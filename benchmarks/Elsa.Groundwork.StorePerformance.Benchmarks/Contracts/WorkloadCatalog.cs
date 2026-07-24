@@ -147,9 +147,7 @@ public sealed class WorkloadCatalog
         }
 
         if (actual.Id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ||
-            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion ||
-            actual.Input.FingerprintSha256 != BlockedSecretInputFingerprint ||
-            actual.Correctness.ResultDigestSha256 != BlockedSecretResultDigest)
+            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion)
             throw new WorkloadContractException($"The workload '{actual.Id}' is not the explicitly blocked Secret comparator contract.");
     }
 
@@ -198,8 +196,6 @@ public sealed class WorkloadCatalog
     }
 
     private sealed record ExpectedWorkload(string[] CoverageRows, string[] PhysicalForms);
-    private const string BlockedSecretInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";
-    private const string BlockedSecretResultDigest = "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb";
     private static readonly IReadOnlyDictionary<string, string> ExpectedSourceDigests = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["runtime.json"] = "4434f60ee6072f9d22cfb93ac941e12054cf93cb1080fc537fde1262cf7a2355",

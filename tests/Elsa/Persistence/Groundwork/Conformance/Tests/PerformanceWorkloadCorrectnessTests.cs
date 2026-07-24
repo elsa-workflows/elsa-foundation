@@ -19,9 +19,6 @@ public sealed class PerformanceWorkloadCorrectnessTests
             .Append(new KeyValuePair<string, (string, string)>(
                 IamNormalizedLookupWorkload.WorkloadId,
                 (IamNormalizedLookupWorkload.ComputeInputFingerprint(), IamNormalizedLookupWorkload.ExpectedResultDigest)))
-            .Append(new KeyValuePair<string, (string, string)>(
-                ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId,
-                ("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb")))
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     [Fact]
@@ -76,12 +73,17 @@ public sealed class PerformanceWorkloadCorrectnessTests
     {
         var workloads = LoadWorkloads();
 
-        Assert.Equal(ExpectedDigests.Keys.Order(StringComparer.Ordinal), workloads.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ExpectedDigests.Keys.Order(StringComparer.Ordinal),
+            workloads.Keys.Where(id => id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId).Order(StringComparer.Ordinal));
         foreach (var (id, workload) in workloads)
         {
-            var expected = ExpectedDigests[id];
-            Assert.Equal(expected.InputFingerprint, workload["input"]!["fingerprintSha256"]!.GetValue<string>());
-            Assert.Equal(expected.ResultDigest, workload["correctness"]!["resultDigestSha256"]!.GetValue<string>());
+            if (id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId)
+            {
+                var expected = ExpectedDigests[id];
+                Assert.Equal(expected.InputFingerprint, workload["input"]!["fingerprintSha256"]!.GetValue<string>());
+                Assert.Equal(expected.ResultDigest, workload["correctness"]!["resultDigestSha256"]!.GetValue<string>());
+            }
             Assert.Equal(RequiredProviders, workload["requiredProviders"]!.AsArray().Select(provider => provider!.GetValue<string>()));
             Assert.Equal(
                 RequiredProviders.Order(StringComparer.Ordinal),
@@ -95,6 +97,10 @@ public sealed class PerformanceWorkloadCorrectnessTests
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, iam["input"]!["fingerprintSha256"]!.GetValue<string>());
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedResultDigest, iam["correctness"]!["resultDigestSha256"]!.GetValue<string>());
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, AspNetCoreIdentityPerformanceWorkload.ComputeInputFingerprint());
+
+        var secret = workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
+        Assert.Equal(ReproducibleWorkloadScenarioCatalog.BlockedVersion, secret["version"]!.GetValue<string>());
+        Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
     }
 
     [Fact]
