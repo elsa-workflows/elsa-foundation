@@ -23,16 +23,16 @@ The repository's current Groundwork family is `0.0.1-preview.81`; do not combine
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
 
-The checked-in checkpoint/fence attachment includes the reviewed `0.0.1-preview.80` four-provider slice for
-`runtime-checkpoint-commit`, `runtime-execution-liveness`, and `runtime-post-commit-outbox`. The remaining
-`preview.76`/`preview.77`/`preview.80` artifacts are historical provenance, not current `preview.81` pass evidence. A partial attachment
-does not advance a row to evidence-complete or close the package-generation readiness gate.
+The original checkpoint/fence attachment and its unversioned evidence paths retain the reviewed
+`0.0.1-preview.80` four-provider slice as immutable historical provenance. The current
+`0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger imports that
+versioned attachment by tuple. A partial attachment does not advance a row to evidence-complete or close the
+package-generation readiness gate.
 
-**2026-07-24 #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the
-seven packages to `0.0.1-preview.81` for batched schema apply while leaving the checked-in tool
-and coverage generation at `.80`. The `.81` tool is available on the configured feed; #646 aligns
-the manifest and republishes the tuple-keyed checkpoint/fence slice before any measurement or
-ledger advancement. Older attachments remain historical provenance and are never rewritten.
+**2026-07-24 #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
+`0.0.1-preview.81` for batched schema apply. Elsa PR #1040 aligned the tool manifest and current-version
+ratchets; the versioned checkpoint/fence publication below then refreshed the tuple-keyed evidence without
+rewriting the `.80` attachment or artifacts.
 
 ## 1. Inspect the frozen denominator
 
@@ -164,6 +164,15 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
   --configuration Release --no-build \
   --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.RuntimeProviderEvidencePublicationTests.Publish_the_catalog_validated_runtime_provider_evidence_slice'
 
+export ELSA_GROUNDWORK_SOURCE_COMMIT="bf452355867c8f76a11d9bca9191563a773a631a"
+export ELSA_GROUNDWORK_SOURCE_TREE="8b3504d52cef5f4a19ae5318fc66f46aefcfd048"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview81"
+
+# Reproduction is only valid from the retained source snapshot. These checks
+# are chained to the publisher so a later or dirty checkout cannot publish.
+test "$(git rev-parse HEAD)" = "$ELSA_GROUNDWORK_SOURCE_COMMIT" &&
+test "$(git rev-parse 'HEAD^{tree}')" = "$ELSA_GROUNDWORK_SOURCE_TREE" &&
+test -z "$(git status --porcelain)" &&
 ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   --configuration Release --no-build \
@@ -180,11 +189,45 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
   --filter 'FullyQualifiedName=Elsa.Persistence.Groundwork.Conformance.Tests.DistributedProviderEvidencePublicationTests.Publish_the_real_distributed_ordinary_round_trip_matrices'
 ```
 
-Each successful publisher writes provider artifacts under `evidence/` and one deterministic, merge-ready
-record set under `ledger-attachments/`. Review and mechanically import those records by
+Each successful publisher writes provider artifacts and one deterministic, merge-ready record set. Legacy
+publishers use `evidence/` and `ledger-attachments/`; a version-scoped refresh writes both beneath
+`versions/<Groundwork package version>/` so an older evidence generation remains immutable. Review and
+mechanically import those records by
 `(coverageEntryId, scenarioId, provider)`; do not hand-author or infer missing obligations. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #644/#660 authority evidence is current.
+
+### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
+
+Against Elsa source commit `bf452355867c8f76a11d9bca9191563a773a631a` (tree
+`8b3504d52cef5f4a19ae5318fc66f46aefcfd048`) and Groundwork `0.0.1-preview.81`, the checkpoint/fence
+publisher passed for SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 1m58s). It produced 36 unique
+`(coverageEntryId, scenarioId, provider)` records across `runtime-checkpoint-commit`,
+`runtime-execution-liveness`, and `runtime-post-commit-outbox`; every retained artifact digest was
+recomputed successfully before the attachment was imported mechanically by that tuple. Each artifact is
+version-namespaced and retains the raw scenario observations plus the exact commit, tree, and run identity.
+The observations and compiled physical-target fingerprint now come from the same driver execution, and each
+record's result hash plus exact artifact-payload comparison binds those observations and provenance.
+The original `.80` attachment hash and all 36 referenced historical artifact hashes are guarded separately.
+
+An earlier full publication reached SQL Server and exposed that the fixture's reset query could select
+system sessions, which SQL Server refuses to kill. The fixture now limits the reset set to user processes;
+the focused SQL Server fence scenario and this complete publication both passed after the correction.
+This refresh preserves T050's completed evidence at the current package family. It does not complete
+T058/T069/T076/T093/T100 or advance any ledger row status; #646 inherits those remaining evidence and
+performance-verdict obligations.
+
+### Preview.81 checkpoint/fence review disposition
+
+Three adversarial reviewers inspected the frozen implementation/evidence range
+`78033cf1167071123cb9fe5ef38653973bd65200..df7fedbdd531bd889a7bfd72a5d436ee53f8dc8e`
+on correctness/mechanism, evidence integrity, and scope/test preservation:
+
+| Axis | Initial finding | Disposition | Final verdict |
+|---|---|---|---|
+| Correctness/mechanism | Version namespaces and retained metadata were not enforced strongly enough. | The publisher now rejects version/path/provenance mismatches; the validator recomputes result hashes and compares the complete retained payload. Focused publisher/capture tests and an independent 36-record audit passed. | PASS |
+| Evidence integrity | Synthetic observations and a separately acquired physical fingerprint could green-wash the retained result. | One driver execution now returns the raw actual observations and physical fingerprint, rechecks the fingerprint, and binds both with provenance into the record, artifact, and digest. All nine four-provider matrices and exact ledger imports were independently recomputed. | PASS |
+| Scope/test preservation | The first refresh overwrote preview.80 history, then the runnable command could label a later checkout as the retained source snapshot. | Preview.80 was restored byte-for-byte and guarded by its attachment hash; preview.81 is version-namespaced. The reproduction command now short-circuits before publication unless HEAD, tree, and cleanliness exactly match the retained source snapshot; the originating reviewer exercised later, dirty, and exact-snapshot cases. | PASS |
 
 For the performance handoff, `requiredNativeRoutes` in the versioned workload documents are exact current
 `BoundedQueryDeclaration.Identity` values, not coverage-ledger `queryShapes` or descriptive “bounded” aliases.

@@ -62,6 +62,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         GroundworkTopologyCapabilities.ExternalProcessRestart;
 
     public override GroundworkCompositionFingerprint CompositionFingerprint => FixtureComposition;
+    public override string? PhysicalTargetFingerprint => _physicalSource?.PhysicalTarget.Fingerprint;
 
     public override GroundworkProcessLaunchDescriptor ProcessLaunchDescriptor =>
         _processLaunchDescriptor ??= _processProbeRunner.CreateLaunchDescriptor();

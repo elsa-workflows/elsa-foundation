@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.81",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "1bf0e8c571d0bbb0e89ea94b75ed200a517a32de209922eb89d1b001ce639907",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24",
+  "clients": 2,
+  "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+  "observations": [
+    {
+      "name": "conflicting-replay",
+      "value": "RuntimeCheckpointReplayConflictException"
+    },
+    {
+      "name": "durable-outcome-count",
+      "value": "1"
+    },
+    {
+      "name": "equivalent-replay",
+      "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
+    "runIdentity": "runtime-checkpoint-fence-preview81"
+  },
+  "concurrencySemantic": "create-only-idempotency-marker",
+  "evidence": "versions/0.0.1-preview.81/evidence/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24.json"
+}

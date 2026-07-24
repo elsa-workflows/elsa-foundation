@@ -26,10 +26,57 @@ public static class GroundworkProviderEvidencePublisher
         IEnumerable<GroundworkScenarioResult> scenarioResults,
         IEnumerable<GroundworkNativeRoutePlanResult>? nativeRoutePlans = null,
         CancellationToken cancellationToken = default)
+        => await PublishCoreAsync(
+            evidenceRoot,
+            artifactNamespace: null,
+            provenance: null,
+            obligation,
+            scenarioResults,
+            nativeRoutePlans,
+            cancellationToken);
+
+    public static async Task<GroundworkProviderEvidencePublication> PublishVersionedAsync(
+        string evidenceRoot,
+        string providerVersion,
+        GroundworkProviderEvidenceProvenance provenance,
+        GroundworkLedgerObligation obligation,
+        IEnumerable<GroundworkScenarioResult> scenarioResults,
+        IEnumerable<GroundworkNativeRoutePlanResult>? nativeRoutePlans = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(provenance);
+        var versionNamespace = VersionNamespace(providerVersion);
+        return await PublishCoreAsync(
+            evidenceRoot,
+            versionNamespace,
+            provenance,
+            obligation,
+            scenarioResults,
+            nativeRoutePlans,
+            cancellationToken);
+    }
+
+    private static async Task<GroundworkProviderEvidencePublication> PublishCoreAsync(
+        string evidenceRoot,
+        string? artifactNamespace,
+        GroundworkProviderEvidenceProvenance? provenance,
+        GroundworkLedgerObligation obligation,
+        IEnumerable<GroundworkScenarioResult> scenarioResults,
+        IEnumerable<GroundworkNativeRoutePlanResult>? nativeRoutePlans,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(evidenceRoot);
         ArgumentNullException.ThrowIfNull(obligation);
         var results = RequireEquivalentPassingMatrix(obligation, scenarioResults);
+        if (artifactNamespace is not null &&
+            results.Any(result => !string.Equals(
+                result.Provider.ProviderVersion,
+                artifactNamespace["versions/".Length..],
+                StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence requires every result to match the artifact namespace version.");
+        }
         var routes = RequireNativePlans(obligation, results, nativeRoutePlans);
         var records = new JsonArray();
         var artifacts = new List<GroundworkProviderEvidenceArtifact>();
@@ -37,7 +84,12 @@ public static class GroundworkProviderEvidencePublisher
         foreach (var result in results)
         {
             routes.TryGetValue(result.Provider.ProviderKey, out var nativeRoute);
-            var record = CreateLedgerRecord(obligation, result, nativeRoute);
+            var record = CreateLedgerRecord(
+                obligation,
+                result,
+                nativeRoute,
+                artifactNamespace,
+                provenance);
             if (nativeRoute is not null)
             {
                 var nativePath = record["nativeEvidence"]!.GetValue<string>();
@@ -71,6 +123,32 @@ public static class GroundworkProviderEvidencePublisher
         string attachmentIdentity,
         IEnumerable<GroundworkProviderEvidencePublication> publications,
         CancellationToken cancellationToken = default)
+        => await WriteLedgerAttachmentCoreAsync(
+            evidenceRoot,
+            attachmentNamespace: null,
+            attachmentIdentity,
+            publications,
+            cancellationToken);
+
+    public static async Task<GroundworkProviderEvidenceArtifact> WriteVersionedLedgerAttachmentAsync(
+        string evidenceRoot,
+        string providerVersion,
+        string attachmentIdentity,
+        IEnumerable<GroundworkProviderEvidencePublication> publications,
+        CancellationToken cancellationToken = default)
+        => await WriteLedgerAttachmentCoreAsync(
+            evidenceRoot,
+            VersionNamespace(providerVersion),
+            attachmentIdentity,
+            publications,
+            cancellationToken);
+
+    private static async Task<GroundworkProviderEvidenceArtifact> WriteLedgerAttachmentCoreAsync(
+        string evidenceRoot,
+        string? attachmentNamespace,
+        string attachmentIdentity,
+        IEnumerable<GroundworkProviderEvidencePublication> publications,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(evidenceRoot);
         if (!Regex.IsMatch(
@@ -100,6 +178,8 @@ public static class GroundworkProviderEvidencePublisher
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicate is not null)
             throw new InvalidOperationException($"Ledger attachment contains duplicate evidence key '{duplicate.Key}'.");
+        if (attachmentNamespace is not null)
+            RequireVersionedAttachmentRecords(attachmentNamespace, records);
 
         var ordered = new JsonArray(records
             .OrderBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
@@ -107,7 +187,9 @@ public static class GroundworkProviderEvidencePublisher
             .ThenBy(record => ProviderOrder(record["provider"]!.GetValue<string>()))
             .Select(record => (JsonNode)record.DeepClone())
             .ToArray());
-        var relativePath = $"ledger-attachments/{attachmentIdentity}.json";
+        var relativePath = JoinNamespace(
+            attachmentNamespace,
+            $"ledger-attachments/{attachmentIdentity}.json");
         var sha256 = await WriteAndHashAsync(
             evidenceRoot,
             relativePath,
@@ -221,7 +303,9 @@ public static class GroundworkProviderEvidencePublisher
     private static JsonObject CreateLedgerRecord(
         GroundworkLedgerObligation obligation,
         GroundworkScenarioResult result,
-        GroundworkNativeRoutePlanResult? nativeRoute)
+        GroundworkNativeRoutePlanResult? nativeRoute,
+        string? artifactNamespace,
+        GroundworkProviderEvidenceProvenance? provenance)
     {
         var record = new JsonObject
         {
@@ -236,18 +320,34 @@ public static class GroundworkProviderEvidencePublisher
             ["executionPath"] = $"provider-driver/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}",
             ["clients"] = result.Clients,
             ["resultHash"] = result.ResultDigest,
+            ["observations"] = new JsonArray(result.Observations
+                .Select(observation => (JsonNode)new JsonObject
+                {
+                    ["name"] = observation.Name,
+                    ["value"] = observation.Value
+                })
+                .ToArray()),
             ["outcome"] = "pass"
         };
+        if (provenance is not null)
+        {
+            record["provenance"] = new JsonObject
+            {
+                ["elsaCommit"] = provenance.ElsaCommit,
+                ["elsaTree"] = provenance.ElsaTree,
+                ["runIdentity"] = provenance.RunIdentity
+            };
+        }
         if (obligation.DimensionProperty is { } dimension)
             record[dimension] = obligation.Value;
         if (nativeRoute is not null)
         {
             record["nativeQueryIdentity"] = nativeRoute.Request.QueryIdentity;
             record["documentKind"] = nativeRoute.Request.DocumentKind;
-            record["nativeEvidence"] = NativeEvidencePath(result, obligation);
+            record["nativeEvidence"] = NativeEvidencePath(result, obligation, artifactNamespace);
         }
 
-        record["evidence"] = EvidencePath(result, obligation);
+        record["evidence"] = EvidencePath(result, obligation, artifactNamespace);
         return record;
     }
 
@@ -264,11 +364,99 @@ public static class GroundworkProviderEvidencePublisher
         return payload;
     }
 
-    private static string EvidencePath(GroundworkScenarioResult result, GroundworkLedgerObligation obligation) =>
-        $"evidence/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}.json";
+    private static void RequireVersionedAttachmentRecords(
+        string attachmentNamespace,
+        IReadOnlyCollection<JsonObject> records)
+    {
+        const string versionsPrefix = "versions/";
+        if (!attachmentNamespace.StartsWith(versionsPrefix, StringComparison.Ordinal))
+            throw new InvalidOperationException("A versioned attachment requires a versions/<provider-version> namespace.");
+        var providerVersion = attachmentNamespace[versionsPrefix.Length..];
+        JsonObject? exactProvenance = null;
+        foreach (var record in records)
+        {
+            if (!string.Equals(
+                    record["providerVersion"]?.GetValue<string>(),
+                    providerVersion,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires every record provider version to match its requested namespace.");
+            }
+            var provider = record["provider"]?.GetValue<string>();
+            var coverageEntryId = record["coverageEntryId"]?.GetValue<string>();
+            var scenarioId = record["scenarioId"]?.GetValue<string>();
+            if (provider is null || coverageEntryId is null || scenarioId is null)
+                throw new InvalidOperationException("A versioned attachment record is missing its catalog identity.");
+            var scenarioKey = ScenarioKey(scenarioId);
+            var expectedEvidence =
+                $"{attachmentNamespace}/evidence/{provider}/{coverageEntryId}/{scenarioKey}.json";
+            if (!string.Equals(
+                    record["evidence"]?.GetValue<string>(),
+                    expectedEvidence,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires every evidence path to remain inside its requested namespace.");
+            }
+            if (record["nativeEvidence"]?.GetValue<string>() is { } nativeEvidence)
+            {
+                var expectedNativeEvidence =
+                    $"{attachmentNamespace}/evidence/{provider}/{coverageEntryId}/{scenarioKey}.plan.txt";
+                if (!string.Equals(nativeEvidence, expectedNativeEvidence, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "A versioned attachment requires every native-evidence path to remain inside its requested namespace.");
+                }
+            }
+            if (record["provenance"] is not JsonObject provenance)
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires exact source provenance on every record.");
+            }
+            exactProvenance ??= provenance;
+            if (!JsonNode.DeepEquals(exactProvenance, provenance))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires one exact source provenance tuple across every record.");
+            }
+        }
+    }
 
-    private static string NativeEvidencePath(GroundworkScenarioResult result, GroundworkLedgerObligation obligation) =>
-        $"evidence/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}.plan.txt";
+    private static string EvidencePath(
+        GroundworkScenarioResult result,
+        GroundworkLedgerObligation obligation,
+        string? artifactNamespace) =>
+        JoinNamespace(
+            artifactNamespace,
+            $"evidence/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}.json");
+
+    private static string NativeEvidencePath(
+        GroundworkScenarioResult result,
+        GroundworkLedgerObligation obligation,
+        string? artifactNamespace) =>
+        JoinNamespace(
+            artifactNamespace,
+            $"evidence/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}.plan.txt");
+
+    private static string VersionNamespace(string providerVersion)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerVersion);
+        if (!Regex.IsMatch(
+                providerVersion,
+                "^[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*$",
+                RegexOptions.CultureInvariant))
+        {
+            throw new ArgumentException(
+                "A provider version containing only alphanumeric dot- or hyphen-delimited segments is required.",
+                nameof(providerVersion));
+        }
+
+        return $"versions/{providerVersion}";
+    }
+
+    private static string JoinNamespace(string? artifactNamespace, string relativePath) =>
+        artifactNamespace is null ? relativePath : $"{artifactNamespace}/{relativePath}";
 
     private static string ScenarioKey(string scenarioId) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(scenarioId)))[..16];
@@ -313,6 +501,42 @@ public sealed record GroundworkProviderEvidencePublication(
     IReadOnlyList<GroundworkProviderEvidenceArtifact> Artifacts);
 
 public sealed record GroundworkProviderEvidenceArtifact(string RelativePath, string Sha256);
+
+public sealed record GroundworkProviderEvidenceProvenance
+{
+    private static readonly Regex GitObjectPattern =
+        new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RunIdentityPattern =
+        new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant);
+
+    private GroundworkProviderEvidenceProvenance(
+        string elsaCommit,
+        string elsaTree,
+        string runIdentity)
+    {
+        ElsaCommit = elsaCommit;
+        ElsaTree = elsaTree;
+        RunIdentity = runIdentity;
+    }
+
+    public string ElsaCommit { get; }
+    public string ElsaTree { get; }
+    public string RunIdentity { get; }
+
+    public static GroundworkProviderEvidenceProvenance Create(
+        string elsaCommit,
+        string elsaTree,
+        string runIdentity)
+    {
+        if (!GitObjectPattern.IsMatch(elsaCommit))
+            throw new ArgumentException("A lowercase 40-character Elsa commit SHA is required.", nameof(elsaCommit));
+        if (!GitObjectPattern.IsMatch(elsaTree))
+            throw new ArgumentException("A lowercase 40-character Elsa tree SHA is required.", nameof(elsaTree));
+        if (!RunIdentityPattern.IsMatch(runIdentity))
+            throw new ArgumentException("A lowercase kebab-case run identity is required.", nameof(runIdentity));
+        return new GroundworkProviderEvidenceProvenance(elsaCommit, elsaTree, runIdentity);
+    }
+}
 
 public enum GroundworkLedgerObligationKind
 {

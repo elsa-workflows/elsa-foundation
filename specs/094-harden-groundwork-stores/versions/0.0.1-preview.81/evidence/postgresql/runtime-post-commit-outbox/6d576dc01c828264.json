@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.81",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "cdc89727cfebdfa44fc437cafcc5df32fdebb70dcea43c53c3911315036540d2",
+  "executionPath": "provider-driver/postgresql/runtime-post-commit-outbox/6d576dc01c828264",
+  "clients": 2,
+  "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+  "observations": [
+    {
+      "name": "conflicting-replay",
+      "value": "RuntimeCheckpointReplayConflictException"
+    },
+    {
+      "name": "durable-outcome-count",
+      "value": "1"
+    },
+    {
+      "name": "equivalent-replay",
+      "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "bf452355867c8f76a11d9bca9191563a773a631a",
+    "elsaTree": "8b3504d52cef5f4a19ae5318fc66f46aefcfd048",
+    "runIdentity": "runtime-checkpoint-fence-preview81"
+  },
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "versions/0.0.1-preview.81/evidence/postgresql/runtime-post-commit-outbox/6d576dc01c828264.json"
+}
