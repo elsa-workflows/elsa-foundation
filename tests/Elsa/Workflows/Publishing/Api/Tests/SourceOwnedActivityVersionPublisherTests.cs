@@ -53,6 +53,32 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     }
 
     [Fact]
+    public async Task Publishes_declared_source_outcomes_with_stable_contract_references()
+    {
+        var command = new RecordingCommand();
+        var publisher = CreatePublisher(command);
+        var version = Version("version-1", "1.0.0");
+        version.DesignFacets =
+        [
+            new("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new
+            {
+                ports = new object[]
+                {
+                    new { referenceKey = "approved", name = "Approved", type = "outcome" },
+                    new { name = "Rejected", type = "outcome" }
+                }
+            }))
+        ];
+
+        await publisher.PublishAsync(Definition(), version);
+
+        Assert.Equal(
+            [("approved", "Approved"), ("Rejected", "Rejected")],
+            Assert.Single(command.Commits).Publication.Contract.Outcomes
+                .Select(x => (x.ReferenceKey, x.Name)));
+    }
+
+    [Fact]
     public async Task Rejects_design_owned_content()
     {
         var publisher = CreatePublisher(new RecordingCommand());

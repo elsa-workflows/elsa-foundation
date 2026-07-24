@@ -21,11 +21,14 @@ public sealed class GraphActivity(
     IDurableValueStateStore durableValueStateStore)
     : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityCheckpointParticipant
 {
+    private string? _selectedOutcomeName;
+
     public GraphActivityDescriptor Descriptor { get; } = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         ArgumentNullException.ThrowIfNull(runtimeContext);
+        _selectedOutcomeName = null;
         ValidatePinnedDescriptor(runtimeContext);
         EnsureEntryIsDirectChild(runtimeContext.ExecutableNode, Descriptor.EntryNodeId);
 
@@ -69,7 +72,24 @@ public sealed class GraphActivity(
         }
 
         RequireRuntimeContext(context.ParentContext);
-        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        if (Descriptor.OutcomeMappings.Count == 0)
+        {
+            _selectedOutcomeName = ActivityOutcomes.Done;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+
+        var matches = Descriptor.OutcomeMappings
+            .Where(mapping => context.OutcomeNames.Contains(mapping.SourceOutcomeName, StringComparer.Ordinal))
+            .ToArray();
+        if (context.OutcomeNames.Count != 1 || matches.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"Graph entry '{Descriptor.EntryNodeId}' must complete with exactly one mapped outcome; " +
+                $"received [{string.Join(", ", context.OutcomeNames.Order(StringComparer.Ordinal))}].");
+        }
+
+        _selectedOutcomeName = matches[0].BoundaryOutcomeName;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(_selectedOutcomeName));
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
@@ -175,9 +195,13 @@ public sealed class GraphActivity(
                 result.Add(output.ReferenceKey, captured.Value);
         }
 
+        var outcomeName = Descriptor.OutcomeMappings.Count == 0
+            ? ActivityOutcomes.Done
+            : _selectedOutcomeName ?? throw new InvalidOperationException(
+                "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome.");
         return new RuntimeActivityCompletionCheckpointPreparation(
             ToChanges(capturedOutputs),
-            ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, ActivityOutcomes.Done));
+            ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, outcomeName));
     }
 
     private static GraphActivityExpressionEvaluator NewEvaluator() =>

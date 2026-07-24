@@ -225,6 +225,37 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Emitted_contract_outcomes_project_into_the_committed_catalog_version()
+    {
+        var contract = new Elsa.Activities.Design.Core.Models.ActivityContract(
+            "1",
+            [],
+            [],
+            [
+                new("accepted", "Accepted", true),
+                new("internal", "Internal", false),
+                new("declined", "Declined", true)
+            ]);
+        var harness = PublisherHarness.Create(contract: contract);
+
+        await harness.PublishAsync(Request("1.0.0"));
+
+        var facet = Assert.Single(
+            harness.Commit.LastCommit!.Design.CatalogVersion.DesignFacets,
+            x => x.Kind == "elsa.outcomes");
+        Assert.Equal("1", facet.SchemaVersion);
+        Assert.Equal(
+            ["Accepted", "Declined"],
+            facet.Payload.GetProperty("ports").EnumerateArray().Select(x => x.GetProperty("name").GetString()));
+        Assert.Equal(
+            ["accepted", "declined"],
+            facet.Payload.GetProperty("ports").EnumerateArray().Select(x => x.GetProperty("referenceKey").GetString()));
+        Assert.All(
+            facet.Payload.GetProperty("ports").EnumerateArray(),
+            port => Assert.Equal("outcome", port.GetProperty("type").GetString()));
+    }
+
+    [Fact]
     public async Task First_publication_returns_a_diff_against_the_explicit_definition_baseline()
     {
         var harness = PublisherHarness.Create(differ: new ActivityVersionDiffer());

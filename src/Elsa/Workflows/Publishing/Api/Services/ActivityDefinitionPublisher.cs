@@ -898,12 +898,30 @@ public sealed class ActivityDefinitionPublisher(
             // InputDefinition/OutputDefinition projections are populated by the reconciler. See #930.
             Inputs = draft.State.Contract.Inputs.Select(ToInputDefinition).ToArray(),
             Outputs = draft.State.Contract.Outputs.Select(ToOutputDefinition).ToArray(),
+            DesignFacets = ToDesignFacets(draft.State.Contract),
             SourceKind = "ActivityDefinitionDraft",
             SourceId = draft.Id,
             Hash = template.TemplateHash,
             CreatedAt = now,
             LastModifiedAt = now
         };
+
+    private static IReadOnlyCollection<ActivityDesignFacet> ToDesignFacets(
+        Elsa.Activities.Design.Core.Models.ActivityContract contract)
+    {
+        var ports = contract.Outcomes
+            .Where(outcome => outcome.IsEmitted)
+            .Select(outcome => new
+            {
+                referenceKey = outcome.ReferenceKey,
+                name = outcome.Name,
+                type = "outcome"
+            })
+            .ToArray();
+        return ports.Length == 0
+            ? []
+            : [new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports }))];
+    }
 
     private static InputDefinition ToInputDefinition(ActivityInputContract input) => new(
         ReferenceKey: input.ReferenceKey,
