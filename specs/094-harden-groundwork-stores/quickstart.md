@@ -459,6 +459,13 @@ on 2026-07-24. Each assumed the implementation had green-washed its claims:
 | Evidence integrity | Successive reviews rejected stale artifact reuse, stored-summary trust, label-only plan evidence, caller-only source/host/provider assertions, shared raw plans, unsafe raw plan/configuration content, endpoint/URI leakage, and false rejection of parameterized endpoint placeholders. Schema-v2 freshness, hash/exclusive ownership, observed provenance, safe structured/raw evidence, and raw-metric recomputation now fail closed. The final reviewer passed 53/53 and a warning-as-error Release build. | PASS |
 | Scope/test preservation | The checkpoint remains additive: frozen workloads, coverage ledger, EF ratchet, source projects, and the load-bearing Identity EF oracle are unchanged. All existing conformance tests remain, two SQLite correctness tests are additive, and the documentation explicitly claims no production timing, verdict, ledger advancement, or #646 completion. The reviewer independently confirmed 53 harness tests, 2 IAM tests, and 285 architecture tests. | PASS |
 
+After `origin/main` advanced to `3940e74f280107c454a9021b4107c8e084c41bf1`, merge commit
+`b68783fe8e1c78a559215bcaf60b90c0e637103c` integrated it without rebasing. All three reviewers
+re-inspected exact range `3940e74f280107c454a9021b4107c8e084c41bf1..b68783fe8e1c78a559215bcaf60b90c0e637103c`
+and returned PASS: the incoming scheduling scripts and `shells.json` were base-only, the harness
+surfaces were byte-identical to the reviewed parent, and the integrated head again passed 53/53,
+2/2, 285/285, and the zero-warning Release harness build.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
