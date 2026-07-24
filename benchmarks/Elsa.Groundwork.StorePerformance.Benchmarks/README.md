@@ -3,6 +3,9 @@
 This is the adapter-independent foundation for the twelve frozen Spec 094 store workloads. It has no
 provider, EF, Groundwork, connection, or secret dependency. Adapter leaves must implement
 `IBenchmarkAdapter` in their own projects and use `ProcessMeasurement` to write `ProcessArtifact` files.
+`workload-vectors` prints deterministic contract definitions for future adapters; it does not execute the
+named public operations. Every workload carries an explicit ready/blocked benchmark-admission status. The
+Secret workload remains blocked until a real EF comparator exists.
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan

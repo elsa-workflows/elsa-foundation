@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -45,6 +46,11 @@ public static class GateEvaluator
 {
     public static GateResult Evaluate(GatePolicy policy, ComparisonResult comparison)
     {
+        if (comparison.WorkloadId == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId)
+            return Blocked(
+                policy,
+                comparison,
+                $"Workload '{comparison.WorkloadId}' is blocked from benchmark gating: {ReproducibleWorkloadScenarioCatalog.BlockedReasonCode}.");
         if (!comparison.Complete || !comparison.CorrectnessEqual) return Blocked(policy, comparison, comparison.BlockReason ?? "Comparison is incomplete.");
         var oracleOperations = comparison.OracleOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();
         var targetOperations = comparison.TargetOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();

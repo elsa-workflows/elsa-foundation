@@ -58,6 +58,20 @@ historical `preview.60`/`preview.76`/`preview.77`/`preview.80` artifact is linke
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
 
+The ten non-Identity, non-Secret workloads now have v1.1.0 contract-vector successors owned by the benchmark
+harness. `workload-vectors` reproduces their version, seed, input fingerprint, and expected result digest from
+code-owned deterministic parameters, operation names, and expected observations. These are definitions that
+future real EF and Groundwork adapters must execute; they are not public-operation runners. The committed
+workload documents must match every semantic input field and independent literal input/result golden before the
+harness admits a matrix request. The v1.0 hashes remain historical supplier evidence and are not silently
+reinterpreted.
+
+`secret-create-read-list` intentionally remains at v1.0.0 and is Blocked with stable reason
+`comparator.secret.real-ef-required`: #646 has no real EF Secret repository comparator. A synthetic target,
+waiver, or Groundwork-vs-Groundwork comparison cannot advance that workload or its ledger row.
+Every workload document carries an explicit `benchmarkAdmission` status/reason. Matrix, comparison, and gate
+admission reject the blocked Secret contract even when supplied artifacts claim a complete measurement.
+
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with
 residual predicates over bounded physical routes. Groundwork PR #96 adds the portable substring search keys

@@ -323,6 +323,7 @@ public sealed record MatrixPlan(PerformanceWorkload Workload, BenchmarkProtocol 
 {
     public static MatrixPlan Create(PerformanceWorkload workload, MatrixRequest request)
     {
+        BenchmarkAdmissionGuard.RequireReady(workload);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
             workload.Input.Seed != request.Seed ||
@@ -521,6 +522,10 @@ public static class Comparison
             !workload.RequiredProviders.Contains(anchor.Provider, StringComparer.Ordinal) ||
             !workload.PhysicalFormsFor646.Contains(anchor.PhysicalForm, StringComparer.Ordinal))
             return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/provider/form contract.");
+        if (!workload.BenchmarkAdmission.IsReady)
+            return TargetValidation.Invalid(
+                anchor,
+                $"Workload '{workload.Id}' is blocked from benchmark comparison: {workload.BenchmarkAdmission.Reason}.");
         if (artifacts.Any(item => !ArtifactAdmission.SameTargetTuple(anchor, item.Request))) return TargetValidation.Invalid(anchor, "A target contains more than one immutable run tuple.");
         var machine = artifacts[0].Machine;
         if (artifacts.Any(item => !ArtifactAdmission.SameMachineEnvironment(machine, item.Machine))) return TargetValidation.Invalid(anchor, "Machine metadata must be complete and stable within a comparison target.");
@@ -570,5 +575,15 @@ public static class Comparison
     {
         public static TargetValidation Invalid(RunRequest? anchor, string error) => new(false, anchor, null, null, [], error);
         public static TargetValidation Validated(RunRequest anchor, CorrectnessEvidence correctness, MachineMetadata machine, IReadOnlyList<string> names) => new(true, anchor, correctness, machine, names, null);
+    }
+}
+
+public static class BenchmarkAdmissionGuard
+{
+    public static void RequireReady(PerformanceWorkload workload)
+    {
+        if (!workload.BenchmarkAdmission.IsReady)
+            throw new PerformanceContractException(
+                $"Workload '{workload.Id}' is blocked from benchmark execution: {workload.BenchmarkAdmission.Reason}.");
     }
 }

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
@@ -155,6 +156,23 @@ public sealed class ComparisonIntegrityTests
 
         Assert.False(comparison.Complete);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
+    }
+
+    [Fact]
+    public void Comparison_rejects_forged_secret_artifacts_even_when_the_measurement_sets_are_complete()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+
+        Assert.False(comparison.Complete);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, comparison.BlockReason);
+        Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
     }
 
     [Fact]
@@ -467,22 +485,23 @@ internal sealed class ArtifactFixture : IDisposable
     private ArtifactFixture(string directory) => Directory = directory;
     public string Directory { get; }
     public static ArtifactFixture Create() => new(Path.Combine(Path.GetTempPath(), "elsa646-artifacts-", Guid.NewGuid().ToString("N")));
-    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null)
+    public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null, string? workloadId = null)
     {
-        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter, hostFingerprintSha256: hostFingerprintSha256, evidenceDocumentInputFingerprint: evidenceDocumentInputFingerprint, observedProviderVersion: observedProviderVersion, rawPlanReferenceOwner: rawPlanReferenceOwner);
+        Write(adapter, form, ProcessKind.Warmup, 0, [], transform: transform, commitSha: commitSha, processorCount: processorCount, timestampUtc: timestampUtc, evidencePlanContentSha: evidencePlanContentSha, routeTransform: routeTransform, omitNativeRoute: omitNativeRoute, evidenceDocumentAdapter: evidenceDocumentAdapter, hostFingerprintSha256: hostFingerprintSha256, evidenceDocumentInputFingerprint: evidenceDocumentInputFingerprint, observedProviderVersion: observedProviderVersion, rawPlanReferenceOwner: rawPlanReferenceOwner, workloadId: workloadId);
         foreach (var index in Enumerable.Range(1, 3))
-            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion, rawPlanReferenceOwner);
+            Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion, rawPlanReferenceOwner, workloadId);
     }
     public void Bind() => ArtifactStore.WriteManifest(Directory);
     public ComparisonResult Compare(string oracle = "sqlite/ef/document-type-specific-tables", string target = "sqlite/groundwork/document-type-specific-tables") =>
         Comparison.Compare(Directory, oracle, target, WorkloadCatalog.Load(Repository.Root()));
     public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);
 
-    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null)
+    private void Write(string adapter, string form, ProcessKind kind, int index, string[] operations, string? input = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null, string? workloadId = null)
     {
         var physicalForm = form == "store" ? "document-type-specific-tables" : form;
         var evidenceReference = $"{adapter}-set.native-plan.json";
-        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
+        var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[workloadId ?? BookmarkScenario.WorkloadId];
+        var request = new RunRequest("cohort-646", $"{adapter}-set", workload.Id, workload.Version, "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), workload.Input.Seed, input ?? workload.Input.FingerprintSha256, "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
         var planOwner = rawPlanReferenceOwner ?? request.MeasurementSetId;
         var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256, planOwner);
         request = request with { NativePlanContentSha256 = Hash(payload) };
@@ -501,7 +520,7 @@ internal sealed class ArtifactFixture : IDisposable
             if (!File.Exists(rawPlanPath)) File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
         }
         var evidence = new CorrectnessEvidence(
-            "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
+            workload.Correctness.ResultDigestSha256,
             observedProviderVersion ?? request.ProviderVersion,
             request.ProviderTopology,
             request.ProviderConfiguration,
@@ -519,6 +538,8 @@ internal sealed class ArtifactFixture : IDisposable
     private static string RawPlanPayload(string route) => JsonSerializer.Serialize(new { SchemaVersion = 1, Route = route, ProviderPlan = $"EXPLAIN {route} USING ix-bookmarks" });
     private static IReadOnlyDictionary<string, string> ProviderConfiguration(string adapter) =>
         new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
+    private static ReproducibleWorkloadScenario BookmarkScenario =>
+        ReproducibleWorkloadScenarioCatalog.Get("bookmark-lookup");
     private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint, string rawPlanReferenceOwner) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256,

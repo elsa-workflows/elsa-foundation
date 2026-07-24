@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using System.Text.RegularExpressions;
 using Elsa.Persistence.Groundwork.Testing;
 using Xunit;
@@ -10,20 +11,20 @@ public sealed class PerformanceWorkloadCorrectnessTests
     private static readonly string[] RequiredProviders = ["sqlite", "sqlserver", "postgresql", "mongodb"];
 
     private static readonly IReadOnlyDictionary<string, (string InputFingerprint, string ResultDigest)> ExpectedDigests =
-        new Dictionary<string, (string InputFingerprint, string ResultDigest)>(StringComparer.Ordinal)
+        new Dictionary<string, (string, string)>(StringComparer.Ordinal)
         {
-            ["bookmark-lookup"] = ("c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e"),
-            ["checkpoint-commit"] = ("f59eef8b9359dc3623bbb42ce07c531f0f027170dc6d33e1788b1bd80dcdab93", "abaa23e9e4f3c9285f50a07f33d7569696ec4cfe1ac496575c12b45dbe78042a"),
-            ["command-send-lease-ack"] = ("cb50baabaf83d0826dbb19d259be9d8fca9b4c8eaa9aea6ba7354a54c1835493", "9f8fa582159e0a796ecbe2d7bfb655cbebee428f9490fa83d4228e8e64f924eb"),
-            ["due-timer-selection"] = ("86bef68c844d10b3cb02c8f65da33ba46ec4c27b9ba0090b9783cd5036f1ab0e", "002fe0f7e4808d7ec2b85f267f8188981c3fd8ed4beca7ad11100ddd6c8d2002"),
+            ["bookmark-lookup"] = ("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
+            ["checkpoint-commit"] = ("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
+            ["command-send-lease-ack"] = ("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
+            ["due-timer-selection"] = ("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
             ["iam-normalized-lookup-update"] = ("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
-            ["outbox-drain"] = ("3a6f44fea2a5905e3df316bd3585b13f6080588c75c6eab9598cced26c184eef", "0f4f678c6250ce1c951ad1e14218a1c38c61d6b15b947fa724c50859a4339934"),
-            ["placement-takeover"] = ("9599391db271c63a41cced1409754b0bcb4e2bd8c316b70efa4d1583c310c92b", "25885819c5cb186adab6196a46d8e369e7b26992e0733e9525a3ca1eb2bf07c1"),
-            ["queue-drain"] = ("21d5dabec0cb604dae214af9bc20835b09ab5f87cfd3d697b946d8adb31d20fa", "bf82d193b202ff0c9e3be211009a3f10401cf1411aaac607db64a199657fb630"),
-            ["recurring-schedule-selection"] = ("ab6e1c276995da9e564f55cee00f243a13e16334c58c0d19cc146f2f757b3b5e", "af1d9aecbc7604ce39e33c553d9c1014be2377d81300aa4905e700beffcf7b17"),
-            ["recovery-scan"] = ("7284c110669aaa3db7587893e9e31005af8c807d8323609aeb80cfd948d82b48", "06033b0de6f4784abc87772b63f5f9a561a5bfc40bc18b3f429b4e318fccd785"),
-            ["secret-create-read-list"] = ("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
-            ["trigger-binding-stimulus-lookup"] = ("cbd570ed8c80f996554853b1143fc34f634138b005858322d1a669dde2113b9a", "3c10eab69da70eccacc648780781ef57ad6499b91cb012465d154d6b1b7e9294")
+            ["outbox-drain"] = ("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
+            ["placement-takeover"] = ("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),
+            ["queue-drain"] = ("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
+            ["recovery-scan"] = ("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
+            ["recurring-schedule-selection"] = ("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
+            [ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId] = ("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
+            ["trigger-binding-stimulus-lookup"] = ("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")
         };
 
     [Fact]
@@ -78,7 +79,9 @@ public sealed class PerformanceWorkloadCorrectnessTests
     {
         var workloads = LoadWorkloads();
 
-        Assert.Equal(ExpectedDigests.Keys.Order(StringComparer.Ordinal), workloads.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ExpectedDigests.Keys.Order(StringComparer.Ordinal),
+            workloads.Keys.Order(StringComparer.Ordinal));
         foreach (var (id, workload) in workloads)
         {
             var expected = ExpectedDigests[id];
@@ -91,12 +94,34 @@ public sealed class PerformanceWorkloadCorrectnessTests
             Assert.All(
                 workload["requiredProviderEvidence"]!.AsObject(),
                 prerequisite => Assert.False(string.IsNullOrWhiteSpace(prerequisite.Value!.GetValue<string>())));
+            Assert.Equal(
+                id == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ? "blocked" : "ready",
+                workload["benchmarkAdmission"]!["status"]!.GetValue<string>());
+        }
+
+        foreach (var (id, scenario) in ReproducibleWorkloadScenarioCatalog.Successors)
+        {
+            Assert.Equal(ExpectedDigests[id].InputFingerprint, scenario.ComputeInputFingerprint());
+            Assert.Equal(ExpectedDigests[id].ResultDigest, scenario.ComputeResultDigest());
         }
 
         var iam = workloads["iam-normalized-lookup-update"];
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, iam["input"]!["fingerprintSha256"]!.GetValue<string>());
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedResultDigest, iam["correctness"]!["resultDigestSha256"]!.GetValue<string>());
         Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, AspNetCoreIdentityPerformanceWorkload.ComputeInputFingerprint());
+
+        var secret = workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
+        Assert.Equal(ReproducibleWorkloadScenarioCatalog.BlockedVersion, secret["version"]!.GetValue<string>());
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.BlockedInputFingerprint,
+            secret["input"]!["fingerprintSha256"]!.GetValue<string>());
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.BlockedResultDigest,
+            secret["correctness"]!["resultDigestSha256"]!.GetValue<string>());
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.BlockedReasonCode,
+            secret["benchmarkAdmission"]!["reason"]!.GetValue<string>());
+        Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
     }
 
     [Fact]
