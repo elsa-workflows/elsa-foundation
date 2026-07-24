@@ -12,7 +12,9 @@ public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureSer
     : IActivityProviderReferenceRewriter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly IReadOnlySet<string> Schemas = new HashSet<string>([ActivityGraphManifest.SchemaVersion], StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> Schemas = new HashSet<string>(
+        [ActivityGraphManifest.SchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion],
+        StringComparer.Ordinal);
 
     public string ProviderKey => GraphActivityProvider.Key;
     public IReadOnlySet<string> SupportedManifestSchemas => Schemas;
@@ -24,7 +26,7 @@ public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureSer
     {
         if (!StringComparer.Ordinal.Equals(manifest.ProviderKey, ProviderKey) || !Schemas.Contains(manifest.SchemaVersion))
             throw new InvalidOperationException("The graph reference rewriter does not own this provider schema.");
-        if (!ActivityGraphManifest.TryParse(manifest.Payload, out var graph, out var errors) || graph is null)
+        if (!ActivityGraphManifest.TryParse(manifest.SchemaVersion, manifest.Payload, out var graph, out var errors) || graph is null)
             throw new InvalidOperationException($"The graph manifest cannot be rewritten: {string.Join("; ", errors.Select(x => x.Message))}");
         var root = graph.RootActivity.Deserialize<ActivityNode>(JsonOptions)
                    ?? throw new InvalidOperationException("The graph root activity cannot be deserialized.");

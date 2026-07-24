@@ -67,7 +67,12 @@ public sealed record ActivityOutputDescriptorView(
     string? Category,
     bool IsBrowsable);
 
-public sealed record ActivityPortDescriptorView(string Name, string? DisplayName, string? Type, bool IsBrowsable);
+public sealed record ActivityPortDescriptorView(
+    string Name,
+    string? DisplayName,
+    string? Type,
+    bool IsBrowsable,
+    string? ReferenceKey = null);
 
 public sealed record ActivityAuthoringTemplateView(
     string NodeId,

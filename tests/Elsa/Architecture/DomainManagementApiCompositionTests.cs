@@ -201,13 +201,9 @@ public sealed class DomainManagementApiCompositionTests
         var provider = Assert.Single(capabilities.Providers);
         Assert.Equal("elsa.activity-graph", provider.ProviderKey);
         Assert.Equal("Activity Graph", provider.DisplayName);
-        var schema = Assert.Single(provider.ManifestSchemas);
-        Assert.Equal("1", schema.SchemaVersion);
-        Assert.True(schema.IsAuthorable);
-        var requiredOutcome = Assert.Single(provider.RequiredOutcomes);
-        Assert.Equal("done", requiredOutcome.ReferenceKey);
-        Assert.Equal("Done", requiredOutcome.Name);
-        Assert.True(requiredOutcome.IsEmitted);
+        Assert.Equal(["1", "2"], provider.ManifestSchemas.Select(x => x.SchemaVersion).Order(StringComparer.Ordinal));
+        Assert.All(provider.ManifestSchemas, schema => Assert.True(schema.IsAuthorable));
+        Assert.Empty(provider.RequiredOutcomes);
     }
 
     private static IReadOnlyCollection<string> StockServerFeatureNames()

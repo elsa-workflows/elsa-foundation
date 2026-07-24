@@ -23,7 +23,7 @@
 ### 01. Search activity definitions for WriteLine.
 ### Copy the returned definition id into @writeLineActivityDefinitionId.
 # @name searchWriteLineActivityDefinitions
-GET {{host}}/design/activities/definitions?searchTerm=WriteLine
+GET {{host}}/design/activities/definitions?search=WriteLine
 
 ### 02. List versions for the selected WriteLine activity definition.
 ### Copy the returned version id into @writeLineActivityVersionId.

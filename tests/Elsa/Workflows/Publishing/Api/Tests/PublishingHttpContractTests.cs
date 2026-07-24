@@ -38,9 +38,12 @@ public sealed class PublishingHttpContractTests
             "design/activities/drafts/{draftId}/publication-preflight",
             Assert.Single(preflightEndpoint.Definition.Routes));
         Assert.Equal(
-            "{\"expectedDraftRevision\":8,\"expectedDefinitionHeadVersionId\":\"activity-ver-1\"}",
+            "{\"expectedDraftRevision\":8,\"expectedDefinitionHeadVersionId\":\"activity-ver-1\",\"version\":\"2.0.0\"}",
             JsonSerializer.Serialize(
-                new PreflightActivityDraftPublication("draft-1", 8, "activity-ver-1"),
+                new PreflightActivityDraftPublication("draft-1", 8, "activity-ver-1")
+                {
+                    Version = "2.0.0"
+                },
                 JsonOptions));
 
         var publishEndpoint = CreateEndpoint(
@@ -73,6 +76,36 @@ public sealed class PublishingHttpContractTests
         Assert.Equal(
             "design/activities/publications/{idempotencyKey}",
             Assert.Single(receiptEndpoint.Definition.Routes));
+    }
+
+    [Fact]
+    public void Activity_preflight_response_serializes_the_version_bound_by_its_review_token()
+    {
+        var response = new ActivityPublicationPreflightView(
+            "draft-1",
+            8,
+            "definition-1",
+            null,
+            false,
+            "sha256:review",
+            true,
+            "1.1.0",
+            ["1.1.0"],
+            null,
+            [],
+            [],
+            new("Provider", "test.provider", "1", "Available", ["1"]),
+            [],
+            [],
+            [])
+        {
+            ReviewedVersion = "7.3.2"
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response, JsonOptions));
+
+        Assert.Equal("1.1.0", document.RootElement.GetProperty("minimumVersion").GetString());
+        Assert.Equal("7.3.2", document.RootElement.GetProperty("reviewedVersion").GetString());
     }
 
     [Fact]

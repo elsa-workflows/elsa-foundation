@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elsa-workflows.github.io/contracts/activity-graph/2",
+  "title": "Elsa Activity Graph Manifest Schema 2",
+  "type": "object",
+  "required": ["rootActivity", "variables", "outputMappings", "outcomeMappings"],
+  "properties": {
+    "rootActivity": { "type": "object" },
+    "variables": { "type": "array" },
+    "outputMappings": { "type": "array" },
+    "outcomeMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sourceOutcomeReferenceKey", "boundaryOutcomeReferenceKey"],
+        "properties": {
+          "sourceOutcomeReferenceKey": { "type": "string", "minLength": 1 },
+          "boundaryOutcomeReferenceKey": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
