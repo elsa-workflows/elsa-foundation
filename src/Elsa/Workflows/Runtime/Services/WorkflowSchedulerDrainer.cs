@@ -238,6 +238,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         catch (Exception exception)
         {
             var faultInfo = _faultCapturePolicy.Capture(exception);
+            var innerFaultInfo = _faultCapturePolicy.CaptureInner(exception);
             // Persisted handler-name — this value is written into poison/drain records (RuntimeSchedulerPoisonRecord.HandlerName,
             // RuntimeSchedulerDrain.HandlerName). Do not rename WorkflowSchedulerDrainer without preserving this literal wire value.
             var handlerName = handler?.Name ?? nameof(WorkflowSchedulerDrainer);
@@ -263,7 +264,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
-            await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
+            await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, innerFaultInfo, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -290,6 +291,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
         RuntimeFaultInfo faultInfo,
+        RuntimeFaultInfo? innerFaultInfo,
         CancellationToken cancellationToken)
     {
         if (_poisonStore is null)
@@ -344,7 +346,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             {
                 [RuntimeMetadataKeys.SchedulerPoisonRetryMode] = decision.Mode.ToString(),
                 [RuntimeMetadataKeys.SchedulerPoisonRetryReason] = decision.Reason
-            }),
+            },
+            innerFault: innerFaultInfo),
             cancellationToken);
     }
 

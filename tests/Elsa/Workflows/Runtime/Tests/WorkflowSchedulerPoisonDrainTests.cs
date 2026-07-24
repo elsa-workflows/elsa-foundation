@@ -41,7 +41,37 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Null(record.NextRetryAt);
         Assert.Equal(1, record.FailureCount);
         Assert.Equal(nameof(InvalidOperationException), record.Fault.ExceptionType.Split('.')[^1]);
+        Assert.Null(record.InnerFault); // The handler exception had no inner exception.
         Assert.Empty(remaining); // Not re-enqueued: the default policy is a safe no-loop park.
+    }
+
+    [Fact]
+    public async Task DrainAsync_HandlerCrashWithWrappedException_RecordsInnerFaultOnPoisonRecord()
+    {
+        // #1031: handler crashes are routinely wrapped (e.g. GroundworkRuntimeCheckpointWriterException around the
+        // physical storage fault). The poison record must carry the first inner fault, captured under the same
+        // policy as the outer one, or the root cause is undiagnosable without temporary logging.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new AlwaysFaultingSchedulerWorkHandler(workItem => new InvalidOperationException(
+            $"Checkpoint write failed for {workItem.WorkItemId}.",
+            new ArgumentException("GW-PHYSICAL-037: projected column overflow.")));
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: new NoopRuntimeDomainRetryPolicy());
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(typeof(InvalidOperationException).FullName, record.Fault.ExceptionType);
+        Assert.NotNull(record.InnerFault);
+        Assert.Equal(typeof(ArgumentException).FullName, record.InnerFault!.ExceptionType);
+        Assert.Equal("GW-PHYSICAL-037: projected column overflow.", record.InnerFault.Message);
     }
 
     [Fact]
@@ -195,7 +225,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             payload: document.RootElement.Clone());
     }
 
-    private sealed class AlwaysFaultingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    private sealed class AlwaysFaultingSchedulerWorkHandler(Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
         public int InvocationCount { get; private set; }
@@ -204,7 +234,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {
             InvocationCount++;
-            throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+            throw exceptionFactory?.Invoke(workItem) ?? new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
         }
     }
 

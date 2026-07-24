@@ -27,6 +27,7 @@ public sealed class GroundworkWorkflowSchedulerPoisonStoreTests
         Assert.NotNull(found);
         Assert.Equal("handler-1", found.HandlerName);
         Assert.Equal("boom-1", found.Fault.Message);
+        Assert.Equal(new RuntimeFaultInfo("System.ArgumentException", "inner-1"), found.InnerFault);
         Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, found.Disposition);
         Assert.Equal("test", found.Metadata["source"]);
 
@@ -144,7 +145,8 @@ public sealed class GroundworkWorkflowSchedulerPoisonStoreTests
             {
                 ["source"] = "test",
                 ["payload"] = payload.RootElement.GetProperty("workItemId").GetString()!
-            });
+            },
+            innerFault: new RuntimeFaultInfo("System.ArgumentException", $"inner-{index}"));
     }
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>

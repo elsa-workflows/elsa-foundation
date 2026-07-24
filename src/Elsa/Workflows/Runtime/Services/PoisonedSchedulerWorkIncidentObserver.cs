@@ -110,15 +110,16 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 _logger.LogError(
                     exception,
                     "Failed to record a blocking incident for poisoned scheduler work item {WorkItemId} of workflow execution {WorkflowExecutionId} " +
-                    "(command {CommandKind}, handler {HandlerName}, {FailureCount} failure(s)); the original poison fault was {FaultType}: {FaultMessage}. " +
-                    "The poison record remains durable in the poison store; continuing the drain.",
+                    "(command {CommandKind}, handler {HandlerName}, {FailureCount} failure(s)); the original poison fault was {FaultType}: {FaultMessage} " +
+                    "(inner fault: {InnerFault}). The poison record remains durable in the poison store; continuing the drain.",
                     record.WorkItemId,
                     workflowExecutionId,
                     record.CommandKind,
                     record.HandlerName,
                     record.FailureCount,
                     record.Fault.ExceptionType,
-                    record.Fault.Message);
+                    record.Fault.Message,
+                    record.InnerFault?.ToSummaryString() ?? "none");
             }
         }
     }
@@ -141,7 +142,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             resolutionAction: IncidentResolutionAction.WaitForIntervention,
             failureType: IncidentFailureType,
             message: $"Scheduler work item '{record.WorkItemId}' ({record.CommandKind}) was poisoned during dispatch " +
-                     $"by handler '{record.HandlerName}' after {record.FailureCount} failure(s): {record.Fault.ToSummaryString()}",
+                     $"by handler '{record.HandlerName}' after {record.FailureCount} failure(s): {record.Fault.ToSummaryString()}" +
+                     (record.InnerFault is null ? "" : $" ---> {record.InnerFault.ToSummaryString()}"),
             createdAt: occurredAt,
             resolvedAt: null,
             metadata: metadata);
@@ -194,6 +196,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         metadata[RuntimeMetadataKeys.FaultMessage] = record.Fault.Message;
         if (!string.IsNullOrWhiteSpace(record.Fault.StackTrace))
             metadata[RuntimeMetadataKeys.FaultStackTrace] = record.Fault.StackTrace;
+        if (record.InnerFault is { } innerFault)
+        {
+            metadata[RuntimeMetadataKeys.FaultInnerType] = innerFault.ExceptionType;
+            metadata[RuntimeMetadataKeys.FaultInnerMessage] = innerFault.Message;
+        }
         return metadata;
     }
 }
