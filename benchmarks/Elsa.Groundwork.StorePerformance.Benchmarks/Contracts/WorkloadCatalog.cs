@@ -1,12 +1,13 @@
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 
 /// <summary>
-/// The closed #646 input boundary. The values below deliberately duplicate the versioned #645 handoff:
-/// a changed workload is a new reviewed handoff, not an input the harness may silently reinterpret.
+/// The closed #646 input boundary. Historical hashes remain frozen while reviewed v1.1 successors
+/// must reproduce their benchmark-owned contract vectors; neither may be silently reinterpreted.
 /// </summary>
 public sealed class WorkloadCatalog
 {
@@ -20,7 +21,12 @@ public sealed class WorkloadCatalog
 
     public IReadOnlyDictionary<string, PerformanceWorkload> Workloads { get; }
 
-    public static WorkloadCatalog Load(string repositoryRoot)
+    public static WorkloadCatalog Load(string repositoryRoot) =>
+        Load(repositoryRoot, ExpectedSourceDigests);
+
+    internal static WorkloadCatalog Load(
+        string repositoryRoot,
+        IReadOnlyDictionary<string, string> expectedSourceDigests)
     {
         var workloadDirectory = Path.Combine(repositoryRoot, "specs", "094-harden-groundwork-stores", "workloads");
         if (!Directory.Exists(workloadDirectory))
@@ -50,7 +56,8 @@ public sealed class WorkloadCatalog
                 if (!workloads.TryAdd(workload.Id, workload))
                     throw new WorkloadContractException($"Duplicate workload id '{workload.Id}'.");
             }
-            if (!string.Equals(Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant(), ExpectedSourceDigests[file], StringComparison.Ordinal))
+            if (!expectedSourceDigests.TryGetValue(file, out var expectedSourceDigest) ||
+                !string.Equals(Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant(), expectedSourceDigest, StringComparison.Ordinal))
                 throw new WorkloadContractException($"{file} does not match the frozen Spec 094 #646 source contract.");
         }
 
@@ -65,7 +72,7 @@ public sealed class WorkloadCatalog
     {
         RequireObject(value, source);
         RequireClosedProperties(value,
-        ["id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation", "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes", "requiredProviderEvidence", "correctness", "efContractBaseline", "physicalFormsFor646", "artifactRetention"], source);
+        ["id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation", "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes", "requiredProviderEvidence", "correctness", "efContractBaseline", "benchmarkAdmission", "physicalFormsFor646", "artifactRetention"], source);
 
         var id = RequireString(value, "id", source);
         var version = RequireString(value, "version", source);
@@ -86,10 +93,11 @@ public sealed class WorkloadCatalog
         var providerEvidence = ParseProviderEvidence(RequireProperty(value, "requiredProviderEvidence", source), source);
         var correctness = ParseCorrectness(RequireProperty(value, "correctness", source), source);
         var baseline = ParseEfBaseline(RequireProperty(value, "efContractBaseline", source), source);
+        var admission = ParseBenchmarkAdmission(RequireProperty(value, "benchmarkAdmission", source), source);
         var physicalForms = RequireStrings(RequireArray(value, "physicalFormsFor646", source), source, "physicalFormsFor646", allowEmpty: false);
         var retention = RequireStrings(RequireArray(value, "artifactRetention", source), source, "artifactRetention", allowEmpty: false);
 
-        return new PerformanceWorkload(id, version, RequireString(value, "scenarioId", source), RequireString(value, "owner", source), RequireString(value, "publicOperation", source), coverageRows, input, operationSequence, requiredProviders, routes, providerEvidence, correctness, baseline, physicalForms, retention);
+        return new PerformanceWorkload(id, version, RequireString(value, "scenarioId", source), RequireString(value, "owner", source), RequireString(value, "publicOperation", source), coverageRows, input, operationSequence, requiredProviders, routes, providerEvidence, correctness, baseline, admission, physicalForms, retention);
     }
 
     private static IReadOnlyDictionary<string, string> ParseProviderEvidence(JsonElement value, string source)
@@ -117,11 +125,116 @@ public sealed class WorkloadCatalog
         return new EfContractBaseline(RequireString(value, "baselineIdentity", source), status, owner, RequireString(value, "purpose", source));
     }
 
+    private static BenchmarkAdmission ParseBenchmarkAdmission(JsonElement value, string source)
+    {
+        RequireObject(value, source);
+        RequireClosedProperties(value, ["status", "reason"], source);
+        var status = RequireString(value, "status", source);
+        var reason = RequireString(value, "reason", source);
+        if (status is not ("ready" or "blocked") ||
+            !Regex.IsMatch(reason, "^[a-z0-9]+(?:[.-][a-z0-9]+)*$", RegexOptions.CultureInvariant))
+            throw new WorkloadContractException($"{source} has an invalid benchmark admission declaration.");
+        return new BenchmarkAdmission(status, reason);
+    }
+
     private static void ValidateFrozenContract(PerformanceWorkload actual, ExpectedWorkload expected)
     {
-        if (actual.Version != expected.Version || actual.Input.FingerprintSha256 != expected.InputFingerprint || actual.Correctness.ResultDigestSha256 != expected.ResultDigest ||
-            !actual.CoverageRows.SequenceEqual(expected.CoverageRows, StringComparer.Ordinal) || !actual.PhysicalFormsFor646.SequenceEqual(expected.PhysicalForms, StringComparer.Ordinal))
+        if (!actual.CoverageRows.SequenceEqual(expected.CoverageRows, StringComparer.Ordinal) ||
+            !actual.PhysicalFormsFor646.SequenceEqual(expected.PhysicalForms, StringComparer.Ordinal))
             throw new WorkloadContractException($"The workload '{actual.Id}' does not match its frozen Spec 094 #646 handoff contract.");
+
+        if (!ReproducibleWorkloadScenarioCatalog.GoldenVectors.TryGetValue(actual.Id, out var golden) ||
+            actual.Input.FingerprintSha256 != golden.InputFingerprint ||
+            actual.Correctness.ResultDigestSha256 != golden.ResultDigest)
+            throw new WorkloadContractException($"The workload '{actual.Id}' does not match its independent frozen input/result golden vector.");
+
+        if (ReproducibleWorkloadScenarioCatalog.Successors.TryGetValue(actual.Id, out var successor))
+        {
+            if (actual.Version != successor.Version ||
+                actual.ScenarioId != successor.ScenarioId ||
+                actual.Input.Seed != successor.Seed ||
+                successor.ComputeInputFingerprint() != golden.InputFingerprint ||
+                successor.ComputeResultDigest() != golden.ResultDigest ||
+                !SemanticInputMatches(actual.Input.Values, successor.Parameters) ||
+                !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal))
+                throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible v1.1 contract vector, including every semantic input field.");
+            RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
+            return;
+        }
+
+        if (actual.Id == IamNormalizedLookupWorkload.WorkloadId)
+        {
+            if (actual.Version != "1.1.0" ||
+                actual.ScenarioId != IamNormalizedLookupWorkload.ScenarioId ||
+                actual.Input.Seed != IamNormalizedLookupWorkload.Seed ||
+                IamNormalizedLookupWorkload.ComputeInputFingerprint() != golden.InputFingerprint ||
+                IamNormalizedLookupWorkload.ExpectedResultDigest != golden.ResultDigest ||
+                !SemanticInputMatches(actual.Input.Values, IamSemanticInputParameters()) ||
+                !actual.OperationSequence.SequenceEqual(IamNormalizedLookupWorkload.OperationSequence, StringComparer.Ordinal))
+                throw new WorkloadContractException(
+                    $"The workload '{actual.Id}' does not match its independent Identity v1.1 golden vector, including every semantic input field.");
+            RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
+            return;
+        }
+
+        if (actual.Id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ||
+            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion ||
+            ReproducibleWorkloadScenarioCatalog.BlockedInputFingerprint != golden.InputFingerprint ||
+            ReproducibleWorkloadScenarioCatalog.BlockedResultDigest != golden.ResultDigest)
+            throw new WorkloadContractException($"The workload '{actual.Id}' is not the explicitly blocked Secret comparator contract.");
+        RequireAdmission(actual, "blocked", ReproducibleWorkloadScenarioCatalog.BlockedReasonCode);
+    }
+
+    private static IReadOnlyDictionary<string, object> IamSemanticInputParameters()
+    {
+        var input = IamNormalizedLookupWorkload.InputDefinition;
+        return new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["tenantCount"] = input.TenantCount,
+            ["canonicalUserCount"] = input.CanonicalUserCount,
+            ["noiseUserCount"] = input.NoiseUserCount,
+            ["roleCount"] = input.RoleCount,
+            ["userRoleLinkCount"] = input.UserRoleLinkCount,
+            ["concurrentContenders"] = input.ConcurrentContenders
+        };
+    }
+
+    private static bool SemanticInputMatches(
+        JsonElement input,
+        IReadOnlyDictionary<string, object> parameters)
+    {
+        var inputProperties = input.EnumerateObject().ToArray();
+        if (inputProperties.Select(property => property.Name).Distinct(StringComparer.Ordinal).Count() !=
+            inputProperties.Length)
+            return false;
+
+        var semanticProperties = inputProperties
+            .Where(property => property.Name is not ("seed" or "fingerprintSha256"))
+            .ToDictionary(property => property.Name, property => property.Value, StringComparer.Ordinal);
+        if (!semanticProperties.Keys.Order(StringComparer.Ordinal)
+            .SequenceEqual(parameters.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            return false;
+
+        return parameters.All(pair =>
+            pair.Value switch
+            {
+                int expected => semanticProperties[pair.Key].ValueKind == JsonValueKind.Number &&
+                                semanticProperties[pair.Key].TryGetInt32(out var actual) &&
+                                actual == expected,
+                string expected => semanticProperties[pair.Key].ValueKind == JsonValueKind.String &&
+                                   semanticProperties[pair.Key].GetString() == expected,
+                bool expected => semanticProperties[pair.Key].ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                                 semanticProperties[pair.Key].GetBoolean() == expected,
+                _ => false
+            });
+    }
+
+    private static void RequireAdmission(PerformanceWorkload workload, string status, string reason)
+    {
+        if (workload.BenchmarkAdmission.Status != status ||
+            workload.BenchmarkAdmission.Reason != reason)
+            throw new WorkloadContractException(
+                $"The workload '{workload.Id}' does not match its reviewed benchmark admission status/reason.");
     }
 
     private static JsonElement RequireProperty(JsonElement value, string name, string source) => value.TryGetProperty(name, out var property) ? property : throw new WorkloadContractException($"{source} is missing required property '{name}'.");
@@ -168,32 +281,36 @@ public sealed class WorkloadCatalog
         if (!allowed.SetEquals(properties)) throw new WorkloadContractException($"{source} is missing one or more required contract properties.");
     }
 
-    private sealed record ExpectedWorkload(string Version, string InputFingerprint, string ResultDigest, string[] CoverageRows, string[] PhysicalForms);
+    private sealed record ExpectedWorkload(string[] CoverageRows, string[] PhysicalForms);
     private static readonly IReadOnlyDictionary<string, string> ExpectedSourceDigests = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["runtime.json"] = "ec28c995f70a98a1f57b34e3c3b9b657ce090c5bd0dc4c81b10f5dd7476d6a82",
-        ["iam-secrets.json"] = "f62c83caca2bfbf2f0989b835d39f8a4a80860ad4b8342d9d051aade4b6c12a6",
-        ["distributed-runtime.json"] = "b82f0c370859c6ba06eca13bad125d7c31f4a2f74b4f8b6d9f5f60e21217e01a"
+        ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
+        ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
+        ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837"
     };
     private static readonly IReadOnlyDictionary<string, ExpectedWorkload> Expected = new Dictionary<string, ExpectedWorkload>(StringComparer.Ordinal)
     {
-        ["checkpoint-commit"] = new("1.0.0", "f59eef8b9359dc3623bbb42ce07c531f0f027170dc6d33e1788b1bd80dcdab93", "abaa23e9e4f3c9285f50a07f33d7569696ec4cfe1ac496575c12b45dbe78042a", ["runtime-activity-execution-state", "runtime-checkpoint-commit", "runtime-durable-value-state", "runtime-workflow-executable"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "checkpoint-unit-of-work-with-linked-outbox"]),
-        ["bookmark-lookup"] = new("1.0.0", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e", ["runtime-bookmark-state"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables"]),
-        ["trigger-binding-stimulus-lookup"] = new("1.0.0", "cbd570ed8c80f996554853b1143fc34f634138b005858322d1a669dde2113b9a", "3c10eab69da70eccacc648780781ef57ad6499b91cb012465d154d6b1b7e9294", ["runtime-executable-source-reference", "runtime-trigger-binding"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "linked-executable-source-reference-index"]),
-        ["recovery-scan"] = new("1.0.0", "7284c110669aaa3db7587893e9e31005af8c807d8323609aeb80cfd948d82b48", "06033b0de6f4784abc87772b63f5f9a561a5bfc40bc18b3f429b4e318fccd785", ["runtime-execution-liveness", "runtime-incident-state", "runtime-scheduler-state", "runtime-workflow-execution-state", "runtime-workflow-hold-state"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "recovery-candidate-index"]),
-        ["queue-drain"] = new("1.0.0", "21d5dabec0cb604dae214af9bc20835b09ab5f87cfd3d697b946d8adb31d20fa", "bf82d193b202ff0c9e3be211009a3f10401cf1411aaac607db64a199657fb630", ["runtime-scheduler-poison", "runtime-scheduler-work-queue"], ["dedicated-scheduler-work-documents", "dedicated-scheduler-poison-documents", "shared-documents-with-linked-index-tables"]),
-        ["outbox-drain"] = new("1.0.0", "3a6f44fea2a5905e3df316bd3585b13f6080588c75c6eab9598cced26c184eef", "0f4f678c6250ce1c951ad1e14218a1c38c61d6b15b947fa724c50859a4339934", ["runtime-post-commit-outbox"], ["dedicated-post-commit-outbox-documents", "shared-documents-with-linked-index-tables", "due-order-index"]),
-        ["due-timer-selection"] = new("1.0.0", "86bef68c844d10b3cb02c8f65da33ba46ec4c27b9ba0090b9783cd5036f1ab0e", "002fe0f7e4808d7ec2b85f267f8188981c3fd8ed4beca7ad11100ddd6c8d2002", ["runtime-durable-timer"], ["dedicated-durable-timer-documents", "shared-documents-with-linked-index-tables", "due-order-index"]),
-        ["recurring-schedule-selection"] = new("1.0.0", "ab6e1c276995da9e564f55cee00f243a13e16334c58c0d19cc146f2f757b3b5e", "af1d9aecbc7604ce39e33c553d9c1014be2377d81300aa4905e700beffcf7b17", ["runtime-publication-projection-state", "runtime-recurring-trigger-schedule"], ["dedicated-recurring-schedule-documents", "publication-projection-documents", "shared-documents-with-linked-index-tables"]),
-        ["iam-normalized-lookup-update"] = new("1.1.0", "5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc", ["iam-application", "iam-claim-mapping", "iam-credential", "iam-external-identity", "iam-provider-configuration-tenant", "iam-role", "iam-tenant-membership", "iam-user"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables-current-identity-shape"]),
-        ["secret-create-read-list"] = new("1.0.0", "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb", ["secrets-repository"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables"]),
-        ["placement-takeover"] = new("1.0.0", "9599391db271c63a41cced1409754b0bcb4e2bd8c316b70efa4d1583c310c92b", "25885819c5cb186adab6196a46d8e369e7b26992e0733e9525a3ca1eb2bf07c1", ["distributed-execution-placement"], ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"]),
-        ["command-send-lease-ack"] = new("1.0.0", "cb50baabaf83d0826dbb19d259be9d8fca9b4c8eaa9aea6ba7354a54c1835493", "9f8fa582159e0a796ecbe2d7bfb655cbebee428f9490fa83d4228e8e64f924eb", ["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"])
+        ["checkpoint-commit"] = new(["runtime-activity-execution-state", "runtime-checkpoint-commit", "runtime-durable-value-state", "runtime-workflow-executable"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "checkpoint-unit-of-work-with-linked-outbox"]),
+        ["bookmark-lookup"] = new(["runtime-bookmark-state"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables"]),
+        ["trigger-binding-stimulus-lookup"] = new(["runtime-executable-source-reference", "runtime-trigger-binding"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "linked-executable-source-reference-index"]),
+        ["recovery-scan"] = new(["runtime-execution-liveness", "runtime-incident-state", "runtime-scheduler-state", "runtime-workflow-execution-state", "runtime-workflow-hold-state"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "recovery-candidate-index"]),
+        ["queue-drain"] = new(["runtime-scheduler-poison", "runtime-scheduler-work-queue"], ["dedicated-scheduler-work-documents", "dedicated-scheduler-poison-documents", "shared-documents-with-linked-index-tables"]),
+        ["outbox-drain"] = new(["runtime-post-commit-outbox"], ["dedicated-post-commit-outbox-documents", "shared-documents-with-linked-index-tables", "due-order-index"]),
+        ["due-timer-selection"] = new(["runtime-durable-timer"], ["dedicated-durable-timer-documents", "shared-documents-with-linked-index-tables", "due-order-index"]),
+        ["recurring-schedule-selection"] = new(["runtime-publication-projection-state", "runtime-recurring-trigger-schedule"], ["dedicated-recurring-schedule-documents", "publication-projection-documents", "shared-documents-with-linked-index-tables"]),
+        ["iam-normalized-lookup-update"] = new(["iam-application", "iam-claim-mapping", "iam-credential", "iam-external-identity", "iam-provider-configuration-tenant", "iam-role", "iam-tenant-membership", "iam-user"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables-current-identity-shape"]),
+        ["secret-create-read-list"] = new(["secrets-repository"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables"]),
+        ["placement-takeover"] = new(["distributed-execution-placement"], ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"]),
+        ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"])
     };
 }
 
-public sealed record PerformanceWorkload(string Id, string Version, string ScenarioId, string Owner, string PublicOperation, IReadOnlyList<string> CoverageRows, WorkloadInput Input, IReadOnlyList<string> OperationSequence, IReadOnlyList<string> RequiredProviders, IReadOnlyList<string> RequiredNativeRoutes, IReadOnlyDictionary<string, string> RequiredProviderEvidence, CorrectnessContract Correctness, EfContractBaseline EfContractBaseline, IReadOnlyList<string> PhysicalFormsFor646, IReadOnlyList<string> ArtifactRetention);
+public sealed record PerformanceWorkload(string Id, string Version, string ScenarioId, string Owner, string PublicOperation, IReadOnlyList<string> CoverageRows, WorkloadInput Input, IReadOnlyList<string> OperationSequence, IReadOnlyList<string> RequiredProviders, IReadOnlyList<string> RequiredNativeRoutes, IReadOnlyDictionary<string, string> RequiredProviderEvidence, CorrectnessContract Correctness, EfContractBaseline EfContractBaseline, BenchmarkAdmission BenchmarkAdmission, IReadOnlyList<string> PhysicalFormsFor646, IReadOnlyList<string> ArtifactRetention);
 public sealed record WorkloadInput(string Seed, string FingerprintSha256, JsonElement Values);
 public sealed record CorrectnessContract(string ResultDigestSha256, IReadOnlyList<string> Invariants, string TimingGate);
 public sealed record EfContractBaseline(string BaselineIdentity, string ExecutionStatus, string ExecutionOwner, string Purpose);
+public sealed record BenchmarkAdmission(string Status, string Reason)
+{
+    public bool IsReady => Status == "ready";
+}
 public sealed class WorkloadContractException(string message) : Exception(message);

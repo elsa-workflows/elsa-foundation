@@ -3,15 +3,15 @@
   "workloads": [
     {
       "id": "placement-takeover",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "distributed-placement-takeover",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Claim, renew, expire, take over, and reject stale release of execution placement through IExecutionPlacementStore.",
       "coverageRows": ["distributed-execution-placement"],
       "input": {
-        "seed": "spec094-placement-takeover-v1",
-        "fingerprintSha256": "9599391db271c63a41cced1409754b0bcb4e2bd8c316b70efa4d1583c310c92b",
+        "seed": "spec094-placement-takeover-v1.1",
+        "fingerprintSha256": "17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985",
         "executionCount": 512,
         "activePlacements": 256,
         "leaseDurationSeconds": 30,
@@ -30,7 +30,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "25885819c5cb186adab6196a46d8e369e7b26992e0733e9525a3ca1eb2bf07c1",
+        "resultDigestSha256": "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4",
         "invariants": ["exactly one current lease exists for each execution", "placement tokens increase monotonically across claim renewal and takeover", "a stale release cannot clear the newer owner", "the reopened store exposes the takeover winner"],
         "timingGate": "Run the public placement correctness baseline with independent clients before #646 times the operation."
       },
@@ -40,20 +40,24 @@
         "executionOwner": "#646",
         "purpose": "Expected observable placement contract only; #646 owns real same-provider EF execution and comparison."
       },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
       "physicalFormsFor646": ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
     },
     {
       "id": "command-send-lease-ack",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "distributed-command-send-lease-ack",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Send commands, lease a bounded ordered batch, re-lease after visibility expiry, acknowledge the current lease, and reject a stale acknowledgement through IExecutionCommandTransport.",
       "coverageRows": ["distributed-command-transport"],
       "input": {
-        "seed": "spec094-command-send-lease-ack-v1",
-        "fingerprintSha256": "cb50baabaf83d0826dbb19d259be9d8fca9b4c8eaa9aea6ba7354a54c1835493",
+        "seed": "spec094-command-send-lease-ack-v1.1",
+        "fingerprintSha256": "a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1",
         "workflowCount": 128,
         "commandsPerWorkflow": 64,
         "batchSize": 16,
@@ -73,7 +77,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "9f8fa582159e0a796ecbe2d7bfb655cbebee428f9490fa83d4228e8e64f924eb",
+        "resultDigestSha256": "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f",
         "invariants": ["command identity and per-execution sequence are unique", "each lease is ordered and bounded", "visibility expiry permits redelivery only to a current lease", "a stale acknowledgement is rejected and no command is lost after reopen"],
         "timingGate": "Run the public command transport correctness baseline with independent clients before #646 times the operation."
       },
@@ -82,6 +86,10 @@
         "executionStatus": "not-executed",
         "executionOwner": "#646",
         "purpose": "Expected observable command transport contract only; this handoff supplies no live EF result or benchmark verdict."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
       },
       "physicalFormsFor646": ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"],
       "artifactRetention": ["workload id/version", "commit SHA", "input fingerprint", "correctness digest", "independent-client metadata", "native route evidence"]
