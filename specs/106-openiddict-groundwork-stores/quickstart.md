@@ -163,3 +163,13 @@ After merging current `main`, the library ratchet should pass and the tool
 ratchet should remain red until `.config/dotnet-tools.json` is aligned from
 preview.80 to the publicly restorable preview.81. T006 remains blocked after that
 alignment on the reviewed physical form and real-provider evidence.
+
+Actual result after merging remote `main`
+`78033cf1167071123cb9fe5ef38653973bd65200`:
+
+- capability probe: 9 passed, 0 failed, 0 skipped;
+- architecture guard: 2 passed, 0 failed, 0 skipped.
+
+The package and tool family are now aligned on preview.81. T006 remains blocked
+only on the reviewed physical form and real-provider evidence; this checkpoint
+does not claim a completed OpenIddict adapter.
