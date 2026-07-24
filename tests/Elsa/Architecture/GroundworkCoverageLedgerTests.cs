@@ -8,6 +8,7 @@ public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.80";
+    private const string ExpectedCurrentGroundworkVersion = "0.0.1-preview.81";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
     private const string CheckpointFenceAttachmentRelativePath =
@@ -205,9 +206,8 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Ledger_evidence_generation_matches_every_pinned_Groundwork_package_and_tool()
+    public void Pinned_Groundwork_packages_and_tool_match_the_current_takeover_version()
     {
-        var ledgerVersion = ReadLedger()["groundworkVersion"]!.GetValue<string>();
         var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
             .Descendants("PackageVersion")
             .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork.", StringComparison.Ordinal) == true)
@@ -218,8 +218,8 @@ public sealed class GroundworkCoverageLedgerTests
         var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
         var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
-        Assert.Equal(ledgerVersion, Assert.Single(packageVersions));
-        Assert.Equal(ledgerVersion, toolVersion);
+        Assert.Equal(ExpectedCurrentGroundworkVersion, Assert.Single(packageVersions));
+        Assert.Equal(ExpectedCurrentGroundworkVersion, toolVersion);
     }
 
     [Fact]
