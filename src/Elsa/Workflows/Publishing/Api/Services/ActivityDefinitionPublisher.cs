@@ -33,7 +33,10 @@ public sealed record PublishActivityDefinitionRequest(
 public sealed record PreflightActivityDefinitionPublicationRequest(
     string DraftId,
     long ExpectedDraftRevision,
-    string? ExpectedDefinitionHeadVersionId);
+    string? ExpectedDefinitionHeadVersionId)
+{
+    public string? Version { get; init; }
+}
 
 public sealed record PublishActivityDefinitionResult(
     ActivityPublicationResult Publication,
@@ -157,38 +160,110 @@ public sealed class ActivityDefinitionPublisher(
                   "The current definition head publication was not found.",
                   [],
                   true);
-        var provisionalVersion = ActivityPublicationReviewPolicy.ProvisionalVersion(head?.Version);
         var candidateVersionId = ActivityPublicationReviewPolicy.StableCandidateVersionId(
             definition.Id,
             draft.Id,
             draft.Revision);
-        var compilation = await compiler.CompileAsync(
-            new(
-                definition,
-                draft,
-                candidateVersionId,
-                provisionalVersion,
-                ComputeLayoutBytes(layout.Records)),
-            cancellationToken);
-        var diff = compilation.Template is null
-            ? null
-            : await ComputeDiffAsync(
-                head,
-                candidateVersionId,
-                provisionalVersion,
-                draft,
-                layout,
-                compilation,
+        var candidateVersion = request.Version ?? ActivityPublicationReviewPolicy.ProvisionalVersion(head?.Version);
+        if (!SemVer.TryParse(candidateVersion, out _))
+            throw Reject(
+                "activity.request.invalid",
+                $"Version '{candidateVersion}' is not valid SemVer 2.0.0.",
+                [Diagnostic("activity.version.invalid", $"Version '{candidateVersion}' is not valid SemVer 2.0.0.", draft)]);
+
+        async Task<(ActivityTemplateCompilerResult Compilation, ActivityVersionDiff? Diff)> CompileCandidateAsync(string version)
+        {
+            var compilation = await compiler.CompileAsync(
+                new(
+                    definition,
+                    draft,
+                    candidateVersionId,
+                    version,
+                    ComputeLayoutBytes(layout.Records)),
                 cancellationToken);
-        var requiredBump = diff?.RequiredBump ?? ActivityVersionBump.None;
+            var diff = compilation.Template is null
+                ? null
+                : await ComputeDiffAsync(
+                    head,
+                    candidateVersionId,
+                    version,
+                    draft,
+                    layout,
+                    compilation,
+                    cancellationToken);
+            return (compilation, diff);
+        }
+
         var existingVersions = await publicationStore.ListByDefinitionAsync(definition.Id, cancellationToken);
-        var validVersions = ActivityPublicationReviewPolicy.AvailableVersionChoices(
-            head?.Version,
-            requiredBump,
-            existingVersions);
-        var minimumVersion = ActivityPublicationReviewPolicy.MinimumVersion(
-            head?.Version,
-            requiredBump);
+        ActivityTemplateCompilerResult compilation;
+        ActivityVersionDiff? diff;
+        ActivityVersionBump requiredBump;
+        IReadOnlyList<string> validVersions;
+        string minimumVersion;
+        var attemptedVersions = new HashSet<string>(StringComparer.Ordinal);
+        while (true)
+        {
+            if (!attemptedVersions.Add(candidateVersion))
+                throw Reject(
+                    "activity.publication.invalid",
+                    "The publication version could not be selected deterministically.",
+                    [new(
+                        "activity.version.selection-unstable",
+                        ActivityDiagnosticSeverity.Error,
+                        "Provider compilation changed the required version bump without reaching a stable suggested version.",
+                        new("ActivityDraft", draft.Id, definition.Id, Revision: draft.Revision),
+                        Remediation: "Run publication preflight with an explicit exact version.",
+                        Metadata: new Dictionary<string, string>(StringComparer.Ordinal))]);
+
+            var review = await CompileCandidateAsync(candidateVersion);
+            compilation = review.Compilation;
+            diff = review.Diff;
+            requiredBump = diff?.RequiredBump ?? ActivityVersionBump.None;
+            validVersions = ActivityPublicationReviewPolicy.AvailableVersionChoices(
+                head?.Version,
+                requiredBump,
+                existingVersions);
+            minimumVersion = ActivityPublicationReviewPolicy.MinimumVersion(
+                head?.Version,
+                requiredBump);
+            if (request.Version is not null)
+                break;
+
+            var suggestedVersion = validVersions.FirstOrDefault()
+                                   ?? throw Reject(
+                                       "activity.version.conflict",
+                                       "No suggested semantic version is available for publication.",
+                                       [],
+                                       true);
+            if (StringComparer.Ordinal.Equals(candidateVersion, suggestedVersion))
+                break;
+            candidateVersion = suggestedVersion;
+        }
+
+        if (!ActivityPublicationReviewPolicy.IsVersionAtLeast(candidateVersion, minimumVersion))
+            throw Reject(
+                "activity.publication.invalid",
+                "The requested exact version is below the reviewed minimum.",
+                [new(
+                    "activity.version.bump-insufficient",
+                    ActivityDiagnosticSeverity.Error,
+                    $"Version {candidateVersion} is below the reviewed minimum {minimumVersion}.",
+                    new("ActivityDraft", draft.Id, definition.Id, Revision: draft.Revision),
+                    Remediation: $"Publish as {minimumVersion} or a higher unique semantic version.",
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["requestedVersion"] = candidateVersion,
+                        ["minimumVersion"] = minimumVersion
+                    })]);
+        if (SemVer.TryParse(candidateVersion, out var selectedVersion) &&
+            existingVersions.Any(x =>
+                SemVer.TryParse(x.Version, out var existingVersion) &&
+                existingVersion == selectedVersion))
+            throw Reject(
+                "activity.version.conflict",
+                $"Version '{candidateVersion}' already exists.",
+                [],
+                true);
         var diagnostics = validation.Diagnostics
             .Concat(compilation.Diagnostics)
             .Concat(_reviewPolicy.ReadinessDiagnostics(draft, compilation.Template))
@@ -221,6 +296,7 @@ public sealed class ActivityDefinitionPublisher(
         var reviewToken = ActivityPublicationReviewPolicy.ReviewToken(
             draft,
             authoring.HeadVersionId,
+            candidateVersion,
             compilation.Template,
             diff,
             requiredBump,
@@ -247,7 +323,10 @@ public sealed class ActivityDefinitionPublisher(
             provider,
             storage,
             runtime,
-            orderedDiagnostics);
+            orderedDiagnostics)
+        {
+            ReviewedVersion = candidateVersion
+        };
     }
 
     public async Task<ActivityPublicationReceipt> PublishReviewedAsync(
@@ -272,7 +351,10 @@ public sealed class ActivityDefinitionPublisher(
                 new(
                     request.DraftId,
                     request.ExpectedDraftRevision,
-                    request.ExpectedDefinitionHeadVersionId),
+                    request.ExpectedDefinitionHeadVersionId)
+                {
+                    Version = request.Version
+                },
                 cancellationToken);
             if (!StringComparer.Ordinal.Equals(preflight.ReviewToken, request.ReviewToken))
                 throw Reject(
@@ -487,6 +569,7 @@ public sealed class ActivityDefinitionPublisher(
         var currentReviewToken = ActivityPublicationReviewPolicy.ReviewToken(
             draft,
             authoring.HeadVersionId,
+            request.Version,
             compilation.Template,
             diff,
             requiredBump,
