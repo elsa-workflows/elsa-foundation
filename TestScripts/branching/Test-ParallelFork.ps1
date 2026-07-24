@@ -4,11 +4,6 @@
 .DESCRIPTION
     Foundation-native equivalent of the classic FlowFork + FlowJoin concept: the `Parallel` composite forks into
     named branches and completes when they finish (optionally after a completion `Threshold`).
-
-    LIVING TRACKER (issue #1027): `Parallel` is currently ABSENT from the default activity catalog even though
-    its ControlFlow siblings (If/Switch/For/ForEach/While/Do) are present, so it cannot be resolved/authored.
-    This script resolves `Parallel` and, if present, runs the fork/join and asserts all branches ran; if it is
-    not in the catalog it reports KNOWN ISSUE #1027 and passes (flip to a strict assertion once #1027 is fixed).
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -20,19 +15,10 @@ param(
 )
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
-Write-Host "== Parallel fork/join ($Branches branches; tracked by #1027) ==  -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== Parallel fork/join ($Branches branches) ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $writeLine = Invoke-Step "resolve WriteLine" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
-
-$parVer = $null
-try { $parVer = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Parallel.Activities.Parallel' }
-catch { $parVer = $null }
-
-if (-not $parVer) {
-    Write-Host ""
-    Write-Host "KNOWN ISSUE #1027 - 'Parallel' is not in the activity catalog (dropped in CLR reconciliation); its ControlFlow siblings register fine. Fork/join can't be exercised until it's restored." -ForegroundColor Yellow
-    return
-}
+$parVer = Invoke-Step "resolve Parallel" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Parallel.Activities.Parallel' }
 
 $branchNodes = @()
 for ($n = 1; $n -le $Branches; $n++) {

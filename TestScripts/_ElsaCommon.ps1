@@ -47,11 +47,12 @@ function Connect-Elsa {
 }
 
 # Resolve an activity's current (head) version id by its CLR type key, e.g.
-# 'Elsa.Activities.Primitives.Activities.WriteLine'. The API's searchTerm is not applied
-# server-side in this build, so we fetch and filter client-side.
+# 'Elsa.Activities.Primitives.Activities.WriteLine'. Search server-side so the result is
+# not hidden beyond the first bounded management page.
 function Get-ActivityVersionId {
     param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)][string] $TypeKey)
-    $acts = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/definitions?searchTerm=$TypeKey" -WebSession $Ctx.Session
+    $search = [Uri]::EscapeDataString($TypeKey)
+    $acts = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/definitions?search=$search" -WebSession $Ctx.Session
     $hit = $acts.items | Where-Object { $_.definition.activityTypeKey -eq $TypeKey } | Select-Object -First 1
     if (-not $hit) { throw "Activity '$TypeKey' not found in the catalog." }
     return $hit.definition.headVersionId
