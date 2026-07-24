@@ -168,6 +168,12 @@ export ELSA_GROUNDWORK_SOURCE_COMMIT="bf452355867c8f76a11d9bca9191563a773a631a"
 export ELSA_GROUNDWORK_SOURCE_TREE="8b3504d52cef5f4a19ae5318fc66f46aefcfd048"
 export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview81"
 
+# Reproduction is only valid from the retained source snapshot. These checks
+# deliberately fail from a later documentation/evidence commit.
+test "$(git rev-parse HEAD)" = "$ELSA_GROUNDWORK_SOURCE_COMMIT"
+test "$(git rev-parse 'HEAD^{tree}')" = "$ELSA_GROUNDWORK_SOURCE_TREE"
+test -z "$(git status --porcelain)"
+
 ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE=1 \
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   --configuration Release --no-build \
@@ -211,6 +217,18 @@ the focused SQL Server fence scenario and this complete publication both passed 
 This refresh preserves T050's completed evidence at the current package family. It does not complete
 T058/T069/T076/T093/T100 or advance any ledger row status; #646 inherits those remaining evidence and
 performance-verdict obligations.
+
+### Preview.81 checkpoint/fence review disposition
+
+Three adversarial reviewers inspected the frozen implementation/evidence range
+`78033cf1167071123cb9fe5ef38653973bd65200..df7fedbdd531bd889a7bfd72a5d436ee53f8dc8e`
+on correctness/mechanism, evidence integrity, and scope/test preservation:
+
+| Axis | Initial finding | Disposition | Final verdict |
+|---|---|---|---|
+| Correctness/mechanism | Version namespaces and retained metadata were not enforced strongly enough. | The publisher now rejects version/path/provenance mismatches; the validator recomputes result hashes and compares the complete retained payload. Focused publisher/capture tests and an independent 36-record audit passed. | PASS |
+| Evidence integrity | Synthetic observations and a separately acquired physical fingerprint could green-wash the retained result. | One driver execution now returns the raw actual observations and physical fingerprint, rechecks the fingerprint, and binds both with provenance into the record, artifact, and digest. All nine four-provider matrices and exact ledger imports were independently recomputed. | PASS |
+| Scope/test preservation | The first refresh overwrote preview.80 history, then the runnable command could label a later checkout as the retained source snapshot. | Preview.80 was restored byte-for-byte and guarded by its attachment hash; preview.81 is version-namespaced. The reproduction command now fails unless HEAD, tree, and cleanliness exactly match the retained source snapshot. | Pending originating-reviewer re-verification |
 
 For the performance handoff, `requiredNativeRoutes` in the versioned workload documents are exact current
 `BoundedQueryDeclaration.Identity` values, not coverage-ledger `queryShapes` or descriptive “bounded” aliases.
