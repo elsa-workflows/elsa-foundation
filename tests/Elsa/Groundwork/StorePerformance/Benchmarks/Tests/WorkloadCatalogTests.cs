@@ -93,6 +93,23 @@ public sealed class WorkloadCatalogTests
         Assert.Contains("semantic input", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("\"noiseUserCount\": 16", "\"noiseUserCount\": 17")]
+    [InlineData("\"scenarioId\": \"identity-authority-baseline\"", "\"scenarioId\": \"identity-authority-drift\"")]
+    [InlineData("\"create-canonical-user\"", "\"create-unreviewed-user\"")]
+    public void Rejects_identity_semantic_scenario_or_operation_drift_with_a_recomputed_source_digest(
+        string from,
+        string to)
+    {
+        using var fixture = WorkloadFixture.CopyFromRepository();
+        fixture.Replace(from, to, "iam-secrets.json");
+
+        var error = Assert.Throws<WorkloadContractException>(() =>
+            WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
+
+        Assert.Contains("Identity v1.1 golden vector", error.Message, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyDictionary<string, string> SourceDigests(string repositoryRoot)
     {
         var directory = Path.Combine(repositoryRoot, "specs", "094-harden-groundwork-stores", "workloads");

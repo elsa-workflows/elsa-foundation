@@ -165,10 +165,14 @@ public sealed class WorkloadCatalog
         if (actual.Id == IamNormalizedLookupWorkload.WorkloadId)
         {
             if (actual.Version != "1.1.0" ||
+                actual.ScenarioId != IamNormalizedLookupWorkload.ScenarioId ||
                 actual.Input.Seed != IamNormalizedLookupWorkload.Seed ||
                 IamNormalizedLookupWorkload.ComputeInputFingerprint() != golden.InputFingerprint ||
-                IamNormalizedLookupWorkload.ExpectedResultDigest != golden.ResultDigest)
-                throw new WorkloadContractException($"The workload '{actual.Id}' does not match its independent Identity v1.1 golden vector.");
+                IamNormalizedLookupWorkload.ExpectedResultDigest != golden.ResultDigest ||
+                !SemanticInputMatches(actual.Input.Values, IamSemanticInputParameters()) ||
+                !actual.OperationSequence.SequenceEqual(IamNormalizedLookupWorkload.OperationSequence, StringComparer.Ordinal))
+                throw new WorkloadContractException(
+                    $"The workload '{actual.Id}' does not match its independent Identity v1.1 golden vector, including every semantic input field.");
             RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
             return;
         }
@@ -179,6 +183,20 @@ public sealed class WorkloadCatalog
             ReproducibleWorkloadScenarioCatalog.BlockedResultDigest != golden.ResultDigest)
             throw new WorkloadContractException($"The workload '{actual.Id}' is not the explicitly blocked Secret comparator contract.");
         RequireAdmission(actual, "blocked", ReproducibleWorkloadScenarioCatalog.BlockedReasonCode);
+    }
+
+    private static IReadOnlyDictionary<string, object> IamSemanticInputParameters()
+    {
+        var input = IamNormalizedLookupWorkload.InputDefinition;
+        return new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["tenantCount"] = input.TenantCount,
+            ["canonicalUserCount"] = input.CanonicalUserCount,
+            ["noiseUserCount"] = input.NoiseUserCount,
+            ["roleCount"] = input.RoleCount,
+            ["userRoleLinkCount"] = input.UserRoleLinkCount,
+            ["concurrentContenders"] = input.ConcurrentContenders
+        };
     }
 
     private static bool SemanticInputMatches(

@@ -484,8 +484,9 @@ candidate are:
 | Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | Awaiting originating-reviewer re-verification |
 | Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | Awaiting originating-reviewer re-verification |
 | Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | Awaiting originating-reviewer re-verification |
+| Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | Awaiting originating-reviewer re-verification |
 
-Root revalidation of the remediated candidate passed the benchmark harness **57/57**, the focused
+Root revalidation of the remediated candidate passed the benchmark harness **60/60**, the focused
 workload-correctness conformance selection **5/5**, and the performance-handoff architecture
 selection **7/7**. GitGuardian identified the Secret workload's literal identifier beside its two
 public SHA-256 golden vectors as a generic high-entropy secret; the dictionary now references the

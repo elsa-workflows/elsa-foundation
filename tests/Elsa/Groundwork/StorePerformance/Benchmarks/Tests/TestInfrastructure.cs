@@ -27,9 +27,11 @@ internal sealed class WorkloadFixture : IDisposable
         return new WorkloadFixture(root);
     }
 
-    public void Replace(string from, string to)
+    public void Replace(string from, string to, string fileName = "runtime.json")
     {
-        var path = Directory.EnumerateFiles(Path.Combine(Root, "specs", "094-harden-groundwork-stores", "workloads"), "runtime.json").Single();
+        var path = Directory.EnumerateFiles(
+            Path.Combine(Root, "specs", "094-harden-groundwork-stores", "workloads"),
+            fileName).Single();
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
     }
 
