@@ -7,14 +7,17 @@ provider, EF, Groundwork, connection, or secret dependency. Adapter leaves must 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque
-OS-machine fingerprint, safe machine architecture metadata, and every operation latency. `matrix` refuses a
-`--commit` that is not the clean repository HEAD. The
+OS-machine fingerprint, safe machine architecture metadata, the exact harness-assembly SHA-256, and every
+operation latency. Both the public matrix runner and the adapter child refuse a requested commit that is not
+the clean repository HEAD, and the child refuses a different harness assembly before adapter preparation. The
 schema-v2 artifact is valid only after its observed correctness digest equals the frozen workload digest and every
 required native route carries an admitted content digest, cardinality, scope/route predicates, finite limit, and
 materialized-count fact. Each route also names a distinct retained raw provider-plan JSON/text/XML artifact whose
 SHA-256 is verified; secret-bearing or oversized raw plans fail closed. The safe top-level summary JSON must
 exist, match the requested SHA-256, and bind its workload input, target, provider metadata, source provenance,
-host fingerprint, and structured route evidence. The cohort manifest binds process, summary, and raw-plan files.
+host fingerprint, harness assembly, and structured route evidence. The cohort manifest binds the expected commit,
+host, harness assembly, process artifacts, summaries, and raw-plan files. Manifest creation and the in-process
+delegate runner are test-internal; production callers must use the source-validating process runner.
 Place the artifact directory outside the worktree (or in an already ignored path) so the second target can prove
 the same clean source snapshot.
 

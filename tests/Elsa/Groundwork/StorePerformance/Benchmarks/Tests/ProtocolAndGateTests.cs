@@ -26,11 +26,14 @@ public sealed class ProtocolAndGateTests
     public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
     {
         Assert.Matches("^[0-9a-f]{64}$", HostFingerprint.CaptureSha256());
+        Assert.Matches("^[0-9a-f]{64}$", SourceProvenance.HarnessAssemblySha256());
         Assert.Throws<PerformanceContractException>(() =>
-            global::RepositoryProvenance.Validate(new string('a', 40), new string('b', 40), isClean: true));
+            SourceProvenance.Validate(new string('a', 40), new string('b', 40), isClean: true));
         Assert.Throws<PerformanceContractException>(() =>
-            global::RepositoryProvenance.Validate(new string('a', 40), new string('a', 40), isClean: false));
-        global::RepositoryProvenance.Validate(new string('a', 40), new string('a', 40), isClean: true);
+            SourceProvenance.Validate(new string('a', 40), new string('a', 40), isClean: false));
+        SourceProvenance.Validate(new string('a', 40), new string('a', 40), isClean: true);
+        Assert.Throws<PerformanceContractException>(() =>
+            SourceProvenance.RequireHarnessAssembly(new string('f', 64)));
     }
 
     [Fact]
@@ -46,6 +49,48 @@ public sealed class ProtocolAndGateTests
 
         Assert.Contains("not running on the matrix host", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(adapter.PrepareCalled);
+    }
+
+    [Fact]
+    public async Task Adapter_child_rejects_false_source_provenance_before_preparation_or_timing()
+    {
+        var request = MatrixPlan.Create(Workload(), Request()).Runs[0] with
+        {
+            HostFingerprintSha256 = HostFingerprint.CaptureSha256(),
+            CommitSha = new string('f', 40),
+            HarnessAssemblySha256 = SourceProvenance.HarnessAssemblySha256()
+        };
+        await using var adapter = new NeverPreparedAdapter();
+
+        var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+            ProcessMeasurement.ExecuteAsync(Workload(), request, BenchmarkProtocol.Acceptance, adapter, Path.GetTempPath(), CancellationToken.None));
+
+        Assert.Contains("must equal the current repository HEAD", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(adapter.PrepareCalled);
+    }
+
+    [Fact]
+    public async Task Public_matrix_runner_rejects_false_source_provenance_before_starting_a_child()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");
+        try
+        {
+            var plan = MatrixPlan.Create(Workload(), Request() with
+            {
+                CommitSha = new string('f', 40),
+                HarnessAssemblySha256 = SourceProvenance.HarnessAssemblySha256()
+            });
+
+            var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                ProcessMatrixRunner.RunAsync(plan, Environment.ProcessPath!, directory, CancellationToken.None));
+
+            Assert.Contains("must equal the current repository HEAD", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(directory));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -71,7 +116,7 @@ public sealed class ProtocolAndGateTests
             ArtifactStore.Write(directory, ArtifactFor(plan.Runs[0]));
 
             var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
+                ProcessMatrixRunner.RunForTestAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
 
             Assert.Contains("preexisting", error.Message, StringComparison.OrdinalIgnoreCase);
         }
@@ -90,7 +135,7 @@ public sealed class ProtocolAndGateTests
             var plan = MatrixPlan.Create(Workload(), Request());
 
             var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
+                ProcessMatrixRunner.RunForTestAsync(plan, directory, (_, _, _) => Task.FromResult(0), CancellationToken.None));
 
             Assert.Contains("did not emit", error.Message, StringComparison.OrdinalIgnoreCase);
             Assert.False(Directory.Exists(directory) && Directory.EnumerateFiles(directory, "artifact-manifest.*.json").Any());
@@ -109,7 +154,7 @@ public sealed class ProtocolAndGateTests
         {
             var plan = MatrixPlan.Create(Workload(), Request());
 
-            await ProcessMatrixRunner.RunAsync(
+            await ProcessMatrixRunner.RunForTestAsync(
                 plan,
                 directory,
                 (run, output, _) =>
@@ -140,7 +185,7 @@ public sealed class ProtocolAndGateTests
             var plan = MatrixPlan.Create(Workload(), Request());
 
             var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(
+                ProcessMatrixRunner.RunForTestAsync(
                     plan,
                     directory,
                     (run, output, _) =>
@@ -168,7 +213,7 @@ public sealed class ProtocolAndGateTests
             var first = true;
 
             var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(
+                ProcessMatrixRunner.RunForTestAsync(
                     plan,
                     directory,
                     (run, output, _) =>
@@ -253,7 +298,7 @@ public sealed class ProtocolAndGateTests
         {
             var plan = MatrixPlan.Create(Workload(), Request());
             var missing = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(
+                ProcessMatrixRunner.RunForTestAsync(
                     plan,
                     missingDirectory,
                     (run, output, _) =>
@@ -265,7 +310,7 @@ public sealed class ProtocolAndGateTests
             Assert.Contains("evidence", missing.Message, StringComparison.OrdinalIgnoreCase);
 
             var mismatch = await Assert.ThrowsAsync<PerformanceContractException>(() =>
-                ProcessMatrixRunner.RunAsync(
+                ProcessMatrixRunner.RunForTestAsync(
                     plan,
                     mismatchDirectory,
                     (run, output, _) =>
@@ -350,7 +395,7 @@ public sealed class ProtocolAndGateTests
     {
         var request = new MatrixRequest(
             cohort, measurementSet, "bookmark-lookup", "1.0.0", "sqlite", adapter, "document-type-specific-tables", "100k",
-            new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
+            new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
         return request with { NativePlanContentSha256 = Hash(NativePlanPayload(request)) };
     }
 
@@ -407,7 +452,7 @@ public sealed class ProtocolAndGateTests
     }
 
     private static Task RunMatrixAsync(MatrixPlan plan, string outputDirectory) =>
-        ProcessMatrixRunner.RunAsync(
+        ProcessMatrixRunner.RunForTestAsync(
             plan,
             outputDirectory,
             (run, output, _) =>
@@ -429,12 +474,12 @@ public sealed class ProtocolAndGateTests
         new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
     private static string NativePlanPayload(MatrixRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
-        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
+        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256,
         request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
         request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string NativePlanPayload(RunRequest request) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
-        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha,
+        request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256,
         request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
         request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, NativeRoutes(request.MeasurementSetId)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

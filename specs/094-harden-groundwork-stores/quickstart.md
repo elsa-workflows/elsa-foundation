@@ -410,15 +410,17 @@ preexisting artifacts could be re-certified, comparison trusted stored summaries
 machine-mismatched targets could be compared, native-plan evidence was label-only, and matrix
 admission did not consult the frozen provider/form contract. The remediated schema-v2 protocol now:
 
-- binds two distinct four-process measurement sets to one cohort and one expected commit in a
-  hash-complete manifest;
+- binds two distinct four-process measurement sets to one cohort, one expected commit, and one exact
+  harness-assembly SHA-256 in a hash-complete manifest;
 - rejects stale planned paths, partial or mixed cohorts, changed admitted files, and unbound files;
 - validates finite positive raw samples and reproduces stored summaries, while comparison and gates
   recompute their statistics from the raw samples;
 - requires exact commit equality and stable machine-environment equality across targets;
-- verifies `--commit` against a clean repository HEAD, binds every process to an opaque hash of the
-  OS machine identity, and retains provider server version, required topology, and material
-  configuration values so adapter setup differences remain visible;
+- enforces the clean/exact repository HEAD and exact harness-assembly hash in both the public process
+  runner and the adapter child before preparation, keeps delegate execution and manifest minting
+  test-internal, binds every process to an opaque hash of the OS machine identity, and retains provider
+  server version, required topology, and material configuration values so adapter setup differences
+  remain visible;
 - binds structured route evidence to an actual hashed JSON file and its cohort, measurement set,
   workload input, provider, adapter, physical form, scale, commit, host, provider metadata, and
   composition fingerprint, while every `(measurement set, route)` exclusively owns a distinct
@@ -426,7 +428,7 @@ admission did not consult the frozen provider/form contract. The remediated sche
   content are validated; and
 - admits only providers and physical forms named by the immutable workload contract.
 
-Root revalidation passed the expanded harness suite **51/51**, the real IAM EF and Groundwork SQLite
+Root revalidation passed the expanded harness suite **53/53**, the real IAM EF and Groundwork SQLite
 correctness selection **2/2**, the full architecture suite **285/285** (including the architecture
 plus shrink-only EF-surface ratchet selection **65/65**), and a zero-warning Release harness build.
 Adapter identity is not present in the immutable

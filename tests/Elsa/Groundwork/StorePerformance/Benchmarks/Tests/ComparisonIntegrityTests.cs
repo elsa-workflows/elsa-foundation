@@ -482,7 +482,7 @@ internal sealed class ArtifactFixture : IDisposable
     {
         var physicalForm = form == "store" ? "document-type-specific-tables" : form;
         var evidenceReference = $"{adapter}-set.native-plan.json";
-        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
+        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
         var planOwner = rawPlanReferenceOwner ?? request.MeasurementSetId;
         var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256, planOwner);
         request = request with { NativePlanContentSha256 = Hash(payload) };
@@ -521,7 +521,7 @@ internal sealed class ArtifactFixture : IDisposable
         new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
     private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint, string rawPlanReferenceOwner) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
-        request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha,
+        request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256,
         request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology,
         request.ProviderConfiguration, request.Seed, documentInputFingerprint, request.NativePlanIdentity, NativeRoutes(rawPlanReferenceOwner)));
     private static string Hash(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

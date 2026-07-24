@@ -26,6 +26,7 @@ public sealed record RunRequest(
     string PhysicalForm,
     string Scale,
     string CommitSha,
+    string HarnessAssemblySha256,
     IReadOnlyDictionary<string, string> PackageVersions,
     string CompositionFingerprint,
     string HostFingerprintSha256,
@@ -61,6 +62,7 @@ public sealed record NativePlanEvidenceDocument(
     string PhysicalForm,
     string Scale,
     string CommitSha,
+    string HarnessAssemblySha256,
     string CompositionFingerprint,
     string HostFingerprintSha256,
     string ProviderVersion,
@@ -152,6 +154,8 @@ public static class ProcessMeasurement
         var hostFingerprint = HostFingerprint.CaptureSha256();
         if (hostFingerprint != request.HostFingerprintSha256)
             throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
+        SourceProvenance.RequireCleanHead(SourceProvenance.FindRepositoryRoot(), request.CommitSha);
+        SourceProvenance.RequireHarnessAssembly(request.HarnessAssemblySha256);
         await adapter.PrepareAsync(cancellationToken);
         var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
@@ -293,6 +297,7 @@ public static class ArtifactAdmission
             document.PhysicalForm != request.PhysicalForm ||
             document.Scale != request.Scale ||
             document.CommitSha != request.CommitSha ||
+            document.HarnessAssemblySha256 != request.HarnessAssemblySha256 ||
             document.CompositionFingerprint != request.CompositionFingerprint ||
             document.HostFingerprintSha256 != request.HostFingerprintSha256 ||
             document.ProviderVersion != request.ProviderVersion ||
@@ -326,6 +331,7 @@ public static class ArtifactAdmission
         first.PhysicalForm == second.PhysicalForm &&
         first.Scale == second.Scale &&
         first.CommitSha == second.CommitSha &&
+        first.HarnessAssemblySha256 == second.HarnessAssemblySha256 &&
         first.CompositionFingerprint == second.CompositionFingerprint &&
         first.HostFingerprintSha256 == second.HostFingerprintSha256 &&
         first.ProviderVersion == second.ProviderVersion &&
