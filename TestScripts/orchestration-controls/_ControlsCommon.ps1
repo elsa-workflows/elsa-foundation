@@ -22,15 +22,20 @@ function Get-EventStimulusHash {
 }
 
 # Publish an Event stimulus. Mode: StartOnly | ResumeOnly | StartAndResume (defaults to server default when null).
+# InputObject carries the stimulus payload. To RESUME a mid-flow wait the body must include a non-empty `input`
+# (the waiting invocation's committed trigger registration adopts its shape, #1014/#1038); an input-less resume
+# matches the bookmark (resumedCount=1) but silently never delivers, so resume callers must pass -InputObject.
 function Publish-EventStimulus {
     param(
         [Parameter(Mandatory)] $Ctx,
         [Parameter(Mandatory)][string] $EventName,
         [string] $Mode = "StartAndResume",
-        [string] $CorrelationId = $null
+        [string] $CorrelationId = $null,
+        $InputObject = $null
     )
     $body = @{ stimulusType = "Event"; stimulusHash = (Get-EventStimulusHash $EventName); mode = $Mode }
     if (-not [string]::IsNullOrEmpty($CorrelationId)) { $body.correlationId = $CorrelationId }
+    if ($null -ne $InputObject) { $body.input = $InputObject }
     Invoke-RestMethod "$($Ctx.BaseUrl)/runtime/workflows/stimuli" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body ($body | ConvertTo-Json)
 }
 

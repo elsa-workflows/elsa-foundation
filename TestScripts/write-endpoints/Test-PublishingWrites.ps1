@@ -33,7 +33,7 @@ Assert-Write -Ctx $ctx -Label "workflows/drafts/test-runs" -Method POST -Path "p
 
 # ---------- activity publishing ----------
 $manifest = @"
-{"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"$seq","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":[{"nodeId":"w","activityVersionId":"$wl","inputs":[{"referenceKey":"text","value":{"value":"act $tag","expressionType":"Literal"},"autoEvaluate":null,"evaluatorType":null,"storageDriverType":null,"isSensitive":null}],"outputs":[],"structure":null}]}}},"outputMappings":[]}
+{"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"$seq","inputs":[],"outputs":[],"structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"activities":[{"nodeId":"w","activityVersionId":"$wl","inputs":[{"referenceKey":"text","value":{"value":"act $tag","expressionType":"Literal"},"autoEvaluate":null,"evaluatorType":null,"storageDriverType":null,"isSensitive":null}],"outputs":[],"structure":null}]}}},"outputMappings":[]}
 "@
 function New-ReusableDraft([string]$name) {
     $body = @"

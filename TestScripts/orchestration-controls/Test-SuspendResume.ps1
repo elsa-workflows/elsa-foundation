@@ -1,21 +1,18 @@
 <#
 .SYNOPSIS
-    Suspend & resume via a mid-flow Event wait + stimulus. Suspend works; resume delivery is tracked against
-    issue #1014.
+    Suspend & resume via a mid-flow Event wait + stimulus. Asserts both halves strictly.
 .DESCRIPTION
     The canonical runtime pause/resume shape: a workflow suspends at a mid-flow `Event` catch
-    (`CanStartWorkflow=false`) and should resume when the matching event stimulus is published.
+    (`CanStartWorkflow=false`) and resumes when the matching event stimulus is published.
 
-    Verified behaviour on current main:
-      - SUSPEND works: the pre-wait step runs, the `Event` node reaches `Suspended`, the post-wait step does not
-        run. (Note: the workflow-level status stays `Running` rather than `Suspended` — see #1014.)
-      - RESUME is acknowledged but does NOT deliver: `POST runtime/workflows/stimuli` returns `resumedCount=1`
-        targeting the instance, yet the instance never progresses (the post-wait step never runs). Tracked as
-        issue #1014.
+    Verified behaviour on current main (resume delivery fixed by #1038, issue #1014):
+      - SUSPEND: the pre-wait step runs, the `Event` node reaches `Suspended`, the post-wait step does not.
+        (The workflow-level status stays `Running` while a descendant is parked.)
+      - RESUME: `POST runtime/workflows/stimuli` (ResumeOnly) with a non-empty `input` payload delivers and the
+        post-wait step runs to completion. NOTE: the `input` is required — an input-less resume matches the
+        bookmark (`resumedCount=1`) but silently never delivers (see Publish-EventStimulus / #1014).
 
-    This is a living tracker: it asserts the suspend half strictly, then attempts the resume and reports either
-    KNOWN ISSUE #1014 (resume did not deliver) or FIXED (resume completed the workflow — convert to a strict
-    assertion). Requires the server running from source (see ../README.md).
+    Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
 param(
@@ -55,8 +52,8 @@ if (-not ($beforeRan -and $suspended -and -not $afterRan)) {
 }
 Write-Host "suspend OK - parked at the Event wait (before ran, after did not)." -ForegroundColor Green
 
-# --- attempt RESUME (tracked by #1014) ---
-$resp = Invoke-Step "resume stimulus" { Publish-EventStimulus -Ctx $ctx -EventName $E -Mode "ResumeOnly" }
+# --- RESUME: ResumeOnly stimulus carrying an input payload (required for delivery, #1014/#1038) ---
+$resp = Invoke-Step "resume stimulus" { Publish-EventStimulus -Ctx $ctx -EventName $E -Mode "ResumeOnly" -InputObject @{ eventName = $E } }
 Write-Host ("stimulus: resumedCount={0} (resumes -> {1})" -f $resp.resumedCount, (($resp.resumes | ForEach-Object { $_.status }) -join ','))
 $completed = $false
 for ($i = 0; $i -lt 15 -and -not $completed; $i++) {
@@ -64,13 +61,12 @@ for ($i = 0; $i -lt 15 -and -not $completed; $i++) {
     $inst = Get-WorkflowInstance -Ctx $ctx -ExecutionId $wfId
     if ((Get-NodeRunCount -Instance $inst -NodeId 'after') -ge 1) { $completed = $true }
 }
+Show-WorkflowInstance -Instance $inst
 
 Write-Host ""
-if ($completed) {
-    Write-Host "FIXED (#1014) - resume delivered and the workflow completed. Convert this tracker to a strict suspend+resume assertion." -ForegroundColor Green
-} elseif ($resp.resumedCount -ge 1) {
-    Write-Host "KNOWN ISSUE #1014 - suspend works and the stimulus matched (resumedCount>=1), but the resume did not deliver (post-wait step never ran)." -ForegroundColor Yellow
+if ($resp.resumedCount -ge 1 -and $completed) {
+    Write-Host "SUCCESS - suspended at the Event wait, then the stimulus resumed it and the post-wait step ran." -ForegroundColor Green
 } else {
-    Write-Host ("MISMATCH - resume stimulus matched nothing (resumedCount={0})." -f $resp.resumedCount) -ForegroundColor Red
+    Write-Host ("FAIL (resume) - resumedCount={0}, post-wait ran={1}." -f $resp.resumedCount, $completed) -ForegroundColor Red
     exit 1
 }
