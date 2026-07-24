@@ -5,6 +5,7 @@ import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndp
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import { formatActivitySummary } from "../activitySummary";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -688,8 +689,8 @@ export function buildInstanceCanvas(
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
   const baseCanvas = support === "unsupported" || !scope
-    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout)
-    : buildCanvas(scope, activityCatalog, definitionVersion.layout);
+    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout, formatActivitySummary)
+    : buildCanvas(scope, activityCatalog, definitionVersion.layout, formatActivitySummary);
   const readonlyNodes = baseCanvas.nodes.map(node => ({
     ...node,
     draggable: false,

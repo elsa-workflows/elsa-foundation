@@ -17,6 +17,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
+import { formatActivitySummary } from "../activitySummary";
 import {
   buildCanvas,
   buildSequenceEdges,
@@ -174,11 +175,11 @@ export function useWorkflowCanvas({
     }
 
     const canvas = isUnsupportedDesigner
-      ? buildUnsupportedActivityCanvas(scopeOwner, catalog, draft?.layout ?? [])
+      ? buildUnsupportedActivityCanvas(scopeOwner, catalog, draft?.layout ?? [], formatActivitySummary)
       : scope
         ? scope.slot.mode === "bpmn"
           ? buildBpmnCanvas(scope, catalog, draft?.layout ?? []) as unknown as { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }
-          : buildCanvas(scope, catalog, draft?.layout ?? [])
+          : buildCanvas(scope, catalog, draft?.layout ?? [], formatActivitySummary)
         : { nodes: [], edges: [] };
     pendingViewportNodeIdsRef.current = canvas.nodes.map(node => node.id);
     setNodes(canvas.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current })));

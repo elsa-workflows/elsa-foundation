@@ -14,6 +14,7 @@ import type {
   WorkflowExecutableInputSources,
   WorkflowExecutableReference
 } from "../workflowTypes";
+import { formatActivitySummary } from "../activitySummary";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -378,8 +379,8 @@ export function buildExecutableInspectorCanvas(
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
   const baseCanvas = support === "unsupported" || !scope
-    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, layout)
-    : buildCanvas(scope, activityCatalog, layout);
+    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, layout, formatActivitySummary)
+    : buildCanvas(scope, activityCatalog, layout, formatActivitySummary);
 
   const nodes = baseCanvas.nodes.map(node => {
     const fact = graph.factsByNodeId.get(node.id);

@@ -3,7 +3,6 @@ import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, 
 import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
-import { formatActivitySummary } from "./activitySummary";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
@@ -30,6 +29,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   ghost?: boolean;
   onEnterSlot?(slot: ChildSlot): void;
 }
+
+export type WorkflowNodeSummaryFormatter = (activity: ActivityNode, catalogItem: ActivityCatalogItem) => string | undefined;
 
 export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger" | "reusable";
 
@@ -519,13 +520,18 @@ function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
     : -1;
 }
 
-export function buildCanvas(scope: CanvasScope, catalog: ActivityCatalogItem[], layout: DesignMetadataRecord[]) {
+export function buildCanvas(
+  scope: CanvasScope,
+  catalog: ActivityCatalogItem[],
+  layout: DesignMetadataRecord[],
+  formatSummary?: WorkflowNodeSummaryFormatter
+) {
   const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
   const layoutByNodeId = new Map(layout.map(record => [record.nodeId, record]));
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
-    return createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y });
+    return createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {}, formatSummary);
   });
 
   return {
@@ -534,7 +540,12 @@ export function buildCanvas(scope: CanvasScope, catalog: ActivityCatalogItem[], 
   };
 }
 
-export function buildUnsupportedActivityCanvas(activity: ActivityNode, catalog: ActivityCatalogItem[], layout: DesignMetadataRecord[]) {
+export function buildUnsupportedActivityCanvas(
+  activity: ActivityNode,
+  catalog: ActivityCatalogItem[],
+  layout: DesignMetadataRecord[],
+  formatSummary?: WorkflowNodeSummaryFormatter
+) {
   const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
   const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
 
@@ -544,7 +555,7 @@ export function buildUnsupportedActivityCanvas(activity: ActivityNode, catalog: 
       deletable: false,
       draggable: false,
       suppressFlowPorts: true
-    })],
+    }, formatSummary)],
     edges: [] satisfies Edge[]
   };
 }
@@ -810,7 +821,8 @@ function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
-  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean } = {}
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean } = {},
+  formatSummary?: WorkflowNodeSummaryFormatter
 ): Node<WorkflowNodeData> {
   return {
     id: activity.nodeId,
@@ -825,7 +837,7 @@ function createWorkflowNode(
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
-      summary: catalogItem ? formatActivitySummary(activity, catalogItem) : undefined,
+      summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),
