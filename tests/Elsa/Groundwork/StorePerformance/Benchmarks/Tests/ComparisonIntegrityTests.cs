@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
@@ -482,7 +483,8 @@ internal sealed class ArtifactFixture : IDisposable
     {
         var physicalForm = form == "store" ? "document-type-specific-tables" : form;
         var evidenceReference = $"{adapter}-set.native-plan.json";
-        var request = new RunRequest("cohort-646", $"{adapter}-set", "bookmark-lookup", "1.0.0", "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), "spec094-bookmark-lookup-v1", input ?? "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
+        var workload = BookmarkScenario;
+        var request = new RunRequest("cohort-646", $"{adapter}-set", workload.WorkloadId, workload.Version, "sqlite", adapter, physicalForm, "100k", commitSha ?? new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.81" }, new string('b', 64), hostFingerprintSha256 ?? new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), workload.Seed, input ?? workload.ComputeInputFingerprint(), "list-by-stimulus-and-type", evidenceReference, new string('0', 64), kind, index);
         var planOwner = rawPlanReferenceOwner ?? request.MeasurementSetId;
         var payload = NativePlanPayload(request, evidenceDocumentAdapter ?? adapter, evidenceDocumentInputFingerprint ?? request.InputFingerprintSha256, planOwner);
         request = request with { NativePlanContentSha256 = Hash(payload) };
@@ -501,7 +503,7 @@ internal sealed class ArtifactFixture : IDisposable
             if (!File.Exists(rawPlanPath)) File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
         }
         var evidence = new CorrectnessEvidence(
-            "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
+            BookmarkScenario.ComputeResultDigest(),
             observedProviderVersion ?? request.ProviderVersion,
             request.ProviderTopology,
             request.ProviderConfiguration,
@@ -519,6 +521,8 @@ internal sealed class ArtifactFixture : IDisposable
     private static string RawPlanPayload(string route) => JsonSerializer.Serialize(new { SchemaVersion = 1, Route = route, ProviderPlan = $"EXPLAIN {route} USING ix-bookmarks" });
     private static IReadOnlyDictionary<string, string> ProviderConfiguration(string adapter) =>
         new Dictionary<string, string> { ["journal_mode"] = adapter == "ef" ? "delete" : "wal", ["synchronous"] = adapter == "ef" ? "full" : "normal" };
+    private static ReproducibleWorkloadScenario BookmarkScenario =>
+        ReproducibleWorkloadScenarioCatalog.Get("bookmark-lookup");
     private static string NativePlanPayload(RunRequest request, string documentAdapter, string documentInputFingerprint, string rawPlanReferenceOwner) => JsonSerializer.Serialize(new NativePlanEvidenceDocument(
         2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion,
         request.Provider, documentAdapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256,
