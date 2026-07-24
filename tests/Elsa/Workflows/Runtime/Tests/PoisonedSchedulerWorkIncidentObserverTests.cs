@@ -39,10 +39,34 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(nameof(WorkflowSchedulerDrainer), incident.Metadata[RuntimeMetadataKeys.SchedulerPoisonHandlerName]);
         Assert.Equal("1", incident.Metadata[RuntimeMetadataKeys.SchedulerPoisonFailureCount]);
         Assert.Equal("System.InvalidOperationException", incident.Metadata[RuntimeMetadataKeys.FaultType]);
+        // No inner exception was captured, so the inner-fault keys must be absent rather than empty.
+        Assert.False(incident.Metadata.ContainsKey(RuntimeMetadataKeys.FaultInnerType));
+        Assert.False(incident.Metadata.ContainsKey(RuntimeMetadataKeys.FaultInnerMessage));
 
         var commit = Assert.Single(_harness.CommitStore.ListCommits()).Commit;
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, commit.Checkpoint.Name);
         Assert.Equal(incident.IncidentId, Assert.Single(commit.StateChanges.Incidents).StateId);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WithInnerFaultOnRecord_ProjectsInnerFaultIntoIncident()
+    {
+        // #1031: the root cause (GW-PHYSICAL-037) was nested one level under a checkpoint-writer wrapper exception
+        // and was invisible on the projected incident. The inner fault carried on the poison record must surface in
+        // both the incident message and the FaultInner* metadata keys (mirroring ActivityFaultIncidentRecorder).
+        var innerFault = new RuntimeFaultInfo(
+            "Groundwork.Documents.Store.GroundworkPhysicalStoreException",
+            "GW-PHYSICAL-037: Projected string column 'by-incident-id' exceeds its declared maximum length of 128.");
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, innerFault: innerFault);
+
+        await _harness.Observer.OnDrainedAsync(_harness.Envelope, _harness.FaultedDrainResult);
+
+        var incident = await _harness.IncidentStore.FindAsync("wfexec-1", PoisonedSchedulerWorkIncidentObserver.IncidentId("workitem-1"));
+        Assert.NotNull(incident);
+        Assert.Contains("System.InvalidOperationException: dispatch exploded", incident!.Message);
+        Assert.Contains($"---> {innerFault.ToSummaryString()}", incident.Message);
+        Assert.Equal(innerFault.ExceptionType, incident.Metadata[RuntimeMetadataKeys.FaultInnerType]);
+        Assert.Equal(innerFault.Message, incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
     }
 
     [Fact]
@@ -209,7 +233,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public ValueTask<RuntimeSchedulerPoisonRecord> RecordPoison(
             RuntimeSchedulerPoisonDisposition disposition,
             DateTimeOffset? nextRetryAt = null,
-            string workItemId = "workitem-1") =>
+            string workItemId = "workitem-1",
+            RuntimeFaultInfo? innerFault = null) =>
             PoisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
                 workflowExecutionId: "wfexec-1",
                 workItemId: workItemId,
@@ -220,7 +245,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 disposition: disposition,
                 firstFailedAt: _now,
                 lastFailedAt: _now,
-                nextRetryAt: nextRetryAt));
+                nextRetryAt: nextRetryAt,
+                innerFault: innerFault));
 
         public ValueTask<WorkflowExecutionState> SaveWorkflow(WorkflowExecutionStatus status) =>
             WorkflowStore.SaveAsync(new WorkflowExecutionState(

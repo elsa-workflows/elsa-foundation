@@ -371,6 +371,160 @@ Identity manifest v1.0.4 matrix, and all older artifacts are immutable historica
 evidence; the ledger remains unlinked until fresh exact-head artifacts exist. The committed EF contract baseline is explicitly non-executed;
 #646 owns live EF execution, equality, and timing.
 
+### #646 IAM adapter checkpoint
+
+The #646 harness now owns one provider-neutral `iam-normalized-lookup-update` scenario and executes it
+through the real ASP.NET Core Identity store contracts. On 2026-07-24, the timing-free SQLite
+checkpoint ran the same fixed seed and observations through:
+
+- `ApplicationIdentityDbContext` registered with `AddEntityFrameworkStores`;
+- `GroundworkIdentityUserStore` and `GroundworkIdentityRoleStore` over the production SQLite driver.
+
+Both targets reproduced input fingerprint
+`5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9` and result digest
+`32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc`. The focused workload and
+SQLite correctness selection passed 11/11. This checkpoint does not authorize timing: EF native-plan
+capture, the executable matrix target, and the remaining workload adapters are still open, so no
+performance verdict or coverage-ledger row advances.
+
+Hosted CI initially rejected the checkpoint because the benchmark test project did not follow the
+domain-tree path convention and the EF comparator had been placed in the EF-free Groundwork
+conformance project. The remediation moved protocol tests to
+`tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`, moved the EF-vs-Groundwork SQLite
+correctness case into the already-EF-owning Foundation Identity test project, and removed the new EF
+edge from Groundwork conformance. After a forced full restore, the benchmark suite passed 16/16, the
+two SQLite correctness targets passed 2/2, and the project-path, Groundwork EF-free boundary, and
+shrink-only EF-surface guards passed 3/3. The baseline did not expand.
+
+After diagnostics checkpoint #1048 and the next stimuli-only main update landed, branch merge
+`28b7c7d11dc3d16d18d67960a8559324f6e9e678` integrated exact `origin/main`
+`ca2813d91bc5e6189615f58b5c43405e06988130` without rebasing. A forced full restore then passed;
+the complete benchmark protocol/integrity/catalog suite passed **16/16**, the real IAM EF and
+Groundwork SQLite correctness targets passed **2/2**, and the combined architecture plus shrink-only
+EF-surface ratchet selection passed **65/65**. This remains a harness and one-workload correctness
+checkpoint only: it publishes no timing, physical-form selection, coverage-ledger verdict, or #646
+completion claim.
+
+The frozen review of that candidate rejected five green-looking but non-durable mechanisms:
+preexisting artifacts could be re-certified, comparison trusted stored summaries, cross-commit or
+machine-mismatched targets could be compared, native-plan evidence was label-only, and matrix
+admission did not consult the frozen provider/form contract. The remediated schema-v2 protocol now:
+
+- binds two distinct four-process measurement sets to one cohort, one expected commit, and one exact
+  harness-assembly SHA-256 in a hash-complete manifest;
+- rejects stale planned paths, partial or mixed cohorts, changed admitted files, and unbound files;
+- validates finite positive raw samples and reproduces stored summaries, while comparison and gates
+  recompute their statistics from the raw samples;
+- requires exact commit equality and stable machine-environment equality across targets;
+- enforces the clean/exact repository HEAD and exact harness-assembly hash in both the public process
+  runner and the adapter child before preparation, keeps delegate execution and manifest minting
+  test-internal, binds every process to an opaque hash of the OS machine identity, and retains provider
+  server version, required topology, and material configuration values so adapter setup differences
+  remain visible;
+- binds structured route evidence to an actual hashed JSON file and its cohort, measurement set,
+  workload input, provider, adapter, physical form, scale, commit, host, provider metadata, and
+  composition fingerprint, while every `(measurement set, route)` exclusively owns a distinct
+  manifest-bound raw provider-plan JSON/text/XML artifact whose digest and secret-safe structured
+  content are validated; and
+- admits only providers and physical forms named by the immutable workload contract.
+
+Root revalidation passed the expanded harness suite **53/53**, the real IAM EF and Groundwork SQLite
+correctness selection **2/2**, the full architecture suite **285/285** (including the architecture
+plus shrink-only EF-surface ratchet selection **65/65**), and a zero-warning Release harness build.
+Adapter identity is not present in the immutable
+Spec 094 workload schema, so exact adapter allowlisting remains explicitly open rather than inferred.
+Likewise, route-specific expected limits/cardinalities require a versioned execution profile or
+successor workload; this checkpoint validates that the facts are complete, bounded, target-bound,
+and file-backed without mutating the frozen workload document. No timing or ledger verdict is
+claimed.
+
+The first re-review did not accept generic OS/runtime/architecture/core-count equality as proof that
+both targets ran on one host, and the evidence reviewer did not accept a structured plan summary as a
+substitute for the raw provider plan or a caller-supplied commit as proof of source provenance. Those
+findings drove the clean-HEAD check, opaque OS-machine fingerprint, adapter-observed provider facts,
+seed/input binding, per-route raw-plan retention, cross-set raw-plan ownership, and structured
+JSON/XML credential rejection described above. Unit fixtures use synthetic
+plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
+therefore retains or claims no production plan, measurement, or verdict.
+
+### #646 reproducible workload contract-vector checkpoint
+
+The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
+2026-07-24. The benchmark project now owns deterministic contract-vector definitions: parameters,
+operation names, expected observations, canonical serialization, and SHA-256 generation. These definitions
+are not public-operation runners; future real EF and Groundwork adapter projects must execute them. Run:
+
+```bash
+dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj \
+  -c Release -- workload-vectors
+```
+
+The command emits the exact version, seed, input fingerprint, expected result digest, and benchmark-admission
+status that `runtime.json` and `distributed-runtime.json` must contain. `WorkloadCatalog` binds every semantic
+JSON input field to the code-owned parameter set, checks independent literal goldens for all twelve workloads,
+and rejects drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
+claim that they were reproducible or executed.
+
+`secret-create-read-list` remains v1.0.0 and Blocked under
+`comparator.secret.real-ef-required` until #646 has a real EF Secret repository comparator. No
+synthetic comparator or waiver was added. Its explicit blocked admission is enforced before matrix child
+launch and again by comparison and gate, including against forged complete artifacts. It publishes no timings,
+physical-form selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+
+### #646 workload-successor review disposition
+
+Three adversarial read-only reviewers inspected the frozen range
+`c4b5fa00499e8448ecf48250fc088ba75186556a..01043fb94acceac69bac3d185235d3ec56e204aa`
+on 2026-07-24 and rejected it. Their findings and the remediations included in the replacement
+candidate are:
+
+| Axis | Required finding and disposition | Candidate status |
+|---|---|---|
+| Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | PASS |
+| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | PASS |
+| Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | PASS |
+| Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | PASS |
+| Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | PASS |
+
+Root revalidation of the remediated candidate passed the benchmark harness **60/60**, the focused
+workload-correctness conformance selection **5/5**, and the performance-handoff architecture
+selection **7/7**. GitGuardian identified the Secret workload's literal identifier beside its two
+public SHA-256 golden vectors as a generic high-entropy secret; the dictionary now references the
+separately declared workload identifier, retaining the exact immutable vectors without placing a
+secret-labeled token beside them. The originating reviewers re-inspected exact clean range
+`c4b5fa00499e8448ecf48250fc088ba75186556a..d15d64c9b65559cb554b0371c3c8cfd114f0fe2c`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Their
+independent verification included the **60/60**, **5/5**, and **7/7** selections above, the real
+Identity EF/Groundwork SQLite oracle **2/2**, the full architecture/ratchet suite **285/285**, three
+recomputed-digest IAM attacks, and a synthetic Secret matrix attempt that failed before child launch
+with `comparator.secret.real-ef-required`.
+
+### #646 harness review disposition
+
+Three adversarial read-only reviewers inspected the frozen range
+`ca2813d91bc5e6189615f58b5c43405e06988130..688a8066ef59384601e2c574789388c0727a2f5e`
+on 2026-07-24. Each assumed the implementation had green-washed its claims:
+
+| Axis | Required finding and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The originating reviewer rejected CLI-only source validation because direct `MatrixPlan`/delegate use or a different child could bypass it. The public runner and adapter child now validate the clean exact HEAD and executing harness assembly before launch/preparation; the harness hash is bound through request, native-plan evidence, manifest, and comparison admission; delegate execution and manifest minting are test-internal. The originating reviewer re-ran 53/53 and withdrew the blocker. | PASS |
+| Evidence integrity | Successive reviews rejected stale artifact reuse, stored-summary trust, label-only plan evidence, caller-only source/host/provider assertions, shared raw plans, unsafe raw plan/configuration content, endpoint/URI leakage, and false rejection of parameterized endpoint placeholders. Schema-v2 freshness, hash/exclusive ownership, observed provenance, safe structured/raw evidence, and raw-metric recomputation now fail closed. The final reviewer passed 53/53 and a warning-as-error Release build. | PASS |
+| Scope/test preservation | The checkpoint remains additive: frozen workloads, coverage ledger, EF ratchet, source projects, and the load-bearing Identity EF oracle are unchanged. All existing conformance tests remain, two SQLite correctness tests are additive, and the documentation explicitly claims no production timing, verdict, ledger advancement, or #646 completion. The reviewer independently confirmed 53 harness tests, 2 IAM tests, and 285 architecture tests. | PASS |
+
+After `origin/main` advanced to `3940e74f280107c454a9021b4107c8e084c41bf1`, merge commit
+`b68783fe8e1c78a559215bcaf60b90c0e637103c` integrated it without rebasing. All three reviewers
+re-inspected exact range `3940e74f280107c454a9021b4107c8e084c41bf1..b68783fe8e1c78a559215bcaf60b90c0e637103c`
+and returned PASS: the incoming scheduling scripts and `shells.json` were base-only, the harness
+surfaces were byte-identical to the reviewed parent, and the integrated head again passed 53/53,
+2/2, 285/285, and the zero-warning Release harness build.
+
+When `origin/main` advanced again to `23300c68cca7840af5c8b7b4ceaa32e4c8c105af`, merge commit
+`b5f762cda5e2c0ec2523267173206ceb5f8d986c` integrated the base-only `TestScripts` to `e2e-tests`
+rename and agent-guidance changes. The three reviewers re-inspected exact range
+`23300c68cca7840af5c8b7b4ceaa32e4c8c105af..b5f762cda5e2c0ec2523267173206ceb5f8d986c`
+and returned PASS; root revalidation again passed 53/53, 2/2, 285/285, and the zero-warning Release
+harness build.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:

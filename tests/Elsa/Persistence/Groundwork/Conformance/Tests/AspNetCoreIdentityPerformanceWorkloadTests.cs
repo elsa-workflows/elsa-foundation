@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Core.PhysicalStorage;
@@ -129,6 +130,9 @@ public sealed class AspNetCoreIdentityPerformanceWorkloadTests
         Assert.NotNull(result.GetProperty("ObservableOperations"));
         Assert.NotNull(result.GetProperty("ObservableResults"));
         Assert.NotNull(result.GetProperty("NativeRouteEvidence"));
+        Assert.Equal(
+            typeof(IReadOnlyList<ProviderNativePlanEvidence>),
+            result.GetProperty("NativeRouteEvidence")!.PropertyType);
         Assert.Null(result.GetProperty("MaterializedCandidateCounts"));
     }
 
