@@ -24,7 +24,7 @@ $seq = Invoke-Step "resolve Sequence"  { Get-ActivityVersionId -Ctx $ctx -TypeKe
 $wl  = Invoke-Step "resolve WriteLine" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
 $tag = Get-Random -Max 999999
 $manifest = @"
-{"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"$seq","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":[{"nodeId":"w","activityVersionId":"$wl","inputs":[{"referenceKey":"text","value":{"value":"act $tag","expressionType":"Literal"},"autoEvaluate":null,"evaluatorType":null,"storageDriverType":null,"isSensitive":null}],"outputs":[],"structure":null}]}}},"outputMappings":[]}
+{"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"$seq","inputs":[],"outputs":[],"structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"activities":[{"nodeId":"w","activityVersionId":"$wl","inputs":[{"referenceKey":"text","value":{"value":"act $tag","expressionType":"Literal"},"autoEvaluate":null,"evaluatorType":null,"storageDriverType":null,"isSensitive":null}],"outputs":[],"structure":null}]}}},"outputMappings":[]}
 "@
 $providerJson = "{`"providerKey`":`"elsa.activity-graph`",`"schemaVersion`":`"1`",`"payload`":$manifest}"
 $contractJson = '{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[{"referenceKey":"done","name":"Done","isEmitted":true}]}'
