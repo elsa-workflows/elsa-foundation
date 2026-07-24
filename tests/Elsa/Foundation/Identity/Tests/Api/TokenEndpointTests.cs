@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -17,6 +18,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
 {
     private const string TokenRoute = "/_elsa/identity/token";
     private const string LoginRoute = "/_elsa/identity/login";
+    private const string RefreshRoute = "/_elsa/identity/refresh";
 
     private TokenEndpointFixture _fixture = null!;
 
@@ -184,7 +186,21 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
         // RefreshAsync throw InvalidOperationException; the endpoint must map that to a clean 401, not a 500.
         var response = await _fixture.Client.PostAsJsonAsync(
-            "/_elsa/identity/refresh", new { refreshToken = "not-a-real-refresh-token" });
+            RefreshRoute, new { refreshToken = "not-a-real-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"refreshToken\":null}")]
+    [InlineData("{\"refreshToken\":\"\"}")]
+    [InlineData("{\"refreshToken\":\"   \"}")]
+    public async Task Refresh_Without_A_Usable_Token_Returns_401_Not_500(string payload)
+    {
+        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _fixture.Client.PostAsync(RefreshRoute, content);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
