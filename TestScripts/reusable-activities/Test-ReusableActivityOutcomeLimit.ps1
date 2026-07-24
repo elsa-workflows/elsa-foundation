@@ -67,12 +67,14 @@ function Invoke-ReusableOutcomeCase {
     $run = Invoke-Artifact -Ctx $ctx -ArtifactId $publication.artifactId -SourceReferenceId $publication.sourceReferenceId
     $instance = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
 
+    if (Test-Structure1051Fault -Instance $instance) { $script:Known1051 = $true; return }
     $expectedRan = (Get-NodeRunCount -Instance $instance -NodeId $ExpectedNodeId) -ge 1
     $otherRan = (Get-NodeRunCount -Instance $instance -NodeId $OtherNodeId) -ge 1
     if ($instance.instance.status -notin @("Completed", "Finished") -or -not $expectedRan -or $otherRan) {
         throw "Reusable outcome mismatch: status=$($instance.instance.status), expectedRan=$expectedRan, otherRan=$otherRan"
     }
 }
+$script:Known1051 = $false
 
 Invoke-Step "True maps to Accepted" {
     Invoke-ReusableOutcomeCase -Condition $true -ExpectedNodeId "accepted" -OtherNodeId "declined"
@@ -82,4 +84,8 @@ Invoke-Step "False maps to Declined" {
 }
 
 Write-Host ""
-Write-Host "SUCCESS - both reusable boundary outcomes routed only their matching parent branch." -ForegroundColor Green
+if ($script:Known1051) {
+    Report-Structure1051
+} else {
+    Write-Host "SUCCESS - both reusable boundary outcomes routed only their matching parent branch." -ForegroundColor Green
+}

@@ -30,7 +30,9 @@ $t = Get-Random -Max 999999
 
 $C = Invoke-Step "publish C v1" { Publish-ReusableActivity -Ctx $ctx -DisplayName "PinC-$t" -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C v1 t=$t") + "]")) }
 $B = Invoke-Step "publish B (root-wraps C v1)" { Publish-ReusableActivity -Ctx $ctx -DisplayName "PinB-$t" -PayloadJson (New-RootWrapManifestJson -RootVersionId $C.VersionId) }
-$cV2Draft = Invoke-Step "create C v2 draft" { Add-ReusableActivityDraft -Ctx $ctx -DefinitionId $C.DefinitionId -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C v2 t=$t") + "]")) -SourceVersionId $C.VersionId }
+# A new content draft must NOT carry sourceVersionId (that signals a clone, which the API rejects when a payload is
+# supplied: "a clone request supplies only 'sourceVersionId'"). The v2->v1 lineage is asserted via HeadVersionId below.
+$cV2Draft = Invoke-Step "create C v2 draft" { Add-ReusableActivityDraft -Ctx $ctx -DefinitionId $C.DefinitionId -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C v2 t=$t") + "]")) }
 $C2 = Invoke-Step "publish C v2" { Publish-ReusableDraft -Ctx $ctx -DraftId $cV2Draft.DraftId -Revision $cV2Draft.Revision -HeadVersionId $C.VersionId }
 Write-Host ("[C] v1={0}" -f $C.VersionId)
 Write-Host ("[C] v2={0}" -f $C2.VersionId)
