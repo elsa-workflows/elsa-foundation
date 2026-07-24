@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using System.Text.RegularExpressions;
 using Elsa.Persistence.Groundwork.Testing;
 using Xunit;
@@ -10,21 +11,18 @@ public sealed class PerformanceWorkloadCorrectnessTests
     private static readonly string[] RequiredProviders = ["sqlite", "sqlserver", "postgresql", "mongodb"];
 
     private static readonly IReadOnlyDictionary<string, (string InputFingerprint, string ResultDigest)> ExpectedDigests =
-        new Dictionary<string, (string InputFingerprint, string ResultDigest)>(StringComparer.Ordinal)
-        {
-            ["bookmark-lookup"] = ("c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a", "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e"),
-            ["checkpoint-commit"] = ("f59eef8b9359dc3623bbb42ce07c531f0f027170dc6d33e1788b1bd80dcdab93", "abaa23e9e4f3c9285f50a07f33d7569696ec4cfe1ac496575c12b45dbe78042a"),
-            ["command-send-lease-ack"] = ("cb50baabaf83d0826dbb19d259be9d8fca9b4c8eaa9aea6ba7354a54c1835493", "9f8fa582159e0a796ecbe2d7bfb655cbebee428f9490fa83d4228e8e64f924eb"),
-            ["due-timer-selection"] = ("86bef68c844d10b3cb02c8f65da33ba46ec4c27b9ba0090b9783cd5036f1ab0e", "002fe0f7e4808d7ec2b85f267f8188981c3fd8ed4beca7ad11100ddd6c8d2002"),
-            ["iam-normalized-lookup-update"] = ("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
-            ["outbox-drain"] = ("3a6f44fea2a5905e3df316bd3585b13f6080588c75c6eab9598cced26c184eef", "0f4f678c6250ce1c951ad1e14218a1c38c61d6b15b947fa724c50859a4339934"),
-            ["placement-takeover"] = ("9599391db271c63a41cced1409754b0bcb4e2bd8c316b70efa4d1583c310c92b", "25885819c5cb186adab6196a46d8e369e7b26992e0733e9525a3ca1eb2bf07c1"),
-            ["queue-drain"] = ("21d5dabec0cb604dae214af9bc20835b09ab5f87cfd3d697b946d8adb31d20fa", "bf82d193b202ff0c9e3be211009a3f10401cf1411aaac607db64a199657fb630"),
-            ["recurring-schedule-selection"] = ("ab6e1c276995da9e564f55cee00f243a13e16334c58c0d19cc146f2f757b3b5e", "af1d9aecbc7604ce39e33c553d9c1014be2377d81300aa4905e700beffcf7b17"),
-            ["recovery-scan"] = ("7284c110669aaa3db7587893e9e31005af8c807d8323609aeb80cfd948d82b48", "06033b0de6f4784abc87772b63f5f9a561a5bfc40bc18b3f429b4e318fccd785"),
-            ["secret-create-read-list"] = ("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
-            ["trigger-binding-stimulus-lookup"] = ("cbd570ed8c80f996554853b1143fc34f634138b005858322d1a669dde2113b9a", "3c10eab69da70eccacc648780781ef57ad6499b91cb012465d154d6b1b7e9294")
-        };
+        ReproducibleWorkloadScenarioCatalog.Successors.Values
+            .ToDictionary(
+                scenario => scenario.WorkloadId,
+                scenario => (scenario.ComputeInputFingerprint(), scenario.ComputeResultDigest()),
+                StringComparer.Ordinal)
+            .Append(new KeyValuePair<string, (string, string)>(
+                IamNormalizedLookupWorkload.WorkloadId,
+                (IamNormalizedLookupWorkload.ComputeInputFingerprint(), IamNormalizedLookupWorkload.ExpectedResultDigest)))
+            .Append(new KeyValuePair<string, (string, string)>(
+                ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId,
+                ("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb")))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     [Fact]
     public void Workload_documents_conform_to_the_shared_json_schema()

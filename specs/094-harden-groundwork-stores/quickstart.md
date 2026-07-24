@@ -447,6 +447,28 @@ JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 
+### #646 reproducible workload successor checkpoint
+
+The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
+2026-07-24. The benchmark project now owns their deterministic parameters, public operation
+sequences, observable-result projections, canonical serialization, and SHA-256 generation. Run:
+
+```bash
+dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj \
+  -c Release -- workload-contracts
+```
+
+The command emits the exact version, seed, input fingerprint, and public result digest that
+`runtime.json` and `distributed-runtime.json` must contain. `WorkloadCatalog` recomputes and rejects
+drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
+claim that they were reproducible.
+
+`secret-create-read-list` remains v1.0.0 and Blocked under
+`comparator.secret.real-ef-required` until #646 has a real EF Secret repository comparator. No
+synthetic comparator or waiver was added. The successor repair passed the complete harness suite
+54/54 and the focused Spec 094 conformance selection 5/5. It publishes no timings, physical-form
+selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+
 ### #646 harness review disposition
 
 Three adversarial read-only reviewers inspected the frozen range

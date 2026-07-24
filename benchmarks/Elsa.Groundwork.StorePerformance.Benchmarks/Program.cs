@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 return await BenchmarkCli.RunAsync(args);
 
@@ -17,6 +18,7 @@ internal static class BenchmarkCli
                 "compare" => Compare(args[1..]),
                 "gate" => Gate(args[1..]),
                 "host-fingerprint" => HostFingerprintCommand(),
+                "workload-contracts" => WorkloadContractsCommand(),
                 "help" or "--help" or "-h" => Help(),
                 _ => Fail($"Unknown command '{command}'.")
             };
@@ -85,6 +87,7 @@ internal static class BenchmarkCli
         return separator > 0 && separator < value.Length - 1 ? new KeyValuePair<string, string>(value[..separator], value[(separator + 1)..]) : throw new PerformanceContractException("--provider-setting must be safe-name=safe-value and repeated for every material provider setting.");
     }
     private static int HostFingerprintCommand() { Console.WriteLine(HostFingerprint.CaptureSha256()); return 0; }
-    private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
+    private static int WorkloadContractsCommand() { Console.WriteLine(ReproducibleWorkloadScenarioCatalog.SerializeContractSummary()); return 0; }
+    private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  workload-contracts\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
     private static int Fail(string message) { Console.Error.WriteLine($"error: {message}"); return 2; }
 }

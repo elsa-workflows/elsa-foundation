@@ -3,7 +3,7 @@
   "workloads": [
     {
       "id": "checkpoint-commit",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-checkpoint-commit",
       "owner": "#645",
       "handoffTarget": "#646",
@@ -15,8 +15,8 @@
         "runtime-workflow-executable"
       ],
       "input": {
-        "seed": "spec094-checkpoint-commit-v1",
-        "fingerprintSha256": "f59eef8b9359dc3623bbb42ce07c531f0f027170dc6d33e1788b1bd80dcdab93",
+        "seed": "spec094-checkpoint-commit-v1.1",
+        "fingerprintSha256": "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13",
         "executionCount": 128,
         "checkpointCount": 1024,
         "activityChangesPerCheckpoint": 4,
@@ -42,7 +42,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "abaa23e9e4f3c9285f50a07f33d7569696ec4cfe1ac496575c12b45dbe78042a",
+        "resultDigestSha256": "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62",
         "invariants": [
           "each checkpoint is one atomic bundle with no partial activity, value, executable, outbox, or marker state",
           "the current fence is accepted and a stale fence is rejected",
@@ -66,15 +66,15 @@
     },
     {
       "id": "bookmark-lookup",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-bookmark-state",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Resolve a bounded page of resumable bookmarks by workflow, stimulus, and bookmark type through IBookmarkStateStore.",
       "coverageRows": ["runtime-bookmark-state"],
       "input": {
-        "seed": "spec094-bookmark-lookup-v1",
-        "fingerprintSha256": "c1b8a142e22e7c47449edc25c79cc2a83c5edb6dbbe4a884a730751038f3ae9a",
+        "seed": "spec094-bookmark-lookup-v1.1",
+        "fingerprintSha256": "d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8",
         "tenantCount": 2,
         "workflowCount": 128,
         "bookmarksPerWorkflow": 64,
@@ -93,7 +93,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "9f3d29edc4c3e64409f3fb9b64b4ec3e7d5e5064d8233be8afd92215ec3d680e",
+        "resultDigestSha256": "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9",
         "invariants": ["the exact resumable bookmark identities are returned", "result order and continuation are deterministic", "no bookmark from the other scope is visible", "the requested page is smaller than the candidate population"],
         "timingGate": "Run the public bounded lookup correctness baseline and capture native route evidence before #646 times the operation."
       },
@@ -108,15 +108,15 @@
     },
     {
       "id": "trigger-binding-stimulus-lookup",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-trigger-binding-stimulus-lookup",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Resolve active workflow trigger bindings and executable source references by stimulus type and hash through the public runtime trigger routes.",
       "coverageRows": ["runtime-executable-source-reference", "runtime-trigger-binding"],
       "input": {
-        "seed": "spec094-trigger-binding-stimulus-lookup-v1",
-        "fingerprintSha256": "cbd570ed8c80f996554853b1143fc34f634138b005858322d1a669dde2113b9a",
+        "seed": "spec094-trigger-binding-stimulus-lookup-v1.1",
+        "fingerprintSha256": "4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc",
         "tenantCount": 2,
         "publicationCount": 96,
         "bindingsPerPublication": 48,
@@ -135,7 +135,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "3c10eab69da70eccacc648780781ef57ad6499b91cb012465d154d6b1b7e9294",
+        "resultDigestSha256": "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a",
         "invariants": ["only active bindings matching the exact stimulus are returned", "source references resolve to the matching live artifact", "cross-publication and cross-scope bindings are absent", "result order and finite page boundary are stable"],
         "timingGate": "Run the public trigger lookup correctness baseline and capture native route evidence before #646 times the operation."
       },
@@ -150,15 +150,15 @@
     },
     {
       "id": "recovery-scan",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-recovery-scan",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Select a bounded, ordered set of stale or recoverable execution, liveness, incident, scheduler, and hold state through IRuntimeRecoveryScanner and its public state stores.",
       "coverageRows": ["runtime-execution-liveness", "runtime-incident-state", "runtime-scheduler-state", "runtime-workflow-execution-state", "runtime-workflow-hold-state"],
       "input": {
-        "seed": "spec094-recovery-scan-v1",
-        "fingerprintSha256": "7284c110669aaa3db7587893e9e31005af8c807d8323609aeb80cfd948d82b48",
+        "seed": "spec094-recovery-scan-v1.1",
+        "fingerprintSha256": "36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3",
         "tenantCount": 2,
         "executionCount": 2048,
         "recoverableCandidates": 173,
@@ -177,7 +177,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "06033b0de6f4784abc87772b63f5f9a561a5bfc40bc18b3f429b4e318fccd785",
+        "resultDigestSha256": "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf",
         "invariants": ["the exact stale and recoverable candidates are returned", "due ordering is deterministic across reopen", "live and terminal executions are absent", "no route materializes the full candidate population"],
         "timingGate": "Run the public recovery correctness baseline and capture native route evidence before #646 times the operation."
       },
@@ -192,15 +192,15 @@
     },
     {
       "id": "queue-drain",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-scheduler-queue-drain",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Claim, process, retry, and acknowledge a bounded scheduler work batch through IWorkflowSchedulerWorkQueue and IWorkflowSchedulerPoisonStore.",
       "coverageRows": ["runtime-scheduler-poison", "runtime-scheduler-work-queue"],
       "input": {
-        "seed": "spec094-queue-drain-v1",
-        "fingerprintSha256": "21d5dabec0cb604dae214af9bc20835b09ab5f87cfd3d697b946d8adb31d20fa",
+        "seed": "spec094-queue-drain-v1.1",
+        "fingerprintSha256": "15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2",
         "workflowCount": 128,
         "workItemsPerWorkflow": 32,
         "batchSize": 16,
@@ -219,7 +219,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "bf82d193b202ff0c9e3be211009a3f10401cf1411aaac607db64a199657fb630",
+        "resultDigestSha256": "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4",
         "invariants": ["one current owner holds each claimed item", "claim order is deterministic", "a stale acknowledgement is rejected", "retry and poison relationships survive reopen"],
         "timingGate": "Run the public queue correctness baseline with independent clients before #646 times the operation."
       },
@@ -234,15 +234,15 @@
     },
     {
       "id": "outbox-drain",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-post-commit-outbox-drain",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Claim and complete or retry a bounded due post-commit outbox batch through IRuntimePostCommitOutboxClaimStore and IRuntimePostCommitOutboxClaimCompletionStore.",
       "coverageRows": ["runtime-post-commit-outbox"],
       "input": {
-        "seed": "spec094-outbox-drain-v1",
-        "fingerprintSha256": "3a6f44fea2a5905e3df316bd3585b13f6080588c75c6eab9598cced26c184eef",
+        "seed": "spec094-outbox-drain-v1.1",
+        "fingerprintSha256": "bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede",
         "outboxEntryCount": 1024,
         "dueEntries": 211,
         "batchSize": 32,
@@ -261,7 +261,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "0f4f678c6250ce1c951ad1e14218a1c38c61d6b15b947fa724c50859a4339934",
+        "resultDigestSha256": "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71",
         "invariants": ["only due entries are claimed in deterministic order", "each entry has one current claim", "a stale completion is rejected", "retryable entries become visible only at their recorded retry time"],
         "timingGate": "Run the public outbox correctness baseline with independent claimants before #646 times the operation."
       },
@@ -276,15 +276,15 @@
     },
     {
       "id": "due-timer-selection",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-durable-timer-selection",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Select and conditionally advance a bounded due timer page through IDurableTimerStore.",
       "coverageRows": ["runtime-durable-timer"],
       "input": {
-        "seed": "spec094-due-timer-selection-v1",
-        "fingerprintSha256": "86bef68c844d10b3cb02c8f65da33ba46ec4c27b9ba0090b9783cd5036f1ab0e",
+        "seed": "spec094-due-timer-selection-v1.1",
+        "fingerprintSha256": "02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd",
         "timerCount": 2048,
         "dueTimers": 193,
         "pageSize": 50,
@@ -303,7 +303,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "002fe0f7e4808d7ec2b85f267f8188981c3fd8ed4beca7ad11100ddd6c8d2002",
+        "resultDigestSha256": "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3",
         "invariants": ["the exact due timers are returned in deterministic order", "not-due timers are absent", "only one conditional advance wins", "the advanced timer state survives reopen"],
         "timingGate": "Run the public durable timer correctness baseline and capture the bounded route evidence before #646 times the operation."
       },
@@ -318,15 +318,15 @@
     },
     {
       "id": "recurring-schedule-selection",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scenarioId": "runtime-recurring-schedule-selection",
       "owner": "#645",
       "handoffTarget": "#646",
       "publicOperation": "Select and conditionally advance bounded due recurring trigger schedules while reading the associated publication projection state.",
       "coverageRows": ["runtime-publication-projection-state", "runtime-recurring-trigger-schedule"],
       "input": {
-        "seed": "spec094-recurring-schedule-selection-v1",
-        "fingerprintSha256": "ab6e1c276995da9e564f55cee00f243a13e16334c58c0d19cc146f2f757b3b5e",
+        "seed": "spec094-recurring-schedule-selection-v1.1",
+        "fingerprintSha256": "384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17",
         "publicationCount": 256,
         "scheduleCount": 2048,
         "dueSchedules": 179,
@@ -346,7 +346,7 @@
         "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
-        "resultDigestSha256": "af1d9aecbc7604ce39e33c553d9c1014be2377d81300aa4905e700beffcf7b17",
+        "resultDigestSha256": "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4",
         "invariants": ["the exact due schedules are returned in deterministic order", "inactive publication schedules are absent", "only one conditional advance wins", "publication projection state remains consistent after reopen"],
         "timingGate": "Run the public recurring schedule correctness baseline and capture bounded route evidence before #646 times the operation."
       },

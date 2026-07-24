@@ -280,6 +280,7 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 - [x] T097 [P] [US9] Define IAM normalized lookup/update and secret create/read/list workloads in `specs/094-harden-groundwork-stores/workloads/iam-secrets.json`
 - [x] T098 [P] [US9] Define placement takeover and command send/lease/ack workloads in `specs/094-harden-groundwork-stores/workloads/distributed-runtime.json`
 - [x] T099 [US9] Produce deterministic correctness digests and provider prerequisites through public contracts in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/PerformanceWorkloadCorrectnessTests.cs`
+- Evidence (2026-07-24, #646 successor repair): `workload-contracts` mechanically reproduces the ten non-Identity/non-Secret v1.1.0 input and result hashes; 54/54 harness tests and 5/5 focused Spec 094 correctness tests passed. Secret remains explicitly Blocked for lack of a real EF comparator, so T100 remains open and no ledger row advanced.
 - [ ] T100 [US9] Consume #646 evidence/accepted-shape verdicts for every ALL32 row and block missing/Redesign/Blocked lanes in `specs/094-harden-groundwork-stores/coverage-ledger.json` and `specs/094-harden-groundwork-stores/contracts/performance-handoff.md`
 
 **Checkpoint**: Every hot/ordinary lane has a reproducible #646 verdict; redesign loops return to the owning implementation phase.
