@@ -15,7 +15,7 @@
     (WaitForCompletion=$true, formerly broken as issue #1006, fixed by #982) is covered end-to-end by
     bpmn/Test-BpmnCallActivity.ps1.
 .EXAMPLE
-    pwsh ./TestScripts/Test-ChildWorkflow.ps1
+    pwsh ./e2e-tests/Test-ChildWorkflow.ps1
 #>
 [CmdletBinding()]
 param(
