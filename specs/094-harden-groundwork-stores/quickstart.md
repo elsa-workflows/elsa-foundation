@@ -396,6 +396,15 @@ edge from Groundwork conformance. After a forced full restore, the benchmark sui
 two SQLite correctness targets passed 2/2, and the project-path, Groundwork EF-free boundary, and
 shrink-only EF-surface guards passed 3/3. The baseline did not expand.
 
+After diagnostics checkpoint #1048 and the next stimuli-only main update landed, branch merge
+`28b7c7d11dc3d16d18d67960a8559324f6e9e678` integrated exact `origin/main`
+`ca2813d91bc5e6189615f58b5c43405e06988130` without rebasing. A forced full restore then passed;
+the complete benchmark protocol/integrity/catalog suite passed **16/16**, the real IAM EF and
+Groundwork SQLite correctness targets passed **2/2**, and the combined architecture plus shrink-only
+EF-surface ratchet selection passed **65/65**. This remains a harness and one-workload correctness
+checkpoint only: it publishes no timing, physical-form selection, coverage-ledger verdict, or #646
+completion claim.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
