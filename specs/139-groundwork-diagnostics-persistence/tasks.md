@@ -63,9 +63,9 @@
 ### Tests for User Story 1 — write and observe failures first
 
 - [X] T012 [P] [US1] Expand Structured Logs conformance tests for tied ordering, filtered cursor advancement, restart, invalid binding, trimmed anchors, and operational failure visibility in `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs`
-  - Evidence: Structured Logs adapter suite passed 17/17, including replay and query conformance.
+  - Evidence: Structured Logs adapter suite passed 18/18 on the preview.81 integration head, including replay and query conformance.
 - [X] T013 [P] [US1] Add OpenTelemetry restart tests for resources, trace summaries, spans, instruments, metric points, and log records in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryRestartTests.cs`
-  - Evidence: OpenTelemetry adapter suite passed 68/68, including restart coverage for every signal kind.
+  - Evidence: OpenTelemetry adapter suite passed 69 tests on the preview.81 integration head, with one explicit #130 skip, including restart coverage for every signal kind.
 - [X] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, concurrent-writer, malformed-payload, and oversized-batch rejection-without-mutation tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
   - Evidence: Durable-operation conformance ran in the 34-test feature/readiness/schema batch with no failures.
 - [ ] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/139-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
@@ -73,19 +73,19 @@
 ### Implementation for User Story 1
 
 - [X] T016 [US1] Harden durable append, stable commit ordering, cursor advancement, and exact cursor-failure translation in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
-  - Evidence: Structured Logs append/replay implementation compiled and its adapter suite passed 17/17.
+  - Evidence: Structured Logs append/replay implementation compiled and its adapter suite passed 18/18 on the preview.81 integration head.
 - [X] T017 [US1] Bind replay cursors to version, storage scope, source, stream, provider position, and record anchor in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkReplayCursorCodec.cs`
   - Evidence: The strict canonical cursor codec compiled and replay tests passed in the 17-test adapter suite.
 - [X] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
-  - Evidence: Record mappings and canonical serializers compiled and the OpenTelemetry adapter suite passed 68/68.
+  - Evidence: Record mappings and canonical serializers compiled; the OpenTelemetry adapter suite passed 69 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
-  - Evidence: Catalog mappings/serializers compiled and the OpenTelemetry adapter suite passed 68/68.
+  - Evidence: Catalog mappings/serializers compiled; the OpenTelemetry adapter suite passed 69 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
-  - Evidence: The durable OpenTelemetry store compiled and the OpenTelemetry adapter suite passed 68/68.
+  - Evidence: The durable OpenTelemetry store compiled; the OpenTelemetry adapter suite passed 69 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
   - Evidence: Both schema declarations compiled; adapter schema tests and the shared schema batch passed.
 - [X] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
-  - Evidence: The preview.81 exact-working-tree certification passed 24/24 shared provider cases (6 each on SQLite, SQL Server, PostgreSQL, and MongoDB); the complete adapters passed 68/68 OpenTelemetry and 17/17 Structured Logs, and provider-independent operation depth passed 5/5.
+  - Evidence: Exact integrated-head certification at `ff1d0ae47325eda1406c52b66d0bb72e321049e4` passed 24/24 shared provider cases (6 each on SQLite, SQL Server, PostgreSQL, and MongoDB); the complete adapters passed 69 OpenTelemetry tests with one explicit #130 skip and 18/18 Structured Logs tests, and provider-independent operation depth passed 5/5.
 
 **Checkpoint**: Durable append, restart, replay, idempotency, and failure semantics work independently for every diagnostic signal on all four providers.
 
@@ -123,7 +123,7 @@
 - [X] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
   - Evidence: the focused endpoint contract passes 2/2, covering route, verb, authorization, filter/token forwarding, and exact provider result return.
 - [X] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
-  - Evidence: The preview.81 exact-working-tree certification passed 17/17 query-result, scope/retention, native bounded-plan, and missing-schema cases across SQLite, SQL Server, PostgreSQL, and MongoDB; the complete OpenTelemetry adapter regression, including query/catalog depth, passed 68/68.
+  - Evidence: Exact integrated-head certification at `ff1d0ae47325eda1406c52b66d0bb72e321049e4` passed 17/17 query-result, scope/retention, native bounded-plan, and missing-schema cases across SQLite, SQL Server, PostgreSQL, and MongoDB; the complete OpenTelemetry adapter regression passed 69 tests with one explicit #130 skip.
 
 **Checkpoint**: All persisted diagnostics queries and mutations are exact, scope-safe, and demonstrably bounded across all providers.
 
@@ -153,9 +153,9 @@
 - [X] T039 [US3] Implement queue, retry, shutdown, retention, closure, and subscriber-delivery loss classification in `src/Elsa/Diagnostics/Persistence/Observability/DiagnosticsPersistenceObservability.cs` and `src/Elsa/Diagnostics/Persistence/Observability/DiagnosticsSubscriberDeliveryLossBridge.cs`, consuming the existing domain live-feed signals without moving fan-out into persistence
   - Evidence: Observability and subscriber-loss bridge implementation compiled and focused tests passed.
 - [X] T040 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
-  - Evidence: Structured Logs uses the shared drain; its adapter suite passed 17/17.
+  - Evidence: Structured Logs uses the shared drain; its adapter suite passed 18/18 on the preview.81 integration head.
 - [X] T041 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
-  - Evidence: OpenTelemetry uses the shared drain; its adapter suite passed 68/68.
+  - Evidence: OpenTelemetry uses the shared drain; its adapter suite passed 69 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T042 [US3] Register one explicit start/stop/drain-before-provider-disposal lifecycle in `src/Elsa/Diagnostics/Persistence/Extensions/DiagnosticsPersistenceRegistration.cs`
   - Evidence: The shared registration/coordinator path is implemented in DiagnosticsPersistenceRegistration.cs; lifecycle tests passed in the 34-test batch.
 - [X] T043 [US3] Run the complete load and shutdown suite and record queue bounds, loss totals, and completion outcomes in `specs/139-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json`

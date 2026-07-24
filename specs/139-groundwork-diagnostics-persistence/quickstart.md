@@ -67,6 +67,26 @@ Release with no failures or skips. The tested head had merged `origin/main`
 This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
 the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.
 
+## Preview.81 integrated four-provider recertification (2026-07-24)
+
+On clean pushed head `ff1d0ae47325eda1406c52b66d0bb72e321049e4`, after merging `origin/main`
+`6458b39ad4a251c992a7384f1f325e164320d481`, the exact commands retained in the US1 and US2
+manifests passed:
+
+- US1 real-provider matrix: **24/24** across SQLite, SQL Server, PostgreSQL, and replica-set MongoDB.
+- Structured Logs adapter: **18/18**.
+- OpenTelemetry adapter: **69 passed, 1 explicit #130 skip**.
+- Provider-independent durable operations: **5/5**.
+- US2 real-provider query/scope/retention/native-plan matrix: **17/17**.
+
+The provider fixture contains exactly the four mandatory providers and starts pinned SQL Server,
+PostgreSQL, and MongoDB Testcontainers without fallback or provider skips; SQLite uses a real
+database file. The provider and adapter projects were force-restored before their recorded runs,
+and their assets resolve every Groundwork library to `0.0.1-preview.81`. The #130 skip remains a
+truthful blocker for provider-side grouped trace reduction and repeated-trace merge across durable
+batches; the passing matrix does not claim that behavior. The manifests retain the exact commands,
+source hashes, provider case counts, and evidence boundaries.
+
 ## T053/T054 removal-ledger intake (2026-07-24)
 
 [The EF test-removal ledger](ef-test-removal-ledger.md) inventories all 46 facts in the pending

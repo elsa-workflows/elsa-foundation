@@ -3,12 +3,14 @@
   "workUnit": "139-groundwork-diagnostics-persistence",
   "userStory": "US1",
   "outcome": "pass",
-  "evidenceClassification": "exact-working-tree-certification",
+  "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T03:42:54Z",
-  "gitHeadAtRun": "473ca82f1098a1e28167cc9f75dee07f25ff6cee",
-  "testedSourceState": "HEAD plus the uncommitted conformance and architecture-gate repairs identified by the source hashes below.",
+  "recordedAtUtc": "2026-07-24T06:28:43Z",
+  "gitHeadAtRun": "ff1d0ae47325eda1406c52b66d0bb72e321049e4",
+  "originMainAtRun": "6458b39ad4a251c992a7384f1f325e164320d481",
+  "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
+  "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
   "testSourceSha256": "33d8b0ac732ea6394d90197d969f1a96bd3e342cdc1bc2a202036b6e84cba530",
   "productionSourceSha256": {
     "GroundworkOpenTelemetryDocumentStoreGate.cs": "b52e989b79723f0411c4f309efc206c8684c0993fef6c494ebc05abe7e73064d",
@@ -58,16 +60,17 @@
     {
       "purpose": "Structured Logs complete adapter regression",
       "command": "dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
-      "passed": 17,
+      "passed": 18,
       "failed": 0,
       "skipped": 0
     },
     {
       "purpose": "OpenTelemetry complete adapter regression",
       "command": "dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
-      "passed": 68,
+      "passed": 69,
       "failed": 0,
-      "skipped": 0
+      "skipped": 1,
+      "skipBoundary": "One explicit Groundwork#130 skip for provider-side grouped trace reduction."
     },
     {
       "purpose": "Provider-independent diagnostic-record operation depth",
