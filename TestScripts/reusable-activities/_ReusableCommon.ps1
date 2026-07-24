@@ -6,7 +6,8 @@
     create definition (+ draft) -> publication-preflight (issues a review token) -> publish.
 
     "Workflows used as activities" in Foundation = a reusable ACTIVITY DEFINITION authored as an
-    `elsa.activity-graph` graph with a public boundary contract (inputs/outputs/one `done` outcome). A
+    `elsa.activity-graph` graph with a public boundary contract. Schema 1 exposes the single `done`
+    outcome; schema 2 supports explicit mappings from entry outcomes to emitted public outcomes. A
     consumer binds it by exact `activityVersionId`; the graph is INLINED into the consumer at publish
     (not a separate execution). See ../README.md and the plan notes.
 
@@ -26,10 +27,11 @@ function New-ReusableActivityDefinition {
         [Parameter(Mandatory)][string] $DisplayName,
         [Parameter(Mandatory)][string] $PayloadJson,
         [string] $ContractJson = $script:DoneOnlyContract,
-        [string] $Category = "QaReusable"
+        [string] $Category = "QaReusable",
+        [string] $SchemaVersion = "1"
     )
     $body = @"
-{"category":"$Category","displayName":"$DisplayName","description":"reusable activity test","provider":{"providerKey":"elsa.activity-graph","schemaVersion":"1","payload":$PayloadJson},"contract":$ContractJson,"layout":[]}
+{"category":"$Category","displayName":"$DisplayName","description":"reusable activity test","provider":{"providerKey":"elsa.activity-graph","schemaVersion":"$SchemaVersion","payload":$PayloadJson},"contract":$ContractJson,"layout":[]}
 "@
     $c = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/definitions" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body $body
     [pscustomobject]@{
@@ -46,10 +48,13 @@ function Publish-ReusableDraft {
         [Parameter(Mandatory)] $Ctx,
         [Parameter(Mandatory)][string] $DraftId,
         [Parameter(Mandatory)][long] $Revision,
-        $HeadVersionId = $null   # untyped: a [string] param would coerce $null to "" and trip stale-head
+        $HeadVersionId = $null,   # untyped: a [string] param would coerce $null to "" and trip stale-head
+        $Version = $null
     )
     if ([string]::IsNullOrEmpty($HeadVersionId)) { $HeadVersionId = $null }
-    $pfBody = @{ expectedDraftRevision = $Revision; expectedDefinitionHeadVersionId = $HeadVersionId } | ConvertTo-Json
+    $pfRequest = @{ expectedDraftRevision = $Revision; expectedDefinitionHeadVersionId = $HeadVersionId }
+    if (-not [string]::IsNullOrEmpty($Version)) { $pfRequest.version = $Version }
+    $pfBody = $pfRequest | ConvertTo-Json
     $pf = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/drafts/$DraftId/publication-preflight" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body $pfBody
     if (-not $pf.isPublishable) {
         $msg = ($pf.diagnostics | ForEach-Object { "$($_.severity):$($_.code)" }) -join "; "
@@ -58,7 +63,7 @@ function Publish-ReusableDraft {
     $pubBody = @{
         expectedDraftRevision           = $pf.draftRevision
         expectedDefinitionHeadVersionId = $pf.definitionHeadVersionId
-        version                         = $pf.minimumVersion
+        version                         = $pf.reviewedVersion
         reviewToken                     = $pf.reviewToken
         idempotencyKey                  = [guid]::NewGuid().ToString()
     } | ConvertTo-Json
@@ -79,9 +84,10 @@ function Publish-ReusableActivity {
         [Parameter(Mandatory)][string] $DisplayName,
         [Parameter(Mandatory)][string] $PayloadJson,
         [string] $ContractJson = $script:DoneOnlyContract,
-        [string] $Category = "QaReusable"
+        [string] $Category = "QaReusable",
+        [string] $SchemaVersion = "1"
     )
-    $d = New-ReusableActivityDefinition -Ctx $Ctx -DisplayName $DisplayName -PayloadJson $PayloadJson -ContractJson $ContractJson -Category $Category
+    $d = New-ReusableActivityDefinition -Ctx $Ctx -DisplayName $DisplayName -PayloadJson $PayloadJson -ContractJson $ContractJson -Category $Category -SchemaVersion $SchemaVersion
     $p = Publish-ReusableDraft -Ctx $Ctx -DraftId $d.DraftId -Revision $d.Revision
     [pscustomobject]@{
         DefinitionId    = $d.DefinitionId
@@ -101,11 +107,12 @@ function Add-ReusableActivityDraft {
         [Parameter(Mandatory)][string] $DefinitionId,
         [Parameter(Mandatory)][string] $PayloadJson,
         [string] $ContractJson = $script:DoneOnlyContract,
-        $SourceVersionId = $null
+        $SourceVersionId = $null,
+        [string] $SchemaVersion = "1"
     )
     $sv = if ([string]::IsNullOrEmpty($SourceVersionId)) { "null" } else { '"' + $SourceVersionId + '"' }
     $body = @"
-{"sourceVersionId":$sv,"provider":{"providerKey":"elsa.activity-graph","schemaVersion":"1","payload":$PayloadJson},"contract":$ContractJson,"layout":[]}
+{"sourceVersionId":$sv,"provider":{"providerKey":"elsa.activity-graph","schemaVersion":"$SchemaVersion","payload":$PayloadJson},"contract":$ContractJson,"layout":[]}
 "@
     $r = Invoke-RestMethod "$($Ctx.BaseUrl)/design/activities/definitions/$DefinitionId/drafts" -Method Post -WebSession $Ctx.Session -ContentType 'application/json' -Body $body
     [pscustomobject]@{ DraftId = $r.draftId; Revision = [long]$r.revision }
@@ -124,20 +131,27 @@ function New-GraphManifestJson {
         [Parameter(Mandatory)][string] $SeqVersionId,
         [Parameter(Mandatory)][string] $ActivitiesJson,   # raw JSON array of node objects
         [string] $OutputMappingsJson = "[]",
-        [string] $VariablesJson = "[]"
+        [string] $VariablesJson = "[]",
+        [string] $OutcomeMappingsJson = $null
     )
+    $outcomeMappings = if ($null -eq $OutcomeMappingsJson) { "" } else { ',"outcomeMappings":' + $OutcomeMappingsJson }
     @"
-{"variables":$VariablesJson,"rootActivity":{"nodeId":"graph-root","activityVersionId":"$SeqVersionId","inputs":[],"outputs":[],"structure":{"kind":"Sequence","schemaVersion":"1","payload":{"activities":$ActivitiesJson}}},"outputMappings":$OutputMappingsJson}
+{"variables":$VariablesJson,"rootActivity":{"nodeId":"graph-root","activityVersionId":"$SeqVersionId","inputs":[],"outputs":[],"structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"activities":$ActivitiesJson}}},"outputMappings":$OutputMappingsJson$outcomeMappings}
 "@
 }
 
-# Build a graph manifest whose root IS another activity version directly (root-wraps-child). This is the working
-# way for a reusable activity to consume another reusable activity: nesting a reusable ref inside a Sequence
-# structure does NOT wire the dependency (see issue #1007 / README), whereas making the child the root does.
+# Build a graph manifest whose root IS another activity version directly (root-wraps-child). This is one supported
+# composition shape for reusable activities; New-GraphManifestJson also supports reusable references in a Sequence.
 function New-RootWrapManifestJson {
-    param([Parameter(Mandatory)][string] $RootVersionId, [string] $OutputMappingsJson = "[]", [string] $VariablesJson = "[]")
+    param(
+        [Parameter(Mandatory)][string] $RootVersionId,
+        [string] $OutputMappingsJson = "[]",
+        [string] $VariablesJson = "[]",
+        [string] $OutcomeMappingsJson = $null
+    )
+    $outcomeMappings = if ($null -eq $OutcomeMappingsJson) { "" } else { ',"outcomeMappings":' + $OutcomeMappingsJson }
     @"
-{"variables":$VariablesJson,"rootActivity":{"nodeId":"wrap","activityVersionId":"$RootVersionId","inputs":[],"outputs":[],"structure":null},"outputMappings":$OutputMappingsJson}
+{"variables":$VariablesJson,"rootActivity":{"nodeId":"wrap","activityVersionId":"$RootVersionId","inputs":[],"outputs":[],"structure":null},"outputMappings":$OutputMappingsJson$outcomeMappings}
 "@
 }
 

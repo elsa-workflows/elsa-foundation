@@ -15,6 +15,7 @@ using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
@@ -523,6 +524,16 @@ public sealed class ClrAssemblyScannerTests
         var models = CreateScanner().Scan(AppContext.BaseDirectory);
 
         Assert.Contains(models, m => m.ActivityTypeKey == typeof(WriteLine).FullName);
+    }
+
+    [Fact]
+    public void ControlFlowAssembly_DiscoversParallelActivity()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ParallelActivity).Assembly);
+
+        var models = CreateScanner().Scan(folder.Path);
+
+        Assert.Contains(models, model => model.ActivityTypeKey == typeof(ParallelActivity).FullName);
     }
 
     [Fact]

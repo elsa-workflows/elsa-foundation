@@ -8,14 +8,10 @@
     no floating reference that would auto-move when the child changes. Propagating an update up a hierarchy is a
     deliberate, staged **upgrade-plan** operation (see ../README.md), not automatic.
 
-    This test publishes child C (v1) and a consumer B whose graph root wraps C, then asserts B's authoritative
-    outbound dependency is EXACTLY C's version id. Because the binding is an immutable version id (not "latest"),
-    republishing C cannot silently move B — the essence of "no auto-cascade".
+    This test publishes child C (v1) and a consumer B whose graph root wraps C, then publishes C v2 and asserts
+    B's authoritative outbound dependency remains EXACTLY C v1's version id. Because the binding is an immutable
+    version id (not "latest"), republishing C cannot silently move B — the essence of "no auto-cascade".
 
-    NOTE: demonstrating non-movement by actually publishing a *second* version of C and re-checking is not
-    covered here: publishing a subsequent activity version over REST currently trips a publication review-token
-    check (`activity.publication.review-stale`) that needs deeper investigation (see ../README.md). The
-    exact-version binding asserted here is the definitive no-auto-cascade signal regardless.
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -34,17 +30,20 @@ $t = Get-Random -Max 999999
 
 $C = Invoke-Step "publish C v1" { Publish-ReusableActivity -Ctx $ctx -DisplayName "PinC-$t" -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C v1 t=$t") + "]")) }
 $B = Invoke-Step "publish B (root-wraps C v1)" { Publish-ReusableActivity -Ctx $ctx -DisplayName "PinB-$t" -PayloadJson (New-RootWrapManifestJson -RootVersionId $C.VersionId) }
+$cV2Draft = Invoke-Step "create C v2 draft" { Add-ReusableActivityDraft -Ctx $ctx -DefinitionId $C.DefinitionId -PayloadJson (New-GraphManifestJson -SeqVersionId $seq -ActivitiesJson ("[" + (New-WriteLineNodeJson -NodeId "c" -WriteLineVersionId $wl -Text "C v2 t=$t") + "]")) -SourceVersionId $C.VersionId }
+$C2 = Invoke-Step "publish C v2" { Publish-ReusableDraft -Ctx $ctx -DraftId $cV2Draft.DraftId -Revision $cV2Draft.Revision -HeadVersionId $C.VersionId }
 Write-Host ("[C] v1={0}" -f $C.VersionId)
+Write-Host ("[C] v2={0}" -f $C2.VersionId)
 Write-Host ("[B] v1={0}" -f $B.VersionId)
 
-$deps = Invoke-Step "read B outbound deps" { Get-OutboundDependencyVersionIds -Ctx $ctx -VersionId $B.VersionId }
+$deps = Invoke-Step "read B outbound deps after C v2" { Get-OutboundDependencyVersionIds -Ctx $ctx -VersionId $B.VersionId }
 Write-Host ("B outbound deps: {0}" -f ($deps -join ', '))
-$pinnedToExactC = $deps -contains $C.VersionId
+$pinnedToExactC = ($deps -contains $C.VersionId) -and ($deps -notcontains $C2.VersionId)
 
 Write-Host ""
 if ($pinnedToExactC) {
-    Write-Host ("SUCCESS - consumer B is pinned to the exact child version '{0}' (immutable binding; no floating/auto-upgrade reference)." -f $C.VersionId) -ForegroundColor Green
+    Write-Host ("SUCCESS - after publishing C v2 '{0}', consumer B remains pinned to C v1 '{1}'." -f $C2.VersionId, $C.VersionId) -ForegroundColor Green
 } else {
-    Write-Host ("MISMATCH - B is not pinned to C's exact version (deps: {0})" -f ($deps -join ', ')) -ForegroundColor Red
+    Write-Host ("MISMATCH - B did not remain pinned to C v1 after C v2 publication (deps: {0})" -f ($deps -join ', ')) -ForegroundColor Red
     exit 1
 }

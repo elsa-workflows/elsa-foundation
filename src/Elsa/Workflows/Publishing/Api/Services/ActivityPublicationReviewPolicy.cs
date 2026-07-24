@@ -146,6 +146,7 @@ internal sealed class ActivityPublicationReviewPolicy(
     public static string ReviewToken(
         ActivityDefinitionDraft draft,
         string? headVersionId,
+        string reviewedVersion,
         ExecutableActivityTemplate? template,
         ActivityVersionDiff? diff,
         ActivityVersionBump requiredBump,
@@ -163,6 +164,7 @@ internal sealed class ActivityPublicationReviewPolicy(
             draft.DefinitionId,
             draft.Revision,
             HeadVersionId = headVersionId,
+            ReviewedVersion = reviewedVersion,
             TemplateHash = template?.TemplateHash,
             template?.ProviderFingerprint,
             Diff = diff is null

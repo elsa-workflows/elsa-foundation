@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -16,7 +17,7 @@ using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContra
 namespace Elsa.Activities.Graph.Design.Services;
 
 /// <summary>
-/// Design-owned compiler for provider manifest schema 1. It never loads mutable definitions and
+/// Design-owned compiler for provider manifest schemas 1 and 2. It never loads mutable definitions and
 /// receives every exact dependency identity from the publishing coordinator.
 /// </summary>
 public sealed class GraphActivityProvider(
@@ -24,13 +25,14 @@ public sealed class GraphActivityProvider(
     ActivityContractAuthoringValidator contractCapabilities) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
 {
     public const string Key = "elsa.activity-graph";
-    public const string Fingerprint = "elsa.activity-graph/compiler/1.0.0";
+    public const string Fingerprint = "elsa.activity-graph/compiler/2.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
     public const string RuntimeDescriptorSchemaVersion = "1";
 
     private static readonly IReadOnlySet<string> Schemas = new HashSet<string>(StringComparer.Ordinal)
     {
-        ActivityGraphManifest.SchemaVersion
+        ActivityGraphManifest.SchemaVersion,
+        ActivityGraphManifest.MultipleOutcomesSchemaVersion
     };
 
     public string ProviderKey => Key;
@@ -38,8 +40,18 @@ public sealed class GraphActivityProvider(
     public IReadOnlySet<string> SupportedManifestSchemas => Schemas;
     public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
         "Activity Graph",
-        [new(ActivityGraphManifest.SchemaVersion, true, new HashSet<string>(StringComparer.Ordinal) { ActivityGraphManifest.SchemaVersion })],
-        new([new("done", "Done", true)]));
+        [
+            new(ActivityGraphManifest.SchemaVersion, true, new HashSet<string>(StringComparer.Ordinal) { ActivityGraphManifest.SchemaVersion }),
+            new(
+                ActivityGraphManifest.MultipleOutcomesSchemaVersion,
+                true,
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    ActivityGraphManifest.SchemaVersion,
+                    ActivityGraphManifest.MultipleOutcomesSchemaVersion
+                })
+        ],
+        new([]));
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
         ActivityProviderContractProposalRequest request,
@@ -47,6 +59,8 @@ public sealed class GraphActivityProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = ReadManifest(request.Manifest, ProposalSubject(), out _);
+        if (!StringComparer.Ordinal.Equals(request.Manifest.SchemaVersion, ActivityGraphManifest.SchemaVersion))
+            return ValueTask.FromResult(new ActivityContractProposal([], diagnostics));
 
         // Schema 1 intentionally does not duplicate public input/output types. A proposal can seed
         // the natural outcome, while the authoritative draft contract remains user/provider owned.
@@ -97,6 +111,8 @@ public sealed class GraphActivityProvider(
             ValidateGraph(graph, request.Contract, subject, diagnostics);
             nodes = EnumerateNodes(graph.RootActivity);
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
+            ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
@@ -202,8 +218,12 @@ public sealed class GraphActivityProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var subject = ProposalSubject();
+        var isSameSchema = string.Equals(request.Source.SchemaVersion, request.TargetSchemaVersion, StringComparison.Ordinal);
+        var isSchemaOneToTwo = string.Equals(request.Source.SchemaVersion, ActivityGraphManifest.SchemaVersion, StringComparison.Ordinal) &&
+                               string.Equals(request.TargetSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion, StringComparison.Ordinal);
         if (!string.Equals(request.Source.ProviderKey, Key, StringComparison.Ordinal) ||
-            !string.Equals(request.TargetSchemaVersion, ActivityGraphManifest.SchemaVersion, StringComparison.Ordinal))
+            !Schemas.Contains(request.TargetSchemaVersion) ||
+            (!isSameSchema && !isSchemaOneToTwo))
         {
             return ValueTask.FromResult(new ActivityManifestMigration(null, [Diagnostic(
                 "activity.provider.migration-unsupported",
@@ -220,7 +240,14 @@ public sealed class GraphActivityProvider(
         if (graph is null)
             return ValueTask.FromResult(new ActivityManifestMigration(null, diagnostics));
 
-        var migrated = new ActivityProviderManifest(Key, ActivityGraphManifest.SchemaVersion, graph.ToCanonicalJsonElement());
+        var migratedGraph = isSchemaOneToTwo
+            ? graph with
+            {
+                ManifestSchemaVersion = ActivityGraphManifest.MultipleOutcomesSchemaVersion,
+                OutcomeMappings = []
+            }
+            : graph;
+        var migrated = new ActivityProviderManifest(Key, request.TargetSchemaVersion, migratedGraph.ToCanonicalJsonElement());
         return ValueTask.FromResult(new ActivityManifestMigration(migrated, diagnostics));
     }
 
@@ -245,7 +272,7 @@ public sealed class GraphActivityProvider(
                 }));
         }
 
-        if (!string.Equals(manifest.SchemaVersion, ActivityGraphManifest.SchemaVersion, StringComparison.Ordinal))
+        if (!Schemas.Contains(manifest.SchemaVersion))
         {
             diagnostics.Add(Diagnostic(
                 "activity.graph.schema-unsupported",
@@ -260,7 +287,7 @@ public sealed class GraphActivityProvider(
         if (diagnostics.Count != 0)
             return ActivityDiagnosticOrderer.Order(diagnostics);
 
-        if (ActivityGraphManifest.TryParse(manifest.Payload, out graph, out var errors))
+        if (ActivityGraphManifest.TryParse(manifest.SchemaVersion, manifest.Payload, out graph, out var errors))
             return [];
 
         diagnostics.AddRange(errors.Select(error => Diagnostic(
@@ -377,7 +404,8 @@ public sealed class GraphActivityProvider(
         }
 
         var emittedOutcomes = contract.Outcomes.Where(x => x.IsEmitted).ToArray();
-        if (emittedOutcomes.Length != 1 || !string.Equals(emittedOutcomes[0].ReferenceKey, "done", StringComparison.Ordinal))
+        if (StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.SchemaVersion) &&
+            (emittedOutcomes.Length != 1 || !string.Equals(emittedOutcomes[0].ReferenceKey, "done", StringComparison.Ordinal)))
         {
             diagnostics.Add(Diagnostic(
                 "activity.graph.outcome-done-required",
@@ -385,6 +413,109 @@ public sealed class GraphActivityProvider(
                 subject,
                 "/contract/outcomes",
                 "done"));
+        }
+
+        if (StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
+            ValidateBoundaryOutcomeMappings(graph, emittedOutcomes, subject, diagnostics);
+    }
+
+    private static void ValidateBoundaryOutcomeMappings(
+        ActivityGraphManifest graph,
+        IReadOnlyCollection<ActivityOutcomeContract> emittedOutcomes,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics)
+    {
+        if (emittedOutcomes.Count == 0)
+        {
+            diagnostics.Add(Diagnostic(
+                "activity.graph.outcome-required",
+                "Graph schema 2 requires at least one emitted public boundary outcome.",
+                subject,
+                "/contract/outcomes"));
+        }
+
+        var emittedByReference = emittedOutcomes.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        foreach (var group in graph.OutcomeMappings.GroupBy(x => x.BoundaryOutcomeReferenceKey, StringComparer.Ordinal))
+        {
+            if (!emittedByReference.ContainsKey(group.Key))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.outcome-mapping-boundary-unknown",
+                    $"Outcome mapping '{group.Key}' does not name an emitted public boundary outcome.",
+                    subject,
+                    "/outcomeMappings",
+                    group.Key));
+            }
+
+            if (group.Count() > 1)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.outcome-mapping-boundary-duplicate",
+                    $"Emitted public boundary outcome '{group.Key}' has more than one mapping.",
+                    subject,
+                    "/outcomeMappings",
+                    group.Key));
+            }
+        }
+
+        foreach (var outcome in emittedOutcomes)
+        {
+            if (graph.OutcomeMappings.Count(x =>
+                    StringComparer.Ordinal.Equals(x.BoundaryOutcomeReferenceKey, outcome.ReferenceKey)) != 1)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.outcome-mapping-required",
+                    $"Emitted public boundary outcome '{outcome.ReferenceKey}' must have exactly one mapping.",
+                    subject,
+                    "/outcomeMappings",
+                    outcome.ReferenceKey));
+            }
+        }
+
+        foreach (var group in graph.OutcomeMappings.GroupBy(x => x.SourceOutcomeReferenceKey, StringComparer.Ordinal).Where(x => x.Count() > 1))
+        {
+            diagnostics.Add(Diagnostic(
+                "activity.graph.outcome-mapping-source-duplicate",
+                $"Entry outcome '{group.Key}' maps to more than one public boundary outcome.",
+                subject,
+                "/outcomeMappings",
+                group.Key));
+        }
+    }
+
+    private static void ValidateOutcomeMappings(
+        ActivityGraphManifest graph,
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyList<ActivityResolvedDependency> dependencies,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics)
+    {
+        if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion) ||
+            nodes.Count == 0)
+            return;
+
+        var entry = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First();
+        var entryDependencies = dependencies
+            .Where(x => StringComparer.Ordinal.Equals(x.OccurrenceId, entry.NodeId))
+            .ToArray();
+        if (entryDependencies.Length != 1)
+            return;
+        var entryDependency = entryDependencies[0];
+
+        var emittedEntryOutcomes = entryDependency.Contract.Outcomes
+            .Where(x => x.IsEmitted)
+            .ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        foreach (var mapping in graph.OutcomeMappings)
+        {
+            if (!emittedEntryOutcomes.ContainsKey(mapping.SourceOutcomeReferenceKey))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.outcome-mapping-source-unknown",
+                    $"Outcome mapping source '{mapping.SourceOutcomeReferenceKey}' is not emitted by graph entry '{entry.NodeId}'.",
+                    subject,
+                    "/outcomeMappings",
+                    mapping.SourceOutcomeReferenceKey));
+            }
         }
     }
 
@@ -444,6 +575,81 @@ public sealed class GraphActivityProvider(
         }
     }
 
+    private void ValidateDeclaredStructures(
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyList<ActivityResolvedDependency> dependencies,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var dependenciesByOccurrence = dependencies
+            .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.Single(), StringComparer.Ordinal);
+
+        foreach (var node in nodes)
+        {
+            var actual = node.Activity.Structure;
+            if (actual is null ||
+                !dependenciesByOccurrence.TryGetValue(node.NodeId, out var dependency) ||
+                !StringComparer.Ordinal.Equals(dependency.VersionId, node.ActivityVersionId))
+                continue;
+
+            if (dependency.DeclaredStructure is not { } declared)
+            {
+                if (activityStructureService.HasHandler(actual))
+                {
+                    diagnostics.Add(Diagnostic(
+                        "activity.graph.structure-contract-undeclared",
+                        $"Graph node '{node.NodeId}' uses handled structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares no structure contract.",
+                        subject,
+                        $"{node.JsonPointer}/structure",
+                        node.NodeId,
+                        new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["structureKind"] = actual.Kind,
+                            ["structureSchemaVersion"] = actual.SchemaVersion
+                        }));
+                }
+
+                continue;
+            }
+
+            if (!StringComparer.Ordinal.Equals(actual.Kind, declared.Kind) ||
+                !StringComparer.Ordinal.Equals(actual.SchemaVersion, declared.SchemaVersion))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.structure-contract-mismatch",
+                    $"Graph node '{node.NodeId}' carries structure '{actual.Kind}@{actual.SchemaVersion}', but exact activity version '{node.ActivityVersionId}' declares '{declared.Kind}@{declared.SchemaVersion}'.",
+                    subject,
+                    $"{node.JsonPointer}/structure",
+                    node.NodeId,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["actualKind"] = actual.Kind,
+                        ["actualSchemaVersion"] = actual.SchemaVersion,
+                        ["declaredKind"] = declared.Kind,
+                        ["declaredSchemaVersion"] = declared.SchemaVersion
+                    }));
+                continue;
+            }
+
+            if (!activityStructureService.HasHandler(actual))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.structure-handler-unavailable",
+                    $"Graph node '{node.NodeId}' uses declared structure '{declared.Kind}@{declared.SchemaVersion}', but no handler is registered for that exact contract.",
+                    subject,
+                    $"{node.JsonPointer}/structure",
+                    node.NodeId,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["structureKind"] = declared.Kind,
+                        ["structureSchemaVersion"] = declared.SchemaVersion
+                    }));
+            }
+        }
+    }
+
     private IReadOnlyList<GraphNode> EnumerateNodes(JsonElement root)
     {
         ActivityNode rootNode;
@@ -489,6 +695,7 @@ public sealed class GraphActivityProvider(
                 pointer,
                 item.Depth,
                 element,
+                item.Node,
                 item.ParentOccurrenceId,
                 item.ChildSlotName,
                 item.ChildIndex,
@@ -525,7 +732,7 @@ public sealed class GraphActivityProvider(
         return nodes;
     }
 
-    private static JsonElement? FindNodeElement(JsonElement root, string nodeId)
+    private JsonElement? FindNodeElement(JsonElement root, string nodeId)
     {
         foreach (var candidate in EnumerateNodeCandidates(root))
             if (TryReadNode(candidate.Element, out var candidateId, out _) && StringComparer.Ordinal.Equals(candidateId, nodeId))
@@ -533,46 +740,94 @@ public sealed class GraphActivityProvider(
         return null;
     }
 
-    private static IReadOnlyList<NodeCandidate> EnumerateNodeCandidates(JsonElement root)
+    private IReadOnlyList<NodeCandidate> EnumerateNodeCandidates(JsonElement root)
     {
         var candidates = new List<NodeCandidate>();
-        var pending = new Stack<(JsonElement Element, string Pointer, bool IsCandidate)>();
-        pending.Push((root, "/rootActivity", true));
+        var pending = new Stack<NodeCandidate>();
+        pending.Push(new(root, "/rootActivity"));
 
         while (pending.TryPop(out var item))
         {
-            var hasNodeField = item.Element.ValueKind == JsonValueKind.Object &&
-                (item.Element.TryGetProperty("nodeId", out _) || item.Element.TryGetProperty("activityVersionId", out _));
-            if (item.IsCandidate || hasNodeField)
-                candidates.Add(new(item.Element, item.Pointer));
+            candidates.Add(item);
+            if (!TryReadStructure(item.Element, out var structure) ||
+                !activityStructureService.HasHandler(structure))
+                continue;
+
+            PushOwnedStructureCandidates(
+                structure.Payload,
+                $"{item.JsonPointer}/structure/payload",
+                pending);
+        }
+
+        return candidates;
+    }
+
+    private static void PushOwnedStructureCandidates(
+        JsonElement payload,
+        string pointer,
+        Stack<NodeCandidate> candidates)
+    {
+        var pending = new Stack<(JsonElement Element, string Pointer, bool IsCandidate)>();
+        pending.Push((payload, pointer, false));
+
+        while (pending.TryPop(out var item))
+        {
+            if (item.IsCandidate || LooksLikeAuthoredNode(item.Element))
+            {
+                candidates.Push(new(item.Element, item.Pointer));
+                continue;
+            }
 
             if (item.Element.ValueKind == JsonValueKind.Object)
             {
-                foreach (var property in item.Element.EnumerateObject().OrderByDescending(x => x.Name, StringComparer.Ordinal))
+                foreach (var property in item.Element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
                 {
-                    var pointer = $"{item.Pointer}/{EscapePointer(property.Name)}";
+                    var propertyPointer = $"{item.Pointer}/{EscapePointer(property.Name)}";
                     if (property.Value.ValueKind == JsonValueKind.Array)
                     {
                         var elements = property.Value.EnumerateArray().ToArray();
-                        var containsAuthoredNodes = string.Equals(property.Name, "activities", StringComparison.Ordinal);
-                        for (var index = elements.Length - 1; index >= 0; index--)
-                            pending.Push((elements[index], $"{pointer}/{index}", containsAuthoredNodes));
+                        var containsAuthoredNodes = StringComparer.Ordinal.Equals(property.Name, "activities");
+                        for (var index = 0; index < elements.Length; index++)
+                            pending.Push((elements[index], $"{propertyPointer}/{index}", containsAuthoredNodes));
                     }
                     else
                     {
-                        pending.Push((property.Value, pointer, false));
+                        pending.Push((property.Value, propertyPointer, false));
                     }
                 }
             }
             else if (item.Element.ValueKind == JsonValueKind.Array)
             {
                 var elements = item.Element.EnumerateArray().ToArray();
-                for (var index = elements.Length - 1; index >= 0; index--)
+                for (var index = 0; index < elements.Length; index++)
                     pending.Push((elements[index], $"{item.Pointer}/{index}", false));
             }
         }
+    }
 
-        return candidates;
+    private static bool LooksLikeAuthoredNode(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object &&
+        (element.TryGetProperty("nodeId", out _) ||
+         element.TryGetProperty("activityVersionId", out _)) &&
+        (element.TryGetProperty("activityVersionId", out _) ||
+         element.TryGetProperty("inputs", out _) ||
+         element.TryGetProperty("outputs", out _) ||
+         element.TryGetProperty("structure", out _));
+
+    private static bool TryReadStructure(JsonElement element, out ActivityNodeStructure structure)
+    {
+        structure = null!;
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty("structure", out var structureElement) ||
+            structureElement.ValueKind != JsonValueKind.Object ||
+            !TryReadRequiredString(structureElement, "kind", out var kind) ||
+            !TryReadRequiredString(structureElement, "schemaVersion", out var schemaVersion) ||
+            !structureElement.TryGetProperty("payload", out var payload) ||
+            payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return false;
+
+        structure = new(kind!, schemaVersion!, payload);
+        return true;
     }
 
     private static bool TryReadNode(JsonElement element, out string? nodeId, out string? activityVersionId)
@@ -666,10 +921,21 @@ public sealed class GraphActivityProvider(
         IReadOnlyList<ActivityResolvedDependency> dependencies)
     {
         var nodesByOccurrence = nodes.ToDictionary(x => x.NodeId, StringComparer.Ordinal);
+        var entryOccurrenceId = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First().NodeId;
+        var entryContract = dependencies.Single(x => StringComparer.Ordinal.Equals(x.OccurrenceId, entryOccurrenceId)).Contract;
+        var entryOutcomes = entryContract.Outcomes.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        var boundaryOutcomes = contract.Outcomes.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        var outcomeMappings = graph.OutcomeMappings
+            .Select(mapping => new
+            {
+                sourceOutcomeName = entryOutcomes[mapping.SourceOutcomeReferenceKey].Name,
+                boundaryOutcomeName = boundaryOutcomes[mapping.BoundaryOutcomeReferenceKey].Name
+            })
+            .ToArray();
         var plan = new
         {
             planSchemaVersion = "1",
-            entryOccurrenceId = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First().NodeId,
+            entryOccurrenceId,
             occurrences = dependencies.Select(dependency =>
             {
                 var node = nodesByOccurrence[dependency.OccurrenceId];
@@ -720,7 +986,14 @@ public sealed class GraphActivityProvider(
             requiredInputReferenceKeys = contract.Inputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray(),
             requiredOutputReferenceKeys = contract.Outputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray()
         };
-        return Canonicalize(JsonSerializer.SerializeToElement(plan, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
+        if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
+            return Canonicalize(payload);
+
+        var schemaTwoPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
+        return Canonicalize(JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions));
     }
 
     private static Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
@@ -818,6 +1091,7 @@ public sealed class GraphActivityProvider(
         string JsonPointer,
         long Depth,
         JsonElement Element,
+        ActivityNode Activity,
         string? ParentOccurrenceId,
         string ChildSlotName,
         int ChildIndex,
