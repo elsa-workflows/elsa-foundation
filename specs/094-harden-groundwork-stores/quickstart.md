@@ -186,6 +186,21 @@ record set under `ledger-attachments/`. Review and mechanically import those rec
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #644/#660 authority evidence is current.
 
+### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
+
+Against Elsa `78033cf11` and Groundwork `0.0.1-preview.81`, the checkpoint/fence publisher passed for
+SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 2m21s). It produced 36 unique
+`(coverageEntryId, scenarioId, provider)` records across `runtime-checkpoint-commit`,
+`runtime-execution-liveness`, and `runtime-post-commit-outbox`; every retained artifact digest was
+recomputed successfully before the attachment was imported mechanically by that tuple.
+
+An earlier full publication reached SQL Server and exposed that the fixture's reset query could select
+system sessions, which SQL Server refuses to kill. The fixture now limits the reset set to user processes;
+the focused SQL Server fence scenario and this complete publication both passed after the correction.
+This refresh preserves T050's completed evidence at the current package family. It does not complete
+T058/T069/T076/T093/T100 or advance any ledger row status; #646 inherits those remaining evidence and
+performance-verdict obligations.
+
 For the performance handoff, `requiredNativeRoutes` in the versioned workload documents are exact current
 `BoundedQueryDeclaration.Identity` values, not coverage-ledger `queryShapes` or descriptive “bounded” aliases.
 For example the current workload set uses `list-claimable`, `list-due`,

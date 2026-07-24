@@ -2,7 +2,7 @@
   "$schema": "./contracts/coverage-ledger.schema.json",
   "schemaVersion": 1,
   "feature": "094-harden-groundwork-stores",
-  "groundworkVersion": "0.0.1-preview.80",
+  "groundworkVersion": "0.0.1-preview.81",
   "baselineRef": "c9aa5fd8f7cfa6c86b2f37885a2446f3f4b82103",
   "mandatoryProviders": [
     "sqlite",
@@ -345,16 +345,16 @@
             "coverageEntryId": "runtime-execution-liveness",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "397ccee7702839e77bfc66ac53fce76b3db372b18ca25124c68c030d43caa627",
+            "manifestFingerprint": "2abbb2181357e50c77277308a308ab08c87d54b3d9153463cdb2403c43440969",
             "executionPath": "provider-driver/sqlite/runtime-execution-liveness/6c14c7b1ab7d6741",
             "clients": 2,
             "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
             "outcome": "pass",
             "concurrencySemantic": "strictly-increasing-fence",
             "evidence": "evidence/sqlite/runtime-execution-liveness/6c14c7b1ab7d6741.json",
-            "evidenceSha256": "0a87ff748eb34e1edd629bc29f3d6a4ca416bf94319240d7452996661cb1c6cf"
+            "evidenceSha256": "1681a228264df437480fb82afac34f6b361eda0f3e3dc93ea479aed6a10bc5cf"
           }
         ],
         "sqlserver": [
@@ -364,16 +364,16 @@
             "coverageEntryId": "runtime-execution-liveness",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "c1d866e30db2c21e33c9ea9ad5d74d494f2e96d274e778a6cfa12ccc8a5e4e9f",
+            "manifestFingerprint": "790dafc53bcf108b25769a55d18062f4ff985ba524427b14e30b9d0d9a44f78f",
             "executionPath": "provider-driver/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741",
             "clients": 2,
             "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
             "outcome": "pass",
             "concurrencySemantic": "strictly-increasing-fence",
             "evidence": "evidence/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741.json",
-            "evidenceSha256": "7186ea0ab66bb1c27ed5d39b0935199f0644ab0d22ec6d2720c23abe7c4baedd"
+            "evidenceSha256": "e0713e3288c823492e8bdacef5164e632488ba3c6fab731a1bc5b6cc83fff40f"
           }
         ],
         "postgresql": [
@@ -383,16 +383,16 @@
             "coverageEntryId": "runtime-execution-liveness",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "7efad2f94737503e4b5bdf186e07f5028bfd5d8ba987cb3eea7b588844b5c346",
+            "manifestFingerprint": "6e0cca58e946a33f89715914756e6e4feeb196d8a76800512dbe6c521266fa26",
             "executionPath": "provider-driver/postgresql/runtime-execution-liveness/6c14c7b1ab7d6741",
             "clients": 2,
             "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
             "outcome": "pass",
             "concurrencySemantic": "strictly-increasing-fence",
             "evidence": "evidence/postgresql/runtime-execution-liveness/6c14c7b1ab7d6741.json",
-            "evidenceSha256": "3e7252a12ca98f942d9664276563a6442fc050cb4fb875ced9175c22574c748e"
+            "evidenceSha256": "7548c57f99abb7bfdde4d546c26c3a5d732eb6c92c3e9ee3bf7d1527e36c0b8d"
           }
         ],
         "mongodb": [
@@ -402,16 +402,16 @@
             "coverageEntryId": "runtime-execution-liveness",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "15b107a9399e2ad9c7e830106d1c8788800ef2c026c2caced2553a6c0bf940f3",
+            "manifestFingerprint": "8f92a32e4ec3b56fd17883e5a0562620036c11cbef049d39bb7c13c6cffe5429",
             "executionPath": "provider-driver/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741",
             "clients": 2,
             "resultHash": "ef22d67b91d092f0a448ed0cd2d25d44a88e4eeea55ddc789b858ff7463b7503",
             "outcome": "pass",
             "concurrencySemantic": "strictly-increasing-fence",
             "evidence": "evidence/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741.json",
-            "evidenceSha256": "f217e902aa35377ffd3dc2e689c46327f5160f1ea724e2e24dd2e7717ea3eff7"
+            "evidenceSha256": "9e09534e574921cf82af5bb71970b19ccc08270ebf81b00ac71b43a461aa8899"
           }
         ]
       },
@@ -557,16 +557,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "397ccee7702839e77bfc66ac53fce76b3db372b18ca25124c68c030d43caa627",
+            "manifestFingerprint": "2abbb2181357e50c77277308a308ab08c87d54b3d9153463cdb2403c43440969",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/974e1222ea1cded8",
             "clients": 2,
             "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
             "outcome": "pass",
             "concurrencySemantic": "atomic-stale-fence-rejection",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/974e1222ea1cded8.json",
-            "evidenceSha256": "204a0ac0d93f0346b86b9efe66c07beb91b1ff44b048cdb32be597e92f9c9e92"
+            "evidenceSha256": "ebf1512994e94d8cf4e4515aa66d5fc9a023b1f54b397a59ee2723a1aa519151"
           },
           {
             "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
@@ -574,16 +574,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "44608d681e9b62bd3037da059b39d144f459a02e7bfea87049366a1898035cea",
+            "manifestFingerprint": "6f8416198fcbd8e27f4b09a32945a25b363e6bf702303b35e865113e5aba4c47",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/10f38a26e09d6b24",
             "clients": 2,
             "resultHash": "f2204451baf4ec56f3e07d6008f0d0eb2711573341c858e38b4e30a15692b1eb",
             "outcome": "pass",
             "concurrencySemantic": "create-only-idempotency-marker",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/10f38a26e09d6b24.json",
-            "evidenceSha256": "445ad4ca78ba3f0cbd5394d2fcf3d054c36e1af360ad6c5fee12687e83828c2c"
+            "evidenceSha256": "c22beeec2eff5721c79d9b23798d0f86cec4adf90d2766f003a225f871f6c9fd"
           },
           {
             "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
@@ -591,16 +591,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "18a125145ae33bfe9d1c6c1b6a8754abc2f3c3313828d991c63c680ec871f945",
+            "manifestFingerprint": "9253f82eedf8c2e51aa839143e3455b53f1dc3fd157f2489303e2d675d63caf1",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/d8be96cddb8ddc60",
             "clients": 2,
             "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
             "outcome": "pass",
             "failureWindow": "after-durable-decision-before-caller-acknowledgement",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
-            "evidenceSha256": "318faa83bf988f46903942cebd68b4f784a6e82046de8ce86c617f6740c3f513"
+            "evidenceSha256": "a71ab33e7605b8955bec2546fcc8a5c94ad2f0365892f5488e204d95c0749aa9"
           },
           {
             "scenarioId": "failureWindow:before-provider-decision",
@@ -608,16 +608,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "18a125145ae33bfe9d1c6c1b6a8754abc2f3c3313828d991c63c680ec871f945",
+            "manifestFingerprint": "9253f82eedf8c2e51aa839143e3455b53f1dc3fd157f2489303e2d675d63caf1",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/11dab48c5b6ded59",
             "clients": 2,
             "resultHash": "47b95e26a8d4b7344a2fe68369cce142ce4fa51e29b84450663d20b68f19491c",
             "outcome": "pass",
             "failureWindow": "before-provider-decision",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/11dab48c5b6ded59.json",
-            "evidenceSha256": "260299302da9c3acf0874a70ab449dacf4d45d3a660ffefd71d69196d937c5d6"
+            "evidenceSha256": "fe9e08b6f3328fa218d2eb83290e0559dfa5bddaa1017805b75adda34c7ffd12"
           },
           {
             "scenarioId": "failureWindow:during-provider-decision",
@@ -625,16 +625,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "18a125145ae33bfe9d1c6c1b6a8754abc2f3c3313828d991c63c680ec871f945",
+            "manifestFingerprint": "9253f82eedf8c2e51aa839143e3455b53f1dc3fd157f2489303e2d675d63caf1",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/d45b0461943784e6",
             "clients": 2,
             "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
             "outcome": "pass",
             "failureWindow": "during-provider-decision",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/d45b0461943784e6.json",
-            "evidenceSha256": "a5d477701c417bf23cc7b51fb2c70d3a59e5aba7d332172c0df6b2815334f425"
+            "evidenceSha256": "b73ec39eb06e545fe42605c1a2c28913155bd9accf5efde3f378fb545f2e5609"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -642,16 +642,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "39e063fdf87fc1ceae63d804adf1fbfa0a4b32fb70e8569e3680d8d5021d3a70",
+            "manifestFingerprint": "176a1acea5f3ec6cfd70546546120b4f94ce050bc7fc329871823f1e5c57dc8e",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/9ff7253c911b2760.json",
-            "evidenceSha256": "c3605eae9ee8d7e5cf321c774e1055eb48a2f2c1d9ce8144e8c50c90972f20ca"
+            "evidenceSha256": "98ab541fdd1a0211bf8e67bd7305d84ddd6dd4334c9d77a375b3d3c81aee6f87"
           },
           {
             "scenarioId": "restartScenario:process-restart-same-database",
@@ -659,16 +659,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "39e063fdf87fc1ceae63d804adf1fbfa0a4b32fb70e8569e3680d8d5021d3a70",
+            "manifestFingerprint": "176a1acea5f3ec6cfd70546546120b4f94ce050bc7fc329871823f1e5c57dc8e",
             "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/8630b67155036d92",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "process-restart-same-database",
             "evidence": "evidence/sqlite/runtime-checkpoint-commit/8630b67155036d92.json",
-            "evidenceSha256": "2ee4c6c47c5949a835c1f578a79d96a8687e15610399d6ada4cc7a3db13863d7"
+            "evidenceSha256": "3316538c384c34d096f5c88dc75c39b79ef84b0a7a0c97d3ccbe76a8775c8f4c"
           }
         ],
         "sqlserver": [
@@ -678,16 +678,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "c1d866e30db2c21e33c9ea9ad5d74d494f2e96d274e778a6cfa12ccc8a5e4e9f",
+            "manifestFingerprint": "790dafc53bcf108b25769a55d18062f4ff985ba524427b14e30b9d0d9a44f78f",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8",
             "clients": 2,
             "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
             "outcome": "pass",
             "concurrencySemantic": "atomic-stale-fence-rejection",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8.json",
-            "evidenceSha256": "f6edf225439889e5a9dadae8aee1b7fcfa83c675aff088bae0072944ba3f6f83"
+            "evidenceSha256": "513d8c79e5abc1f0251f5b90522d0a7d0974ec7d9c5565bc19fbbf2f7894e3c6"
           },
           {
             "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
@@ -695,16 +695,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7fcf202c2bbf25c81bb9257c86e6a2baf118ecb4bc7507c5569e9fd90dba2dfe",
+            "manifestFingerprint": "c024d20a38d611459230ebfbcda75010797235ac02a40a3afde5745f5af3d199",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24",
             "clients": 2,
             "resultHash": "f2204451baf4ec56f3e07d6008f0d0eb2711573341c858e38b4e30a15692b1eb",
             "outcome": "pass",
             "concurrencySemantic": "create-only-idempotency-marker",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24.json",
-            "evidenceSha256": "d17ff336fcef28e2c9a92e823d330d2c4deb1daefcbee1f80783170ac101b9c0"
+            "evidenceSha256": "fb32df043c493e1f2e7d8823b6fc1840352280c37c683676b5ebc6492740f0c6"
           },
           {
             "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
@@ -712,16 +712,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e13cb8b925685513bb63f420cc28879b05b4a5fa92901e21ceee1f00457575bc",
+            "manifestFingerprint": "2410001e6a650673a14274b8686642766b994726fbb287bac6d01ef5b3490365",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60",
             "clients": 2,
             "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
             "outcome": "pass",
             "failureWindow": "after-durable-decision-before-caller-acknowledgement",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
-            "evidenceSha256": "a1e7262387a6ea10ea17677cfb021bb2029c4abd21dd35fb1c6e5ea651ad3e61"
+            "evidenceSha256": "2eac79613d4d3806b8d230795d5169b0b7a1da9796d1145433dbfcc432c81ed5"
           },
           {
             "scenarioId": "failureWindow:before-provider-decision",
@@ -729,16 +729,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e13cb8b925685513bb63f420cc28879b05b4a5fa92901e21ceee1f00457575bc",
+            "manifestFingerprint": "2410001e6a650673a14274b8686642766b994726fbb287bac6d01ef5b3490365",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/11dab48c5b6ded59",
             "clients": 2,
             "resultHash": "47b95e26a8d4b7344a2fe68369cce142ce4fa51e29b84450663d20b68f19491c",
             "outcome": "pass",
             "failureWindow": "before-provider-decision",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/11dab48c5b6ded59.json",
-            "evidenceSha256": "16ddb64f8b92be6afd3b55abec8144b65a4f80d54a72346ec91d3f5e3390a883"
+            "evidenceSha256": "c818c8d5ab66a9553d9009ca084773af92ca66050977439422cfcb5b63dd3a7c"
           },
           {
             "scenarioId": "failureWindow:during-provider-decision",
@@ -746,16 +746,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "e13cb8b925685513bb63f420cc28879b05b4a5fa92901e21ceee1f00457575bc",
+            "manifestFingerprint": "2410001e6a650673a14274b8686642766b994726fbb287bac6d01ef5b3490365",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/d45b0461943784e6",
             "clients": 2,
             "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
             "outcome": "pass",
             "failureWindow": "during-provider-decision",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/d45b0461943784e6.json",
-            "evidenceSha256": "dd5452087b850b453cfc678a7b94b1e3805b0715d2e6db91fcd7f40484ab39fc"
+            "evidenceSha256": "2685950a6325c618672eea834e08541b6276583102236d9ea509e0b5c7e448d0"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -763,16 +763,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "3c26c89dfcdc0e54256ff1f6464cb64b7ce945279f6330dcbc2218fc81bab516",
+            "manifestFingerprint": "929656a9f6bd0418158d6a5ba94e900af10388ff92180cc7033bfcc15a9c0de2",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/9ff7253c911b2760.json",
-            "evidenceSha256": "71ec0c2c34db72a8055cfadbc58d5beaac4d92d8ce7552fd29529f1a52494434"
+            "evidenceSha256": "a4a5ee4d5c8882594f5e67f5fbead47603a74e8500e2adc3471ce977562790e5"
           },
           {
             "scenarioId": "restartScenario:process-restart-same-database",
@@ -780,16 +780,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "3c26c89dfcdc0e54256ff1f6464cb64b7ce945279f6330dcbc2218fc81bab516",
+            "manifestFingerprint": "929656a9f6bd0418158d6a5ba94e900af10388ff92180cc7033bfcc15a9c0de2",
             "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/8630b67155036d92",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "process-restart-same-database",
             "evidence": "evidence/sqlserver/runtime-checkpoint-commit/8630b67155036d92.json",
-            "evidenceSha256": "bdd082dcb91812fbcdb2b615135b045b7201682d4c50746f7bcc98ce6d020758"
+            "evidenceSha256": "7518c9e2a0c095191143baebccb78f702d074b2cac3fd3bc65e156124673e298"
           }
         ],
         "postgresql": [
@@ -799,16 +799,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "7efad2f94737503e4b5bdf186e07f5028bfd5d8ba987cb3eea7b588844b5c346",
+            "manifestFingerprint": "6e0cca58e946a33f89715914756e6e4feeb196d8a76800512dbe6c521266fa26",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/974e1222ea1cded8",
             "clients": 2,
             "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
             "outcome": "pass",
             "concurrencySemantic": "atomic-stale-fence-rejection",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/974e1222ea1cded8.json",
-            "evidenceSha256": "a1d76b66ef6c5cc9c55434ff72d1639ea374d6d2b166fc11b2d9e3109b87c421"
+            "evidenceSha256": "1214b0625489a2a73fe963ce5ab48f6d537d883b2dd82b2060229cde3511210a"
           },
           {
             "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
@@ -816,16 +816,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "713eaacbfd8086d9d3de69144f9f25f4c851f1d7b0060162b7b9b2bf0706fe5e",
+            "manifestFingerprint": "5c62613c501039d2b957acb005928b45302bbb0fa50a75c732040578c1300402",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/10f38a26e09d6b24",
             "clients": 2,
             "resultHash": "f2204451baf4ec56f3e07d6008f0d0eb2711573341c858e38b4e30a15692b1eb",
             "outcome": "pass",
             "concurrencySemantic": "create-only-idempotency-marker",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/10f38a26e09d6b24.json",
-            "evidenceSha256": "c3b2bd19a6a74f96f8da5de8985183b61ae6ab805e93d3ad5b1f6b9e47772f71"
+            "evidenceSha256": "a2acce6f06cd8f6c0172e4f5afb377a47f1107b558da7a192537a8a34c6a392d"
           },
           {
             "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
@@ -833,16 +833,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "a5d8d996026a54d1d67bbaf4948d3a2182658002ce2b216842b4ea8f2cac2503",
+            "manifestFingerprint": "1996bed17646b445151f1ac1b8e906caa01b08f328fd090073e2ba9977385a0d",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/d8be96cddb8ddc60",
             "clients": 2,
             "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
             "outcome": "pass",
             "failureWindow": "after-durable-decision-before-caller-acknowledgement",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
-            "evidenceSha256": "4c824d3a80010f8377451e5029b75c759d62122522c9407425666662614efef3"
+            "evidenceSha256": "3c25c1e664d16cb21fe9514d1e3c8fa037d2a95a00c38e80ebd4d0e6c1985b9e"
           },
           {
             "scenarioId": "failureWindow:before-provider-decision",
@@ -850,16 +850,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "a5d8d996026a54d1d67bbaf4948d3a2182658002ce2b216842b4ea8f2cac2503",
+            "manifestFingerprint": "1996bed17646b445151f1ac1b8e906caa01b08f328fd090073e2ba9977385a0d",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/11dab48c5b6ded59",
             "clients": 2,
             "resultHash": "47b95e26a8d4b7344a2fe68369cce142ce4fa51e29b84450663d20b68f19491c",
             "outcome": "pass",
             "failureWindow": "before-provider-decision",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/11dab48c5b6ded59.json",
-            "evidenceSha256": "365ae1610190d26429f379a57cfa74c9bee235302250061b91e8c86b223f7ce1"
+            "evidenceSha256": "979a15df8d82e6993ff1db0f25f719735c71e4befe150f9ea660ccdf329b3a5a"
           },
           {
             "scenarioId": "failureWindow:during-provider-decision",
@@ -867,16 +867,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "a5d8d996026a54d1d67bbaf4948d3a2182658002ce2b216842b4ea8f2cac2503",
+            "manifestFingerprint": "1996bed17646b445151f1ac1b8e906caa01b08f328fd090073e2ba9977385a0d",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/d45b0461943784e6",
             "clients": 2,
             "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
             "outcome": "pass",
             "failureWindow": "during-provider-decision",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/d45b0461943784e6.json",
-            "evidenceSha256": "3034b79f932968b3f63d1df00dc65dbf19fcceea3bfdb40a96e9f2eea5f92b54"
+            "evidenceSha256": "0de28606076e0ac4b8bcc459dceea8bd714640a05eb9afee0ed3c5230f94c885"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -884,16 +884,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "12498326943c68d298811253d9497c5e44347025d34c6a302a44eb0457cf913e",
+            "manifestFingerprint": "4a73ea7db621d088aa06e6c3b7078d55b004d8e0eb35482e2898ede6ff69ef93",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/9ff7253c911b2760.json",
-            "evidenceSha256": "1a8f7ccd6bc89e68740861de26a8ee273bc4debdef1056c875662adfefdc3628"
+            "evidenceSha256": "34111978cbcf62e050a2bfd2e5de290c8e1ab538cbae709a20ecb5da8e98ae00"
           },
           {
             "scenarioId": "restartScenario:process-restart-same-database",
@@ -901,16 +901,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "12498326943c68d298811253d9497c5e44347025d34c6a302a44eb0457cf913e",
+            "manifestFingerprint": "4a73ea7db621d088aa06e6c3b7078d55b004d8e0eb35482e2898ede6ff69ef93",
             "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/8630b67155036d92",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "process-restart-same-database",
             "evidence": "evidence/postgresql/runtime-checkpoint-commit/8630b67155036d92.json",
-            "evidenceSha256": "5687c292a777dbd621c940a3fc79157d60d8a873b3c5b381800d41cd514d2e03"
+            "evidenceSha256": "8f6143bbb5221db115360a5a7fe5a62e8858c9ad189822c86694eb929e7af6af"
           }
         ],
         "mongodb": [
@@ -920,16 +920,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "15b107a9399e2ad9c7e830106d1c8788800ef2c026c2caced2553a6c0bf940f3",
+            "manifestFingerprint": "8f92a32e4ec3b56fd17883e5a0562620036c11cbef049d39bb7c13c6cffe5429",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/974e1222ea1cded8",
             "clients": 2,
             "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
             "outcome": "pass",
             "concurrencySemantic": "atomic-stale-fence-rejection",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/974e1222ea1cded8.json",
-            "evidenceSha256": "dfa8a3609bff13d1363cb90f90463422cf4d8d6c43bd87ba96da3e24ea10fdef"
+            "evidenceSha256": "2f2524d359fb6bac143b77725ae2414e88ff50914cb3ceda8ab45f087d091831"
           },
           {
             "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
@@ -937,16 +937,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "11b70dcf2404e209c76d1bdf1076dbeb597f7f29961aa296b0e8337373cee077",
+            "manifestFingerprint": "b9c34f20b5fdacded50e21520c76b6723fb745cbcde75b9fea1b261f6f6b613e",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/10f38a26e09d6b24",
             "clients": 2,
             "resultHash": "f2204451baf4ec56f3e07d6008f0d0eb2711573341c858e38b4e30a15692b1eb",
             "outcome": "pass",
             "concurrencySemantic": "create-only-idempotency-marker",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/10f38a26e09d6b24.json",
-            "evidenceSha256": "105381a79890619aedf838ca6c86a893767d0bcf99eb01439b9e42f68690efdd"
+            "evidenceSha256": "4b14ad0e1d5c1ecdabc53dfacf0be844c904f7b53c13245940019a499f8b3ff4"
           },
           {
             "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
@@ -954,16 +954,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "31cff41a1308c8f772de91cb6df5c5c74cf887076842c97dede9d8f11f07c2ad",
+            "manifestFingerprint": "5aeb2dfafb4c139bce7eaa655aaa23c6358240279443044e6a8bf9e348e4d9e9",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/d8be96cddb8ddc60",
             "clients": 2,
             "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
             "outcome": "pass",
             "failureWindow": "after-durable-decision-before-caller-acknowledgement",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
-            "evidenceSha256": "7847631b6a72709e0cdf76b4ec8bc72e1a0fa275569f669e2cd2d4ab661dd6e9"
+            "evidenceSha256": "cf78da3c88b2ad63db0560c62c2153289260e0273daa277cae96bb8a33d37094"
           },
           {
             "scenarioId": "failureWindow:before-provider-decision",
@@ -971,16 +971,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "31cff41a1308c8f772de91cb6df5c5c74cf887076842c97dede9d8f11f07c2ad",
+            "manifestFingerprint": "5aeb2dfafb4c139bce7eaa655aaa23c6358240279443044e6a8bf9e348e4d9e9",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59",
             "clients": 2,
             "resultHash": "47b95e26a8d4b7344a2fe68369cce142ce4fa51e29b84450663d20b68f19491c",
             "outcome": "pass",
             "failureWindow": "before-provider-decision",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59.json",
-            "evidenceSha256": "05a75969a873074bad70b3a72ea901ba2c7651573dc65cba0d380e1a81332f79"
+            "evidenceSha256": "534cfc8ab796615b8165a129de473246484f1ac928eb1c09eff2e3aa5727d160"
           },
           {
             "scenarioId": "failureWindow:during-provider-decision",
@@ -988,16 +988,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "31cff41a1308c8f772de91cb6df5c5c74cf887076842c97dede9d8f11f07c2ad",
+            "manifestFingerprint": "5aeb2dfafb4c139bce7eaa655aaa23c6358240279443044e6a8bf9e348e4d9e9",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/d45b0461943784e6",
             "clients": 2,
             "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
             "outcome": "pass",
             "failureWindow": "during-provider-decision",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/d45b0461943784e6.json",
-            "evidenceSha256": "9708fd6c9f793e76a868c70ed09262d0be087fb35a9351bab81c80b1ef694bb2"
+            "evidenceSha256": "e042cbfd2bde947d69e20c59bde86f09043a0798c5072d1ca909da5bdf5c94ca"
           },
           {
             "scenarioId": "restartScenario:dispose-and-reopen-same-database",
@@ -1005,16 +1005,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "14fc9794edd9d368a706230a028bb506abc4181b61e1169d8729448f3a6cc7f2",
+            "manifestFingerprint": "2e1c4bd425527f237c9ea6b657f93f721c81c933b2b71f7c92a039f2641c0421",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/9ff7253c911b2760",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "dispose-and-reopen-same-database",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/9ff7253c911b2760.json",
-            "evidenceSha256": "d5453418339ad7a78c01568cd42e866e60ce48258038859de452543be3512e61"
+            "evidenceSha256": "815268b914475794efdb3627c3ec90dc53d1c64083a2dc9cb217c947809ee45c"
           },
           {
             "scenarioId": "restartScenario:process-restart-same-database",
@@ -1022,16 +1022,16 @@
             "coverageEntryId": "runtime-checkpoint-commit",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "14fc9794edd9d368a706230a028bb506abc4181b61e1169d8729448f3a6cc7f2",
+            "manifestFingerprint": "2e1c4bd425527f237c9ea6b657f93f721c81c933b2b71f7c92a039f2641c0421",
             "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/8630b67155036d92",
             "clients": 2,
             "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
             "outcome": "pass",
             "restartScenario": "process-restart-same-database",
             "evidence": "evidence/mongodb/runtime-checkpoint-commit/8630b67155036d92.json",
-            "evidenceSha256": "e580269cc0f13fe0d65611895d1d45709c044464a61910e53de2a4460b406e46"
+            "evidenceSha256": "5892d1d4d13deb283cdc1f986496722793de9ec0d545f50627a16a347a9632f8"
           }
         ]
       },
@@ -1135,16 +1135,16 @@
             "coverageEntryId": "runtime-post-commit-outbox",
             "provider": "sqlite",
             "providerIdentity": "groundwork-sqlite",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "file-backed-distinct-connections",
-            "manifestFingerprint": "44608d681e9b62bd3037da059b39d144f459a02e7bfea87049366a1898035cea",
+            "manifestFingerprint": "6f8416198fcbd8e27f4b09a32945a25b363e6bf702303b35e865113e5aba4c47",
             "executionPath": "provider-driver/sqlite/runtime-post-commit-outbox/6d576dc01c828264",
             "clients": 2,
             "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
             "outcome": "pass",
             "concurrencySemantic": "checkpoint-bundle-write",
             "evidence": "evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "9be4c5ba542e6e4e60d6b3d8d8b9dd10174b932d811a2b6183cec107d169132d"
+            "evidenceSha256": "8274c7418ab393078abb3d948e9b66f3c6c0ee481ed7fcab4d2401505e700f50"
           }
         ],
         "sqlserver": [
@@ -1154,16 +1154,16 @@
             "coverageEntryId": "runtime-post-commit-outbox",
             "provider": "sqlserver",
             "providerIdentity": "groundwork-sqlserver",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-sqlserver-container",
-            "manifestFingerprint": "7fcf202c2bbf25c81bb9257c86e6a2baf118ecb4bc7507c5569e9fd90dba2dfe",
+            "manifestFingerprint": "c024d20a38d611459230ebfbcda75010797235ac02a40a3afde5745f5af3d199",
             "executionPath": "provider-driver/sqlserver/runtime-post-commit-outbox/6d576dc01c828264",
             "clients": 2,
             "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
             "outcome": "pass",
             "concurrencySemantic": "checkpoint-bundle-write",
             "evidence": "evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "a6c225fa2174e69523c712dfd553620c1d5726e9be32dcef0afc81fd26998b3d"
+            "evidenceSha256": "becdb4938d96e2ce674f90b81a1ef404fad9d433ccc0f1721c720d3bebc7ad51"
           }
         ],
         "postgresql": [
@@ -1173,16 +1173,16 @@
             "coverageEntryId": "runtime-post-commit-outbox",
             "provider": "postgresql",
             "providerIdentity": "groundwork-postgresql",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "real-postgresql-container",
-            "manifestFingerprint": "713eaacbfd8086d9d3de69144f9f25f4c851f1d7b0060162b7b9b2bf0706fe5e",
+            "manifestFingerprint": "5c62613c501039d2b957acb005928b45302bbb0fa50a75c732040578c1300402",
             "executionPath": "provider-driver/postgresql/runtime-post-commit-outbox/6d576dc01c828264",
             "clients": 2,
             "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
             "outcome": "pass",
             "concurrencySemantic": "checkpoint-bundle-write",
             "evidence": "evidence/postgresql/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "ade4fe472d85e83302dab49e8a862e97568db9871dc59b3fcb39ecaaf35dee03"
+            "evidenceSha256": "9429e73b8af44564ae00ce3cde4a16fd3a7e04adef48f3132934cad4bc9e8826"
           }
         ],
         "mongodb": [
@@ -1192,16 +1192,16 @@
             "coverageEntryId": "runtime-post-commit-outbox",
             "provider": "mongodb",
             "providerIdentity": "groundwork-mongodb",
-            "providerVersion": "0.0.1-preview.80",
+            "providerVersion": "0.0.1-preview.81",
             "topology": "transaction-capable-replica-set",
-            "manifestFingerprint": "11b70dcf2404e209c76d1bdf1076dbeb597f7f29961aa296b0e8337373cee077",
+            "manifestFingerprint": "b9c34f20b5fdacded50e21520c76b6723fb745cbcde75b9fea1b261f6f6b613e",
             "executionPath": "provider-driver/mongodb/runtime-post-commit-outbox/6d576dc01c828264",
             "clients": 2,
             "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
             "outcome": "pass",
             "concurrencySemantic": "checkpoint-bundle-write",
             "evidence": "evidence/mongodb/runtime-post-commit-outbox/6d576dc01c828264.json",
-            "evidenceSha256": "731c06fd858613d9f690660009b710bb73ef041dafc13fc70cb0a8097cd333aa"
+            "evidenceSha256": "a710131dd711acf69124c71d582448a232b40eb83980e90f53c22589f4306cdc"
           }
         ]
       },
