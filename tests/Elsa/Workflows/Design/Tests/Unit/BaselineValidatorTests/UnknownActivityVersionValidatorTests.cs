@@ -1,4 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Validators;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTestHelpers;
@@ -34,6 +36,22 @@ public sealed class UnknownActivityVersionValidatorTests
         Assert.Equal("n1", error.Path);
         Assert.Equal("Graph/UnknownActivityVersion", error.Type);
         Assert.Contains("av-missing", error.Message);
+    }
+
+    [Fact]
+    public async Task Engine_intrinsic_does_not_require_a_persisted_catalog_version()
+    {
+        var intrinsic = Node("mark", "elsa.intrinsic.set-output@1") with
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(
+                AuthoredWorkflowIntrinsicKind.SetOutput,
+                new TypeReference("Elsa.Any"))
+        };
+        var state = StateWithRoot(intrinsic);
+
+        var errors = await Validate(Validator(new StubActivityCatalog()), state);
+
+        Assert.Empty(errors);
     }
 
     [Fact]

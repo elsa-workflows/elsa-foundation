@@ -6,17 +6,17 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Internal;
 using Microsoft.Extensions.Options;
 using InputDefinition = Elsa.Activities.Design.Core.Models.InputDefinition;
-using OutputDefinition = Elsa.Activities.Design.Core.Models.OutputDefinition;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
 /// Baseline validator (Unit C FR-033). For every activity in the Draft (root + nested), looks
 /// up the catalog version via <see cref="CatalogVersionResolver"/> and reads
-/// <c>IsRequired</c> from each <see cref="InputDefinition"/> / <see cref="OutputDefinition"/>
-/// (per FR-036). Emits a <see cref="ValidationError"/> per required input or output where the
-/// corresponding <see cref="ArgumentState"/> on the activity is absent or carries an empty
-/// value.
+/// <c>IsRequired</c> from each <see cref="InputDefinition"/> (per FR-036). Emits a
+/// <see cref="ValidationError"/> per required input where the corresponding
+/// <see cref="ArgumentState"/> on the activity is absent or carries an empty value. Activity
+/// outputs are optional author-side captures of results produced by the activity, so they are not
+/// required bindings even when the result contract marks an output as required.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -45,6 +45,11 @@ public sealed class RequiredInputOutputValidator(
 
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
+            // Engine intrinsics have no persisted activity-catalog version. Their authored input
+            // shape is validated by the intrinsic compiler and intrinsic-specific validators.
+            if (node.Intrinsic is not null)
+                continue;
+
             // CatalogVersionResolver memoizes per pass and translates the store's throwing Get
             // contract to nullable. An unresolvable node is UnknownActivityVersionValidator's
             // report (FR-033 2026-07-05 amendment) — skip it here rather than fault the gate.
@@ -66,23 +71,6 @@ public sealed class RequiredInputOutputValidator(
                     Path: $"{node.NodeId}/inputs/{definition.ReferenceKey}",
                     Type: "InputOutput/MissingRequired",
                     Message: $"Required input '{definition.Name}' on activity '{node.NodeId}' is missing or empty."
-                ));
-            }
-
-            var providedOutputKeys = node.Outputs
-                .Where(IsBound)
-                .Select(a => a.ReferenceKey)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (var definition in version.Outputs.Where(d => d.IsRequired))
-            {
-                if (providedOutputKeys.Contains(definition.ReferenceKey))
-                    continue;
-
-                errors.Add(new ValidationError(
-                    Path: $"{node.NodeId}/outputs/{definition.ReferenceKey}",
-                    Type: "InputOutput/MissingRequired",
-                    Message: $"Required output '{definition.Name}' on activity '{node.NodeId}' is missing or empty."
                 ));
             }
         }
