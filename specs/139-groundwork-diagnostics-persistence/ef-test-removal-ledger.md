@@ -8,8 +8,8 @@ This follows Spec 093's source-method ledger and its shared-host addendum. It in
 `[Fact]` in the two EF test projects, including the SQLite feature/host tests that a token-only
 EF scan can miss. A row is not deletion approval: framework §2.21.1 requires explicit recorded
 architect approval before the original test can be removed. `Covered` means a named Groundwork or
-provider-neutral test has been inspected and exercises the objective; `blocked` means the old
-objective is now represented by a red Groundwork test and T054 cannot delete it.
+provider-neutral test has been inspected and exercises the objective; `blocked` means a pending
+Groundwork contract test is explicitly retained and T054 cannot delete the oracle yet.
 
 ## Structured Logs — 30 facts
 
