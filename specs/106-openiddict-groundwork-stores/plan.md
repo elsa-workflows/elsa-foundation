@@ -88,9 +88,10 @@ specs/106-openiddict-groundwork-stores/
 ```text
 src/Elsa/Foundation/Identity/
 ├── Abstractions/                     # Retained provider-neutral identity/token contracts
-├── OpenIddict/                       # Server, validation, selector, options, public token behavior
-│   └── EntityFrameworkCore/           # Temporary oracle; removed only at final exit
-└── OpenIddict/Groundwork/             # New concrete stores, documents, manifest, registration
+├── OpenIddict/
+│   ├── Behavior/                      # EF-free server, validation, selector, options, and token behavior
+│   ├── EntityFrameworkCore/           # Temporary oracle; removed only at final exit
+│   └── Groundwork/                    # New concrete stores, documents, manifest, registration
 
 src/Elsa/Persistence/Groundwork/
 └── Unified/                           # Existing host-composed schema source extended by feature manifest
@@ -109,7 +110,7 @@ tests/Elsa/Persistence/Groundwork/
 tests/Elsa/Architecture/               # Provider-neutral core and final EF removal guards
 ```
 
-**Structure Decision**: Keep OpenIddict server/validation behavior in its existing feature package and add one provider-suffixed implementation package. Do not move provider mechanics into identity abstractions, add a new core, or retain a separate EF feature after the exit gate.
+**Structure Decision**: Keep OpenIddict server/validation behavior in one explicit EF-free `Behavior` package and add one provider-suffixed Groundwork implementation package. The existing package remains the frozen EF oracle until the exit gate so the shrink-only ratchet does not gain a replacement EF project. Do not move provider mechanics into identity abstractions, add a new core, or retain the EF oracle after the exit gate.
 
 ## Delivery Sequencing
 

@@ -186,7 +186,7 @@ dotnet test \
   -c Release --no-restore --nologo --verbosity minimal
 ```
 
-Actual red result: **24 failed, 0 passed, 0 skipped** after successful compilation:
+Initial red result: **24 failed, 0 passed, 0 skipped** after successful compilation:
 
 - codec/version contract: 14 failures because
   `Serialization.OpenIddictGroundworkJson` does not exist;
@@ -199,3 +199,32 @@ The shared fixture keeps those tests compilable and fixes the expected contract
 without adding client-side evaluation, generic-query fallback, a storage
 manifest, store implementations, or a physical form. T006/T007A therefore
 continues to block T011, T016, and every physical-form-dependent production task.
+
+### EF-free behavior-boundary correction
+
+CI at `95a2e2922` confirmed the intended 24 red contract failures, but also
+rejected the new Groundwork and test projects because their reference to the
+mixed OpenIddict project made them new transitive EF consumers. The ratchet was
+not expanded or waived.
+
+The correction extracts server, validation, selector, options, token service,
+and provider-module behavior into
+`Elsa.Foundation.Identity.OpenIddict.Behavior`. The existing
+`Elsa.Foundation.Identity.OpenIddict` project keeps its exact identity and four
+frozen EF package references as the #646 oracle. It composes Behavior with the
+EF Core store, while the Groundwork project references Behavior directly.
+
+Root verification after solution registration:
+
+- Behavior, EF oracle, and Groundwork Release builds: green with zero warnings;
+- OpenIddict architecture, EF-free boundary, shrink-only baseline, and solution
+  folder checks: **6 passed**;
+- resolved assets for Behavior, Groundwork, and the Groundwork tests contain
+  zero EF libraries;
+- the Groundwork contract project now reports **24 expected red, 1 passed**:
+  the provider-neutral behavior composition test passes, while codec, feature,
+  Groundwork registration/store, and failure-mapper seams remain deliberately
+  absent behind T006/T007A.
+
+This correction changes dependency ownership only. It does not select a
+physical form or start a blocked production-store task.

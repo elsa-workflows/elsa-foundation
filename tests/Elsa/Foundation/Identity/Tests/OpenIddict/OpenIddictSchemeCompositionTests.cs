@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.Oidc.Extensions;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
@@ -45,6 +47,28 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         using var scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ITokenService>());
+        Assert.IsType<OpenIddictTokenService>(scope.ServiceProvider.GetRequiredService<ITokenService>());
+    }
+
+    [Fact]
+    public void EF_oracle_composes_behavior_with_the_entity_framework_store()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddFoundationIdentityOpenIddict(
+            options => options.IsDevelopmentOrDemo = true,
+            configureDbContext: builder =>
+                OpenIddictIdentityFixture.ConfigureInMemoryStore(builder, $"openiddict-{Guid.NewGuid():n}"));
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>());
         Assert.IsType<OpenIddictTokenService>(scope.ServiceProvider.GetRequiredService<ITokenService>());
     }
 

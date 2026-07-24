@@ -25,7 +25,7 @@ public static class OpenIddictGroundworkContractFixture
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+        services.AddFoundationIdentityOpenIddictBehavior(options => options.IsDevelopmentOrDemo = true);
         return services;
     }
 

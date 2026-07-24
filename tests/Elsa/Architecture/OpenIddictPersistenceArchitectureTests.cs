@@ -26,41 +26,80 @@ public sealed class OpenIddictPersistenceArchitectureTests
     }
 
     [Fact]
-    public void OpenIddict_behavior_package_has_no_Groundwork_edge_and_does_not_expand_the_EF_oracle()
+    public void OpenIddict_behavior_package_is_free_of_concrete_persistence_dependencies()
     {
-        var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "OpenIddict");
-        var providerBoundary = Path.Combine(root, "Groundwork");
-        var groundworkSourceViolations = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.StartsWith(
-                providerBoundary + Path.DirectorySeparatorChar,
-                StringComparison.Ordinal))
-            .SelectMany(path => ForbiddenLines(path, "Groundwork"))
+        var root = Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "OpenIddict",
+            "Behavior");
+        var violations = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Where(IsSourceOrProject)
+            .SelectMany(path => ForbiddenLines(path, "Groundwork", "EntityFrameworkCore"))
             .ToArray();
-        var projectPath = Path.Combine(root, "Elsa.Foundation.Identity.OpenIddict.csproj");
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Groundwork_references_behavior_without_reaching_the_EF_oracle()
+    {
+        var projectPath = Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "OpenIddict",
+            "Groundwork",
+            "Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj");
         var project = XDocument.Load(projectPath);
-        var groundworkReferenceViolations = project.Descendants()
-            .Where(element =>
-                element.Name.LocalName is "PackageReference" or "ProjectReference")
+        var references = project.Descendants("ProjectReference")
             .Select(element => (string?)element.Attribute("Include"))
-            .Where(include => include?.Contains("Groundwork", StringComparison.OrdinalIgnoreCase) == true)
             .ToArray();
+
+        Assert.Contains(
+            references,
+            include => include?.EndsWith(
+                @"Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
+                StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(
+            references,
+            include => include?.EndsWith(
+                @"Elsa.Foundation.Identity.OpenIddict.csproj",
+                StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Transitional_EF_oracle_keeps_the_frozen_packages_and_excludes_nested_sources()
+    {
+        var projectPath = Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "OpenIddict",
+            "Elsa.Foundation.Identity.OpenIddict.csproj");
+        var project = XDocument.Load(projectPath);
         var efPackages = project.Descendants("PackageReference")
             .Select(element => (string?)element.Attribute("Include"))
             .Where(include => include?.Contains("EntityFrameworkCore", StringComparison.Ordinal) == true)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            groundworkSourceViolations.Length == 0,
-            string.Join(Environment.NewLine, groundworkSourceViolations));
-        Assert.True(
-            groundworkReferenceViolations.Length == 0,
-            string.Join(Environment.NewLine, groundworkReferenceViolations));
         Assert.Equal(TransitionalOpenIddictEfPackages, efPackages);
         Assert.Contains(
             project.Descendants("Compile"),
             element =>
                 string.Equals((string?)element.Attribute("Remove"), "Groundwork/**/*.cs", StringComparison.Ordinal));
+        Assert.Contains(
+            project.Descendants("Compile"),
+            element =>
+                string.Equals((string?)element.Attribute("Remove"), "Behavior/**/*.cs", StringComparison.Ordinal));
     }
 
     private static bool IsSourceOrProject(string path) =>

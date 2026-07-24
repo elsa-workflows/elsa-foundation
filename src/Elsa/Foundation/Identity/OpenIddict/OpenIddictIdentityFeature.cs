@@ -43,22 +43,26 @@ public sealed class OpenIddictIdentityFeature : IShellFeature
         var connectionString = ConnectionString;
         var autoMigrate = AutoMigrate;
 
-        services.AddFoundationIdentityOpenIddict(options =>
-        {
-            options.IsDevelopmentOrDemo = isDevelopmentOrDemo;
-            options.AutoMigrate = autoMigrate;
+        services.AddFoundationIdentityOpenIddict(
+            options =>
+            {
+                options.IsDevelopmentOrDemo = isDevelopmentOrDemo;
 
-            if (!string.IsNullOrWhiteSpace(issuer))
-                options.Issuer = issuer;
+                if (!string.IsNullOrWhiteSpace(issuer))
+                    options.Issuer = issuer;
 
-            if (!string.IsNullOrWhiteSpace(signingKey))
-                options.SigningKey = signingKey;
+                if (!string.IsNullOrWhiteSpace(signingKey))
+                    options.SigningKey = signingKey;
 
-            if (!string.IsNullOrWhiteSpace(encryptionKey))
-                options.EncryptionKey = encryptionKey;
+                if (!string.IsNullOrWhiteSpace(encryptionKey))
+                    options.EncryptionKey = encryptionKey;
+            },
+            configureEntityFrameworkCore: options =>
+            {
+                options.AutoMigrate = autoMigrate;
 
-            if (!string.IsNullOrWhiteSpace(connectionString))
-                options.ConnectionString = connectionString;
-        });
+                if (!string.IsNullOrWhiteSpace(connectionString))
+                    options.ConnectionString = connectionString;
+            });
     }
 }

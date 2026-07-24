@@ -2,7 +2,9 @@ using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.Fixtures;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
 using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests;
@@ -74,6 +76,23 @@ public sealed class OpenIddictGroundworkRegistrationTests
                 descriptor.ServiceType.IsGenericType &&
                 StoreContractDefinitions.Contains(descriptor.ServiceType.GetGenericTypeDefinition())),
             descriptor => Assert.NotNull(scope.ServiceProvider.GetRequiredService(descriptor.ServiceType)));
+    }
+
+    [Fact]
+    public async Task Behavior_registration_preserves_server_validation_selector_and_token_service_without_a_store_provider()
+    {
+        var services = OpenIddictGroundworkContractFixture.CreateBaselineServices();
+        var tokenService = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ITokenService));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IConfigureOptions<OpenIddictServerOptions>));
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(typeof(OpenIddictTokenService), tokenService.ImplementationType);
+        var schemes = await provider.GetRequiredService<IAuthenticationSchemeProvider>().GetAllSchemesAsync();
+        Assert.Contains(schemes, scheme =>
+            scheme.Name == OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+        Assert.Contains(schemes, scheme =>
+            scheme.Name == OpenIddictIdentityDefaults.SelectorScheme);
     }
 
     [Fact]

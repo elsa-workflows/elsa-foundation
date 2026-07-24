@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// <see cref="IShellInitializer"/> (the shell-composed Elsa.Server host, where shell-scoped hosted services
 /// do not run). Ensure-created / migrate are idempotent, so running under either hook is safe.
 /// </remarks>
-public sealed class OpenIddictIdentityStoreInitializer(IServiceProvider services, IOptions<OpenIddictIdentityOptions> options) : IHostedService, IShellInitializer
+public sealed class OpenIddictIdentityStoreInitializer(IServiceProvider services, IOptions<OpenIddictEntityFrameworkCoreOptions> options) : IHostedService, IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken) => EnsureSchemaAsync(cancellationToken);
 
