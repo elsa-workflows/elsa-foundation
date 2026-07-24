@@ -41,7 +41,8 @@
   - Evidence: Architecture tests are present; the non-removal architecture slice passed 19/19.
 - [X] T007 Implement only the composition abstractions needed by both adapters in `src/Elsa/Diagnostics/Persistence/`, catalog their semantics in `src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md`, and make T006 pass without exposing Groundwork types from diagnostics core
   - Evidence: The Groundwork-free helper library and owning extension catalog are present; architecture and lifecycle slices passed.
-- [ ] T008 Build a reusable four-provider fixture with real SQLite, SQL Server, PostgreSQL, and MongoDB lifecycle support in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs` and instantiate every provider lease in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderLifecycleSmokeTests.cs`
+- [X] T008 Build a reusable four-provider fixture with real SQLite, SQL Server, PostgreSQL, and MongoDB lifecycle support in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs` and instantiate every provider lease in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderLifecycleSmokeTests.cs`
+  - Evidence: the Release lifecycle smoke passed 1/1 and opened isolated ready leases for SQLite, SQL Server, PostgreSQL, and replica-set MongoDB with the required transaction, bounded-query, and plan capabilities.
 - [X] T009 [P] Add reusable acknowledgement-loss, cancellation, restart, and operational-failure doubles in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsFailureFixtures.cs`
   - Evidence: Failure fixtures are present and exercised by the 49-test drain/observability slice.
 - [X] T010 [P] Record the temporary EF behavior-oracle inventory and exact parity mapping in `specs/139-groundwork-diagnostics-persistence/oracle-inventory.md`
