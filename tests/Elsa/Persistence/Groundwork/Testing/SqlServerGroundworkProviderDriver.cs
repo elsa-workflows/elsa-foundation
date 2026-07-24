@@ -60,6 +60,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 
     public override GroundworkCompositionFingerprint CompositionFingerprint { get; } =
         GroundworkCompositionFingerprint.Create("elsa-runtime-provider-fixture:v1");
+    public override string? PhysicalTargetFingerprint => _physicalSource?.PhysicalTarget.Fingerprint;
 
     public override GroundworkProcessLaunchDescriptor ProcessLaunchDescriptor => _processLaunchDescriptor;
 
@@ -125,6 +126,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
                  SELECT @killSql = @killSql + N'KILL ' + CONVERT(varchar(11), session_id) + N';'
                  FROM sys.dm_exec_sessions
                  WHERE database_id = DB_ID(@databaseName)
+                   AND is_user_process = 1
                    AND session_id <> @@SPID;
 
                  IF LEN(@killSql) > 0

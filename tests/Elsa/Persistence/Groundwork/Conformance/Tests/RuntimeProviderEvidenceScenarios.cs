@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
+using System.Globalization;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 
@@ -66,16 +67,11 @@ internal static class RuntimeProviderEvidenceScenarios
     /// Executes the complete physical checkpoint/fence contract once. Result factories below may project that
     /// one execution into only the catalog scenarios it directly proves; they never manufacture a row outcome.
     /// </summary>
-    public static async Task<RuntimeCheckpointFenceEvidence> CaptureCheckpointFenceEvidenceAsync(string providerKey)
-    {
-        await new RuntimeFenceContractTests()
-            .Runtime_fence_contract_is_enforced_by_every_persistent_provider(providerKey);
-
-        return new RuntimeCheckpointFenceEvidence(await DescribeAsync(providerKey));
-    }
+    public static Task<RuntimeCheckpointFenceExecutionResult> CaptureCheckpointFenceEvidenceAsync(string providerKey) =>
+        new RuntimeFenceContractTests().ExecuteRuntimeFenceContractAsync(providerKey);
 
     public static GroundworkScenarioResult CreateCheckpointFenceResult(
-        RuntimeCheckpointFenceEvidence evidence,
+        RuntimeCheckpointFenceExecutionResult evidence,
         string coverageEntryId)
     {
         ArgumentNullException.ThrowIfNull(evidence);
@@ -83,17 +79,21 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
-                new GroundworkScenarioObservation("stale-commit-count", "1"),
-                new GroundworkScenarioObservation("token-order", "strictly-increasing"),
-                new GroundworkScenarioObservation("winner-count", "1")
+                new GroundworkScenarioObservation(
+                    "stale-commit-count",
+                    evidence.OwnershipFencing.StaleCommitCount.ToString(CultureInfo.InvariantCulture)),
+                new GroundworkScenarioObservation("token-order", evidence.OwnershipFencing.TokenOrder),
+                new GroundworkScenarioObservation(
+                    "winner-count",
+                    evidence.OwnershipFencing.WinnerCount.ToString(CultureInfo.InvariantCulture))
             ]);
     }
 
     public static GroundworkScenarioResult CreateCheckpointIdempotencyResult(
-        RuntimeCheckpointFenceEvidence evidence,
+        RuntimeCheckpointFenceExecutionResult evidence,
         string coverageEntryId)
     {
         ArgumentNullException.ThrowIfNull(evidence);
@@ -101,37 +101,58 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
-                new GroundworkScenarioObservation("conflicting-replay", "rejected"),
-                new GroundworkScenarioObservation("durable-outcome-count", "1"),
-                new GroundworkScenarioObservation("equivalent-replay", "verified")
+                new GroundworkScenarioObservation(
+                    "conflicting-replay",
+                    evidence.Idempotency.ConflictExceptionType),
+                new GroundworkScenarioObservation(
+                    "durable-outcome-count",
+                    evidence.Idempotency.DurableOutcomeCount.ToString(CultureInfo.InvariantCulture)),
+                new GroundworkScenarioObservation(
+                    "equivalent-replay",
+                    string.Join(
+                        ';',
+                        $"marker-version-before:{evidence.Idempotency.MarkerVersionBeforeReplay.ToString(CultureInfo.InvariantCulture)}",
+                        $"marker-version-after:{evidence.Idempotency.MarkerVersionAfterReplay.ToString(CultureInfo.InvariantCulture)}",
+                        $"pending-work-match:{evidence.Idempotency.PendingWorkMatches.ToString().ToLowerInvariant()}"))
             ]);
     }
 
     public static GroundworkScenarioResult CreateCheckpointFailureRecoveryResult(
-        RuntimeCheckpointFenceEvidence evidence,
+        RuntimeCheckpointFenceExecutionResult evidence,
         string coverageEntryId,
         string failureWindow)
     {
         ArgumentNullException.ThrowIfNull(evidence);
         const string scenarioId = "runtime-checkpoint-failure-recovery";
+        var recovery = evidence.FailureRecoveries.Single(candidate =>
+            string.Equals(candidate.FailureWindow, failureWindow, StringComparison.Ordinal));
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
-                new GroundworkScenarioObservation("committed-bundle-count", "1"),
-                new GroundworkScenarioObservation("partial-bundle-count", "0"),
-                new GroundworkScenarioObservation("recovered-state", "verified")
+                new GroundworkScenarioObservation(
+                    "committed-bundle-count",
+                    recovery.RecoveredCompleteBundleCount.ToString(CultureInfo.InvariantCulture)),
+                new GroundworkScenarioObservation(
+                    "partial-bundle-count",
+                    recovery.RecoveredPartialBundleCount.ToString(CultureInfo.InvariantCulture)),
+                new GroundworkScenarioObservation(
+                    "recovered-state",
+                    string.Join(
+                        ';',
+                        $"initial-complete-count:{recovery.InitialCompleteBundleCount.ToString(CultureInfo.InvariantCulture)}",
+                        $"recovered-complete-count:{recovery.RecoveredCompleteBundleCount.ToString(CultureInfo.InvariantCulture)}"))
             ],
             failureWindow: failureWindow);
     }
 
     public static GroundworkScenarioResult CreateCheckpointProcessRestartResult(
-        RuntimeCheckpointFenceEvidence evidence,
+        RuntimeCheckpointFenceExecutionResult evidence,
         string coverageEntryId)
     {
         ArgumentNullException.ThrowIfNull(evidence);
@@ -139,11 +160,19 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
-                new GroundworkScenarioObservation("child-process-rehydration", "verified"),
-                new GroundworkScenarioObservation("complete-bundle-count", "1")
+                new GroundworkScenarioObservation(
+                    "child-process-rehydration",
+                    string.Join(
+                        ';',
+                        $"schema-version:{evidence.ProcessRestart.SchemaVersion}",
+                        $"document-version:{evidence.ProcessRestart.DocumentVersion.ToString(CultureInfo.InvariantCulture)}",
+                        $"distinct-process:{evidence.ProcessRestart.UsedDistinctProcess.ToString().ToLowerInvariant()}")),
+                new GroundworkScenarioObservation(
+                    "complete-bundle-count",
+                    evidence.ProcessRestart.CompleteBundleCount.ToString(CultureInfo.InvariantCulture))
             ]);
     }
 
@@ -351,5 +380,3 @@ internal sealed record RuntimeOperationalFailureWindowEvidence(
     GroundworkProviderDescriptor Descriptor,
     string WindowId,
     bool DecisionIsDurable);
-
-internal sealed record RuntimeCheckpointFenceEvidence(GroundworkProviderDescriptor Descriptor);

@@ -568,9 +568,14 @@ internal sealed class GroundworkCoverageLedgerValidator
         string scenarioId,
         ICollection<string> findings)
     {
+        var providerVersion = StringValue(record, "providerVersion");
+        ValidateObservationResultHash(id, provider, scenarioId, record, findings);
         var expectedEvidence = GroundworkEvidenceArtifactContract.EvidencePath(provider, id, scenarioId);
+        var expectedVersionedEvidence = providerVersion is null
+            ? null
+            : GroundworkEvidenceArtifactContract.VersionedEvidencePath(providerVersion, provider, id, scenarioId);
         var evidence = StringValue(record, "evidence");
-        if (evidence != expectedEvidence)
+        if (evidence is null || (evidence != expectedEvidence && evidence != expectedVersionedEvidence))
         {
             findings.Add(
                 $"{id}: {provider} evidence record '{scenarioId}' does not reference its catalog-bound evidence artifact.");
@@ -601,8 +606,16 @@ internal sealed class GroundworkCoverageLedgerValidator
         }
 
         var expectedNativeEvidence = GroundworkEvidenceArtifactContract.NativeEvidencePath(provider, id, scenarioId);
+        var expectedVersionedNativeEvidence = providerVersion is null
+            ? null
+            : GroundworkEvidenceArtifactContract.VersionedNativeEvidencePath(
+                providerVersion,
+                provider,
+                id,
+                scenarioId);
         var nativeEvidence = StringValue(record, "nativeEvidence");
-        if (nativeEvidence != expectedNativeEvidence)
+        if (nativeEvidence is null ||
+            (nativeEvidence != expectedNativeEvidence && nativeEvidence != expectedVersionedNativeEvidence))
         {
             findings.Add(
                 $"{id}: {provider} query '{queryShape}' does not reference its catalog-bound provider-native artifact.");
@@ -722,6 +735,60 @@ internal sealed class GroundworkCoverageLedgerValidator
         {
             findings.Add(
                 $"{id}: {provider} evidence record '{scenarioId}' does not match its durable artifact payload.");
+        }
+    }
+
+    private static void ValidateObservationResultHash(
+        string id,
+        string provider,
+        string scenarioId,
+        JsonObject record,
+        ICollection<string> findings)
+    {
+        if (record["observations"] is not JsonArray observations)
+            return;
+
+        var parsed = new List<(string Name, string Value)>();
+        foreach (var candidate in observations)
+        {
+            if (candidate is not JsonObject observation ||
+                StringValue(observation, "name") is not { } name ||
+                StringValue(observation, "value") is not { } value)
+            {
+                return;
+            }
+            parsed.Add((name, value));
+        }
+        if (parsed.Count == 0)
+            return;
+        if (parsed.Select(observation => observation.Name).Distinct(StringComparer.Ordinal).Count() != parsed.Count)
+        {
+            findings.Add(
+                $"{id}: {provider} evidence record '{scenarioId}' contains duplicate observation names.");
+            return;
+        }
+
+        var sourceScenarioId = StringValue(record, "sourceScenarioId");
+        var coverageEntryId = StringValue(record, "coverageEntryId");
+        var outcome = StringValue(record, "outcome");
+        var resultHash = StringValue(record, "resultHash");
+        if (sourceScenarioId is null || coverageEntryId is null || outcome is null || resultHash is null)
+            return;
+
+        var digestInput = string.Join(
+            '\n',
+            new[] { sourceScenarioId, coverageEntryId, outcome, StringValue(record, "failureWindow") ?? "-" }
+                .Concat(parsed
+                    .OrderBy(observation => observation.Name, StringComparer.Ordinal)
+                    .ThenBy(observation => observation.Value, StringComparer.Ordinal)
+                    .Select(observation =>
+                        $"{observation.Name.Length}:{observation.Name}{observation.Value.Length}:{observation.Value}")));
+        var observedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(digestInput)))
+            .ToLowerInvariant();
+        if (!string.Equals(observedHash, resultHash, StringComparison.Ordinal))
+        {
+            findings.Add(
+                $"{id}: {provider} evidence record '{scenarioId}' result hash does not bind its retained observations.");
         }
     }
 
@@ -1080,8 +1147,22 @@ internal static class GroundworkEvidenceArtifactContract
     public static string EvidencePath(string provider, string entryId, string scenarioId) =>
         $"evidence/{provider}/{entryId}/{ScenarioKey(scenarioId)}.json";
 
+    public static string VersionedEvidencePath(
+        string providerVersion,
+        string provider,
+        string entryId,
+        string scenarioId) =>
+        $"versions/{providerVersion}/{EvidencePath(provider, entryId, scenarioId)}";
+
     public static string NativeEvidencePath(string provider, string entryId, string scenarioId) =>
         $"evidence/{provider}/{entryId}/{ScenarioKey(scenarioId)}.plan.txt";
+
+    public static string VersionedNativeEvidencePath(
+        string providerVersion,
+        string provider,
+        string entryId,
+        string scenarioId) =>
+        $"versions/{providerVersion}/{NativeEvidencePath(provider, entryId, scenarioId)}";
 
     public static JsonObject ArtifactPayload(JsonObject record)
     {

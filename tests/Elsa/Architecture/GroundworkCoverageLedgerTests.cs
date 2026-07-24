@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Xunit;
@@ -7,12 +9,19 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.80";
-    private const string ExpectedCurrentGroundworkVersion = "0.0.1-preview.81";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.81";
+    private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
     private const string CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string HistoricalCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string HistoricalCheckpointFenceAttachmentSha256 =
+        "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
+    private const string ExpectedCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
+    private const string ExpectedCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
+    private const string ExpectedCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -109,6 +118,30 @@ public sealed class GroundworkCoverageLedgerTests
         {
             Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
             Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
+            Assert.StartsWith(
+                $"versions/{ExpectedGroundworkVersion}/evidence/",
+                relativeEvidencePath,
+                StringComparison.Ordinal);
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(record["manifestFingerprint"]!.GetValue<string>(), artifact["manifestFingerprint"]!.GetValue<string>());
+            Assert.NotEmpty(artifact["observations"]!.AsArray());
+            Assert.Equal(
+                ExpectedCheckpointFenceEvidenceCommit,
+                artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
+            Assert.Equal(
+                ExpectedCheckpointFenceEvidenceTree,
+                artifact["provenance"]!["elsaTree"]!.GetValue<string>());
+            Assert.Equal(
+                ExpectedCheckpointFenceRunIdentity,
+                artifact["provenance"]!["runIdentity"]!.GetValue<string>());
         });
         Assert.All(attachmentByKey, records => Assert.Single(records));
         Assert.All(ledgerByKey, records => Assert.Single(records));
@@ -122,6 +155,37 @@ public sealed class GroundworkCoverageLedgerTests
                 JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
                 $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
         }
+    }
+
+    [Fact]
+    public void Preview80_checkpoint_fence_attachment_and_artifacts_remain_immutable_historical_provenance()
+    {
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            HistoricalCheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var records = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                          ?.OfType<JsonObject>()
+                          .ToArray()
+                      ?? throw new InvalidOperationException(
+                          $"Historical checkpoint/fence attachment '{attachmentPath}' is empty.");
+
+        Assert.Equal(
+            HistoricalCheckpointFenceAttachmentSha256,
+            GroundworkEvidenceArtifactContract.FileSha256(attachmentPath));
+        Assert.Equal(36, records.Length);
+        Assert.All(records, record =>
+        {
+            Assert.Equal(HistoricalGroundworkVersion, record["providerVersion"]?.GetValue<string>());
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                record["evidence"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(HistoricalGroundworkVersion, artifact["providerVersion"]?.GetValue<string>());
+        });
     }
 
     [Fact]
@@ -218,8 +282,8 @@ public sealed class GroundworkCoverageLedgerTests
         var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
         var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
-        Assert.Equal(ExpectedCurrentGroundworkVersion, Assert.Single(packageVersions));
-        Assert.Equal(ExpectedCurrentGroundworkVersion, toolVersion);
+        Assert.Equal(ExpectedGroundworkVersion, Assert.Single(packageVersions));
+        Assert.Equal(ExpectedGroundworkVersion, toolVersion);
     }
 
     [Fact]
@@ -621,6 +685,70 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Retained_observations_must_recompute_the_published_result_hash()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["observations"] = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "winner-count",
+                ["value"] = "1"
+            });
+        record["resultHash"] = ResultHash(record);
+        record["observations"]![0]!["value"] = "2";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' result hash does not bind its retained observations.",
+            findings);
+    }
+
+    [Fact]
+    public void Versioned_artifact_provenance_must_exactly_match_its_ledger_record()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["evidence"] = GroundworkEvidenceArtifactContract.VersionedEvidencePath(
+            ExpectedGroundworkVersion,
+            "sqlite",
+            EntryId,
+            "ordinary-round-trip");
+        record["observations"] = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "winner-count",
+                ["value"] = "1"
+            });
+        record["provenance"] = new JsonObject
+        {
+            ["elsaCommit"] = new string('a', 40),
+            ["elsaTree"] = new string('b', 40),
+            ["runIdentity"] = "fixture-publication"
+        };
+        record["resultHash"] = ResultHash(record);
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var evidencePath = ArtifactPath(record["evidence"]!.GetValue<string>());
+        var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+        artifact["provenance"]!["elsaTree"] = new string('c', 40);
+        File.WriteAllText(evidencePath, artifact.ToJsonString());
+        record["evidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(evidencePath);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' does not match its durable artifact payload.",
+            findings);
+    }
+
+    [Fact]
     public void Evidence_complete_binds_provider_metadata_and_execution_to_the_active_catalog()
     {
         var ledger = ReadLedger();
@@ -890,6 +1018,30 @@ public sealed class GroundworkCoverageLedgerTests
             ["outcome"] = "pass",
             ["evidence"] = GroundworkEvidenceArtifactContract.EvidencePath(provider, entryId, scenarioId)
         };
+    }
+
+    private static string ResultHash(JsonObject record)
+    {
+        var observations = record["observations"]!.AsArray()
+            .Select(candidate => candidate!.AsObject())
+            .OrderBy(observation => observation["name"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ThenBy(observation => observation["value"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(observation =>
+            {
+                var name = observation["name"]!.GetValue<string>();
+                var value = observation["value"]!.GetValue<string>();
+                return $"{name.Length}:{name}{value.Length}:{value}";
+            });
+        var digestInput = string.Join(
+            '\n',
+            new[]
+            {
+                record["sourceScenarioId"]!.GetValue<string>(),
+                record["coverageEntryId"]!.GetValue<string>(),
+                record["outcome"]!.GetValue<string>(),
+                record["failureWindow"]?.GetValue<string>() ?? "-"
+            }.Concat(observations));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(digestInput))).ToLowerInvariant();
     }
 
     private static void WriteEvidenceArtifacts(IEnumerable<JsonNode?> records)
