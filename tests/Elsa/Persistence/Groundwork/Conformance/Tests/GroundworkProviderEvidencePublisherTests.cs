@@ -56,6 +56,9 @@ public sealed class GroundworkProviderEvidencePublisherTests
                 var payload = JsonNode.Parse(File.ReadAllText(Path.Combine(directory, evidencePath)))!.AsObject();
                 Assert.Equal(1, payload["schemaVersion"]!.GetValue<int>());
                 Assert.Equal(record["resultHash"]!.GetValue<string>(), payload["resultHash"]!.GetValue<string>());
+                var observation = Assert.Single(payload["observations"]!.AsArray());
+                Assert.Equal("winner-count", observation!["name"]!.GetValue<string>());
+                Assert.Equal("same", observation["value"]!.GetValue<string>());
                 Assert.DoesNotContain("evidenceSha256", payload.Select(pair => pair.Key));
                 Assert.DoesNotContain("nativeEvidenceSha256", payload.Select(pair => pair.Key));
             }
@@ -371,6 +374,72 @@ public sealed class GroundworkProviderEvidencePublisherTests
             Assert.Equal(second.LedgerAttachmentJson, repeated.LedgerAttachmentJson);
             Assert.False(File.Exists(Path.Combine(directory, "current.json")));
             Assert.False(Directory.Exists(Path.Combine(directory, "generations")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Versioned_publication_preserves_current_paths_and_retains_exact_source_provenance()
+    {
+        var directory = TemporaryDirectory();
+        try
+        {
+            const string version = "1.0.1-preview.2";
+            var currentPath = Path.Combine(
+                directory,
+                "evidence/sqlite/runtime-bookmark-state",
+                $"{ScenarioKey("ordinary-round-trip")}.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(currentPath)!);
+            await File.WriteAllTextAsync(currentPath, "immutable-current-evidence");
+            var provenance = GroundworkProviderEvidenceProvenance.Create(
+                new string('a', 40),
+                new string('b', 40),
+                "runtime-checkpoint-fence-preview81");
+            var publication = await GroundworkProviderEvidencePublisher.PublishVersionedAsync(
+                directory,
+                version,
+                provenance,
+                GroundworkLedgerObligation.OrdinaryRoundTrip("runtime-bookmark-state", "bounded-query"),
+                MandatoryProviders.Select(provider => Result(provider, null, providerVersion: version)));
+
+            Assert.Equal("immutable-current-evidence", await File.ReadAllTextAsync(currentPath));
+            foreach (var record in publication.LedgerRecords.Select(node => node!.AsObject()))
+            {
+                var provider = record["provider"]!.GetValue<string>();
+                var evidencePath = record["evidence"]!.GetValue<string>();
+                Assert.Equal(
+                    $"versions/{version}/evidence/{provider}/runtime-bookmark-state/{ScenarioKey("ordinary-round-trip")}.json",
+                    evidencePath);
+                var payload = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, evidencePath)))!.AsObject();
+                Assert.Equal(new string('a', 40), payload["provenance"]!["elsaCommit"]!.GetValue<string>());
+                Assert.Equal(new string('b', 40), payload["provenance"]!["elsaTree"]!.GetValue<string>());
+                Assert.Equal(
+                    "runtime-checkpoint-fence-preview81",
+                    payload["provenance"]!["runIdentity"]!.GetValue<string>());
+                Assert.Single(payload["observations"]!.AsArray());
+            }
+
+            var attachment = await GroundworkProviderEvidencePublisher.WriteVersionedLedgerAttachmentAsync(
+                directory,
+                version,
+                "runtime-evidence",
+                [publication]);
+            Assert.Equal(
+                $"versions/{version}/ledger-attachments/runtime-evidence.json",
+                attachment.RelativePath);
+            Assert.Equal(HashFile(directory, attachment.RelativePath), attachment.Sha256);
+
+            var mismatch = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                GroundworkProviderEvidencePublisher.PublishVersionedAsync(
+                    directory,
+                    "1.0.2",
+                    provenance,
+                    GroundworkLedgerObligation.OrdinaryRoundTrip("runtime-bookmark-state", "bounded-query"),
+                    MandatoryProviders.Select(provider => Result(provider, null, providerVersion: version))));
+            Assert.Contains("namespace version", mismatch.Message, StringComparison.Ordinal);
         }
         finally
         {

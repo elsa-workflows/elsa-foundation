@@ -71,7 +71,15 @@ internal static class RuntimeProviderEvidenceScenarios
         await new RuntimeFenceContractTests()
             .Runtime_fence_contract_is_enforced_by_every_persistent_provider(providerKey);
 
-        return new RuntimeCheckpointFenceEvidence(await DescribeAsync(providerKey));
+        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
+        await driver.InitializeAsync();
+        await driver.ResetPhysicalAsync();
+        var targetFingerprint = driver.PhysicalTargetFingerprint
+                                ?? throw new InvalidOperationException(
+                                    $"Provider '{providerKey}' did not retain its compiled physical target fingerprint.");
+        return new RuntimeCheckpointFenceEvidence(
+            driver.Descriptor,
+            GroundworkCompositionFingerprint.Parse(targetFingerprint));
     }
 
     public static GroundworkScenarioResult CreateCheckpointFenceResult(
@@ -83,7 +91,7 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
                 new GroundworkScenarioObservation("stale-commit-count", "1"),
@@ -101,7 +109,7 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
                 new GroundworkScenarioObservation("conflicting-replay", "rejected"),
@@ -120,7 +128,7 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
                 new GroundworkScenarioObservation("committed-bundle-count", "1"),
@@ -139,7 +147,7 @@ internal static class RuntimeProviderEvidenceScenarios
         return GroundworkStoreScenarioCatalog.Get(scenarioId).CreateResult(
             coverageEntryId,
             evidence.Descriptor,
-            Composition(evidence.Descriptor, scenarioId),
+            evidence.PhysicalTargetFingerprint,
             clients: 2,
             [
                 new GroundworkScenarioObservation("child-process-rehydration", "verified"),
@@ -352,4 +360,6 @@ internal sealed record RuntimeOperationalFailureWindowEvidence(
     string WindowId,
     bool DecisionIsDurable);
 
-internal sealed record RuntimeCheckpointFenceEvidence(GroundworkProviderDescriptor Descriptor);
+internal sealed record RuntimeCheckpointFenceEvidence(
+    GroundworkProviderDescriptor Descriptor,
+    GroundworkCompositionFingerprint PhysicalTargetFingerprint);

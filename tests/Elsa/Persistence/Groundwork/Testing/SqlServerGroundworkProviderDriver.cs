@@ -60,6 +60,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 
     public override GroundworkCompositionFingerprint CompositionFingerprint { get; } =
         GroundworkCompositionFingerprint.Create("elsa-runtime-provider-fixture:v1");
+    public override string? PhysicalTargetFingerprint => _physicalSource?.PhysicalTarget.Fingerprint;
 
     public override GroundworkProcessLaunchDescriptor ProcessLaunchDescriptor => _processLaunchDescriptor;
 

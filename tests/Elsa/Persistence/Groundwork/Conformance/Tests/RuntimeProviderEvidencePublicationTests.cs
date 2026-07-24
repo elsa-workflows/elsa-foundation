@@ -11,6 +11,10 @@ public sealed class RuntimeProviderEvidencePublicationTests
 {
     private const string PublishOptIn = "ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE";
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
+    private const string EvidenceVersion = "0.0.1-preview.81";
+    private const string SourceCommit = "ELSA_GROUNDWORK_SOURCE_COMMIT";
+    private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
+    private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";
     private const string SchedulerScenario = "runtime-scheduler-state-roundtrip";
 
     [SkippableFact]
@@ -54,6 +58,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
     {
         RequirePublicationOptIn();
         var output = Environment.GetEnvironmentVariable(EvidenceOutput)!;
+        var provenance = RequireVersionedPublicationProvenance();
         var captures = new List<RuntimeCheckpointFenceEvidence>();
 
         foreach (var providerKey in GroundworkStoreScenarioCatalog.MandatoryProviderKeys)
@@ -63,6 +68,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
         {
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.ConcurrencySemantic(
                     "runtime-checkpoint-commit",
                     "atomic-stale-fence-rejection",
@@ -73,6 +79,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
                     "runtime-checkpoint-commit")),
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.ConcurrencySemantic(
                     "runtime-execution-liveness",
                     "strictly-increasing-fence",
@@ -83,6 +90,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
                     "runtime-execution-liveness")),
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.ConcurrencySemantic(
                     "runtime-checkpoint-commit",
                     "create-only-idempotency-marker",
@@ -93,6 +101,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
                     "runtime-checkpoint-commit")),
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.ConcurrencySemantic(
                     "runtime-post-commit-outbox",
                     "checkpoint-bundle-write",
@@ -103,6 +112,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
                     "runtime-post-commit-outbox")),
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.RestartScenario(
                     "runtime-checkpoint-commit",
                     "dispose-and-reopen-same-database",
@@ -113,6 +123,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
                     "runtime-checkpoint-commit")),
             await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.RestartScenario(
                     "runtime-checkpoint-commit",
                     "process-restart-same-database",
@@ -132,6 +143,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
         {
             publications.Add(await PublishAsync(
                 output,
+                provenance,
                 GroundworkLedgerObligation.FailureWindow(
                     "runtime-checkpoint-commit",
                     failureWindow,
@@ -144,15 +156,41 @@ public sealed class RuntimeProviderEvidencePublicationTests
         }
 
         Assert.All(publications, publication => Assert.Equal(4, publication.LedgerRecords.Count));
-        await GroundworkProviderEvidencePublisher.WriteLedgerAttachmentAsync(output, "runtime-checkpoint-fence", publications);
+        await GroundworkProviderEvidencePublisher.WriteVersionedLedgerAttachmentAsync(
+            output,
+            EvidenceVersion,
+            "runtime-checkpoint-fence",
+            publications);
     }
 
     private static Task<GroundworkProviderEvidencePublication> PublishAsync(
         string output,
+        GroundworkProviderEvidenceProvenance provenance,
         GroundworkLedgerObligation obligation,
         IEnumerable<RuntimeCheckpointFenceEvidence> captures,
         Func<RuntimeCheckpointFenceEvidence, GroundworkScenarioResult> createResult) =>
-        GroundworkProviderEvidencePublisher.PublishAsync(output, obligation, captures.Select(createResult));
+        GroundworkProviderEvidencePublisher.PublishVersionedAsync(
+            output,
+            EvidenceVersion,
+            provenance,
+            obligation,
+            captures.Select(createResult));
+
+    private static GroundworkProviderEvidenceProvenance RequireVersionedPublicationProvenance()
+    {
+        var commit = Environment.GetEnvironmentVariable(SourceCommit);
+        var tree = Environment.GetEnvironmentVariable(SourceTree);
+        var runIdentity = Environment.GetEnvironmentVariable(RunIdentity);
+        if (string.IsNullOrWhiteSpace(commit) ||
+            string.IsNullOrWhiteSpace(tree) ||
+            string.IsNullOrWhiteSpace(runIdentity))
+        {
+            throw new InvalidOperationException(
+                $"Set {SourceCommit}, {SourceTree}, and {RunIdentity} to exact retained publication provenance.");
+        }
+
+        return GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
+    }
 
     private static void RequirePublicationOptIn()
     {
