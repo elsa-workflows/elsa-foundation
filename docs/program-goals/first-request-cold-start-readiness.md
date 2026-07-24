@@ -38,9 +38,15 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
    but not out-of-band drift. **Batching: deferred to Groundwork** — the 873-op apply is 873 package-internal
    transactions (one per op, each with a durability re-read); the batch-apply path must land in the Groundwork
    package (proposal in spec 133), not Elsa-side.
-4. **Opt-in eager activation.** A host-side `IHostedService` that triggers shell activation at startup (behind a
-   switch) so the activation cliff is paid before the first user request, not during it. CShells is external and
-   has no in-repo eager-activation option; see the unit-2 gating finding in spec 129.
+4. **Opt-in eager activation — IMPLEMENTED (spec 132).** A host-side `IHostedService`
+   (`EagerShellActivationHostedService`) that triggers shell activation at startup (behind
+   `Elsa:Boot:EagerShellActivation:Enabled`, default OFF) so the activation cliff — and the mid-activation
+   contention tail — is paid before the first user request, not during it. Uses the public
+   `IShellRegistry.GetOrActivateAsync` (the exact call `ShellMiddleware` makes on a cold request → byte-identical
+   shell state), so no CShells edit and no synthetic request are needed. Supports "all configured shells"
+   (default/`*`) and named-shell config shapes; a many-shell host pays every activation at boot only when it opts
+   in (the documented trade). Demo default remains OFF; flipping it is a separate decision. See
+   `specs/132-eager-shell-activation/`.
 5. **Warmups.** Targeted first-use warmups (JIT/route-table/serializer/connection) for whatever residual
    first-request cost remains after units 2–4.
 
@@ -70,12 +76,16 @@ EF-initializer consolidation is **not** in this bucket — it belongs to [Zero-E
 1. Land spec 129: instrument, deterministic op count, recipe, baseline report. **(this unit)**
 2. Size units 2–5 from the baseline report and pick the next unit by measured share.
 3. File the upstream CShells `IShellInitializerObserver` proposal so unit 2 can attribute per-initializer cost.
+   **Done** — `docs/reports/cshells-initializer-observer-proposal.md` (filed by spec 132).
 
 ## Linked surfaces
 
-- Spec: `specs/129-cold-start-phase-instrument/`
+- Spec: `specs/129-cold-start-phase-instrument/` (unit 1)
+- Spec: `specs/132-eager-shell-activation/` (unit 4)
 - Spec: `specs/133-schema-admission-skip-and-batch/` (unit 3 skip-if-current; batching proposal for Groundwork)
 - Report: `docs/reports/cold-start-readiness-2026-07.md`
+- Upstream proposal: `docs/reports/cshells-initializer-observer-proposal.md`
+- Eager activation: `src/Apps/Elsa.Server/Boot/EagerShellActivation*.cs`
 - Charter/precedent: `docs/reports/runtime-http-performance-2026-07.md`
 - Instrument: `src/Apps/Elsa.Server/Boot/`, `src/Apps/Elsa.Server/Program.cs`
 - Recipe: `tools/performance/measure-cold-start.sh`
