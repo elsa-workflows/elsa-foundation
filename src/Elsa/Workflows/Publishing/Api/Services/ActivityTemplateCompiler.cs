@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -58,6 +59,7 @@ public sealed class ActivityTemplateCompiler(
     IActivityTemplateProviderCompilerRegistry providers,
     IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
     IActivityDefinitionVersionPublicationStore publications,
+    IActivityDefinitionVersionStore activityVersions,
     IExecutableActivityTemplateReader templates,
     IActivityTemplateAdmissionPolicy admissionPolicy,
     TimeProvider timeProvider) : IActivityTemplateCompiler
@@ -70,6 +72,7 @@ public sealed class ActivityTemplateCompiler(
         var diagnostics = new List<ActivityDiagnostic>();
         var resolved = new List<ActivityResolvedDependency>();
         var loadedTemplates = new Dictionary<string, ExecutableActivityTemplate>(StringComparer.Ordinal);
+        var loadedActivityVersions = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
         IReadOnlyList<ActivityTemplateDependencyRequest> authoritativeDependencies;
         IActivityTemplateDependencyDiscoverer discoverer;
         try
@@ -149,6 +152,32 @@ public sealed class ActivityTemplateCompiler(
                 continue;
             }
 
+            if (!loadedActivityVersions.TryGetValue(publication.DefinitionVersionId, out var activityVersion))
+            {
+                try
+                {
+                    activityVersion = await activityVersions.GetAsync(publication.DefinitionVersionId, cancellationToken);
+                    loadedActivityVersions.Add(publication.DefinitionVersionId, activityVersion);
+                }
+                catch (EntityNotFoundException)
+                {
+                    diagnostics.Add(Error(
+                        "activity.dependency.catalog-version-not-found",
+                        $"Exact activity catalog version '{dependencyRequest.DefinitionVersionId}' was not found.",
+                        subject,
+                        dependencyRequest));
+                    continue;
+                }
+            }
+
+            if (!TryReadDeclaredStructure(
+                    activityVersion,
+                    subject,
+                    dependencyRequest,
+                    diagnostics,
+                    out var declaredStructure))
+                continue;
+
             loadedTemplates.TryAdd(template.TemplateId, template);
             resolved.Add(new(
                 publication.DefinitionId,
@@ -164,7 +193,8 @@ public sealed class ActivityTemplateCompiler(
                 dependencyRequest.ParentOccurrenceId,
                 dependencyRequest.ChildSlotName,
                 dependencyRequest.ChildIndex,
-                dependencyRequest.MemberUsage));
+                dependencyRequest.MemberUsage,
+                declaredStructure));
         }
 
         diagnostics.AddRange(ValidateOccurrenceRequests(authoritativeDependencies, subject));
@@ -400,6 +430,34 @@ public sealed class ActivityTemplateCompiler(
         };
     }
 
+    private static bool TryReadDeclaredStructure(
+        ActivityDefinitionVersion activityVersion,
+        ActivityDiagnosticSubject subject,
+        ActivityTemplateDependencyRequest dependency,
+        ICollection<ActivityDiagnostic> diagnostics,
+        out ActivityStructureContract? contract)
+    {
+        contract = null;
+        if (ActivityStructureDesignFacetReader.TryReadSingle(
+                activityVersion.DesignFacets,
+                out var structureFacet))
+        {
+            if (structureFacet is not null)
+            {
+                ActivityStructureDesignFacetReader.TryReadContract(structureFacet, out var parsed);
+                contract = parsed;
+            }
+            return true;
+        }
+
+        diagnostics.Add(Error(
+            "activity.dependency.structure-contract-invalid",
+            $"Exact activity version '{dependency.DefinitionVersionId}' declares more than one structure contract.",
+            subject,
+            dependency));
+        return false;
+    }
+
     private async ValueTask<IReadOnlyList<ActivityDependencyPathItem>?> FindCycleAsync(
         ActivityTemplateCompilerRequest request,
         IReadOnlyList<ActivityResolvedDependency> directDependencies,
@@ -550,7 +608,7 @@ public sealed class ActivityTemplateCompiler(
         IReadOnlyList<ActivityResolvedDependency> authoritative)
     {
         static string Key(ActivityResolvedDependency value) =>
-            $"{value.DefinitionId}\u001f{value.VersionId}\u001f{value.Version}\u001f{value.TemplateId}\u001f{value.TemplateHash}\u001f{value.OccurrenceId}\u001f{value.ParentOccurrenceId}\u001f{value.ChildSlotName}\u001f{value.ChildIndex}\u001f{string.Join("\u001e", value.NodeOrigin.Select(x => $"{x.Kind}\u001d{x.Id}"))}\u001f{string.Join("\u001e", value.MemberUsage.OrderBy(x => x.MemberKind, StringComparer.Ordinal).ThenBy(x => x.ReferenceKey, StringComparer.Ordinal).ThenBy(x => x.UsageKind, StringComparer.Ordinal).Select(x => $"{x.MemberKind}\u001d{x.ReferenceKey}\u001d{x.UsageKind}"))}";
+            $"{value.DefinitionId}\u001f{value.VersionId}\u001f{value.Version}\u001f{value.TemplateId}\u001f{value.TemplateHash}\u001f{value.OccurrenceId}\u001f{value.ParentOccurrenceId}\u001f{value.ChildSlotName}\u001f{value.ChildIndex}\u001f{string.Join("\u001e", value.NodeOrigin.Select(x => $"{x.Kind}\u001d{x.Id}"))}\u001f{string.Join("\u001e", value.MemberUsage.OrderBy(x => x.MemberKind, StringComparer.Ordinal).ThenBy(x => x.ReferenceKey, StringComparer.Ordinal).ThenBy(x => x.UsageKind, StringComparer.Ordinal).Select(x => $"{x.MemberKind}\u001d{x.ReferenceKey}\u001d{x.UsageKind}"))}\u001f{value.DeclaredStructure?.Kind}\u001d{value.DeclaredStructure?.SchemaVersion}";
         return providerDependencies.Select(Key).Order(StringComparer.Ordinal)
             .SequenceEqual(authoritative.Select(Key).Order(StringComparer.Ordinal), StringComparer.Ordinal);
     }

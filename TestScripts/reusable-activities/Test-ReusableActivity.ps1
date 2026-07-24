@@ -9,9 +9,8 @@
       2. publishes a parent workflow whose ROOT is that reusable activity (bound by exact activityVersionId);
       3. executes the parent and asserts it completes AND an activity of the reusable's type ran inline.
 
-    Root placement is used because the compiler inlines a reusable boundary as the workflow root or inside a
-    Flowchart; nesting a reusable boundary directly in a Sequence structure is covered separately
-    (Test-ReusableSequenceNesting.ps1). Requires the server running from source (see ../README.md).
+    This basic test uses root placement. Reusable composition with a child nested in a reusable graph's Sequence
+    is covered by Test-ReusableActivityDeep.ps1. Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
 param(

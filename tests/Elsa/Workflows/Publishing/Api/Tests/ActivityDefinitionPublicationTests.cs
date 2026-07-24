@@ -151,6 +151,30 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Publisher_propagates_structure_contract_rejection_and_never_enters_the_commit_boundary()
+    {
+        var diagnostic = new ActivityDiagnostic(
+            "activity.graph.structure-contract-mismatch",
+            ActivityDiagnosticSeverity.Error,
+            "The authored structure does not match the exact activity version.",
+            new("ActivityDraft", "draft-1", "definition-1", Revision: 4),
+            new(JsonPointer: "/rootActivity/structure"));
+        var harness = PublisherHarness.Create(compileResult: new(
+            null,
+            Measurements(),
+            [],
+            [diagnostic]));
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => harness.PublishAsync(
+            Request("1.0.0")));
+
+        Assert.Equal("activity.publication.invalid", exception.ErrorCode);
+        Assert.Contains(exception.Diagnostics, x => x.Code == diagnostic.Code);
+        Assert.Equal(2, harness.Compiler.CallCount);
+        Assert.Equal(0, harness.Commit.CallCount);
+    }
+
+    [Fact]
     public async Task Publisher_commits_one_exact_source_reference_bound_to_the_new_version_and_template()
     {
         var template = Template();
@@ -866,6 +890,7 @@ public sealed class ActivityDefinitionPublicationTests
             new ActivityTemplateProviderCompilerRegistry([provider]),
             new ActivityTemplateDependencyDiscovererRegistry([provider]),
             new EmptyPublicationStore(),
+            new FakeActivityVersionStore([]),
             new EmptyTemplateReader(),
             new AcceptAdmissionPolicy(),
             TimeProvider.System);
@@ -886,6 +911,38 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     [Fact]
+    public async Task Compiler_forwards_the_exact_catalog_structure_contract_to_the_provider()
+    {
+        var provider = new CapturingDependencyCompiler();
+        var dependencyTemplate = Template();
+        var publication = Publication("definition-b", "version-b", "type-b", dependencyTemplate);
+        var structureFacet = new ActivityDesignFacet(
+            "elsa.sequence.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new ActivityStructureDesignFacetPayload(
+                "generic",
+                true,
+                [],
+                new Dictionary<string, object?>()),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var compiler = new ActivityTemplateCompiler(
+            new ActivityTemplateProviderCompilerRegistry([provider]),
+            new ActivityTemplateDependencyDiscovererRegistry([provider]),
+            new SinglePublicationStore(publication),
+            new FakeActivityVersionStore([CatalogVersion("definition-b", "version-b", [structureFacet])]),
+            new SingleTemplateReader(dependencyTemplate),
+            new AcceptAdmissionPolicy(),
+            TimeProvider.System);
+
+        var result = await compiler.CompileAsync(
+            CompileRequest("definition-a", "type-a", "draft-a", "version-a", "1.0.0"));
+
+        Assert.True(result.IsSuccessful);
+        var dependency = Assert.Single(provider.Request!.ResolvedDirectDependencies);
+        Assert.Equal(new ActivityStructureContract("elsa.sequence.structure", "1.0.0"), dependency.DeclaredStructure);
+    }
+
+    [Fact]
     public async Task Cycle_diagnostic_reports_the_full_iteratively_discovered_exact_path()
     {
         var provider = new CycleCompiler();
@@ -898,6 +955,7 @@ public sealed class ActivityDefinitionPublicationTests
             new ActivityTemplateProviderCompilerRegistry([provider]),
             new ActivityTemplateDependencyDiscovererRegistry([provider]),
             new SinglePublicationStore(publication),
+            new FakeActivityVersionStore([CatalogVersion("definition-b", "version-b")]),
             new SingleTemplateReader(childTemplate),
             new AcceptAdmissionPolicy(),
             TimeProvider.System);
@@ -918,6 +976,7 @@ public sealed class ActivityDefinitionPublicationTests
             new ActivityTemplateProviderCompilerRegistry([provider]),
             new ActivityTemplateDependencyDiscovererRegistry([provider]),
             new EmptyPublicationStore(),
+            new FakeActivityVersionStore([]),
             new EmptyTemplateReader(),
             new RejectAdmissionPolicy(),
             TimeProvider.System);
@@ -936,6 +995,7 @@ public sealed class ActivityDefinitionPublicationTests
             new ActivityTemplateProviderCompilerRegistry([provider]),
             new ActivityTemplateDependencyDiscovererRegistry([provider]),
             new EmptyPublicationStore(),
+            new FakeActivityVersionStore([]),
             new EmptyTemplateReader(),
             new AcceptAdmissionPolicy(),
             TimeProvider.System);
@@ -1196,6 +1256,15 @@ public sealed class ActivityDefinitionPublicationTests
         return new(template, Measurements(), [], []);
     }
 
+    private static ActivityDefinitionVersion CatalogVersion(
+        string definitionId,
+        string versionId,
+        IEnumerable<ActivityDesignFacet>? designFacets = null) => new("1.0.0", definitionId)
+        {
+            Id = versionId,
+            DesignFacets = designFacets ?? []
+        };
+
     private static ActivityDefinitionVersionPublication CopyPublication(
         ActivityDefinitionVersionPublication source,
         string version,
@@ -1293,6 +1362,38 @@ public sealed class ActivityDefinitionPublicationTests
         public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(ActivityTemplateDependencyDiscoveryRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ActivityTemplateDependencyDiscovery(
                 [new("version-b", "use-b", [new("AuthoredNode", "use-b")])], []));
+    }
+
+    private sealed class CapturingDependencyCompiler : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    {
+        public string ProviderKey => "test.provider";
+        public string CompilerFingerprint => "test.provider/compiler/1";
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
+        public ActivityTemplateCompilationRequest? Request { get; private set; }
+
+        public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(
+            ActivityTemplateDependencyDiscoveryRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityTemplateDependencyDiscovery(
+                [new("version-b", "use-b", [new("AuthoredNode", "use-b")])],
+                []));
+
+        public ValueTask<ActivityTemplateCompilation> CompileAsync(
+            ActivityTemplateCompilationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Request = request;
+            return ValueTask.FromResult(new ActivityTemplateCompilation(
+                Boundary(),
+                new Dictionary<string, WorkflowExecutableResumeTarget>(),
+                request.ResolvedDirectDependencies,
+                [new RuntimeRequirement("test.consumer", "1")],
+                [],
+                new(1, 1, request.ResolvedDirectDependencies.Count, 1, 10, 0, 0),
+                request.ProviderFingerprint,
+                [],
+                []));
+        }
     }
 
     private sealed class SinglePublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore

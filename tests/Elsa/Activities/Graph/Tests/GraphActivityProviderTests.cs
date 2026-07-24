@@ -242,6 +242,44 @@ public sealed class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task Validation_does_not_treat_flowchart_connection_endpoints_as_activity_nodes()
+    {
+        var manifest = CreateManifest("""
+            {
+              "rootActivity": {
+                "nodeId": "flowchart",
+                "activityVersionId": "activity-ver-flowchart",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.flowchart.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      { "nodeId": "first", "activityVersionId": "activity-ver-first", "inputs": [], "outputs": [], "structure": null },
+                      { "nodeId": "second", "activityVersionId": "activity-ver-second", "inputs": [], "outputs": [], "structure": null }
+                    ],
+                    "connections": [{
+                      "source": { "nodeId": "first", "port": "Done" },
+                      "target": { "nodeId": "second", "port": null }
+                    }]
+                  }
+                }
+              },
+              "variables": [],
+              "outputMappings": [{
+                "outputReferenceKey": "total",
+                "source": { "syntax": "Literal", "value": 42 }
+              }]
+            }
+            """);
+
+        var diagnostics = await _provider.ValidateAsync(manifest, CreateContract());
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public async Task Compilation_is_deterministic_and_preserves_exact_dependency_origins()
     {
         var contract = CreateContract();
@@ -279,7 +317,11 @@ public sealed class GraphActivityProviderTests
               }
             }
             """);
-        var rootDependency = CreateDependency("root", "activity-ver-root", "root-origin");
+        var rootDependency = CreateDependency(
+            "root",
+            "activity-ver-root",
+            "root-origin",
+            declaredStructure: new("Sequence", "1"));
         var childDependency = CreateDependency("child", "activity-ver-child", "child-origin");
         var request = new ActivityTemplateCompilationRequest(
             "definition-1",
@@ -475,8 +517,31 @@ public sealed class GraphActivityProviderTests
             7,
             "1.0.0",
             CreateContract(),
-            CreateManifest(),
-            [CreateDependency("graph-root", "a-different-version", "root-origin")],
+            CreateManifest("""
+                {
+                  "variables": [],
+                  "rootActivity": {
+                    "nodeId": "graph-root",
+                    "activityVersionId": "activity-ver-root",
+                    "inputs": [],
+                    "outputs": [],
+                    "structure": {
+                      "kind": "Sequence",
+                      "schemaVersion": "1",
+                      "payload": { "activities": [] }
+                    }
+                  },
+                  "outputMappings": [{
+                    "source": { "value": 42, "syntax": "Literal" },
+                    "outputReferenceKey": "total"
+                  }]
+                }
+                """),
+            [CreateDependency(
+                "graph-root",
+                "a-different-version",
+                "root-origin",
+                declaredStructure: new("Sequence", "1"))],
             "fingerprint");
 
         var result = await _provider.CompileAsync(request);
@@ -486,6 +551,199 @@ public sealed class GraphActivityProviderTests
         Assert.Equal("graph-root", diagnostic.Location!.ReferenceKey);
         Assert.Empty(result.DirectDependencies);
         Assert.Empty(result.RuntimeRequirements);
+    }
+
+    [Theory]
+    [InlineData("Sequence", "1")]
+    [InlineData("elsa.sequence.structure", "1")]
+    public async Task Compilation_rejects_a_structure_identity_that_differs_from_the_exact_activity_version(
+        string actualKind,
+        string actualSchemaVersion)
+    {
+        var manifest = CreateManifest($$"""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "graph-root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "{{actualKind}}",
+                  "schemaVersion": "{{actualSchemaVersion}}",
+                  "payload": { "activities": [] }
+                }
+              },
+              "outputMappings": [{
+                "source": { "value": 42, "syntax": "Literal" },
+                "outputReferenceKey": "total"
+              }]
+            }
+            """);
+        var dependency = CreateDependency(
+            "graph-root",
+            "activity-ver-root",
+            "root-origin",
+            declaredStructure: new("elsa.sequence.structure", "1.0.0"));
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "1.0.0",
+            CreateContract(),
+            manifest,
+            [dependency],
+            "fingerprint");
+
+        var result = await _provider.CompileAsync(request);
+
+        Assert.Null(result.ExecutableRoot);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("activity.graph.structure-contract-mismatch", diagnostic.Code);
+        Assert.Equal("/rootActivity/structure", diagnostic.Location!.JsonPointer);
+        Assert.Equal("elsa.sequence.structure", diagnostic.Metadata!["declaredKind"]);
+        Assert.Equal("1.0.0", diagnostic.Metadata["declaredSchemaVersion"]);
+        Assert.Equal(actualKind, diagnostic.Metadata["actualKind"]);
+        Assert.Equal(actualSchemaVersion, diagnostic.Metadata["actualSchemaVersion"]);
+    }
+
+    [Fact]
+    public async Task Compilation_preserves_unknown_opaque_structure_when_the_activity_declares_no_structure_contract()
+    {
+        var manifest = CreateManifest("""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "graph-root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "vendor.opaque",
+                  "schemaVersion": "1",
+                  "payload": {
+                    "metadata": {
+                      "nodeId": "not-an-authored-child"
+                    }
+                  }
+                }
+              },
+              "outputMappings": [{
+                "source": { "value": 42, "syntax": "Literal" },
+                "outputReferenceKey": "total"
+              }]
+            }
+            """);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "1.0.0",
+            CreateContract(),
+            manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin")],
+            "fingerprint");
+
+        var result = await _provider.CompileAsync(request);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.NotNull(result.ExecutableRoot);
+    }
+
+    [Fact]
+    public async Task Compilation_rejects_a_handled_structure_that_the_exact_activity_version_does_not_declare()
+    {
+        var manifest = CreateManifest("""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "graph-root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": { "activities": [] }
+                }
+              },
+              "outputMappings": [{
+                "source": { "value": 42, "syntax": "Literal" },
+                "outputReferenceKey": "total"
+              }]
+            }
+            """);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "1.0.0",
+            CreateContract(),
+            manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "root-origin")],
+            "fingerprint");
+
+        var result = await _provider.CompileAsync(request);
+
+        Assert.Null(result.ExecutableRoot);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("activity.graph.structure-contract-undeclared", diagnostic.Code);
+        Assert.Equal("/rootActivity/structure", diagnostic.Location!.JsonPointer);
+    }
+
+    [Fact]
+    public async Task Compilation_rejects_a_declared_structure_when_its_handler_is_unavailable()
+    {
+        var provider = new GraphActivityProvider(
+            new TestActivityStructureService(hasHandlers: false),
+            new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
+        var manifest = CreateManifest("""
+            {
+              "variables": [],
+              "rootActivity": {
+                "nodeId": "graph-root",
+                "activityVersionId": "activity-ver-root",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": { "activities": [] }
+                }
+              },
+              "outputMappings": [{
+                "source": { "value": 42, "syntax": "Literal" },
+                "outputReferenceKey": "total"
+              }]
+            }
+            """);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "1.0.0",
+            CreateContract(),
+            manifest,
+            [CreateDependency(
+                "graph-root",
+                "activity-ver-root",
+                "root-origin",
+                declaredStructure: new("elsa.sequence.structure", "1.0.0"))],
+            "fingerprint");
+
+        var matchingResult = await _provider.CompileAsync(request);
+        var result = await provider.CompileAsync(request);
+
+        Assert.Empty(matchingResult.Diagnostics);
+        Assert.NotNull(matchingResult.ExecutableRoot);
+        Assert.Null(result.ExecutableRoot);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("activity.graph.structure-handler-unavailable", diagnostic.Code);
+        Assert.Equal("/rootActivity/structure", diagnostic.Location!.JsonPointer);
     }
 
     [Fact]
@@ -539,6 +797,40 @@ public sealed class GraphActivityProviderTests
         Assert.Equal(
             ["a.error", "b.error", "z.warning", "a.info"],
             ActivityDiagnosticOrderer.Order(diagnostics).Select(x => x.Code));
+    }
+
+    [Fact]
+    public void Structure_facet_reader_requires_the_typed_payload_shape()
+    {
+        var valid = new ActivityDesignFacet(
+            "elsa.sequence.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new ActivityStructureDesignFacetPayload(
+                "generic",
+                true,
+                [],
+                new Dictionary<string, object?>()),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var unrelated = new ActivityDesignFacet(
+            "vendor.options",
+            "1",
+            JsonSerializer.SerializeToElement(new { slots = Array.Empty<object>() }));
+        var malformed = new ActivityDesignFacet(
+            "elsa.sequence.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new { slots = Array.Empty<object>() }));
+        var secondValid = new ActivityDesignFacet(
+            "elsa.flowchart.structure",
+            "1.0.0",
+            valid.Payload);
+
+        Assert.True(ActivityStructureDesignFacetReader.TryReadContract(valid, out var contract));
+        Assert.Equal(new ActivityStructureContract("elsa.sequence.structure", "1.0.0"), contract);
+        Assert.False(ActivityStructureDesignFacetReader.TryReadContract(unrelated, out _));
+        Assert.False(ActivityStructureDesignFacetReader.TryReadContract(malformed, out _));
+        Assert.True(ActivityStructureDesignFacetReader.TryReadSingle([unrelated, malformed, valid], out var single));
+        Assert.Same(valid, single);
+        Assert.False(ActivityStructureDesignFacetReader.TryReadSingle([valid, secondValid], out _));
     }
 
     private static ActivityProviderManifest CreateManifest(string? json = null) => new(
@@ -612,7 +904,8 @@ public sealed class GraphActivityProviderTests
         string occurrenceId,
         string versionId,
         string originId,
-        DesignActivityContract? contract = null) => new(
+        DesignActivityContract? contract = null,
+        ActivityStructureContract? declaredStructure = null) => new(
         $"definition-{occurrenceId}",
         versionId,
         "1.0.0",
@@ -622,7 +915,8 @@ public sealed class GraphActivityProviderTests
         ActivityDefinitionVersionLifecycle.Active,
         null,
         occurrenceId,
-        [new ActivityNodeOrigin("AuthoredNode", originId)]);
+        [new ActivityNodeOrigin("AuthoredNode", originId)],
+        DeclaredStructure: declaredStructure);
 
     private static JsonElement ParseJson(string json)
     {
@@ -672,7 +966,7 @@ public sealed class GraphActivityProviderTests
             new HashSet<string>(StringComparer.Ordinal) { "elsa.json" });
     }
 
-    private sealed class TestActivityStructureService : IActivityStructureService
+    private sealed class TestActivityStructureService(bool hasHandlers = true) : IActivityStructureService
     {
         private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
@@ -681,8 +975,10 @@ public sealed class GraphActivityProviderTests
             if (activity.Structure is null)
                 return [];
             var payload = activity.Structure.Payload;
-            if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "Sequence") && payload.TryGetProperty("activities", out var activities))
+            if (IsSequence(activity.Structure) && payload.TryGetProperty("activities", out var activities))
                 return [new("Sequence.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
+            if (IsFlowchart(activity.Structure) && payload.TryGetProperty("activities", out activities))
+                return [new("Flowchart.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
             if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
             {
                 var then = payload.TryGetProperty("then", out var thenElement) && thenElement.ValueKind == JsonValueKind.Object
@@ -704,7 +1000,7 @@ public sealed class GraphActivityProviderTests
             if (activity.Structure is null)
                 return activity;
             var payload = JsonNode.Parse(activity.Structure.Payload.GetRawText())!.AsObject();
-            if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "Sequence"))
+            if (IsSequence(activity.Structure))
                 payload["activities"] = JsonSerializer.SerializeToNode(childProjections.Single().Activities, Options);
             else if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
             {
@@ -714,6 +1010,12 @@ public sealed class GraphActivityProviderTests
             return activity with { Structure = new(activity.Structure.Kind, activity.Structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, Options)) };
         }
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public bool HasHandler(ActivityNodeStructure structure) =>
+            hasHandlers &&
+            (IsSequence(structure) ||
+             IsFlowchart(structure) ||
+             StringComparer.Ordinal.Equals(structure.Kind, "If") &&
+             StringComparer.Ordinal.Equals(structure.SchemaVersion, "1"));
         public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
         {
             if (activity.Structure?.Payload.TryGetProperty("outcomeUsage", out var usage) != true)
@@ -726,5 +1028,15 @@ public sealed class GraphActivityProviderTests
         }
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
         public bool SupportsScopedVariables(ActivityNode activity) => false;
+
+        private static bool IsSequence(ActivityNodeStructure structure) =>
+            (StringComparer.Ordinal.Equals(structure.Kind, "Sequence") &&
+             StringComparer.Ordinal.Equals(structure.SchemaVersion, "1")) ||
+            (StringComparer.Ordinal.Equals(structure.Kind, "elsa.sequence.structure") &&
+             StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0"));
+
+        private static bool IsFlowchart(ActivityNodeStructure structure) =>
+            StringComparer.Ordinal.Equals(structure.Kind, "elsa.flowchart.structure") &&
+            StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0");
     }
 }
