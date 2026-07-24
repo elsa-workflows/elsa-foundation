@@ -23,7 +23,7 @@ $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $tag = Get-Random -Max 999999
 
 # --- pick an existing catalog definition + its head version ---
-$catalog = (Invoke-Get -Ctx $ctx -Path "design/activities/definitions?searchTerm=").Json
+$catalog = (Invoke-Get -Ctx $ctx -Path "design/activities/definitions?search=").Json
 $items = if ($catalog.items) { $catalog.items } else { $catalog }
 $sample = $items | Where-Object { $_.definition.headVersionId } | Select-Object -First 1
 $existingDef = $sample.definition.definitionId
@@ -47,7 +47,7 @@ Write-Host ""
 
 Assert-Get -Ctx $ctx -Label "authoring-capabilities" -Path "design/activities/authoring-capabilities" | Out-Null
 Assert-Get -Ctx $ctx -Label "catalog" -Path "design/activities/catalog" | Out-Null
-Assert-Get -Ctx $ctx -Label "definitions (list)" -Path "design/activities/definitions?searchTerm=" | Out-Null
+Assert-Get -Ctx $ctx -Label "definitions (list)" -Path "design/activities/definitions?search=" | Out-Null
 Assert-Get -Ctx $ctx -Label "definitions/picker" -Path "design/activities/definitions/picker" | Out-Null
 Assert-Get -Ctx $ctx -Label "definitions/{id}" -Path "design/activities/definitions/$existingDef" | Out-Null
 Assert-Get -Ctx $ctx -Label "definitions/{id}/versions" -Path "design/activities/definitions/$existingDef/versions" | Out-Null
