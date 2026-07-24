@@ -25,4 +25,12 @@
 		<ProjectReference Include="..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<!-- Keep the provider implementation below this package directory out of the
+		     provider-neutral OpenIddict behavior assembly. -->
+		<Compile Remove="Groundwork/**/*.cs" />
+		<EmbeddedResource Remove="Groundwork/**/*.resx" />
+		<None Remove="Groundwork/**/bin/**;Groundwork/**/obj/**" />
+	</ItemGroup>
+
 </Project>

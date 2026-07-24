@@ -1,6 +1,6 @@
 # Feature Specification: OpenIddict Groundwork Stores
 
-**Feature Branch**: `codex/106-openiddict-groundwork-stores`
+**Feature Branch**: `codex/106-openiddict-groundwork-implementation`
 
 **Created**: 2026-07-20
 
@@ -144,6 +144,7 @@ As an Elsa maintainer, I can evolve OpenIddict and identity-facing contracts wit
 ## Assumptions
 
 - The accepted zero-EF ADR governs this feature: `elsa-foundation` ships Groundwork as its only first-party concrete durable persistence implementation family, while core contracts remain provider-neutral.
+- OpenIddict is a separately deliverable migration lane inside the zero-EF completion gate. Landing another store family does not waive this lane, and this lane does not declare repository-wide zero-EF completion until the remaining gate owners also finish.
 - The product is greenfield and unreleased. Historical EF database conversion, EF compatibility aliases, and a separately maintained external EF implementation repository are outside this feature.
 - The current published Groundwork package family provides the physical entity forms, declared bounded query routes, schema readiness operations, naming-policy bridge, optimistic concurrency, atomic unit-of-work support, and integrations for SQLite, SQL Server, PostgreSQL, and MongoDB required by this feature; implementation will consume one binary-compatible package/tool family.
 - OpenIddict entries are globally addressed in this release because the relevant public store contracts have no tenant input. This is an explicit storage classification, not an authorization decision or a claim of cross-tenant querying.

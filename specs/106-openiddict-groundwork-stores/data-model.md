@@ -11,7 +11,7 @@ The following records belong only to `Elsa.Foundation.Identity.OpenIddict.Ground
 | Identity/concurrency | id, opaque concurrency value | Primary identity; CAS update/delete. |
 | Client configuration | application/client/consent types, client id/secret | Unique client-id route. |
 | Presentation/keys | display name(s), JSON Web Key Set | Round-trip only unless a named query proves a projection. |
-| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Linked multivalue routes only after preview.76 public capability proof; otherwise block the corresponding route. |
+| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Preview.81 exposes linked declarations only on non-entity physical forms. The record unit remains logical until architecture review chooses shared/dedicated storage or separately declared linked membership units. |
 | Metadata | properties, settings | Canonical JSON round-trip. |
 
 ## 2. Authorization Record
@@ -69,3 +69,19 @@ Scope -----------------------> referenced by authorization scope values
 - **Capability admission**: exact Groundwork family/tool version, provider topology, route/mutation evidence, and readiness diagnostic.
 - **Provider evidence**: provider/version/topology, manifest fingerprint, scenario, independent-client count, failure window, result digest, native plan/mutation-plan artifact, restart outcome.
 - **Performance submission**: #646 workload id, fixed dataset/payload/concurrency, correctness digest, physical form, machine/provider identity, and pass/redesign/blocked verdict.
+
+## 8. Preview.81 Physical-Form Blocker
+
+Applications, authorizations, scopes, and tokens remain four distinct logical record
+units. They are not yet declared as four physical entity tables:
+
+- `PhysicalTableDefinition.PhysicalEntityTable` admits projected scalar columns and
+  physical indexes, but has no linked projection/key parameter.
+- The shared/dedicated document forms expose the linked projection contract.
+- OpenIddict requires searchable collection membership for redirect URIs,
+  post-logout redirect URIs, authorization scopes, and scope resources.
+
+Choosing shared/dedicated storage changes the original physical-form decision.
+Choosing extra linked membership units changes the “four tables” count and requires
+portable atomicity/readiness evidence. Either choice is architecture- and
+performance-bearing, so the manifest/store scaffolding gate remains blocked.

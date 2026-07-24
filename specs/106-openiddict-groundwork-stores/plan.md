@@ -1,20 +1,20 @@
 # Implementation Plan: OpenIddict Groundwork Stores
 
-**Branch**: `codex/106-openiddict-groundwork-stores` | **Date**: 2026-07-20 | **Spec**: [spec.md](spec.md)
+**Branch**: `codex/106-openiddict-groundwork-implementation` | **Date**: 2026-07-24 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/106-openiddict-groundwork-stores/spec.md`
 
 ## Summary
 
-Replace the EF-backed OpenIddict persistence integration with one concrete `Elsa.Foundation.Identity.OpenIddict.Groundwork` adapter package. The package implements OpenIddict 7.5's four store contracts over four global physical entity tables while retaining existing OpenIddict server, validation, selector, and `ITokenService` behavior. It uses declared bounded routes, expected-version concurrency, explicit units of work, and shared host schema readiness. The work is complete only after real four-provider evidence and #646 performance verdicts allow the host switch and EF OpenIddict deletion.
+Replace the EF-backed OpenIddict persistence integration with one concrete `Elsa.Foundation.Identity.OpenIddict.Groundwork` adapter package. The package implements OpenIddict 7.5's four store contracts over four global logical record units while retaining existing OpenIddict server, validation, selector, and `ITokenService` behavior. It uses declared bounded routes, expected-version concurrency, explicit units of work, and shared host schema readiness. Physical form is deliberately unresolved until the preview.81 multivalue probe and #646 comparison select an admissible shape. The work is complete only after real four-provider evidence and #646 performance verdicts allow the host switch and EF OpenIddict deletion.
 
 ## Technical Context
 
 **Language/Version**: C# 14 on .NET 10 (`net10.0`)
 
-**Primary Dependencies**: OpenIddict.Abstractions/Core/AspNetCore 7.5.0; Elsa Identity abstractions; Groundwork Core, Documents, provider packages, and Tool from one public binary-compatible `0.0.1-preview.76` family; Microsoft.Extensions dependency injection and options
+**Primary Dependencies**: OpenIddict.Abstractions/Core/AspNetCore 7.5.0; Elsa Identity abstractions; Groundwork Core, Documents, provider packages, and Tool from one public binary-compatible `0.0.1-preview.81` family; Microsoft.Extensions dependency injection and options
 
-**Storage**: Four global Groundwork physical entity tables—applications, authorizations, scopes, and tokens—with canonical JSON authoritative and only workload-proven native projections/indexes; SQLite, SQL Server, PostgreSQL, and MongoDB
+**Storage**: Four global logical record units—applications, authorizations, scopes, and tokens—with canonical JSON authoritative. Preview.81 proves scalar physical-entity projections but cannot attach linked multivalue storage to `PhysicalEntityTable`; shared/dedicated or additional linked units require an explicit design and #646 verdict before production scaffolding. Mandatory providers remain SQLite, SQL Server, PostgreSQL, and MongoDB.
 
 **Testing**: xUnit; existing OpenIddict identity, API, shell, and ASP.NET Core Identity Groundwork acceptance tests; new direct store branch suites; shared real-provider conformance; native route/mutation-plan evidence; restart/failure injection; architecture dependency guard
 
@@ -39,27 +39,32 @@ The Elsa and framework constitutions are draft/provisional. This matters because
 | Framework §2.9 provider-neutral persistence | PASS | Identity abstractions, `ITokenService`, and OpenIddict-facing domain behavior do not reference Groundwork. |
 | Framework §2.10 CQS | PASS | Named reads and mutations remain separate; generic delegate requests never become general query execution. |
 | Framework §2.20 provider module decomposition | PASS | New Groundwork code is a concrete provider-suffixed package; no provider-neutral umbrella or second core is introduced. |
-| Framework §2.21.1 test objective preservation | PASS | Existing 23 OpenIddict test objectives and dependent HTTP/shell objectives move to equivalent fixtures; deletion requires recorded architect approval. |
+| Framework §2.21.1 test objective preservation | PASS | All 54 retained objectives, including nine reached only through the shared token-endpoint host, move to equivalent fixtures; deletion requires recorded architect approval. |
 | Framework §2.23.1 registration coverage | PASS | Each feature composition resolves all four OpenIddict managers/stores, schema contributors, and required public collaborators. |
 | Framework §2.23.2 branch coverage | PASS | Every logic-bearing mapper, route selector, generic-delegate rejection, CAS/UoW/recovery, exception mapping, and provider-admission branch has direct stubbed-dependency tests. |
 | Framework §2.22 documentation/catalog/maps | PASS | Feature documentation, extension-point catalog/index where a new extension point exists, storage/readiness documentation, and authorized generated maps update with delivery. |
 | Framework §2.23.5 exception boundary | PASS | Provider/serialization failures translate at the adapter boundary to documented OpenIddict/feature-scoped outcomes; cancellation is preserved. |
 | Elsa §E6 naming | PASS | New Elsa-owned types use the provider prefix and one role suffix; external OpenIddict names are retained only when mirroring external contracts. |
-| Accepted zero-EF ADR | PASS | Groundwork is the completed first-party persistence lane; EF remains only as an oracle until all exit gates pass. |
+| Accepted zero-EF ADR | PASS | OpenIddict is a separate delivery lane inside the zero-EF completion gate. Groundwork is the target first-party persistence family; EF remains only as an oracle until this lane and the shared exit gates pass. |
 
-**Post-design re-check**: PASS. The data model confines physical projections and Groundwork session mechanics to the provider package, the contract defines bounded-query and mutation admission, and the quickstart makes public preview.76 verification and real-provider evidence blocking gates.
+**Post-probe re-check**: BLOCKED before production store scaffolding. The data model confines physical projections and Groundwork session mechanics to the provider package, but preview.81 exposes linked projection parameters only on non-entity physical forms. The quickstart records the evidence and the design choice remains explicit rather than being improvised in an adapter.
 
 ## Hard Prerequisite Gate
 
-No implementation task may begin until the exact public `0.0.1-preview.76` Groundwork Core/Documents/provider/Tool family restores together and the following capabilities are demonstrated from its public API with a focused executable probe:
+No production store task may begin until the exact public `0.0.1-preview.81` Groundwork Core/Documents/provider/Tool family restores together and the following capabilities are demonstrated from its public API with a focused executable probe:
 
 1. Version-aware document codec admission, current/minimum-readable policy, upcaster-chain validation, and rejection before deserialization.
-2. Four physical entity-table definitions with deterministic host naming, schema fingerprinting, CLI plan/validate/status/apply, and runtime validate-only admission.
+2. Four logical record-unit definitions with a reviewed physical form, deterministic host naming, schema fingerprinting, CLI plan/validate/status/apply, and runtime validate-only admission.
 3. Bounded server-side mutation by declared predicate with exact affected count, cancellation, failure cleanup, and provider-native mutation-plan inspection.
 4. Typed compound, unique, date/range, and multivalue physical/query support needed by the named OpenIddict routes.
 5. Expected-version CAS and transaction-capable UoW behavior across all four providers.
 
-If any capability is absent, incomplete, non-public, or fails its probe, create/link an upstream Groundwork work item and mark this feature blocked at that prerequisite. Do not hide the gap with raw provider queries, client filtering, synthetic plan evidence, or a compatibility fallback. Linked multivalue projections are introduced only after item 4 proves their public declaration and execution API; otherwise the affected named route remains an upstream prerequisite, not an invented local storage shape.
+If any capability is absent, incomplete, non-public, or fails its probe, mark this feature blocked at that prerequisite and either link upstream work or record the Elsa design decision required to consume an already-public alternative form. Do not hide the gap with raw provider queries, client filtering, synthetic plan evidence, or a compatibility fallback.
+
+The preview.81 probe proves that `PhysicalEntityTable` has no public linked parameter while the shared/dedicated document forms do. Therefore “four physical entity tables with linked multivalue relationships” is not an implementable contract. Production scaffolding remains blocked until architecture review chooses and #646 evaluates one of:
+
+1. four shared/dedicated logical units using the public linked projection contract; or
+2. four entity units plus separately declared linked membership units with explicit atomicity, naming, readiness, and provider evidence.
 
 ## Project Structure
 
@@ -98,6 +103,7 @@ tests/Elsa/Foundation/Identity/Tests/
 └── OpenIddict/Conformance/            # Shared black-box four-provider/restart/failure suite
 
 tests/Elsa/Persistence/Groundwork/
+├── Conformance/Tests/                 # Preview.81 capability and provider-evidence probes
 └── UnifiedHost/Tests/                 # Production-shaped schema/host composition
 
 tests/Elsa/Architecture/               # Provider-neutral core and final EF removal guards
@@ -107,9 +113,9 @@ tests/Elsa/Architecture/               # Provider-neutral core and final EF remo
 
 ## Delivery Sequencing
 
-1. **Verify upstream capability**: record exact public preview.76 packages/tool, provider topology, public capability probes, and baseline test identities. Stop for upstream work if a hard prerequisite fails.
+1. **Verify upstream capability**: record exact public preview.81 packages/tool, provider topology, public capability probes, and baseline test identities. Stop for upstream work or an explicit Elsa physical-form decision if a hard prerequisite fails.
 2. **Freeze contract denominator**: encode all 145 OpenIddict store members by capability group, descriptor round trips, named route catalog, generic-delegate rejection, current token-service behavior, and every legacy test objective.
-3. **Build the provider boundary**: add the Groundwork package, global four-table manifest, codec policies, physical field/index declarations, scoped registration, and Core builder replacement of all four stores.
+3. **Build the provider boundary**: only after the physical-form gate passes, add the Groundwork package, four-unit manifest, codec policies, physical field/index declarations, scoped registration, and Core builder replacement of all four stores.
 4. **Implement named behavior**: add document mapping, CRUD/accessors, deterministic pages/counts, typed/multivalue named lookups, stable capability errors for unsupported generic delegates, and direct §2.23 branch tests.
 5. **Implement atomic behavior**: add expected-version updates/deletes, refresh redemption, revocation, prune/bulk revoke, application-dependent cleanup, exact counts, cancellation, rollback, lost-acknowledgement inspection, and restart recovery.
 6. **Prove four providers**: run one black-box suite on real persistent storage, independent clients, failure windows, close/reopen, restart, route/mutation plan evidence, and Mongo replica-set transaction admission.

@@ -20,4 +20,10 @@ Feature code supplies stable logical unit identities and defaults. The app host 
 
 ## Capability Contract
 
-Before this feature can advertise a provider, executable proof must show the exact public preview.76 family supports its required entity definitions, indexes, named query routes, bounded mutations, CAS/UoW, codec admission, and native plan/mutation-plan inspection. Mongo multi-record claims additionally require transaction-capable topology admission.
+Before this feature can advertise a provider, executable proof must show the exact public preview.81 family supports its reviewed physical definitions, indexes, named query routes, bounded mutations, CAS/UoW, codec admission, and native plan/mutation-plan inspection. Mongo multi-record claims additionally require transaction-capable topology admission.
+
+The four logical OpenIddict record units do not imply four physical entity tables.
+Preview.81 does not expose linked multivalue declarations on
+`PhysicalEntityTable`; the selected shared/dedicated or additional-membership-unit
+shape must first be recorded in the data model and then consumed unchanged by this
+contract.

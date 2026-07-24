@@ -23,15 +23,16 @@
 - Rewrite token issuance around provider APIs: rejected; would conflate an already-working public flow with persistence migration risk.
 - Keep EF initializer beside a Groundwork store: rejected; creates two readiness authorities.
 
-## Decision 3: Use four global physical entity tables
+## Decision 3: Keep four global logical units; block the physical form
 
-**Decision**: Declare applications, authorizations, scopes, and tokens as four distinct global physical entity tables with canonical JSON authoritative, stable logical identities, provider-normalized physical names, and only workload-proven projected fields/indexes.
+**Decision**: Declare applications, authorizations, scopes, and tokens as four distinct global logical record units with canonical JSON authoritative and stable logical identities. Do not scaffold their physical form until architecture review resolves the preview.81 multivalue boundary and #646 evaluates the admitted alternatives.
 
-**Rationale**: They have different uniqueness, compound, date/range, relationship, and multivalue workloads. The stores do not accept a tenant parameter, so these units are explicitly global for this release.
+**Rationale**: They have different uniqueness, compound, date/range, relationship, and multivalue workloads. The stores do not accept a tenant parameter, so these units are explicitly global for this release. The focused preview.81 probe proves scalar entity-table declarations, indexes, bounded routes, mutation declarations, CAS/UoW contracts, readiness, and static provider capability reports. It also proves `PhysicalEntityTable` has no linked parameter while the shared/dedicated document forms do. The original four-entity-table decision therefore cannot express the required collection-membership routes.
 
 **Alternatives considered**:
 
-- One shared document table: rejected for this high-value identity/security workload unless #646 proves it is the selected physical form.
+- Shared/dedicated document forms: viable public linked-projection candidates, but not selected until architecture review and #646.
+- Four entity units plus additional membership units: viable only with explicit portable atomicity, naming, readiness, and provider evidence; not selected in this batch.
 - Ambient tenant filtering: rejected because token validation has no tenant argument and must not claim isolation it cannot enforce.
 - Copy the current EF table schema mechanically: rejected; it lacks direct proof for several multivalue and bounded-mutation routes.
 
@@ -59,11 +60,11 @@
 - Provider-native cascades: rejected; not a portable public contract.
 - Read-then-mutate bulk loops: rejected; not bounded or interruption-safe.
 
-## Decision 6: Preview.76 public capability verification is a blocking prerequisite
+## Decision 6: Preview.81 public capability verification is a blocking prerequisite
 
-**Decision**: Before implementation, verify an exact public `0.0.1-preview.76` package/tool family and executable probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native mutation plans, and four-provider CAS/UoW.
+**Decision**: Before production store implementation, verify the exact public `0.0.1-preview.81` package/tool family and executable probes for codec admission, physical definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native mutation plans, and four-provider CAS/UoW.
 
-**Rationale**: The audit worktree pinned preview.72 when this prerequisite was recorded; a local or historical capability claim cannot establish the public integration contract. The repository now consumes preview.76, but linked multivalue projections remain permitted only after that public family proves the declaration/execution surface.
+**Rationale**: Current Elsa `main` pins all seven libraries to preview.81 but still pins `groundwork.tool` to preview.80. Preview.81 of the tool is publicly restorable and reports its exact version, so the central tool manifest must be aligned before T004 can pass. The focused probe is checked into the existing Groundwork conformance project so it compiles against the same restored libraries and provider packages as the shared evidence infrastructure. It proves scalar shape, codec/CAS/UoW/readiness surface, and static provider declarations, but static reports are not real provider evidence and linked multivalue cannot be attached to `PhysicalEntityTable`. These are blocking gates, not permission to invent a provider-specific fallback.
 
 **Alternatives considered**:
 
@@ -85,5 +86,5 @@
 
 - OpenIddict packages are currently version 7.5.0; current OpenIddict project directly references EF Design, InMemory, Sqlite, and EntityFrameworkCore.
 - Current source has one EF registration method, one DbContext, one initializer, one SQLite factory, and three migration/snapshot files.
-- Current direct OpenIddict tests contain 23 Fact/Theory methods; they preserve token flow, bearer validation, scheme composition, and development/demo guard objectives but do not yet cover full stores, four providers, restart, races, prune/revoke, or generic delegate capability.
+- The retained denominator contains 54 objectives: 23 direct OpenIddict methods, 7 guard/shell methods, 9 shared token-endpoint-host methods, 12 mixed Groundwork Identity/EF OpenIddict HTTP methods, and 3 provider-module methods. They do not yet cover full stores, four providers, restart, races, prune/revoke, or generic delegate capability.
 - Existing EF schema provides unique client id/scope name/reference id and common compound routes; it is a behavior reference, not the new physical design authority.

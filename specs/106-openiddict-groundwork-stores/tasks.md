@@ -12,13 +12,21 @@
 
 **Purpose**: Freeze the external denominator and prove that the exact public Groundwork family can support the feature before implementation begins.
 
-- [ ] T001 Record all 145 OpenIddict 7.5 application, authorization, scope, and token store members by capability group in `specs/106-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`
-- [ ] T002 [P] Inventory every existing OpenIddict, bearer, token-service, shell-composition, and development/demo guard test objective with its retained destination in `specs/106-openiddict-groundwork-stores/contracts/test-objective-ledger.md`
-- [ ] T003 [P] Add architecture tests that keep Identity abstractions and the retained OpenIddict behavior package free of Groundwork and new EF dependencies in `tests/Elsa/Architecture/Tests/OpenIddictPersistenceArchitectureTests.cs`
-- [ ] T004 Align the complete Groundwork package and tool family to the exact publicly restorable `0.0.1-preview.76` release in `Directory.Packages.props` and `.config/dotnet-tools.json`
-- [ ] T005 Add executable public-API probes for codec admission, physical entity definitions, naming/fingerprints, schema CLI/readiness, typed compound/range/multivalue routes, bounded mutations with native plans, CAS, and UoW in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/CapabilityProbe/OpenIddictGroundworkCapabilityProbeTests.cs`
-- [ ] T006 Run T005 against SQLite, SQL Server, PostgreSQL, and transaction-capable MongoDB and record package hashes, tool output, provider topology, and capability verdicts in `specs/106-openiddict-groundwork-stores/quickstart.md`
+- [X] T001 Record all 145 OpenIddict 7.5 application, authorization, scope, and token store members by capability group in `specs/106-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`
+  - Evidence: the package XML reproduction reports 42 application, 32 authorization, 28 scope, and 43 token members.
+- [X] T002 [P] Inventory every existing OpenIddict, bearer, token-service, shell-composition, and development/demo guard test objective with its retained destination in `specs/106-openiddict-groundwork-stores/contracts/test-objective-ledger.md`
+  - Evidence: the ledger retains 54 objectives: 23 direct, 7 guard/shell, 9 shared token-endpoint-host, 12 mixed Groundwork-Identity/EF-OpenIddict HTTP, and 3 provider-module objectives.
+- [X] T003 [P] Add architecture tests that keep Identity abstractions and the retained OpenIddict behavior project free of Groundwork and new EF dependencies in `tests/Elsa/Architecture/OpenIddictPersistenceArchitectureTests.cs`
+  - Evidence: the focused guard passes, excludes the nested `Groundwork/` provider boundary from behavior-source scanning, requires its explicit `Compile Remove`, and freezes the four transitional EF package references.
+- [ ] T004 Verify, without changing the central pins in this work unit, that the complete Groundwork package and tool family is the exact publicly restorable `0.0.1-preview.81` release in `Directory.Packages.props` and `.config/dotnet-tools.json`
+  - Evidence status: current `main` pins all seven libraries to preview.81 but the tool manifest to preview.80. A clean temporary install proves `groundwork.tool` preview.81 is publicly restorable and reports `Groundwork.Tool 0.0.1-preview.81`; central alignment remains for the serialized integration step.
+- [ ] T005 Add executable public-API probes for codec admission, physical definitions, naming/fingerprints, schema CLI/readiness, typed compound/range/multivalue routes, bounded mutations with native plans, CAS, and UoW in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/OpenIddictGroundworkCapabilityProbeTests.cs`
+  - Evidence status: the functional API and static package-report assertions pass; the preview.81 version ratchets await integration with current `main` and central tool alignment. The gate then remains open because `PhysicalEntityTable` cannot declare linked multivalue storage.
+- [ ] T006 Run the reviewed T005 physical shape against real SQLite, SQL Server, PostgreSQL, and transaction-capable MongoDB and record package hashes, tool output, provider topology, native query/mutation evidence, and capability verdicts in `specs/106-openiddict-groundwork-stores/quickstart.md`
+  - Static package capability reports are admission inputs only and do not satisfy native provider conformance.
 - [ ] T007 Create or link a Groundwork issue for every failed T005 capability and keep all dependent tasks blocked rather than adding provider-specific or client-side fallbacks in `specs/106-openiddict-groundwork-stores/research.md`
+- [X] T007A Record and enforce an Elsa architecture blocker when the public package offers an alternative physical form but using it would change the approved design
+  - Evidence: `research.md`, `data-model.md`, and the focused probe block production scaffolding pending a shared/dedicated-versus-additional-membership-unit decision and #646 verdict.
 
 **Checkpoint**: The exact public package/tool family restores together and every hard prerequisite has executable proof. No later task starts while T006 reports a missing capability.
 
@@ -31,15 +39,17 @@
 **⚠️ CRITICAL**: No user-story implementation starts until this phase is green.
 
 - [ ] T008 Scaffold the concrete provider package and test project in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj` and `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj`
-- [ ] T009 Add both projects to `Elsa.Foundation.slnx` and add only provider-boundary project references in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj`
+- [X] T008A Exclude nested `Groundwork/**/*.cs`, resources, and project-local build artifacts from `src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj` before adding source below that directory
+  - Evidence: the behavior project now removes nested provider source/resources/build artifacts, and the focused architecture guard enforces the source exclusion.
+- [ ] T009 Add both projects to `Elsa.Server.slnx` and add only provider-boundary project references in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj`
 - [ ] T010 [P] Write red canonical JSON, descriptor round-trip, current/minimum-readable version, upcast, and corrupt/future payload tests for all four record kinds in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkCodecTests.cs`
-- [ ] T011 [P] Write red manifest tests for four global physical entity tables, stable logical identities, finite lengths, unique/compound/range/multivalue indexes, bounded query/mutation routes, naming-policy output, and schema fingerprint in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkStorageManifestTests.cs`
+- [ ] T011 [P] After T007A is resolved, write red manifest tests for four global logical units using the reviewed physical forms, stable identities, SQL Server-safe finite lengths, unique/compound/range/multivalue indexes, bounded query/mutation routes, naming-policy output, and schema fingerprint in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkStorageManifestTests.cs`
 - [ ] T012 [P] Write red registration tests proving all four OpenIddict stores/managers resolve while existing server, validation, scheme selector, and `ITokenService` registrations remain unchanged in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkRegistrationTests.cs`
 - [ ] T013 [P] Write red branch tests for unsupported generic delegates, readiness rejection, cancellation propagation, concurrency translation, corrupt payloads, and provider failures in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkFailureMappingTests.cs`
 - [ ] T014 Implement the four canonical global record types, opaque concurrency value, deterministic operation identity, and descriptor mappings in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Models/`
 - [ ] T015 Bind Groundwork's version-aware document codec to per-kind OpenIddict version policies and JSON options without duplicating the generic codec in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Serialization/OpenIddictGroundworkJson.cs`
-- [ ] T016 Declare four `PhysicalTableDefinition` entity tables, projected fields, linked multivalue relationships, indexes, bounded queries, bounded mutations, versions, and provider requirements in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/OpenIddictGroundworkStorageManifest.cs`
-- [ ] T017 Contribute the OpenIddict declaration to the unified runtime/deployment schema source in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/OpenIddictGroundworkStorageManifestSource.cs` and `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
+- [ ] T016 Declare the four logical units using the T007A-reviewed `PhysicalTableDefinition` forms, projected fields, linked multivalue relationships/units, indexes, bounded queries, bounded mutations, versions, and provider requirements in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/OpenIddictGroundworkStorageManifest.cs`
+- [ ] T017 Contribute the OpenIddict declaration through `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/OpenIddictGroundworkStorageManifestSource.cs` to the current unified runtime/deployment composition consumed by `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkPhysicalSchemaManifestSource.cs`
 - [ ] T018 Implement one immutable global OpenIddict store-session/UoW factory with readiness admission and no ambient tenant filtering in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Stores/OpenIddictGroundworkStoreSessionFactory.cs`
 - [ ] T019 Implement stable adapter-scoped capability, readiness, serialization, and provider exceptions plus OpenIddict concurrency mapping in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Exceptions/`
 - [ ] T020 Implement all-four-store replacement registration while preserving existing server/validation behavior in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Extensions/OpenIddictGroundworkServiceCollectionExtensions.cs`
@@ -111,16 +121,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Add SQLite, SQL Server, PostgreSQL, and replica-set MongoDB drivers for the shared OpenIddict suite in `tests/Elsa/Foundation/Identity/OpenIddict/Conformance/Providers/`
+- [ ] T044 [P] [US3] Reuse the existing SQLite, SQL Server, PostgreSQL, and replica-set MongoDB drivers in `tests/Elsa/Persistence/Groundwork/Testing/` from the shared OpenIddict suite; add an OpenIddict-specific driver only if the shared contract cannot express a required scenario
 - [ ] T045 [P] [US3] Write schema plan/validate/status/apply, naming transformation/collision, fingerprint, drift, capability, topology, and runtime validate-only tests in `tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/OpenIddictGroundworkSchemaReadinessTests.cs`
 - [ ] T046 [P] [US3] Write native query/mutation-plan admission tests for every scale-bearing route on all four providers in `tests/Elsa/Foundation/Identity/OpenIddict/Conformance/OpenIddictNativePlanEvidenceTests.cs`
 - [ ] T047 [P] [US3] Write production-shaped sign-in, protected request, issue, refresh, replay rejection, revoke, and restart scenarios in `tests/Elsa/Foundation/Identity/OpenIddict/Conformance/OpenIddictHostAcceptanceTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Wire the OpenIddict manifest into the shared schema CLI and runtime readiness source for all four providers in `src/Elsa/Persistence/Groundwork/Unified/ElsaGroundworkSchema.cs`
+- [ ] T048 [US3] Wire the OpenIddict manifest into the shared schema CLI and runtime readiness composition behind `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkPhysicalSchemaManifestSource.cs` for all four providers
 - [ ] T049 [US3] Apply host naming policy once, provider normalization once, and collision diagnostics naming both logical owners in `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/OpenIddictGroundworkStorageManifestSource.cs`
-- [ ] T050 [P] [US3] Add provider-specific OpenIddict composition adapters only where host registration requires them in `src/Elsa/Persistence/Groundwork/Sqlite/Unified/`, `src/Elsa/Persistence/Groundwork/SqlServer/Unified/`, `src/Elsa/Persistence/Groundwork/PostgreSql/Unified/`, and `src/Elsa/Persistence/Groundwork/MongoDb/Unified/`
+- [ ] T050 [P] [US3] Add provider-specific OpenIddict composition adapters only if an executable host-registration test proves the provider-independent unified substrate is insufficient; otherwise close this task as not required with evidence
 - [ ] T051 [US3] Run CLI plan/validate/status/apply and both shared P1 suites on all four real providers with independent clients, failure windows, close/reopen, process restart, and Mongo transaction-topology admission in `specs/106-openiddict-groundwork-stores/evidence/provider-matrix.json`
 - [ ] T052 [US3] Capture provider-native query and mutation plans, resolved physical targets, manifest fingerprint, topology, result digest, and bounded-execution verdict for every scale-bearing operation in `specs/106-openiddict-groundwork-stores/evidence/provider-plans/`
 - [ ] T053 [US3] Switch the production-shaped identity acceptance host to the selected Groundwork provider path and run T047 on all four providers in `tests/Elsa/Foundation/Identity/OpenIddict/Conformance/OpenIddictHostAcceptanceTests.cs`
@@ -139,18 +149,18 @@
 
 - [ ] T054 [P] [US4] Add fixed 1K correctness and 100K/1M scale dataset generators plus result digests for the accepted OpenIddict workload catalog in `tests/Elsa/Persistence/Groundwork/Benchmarks/OpenIddict/OpenIddictBenchmarkDataset.cs`
 - [ ] T055 [P] [US4] Add token issue/lookup/refresh/revoke/prune, authorization filter/revoke, application-client, and scope-resource workload adapters for EF oracle and Groundwork physical forms in `tests/Elsa/Persistence/Groundwork/Benchmarks/OpenIddict/`
-- [ ] T056 [P] [US4] Add a repository guard that reports the complete direct/transitive dependency path for any `Microsoft.EntityFrameworkCore*` reintroduction in `tests/Elsa/Architecture/Tests/ZeroEfCoreArchitectureTests.cs`
+- [ ] T056 [P] [US4] Extend the existing `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` and scanner so final cleanup reports the complete direct/transitive dependency path for any `Microsoft.EntityFrameworkCore*` reintroduction
 
 ### Implementation for User Story 4
 
 - [ ] T057 [US4] Declare every benchmark dataset, payload, concurrency, warm/cold mode, provider, physical form, correctness digest, and mandatory observation before timing in `specs/106-openiddict-groundwork-stores/evidence/performance-manifest.json`
 - [ ] T058 [US4] Run the shared #646 benchmark protocol for all OpenIddict workloads and physical forms, preserving raw results and native plans in `specs/106-openiddict-groundwork-stores/evidence/performance/`
 - [ ] T059 [US4] Record the #646 pass/redesign/blocked decision for every workload and remediate any rejected physical form before continuing in `specs/106-openiddict-groundwork-stores/quickstart.md`
-- [ ] T060 [US4] Switch `Elsa.Server` OpenIddict composition and development/demo behavior from EF/InMemory to the Groundwork implementation in `src/Apps/Elsa.Server/Program.cs` and `src/Elsa/Foundation/Identity/OpenIddict/Extensions/OpenIddictIdentityServiceCollectionExtensions.cs`
+- [ ] T060 [US4] Switch `Elsa.Server` OpenIddict composition and development/demo behavior from EF/InMemory to the Groundwork implementation in `src/Apps/Elsa.Server/shells.json`, `src/Apps/Elsa.Server/shells.Production.json`, and `src/Elsa/Foundation/Identity/OpenIddict/Extensions/OpenIddictIdentityServiceCollectionExtensions.cs`
 - [ ] T061 [US4] Migrate every retained EF-backed OpenIddict test objective to Groundwork/shared fixtures and obtain recorded approval for any deletion in `specs/106-openiddict-groundwork-stores/contracts/test-objective-ledger.md`
 - [ ] T062 [US4] Delete the OpenIddict EF DbContext, initializer, SQLite factory, migrations, EF/InMemory registration, and EF-only source under `src/Elsa/Foundation/Identity/OpenIddict/EntityFrameworkCore/`
-- [ ] T063 [US4] Remove OpenIddict EF/InMemory/SQLite package references, project references, settings, and build artifacts from `src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj`, `Directory.Packages.props`, `Elsa.Foundation.slnx`, and `src/Apps/Elsa.Server/`
-- [ ] T064 [US4] Run source, project, package-lock/assets, host, and resolved dependency audits and make `ZeroEfCoreArchitectureTests` fail with a full path for a deliberate temporary reintroduction before removing the mutation in `tests/Elsa/Architecture/Tests/ZeroEfCoreArchitectureTests.cs`
+- [ ] T063 [US4] Remove OpenIddict EF/InMemory/SQLite package references, project references, settings, and build artifacts from `src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj`, `Directory.Packages.props`, `Elsa.Server.slnx`, and `src/Apps/Elsa.Server/`
+- [ ] T064 [US4] Run source, project, package-lock/assets, host, and resolved dependency audits and make the final EF absolute-zero guard fail with a full path for a deliberate temporary reintroduction before removing the mutation in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T065 [US4] Run the full OpenIddict, Identity, API, shell, architecture, Groundwork fast-gate, and Release solution suites on the exact cleanup head and record results in `specs/106-openiddict-groundwork-stores/quickstart.md`
 
 **Checkpoint**: OpenIddict has one first-party Groundwork implementation, no EF artifact or escape hatch remains, and the dependency ratchet is executable.
@@ -176,7 +186,7 @@
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: T001–T003 may begin immediately. T004–T006 form the hard public-capability gate; T007 records upstream gaps if that gate fails.
+- **Setup (Phase 1)**: T001–T003 may begin immediately. T004–T006 form the hard public-capability gate; T007 records upstream gaps and T007A records an Elsa design blocker when the public alternative would change the approved shape.
 - **Foundational (Phase 2)**: Depends on a passing T006 and blocks every user story.
 - **User Story 1 (Phase 3)** and **User Story 2 (Phase 4)**: Both depend on Phase 2. Their red tests and store implementations can proceed in parallel by file, but T041 consumes the completed token mutation seam.
 - **User Story 3 (Phase 5)**: Depends on both P1 stories so the same complete suite can run on every provider.
@@ -260,4 +270,5 @@ Task: "T040 scope store"
 - `[USn]` labels map tasks to the four user stories in `spec.md`.
 - Every task names an exact file or directory and is intended to be executable without rediscovering the architecture.
 - The Elsa/framework constitutions are draft/provisional; ADR 0042 governs the accepted zero-EF product target.
-- Public preview.76 capability proof is a hard prerequisite, not a documentation formality.
+- Public preview.81 capability proof is a hard prerequisite, not a documentation formality.
+- Static provider capability reports prove package declarations only. T006 requires real native-provider execution and evidence after T007A resolves the physical form.
