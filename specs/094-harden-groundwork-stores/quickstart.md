@@ -466,6 +466,13 @@ and returned PASS: the incoming scheduling scripts and `shells.json` were base-o
 surfaces were byte-identical to the reviewed parent, and the integrated head again passed 53/53,
 2/2, 285/285, and the zero-warning Release harness build.
 
+When `origin/main` advanced again to `23300c68cca7840af5c8b7b4ceaa32e4c8c105af`, merge commit
+`b5f762cda5e2c0ec2523267173206ceb5f8d986c` integrated the base-only `TestScripts` to `e2e-tests`
+rename and agent-guidance changes. The three reviewers re-inspected exact range
+`23300c68cca7840af5c8b7b4ceaa32e4c8c105af..b5f762cda5e2c0ec2523267173206ceb5f8d986c`
+and returned PASS; root revalidation again passed 53/53, 2/2, 285/285, and the zero-warning Release
+harness build.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
