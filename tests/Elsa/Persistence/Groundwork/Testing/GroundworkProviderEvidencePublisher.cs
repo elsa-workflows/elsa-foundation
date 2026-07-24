@@ -84,7 +84,12 @@ public static class GroundworkProviderEvidencePublisher
         foreach (var result in results)
         {
             routes.TryGetValue(result.Provider.ProviderKey, out var nativeRoute);
-            var record = CreateLedgerRecord(obligation, result, nativeRoute, artifactNamespace);
+            var record = CreateLedgerRecord(
+                obligation,
+                result,
+                nativeRoute,
+                artifactNamespace,
+                provenance);
             if (nativeRoute is not null)
             {
                 var nativePath = record["nativeEvidence"]!.GetValue<string>();
@@ -94,7 +99,7 @@ public static class GroundworkProviderEvidencePublisher
                 artifacts.Add(new GroundworkProviderEvidenceArtifact(nativePath, nativeSha256));
             }
 
-            var payload = ArtifactPayload(record, result, provenance);
+            var payload = ArtifactPayload(record);
             var payloadBytes = Serialize(payload);
             _ = GroundworkSanitizedEvidence.Create("provider-evidence", Encoding.UTF8.GetString(payloadBytes));
             var evidencePath = record["evidence"]!.GetValue<string>();
@@ -173,6 +178,8 @@ public static class GroundworkProviderEvidencePublisher
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicate is not null)
             throw new InvalidOperationException($"Ledger attachment contains duplicate evidence key '{duplicate.Key}'.");
+        if (attachmentNamespace is not null)
+            RequireVersionedAttachmentRecords(attachmentNamespace, records);
 
         var ordered = new JsonArray(records
             .OrderBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
@@ -297,7 +304,8 @@ public static class GroundworkProviderEvidencePublisher
         GroundworkLedgerObligation obligation,
         GroundworkScenarioResult result,
         GroundworkNativeRoutePlanResult? nativeRoute,
-        string? artifactNamespace)
+        string? artifactNamespace,
+        GroundworkProviderEvidenceProvenance? provenance)
     {
         var record = new JsonObject
         {
@@ -312,8 +320,24 @@ public static class GroundworkProviderEvidencePublisher
             ["executionPath"] = $"provider-driver/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}",
             ["clients"] = result.Clients,
             ["resultHash"] = result.ResultDigest,
+            ["observations"] = new JsonArray(result.Observations
+                .Select(observation => (JsonNode)new JsonObject
+                {
+                    ["name"] = observation.Name,
+                    ["value"] = observation.Value
+                })
+                .ToArray()),
             ["outcome"] = "pass"
         };
+        if (provenance is not null)
+        {
+            record["provenance"] = new JsonObject
+            {
+                ["elsaCommit"] = provenance.ElsaCommit,
+                ["elsaTree"] = provenance.ElsaTree,
+                ["runIdentity"] = provenance.RunIdentity
+            };
+        }
         if (obligation.DimensionProperty is { } dimension)
             record[dimension] = obligation.Value;
         if (nativeRoute is not null)
@@ -327,10 +351,7 @@ public static class GroundworkProviderEvidencePublisher
         return record;
     }
 
-    private static JsonObject ArtifactPayload(
-        JsonObject record,
-        GroundworkScenarioResult result,
-        GroundworkProviderEvidenceProvenance? provenance)
+    private static JsonObject ArtifactPayload(JsonObject record)
     {
         var payload = new JsonObject { ["schemaVersion"] = 1 };
         foreach (var (name, value) in record)
@@ -339,24 +360,67 @@ public static class GroundworkProviderEvidencePublisher
                 continue;
             payload[name] = value?.DeepClone();
         }
-        payload["observations"] = new JsonArray(result.Observations
-            .Select(observation => (JsonNode)new JsonObject
-            {
-                ["name"] = observation.Name,
-                ["value"] = observation.Value
-            })
-            .ToArray());
-        if (provenance is not null)
-        {
-            payload["provenance"] = new JsonObject
-            {
-                ["elsaCommit"] = provenance.ElsaCommit,
-                ["elsaTree"] = provenance.ElsaTree,
-                ["runIdentity"] = provenance.RunIdentity
-            };
-        }
 
         return payload;
+    }
+
+    private static void RequireVersionedAttachmentRecords(
+        string attachmentNamespace,
+        IReadOnlyCollection<JsonObject> records)
+    {
+        const string versionsPrefix = "versions/";
+        if (!attachmentNamespace.StartsWith(versionsPrefix, StringComparison.Ordinal))
+            throw new InvalidOperationException("A versioned attachment requires a versions/<provider-version> namespace.");
+        var providerVersion = attachmentNamespace[versionsPrefix.Length..];
+        JsonObject? exactProvenance = null;
+        foreach (var record in records)
+        {
+            if (!string.Equals(
+                    record["providerVersion"]?.GetValue<string>(),
+                    providerVersion,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires every record provider version to match its requested namespace.");
+            }
+            var provider = record["provider"]?.GetValue<string>();
+            var coverageEntryId = record["coverageEntryId"]?.GetValue<string>();
+            var scenarioId = record["scenarioId"]?.GetValue<string>();
+            if (provider is null || coverageEntryId is null || scenarioId is null)
+                throw new InvalidOperationException("A versioned attachment record is missing its catalog identity.");
+            var scenarioKey = ScenarioKey(scenarioId);
+            var expectedEvidence =
+                $"{attachmentNamespace}/evidence/{provider}/{coverageEntryId}/{scenarioKey}.json";
+            if (!string.Equals(
+                    record["evidence"]?.GetValue<string>(),
+                    expectedEvidence,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires every evidence path to remain inside its requested namespace.");
+            }
+            if (record["nativeEvidence"]?.GetValue<string>() is { } nativeEvidence)
+            {
+                var expectedNativeEvidence =
+                    $"{attachmentNamespace}/evidence/{provider}/{coverageEntryId}/{scenarioKey}.plan.txt";
+                if (!string.Equals(nativeEvidence, expectedNativeEvidence, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "A versioned attachment requires every native-evidence path to remain inside its requested namespace.");
+                }
+            }
+            if (record["provenance"] is not JsonObject provenance)
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires exact source provenance on every record.");
+            }
+            exactProvenance ??= provenance;
+            if (!JsonNode.DeepEquals(exactProvenance, provenance))
+            {
+                throw new InvalidOperationException(
+                    "A versioned attachment requires one exact source provenance tuple across every record.");
+            }
+        }
     }
 
     private static string EvidencePath(

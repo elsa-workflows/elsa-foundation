@@ -569,6 +569,7 @@ internal sealed class GroundworkCoverageLedgerValidator
         ICollection<string> findings)
     {
         var providerVersion = StringValue(record, "providerVersion");
+        ValidateObservationResultHash(id, provider, scenarioId, record, findings);
         var expectedEvidence = GroundworkEvidenceArtifactContract.EvidencePath(provider, id, scenarioId);
         var expectedVersionedEvidence = providerVersion is null
             ? null
@@ -730,12 +731,64 @@ internal sealed class GroundworkCoverageLedgerValidator
             actualPayload = null;
         }
 
-        actualPayload?.Remove("observations");
-        actualPayload?.Remove("provenance");
         if (!JsonNode.DeepEquals(expectedPayload, actualPayload))
         {
             findings.Add(
                 $"{id}: {provider} evidence record '{scenarioId}' does not match its durable artifact payload.");
+        }
+    }
+
+    private static void ValidateObservationResultHash(
+        string id,
+        string provider,
+        string scenarioId,
+        JsonObject record,
+        ICollection<string> findings)
+    {
+        if (record["observations"] is not JsonArray observations)
+            return;
+
+        var parsed = new List<(string Name, string Value)>();
+        foreach (var candidate in observations)
+        {
+            if (candidate is not JsonObject observation ||
+                StringValue(observation, "name") is not { } name ||
+                StringValue(observation, "value") is not { } value)
+            {
+                return;
+            }
+            parsed.Add((name, value));
+        }
+        if (parsed.Count == 0)
+            return;
+        if (parsed.Select(observation => observation.Name).Distinct(StringComparer.Ordinal).Count() != parsed.Count)
+        {
+            findings.Add(
+                $"{id}: {provider} evidence record '{scenarioId}' contains duplicate observation names.");
+            return;
+        }
+
+        var sourceScenarioId = StringValue(record, "sourceScenarioId");
+        var coverageEntryId = StringValue(record, "coverageEntryId");
+        var outcome = StringValue(record, "outcome");
+        var resultHash = StringValue(record, "resultHash");
+        if (sourceScenarioId is null || coverageEntryId is null || outcome is null || resultHash is null)
+            return;
+
+        var digestInput = string.Join(
+            '\n',
+            new[] { sourceScenarioId, coverageEntryId, outcome, StringValue(record, "failureWindow") ?? "-" }
+                .Concat(parsed
+                    .OrderBy(observation => observation.Name, StringComparer.Ordinal)
+                    .ThenBy(observation => observation.Value, StringComparer.Ordinal)
+                    .Select(observation =>
+                        $"{observation.Name.Length}:{observation.Name}{observation.Value.Length}:{observation.Value}")));
+        var observedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(digestInput)))
+            .ToLowerInvariant();
+        if (!string.Equals(observedHash, resultHash, StringComparison.Ordinal))
+        {
+            findings.Add(
+                $"{id}: {provider} evidence record '{scenarioId}' result hash does not bind its retained observations.");
         }
     }
 

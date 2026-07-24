@@ -420,6 +420,8 @@ public sealed class GroundworkProviderEvidencePublisherTests
                     "runtime-checkpoint-fence-preview81",
                     payload["provenance"]!["runIdentity"]!.GetValue<string>());
                 Assert.Single(payload["observations"]!.AsArray());
+                Assert.True(JsonNode.DeepEquals(record["provenance"], payload["provenance"]));
+                Assert.True(JsonNode.DeepEquals(record["observations"], payload["observations"]));
             }
 
             var attachment = await GroundworkProviderEvidencePublisher.WriteVersionedLedgerAttachmentAsync(
@@ -440,6 +442,36 @@ public sealed class GroundworkProviderEvidencePublisherTests
                     GroundworkLedgerObligation.OrdinaryRoundTrip("runtime-bookmark-state", "bounded-query"),
                     MandatoryProviders.Select(provider => Result(provider, null, providerVersion: version))));
             Assert.Contains("namespace version", mismatch.Message, StringComparison.Ordinal);
+
+            async Task AssertAttachmentRejectedAsync(Action<JsonObject> tamper, string messageFragment)
+            {
+                var records = publication.LedgerRecords.DeepClone().AsArray();
+                tamper(records[0]!.AsObject());
+                var tampered = publication with { LedgerRecords = records };
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    GroundworkProviderEvidencePublisher.WriteVersionedLedgerAttachmentAsync(
+                        directory,
+                        version,
+                        "tampered-runtime-evidence",
+                        [tampered]));
+                Assert.Contains(messageFragment, exception.Message, StringComparison.Ordinal);
+            }
+
+            await AssertAttachmentRejectedAsync(
+                record => record["providerVersion"] = "1.0.1-preview.3",
+                "provider version");
+            await AssertAttachmentRejectedAsync(
+                record => record["evidence"] = "evidence/sqlite/runtime-bookmark-state/fixture.json",
+                "evidence path");
+            await AssertAttachmentRejectedAsync(
+                record => record["nativeEvidence"] = "evidence/sqlite/runtime-bookmark-state/fixture.plan.txt",
+                "native-evidence path");
+            await AssertAttachmentRejectedAsync(
+                record => record.Remove("provenance"),
+                "source provenance");
+            await AssertAttachmentRejectedAsync(
+                record => record["provenance"]!["elsaTree"] = new string('c', 40),
+                "one exact source provenance tuple");
         }
         finally
         {

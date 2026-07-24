@@ -13,6 +13,7 @@ using Groundwork.MongoDb.Documents;
 using Groundwork.PostgreSql.Documents;
 using Groundwork.Sqlite.Documents;
 using Groundwork.SqlServer.Documents;
+using System.Globalization;
 using System.Text.Json;
 using Xunit;
 
@@ -35,6 +36,11 @@ public sealed class RuntimeFenceContractTests
     [MemberData(nameof(Providers))]
     public async Task Runtime_fence_contract_is_enforced_by_every_persistent_provider(string providerKey)
     {
+        _ = await ExecuteRuntimeFenceContractAsync(providerKey);
+    }
+
+    internal async Task<RuntimeCheckpointFenceExecutionResult> ExecuteRuntimeFenceContractAsync(string providerKey)
+    {
         await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
         await driver.InitializeAsync();
         driver.Descriptor.Topology.EnsureSupports(
@@ -43,6 +49,10 @@ public sealed class RuntimeFenceContractTests
             GroundworkTopologyCapabilities.MultiDocumentTransactions);
 
         await driver.ResetPhysicalAsync();
+        var physicalTargetFingerprint = GroundworkCompositionFingerprint.Parse(
+            driver.PhysicalTargetFingerprint
+            ?? throw new InvalidOperationException(
+                $"Provider '{providerKey}' did not retain its compiled physical target fingerprint."));
         await AssertPhysicalClientsAsync(driver, providerKey);
         await AssertConcurrentAllocationAsync(driver);
 
@@ -50,16 +60,32 @@ public sealed class RuntimeFenceContractTests
         await AssertConditionalHeartbeatReleaseAndReopenAsync(driver);
 
         await driver.ResetPhysicalAsync();
-        await AssertCheckpointFenceAndReplayAtomicityAsync(driver);
+        var atomicity = await AssertCheckpointFenceAndReplayAtomicityAsync(driver);
 
+        var failureRecoveries = new List<RuntimeCheckpointFailureRecoveryObservation>();
         foreach (var (window, decisionIsDurable) in CheckpointFailureWindows())
-            await AssertCheckpointBundleFailureAndReopenAsync(driver, window, decisionIsDurable);
+        {
+            failureRecoveries.Add(
+                await AssertCheckpointBundleFailureAndReopenAsync(driver, window, decisionIsDurable));
+        }
 
-        await AssertCheckpointBundleProcessRestartAsync(driver);
+        var processRestart = await AssertCheckpointBundleProcessRestartAsync(driver);
+        var finalPhysicalTargetFingerprint = GroundworkCompositionFingerprint.Parse(
+            driver.PhysicalTargetFingerprint
+            ?? throw new InvalidOperationException(
+                $"Provider '{providerKey}' did not retain its compiled physical target fingerprint."));
+        Assert.Equal(physicalTargetFingerprint, finalPhysicalTargetFingerprint);
+        return new RuntimeCheckpointFenceExecutionResult(
+            driver.Descriptor,
+            physicalTargetFingerprint,
+            atomicity.OwnershipFencing,
+            atomicity.Idempotency,
+            failureRecoveries,
+            processRestart);
     }
 
     internal Task Runtime_checkpoint_bundle_survives_a_real_process_restart_on_every_persistent_provider(string providerKey) =>
-        Runtime_fence_contract_is_enforced_by_every_persistent_provider(providerKey);
+        ExecuteRuntimeFenceContractAsync(providerKey);
 
     private static async Task AssertPhysicalClientsAsync(GroundworkProviderDriver driver, string providerKey)
     {
@@ -147,7 +173,8 @@ public sealed class RuntimeFenceContractTests
         Assert.True(reopened.FencingToken > releasedToken);
     }
 
-    private static async Task AssertCheckpointFenceAndReplayAtomicityAsync(GroundworkProviderDriver driver)
+    private static async Task<RuntimeCheckpointAtomicityObservation> AssertCheckpointFenceAndReplayAtomicityAsync(
+        GroundworkProviderDriver driver)
     {
         await using var firstClient = await driver.OpenPhysicalClientAsync();
         await using var secondClient = await driver.OpenPhysicalClientAsync();
@@ -158,8 +185,10 @@ public sealed class RuntimeFenceContractTests
         var staleCommit = Commit("commit-stale", "node-stale", stale.ToFence());
         var firstWriter = Writer(firstClient.DocumentStore);
 
-        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(async () =>
+        var staleException = await Record.ExceptionAsync(async () =>
             await firstWriter.CommitAsync(staleCommit, Decision));
+        Assert.IsType<RuntimeStaleFencingTokenException>(staleException);
+        var staleCommitCount = staleException is RuntimeStaleFencingTokenException ? 1 : 0;
 
         await AssertBundleAbsentAsync(firstClient.DocumentStore, staleCommit);
 
@@ -170,14 +199,48 @@ public sealed class RuntimeFenceContractTests
             secondWriter.CommitAsync(currentCommit, Decision).AsTask());
         Assert.All(results, result => Assert.Equal(new[] { OutboxId(currentCommit) }, result.PendingPostCommitWorkIds));
         await AssertBundlePresentAsync(firstClient.DocumentStore, currentCommit);
+        var markerAfterRace = await firstClient.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            currentCommit.CommitId);
+        var winnerCount = markerAfterRace is null ? 0 : 1;
+        Assert.Equal(1, winnerCount);
 
         var replay = await secondWriter.CommitAsync(currentCommit, Decision);
-        Assert.Equal(new[] { OutboxId(currentCommit) }, replay.PendingPostCommitWorkIds);
+        var expectedPendingWork = new[] { OutboxId(currentCommit) };
+        var pendingWorkMatches = replay.PendingPostCommitWorkIds.SequenceEqual(expectedPendingWork, StringComparer.Ordinal);
+        Assert.True(pendingWorkMatches);
+        var markerAfterReplay = await secondClient.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            currentCommit.CommitId);
+        Assert.NotNull(markerAfterReplay);
+        var markerVersionBeforeReplay = markerAfterRace!.Version;
+        var markerVersionAfterReplay = markerAfterReplay!.Version;
+        Assert.Equal(markerVersionBeforeReplay, markerVersionAfterReplay);
 
         var conflicting = Commit(currentCommit.CommitId, "node-conflict", current.ToFence());
-        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(async () =>
+        var conflictException = await Record.ExceptionAsync(async () =>
             await secondWriter.CommitAsync(conflicting, Decision));
+        Assert.IsType<RuntimeCheckpointReplayConflictException>(conflictException);
         await AssertBundlePresentAsync(secondClient.DocumentStore, currentCommit);
+        var markerAfterConflict = await secondClient.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            currentCommit.CommitId);
+        var durableOutcomeCount = markerAfterConflict is null ? 0 : 1;
+        Assert.Equal(1, durableOutcomeCount);
+        Assert.True(stale.FencingToken < current.FencingToken);
+
+        return new RuntimeCheckpointAtomicityObservation(
+            new RuntimeCheckpointOwnershipFencingObservation(
+                staleCommitCount,
+                stale.FencingToken,
+                current.FencingToken,
+                winnerCount),
+            new RuntimeCheckpointIdempotencyObservation(
+                conflictException!.GetType().Name,
+                durableOutcomeCount,
+                markerVersionBeforeReplay,
+                markerVersionAfterReplay,
+                pendingWorkMatches));
     }
 
     /// <summary>
@@ -186,7 +249,7 @@ public sealed class RuntimeFenceContractTests
     /// when the provider acknowledgement is interrupted; the underlying transaction, reopen, and replay all run
     /// against the selected physical provider.
     /// </summary>
-    private static async Task AssertCheckpointBundleFailureAndReopenAsync(
+    private static async Task<RuntimeCheckpointFailureRecoveryObservation> AssertCheckpointBundleFailureAndReopenAsync(
         GroundworkProviderDriver driver,
         string windowId,
         bool decisionIsDurable)
@@ -222,7 +285,7 @@ public sealed class RuntimeFenceContractTests
 
         await using (var reopenedClient = await driver.OpenPhysicalClientAsync())
         {
-            await AssertFullBundleAsync(
+            var initialSnapshot = await AssertFullBundleAsync(
                 reopenedClient.DocumentStore,
                 commit,
                 decisionIsDurable,
@@ -233,12 +296,17 @@ public sealed class RuntimeFenceContractTests
             // routes must converge to one complete bundle after the physical client is reopened.
             var result = await Writer(reopenedClient.DocumentStore).CommitAsync(commit, Decision);
             Assert.Equal(new[] { OutboxId(commit) }, result.PendingPostCommitWorkIds);
-            await AssertFullBundleAsync(
+            var recoveredSnapshot = await AssertFullBundleAsync(
                 reopenedClient.DocumentStore,
                 commit,
                 present: true,
                 expectedFence,
                 initialOwnershipVersion + 1);
+            return new RuntimeCheckpointFailureRecoveryObservation(
+                windowId,
+                initialSnapshot.CompleteBundleCount,
+                recoveredSnapshot.CompleteBundleCount,
+                recoveredSnapshot.PartialBundleCount);
         }
     }
 
@@ -253,7 +321,8 @@ public sealed class RuntimeFenceContractTests
         ];
     }
 
-    private static async Task AssertCheckpointBundleProcessRestartAsync(GroundworkProviderDriver driver)
+    private static async Task<RuntimeCheckpointProcessRestartObservation> AssertCheckpointBundleProcessRestartAsync(
+        GroundworkProviderDriver driver)
     {
         var commit = FullBundleCommit("checkpoint-failure-after-durable-decision-before-caller-acknowledgement");
         var payload = new RuntimeCheckpointRestartProbePayload(
@@ -266,9 +335,10 @@ public sealed class RuntimeFenceContractTests
             "operational-full",
             OwnershipStateId(commit.WorkflowExecutionId),
             OutboxId(commit));
+        RuntimeCheckpointRestartProbeObservation inProcess;
         await using (var reopenedClient = await driver.OpenPhysicalClientAsync())
         {
-            _ = await RuntimeCheckpointRestartProbe.VerifyAsync(
+            inProcess = await RuntimeCheckpointRestartProbe.VerifyAsync(
                 reopenedClient.DocumentStore,
                 GroundworkProviderTestSerialization.Serializer,
                 GroundworkTestAccess.DefaultAccessContextAccessor,
@@ -282,6 +352,12 @@ public sealed class RuntimeFenceContractTests
         Assert.Equal(request.PayloadSha256, result.PayloadSha256);
         Assert.NotEqual(Environment.ProcessId, result.ProcessId);
         Assert.True(result.DocumentVersion >= 1);
+        Assert.Equal(inProcess.DocumentVersion, result.DocumentVersion);
+        return new RuntimeCheckpointProcessRestartObservation(
+            inProcess.SchemaVersion,
+            result.DocumentVersion,
+            result.ProcessId != Environment.ProcessId,
+            CompleteBundleCount: result.DocumentVersion >= 1 ? 1 : 0);
     }
 
     private static RuntimeExecutionOwnershipService Ownership(
@@ -504,7 +580,7 @@ public sealed class RuntimeFenceContractTests
             commit.CommitId));
     }
 
-    private static async Task AssertFullBundleAsync(
+    private static async Task<RuntimeCheckpointBundleSnapshot> AssertFullBundleAsync(
         IDocumentStore store,
         RuntimeCheckpointCommit commit,
         bool present,
@@ -537,6 +613,24 @@ public sealed class RuntimeFenceContractTests
             DocumentId.Compose(workflowExecutionId, OwnershipStateId(workflowExecutionId)));
         var marker = await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, commit.CommitId);
         var outbox = await store.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, OutboxId(commit));
+        var presentBundleMemberCount = new object?[]
+        {
+            workflow,
+            activity,
+            inspection,
+            hierarchy,
+            scheduler,
+            bookmark,
+            value,
+            incident,
+            liveness,
+            marker,
+            outbox
+        }.Count(member => member is not null);
+        const int expectedBundleMemberCount = 11;
+        var snapshot = new RuntimeCheckpointBundleSnapshot(
+            CompleteBundleCount: presentBundleMemberCount == expectedBundleMemberCount ? 1 : 0,
+            PartialBundleCount: presentBundleMemberCount is > 0 and < expectedBundleMemberCount ? 1 : 0);
 
         Assert.NotNull(ownership);
         Assert.Equal(expectedFence.LeaseId, ownership!.ExecutionLease!.LeaseId);
@@ -558,7 +652,8 @@ public sealed class RuntimeFenceContractTests
             Assert.Null(liveness);
             Assert.Null(marker);
             Assert.Null(outbox);
-            return;
+            Assert.Equal(0, presentBundleMemberCount);
+            return snapshot;
         }
 
         Assert.Equal(workflowExecutionId, workflow!.WorkflowExecutionId);
@@ -572,6 +667,8 @@ public sealed class RuntimeFenceContractTests
         Assert.Equal("operational-full", liveness!.OperationalStateId);
         Assert.NotNull(marker);
         Assert.NotNull(outbox);
+        Assert.Equal(expectedBundleMemberCount, presentBundleMemberCount);
+        return snapshot;
     }
 
     private static string OwnershipStateId(string workflowExecutionId) => $"ownership:{workflowExecutionId}";
@@ -611,3 +708,50 @@ public sealed class RuntimeFenceContractTests
             write(cancellationToken);
     }
 }
+
+internal sealed record RuntimeCheckpointFenceExecutionResult(
+    GroundworkProviderDescriptor Descriptor,
+    GroundworkCompositionFingerprint PhysicalTargetFingerprint,
+    RuntimeCheckpointOwnershipFencingObservation OwnershipFencing,
+    RuntimeCheckpointIdempotencyObservation Idempotency,
+    IReadOnlyList<RuntimeCheckpointFailureRecoveryObservation> FailureRecoveries,
+    RuntimeCheckpointProcessRestartObservation ProcessRestart);
+
+internal sealed record RuntimeCheckpointAtomicityObservation(
+    RuntimeCheckpointOwnershipFencingObservation OwnershipFencing,
+    RuntimeCheckpointIdempotencyObservation Idempotency);
+
+internal sealed record RuntimeCheckpointOwnershipFencingObservation(
+    int StaleCommitCount,
+    long StaleFencingToken,
+    long CurrentFencingToken,
+    int WinnerCount)
+{
+    public string TokenOrder => string.Join(
+        ',',
+        StaleFencingToken.ToString(CultureInfo.InvariantCulture),
+        CurrentFencingToken.ToString(CultureInfo.InvariantCulture));
+}
+
+internal sealed record RuntimeCheckpointIdempotencyObservation(
+    string ConflictExceptionType,
+    int DurableOutcomeCount,
+    long MarkerVersionBeforeReplay,
+    long MarkerVersionAfterReplay,
+    bool PendingWorkMatches);
+
+internal sealed record RuntimeCheckpointFailureRecoveryObservation(
+    string FailureWindow,
+    int InitialCompleteBundleCount,
+    int RecoveredCompleteBundleCount,
+    int RecoveredPartialBundleCount);
+
+internal sealed record RuntimeCheckpointProcessRestartObservation(
+    string SchemaVersion,
+    long DocumentVersion,
+    bool UsedDistinctProcess,
+    int CompleteBundleCount);
+
+internal sealed record RuntimeCheckpointBundleSnapshot(
+    int CompleteBundleCount,
+    int PartialBundleCount);

@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
@@ -16,6 +17,48 @@ public sealed class RuntimeProviderEvidencePublicationTests
     private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
     private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";
     private const string SchedulerScenario = "runtime-scheduler-state-roundtrip";
+
+    [Fact]
+    public async Task Checkpoint_fence_capture_retains_the_same_execution_observations_and_physical_target()
+    {
+        var capture = await RuntimeProviderEvidenceScenarios.CaptureCheckpointFenceEvidenceAsync("sqlite");
+
+        Assert.Equal("sqlite", capture.Descriptor.ProviderKey);
+        Assert.True(capture.OwnershipFencing.StaleFencingToken < capture.OwnershipFencing.CurrentFencingToken);
+        Assert.Equal(1, capture.OwnershipFencing.StaleCommitCount);
+        Assert.Equal(1, capture.OwnershipFencing.WinnerCount);
+        Assert.Equal(nameof(RuntimeCheckpointReplayConflictException), capture.Idempotency.ConflictExceptionType);
+        Assert.Equal(capture.Idempotency.MarkerVersionBeforeReplay, capture.Idempotency.MarkerVersionAfterReplay);
+        Assert.True(capture.Idempotency.PendingWorkMatches);
+        Assert.Equal(3, capture.FailureRecoveries.Count);
+        Assert.All(capture.FailureRecoveries, recovery =>
+        {
+            Assert.Equal(1, recovery.RecoveredCompleteBundleCount);
+            Assert.Equal(0, recovery.RecoveredPartialBundleCount);
+        });
+        Assert.True(capture.ProcessRestart.UsedDistinctProcess);
+        Assert.Equal(1, capture.ProcessRestart.CompleteBundleCount);
+
+        var fencing = RuntimeProviderEvidenceScenarios.CreateCheckpointFenceResult(
+            capture,
+            "runtime-checkpoint-commit");
+        var idempotency = RuntimeProviderEvidenceScenarios.CreateCheckpointIdempotencyResult(
+            capture,
+            "runtime-checkpoint-commit");
+        var restart = RuntimeProviderEvidenceScenarios.CreateCheckpointProcessRestartResult(
+            capture,
+            "runtime-checkpoint-commit");
+
+        Assert.Equal(capture.PhysicalTargetFingerprint, fencing.CompositionFingerprint);
+        Assert.Equal(capture.OwnershipFencing.TokenOrder, Observation(fencing, "token-order"));
+        Assert.Equal(
+            capture.Idempotency.ConflictExceptionType,
+            Observation(idempotency, "conflicting-replay"));
+        Assert.Contains(
+            capture.ProcessRestart.DocumentVersion.ToString(),
+            Observation(restart, "child-process-rehydration"),
+            StringComparison.Ordinal);
+    }
 
     [SkippableFact]
     [Trait("Category", "GroundworkEvidencePublication")]
@@ -59,7 +102,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
         RequirePublicationOptIn();
         var output = Environment.GetEnvironmentVariable(EvidenceOutput)!;
         var provenance = RequireVersionedPublicationProvenance();
-        var captures = new List<RuntimeCheckpointFenceEvidence>();
+        var captures = new List<RuntimeCheckpointFenceExecutionResult>();
 
         foreach (var providerKey in GroundworkStoreScenarioCatalog.MandatoryProviderKeys)
             captures.Add(await RuntimeProviderEvidenceScenarios.CaptureCheckpointFenceEvidenceAsync(providerKey));
@@ -167,8 +210,8 @@ public sealed class RuntimeProviderEvidencePublicationTests
         string output,
         GroundworkProviderEvidenceProvenance provenance,
         GroundworkLedgerObligation obligation,
-        IEnumerable<RuntimeCheckpointFenceEvidence> captures,
-        Func<RuntimeCheckpointFenceEvidence, GroundworkScenarioResult> createResult) =>
+        IEnumerable<RuntimeCheckpointFenceExecutionResult> captures,
+        Func<RuntimeCheckpointFenceExecutionResult, GroundworkScenarioResult> createResult) =>
         GroundworkProviderEvidencePublisher.PublishVersionedAsync(
             output,
             EvidenceVersion,
@@ -191,6 +234,9 @@ public sealed class RuntimeProviderEvidencePublicationTests
 
         return GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
     }
+
+    private static string Observation(GroundworkScenarioResult result, string name) =>
+        result.Observations.Single(observation => string.Equals(observation.Name, name, StringComparison.Ordinal)).Value;
 
     private static void RequirePublicationOptIn()
     {

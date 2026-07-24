@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Xunit;
@@ -683,6 +685,70 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Retained_observations_must_recompute_the_published_result_hash()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["observations"] = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "winner-count",
+                ["value"] = "1"
+            });
+        record["resultHash"] = ResultHash(record);
+        record["observations"]![0]!["value"] = "2";
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' result hash does not bind its retained observations.",
+            findings);
+    }
+
+    [Fact]
+    public void Versioned_artifact_provenance_must_exactly_match_its_ledger_record()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        var record = EvidenceRecord(EntryId, "sqlite", "ordinary-round-trip");
+        record["evidence"] = GroundworkEvidenceArtifactContract.VersionedEvidencePath(
+            ExpectedGroundworkVersion,
+            "sqlite",
+            EntryId,
+            "ordinary-round-trip");
+        record["observations"] = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "winner-count",
+                ["value"] = "1"
+            });
+        record["provenance"] = new JsonObject
+        {
+            ["elsaCommit"] = new string('a', 40),
+            ["elsaTree"] = new string('b', 40),
+            ["runIdentity"] = "fixture-publication"
+        };
+        record["resultHash"] = ResultHash(record);
+        WriteEvidenceArtifacts([record]);
+        entry["providerEvidence"]!["sqlite"] = new JsonArray(record);
+
+        var evidencePath = ArtifactPath(record["evidence"]!.GetValue<string>());
+        var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+        artifact["provenance"]!["elsaTree"] = new string('c', 40);
+        File.WriteAllText(evidencePath, artifact.ToJsonString());
+        record["evidenceSha256"] = GroundworkEvidenceArtifactContract.FileSha256(evidencePath);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"{EntryId}: sqlite evidence record 'ordinary-round-trip' does not match its durable artifact payload.",
+            findings);
+    }
+
+    [Fact]
     public void Evidence_complete_binds_provider_metadata_and_execution_to_the_active_catalog()
     {
         var ledger = ReadLedger();
@@ -952,6 +1018,30 @@ public sealed class GroundworkCoverageLedgerTests
             ["outcome"] = "pass",
             ["evidence"] = GroundworkEvidenceArtifactContract.EvidencePath(provider, entryId, scenarioId)
         };
+    }
+
+    private static string ResultHash(JsonObject record)
+    {
+        var observations = record["observations"]!.AsArray()
+            .Select(candidate => candidate!.AsObject())
+            .OrderBy(observation => observation["name"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ThenBy(observation => observation["value"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(observation =>
+            {
+                var name = observation["name"]!.GetValue<string>();
+                var value = observation["value"]!.GetValue<string>();
+                return $"{name.Length}:{name}{value.Length}:{value}";
+            });
+        var digestInput = string.Join(
+            '\n',
+            new[]
+            {
+                record["sourceScenarioId"]!.GetValue<string>(),
+                record["coverageEntryId"]!.GetValue<string>(),
+                record["outcome"]!.GetValue<string>(),
+                record["failureWindow"]?.GetValue<string>() ?? "-"
+            }.Concat(observations));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(digestInput))).ToLowerInvariant();
     }
 
     private static void WriteEvidenceArtifacts(IEnumerable<JsonNode?> records)

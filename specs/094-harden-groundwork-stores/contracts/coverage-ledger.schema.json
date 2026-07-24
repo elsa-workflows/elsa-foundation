@@ -209,6 +209,12 @@
         "failureWindow": { "type": "string", "minLength": 1 },
         "restartScenario": { "type": "string", "minLength": 1 },
         "resultHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/scenarioObservation" }
+        },
+        "provenance": { "$ref": "#/$defs/providerEvidenceProvenance" },
         "nativeEvidence": {
           "type": "string",
           "pattern": "^(?:versions/[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*/)?evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.plan\\.txt$"
@@ -235,8 +241,47 @@
               "nativeEvidenceSha256"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "type": "string",
+                "pattern": "^versions/"
+              }
+            },
+            "required": ["evidence"]
+          },
+          "then": {
+            "required": ["observations", "provenance"]
+          }
         }
       ]
+    },
+    "scenarioObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "value": { "type": "string" }
+      }
+    },
+    "providerEvidenceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elsaCommit", "elsaTree", "runIdentity"],
+      "properties": {
+        "elsaCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "elsaTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "runIdentity": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
     },
     "providerEvidence": {
       "type": "object",
