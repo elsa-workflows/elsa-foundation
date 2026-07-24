@@ -57,7 +57,7 @@ public sealed class DiagnosticsDocumentationTests
     [Fact]
     public void Ef_oracle_inventory_names_exact_source_and_test_evidence_for_every_required_area()
     {
-        var inventory = File.ReadAllText(RepositoryPath("specs/138-groundwork-diagnostics-persistence/oracle-inventory.md"));
+        var inventory = File.ReadAllText(RepositoryPath("specs/139-groundwork-diagnostics-persistence/oracle-inventory.md"));
         var requiredEvidence = new[]
         {
             "src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Storage/EfCoreStructuredLogStore.cs",

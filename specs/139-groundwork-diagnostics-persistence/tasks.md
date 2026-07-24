@@ -1,6 +1,6 @@
 # Tasks: Durable Diagnostics Persistence
 
-**Input**: Design documents from `specs/138-groundwork-diagnostics-persistence/`
+**Input**: Design documents from `specs/139-groundwork-diagnostics-persistence/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/diagnostics-persistence.md`
 
@@ -42,8 +42,8 @@
 - [ ] T008 Build a reusable four-provider fixture with real SQLite, SQL Server, PostgreSQL, and MongoDB lifecycle support in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs` and instantiate every provider lease in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderLifecycleSmokeTests.cs`
 - [X] T009 [P] Add reusable acknowledgement-loss, cancellation, restart, and operational-failure doubles in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsFailureFixtures.cs`
   - Evidence: Failure fixtures are present and exercised by the 49-test drain/observability slice.
-- [X] T010 [P] Record the temporary EF behavior-oracle inventory and exact parity mapping in `specs/138-groundwork-diagnostics-persistence/oracle-inventory.md`
-  - Evidence: The renumbered EF oracle inventory is present under spec 138 and the focused documentation/fixture/evidence slice passed 10/10.
+- [X] T010 [P] Record the temporary EF behavior-oracle inventory and exact parity mapping in `specs/139-groundwork-diagnostics-persistence/oracle-inventory.md`
+  - Evidence: The renumbered EF oracle inventory is present under spec 139 and the focused documentation/fixture/evidence slice passed 10/10.
 - [X] T011 Add one shared diagnostics provider capability/readiness assertion helper in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderAssertions.cs`
   - Evidence: Provider assertions passed their four capability cases in the focused 10-test slice; real-provider lease certification remains open in T008.
 
@@ -65,7 +65,7 @@
   - Evidence: OpenTelemetry adapter suite passed 68/68, including restart coverage for every signal kind.
 - [X] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, concurrent-writer, malformed-payload, and oversized-batch rejection-without-mutation tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
   - Evidence: Durable-operation conformance ran in the 34-test feature/readiness/schema batch with no failures.
-- [ ] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/138-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
+- [ ] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/139-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
 
 ### Implementation for User Story 1
 
@@ -81,7 +81,7 @@
   - Evidence: The durable OpenTelemetry store compiled and the OpenTelemetry adapter suite passed 68/68.
 - [X] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
   - Evidence: Both schema declarations compiled; adapter schema tests and the shared schema batch passed.
-- [ ] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/138-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
+- [ ] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
 
 **Checkpoint**: Durable append, restart, replay, idempotency, and failure semantics work independently for every diagnostic signal on all four providers.
 
@@ -114,7 +114,7 @@
   - Evidence: Bounded telemetry record queries passed inside the 68-test adapter suite.
 - [ ] T031 [US2] Add the missing authorized OpenTelemetry logs query endpoint in `src/Elsa/Diagnostics/OpenTelemetry/Endpoints/OpenTelemetry/Logs/Endpoint.cs`
 - [ ] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
-- [ ] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/138-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
+- [ ] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
 
 **Checkpoint**: All persisted diagnostics queries and mutations are exact, scope-safe, and demonstrably bounded across all providers.
 
@@ -149,7 +149,7 @@
   - Evidence: OpenTelemetry uses the shared drain; its adapter suite passed 68/68.
 - [X] T042 [US3] Register one explicit start/stop/drain-before-provider-disposal lifecycle in `src/Elsa/Diagnostics/Persistence/Extensions/DiagnosticsPersistenceRegistration.cs`
   - Evidence: The shared registration/coordinator path is implemented in DiagnosticsPersistenceRegistration.cs; lifecycle tests passed in the 34-test batch.
-- [X] T043 [US3] Run the complete load and shutdown suite and record queue bounds, loss totals, and completion outcomes in `specs/138-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json`
+- [X] T043 [US3] Run the complete load and shutdown suite and record queue bounds, loss totals, and completion outcomes in `specs/139-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json`
   - Evidence: The six manifest-bound lifecycle suites passed 49/49 on the preview.80 replay base; the manifest labels preview.81 promotion as pending.
 
 **Checkpoint**: Persistence latency cannot block producers or leave accepted acknowledgements unresolved; every loss and shutdown outcome is observable.
@@ -179,13 +179,13 @@
 - [X] T049 [US4] Implement Groundwork persistence feature composition and readiness in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/`
   - Evidence: Both Groundwork persistence features and readiness paths compiled; focused feature/readiness tests passed.
 - [ ] T050 [P] [US4] Consume the #646-owned diagnostics workload and retained-artifact contract; do not create a lane-local benchmark harness
-- [ ] T051 [US4] Import the ratified #646 performance verdict for the diagnostics workload into `specs/138-groundwork-diagnostics-persistence/evidence/performance-decision.json`
+- [ ] T051 [US4] Import the ratified #646 performance verdict for the diagnostics workload into `specs/139-groundwork-diagnostics-persistence/evidence/performance-decision.json`
 - [ ] T052 [US4] For every material correctness or #646 performance regression, record the failing gate, changed source/test paths, remediation commit, and rerun outcome, then repeat the relevant adapter gates until the #646 verdict passes
 - [ ] T053 [US4] Delete Structured Logs EF implementation projects and their tests under `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/` while preserving provider-neutral conformance coverage
 - [ ] T054 [US4] Delete OpenTelemetry EF implementation projects and their tests under `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/` and `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/` while preserving provider-neutral conformance coverage
 - [ ] T055 [US4] Remove diagnostics EF project/registration/migration/package usages from `Elsa.Server.slnx` and affected diagnostics projects; remove EF entries from `Directory.Packages.props` only when the repository-wide dependency audit proves no remaining feature consumes them
 - [ ] T056 [P] [US4] Update `src/Elsa/Diagnostics/StructuredLogs/README.md`, `src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`, `src/Elsa/Diagnostics/OpenTelemetry/README.md`, and `src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`
-- [ ] T057 [US4] Run the complete four-provider suite, solution build, architecture audit, and final `rg` zero-EF/zero-core-Groundwork checks documented in `specs/138-groundwork-diagnostics-persistence/quickstart.md`
+- [ ] T057 [US4] Run the complete four-provider suite, solution build, architecture audit, and final `rg` zero-EF/zero-core-Groundwork checks documented in `specs/139-groundwork-diagnostics-persistence/quickstart.md`
 
 **Checkpoint**: Diagnostics has one first-party Groundwork persistence model, four-provider proof, pre-start deployment support, and zero EF implementation surface.
 
@@ -196,10 +196,10 @@
 **Purpose**: Make the work durable for maintainers and agents, and land it through the approved operating model.
 
 - [ ] T058 [P] Refresh the narrowest affected dependency and extension-point maps using `tools/maps/generate-feature-dependency-map.sh` and `tools/maps/generate-extension-point-map.sh`
-- [ ] T059 Reconcile all evidence, task completion, exceptions, and follow-up findings in `specs/138-groundwork-diagnostics-persistence/quickstart.md` and `docs/reports/unfinished-work.md`
+- [ ] T059 Reconcile all evidence, task completion, exceptions, and follow-up findings in `specs/139-groundwork-diagnostics-persistence/quickstart.md` and `docs/reports/unfinished-work.md`
 - [ ] T060 Run an independent review of the exact branch HEAD against FR-001 through FR-017 and SC-001 through SC-009, then remediate every blocker
 - [ ] T061 Push the organization-owned feature branch, open the reviewed PR linked to the diagnostics migration issue, obtain required checks, and merge it to `main`
-- [ ] T062 Verify `main` and the remote issue/PR state, then record the final commit and evidence links in `specs/138-groundwork-diagnostics-persistence/quickstart.md`
+- [ ] T062 Verify `main` and the remote issue/PR state, then record the final commit and evidence links in `specs/139-groundwork-diagnostics-persistence/quickstart.md`
 
 ---
 

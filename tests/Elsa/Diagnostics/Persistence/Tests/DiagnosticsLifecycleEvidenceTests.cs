@@ -22,10 +22,10 @@ public sealed class DiagnosticsLifecycleEvidenceTests
     public async Task Us3_manifest_matches_executed_queue_loss_and_completion_evidence()
     {
         using var manifest = JsonDocument.Parse(File.ReadAllText(RepositoryPath(
-            "specs/138-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json")));
+            "specs/139-groundwork-diagnostics-persistence/evidence/us3-lifecycle-results.json")));
         var root = manifest.RootElement;
         Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal("138-groundwork-diagnostics-persistence", root.GetProperty("workUnit").GetString());
+        Assert.Equal("139-groundwork-diagnostics-persistence", root.GetProperty("workUnit").GetString());
         Assert.Equal("US3", root.GetProperty("userStory").GetString());
         Assert.Equal("pass", root.GetProperty("outcome").GetString());
         Assert.Equal(

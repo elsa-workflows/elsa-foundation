@@ -1,6 +1,6 @@
 # Feature Specification: Durable Diagnostics Persistence
 
-**Feature Branch**: `138-groundwork-diagnostics-persistence`
+**Feature Branch**: `139-groundwork-diagnostics-persistence`
 
 **Created**: 2026-07-13
 

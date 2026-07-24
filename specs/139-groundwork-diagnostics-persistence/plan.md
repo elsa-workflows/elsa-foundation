@@ -1,6 +1,6 @@
 # Implementation Plan: Durable Diagnostics Persistence
 
-**Branch**: `138-groundwork-diagnostics-persistence` | **Date**: 2026-07-13 | **Spec**: [spec.md](spec.md)
+**Branch**: `139-groundwork-diagnostics-persistence` | **Date**: 2026-07-13 | **Spec**: [spec.md](spec.md)
 
 **Input**: Replace the Structured Logs and OpenTelemetry EF Core implementations with Groundwork implementations while preserving provider-neutral diagnostics contracts.
 
@@ -53,7 +53,7 @@ Post-design re-check: the proposed contracts preserve the same boundaries. No co
 ### Documentation (this feature)
 
 ```text
-specs/138-groundwork-diagnostics-persistence/
+specs/139-groundwork-diagnostics-persistence/
 ├── spec.md
 ├── plan.md
 ├── research.md

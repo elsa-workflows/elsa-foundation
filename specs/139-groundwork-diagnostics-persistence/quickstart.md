@@ -3,7 +3,7 @@
 ## Planning validation
 
 ```bash
-rg -n "NEEDS CLARIFICATION|\[FEATURE|\[###|TODO|TBD" specs/138-groundwork-diagnostics-persistence
+rg -n "NEEDS CLARIFICATION|\[FEATURE|\[###|TODO|TBD" specs/139-groundwork-diagnostics-persistence
 ```
 
 ## Focused test progression
