@@ -86,7 +86,7 @@
 - [X] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
   - Evidence: Both schema declarations compiled; adapter schema tests and the shared schema batch passed.
 - [X] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
-  - Evidence: Exact integrated-head certification at `9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd` passed 24/24 shared provider cases (6 each on SQLite, SQL Server, PostgreSQL, and MongoDB); the complete adapters passed 73 OpenTelemetry tests with one explicit #130 skip and 18/18 Structured Logs tests, and provider-independent operation depth passed 5/5.
+  - Evidence: Exact integrated-head certification at `d6e10c293b2414b4f8613b80424c3ecddca6c95e` passed 24/24 shared provider cases (6 each on SQLite, SQL Server, PostgreSQL, and MongoDB); the complete adapters passed 73 OpenTelemetry tests with one explicit #130 skip and 18/18 Structured Logs tests, and provider-independent operation depth passed 5/5.
 
 **Checkpoint**: Durable append, restart, replay, idempotency, and failure semantics work independently for every diagnostic signal on all four providers.
 
@@ -109,7 +109,7 @@
 - [X] T026 [P] [US2] Add cross-scope non-disclosure and exact retention tests for all signals in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs`
   - Evidence: the real-provider suite passed the structured-log and all-signal telemetry cross-scope retention cases on SQLite, SQL Server, PostgreSQL, and MongoDB.
 - [X] T027 [US2] Add real-provider execution-plan/index evidence assertions for every plan-exposed scale-bearing query and trim selection in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs`
-  - Evidence: the 5-test real-provider plan slice passed (four provider theory cases plus SQLite missing-schema rejection), covering ten diagnostic-record query routes, five trim selections, and eight catalog selection/count/capacity routes. Catalog writes and ledger mutations have correctness coverage, but Groundwork's public document-store API exposes no mutation-plan inspector and this task does not claim one.
+  - Evidence: the 5-test real-provider plan slice passed (four provider theory cases plus SQLite missing-schema rejection), covering eleven diagnostic-record query routes, five trim selections, and eight catalog selection/count/capacity routes. Catalog writes and ledger mutations have correctness coverage, but Groundwork's public document-store API exposes no mutation-plan inspector and this task does not claim one.
 
 ### Implementation for User Story 2
 
@@ -124,7 +124,7 @@
 - [X] T032 [US2] Add endpoint binding and result tests in `tests/Elsa/Diagnostics/OpenTelemetry/Tests/OpenTelemetryLogsEndpointTests.cs`
   - Evidence: the focused endpoint contract passes 2/2, covering route, verb, authorization, filter/token forwarding, and exact provider result return.
 - [X] T033 [US2] Run the US2 query, scope, retention, and plan suite against all four providers and store a summarized evidence manifest in `specs/139-groundwork-diagnostics-persistence/evidence/us2-provider-results.json`
-  - Evidence: Exact integrated-head certification at `9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd` passed 17/17 query-result, scope/retention, native bounded-plan, and missing-schema cases across SQLite, SQL Server, PostgreSQL, and MongoDB; the complete OpenTelemetry adapter regression passed 73 tests with one explicit #130 skip.
+  - Evidence: Exact integrated-head certification at `d6e10c293b2414b4f8613b80424c3ecddca6c95e` passed 17/17 query-result, scope/retention, native bounded-plan, and missing-schema cases across SQLite, SQL Server, PostgreSQL, and MongoDB; the complete OpenTelemetry adapter regression passed 73 tests with one explicit #130 skip.
 
 **Checkpoint**: All persisted diagnostics queries and mutations are exact, scope-safe, and demonstrably bounded across all providers.
 

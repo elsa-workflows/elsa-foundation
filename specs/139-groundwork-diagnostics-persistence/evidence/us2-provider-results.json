@@ -6,17 +6,17 @@
   "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T10:42:21Z",
-  "gitHeadAtRun": "9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd",
+  "recordedAtUtc": "2026-07-24T10:57:13Z",
+  "gitHeadAtRun": "d6e10c293b2414b4f8613b80424c3ecddca6c95e",
   "originMainAtRun": "305e2dc553b09131e7ae49c083cdcb3125da1868",
   "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
   "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
   "hashAlgorithm": "SHA-256",
   "testSourceSha256": {
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "df8e2de61dafe84102462e844a1612848ede558b33d9c6581c7e62744c292da3",
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "b834687e1ed3f215419ec643e3904d0d999c01918f941ba1de6dbc38cd30524b",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "961041f41bb45504adc938ebfb5ca88b7d799beb49decc8baceb6ace6921e6c5",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "a098c4f9a3830d15dc75bf6436b3d6b3b24f76328ec6e381f25f40955137d95b",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs": "cee767d7db4aad64d13c77d9349af992e6a77351acd0755c7f4eef4f53bdede4",
-    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "6005cdc602b2351993a80569c6f0fe86b3d9ccecaa96bc18203dfd4aa2f3d6a1",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "9827b937fd144011fc2b10b2c43879627c2a5b8549726cfa1ad5e44f3ab1e191",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "cbc109854bb5aa0f6a9c3d97a00272f21b59259c17aa7dbbafa68237349a43d1",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "3eb1042302cfe482cabfd76f93ec6d5cc680b54d0317bd565ee4ed6211161608"
   },
@@ -60,7 +60,7 @@
     "Structured Logs minimum-level, category, source, stable ordering, and take behavior",
     "OpenTelemetry resource, trace, trace-detail, metric, and log filters with inclusive ranges, case policy, stable ties, take bounds, and deterministic catalog capacity",
     "Structured Logs and OpenTelemetry cross-scope non-disclosure and exact retention",
-    "Native bounded plans for ten diagnostic-record query routes, five trim-selection routes, and eight physical catalog selection/count/capacity routes"
+    "Native bounded plans for eleven diagnostic-record query routes, five trim-selection routes, and eight physical catalog selection/count/capacity routes"
   ],
   "commands": [
     {
@@ -79,6 +79,15 @@
       "skipped": 1,
       "discovered": 74,
       "skipBoundary": "One explicit Groundwork#130 skip for provider-side grouped trace reduction."
+    },
+    {
+      "purpose": "Full shared diagnostics persistence checkpoint regression",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 147,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 62,
+      "evidenceBoundary": "Checkpoint regression only; this is not T057 final zero-EF certification."
     }
   ],
   "evidenceBoundary": "The 17-case certification consists of four query-result cases, eight scope/retention cases, four provider-native bounded-plan cases, and one SQLite missing-schema non-materialization case. Native plan evidence covers diagnostic-record queries, trim selection, and catalog selection/count/capacity. Catalog save/delete and capture-ledger load/save use IDocumentStore, whose public API does not expose native mutation-plan inspection; this manifest does not claim otherwise.",

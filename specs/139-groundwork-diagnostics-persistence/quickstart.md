@@ -69,7 +69,7 @@ the container-provider matrix, performance verdict, zero-EF removal, or a future
 
 ## Preview.81 integrated four-provider recertification (2026-07-24)
 
-On clean code-and-test head `9ac3b62d8f3da6ac5e1231aacfe4d1cd61b161dd`, after merging `origin/main`
+On clean code-and-test head `d6e10c293b2414b4f8613b80424c3ecddca6c95e`, after merging `origin/main`
 `305e2dc553b09131e7ae49c083cdcb3125da1868`, the exact commands retained in the US1 and US2
 manifests passed:
 
@@ -78,7 +78,7 @@ manifests passed:
 - OpenTelemetry adapter: **74 discovered, 73 passed, 1 explicit #130 skip**.
 - Provider-independent durable operations: **5/5**.
 - US2 real-provider query/scope/retention/native-plan matrix: **17/17**.
-- Four-provider bounded-plan slice: **5/5**, including eight catalog routes.
+- Four-provider bounded-plan slice: **5/5**, including eleven record routes and eight catalog routes.
 - Full shared diagnostics persistence checkpoint: **147/147**.
 
 The provider fixture contains exactly the four mandatory providers and starts pinned SQL Server,
@@ -95,8 +95,9 @@ full relative source paths with SHA-256 hashes, provider case counts, and eviden
 Three adversarial read-only reviews of the pre-remediation candidate found real correctness,
 evidence, and scope defects. Commit `5538d8414` resolved zero-capacity retention, deterministic tied
 catalog eviction, paged trace detail, the declared resource/trace service filters, corrupt catalog
-taxonomy, and bounded physical plans. Commit `9ac3b62d8` added four-provider coverage for resource,
-trace, metric, and log service-name filters.
+taxonomy, and bounded physical plans. Commits `9ac3b62d8` and `d6e10c293` added four-provider
+coverage for every declared trace filter plus resource, trace, metric, and log service-name filters,
+and native-plan coverage for those record predicates.
 
 The evidence review also found that the original T015 red baseline was recorded too late. T015
 therefore remains unchecked as a non-retroactive process deviation; later green runs establish
@@ -120,7 +121,7 @@ The same intake exposed two OpenTelemetry gaps. Metric/log `ServiceName` is now 
 durable resource catalog and filtered inside the diagnostic-record provider; the full OpenTelemetry
 suite discovers **74 tests: 73 pass and one is explicitly skipped**. Repeated trace fragments still require merge-before-
 filter semantics. A proposed retained-window client merge was rejected because it violated the
-provider-bounded query contract. The red test is retained as an explicit skip blocked by
+provider-bounded query contract. The pending contract test is retained as an explicit skip blocked by
 `valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks
 trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
 task, package/solution configuration, or task checkbox was changed by this intake.
