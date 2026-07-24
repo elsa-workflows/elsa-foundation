@@ -16,6 +16,7 @@
           "ActivitiesPrimitives": {},
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
+          "ActivitiesScheduling": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
@@ -161,6 +162,8 @@
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",
