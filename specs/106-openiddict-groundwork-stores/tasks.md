@@ -13,7 +13,7 @@
 **Purpose**: Freeze the external denominator and prove that the exact public Groundwork family can support the feature before implementation begins.
 
 - [X] T001 Record all 145 OpenIddict 7.5 application, authorization, scope, and token store members by capability group in `specs/106-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`
-  - Evidence: the package XML reproduction reports 42 application, 32 authorization, 28 scope, and 43 token members.
+  - Evidence: the restored 7.5.0 `netstandard2.0` package XML and current Behavior/Groundwork assets report 42 application, 32 authorization, 28 scope, and 43 token members; the ledger maps all 145 rows to semantics, bounded-execution classification, and T023/T033–T037/T046/T051–T052 evidence owners.
 - [X] T002 [P] Inventory every existing OpenIddict, bearer, token-service, shell-composition, and development/demo guard test objective with its retained destination in `specs/106-openiddict-groundwork-stores/contracts/test-objective-ledger.md`
   - Evidence: the ledger retains 54 objectives: 23 direct, 7 guard/shell, 9 shared token-endpoint-host, 12 mixed Groundwork-Identity/EF-OpenIddict HTTP, and 3 provider-module objectives.
 - [X] T003 [P] Add architecture tests that keep Identity abstractions and the retained OpenIddict behavior project free of Groundwork and new EF dependencies in `tests/Elsa/Architecture/OpenIddictPersistenceArchitectureTests.cs`

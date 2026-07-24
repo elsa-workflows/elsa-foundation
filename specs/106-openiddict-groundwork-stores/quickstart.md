@@ -70,8 +70,14 @@ Current remote `main` inspected during the batch:
 
 ### Frozen denominators
 
-- OpenIddict.Abstractions 7.5.0 XML documentation reports 42 application,
-  32 authorization, 28 scope, and 43 token members: 145 total.
+- OpenIddict.Abstractions 7.5.0's restored `lib/netstandard2.0` XML documentation
+  reports 42 application, 32 authorization, 28 scope, and 43 token members:
+  145 total. The exact package is resolved by both the Behavior and Groundwork
+  project assets on the preview.81 branch. `contracts/openiddict-member-ledger.md`
+  records each member's intended store/interface, semantic objective,
+  bounded-execution classification, and direct-test/provider-evidence owner.
+  All 12 `IQueryable` delegate rows are bounded-translator-or-stable-capability-
+  failure only; none may be client-evaluated.
 - The retained behavior baseline contains 54 objectives: 23 direct
   OpenIddict tests, 7 development/shell tests, 9 tests that reach
   OpenIddict only through the shared token-endpoint host, 12 mixed Groundwork
