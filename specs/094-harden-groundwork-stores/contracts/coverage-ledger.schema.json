@@ -211,7 +211,7 @@
         "resultHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "nativeEvidence": {
           "type": "string",
-          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.plan\\.txt$"
+          "pattern": "^(?:versions/[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*/)?evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.plan\\.txt$"
         },
         "nativeEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "outcome": {
@@ -220,7 +220,7 @@
         },
         "evidence": {
           "type": "string",
-          "pattern": "^evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.json$"
+          "pattern": "^(?:versions/[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*/)?evidence/(sqlite|sqlserver|postgresql|mongodb)/[a-z0-9-]+/[0-9a-f]{16}\\.json$"
         },
         "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       },

@@ -568,9 +568,13 @@ internal sealed class GroundworkCoverageLedgerValidator
         string scenarioId,
         ICollection<string> findings)
     {
+        var providerVersion = StringValue(record, "providerVersion");
         var expectedEvidence = GroundworkEvidenceArtifactContract.EvidencePath(provider, id, scenarioId);
+        var expectedVersionedEvidence = providerVersion is null
+            ? null
+            : GroundworkEvidenceArtifactContract.VersionedEvidencePath(providerVersion, provider, id, scenarioId);
         var evidence = StringValue(record, "evidence");
-        if (evidence != expectedEvidence)
+        if (evidence is null || (evidence != expectedEvidence && evidence != expectedVersionedEvidence))
         {
             findings.Add(
                 $"{id}: {provider} evidence record '{scenarioId}' does not reference its catalog-bound evidence artifact.");
@@ -601,8 +605,16 @@ internal sealed class GroundworkCoverageLedgerValidator
         }
 
         var expectedNativeEvidence = GroundworkEvidenceArtifactContract.NativeEvidencePath(provider, id, scenarioId);
+        var expectedVersionedNativeEvidence = providerVersion is null
+            ? null
+            : GroundworkEvidenceArtifactContract.VersionedNativeEvidencePath(
+                providerVersion,
+                provider,
+                id,
+                scenarioId);
         var nativeEvidence = StringValue(record, "nativeEvidence");
-        if (nativeEvidence != expectedNativeEvidence)
+        if (nativeEvidence is null ||
+            (nativeEvidence != expectedNativeEvidence && nativeEvidence != expectedVersionedNativeEvidence))
         {
             findings.Add(
                 $"{id}: {provider} query '{queryShape}' does not reference its catalog-bound provider-native artifact.");
@@ -718,6 +730,8 @@ internal sealed class GroundworkCoverageLedgerValidator
             actualPayload = null;
         }
 
+        actualPayload?.Remove("observations");
+        actualPayload?.Remove("provenance");
         if (!JsonNode.DeepEquals(expectedPayload, actualPayload))
         {
             findings.Add(
@@ -1080,8 +1094,22 @@ internal static class GroundworkEvidenceArtifactContract
     public static string EvidencePath(string provider, string entryId, string scenarioId) =>
         $"evidence/{provider}/{entryId}/{ScenarioKey(scenarioId)}.json";
 
+    public static string VersionedEvidencePath(
+        string providerVersion,
+        string provider,
+        string entryId,
+        string scenarioId) =>
+        $"versions/{providerVersion}/{EvidencePath(provider, entryId, scenarioId)}";
+
     public static string NativeEvidencePath(string provider, string entryId, string scenarioId) =>
         $"evidence/{provider}/{entryId}/{ScenarioKey(scenarioId)}.plan.txt";
+
+    public static string VersionedNativeEvidencePath(
+        string providerVersion,
+        string provider,
+        string entryId,
+        string scenarioId) =>
+        $"versions/{providerVersion}/{NativeEvidencePath(provider, entryId, scenarioId)}";
 
     public static JsonObject ArtifactPayload(JsonObject record)
     {

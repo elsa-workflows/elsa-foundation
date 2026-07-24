@@ -23,16 +23,16 @@ The repository's current Groundwork family is `0.0.1-preview.81`; do not combine
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
 
-The checked-in checkpoint/fence attachment includes the reviewed `0.0.1-preview.80` four-provider slice for
-`runtime-checkpoint-commit`, `runtime-execution-liveness`, and `runtime-post-commit-outbox`. The remaining
-`preview.76`/`preview.77`/`preview.80` artifacts are historical provenance, not current `preview.81` pass evidence. A partial attachment
-does not advance a row to evidence-complete or close the package-generation readiness gate.
+The original checkpoint/fence attachment and its unversioned evidence paths retain the reviewed
+`0.0.1-preview.80` four-provider slice as immutable historical provenance. The current
+`0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger imports that
+versioned attachment by tuple. A partial attachment does not advance a row to evidence-complete or close the
+package-generation readiness gate.
 
-**2026-07-24 #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the
-seven packages to `0.0.1-preview.81` for batched schema apply while leaving the checked-in tool
-and coverage generation at `.80`. The `.81` tool is available on the configured feed; #646 aligns
-the manifest and republishes the tuple-keyed checkpoint/fence slice before any measurement or
-ledger advancement. Older attachments remain historical provenance and are never rewritten.
+**2026-07-24 #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
+`0.0.1-preview.81` for batched schema apply. Elsa PR #1040 aligned the tool manifest and current-version
+ratchets; the versioned checkpoint/fence publication below then refreshed the tuple-keyed evidence without
+rewriting the `.80` attachment or artifacts.
 
 ## 1. Inspect the frozen denominator
 
@@ -188,11 +188,14 @@ restart obligation is present for all four providers and the linked #644/#660 au
 
 ### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
 
-Against Elsa `78033cf11` and Groundwork `0.0.1-preview.81`, the checkpoint/fence publisher passed for
-SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 2m21s). It produced 36 unique
+Against Elsa source commit `61f13bf1cbc912db39e950807b2cd195da0de07b` (tree
+`4cb48a88b8855aa1e7756ab9314dbf27a530d5a6`) and Groundwork `0.0.1-preview.81`, the checkpoint/fence
+publisher passed for SQLite, SQL Server, PostgreSQL, and MongoDB (1/1, 2m33s). It produced 36 unique
 `(coverageEntryId, scenarioId, provider)` records across `runtime-checkpoint-commit`,
 `runtime-execution-liveness`, and `runtime-post-commit-outbox`; every retained artifact digest was
-recomputed successfully before the attachment was imported mechanically by that tuple.
+recomputed successfully before the attachment was imported mechanically by that tuple. Each artifact is
+version-namespaced and retains the raw scenario observations plus the exact commit, tree, and run identity.
+The original `.80` attachment hash and all 36 referenced historical artifact hashes are guarded separately.
 
 An earlier full publication reached SQL Server and exposed that the fixture's reset query could select
 system sessions, which SQL Server refuses to kill. The fixture now limits the reset set to user processes;

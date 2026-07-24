@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+  "sourceScenarioId": "runtime-execution-ownership-fencing",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.81",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "cdc89727cfebdfa44fc437cafcc5df32fdebb70dcea43c53c3911315036540d2",
+  "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/974e1222ea1cded8",
+  "clients": 2,
+  "resultHash": "5d5cc49f6c1814b3ddb5fc014f4f5c694d8e9eeaa3a4ce90dffed0ab0872e827",
+  "outcome": "pass",
+  "concurrencySemantic": "atomic-stale-fence-rejection",
+  "evidence": "versions/0.0.1-preview.81/evidence/postgresql/runtime-checkpoint-commit/974e1222ea1cded8.json",
+  "observations": [
+    {
+      "name": "stale-commit-count",
+      "value": "1"
+    },
+    {
+      "name": "token-order",
+      "value": "strictly-increasing"
+    },
+    {
+      "name": "winner-count",
+      "value": "1"
+    }
+  ],
+  "provenance": {
+    "elsaCommit": "61f13bf1cbc912db39e950807b2cd195da0de07b",
+    "elsaTree": "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6",
+    "runIdentity": "runtime-checkpoint-fence-preview81"
+  }
+}

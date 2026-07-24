@@ -8,10 +8,18 @@ public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.81";
+    private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
     private const string CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string HistoricalCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string HistoricalCheckpointFenceAttachmentSha256 =
+        "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
+    private const string ExpectedCheckpointFenceEvidenceCommit = "61f13bf1cbc912db39e950807b2cd195da0de07b";
+    private const string ExpectedCheckpointFenceEvidenceTree = "4cb48a88b8855aa1e7756ab9314dbf27a530d5a6";
+    private const string ExpectedCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -108,6 +116,30 @@ public sealed class GroundworkCoverageLedgerTests
         {
             Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
             Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
+            Assert.StartsWith(
+                $"versions/{ExpectedGroundworkVersion}/evidence/",
+                relativeEvidencePath,
+                StringComparison.Ordinal);
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(record["manifestFingerprint"]!.GetValue<string>(), artifact["manifestFingerprint"]!.GetValue<string>());
+            Assert.NotEmpty(artifact["observations"]!.AsArray());
+            Assert.Equal(
+                ExpectedCheckpointFenceEvidenceCommit,
+                artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
+            Assert.Equal(
+                ExpectedCheckpointFenceEvidenceTree,
+                artifact["provenance"]!["elsaTree"]!.GetValue<string>());
+            Assert.Equal(
+                ExpectedCheckpointFenceRunIdentity,
+                artifact["provenance"]!["runIdentity"]!.GetValue<string>());
         });
         Assert.All(attachmentByKey, records => Assert.Single(records));
         Assert.All(ledgerByKey, records => Assert.Single(records));
@@ -121,6 +153,37 @@ public sealed class GroundworkCoverageLedgerTests
                 JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
                 $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
         }
+    }
+
+    [Fact]
+    public void Preview80_checkpoint_fence_attachment_and_artifacts_remain_immutable_historical_provenance()
+    {
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            HistoricalCheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var records = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                          ?.OfType<JsonObject>()
+                          .ToArray()
+                      ?? throw new InvalidOperationException(
+                          $"Historical checkpoint/fence attachment '{attachmentPath}' is empty.");
+
+        Assert.Equal(
+            HistoricalCheckpointFenceAttachmentSha256,
+            GroundworkEvidenceArtifactContract.FileSha256(attachmentPath));
+        Assert.Equal(36, records.Length);
+        Assert.All(records, record =>
+        {
+            Assert.Equal(HistoricalGroundworkVersion, record["providerVersion"]?.GetValue<string>());
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                record["evidence"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(HistoricalGroundworkVersion, artifact["providerVersion"]?.GetValue<string>());
+        });
     }
 
     [Fact]
