@@ -24,7 +24,7 @@
     Requires the DispatchWorkflow + Bpmn features composed in the server (default Elsa.Server shells.json
     has 'ActivitiesBpmn' + 'ActivitiesDispatchWorkflowRuntime'/'ActivitiesDispatchWorkflowDesign').
 .EXAMPLE
-    pwsh ./TestScripts/bpmn/Test-BpmnCallActivity.ps1
+    pwsh ./e2e-tests/bpmn/Test-BpmnCallActivity.ps1
 #>
 [CmdletBinding()]
 param(

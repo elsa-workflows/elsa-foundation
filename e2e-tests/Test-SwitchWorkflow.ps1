@@ -6,8 +6,8 @@
     asserts the branch matching -Value executed (or default when nothing matches). The switch value is a
     literal here; in a real workflow it would typically be an expression over inputs/variables.
 .EXAMPLE
-    pwsh ./TestScripts/Test-SwitchWorkflow.ps1 -Value b
-    pwsh ./TestScripts/Test-SwitchWorkflow.ps1 -Value zzz   # no match -> default
+    pwsh ./e2e-tests/Test-SwitchWorkflow.ps1 -Value b
+    pwsh ./e2e-tests/Test-SwitchWorkflow.ps1 -Value zzz   # no match -> default
 #>
 [CmdletBinding()]
 param(

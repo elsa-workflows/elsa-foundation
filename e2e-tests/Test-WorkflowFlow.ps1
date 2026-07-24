@@ -6,8 +6,8 @@
     the resulting instance (status + activity executions). Requires the server running from source:
         dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj --launch-profile http
 .EXAMPLE
-    pwsh ./TestScripts/Test-WorkflowFlow.ps1
-    pwsh ./TestScripts/Test-WorkflowFlow.ps1 -Message "Hi there"
+    pwsh ./e2e-tests/Test-WorkflowFlow.ps1
+    pwsh ./e2e-tests/Test-WorkflowFlow.ps1 -Message "Hi there"
 #>
 [CmdletBinding()]
 param(
