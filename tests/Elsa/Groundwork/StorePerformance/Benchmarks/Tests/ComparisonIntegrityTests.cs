@@ -333,6 +333,19 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Manifest_rejects_endpoint_bearing_raw_provider_plan_json()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        var rawPlan = Directory.EnumerateFiles(fixture.Directory, "ef-set.*.raw-plan.json").First();
+        File.WriteAllText(rawPlan, """{"server":"db.internal","database":"elsa","user":"sa"}""");
+
+        var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
+
+        Assert.Contains("connection values or credentials", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Artifact_schema_v2_rejects_v1_manifests_and_missing_required_process_fields()
     {
         using var legacy = ArtifactFixture.Create();

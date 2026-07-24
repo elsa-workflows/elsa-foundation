@@ -224,7 +224,8 @@ public static class ArtifactStore
 public static class ArtifactSafety
 {
     private static readonly Regex SensitiveName = new("(password|pwd|credential|connection|string|secret|account[_-]?key|access[_-]?key|token)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-    private static readonly Regex SensitiveContent = new("(?i)(password|pwd|connection\\s*string|account[_-]?key|access[_-]?key)\\s*[:=]|authorization\\s*:\\s*bearer\\s+\\S+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex RawConnectionName = new("(server|host|endpoint|data[_-]?source|database|initial[_-]?catalog|port)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex SensitiveContent = new("(?i)(password|pwd|connection\\s*string|account[_-]?key|access[_-]?key|server|host|endpoint|data[ _-]?source|database|initial[ _-]?catalog|port|user[ _-]?id|uid)\\s*[:=]\\s*(?![@$:?])|authorization\\s*:\\s*bearer\\s+\\S+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha1 = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Identifier = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -255,7 +256,7 @@ public static class ArtifactSafety
         {
             foreach (var property in value.EnumerateObject())
             {
-                if (SensitiveName.IsMatch(property.Name) && !SafeRedactedValue(property.Value))
+                if ((SensitiveName.IsMatch(property.Name) || RawConnectionName.IsMatch(property.Name)) && !SafeRedactedValue(property.Value))
                     throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive field '{property.Name}').");
                 ValidateRawStructured(property.Value);
             }
@@ -268,10 +269,10 @@ public static class ArtifactSafety
     {
         foreach (var element in document.Descendants())
         {
-            if (SensitiveName.IsMatch(element.Name.LocalName) && !SafeRedactedText(element.Value))
+            if ((SensitiveName.IsMatch(element.Name.LocalName) || RawConnectionName.IsMatch(element.Name.LocalName)) && !SafeRedactedText(element.Value))
                 throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive element '{element.Name.LocalName}').");
             foreach (var attribute in element.Attributes())
-                if (SensitiveName.IsMatch(attribute.Name.LocalName) && !SafeRedactedText(attribute.Value))
+                if ((SensitiveName.IsMatch(attribute.Name.LocalName) || RawConnectionName.IsMatch(attribute.Name.LocalName)) && !SafeRedactedText(attribute.Value))
                     throw new PerformanceContractException($"Raw provider-plan evidence may not retain connection values or credentials (sensitive attribute '{attribute.Name.LocalName}').");
         }
     }
