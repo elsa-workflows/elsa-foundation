@@ -57,13 +57,12 @@ represented as preview.81/four-provider certification.
 
 ## Preview.81 exact-head T043 lifecycle recertification (2026-07-24)
 
-On clean `codex/642-groundwork-diagnostics-replay` head
-`df39cc9aae3ad5ac2ebfdb0f4589c88b014a1d52`, with Groundwork resolved at
+On clean `codex/642-groundwork-diagnostics-replay` integration head
+`05f26897cdf293643e8f76d6ff4ac8456fba39a9`, with Groundwork resolved at
 `0.0.1-preview.81`, the provider-neutral lifecycle command recorded in
 [`evidence/us3-lifecycle-results.json`](evidence/us3-lifecycle-results.json) passed **49/49** in
-Release with no failures or skips. At the run, `origin/main` was
-`6458b39ad4a251c992a7384f1f325e164320d481`; the branch was 10 commits ahead and 9 commits behind,
-with merge base `78033cf1167071123cb9fe5ef38653973bd65200`.
+Release with no failures or skips. The tested head had merged `origin/main`
+`6458b39ad4a251c992a7384f1f325e164320d481`; it was 12 branch commits ahead and 0 behind.
 
 This certifies T043's load, shutdown, lifecycle, and observability boundary only. It does not certify
 the container-provider matrix, performance verdict, zero-EF removal, or a future exact-main head.

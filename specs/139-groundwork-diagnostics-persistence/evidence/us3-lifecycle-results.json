@@ -15,14 +15,14 @@
     "passed": 49,
     "failed": 0,
     "skipped": 0,
-    "recordedAtUtc": "2026-07-24T06:16:04Z",
+    "recordedAtUtc": "2026-07-24T06:20:38Z",
     "branch": "codex/642-groundwork-diagnostics-replay",
-    "gitHead": "df39cc9aae3ad5ac2ebfdb0f4589c88b014a1d52",
+    "gitHead": "05f26897cdf293643e8f76d6ff4ac8456fba39a9",
     "originMain": "6458b39ad4a251c992a7384f1f325e164320d481",
-    "mergeBaseWithOriginMain": "78033cf1167071123cb9fe5ef38653973bd65200",
-    "originMainOnlyCommitCount": 9,
-    "branchOnlyCommitCount": 10,
-    "testedSourceState": "Clean exact branch HEAD; origin/main divergence was recorded immediately before the run."
+    "mergeBaseWithOriginMain": "6458b39ad4a251c992a7384f1f325e164320d481",
+    "originMainOnlyCommitCount": 0,
+    "branchOnlyCommitCount": 12,
+    "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main; divergence was recorded immediately before the run."
   },
   "coveredSuites": [
     "Elsa.Diagnostics.Persistence.Tests.DiagnosticsDrainLoadTests",
