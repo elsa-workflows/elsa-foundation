@@ -6,19 +6,19 @@
   "evidenceClassification": "exact-integrated-head-certification",
   "currentPromotionTarget": "0.0.1-preview.81",
   "groundworkPackageVersion": "0.0.1-preview.81",
-  "recordedAtUtc": "2026-07-24T11:02:24Z",
-  "gitHeadAtRun": "ef94016a07664e4e754af5612e38068d59c86fdb",
+  "recordedAtUtc": "2026-07-24T11:10:38Z",
+  "gitHeadAtRun": "8ba7775deed77c8c3a0caefcad7be094921ebc54",
   "originMainAtRun": "165cf20723e088ca1bcb1530abf2149cabacb2bc",
   "testedSourceState": "Clean exact branch HEAD after merging the recorded origin/main.",
   "groundworkPackageResolution": "The Persistence Tests project and both adapter test projects were restored with --force-evaluate before their recorded runs; their project.assets.json files resolved every Groundwork library at 0.0.1-preview.81.",
   "hashAlgorithm": "SHA-256",
   "testSourceSha256": {
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "961041f41bb45504adc938ebfb5ca88b7d799beb49decc8baceb6ace6921e6c5",
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "a098c4f9a3830d15dc75bf6436b3d6b3b24f76328ec6e381f25f40955137d95b",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "9ecdfd8be39f28e15afa12b3b347f4bc21112594ad1d229d6673850657143ceb",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "aa78c7ff9b41391d749500080b15d7013b055e70b5e51722471bd41167360eca",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs": "cee767d7db4aad64d13c77d9349af992e6a77351acd0755c7f4eef4f53bdede4",
-    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "9827b937fd144011fc2b10b2c43879627c2a5b8549726cfa1ad5e44f3ab1e191",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "9334c7fb5bd0ea9cb0ef5a27c78f70ff8334df18562737b79c148fe8f370202f",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "cbc109854bb5aa0f6a9c3d97a00272f21b59259c17aa7dbbafa68237349a43d1",
-    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "3eb1042302cfe482cabfd76f93ec6d5cc680b54d0317bd565ee4ed6211161608"
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "bae06d72d97650714d8177f515a4c9e517aeb96d16e60338ef7bd0b13a2f05c8"
   },
   "productionSourceSha256": {
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs": "5d456383e636f6f72fd92fec58ad0e6c2ef288eecf06aebab88d2437d09b23e1",
@@ -26,7 +26,7 @@
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocumentSerializer.cs": "a8475dae3905cd41a5aba4fe180caf44ab64f986a016a33ecda52597feb7a810",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocuments.cs": "b5f45120b8f8636cc11b66eeb7630b3f547b3c2eebb3bb6211d01f444143423e",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/CanonicalRecordSerializer.cs": "4b6b30954a5063dafe6b39b76689d54b71ad5aaa9d9bc2d6e28e6f0dff059e22",
-    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "a1045bc4ba4678d0648b009e95a7a61e0750c3ac743eeb098f59063a9a1a19b8",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "f9b9cfae288895c2e20c4d417239bd4f50623680359686c3b5d059629ae4bb03",
     "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs": "9e836726ea4ea955d58b5be53665b4af9a74b28a973dc9f4989876132ff27537",
     "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs": "0d08c62651c9f451df174e41e8d1e88e5e1b42386e8400fe1a79d264f05a0e14"
   },
@@ -67,7 +67,7 @@
       "passed": 24,
       "failed": 0,
       "skipped": 0,
-      "durationSeconds": 20
+      "durationSeconds": 33
     },
     {
       "purpose": "Structured Logs complete adapter regression",
