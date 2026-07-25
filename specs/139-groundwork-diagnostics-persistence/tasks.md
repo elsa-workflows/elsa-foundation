@@ -80,6 +80,7 @@
 - [X] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
   - Evidence: Record mappings and canonical serializers compiled; the OpenTelemetry adapter suite passed 73 tests with one explicit #130 skip on the preview.81 integration head.
   - Preview.86 follow-up: the trace stream now declares the native `trace-summary-v1` grouped-reduction profile and stores the first root/name plus total span count needed to materialize it. Its schema-v2 pre-release reset boundary, exact pre-retention union limit, focused serializer/definition tests, and complete adapter suite passed 75/75.
+  - Preview.88 follow-up: the stream binds grouped reduction to the configured 5,000 newest raw records before predicates and caps each 256-value union at 1,280,000 values. The complete adapter suite passed 75/75.
 - [X] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
   - Evidence: Catalog mappings/serializers compiled; the OpenTelemetry adapter suite passed 73 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
@@ -106,6 +107,7 @@
 - [X] T024 [P] [US2] Add OpenTelemetry resource, trace, trace-detail, metric, and log query matrices with inclusive boundaries, stable ties, invalid-range rejection, and unsupported-query rejection without broad reads in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs`
   - Evidence: OpenTelemetry query conformance passed inside the 73-pass adapter suite; the only skip is the explicit #130 repeated-trace reduction case.
   - Preview.86 follow-up: the former repeated-trace #130 skip is executable and the complete adapter suite passed 75/75. Real-provider cases passed 12/12 across SQLite, SQL Server, PostgreSQL, and MongoDB, proving grouped merge-before-filter, ordering/take, group continuations, restart, concurrent durable writes, the 257-value pre-retention union boundary, and the explicit fail-closed preview.81-to-fresh-preview.86 reset rule. This is focused follow-up evidence, not T057 promotion evidence.
+  - Preview.88 follow-up: the same four-provider matrix plus the newest-raw-window boundary passed 20/20, proving records outside the configured 5,000-input window cannot re-enter through a later predicate. This remains focused follow-up evidence, not T057 promotion evidence.
 - [X] T025 [P] [US2] Add deterministic resource/instrument catalog capacity and least-recently-seen retention tests in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs`
   - Evidence: OpenTelemetry catalog conformance passed inside the 73-pass adapter suite; the only skip is the explicit #130 repeated-trace reduction case.
   - Preview.86 follow-up: a real-provider catalog case passed 4/4 across SQLite, SQL Server, PostgreSQL, and MongoDB, covering supplementary-plane Unicode case collisions, exact latest-write identity, query/load, restart, retention deletion, and scope isolation without an adapter lowercase workaround. This is focused follow-up evidence, not T057 promotion evidence.
@@ -114,6 +116,7 @@
 - [X] T027 [US2] Add real-provider execution-plan/index evidence assertions for every plan-exposed scale-bearing query and trim selection in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs`
   - Evidence: the 5-test real-provider plan slice passed (four provider theory cases plus SQLite missing-schema rejection), covering eleven diagnostic-record query routes, five trim selections, and eight catalog selection/count/capacity routes. Catalog writes and ledger mutations have correctness coverage, but Groundwork's public document-store API exposes no mutation-plan inspector and this task does not claim one.
   - Preview.86 follow-up: `InspectGroupedQueryAsync` reported a native grouped-query plan for the trace-summary route on all four providers (4/4). It proves provider-side bounded grouped reduction only; it does not supply #646 performance evidence or complete T057.
+  - Preview.88 follow-up: native grouped-query plan inspection passed 4/4 with the input-record limit fixed at 5,000; it does not supply #646 performance evidence or complete T057.
 
 ### Implementation for User Story 2
 

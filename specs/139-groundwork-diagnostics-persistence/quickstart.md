@@ -14,9 +14,9 @@ dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/El
 dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj
 ```
 
-The replay targets Groundwork `0.0.1-preview.81`. Runs recorded against preview.73, preview.75, or
-preview.80 are historical provenance only and cannot promote the lane. The T043 manifest records one
-clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
+The replay targets Groundwork `0.0.1-preview.88`. Runs recorded against preview.73, preview.75,
+preview.80, preview.81, or preview.86 are historical provenance only and cannot promote the lane.
+The T043 manifest records one clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
 four-provider recertification required after any later `main` integration.
 
 ## Required provider certification
@@ -186,15 +186,14 @@ providers admit the preview.86 definition on fresh storage. No migration or
 dual-format shim is supplied because Elsa Foundation is unreleased and the
 ratified program rule selects the clean end state.
 
-The trace stream admits at most 5,000 retained records, and each normalized
-signal batch admits at most 1,000 records. A query may race retention after up
-to 499 newly committed records, so the drain commits one capture batch at a
-time and the grouped profile declares the exact finite pre-retention bound:
-`(5,000 + 499 + 1,000) × 256 = 1,663,744` union values. A configured trace
-capacity above 5,000 now fails before provider work. The four-provider boundary
-case appends 257 fragments directly to the admitted stream and queries before
-any trim, proving distinct resources, services, and workflow ids remain
-available in the window that triggered the review finding.
+The trace stream admits at most 5,000 retained records, and every grouped query
+reduces exactly the newest 5,000 raw records before applying predicates. Each
+record contributes at most 256 values to a resource, service, or workflow union,
+so the grouped profile declares the exact finite bound `5,000 × 256 =
+1,280,000` values. A configured trace capacity above 5,000 now fails before
+provider work. The four-provider boundary cases prove both that 257 distinct
+values remain available before trim and that an older matching fragment cannot
+re-enter after the 5,000-record input window has been selected.
 
 ## Preview.86 grouped-trace independent review
 
@@ -226,6 +225,30 @@ Three adversarial reviewers inspected the exact candidate range from
 - Scope/test preservation passed: no EF oracle, migration, project, package,
   solution, or host file was removed or changed; the former #130 skip is the
   only removed skip; T050–T057 remain open.
+
+## Preview.88 grouped-trace window recertification (2026-07-25)
+
+Groundwork preview.88 retains the grouped-reduction contract and adds the
+atomic collection-bearing mutation mechanism required by OpenIddict. The
+diagnostics integration additionally makes the grouped input window explicit:
+the newest 5,000 raw trace records are selected before grouping and before any
+caller predicate. The normal 64-capture drain batching is retained; correctness
+no longer depends on serializing the drain to one capture at a time.
+
+Root reproduced the exact focused evidence on implementation head
+`6d0e0eb3a76e2140dcb39ef8df2d560c8f637f16`:
+
+- complete OpenTelemetry Groundwork adapter suite: **75/75**;
+- grouped trace, Unicode case policy, pre-retention union, newest-input-window,
+  and pre-release reset behavior on all four providers: **20/20**;
+- native grouped-query plan inspection across all four providers: **4/4**.
+
+The resolved preview.88 package/tool family, exact commands, source hashes,
+provider topology, and result totals are retained in
+[`evidence/preview88-grouped-trace-results.json`](evidence/preview88-grouped-trace-results.json).
+This remains focused correctness evidence only. It is not #646 performance
+evidence, T057 final zero-EF certification, or authorization to delete either
+EF oracle; T050–T057 remain open.
 
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 
