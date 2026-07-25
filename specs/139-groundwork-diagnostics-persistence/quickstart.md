@@ -159,12 +159,18 @@ filtering, ordering, take, or continuation. Trace list and detail both consume
 that bounded grouped route; the previous latest-fragment path and explicit #130
 skip are gone.
 
-Root independently reproduced the focused evidence:
+Root independently reproduced the final focused evidence:
 
-- complete OpenTelemetry Groundwork adapter suite: **74/74**;
-- grouped merge plus supplementary-Unicode catalog behavior on SQLite, SQL
-  Server, PostgreSQL, and MongoDB: **8/8**;
+- complete OpenTelemetry Groundwork adapter suite: **75/75**;
+- grouped merge, supplementary-Unicode catalog behavior, retained-record union
+  boundary, and explicit pre-release reset behavior on SQLite, SQL Server,
+  PostgreSQL, and MongoDB: **16/16**;
 - native grouped-query plan inspection across the same four providers: **4/4**.
+
+The exact implementation head, resolved preview.86 package/tool family, source
+hashes, provider images/topology, exact commands, and raw totals are retained
+in
+[`evidence/preview86-grouped-trace-results.json`](evidence/preview86-grouped-trace-results.json).
 
 The provider case includes concurrent fragment writes, disposal/reopen, merged
 filtering, newest-window ordering/take, continuation, detail parity, Unicode
@@ -172,6 +178,40 @@ case collision, scope isolation, and retention. This closes the previously
 disclosed #130 mechanism gap only. It is not #646 performance evidence, the
 T057 promotion matrix, or authorization to delete either EF oracle; T050–T057
 remain open.
+
+The grouped trace definition is an intentional pre-release reset boundary. It
+uses schema version 2 and a distinct logical storage name. A preview.81
+definition is rejected fail-closed on all four providers, and the same four
+providers admit the preview.86 definition on fresh storage. No migration or
+dual-format shim is supplied because Elsa Foundation is unreleased and the
+ratified program rule selects the clean end state.
+
+The trace stream admits at most 5,000 retained records. Each record may carry
+256 values per multi-value field, so the grouped profile declares the exact
+finite worst-case union of 1,280,000 values. A configured trace capacity above
+5,000 now fails before provider work. The four-provider boundary case merges
+and filters 257 distinct resources, services, and workflow ids without the
+former 256-value failure.
+
+## Preview.86 grouped-trace independent review
+
+Three adversarial reviewers inspected the exact candidate range from
+`f4eaee963da34f650b7e40d0e859ae10b92d4a30`.
+
+- Correctness/mechanism found two blockers: the immutable preview.81 stream
+  fingerprint had no explicit transition policy, and the 256-value group union
+  rejected individually valid retained fragments. Both findings were accepted.
+  The remediation is the explicit schema-v2 fresh-storage boundary plus the
+  retention-derived 1,280,000-value union contract and the four-provider tests
+  described above.
+- Evidence integrity found that the preview.86 pass totals existed only as
+  narrative while the retained JSON manifests still described preview.81.
+  The historical manifests remain immutable; the new hash-bound preview.86
+  manifest records the exact implementation head, commands, totals, resolved
+  package family, source hashes, and provider topology.
+- Scope/test preservation passed: no EF oracle, migration, project, package,
+  solution, or host file was removed or changed; the former #130 skip is the
+  only removed skip; T050–T057 remain open.
 
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 
