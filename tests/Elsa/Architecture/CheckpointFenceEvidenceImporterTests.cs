@@ -113,6 +113,27 @@ public sealed class CheckpointFenceEvidenceImporterTests
     }
 
     [Fact]
+    public async Task Rejects_provider_divergence_even_when_each_record_and_artifact_is_internally_consistent()
+    {
+        using var fixture = new ImportFixture();
+        var records = fixture.StagedRecords();
+        var divergent = records
+            .OfType<JsonObject>()
+            .First(record =>
+                record["provider"]!.GetValue<string>() == "mongodb" &&
+                record["scenarioId"]!.GetValue<string>() == "concurrencySemantic:atomic-stale-fence-rejection");
+        divergent["observations"]![0]!["value"] = "provider-divergence";
+        divergent["resultHash"] = ResultHash(divergent);
+        fixture.RewriteStagedArtifact(divergent);
+        fixture.WriteStagedRecords(records);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
+
+        Assert.Contains("non-equivalent provider result hashes", exception.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
+    }
+
+    [Fact]
     public async Task Rejects_an_import_when_immutable_preview80_or_preview81_history_has_changed()
     {
         using var fixture = new ImportFixture();
@@ -138,6 +159,30 @@ public sealed class CheckpointFenceEvidenceImporterTests
 
     private static string FileSha256(string path) =>
         Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+
+    private static string ResultHash(JsonObject record)
+    {
+        var observations = record["observations"]!.AsArray()
+            .Select(candidate => candidate!.AsObject())
+            .OrderBy(observation => observation["name"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ThenBy(observation => observation["value"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(observation =>
+            {
+                var name = observation["name"]!.GetValue<string>();
+                var value = observation["value"]!.GetValue<string>();
+                return $"{name.Length}:{name}{value.Length}:{value}";
+            });
+        var digestInput = string.Join(
+            '\n',
+            new[]
+            {
+                record["sourceScenarioId"]!.GetValue<string>(),
+                record["coverageEntryId"]!.GetValue<string>(),
+                record["outcome"]!.GetValue<string>(),
+                record["failureWindow"]?.GetValue<string>() ?? "-"
+            }.Concat(observations));
+        return Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(digestInput)));
+    }
 
     private static JsonObject ProvenanceNode() => new()
     {
@@ -234,6 +279,13 @@ public sealed class CheckpointFenceEvidenceImporterTests
         public string StagingArtifactPath(JsonObject record) => Path.Combine(
             StagingRoot,
             record["evidence"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+
+        public void RewriteStagedArtifact(JsonObject record)
+        {
+            var artifactPath = StagingArtifactPath(record);
+            File.WriteAllText(artifactPath, CheckpointFenceEvidenceImporter.ArtifactPayload(record).ToJsonString());
+            record["evidenceSha256"] = FileSha256(artifactPath);
+        }
 
         public void Dispose()
         {

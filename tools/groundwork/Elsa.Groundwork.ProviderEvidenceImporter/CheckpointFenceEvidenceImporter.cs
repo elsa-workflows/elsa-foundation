@@ -253,6 +253,21 @@ public static class CheckpointFenceEvidenceImporter
         var missing = expectedTuples.Where(tuple => !actualTuples.Contains(tuple)).Order(StringComparer.Ordinal).ToArray();
         if (missing.Length != 0)
             throw new InvalidOperationException($"Staged attachment is missing required evidence tuples: {string.Join(", ", missing)}.");
+
+        foreach (var scenario in records.GroupBy(
+                     record => $"{RequiredString(record, "coverageEntryId", "record")}|{RequiredString(record, "scenarioId", "record")}",
+                     StringComparer.Ordinal))
+        {
+            var resultHashes = scenario
+                .Select(record => RequiredString(record, "resultHash", scenario.Key))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (resultHashes.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Staged evidence scenario '{scenario.Key}' has non-equivalent provider result hashes.");
+            }
+        }
     }
 
     private static void ValidateProvenance(JsonObject record, string tuple, CheckpointFenceEvidenceProvenance expected)
