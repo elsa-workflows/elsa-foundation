@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityDescriptor, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
 import { InspectorPanel } from "../workflow-editor/InspectorPanel";
 import type { ActivityNode, VisibleVariableView } from "../workflowTypes";
 
@@ -90,6 +91,8 @@ function panel(node: ActivityNode, onChange: ReturnType<typeof vi.fn>, overrides
       descriptorStatus="ready"
       onRetryExpressionDescriptors={() => undefined}
       scopedVariableAnalysis={{ visibleVariables, shadowingWarnings: [], status: "ready" }}
+      activeTabId="outputs"
+      onActiveTabChange={() => undefined}
       onSelectedActivityChange={onChange}
       onEnterSlot={vi.fn()}
       onReplaceSlotActivity={vi.fn()}
@@ -103,6 +106,39 @@ function outputSelect(container: HTMLElement) {
 }
 
 describe("ActivityOutputsPanel capture editor", () => {
+  it("can hide its section heading when it is presented inside an Inspector tab", () => {
+    const container = render(
+      <ActivityOutputsPanel
+        descriptor={descriptor()}
+        activity={readLineNode}
+        context={{} as StudioEndpointContext}
+        visibleVariables={visibleVariables}
+        scopeStatus="ready"
+        showHeading={false}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(container.querySelector(".wf-section-label")).toBeNull();
+    expect(container.querySelectorAll(".wf-output-row")).toHaveLength(1);
+  });
+
+  it("can render a caller-provided empty state when the activity exposes no outputs", () => {
+    const container = render(
+      <ActivityOutputsPanel
+        descriptor={descriptor({ outputs: [] })}
+        activity={readLineNode}
+        context={{} as StudioEndpointContext}
+        visibleVariables={visibleVariables}
+        scopeStatus="ready"
+        emptyLabel="This activity has no outputs."
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(container.textContent).toContain("This activity has no outputs.");
+  });
+
   it("renders a workflow-scope-only capture picker for each browsable output", () => {
     const container = render(panel(readLineNode, vi.fn()));
 

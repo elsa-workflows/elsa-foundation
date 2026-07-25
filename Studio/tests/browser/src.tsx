@@ -26,7 +26,7 @@ import type {
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/Elsa.Studio.Workflows/Client/src/api/runtime";
 import { getDraft, updateDraft } from "../../src/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
-import { createActivityNode, getActivityDisplay } from "../../src/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
 import { ActivityPalettePanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { InspectorPanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
@@ -57,6 +57,7 @@ const activityDefinitionsFixture = searchParams.get("mode") === "activity-defini
   (window.location.pathname.startsWith("/workflows/activity-definitions") && !elsa3ReusableImportFixture && !activityUpgradeFixture);
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const versionChangeFixture = searchParams.get("mode") === "version-change";
+const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const endpointContext = createEndpointContext(window.location.origin);
 
@@ -185,6 +186,115 @@ function Fixture() {
           onChange={setActivity}
         />
         {scrollingFixture ? <div className="browser-inspector-tail" aria-hidden="true" /> : null}
+      </aside>
+    </main>
+  );
+}
+
+const activityInspectorTabDescriptor: StudioActivityDescriptor = {
+  typeName: "Contoso.Browser.LongRunningActivity",
+  displayName: "Long running browser activity",
+  inputs: Array.from({ length: 18 }, (_, index) => ({
+    name: `Input${index + 1}`,
+    displayName: `Long input ${index + 1}`,
+    typeName: "System.String",
+    description: "A representative configurable input that makes the Inputs panel independently scrollable.",
+    order: index,
+    category: "Inputs",
+    isBrowsable: true,
+    isWrapped: true,
+    defaultSyntax: "Literal"
+  })),
+  outputs: [
+    { name: "Status", displayName: "Status", typeName: "System.Int32", isBrowsable: true },
+    { name: "Response", displayName: "Response", typeName: "System.String", isBrowsable: true }
+  ],
+  ports: []
+};
+
+const activityInspectorTabNode: ActivityNode = {
+  nodeId: "browser-long-running-activity",
+  activityVersionId: "browser-long-running-v1",
+  inputs: activityInspectorTabDescriptor.inputs.map(input => ({
+    referenceKey: input.name,
+    value: { value: `Browser value for ${input.displayName}`, expressionType: "Literal" }
+  })),
+  outputs: [],
+  structure: {
+    kind: "elsa.sequence.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      variables: [{
+        referenceKey: "browserVariable",
+        name: "Browser variable",
+        type: { typeName: "System.String", isCollection: false }
+      }]
+    }
+  }
+};
+
+const activityInspectorTabSlots: ChildSlot[] = [{
+  id: "browser-long-running.structure:body",
+  label: "Body",
+  property: "body",
+  cardinality: "single",
+  mode: "sequence",
+  activities: []
+}];
+
+function ActivityInspectorTabsFixture() {
+  const [activeOuterPanel, setActiveOuterPanel] = useState<"inspector" | "runtime" | "artifacts">("inspector");
+  const [activeTabId, setActiveTabId] = useState<React.ComponentProps<typeof InspectorPanel>["activeTabId"]>("inputs");
+  const [activity, setActivity] = useState(activityInspectorTabNode);
+
+  return (
+    <main className="wf-editor browser-fixture">
+      <h1>Activity inspector tabs</h1>
+      <div aria-label="Workflow inspector panel controls">
+        <button type="button" aria-pressed={activeOuterPanel === "inspector"} onClick={() => setActiveOuterPanel("inspector")}>Inspector</button>
+        <button type="button" aria-pressed={activeOuterPanel === "runtime"} onClick={() => setActiveOuterPanel("runtime")}>Runtime</button>
+        <button type="button" aria-pressed={activeOuterPanel === "artifacts"} onClick={() => setActiveOuterPanel("artifacts")}>Artifacts</button>
+      </div>
+      <aside
+        className="wf-inspector browser-inspector"
+        aria-label="Activity inspector"
+        style={{ width: "264px", height: "510px", padding: 0 }}
+      >
+        {activeOuterPanel === "inspector" ? (
+          <InspectorPanel
+            context={endpointContext}
+            selectedNode={activity}
+            selectedNodeLabel="Long running browser activity"
+            selectedActivityType={activityInspectorTabDescriptor.typeName}
+            selectedDescriptor={activityInspectorTabDescriptor}
+            selectedNodeAvailability={{
+              state: "RemovedFromCatalog",
+              layer: "Catalog",
+              referenceKind: "ActivityType",
+              reason: "This fixture activity is intentionally unavailable."
+            }}
+            selectedSlots={activityInspectorTabSlots}
+            inspectingScopeOwner
+            catalog={[]}
+            selectedSupportsScopedVariables
+            propertyEditors={[]}
+            expressionEditors={[]}
+            expressionDescriptors={expressionDescriptors}
+            expressionDescriptorStatus="ready"
+            descriptorStatus="ready"
+            onRetryExpressionDescriptors={() => undefined}
+            scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "ready" }}
+            activeTabId={activeTabId}
+            onActiveTabChange={setActiveTabId}
+            onSelectedActivityChange={setActivity}
+            onEnterSlot={() => undefined}
+            onReplaceSlotActivity={() => undefined}
+          />
+        ) : (
+          <section aria-label={`${activeOuterPanel} panel`} style={{ padding: "12px" }}>
+            {activeOuterPanel === "runtime" ? "Runtime inspector panel" : "Artifacts inspector panel"}
+          </section>
+        )}
       </aside>
     </main>
   );
@@ -773,6 +883,8 @@ createRoot(document.getElementById("root")!).render(
     ? <ActivityDefinitionRoutesFixture />
     : reusableBoundaryFixture
       ? <QueryClientProvider client={queryClient}><ReusableBoundaryFixture /></QueryClientProvider>
+      : activityInspectorTabsFixture
+        ? <ActivityInspectorTabsFixture />
       : runDetailFixture
         ? <RunDetailFixture />
         : lazyBoundaryFixture

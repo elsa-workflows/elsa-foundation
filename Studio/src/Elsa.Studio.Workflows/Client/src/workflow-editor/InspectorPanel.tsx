@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
+import { StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
@@ -24,6 +25,18 @@ interface SlotPickerState {
   slotId: string;
   clientX: number;
   clientY: number;
+}
+
+export type ActivityInspectorTabId = "inputs" | "outputs" | "variables" | "slots" | "details" | "version";
+
+export function resolveActivityInspectorTabId(
+  requestedTabId: ActivityInspectorTabId,
+  supportsVariables: boolean,
+  hasSlots: boolean
+): ActivityInspectorTabId {
+  if (requestedTabId === "variables" && !supportsVariables) return "inputs";
+  if (requestedTabId === "slots" && !hasSlots) return "inputs";
+  return requestedTabId;
 }
 
 interface InspectorPanelProps {
@@ -53,6 +66,8 @@ interface InspectorPanelProps {
   descriptorStatus: "loading" | "ready" | "failed";
   onRetryExpressionDescriptors(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
+  activeTabId?: ActivityInspectorTabId;
+  onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode): void;
   onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
@@ -87,12 +102,44 @@ export function InspectorPanel({
   descriptorStatus,
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
+  activeTabId,
+  onActiveTabChange,
   onSelectedActivityChange,
   onChangeReusableVersion,
   onEnterSlot,
   onReplaceSlotActivity
 }: InspectorPanelProps) {
   const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
+  const [localActiveTabId, setLocalActiveTabId] = useState<ActivityInspectorTabId>("inputs");
+  const tabBaseId = useId();
+  const hasSlots = selectedSlots.length > 0;
+  const requestedTabId = activeTabId ?? localActiveTabId;
+  const effectiveActiveTabId = resolveActivityInspectorTabId(requestedTabId, selectedSupportsScopedVariables, hasSlots);
+  const inspectorTabs: StudioTabItem[] = [
+    { id: "inputs", label: "Inputs" },
+    { id: "outputs", label: "Outputs" },
+    ...(selectedSupportsScopedVariables ? [{ id: "variables" as const, label: "Variables" }] : []),
+    ...(hasSlots ? [{ id: "slots" as const, label: "Slots" }] : []),
+    { id: "details", label: "Details" },
+    { id: "version", label: "Version" }
+  ];
+  const selectTab = onActiveTabChange ?? setLocalActiveTabId;
+  const tabIndexById = new Map(inspectorTabs.map((tab, index) => [tab.id, index]));
+  const tabPanelProps = (tabId: ActivityInspectorTabId) => {
+    const index = tabIndexById.get(tabId)!;
+    return {
+      index,
+      baseId: tabBaseId,
+      className: "wf-inspector-tab-panel",
+      hidden: tabId !== effectiveActiveTabId
+    };
+  };
+
+  useEffect(() => {
+    if (effectiveActiveTabId !== requestedTabId) {
+      selectTab(effectiveActiveTabId);
+    }
+  }, [effectiveActiveTabId, requestedTabId, selectTab]);
 
   // Adjust-during-render: an open picker belongs to the node it was opened for; drop it the moment the
   // selection moves, so it neither survives a selection change nor resurrects on reselection.
@@ -126,6 +173,8 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      showHeading={false}
+      emptyLabel="This activity has no configurable inputs."
       onChange={onSelectedActivityChange}
     />
   ) : (
@@ -143,29 +192,122 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      showHeading={false}
+      emptyLabel="This activity has no configurable inputs."
       onChange={onSelectedActivityChange}
     />
   );
 
   return (
     <div className="wf-inspector-content">
-      <h3>{selectedNodeLabel}</h3>
-      {inspectingScopeOwner ? (
-        <p className="wf-muted wf-inspector-owner-hint">Container of this canvas — select a node to inspect it instead.</p>
-      ) : null}
-      <dl>
-        <dt>Node ID</dt>
-        <dd>{selectedNode.nodeId}</dd>
-        <dt>Activity type</dt>
-        <dd>{selectedActivityType}</dd>
-      </dl>
-      <details className="wf-inspector-advanced">
-        <summary>Version &amp; source</summary>
-        <div className="wf-inspector-advanced-body">
+      <div className="wf-inspector-context">
+        <h3>{selectedNodeLabel}</h3>
+        {inspectingScopeOwner ? (
+          <p className="wf-muted wf-inspector-owner-hint">Container of this canvas — select a node to inspect it instead.</p>
+        ) : null}
+        {selectedNodeAvailability ? (
+          <div className="wf-availability-notice">
+            <AlertTriangle size={14} />
+            <span>No longer available for new use · {getAvailabilityStateLabel(selectedNodeAvailability.state)}</span>
+          </div>
+        ) : null}
+      </div>
+      <StudioTabs
+        baseId={tabBaseId}
+        className="wf-inspector-tabs"
+        tabs={inspectorTabs}
+        activeTab={effectiveActiveTabId}
+        ariaLabel="Activity inspector sections"
+        onSelect={tabId => selectTab(tabId as ActivityInspectorTabId)}
+      />
+      <div className="wf-inspector-tab-panels">
+        <StudioTabPanel {...tabPanelProps("inputs")}>
+          {propertiesPanel}
+        </StudioTabPanel>
+        <StudioTabPanel {...tabPanelProps("outputs")}>
+          <ActivityOutputsPanel
+            descriptor={selectedDescriptor}
+            activity={selectedNode}
+            context={context}
+            visibleVariables={scopedVariableAnalysis.visibleVariables}
+            scopeStatus={scopedVariableAnalysis.status}
+            scopeRetry={scopedVariableAnalysis.retry}
+            showHeading={false}
+            emptyLabel="This activity has no outputs."
+            onChange={onSelectedActivityChange}
+          />
+        </StudioTabPanel>
+        {selectedSupportsScopedVariables ? (
+          <StudioTabPanel {...tabPanelProps("variables")}>
+            <div className="wf-container-variables">
+              <ScopedVariablesEditor
+                context={context}
+                variables={readContainerVariables(selectedNode)}
+                title="Container variables"
+                addLabel="Add container variable"
+                emptyLabel="No container variables declared on this activity."
+                warnings={shadowingWarningMap(scopedVariableAnalysis.shadowingWarnings, selectedNode.nodeId)}
+                onChange={next => onSelectedActivityChange(writeContainerVariables(selectedNode, next as VariableDefinition[]))}
+              />
+            </div>
+          </StudioTabPanel>
+        ) : null}
+        {hasSlots ? (
+          <StudioTabPanel {...tabPanelProps("slots")}>
+            <div className="wf-slot-list">
+              {selectedSlots.map(slot => {
+                const label = slotCrumbLabel(selectedNodeLabel, slot);
+                return (
+                  <div className="wf-slot-row" key={slot.id}>
+                    <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
+                      {slot.label}
+                      <small>{describeSlotContents(slot, catalogByVersion)}</small>
+                    </button>
+                    {slot.cardinality === "single" ? (
+                      <button
+                        type="button"
+                        className="wf-slot-change"
+                        aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
+                        title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
+                        onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, clientX: event.clientX, clientY: event.clientY })}
+                      >
+                        <Repeat2 size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            {slotPicker ? (
+              <ConnectMenu
+                clientX={slotPicker.clientX}
+                clientY={slotPicker.clientY}
+                activities={catalog}
+                onPick={activity => {
+                  setSlotPicker(null);
+                  const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
+                  if (!slot) return;
+                  onReplaceSlotActivity(selectedNode.nodeId, slot, slotCrumbLabel(selectedNodeLabel, slot), activity);
+                }}
+                onClose={() => setSlotPicker(null)}
+              />
+            ) : null}
+          </StudioTabPanel>
+        ) : null}
+        <StudioTabPanel {...tabPanelProps("details")}>
           <dl>
-            <dt>Activity version</dt>
-            <dd>{selectedNode.activityVersionId}</dd>
+            <dt>Node ID</dt>
+            <dd>{selectedNode.nodeId}</dd>
+            <dt>Activity type</dt>
+            <dd>{selectedActivityType}</dd>
           </dl>
+        </StudioTabPanel>
+        <StudioTabPanel {...tabPanelProps("version")}>
+          <div className="wf-inspector-version">
+            <dl>
+              <dt>Activity version</dt>
+              <dd>{selectedNode.activityVersionId}</dd>
+            </dl>
           {selectedReusableDefinitionId ? (
             <ReusableActivityIdentity
               node={selectedNode}
@@ -177,78 +319,9 @@ export function InspectorPanel({
               onChangeVersion={onChangeReusableVersion}
             />
           ) : null}
-        </div>
-      </details>
-      {selectedNodeAvailability ? (
-        <div className="wf-availability-notice">
-          <AlertTriangle size={14} />
-          <span>No longer available for new use · {getAvailabilityStateLabel(selectedNodeAvailability.state)}</span>
-        </div>
-      ) : null}
-      {propertiesPanel}
-      <ActivityOutputsPanel
-        descriptor={selectedDescriptor}
-        activity={selectedNode}
-        context={context}
-        visibleVariables={scopedVariableAnalysis.visibleVariables}
-        scopeStatus={scopedVariableAnalysis.status}
-        scopeRetry={scopedVariableAnalysis.retry}
-        onChange={onSelectedActivityChange}
-      />
-      {selectedSupportsScopedVariables ? (
-        <div className="wf-container-variables">
-          <ScopedVariablesEditor
-            context={context}
-            variables={readContainerVariables(selectedNode)}
-            title="Container variables"
-            addLabel="Add container variable"
-            emptyLabel="No container variables declared on this activity."
-            warnings={shadowingWarningMap(scopedVariableAnalysis.shadowingWarnings, selectedNode.nodeId)}
-            onChange={next => onSelectedActivityChange(writeContainerVariables(selectedNode, next as VariableDefinition[]))}
-          />
-        </div>
-      ) : null}
-      {selectedSlots.length > 0 ? (
-        <div className="wf-slot-list">
-          <span>Embedded slots</span>
-          {selectedSlots.map(slot => {
-            const label = slotCrumbLabel(selectedNodeLabel, slot);
-            return (
-              <div className="wf-slot-row" key={slot.id}>
-                <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
-                  {slot.label}
-                  <small>{describeSlotContents(slot, catalogByVersion)}</small>
-                </button>
-                {slot.cardinality === "single" ? (
-                  <button
-                    type="button"
-                    className="wf-slot-change"
-                    aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
-                    title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
-                    onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, clientX: event.clientX, clientY: event.clientY })}
-                  >
-                    <Repeat2 size={14} />
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : <p className="wf-muted">This activity does not expose embedded child slots.</p>}
-      {slotPicker ? (
-        <ConnectMenu
-          clientX={slotPicker.clientX}
-          clientY={slotPicker.clientY}
-          activities={catalog}
-          onPick={activity => {
-            setSlotPicker(null);
-            const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
-            if (!slot) return;
-            onReplaceSlotActivity(selectedNode.nodeId, slot, slotCrumbLabel(selectedNodeLabel, slot), activity);
-          }}
-          onClose={() => setSlotPicker(null)}
-        />
-      ) : null}
+          </div>
+        </StudioTabPanel>
+      </div>
     </div>
   );
 }

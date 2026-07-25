@@ -142,6 +142,8 @@ describe("workflow Input reference Contribution", () => {
         descriptorStatus="ready"
         onRetryExpressionDescriptors={() => undefined}
         scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "unavailable" }}
+        activeTabId="inputs"
+        onActiveTabChange={() => undefined}
         onSelectedActivityChange={onChange}
         onEnterSlot={() => undefined}
         onReplaceSlotActivity={() => undefined}

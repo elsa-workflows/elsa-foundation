@@ -4077,10 +4077,95 @@ button.wf-node-slot-badge:focus-visible {
 }
 
 .wf-inspector-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.wf-inspector-context {
+  flex: 0 0 auto;
+  padding: 12px 12px 10px;
+}
+
+.wf-inspector-tabs {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  border-top: 1px solid var(--wf-border);
+  border-bottom: 1px solid var(--wf-border);
+  padding: 5px 8px;
+}
+
+.wf-inspector-tabs button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--wf-radius-sm);
+  background: transparent;
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: var(--wf-label-weight, 600);
+  padding: 0 8px;
+}
+
+.wf-inspector-tabs button:hover,
+.wf-inspector-tabs button:focus-visible,
+.wf-inspector-tabs button.active {
+  border-color: var(--wf-border);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  outline: none;
+}
+
+.wf-inspector-tabs button:focus-visible {
+  box-shadow: var(--wf-focus-ring);
+}
+
+.wf-inspector-tabs button.active {
+  color: var(--wf-accent);
+}
+
+.wf-inspector-tab-panels {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.wf-inspector-tab-panel {
+  min-width: 0;
   min-height: 0;
   flex: 1;
   overflow: auto;
   padding: 12px;
+}
+
+.wf-inspector-tab-panel[hidden] {
+  display: none;
+}
+
+.wf-inspector-tab-panel > .wf-properties,
+.wf-inspector-tab-panel > .wf-outputs {
+  margin: 0;
+}
+
+.wf-inspector-tab-panel .wf-container-variables,
+.wf-inspector-tab-panel .wf-slot-list {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.wf-inspector-tab-empty {
+  margin: 0;
 }
 
 .wf-inspector > .wf-muted {
@@ -4089,7 +4174,7 @@ button.wf-node-slot-badge:focus-visible {
 }
 
 .wf-inspector h3 {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 16px;
 }
 
@@ -4111,50 +4196,6 @@ button.wf-node-slot-badge:focus-visible {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 12px;
-}
-
-.wf-inspector-advanced {
-  margin: 0 0 16px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-}
-
-.wf-inspector-advanced summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--wf-text);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  list-style-position: inside;
-  padding: 8px 10px;
-  border-radius: var(--wf-radius);
-}
-
-.wf-inspector-advanced summary:hover {
-  background: var(--wf-accent-soft);
-}
-
-.wf-inspector-advanced summary:focus-visible {
-  outline: none;
-  box-shadow: var(--wf-focus-ring);
-}
-
-.wf-inspector-advanced[open] summary {
-  border-bottom: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius) var(--wf-radius) 0 0;
-}
-
-.wf-inspector-advanced-body {
-  display: grid;
-  gap: 10px;
-  padding: 10px;
-}
-
-/* The nested identity list drops the standalone-inspector bottom margin — it's inside a padded body. */
-.wf-inspector-advanced-body dl {
-  margin: 0;
 }
 
 .wf-outputs {
@@ -4614,8 +4655,7 @@ button.wf-reference-select {
   margin: 0 0 18px;
 }
 
-.wf-section-label,
-.wf-slot-list > span {
+.wf-section-label {
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: var(--wf-label-weight, 600);
@@ -5680,7 +5720,7 @@ button.wf-reference-select {
 }
 
 .wf-inspector-owner-hint {
-  margin-top: -6px;
+  margin: 4px 0 0;
 }
 
 .wf-slot-row {

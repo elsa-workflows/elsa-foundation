@@ -78,6 +78,10 @@ export interface ActivityPropertiesPanelProps {
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
   dictionarySessionScope?: string;
+  /** Lets an enclosing Inspector tab provide the section context without a duplicate heading. */
+  showHeading?: boolean;
+  /** Overrides the standalone empty-state copy when the panel is presented as activity inputs. */
+  emptyLabel?: string;
   onChange(activity: ActivityNode): void;
 }
 
@@ -96,6 +100,8 @@ export function ActivityPropertiesPanel({
   scopeStatus,
   scopeRetry,
   dictionarySessionScope,
+  showHeading = true,
+  emptyLabel = "This activity does not expose editable properties.",
   onChange
 }: ActivityPropertiesPanelProps) {
   const generatedDictionarySessionScope = useId();
@@ -115,7 +121,7 @@ export function ActivityPropertiesPanel({
   const inputs = descriptor.inputs.filter(input => input.isBrowsable !== false);
 
   if (inputs.length === 0) {
-    return <p className="wf-muted">This activity does not expose editable properties.</p>;
+    return <p className="wf-muted">{emptyLabel}</p>;
   }
 
   const groups = groupInputs(inputs, readPropertyGroupMetadata(descriptor.customProperties));
@@ -128,7 +134,7 @@ export function ActivityPropertiesPanel({
       retry={scopeRetry}
     >
     <div className="wf-properties">
-      <span className="wf-section-label">Properties</span>
+      {showHeading ? <span className="wf-section-label">Properties</span> : null}
       <ExpressionDescriptorStatus
         status={expressionDescriptorStatus}
         hasSnapshot={expressionDescriptors.length > 0}

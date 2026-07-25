@@ -51,7 +51,11 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
-import { InspectorPanel } from "./InspectorPanel";
+import {
+  InspectorPanel,
+  resolveActivityInspectorTabId,
+  type ActivityInspectorTabId
+} from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
 import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
 import { findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
@@ -119,6 +123,7 @@ export function WorkflowEditor({
   const [paletteSearch, setPaletteSearch] = useState("");
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [versionChange, setVersionChange] = useState<{
     occurrence: ActivityNode;
@@ -188,6 +193,10 @@ export function WorkflowEditor({
     selectedBpmnElement,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  useEffect(() => {
+    setActiveInspectorTabId(current =>
+      resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
+  }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
   const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
   const inspectedReusableVersion = useFullActivityDefinitionVersion(
@@ -732,6 +741,7 @@ export function WorkflowEditor({
         />
       ) : (
         <InspectorPanel
+          key={inspectedNode?.nodeId ?? "no-activity"}
           context={context}
           workflowState={draft.state}
           selectedNode={inspectedNode}
@@ -762,6 +772,8 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activeTabId={activeInspectorTabId}
+          onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
           onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}

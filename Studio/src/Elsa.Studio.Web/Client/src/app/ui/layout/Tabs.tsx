@@ -83,19 +83,25 @@ export function StudioTabs({
   tabs,
   activeTab,
   onSelect,
-  ariaLabel
+  ariaLabel,
+  baseId: providedBaseId,
+  className
 }: {
   tabs: StudioTabItem[];
   activeTab: string;
   onSelect(tabId: string): void;
   ariaLabel?: string;
+  /** Share with StudioTabPanel when callers compose the tab list and mounted panels separately. */
+  baseId?: string;
+  className?: string;
 }) {
-  const baseId = useId();
+  const generatedBaseId = useId();
+  const baseId = providedBaseId ?? generatedBaseId;
   const tabIds = tabs.map(tab => tab.id);
   const onKeyDown = useTablistKeyboard(tabIds, activeTab, onSelect);
 
   return (
-    <div className="studio-tabs" role="tablist" aria-label={ariaLabel} onKeyDown={onKeyDown}>
+    <div className={["studio-tabs", className].filter(Boolean).join(" ")} role="tablist" aria-label={ariaLabel} onKeyDown={onKeyDown}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab;
         const ids = tabElementIds(baseId, index);
@@ -130,16 +136,19 @@ export function StudioTabPanel({
   baseId,
   index,
   children,
-  className
+  className,
+  hidden = false
 }: {
   baseId: string;
   index: number;
   children: React.ReactNode;
   className?: string;
+  /** Keep panel state mounted while removing an inactive panel from layout and accessibility APIs. */
+  hidden?: boolean;
 }) {
   const ids = tabElementIds(baseId, index);
   return (
-    <div id={ids.panelId} role="tabpanel" aria-labelledby={ids.tabId} tabIndex={0} className={className}>
+    <div id={ids.panelId} role="tabpanel" aria-labelledby={ids.tabId} tabIndex={0} className={className} hidden={hidden}>
       {children}
     </div>
   );

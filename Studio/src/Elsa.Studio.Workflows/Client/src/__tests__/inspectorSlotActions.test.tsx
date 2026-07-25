@@ -104,11 +104,18 @@ function panelElement(slots: ChildSlot[], handlers: PanelHandlers = {}, override
 }
 
 function renderPanel(slot: ChildSlot, handlers: PanelHandlers = {}) {
-  return render(panelElement([slot], handlers));
+  const container = render(panelElement([slot], handlers));
+  activateTab(container, "Slots");
+  return container;
 }
 
 function findButton(container: HTMLElement, text: string) {
   return Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes(text));
+}
+
+function activateTab(container: HTMLElement, label: string) {
+  click([...container.querySelectorAll<HTMLButtonElement>("[role='tab']")]
+    .find(tab => tab.textContent === label)!);
 }
 
 describe("InspectorPanel slot actions", () => {
@@ -227,14 +234,11 @@ describe("InspectorPanel slot actions", () => {
     const container = renderPanel(slot, { onReplaceSlotActivity });
 
     click(container.querySelector('[aria-label="Change Body activity"]')!);
-    // The slot disappears (e.g. a concurrent edit removed it) while the picker stays open.
+    // The slot disappears (e.g. a concurrent edit removed it), so its conditional tab and picker close.
     rerender(panelElement([], { onReplaceSlotActivity }));
-    expect(container.querySelector(".wf-connect-menu")).toBeTruthy();
-
-    click(findButton(container.ownerDocument.body as HTMLElement, "Read Line")!);
+    expect(container.querySelector(".wf-connect-menu")).toBeNull();
 
     expect(onReplaceSlotActivity).not.toHaveBeenCalled();
-    expect(container.querySelector(".wf-connect-menu")).toBeNull();
   });
 
   it("replaces via the live slot descriptor, not the one captured when the picker opened", () => {
@@ -264,33 +268,32 @@ function descriptor(overrides: Partial<StudioActivityDescriptor> = {}): StudioAc
   };
 }
 
-describe("InspectorPanel simplified layout", () => {
-  it("keeps Node ID and Activity type in the top identity list but not the Activity version", () => {
+describe("InspectorPanel tabbed layout", () => {
+  it("moves Node ID and Activity type into Details without the Activity version", () => {
     const container = render(panelElement([]));
-    const topList = container.querySelector<HTMLElement>(".wf-inspector-content > dl")!;
+    activateTab(container, "Details");
+    const detailsPanel = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
 
-    expect(topList.textContent).toContain("Node ID");
-    expect(topList.textContent).toContain("foreach-1");
-    expect(topList.textContent).toContain("Activity type");
-    expect(topList.textContent).toContain("Elsa.Activities.ForEach.Activities.ForEach");
-    expect(topList.textContent).not.toContain("Activity version");
-    expect(topList.textContent).not.toContain("activity-foreach-v1");
+    expect(detailsPanel.textContent).toContain("Node ID");
+    expect(detailsPanel.textContent).toContain("foreach-1");
+    expect(detailsPanel.textContent).toContain("Activity type");
+    expect(detailsPanel.textContent).toContain("Elsa.Activities.ForEach.Activities.ForEach");
+    expect(detailsPanel.textContent).not.toContain("Activity version");
+    expect(detailsPanel.textContent).not.toContain("activity-foreach-v1");
   });
 
-  it("tucks the Activity version and reusable boundary into the Version & source disclosure", () => {
+  it("moves the Activity version and reusable boundary into Version", () => {
     const container = render(panelElement([], {}, {
       selectedReusableDefinitionId: "invoice-definition",
       selectedReusableSemanticVersion: "2.0.0"
     }));
-    const advanced = container.querySelector<HTMLDetailsElement>("details.wf-inspector-advanced")!;
+    activateTab(container, "Version");
+    const versionPanel = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
 
-    expect(advanced.querySelector("summary")?.textContent).toContain("Version & source");
-    expect(advanced.textContent).toContain("Activity version");
-    expect(advanced.textContent).toContain("activity-foreach-v1");
-    expect(advanced.textContent).toContain("invoice-definition");
-    expect(advanced.textContent).toContain("Reusable boundary");
-    // The disclosure stays collapsed by default, hiding the metadata until expanded.
-    expect(advanced.open).toBe(false);
+    expect(versionPanel.textContent).toContain("Activity version");
+    expect(versionPanel.textContent).toContain("activity-foreach-v1");
+    expect(versionPanel.textContent).toContain("invoice-definition");
+    expect(versionPanel.textContent).toContain("Reusable boundary");
   });
 
   it("renders a read-only Outputs section for each browsable output", () => {
@@ -311,8 +314,11 @@ describe("InspectorPanel simplified layout", () => {
     expect(outputs.textContent).not.toContain("Hidden");
   });
 
-  it("omits the Outputs section when the activity exposes no outputs", () => {
+  it("shows an explicit Outputs empty state when the activity exposes no outputs", () => {
     const container = render(panelElement([], {}, { selectedDescriptor: descriptor() }));
     expect(container.querySelector(".wf-outputs")).toBeNull();
+    activateTab(container, "Outputs");
+    expect(container.querySelector("[role='tabpanel']:not([hidden])")?.textContent)
+      .toContain("This activity has no outputs.");
   });
 });

@@ -24,6 +24,8 @@ export function ActivityOutputsPanel({
   visibleVariables,
   scopeStatus,
   scopeRetry,
+  showHeading = true,
+  emptyLabel = null,
   onChange
 }: {
   descriptor: StudioActivityDescriptor | null;
@@ -32,17 +34,23 @@ export function ActivityOutputsPanel({
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
+  /** Lets an enclosing Inspector tab provide the section context without a duplicate heading. */
+  showHeading?: boolean;
+  /** Optional empty state for contexts where the absence of outputs should be explicit. */
+  emptyLabel?: string | null;
   onChange(activity: ActivityNode): void;
 }) {
   const conversionProfiles = useConversionProfiles(context);
   if (!descriptor || !activity) return null;
 
   const outputs = descriptor.outputs.filter(output => output.isBrowsable !== false);
-  if (outputs.length === 0) return null;
+  if (outputs.length === 0) {
+    return emptyLabel ? <p className="wf-muted wf-inspector-tab-empty">{emptyLabel}</p> : null;
+  }
 
   return (
     <div className="wf-outputs">
-      <span className="wf-section-label">Outputs</span>
+      {showHeading ? <span className="wf-section-label">Outputs</span> : null}
       {outputs.map(output => (
         <OutputCaptureRow
           key={getOutputPropertyName(output)}

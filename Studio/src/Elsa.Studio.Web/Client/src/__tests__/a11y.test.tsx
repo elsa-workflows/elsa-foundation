@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ShellFrame } from "../app/App";
 import { ThemeProvider } from "../app/components/ThemeProvider";
-import { StudioTabs, type StudioTabItem } from "../app/ui/layout/Tabs";
+import { StudioTabPanel, StudioTabs, type StudioTabItem } from "../app/ui/layout/Tabs";
 import { StudioAlert } from "../app/ui/feedback/FeedbackStates";
 import { StudioDataGrid } from "../app/ui/data-grid/DataGrid";
 
@@ -61,6 +61,31 @@ describe("StudioTabs keyboard navigation", () => {
     expect(panelId).toBeTruthy();
     expect(first.id).toBeTruthy();
     expect(first.id).not.toBe(panelId);
+  });
+
+  it("accepts a caller-owned base id that links a composed StudioTabPanel", () => {
+    render(
+      <>
+        <StudioTabs
+          baseId="activity-inspector"
+          tabs={items}
+          activeTab="one"
+          onSelect={() => {}}
+          ariaLabel="Sections"
+          className="activity-tabs"
+        />
+        <StudioTabPanel baseId="activity-inspector" index={0}>First panel</StudioTabPanel>
+        <StudioTabPanel baseId="activity-inspector" index={1} hidden>Second panel</StudioTabPanel>
+      </>
+    );
+
+    const [first] = tabs();
+    const panel = container.querySelector<HTMLElement>("[role='tabpanel']")!;
+    expect(first.getAttribute("aria-controls")).toBe(panel.id);
+    expect(panel.getAttribute("aria-labelledby")).toBe(first.id);
+    expect(panel.tabIndex).toBe(0);
+    expect(container.querySelector("[role='tablist']")?.classList).toContain("activity-tabs");
+    expect(container.querySelectorAll<HTMLElement>("[role='tabpanel']")[1].hidden).toBe(true);
   });
 
   it("gives tabs whose ids differ only in punctuation distinct element ids", () => {
