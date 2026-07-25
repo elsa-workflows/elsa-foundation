@@ -11,10 +11,11 @@
     "mongodb"
   ],
   "compositionEvidence": {
-    "evidenceId": "host-selection-all32",
+    "evidenceId": "host-selection-all34",
     "outcome": "pass",
     "selectedFeatureIdentities": [
       "elsa-activities-design",
+      "elsa-diagnostics",
       "elsa-identity",
       "elsa-secrets",
       "elsa-workflows-design",
@@ -23,6 +24,8 @@
       "elsa-workflows-runtime-distributed"
     ],
     "coveredEntryIds": [
+      "diagnostics-open-telemetry-store",
+      "diagnostics-structured-log-store",
       "runtime-activity-execution-inspection",
       "runtime-activity-execution-state",
       "runtime-bookmark-state",
@@ -74,10 +77,120 @@
         ]
       }
     ],
-    "artifact": "evidence/composition/host-selection-all32.json",
-    "artifactSha256": "7aed181584844633ffd66e483c1afb2eef5548ba7a5e49da4184246029c4c9c0"
+    "artifact": "evidence/composition/host-selection-all34.json",
+    "artifactSha256": "60351a13b0a736e213b2636aa54a44eaf54e764648a648ddaa2758e408306cd6"
   },
   "entries": [
+    {
+      "id": "diagnostics-open-telemetry-store",
+      "family": "diagnostics",
+      "contract": "IOpenTelemetryStore",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#642",
+      "status": "implemented",
+      "initialGap": "The preview.86 four-provider recertification, diagnostics performance verdict, and retained provider artifacts are incomplete.",
+      "performanceWorkload": "diagnostics-durable-history",
+      "dependency": "#642 and #646",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "bounded-resource-catalog-query",
+        "latest-trace-summary-query",
+        "bounded-trace-detail-query",
+        "bounded-metric-point-query",
+        "bounded-telemetry-log-query",
+        "exact-stream-inspection"
+      ],
+      "concurrencySemantics": [
+        "idempotent-atomic-single-stream-batch-append",
+        "bounded-nonblocking-capture-drain",
+        "snapshot-bound-provider-query",
+        "deterministic-catalog-upsert"
+      ],
+      "atomicBoundary": "Each diagnostic record stream append is atomic and idempotent; mutable resource and instrument catalog writes use Groundwork document concurrency.",
+      "failureWindows": [
+        "before-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement",
+        "queue-overflow",
+        "retry-exhaustion",
+        "shutdown-timeout"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database",
+        "retention-trim-preserves-stream-high-water"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#642 adapter and provider conformance; #646 performance evidence",
+      "behavioralBaseline": [
+        "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs",
+        "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs",
+        "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryRestartTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs"
+      ]
+    },
+    {
+      "id": "diagnostics-structured-log-store",
+      "family": "diagnostics",
+      "contract": "IStructuredLogStore",
+      "outcome": "specialized-primitive",
+      "scope": "tenant-scoped",
+      "authority": "#642",
+      "status": "implemented",
+      "initialGap": "The preview.86 four-provider recertification, diagnostics performance verdict, and retained provider artifacts are incomplete.",
+      "performanceWorkload": "diagnostics-durable-history",
+      "dependency": "#642 and #646",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "bounded-recent-query",
+        "snapshot-bound-replay-page",
+        "tail-cursor-query",
+        "exact-stream-inspection"
+      ],
+      "concurrencySemantics": [
+        "idempotent-atomic-single-stream-batch-append",
+        "bounded-nonblocking-capture-drain",
+        "durable-cursor-total-order",
+        "lifetime-logical-high-water"
+      ],
+      "atomicBoundary": "One structured-log batch append is atomic and idempotent within an explicit tenant and shell storage scope.",
+      "failureWindows": [
+        "before-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement",
+        "queue-overflow",
+        "retry-exhaustion",
+        "shutdown-timeout"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database",
+        "retention-trim-preserves-cursor-and-logical-high-water"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass",
+      "deliveryOwner": "#642 adapter and provider conformance; #646 performance evidence",
+      "behavioralBaseline": [
+        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogStoreTests.cs",
+        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogQueryConformanceTests.cs",
+        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs",
+        "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs"
+      ]
+    },
     {
       "id": "runtime-activity-execution-inspection",
       "family": "runtime",

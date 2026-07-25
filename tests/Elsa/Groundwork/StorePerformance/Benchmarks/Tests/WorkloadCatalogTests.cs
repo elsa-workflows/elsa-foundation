@@ -8,11 +8,11 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
 public sealed class WorkloadCatalogTests
 {
     [Fact]
-    public void Loads_the_exact_twelve_versioned_spec_094_workloads()
+    public void Loads_the_exact_thirteen_versioned_spec_094_workloads()
     {
         var catalog = WorkloadCatalog.Load(Repository.Root());
 
-        Assert.Equal(12, catalog.Workloads.Count);
+        Assert.Equal(13, catalog.Workloads.Count);
         Assert.Equal(Expected.Keys.Order(StringComparer.Ordinal), catalog.Workloads.Keys.Order(StringComparer.Ordinal));
         foreach (var (id, expected) in Expected)
         {
@@ -38,7 +38,7 @@ public sealed class WorkloadCatalogTests
             Assert.Equal(golden.ResultDigest, catalog.Workloads[id].Correctness.ResultDigestSha256);
         }
 
-        Assert.Equal(10, ReproducibleWorkloadScenarioCatalog.Successors.Count);
+        Assert.Equal(11, ReproducibleWorkloadScenarioCatalog.Successors.Count);
         foreach (var (id, scenario) in ReproducibleWorkloadScenarioCatalog.Successors)
         {
             var workload = catalog.Workloads[id];
@@ -110,6 +110,23 @@ public sealed class WorkloadCatalogTests
         Assert.Contains("Identity v1.1 golden vector", error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("\"retentionOverflowRecords\": 1000", "\"retentionOverflowRecords\": 1001")]
+    [InlineData("\"query-open-telemetry-logs\"", "\"query-open-telemetry-log-drift\"")]
+    [InlineData("\"scenarioId\": \"diagnostics-durable-history\"", "\"scenarioId\": \"diagnostics-durable-history-drift\"")]
+    public void Rejects_diagnostics_semantic_scenario_or_operation_drift_with_a_recomputed_source_digest(
+        string from,
+        string to)
+    {
+        using var fixture = WorkloadFixture.CopyFromRepository();
+        fixture.Replace(from, to, "diagnostics.json");
+
+        var error = Assert.Throws<WorkloadContractException>(() =>
+            WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
+
+        Assert.Contains("reproducible v1.1 contract vector", error.Message, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyDictionary<string, string> SourceDigests(string repositoryRoot)
     {
         var directory = Path.Combine(repositoryRoot, "specs", "094-harden-groundwork-stores", "workloads");
@@ -136,7 +153,10 @@ public sealed class WorkloadCatalogTests
             ["iam-normalized-lookup-update"] = new(["iam-application", "iam-claim-mapping", "iam-credential", "iam-external-identity", "iam-provider-configuration-tenant", "iam-role", "iam-tenant-membership", "iam-user"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables-current-identity-shape"]),
             ["secret-create-read-list"] = new(["secrets-repository"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables"]),
             ["placement-takeover"] = new(["distributed-execution-placement"], ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"]),
-            ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"])
+            ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"]),
+            ["diagnostics-durable-history"] = new(
+                ["diagnostics-open-telemetry-store", "diagnostics-structured-log-store"],
+                ["specialized-diagnostic-record-streams-with-shared-document-catalogs", "specialized-diagnostic-record-streams-with-dedicated-document-catalogs"])
         };
 
     private static readonly IReadOnlyDictionary<string, WorkloadGoldenVector> ExpectedGoldenVectors =
@@ -146,6 +166,7 @@ public sealed class WorkloadCatalogTests
             ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
             ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
+            ["diagnostics-durable-history"] = new("448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667", "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7"),
             ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
             ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),

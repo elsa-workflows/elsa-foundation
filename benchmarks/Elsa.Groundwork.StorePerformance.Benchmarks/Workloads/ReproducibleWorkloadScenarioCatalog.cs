@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 /// <summary>
-/// Benchmark-owned deterministic contract vectors for ten Spec 094 workloads. These definitions
+/// Benchmark-owned deterministic contract vectors for eleven Spec 094 workloads. These definitions
 /// describe the inputs, operation names, and expected observations that future real EF and Groundwork
 /// adapter runners must execute; they are not public-operation runners themselves.
 /// </summary>
@@ -37,6 +37,7 @@ public static class ReproducibleWorkloadScenarioCatalog
             ["bookmark-lookup"] = new("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
             ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
+            ["diagnostics-durable-history"] = new("448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667", "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7"),
             ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
             ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
@@ -299,6 +300,61 @@ public static class ReproducibleWorkloadScenarioCatalog
                 ("pendingAfterReopen", Int(parameters, "workflowCount") * Int(parameters, "commandsPerWorkflow") - Int(parameters, "batchSize")),
                 ("redeliveredCount", Int(parameters, "batchSize")),
                 ("staleAcknowledgementRejected", true)));
+
+        yield return Scenario(
+            "diagnostics-durable-history",
+            "diagnostics-durable-history",
+            "spec094-diagnostics-durable-history-v1.1",
+            [
+                ("concurrentWriters", 4),
+                ("fixedNowUtc", "2026-07-25T00:00:00Z"),
+                ("instrumentCount", 64),
+                ("normalizedRecordsPerOtlpBatch", 64),
+                ("payloadBytes", 512),
+                ("queryLimit", 200),
+                ("resourceCount", 128),
+                ("retainedRecordsPerStream", 100_000),
+                ("retentionOverflowRecords", 1_000),
+                ("structuredLogBatchSize", 200),
+                ("tenantCount", 2),
+                ("timedSetup", "excluded")
+            ],
+            [
+                "seed-cross-scope-diagnostic-history",
+                "append-structured-log-batches",
+                "read-structured-log-recent",
+                "resume-structured-log-history",
+                "reopen-and-read-structured-log-high-water",
+                "append-open-telemetry-batches",
+                "query-open-telemetry-resources",
+                "query-open-telemetry-traces",
+                "read-open-telemetry-trace-detail",
+                "query-open-telemetry-metrics",
+                "query-open-telemetry-logs",
+                "inspect-exact-stream-counts",
+                "trim-diagnostic-streams",
+                "reopen-and-verify-durable-history",
+                "verify-cross-scope-isolation"
+            ],
+            parameters => Observations(
+                ("crossScopeResultCount", 0),
+                ("diagnosticDropCount", 0),
+                ("instrumentCount", Int(parameters, "instrumentCount")),
+                ("openTelemetryRetainedCounts", new[]
+                {
+                    Int(parameters, "retainedRecordsPerStream"),
+                    Int(parameters, "retainedRecordsPerStream"),
+                    Int(parameters, "retainedRecordsPerStream"),
+                    Int(parameters, "retainedRecordsPerStream")
+                }),
+                ("resourceCount", Int(parameters, "resourceCount")),
+                ("restartStateMatched", true),
+                ("structuredLogHighWater",
+                    Int(parameters, "retainedRecordsPerStream") + Int(parameters, "retentionOverflowRecords")),
+                ("structuredLogRecentCount", Int(parameters, "queryLimit")),
+                ("structuredLogReplayCount", Int(parameters, "queryLimit")),
+                ("structuredLogRetainedCount", Int(parameters, "retainedRecordsPerStream")),
+                ("trimmedRecordsPerStream", Int(parameters, "retentionOverflowRecords"))));
     }
 
     private static ReproducibleWorkloadScenario Scenario(

@@ -17,6 +17,8 @@ public sealed class GroundworkPerformanceHandoffTests
                 "runtime-workflow-executable"
             ],
             ["command-send-lease-ack"] = ["distributed-command-transport"],
+            ["diagnostics-durable-history"] =
+            ["diagnostics-open-telemetry-store", "diagnostics-structured-log-store"],
             ["diagnostic-settings-owned-by-660-and-646"] = ["runtime-diagnostics-settings"],
             ["due-timer-selection"] = ["runtime-durable-timer"],
             ["iam-normalized-lookup-update"] =
@@ -57,6 +59,8 @@ public sealed class GroundworkPerformanceHandoffTests
             ["checkpoint-commit"] = [],
             ["command-send-lease-ack"] =
             ["lease-visible-commands-by-execution", "list-visible-command-executions", "count-pending-commands-by-execution"],
+            ["diagnostics-durable-history"] =
+            ["resources-by-last-seen", "resources-by-status", "resources-by-service", "instruments-by-last-seen"],
             ["due-timer-selection"] = ["list-due"],
             ["iam-normalized-lookup-update"] =
             ["find-user-by-normalized-name", "find-user-by-normalized-email", "find-role-by-normalized-name", "list-user-roles", "list-role-users"],
@@ -102,7 +106,7 @@ public sealed class GroundworkPerformanceHandoffTests
     }
 
     [Fact]
-    public void Ledger_maps_the_exact_ALL32_denominator_to_reviewed_workload_lanes()
+    public void Ledger_maps_the_ratified_34_row_denominator_to_reviewed_workload_lanes()
     {
         var ledger = ReadJson(LedgerPath);
         var actual = ledger["entries"]!.AsArray()
@@ -116,7 +120,7 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Equal(ExpectedLedgerMapping.Keys.Order(StringComparer.Ordinal), actual.Keys.Order(StringComparer.Ordinal));
         foreach (var (workload, expectedRows) in ExpectedLedgerMapping)
             Assert.Equal(expectedRows.Order(StringComparer.Ordinal), actual[workload]);
-        Assert.Equal(32, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(34, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -265,6 +269,7 @@ public sealed class GroundworkPerformanceHandoffTests
     [
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
         IdentityWorkloadPath
     ];
 

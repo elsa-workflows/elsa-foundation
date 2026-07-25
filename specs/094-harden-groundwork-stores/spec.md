@@ -8,9 +8,11 @@
 
 **Input**: User description: "Harden every already-landed Elsa Groundwork runtime, IAM, secrets, and distributed-runtime store so Groundwork can become the only first-party persistence implementation family in elsa-foundation. Preserve provider-neutral core contracts, prove equivalent behavior across SQLite, SQL Server, PostgreSQL, and MongoDB, close composition, tenancy, concurrency, recovery, bounded-query, and performance gaps, and avoid duplicate identity authorities."
 
-The executable coverage denominator remains the 32 runtime, IAM, secrets, and distributed-runtime
-rows. Storage composition and scope adoption also own the selected Workflows Design, Activities Design,
-and Publishing manifest units; those units do not add or claim ALL32 ledger rows.
+The executable coverage denominator preserves the original 32 runtime, IAM, secrets, and
+distributed-runtime rows. A program-owner-ratified 2026-07-25 amendment adds the durable Structured
+Logs and OpenTelemetry store rows, bringing the current denominator to 34 without weakening the
+ALL32 floor. Storage composition and scope adoption also own the selected Workflows Design,
+Activities Design, and Publishing manifest units; those units do not add ledger rows.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -186,15 +188,15 @@ An Elsa performance owner receives representative #645 workloads with verified o
 
 ### Functional Requirements
 
-- **FR-001**: The feature MUST maintain a coverage ledger for every durable runtime, IAM, secrets, and distributed-runtime contract discovered in the repository. The baseline MUST account for bookmark state and stimulus lookup; workflow executable artifacts and source references; activity and workflow execution state and inspection; durable values; scheduler, liveness, ownership, hold, and incident state; checkpoints and idempotency records; outbox, queue, poison, timer, trigger-binding, recurring-schedule, and publication-owned runtime projection state supporting trigger bindings and recurring schedules; Elsa IAM user, role, external-identity, tenant-membership, application, credential, claim-mapping, and provider-configuration contracts; secrets; distributed placement; and distributed command transport.
+- **FR-001**: The feature MUST maintain a coverage ledger for every durable runtime, IAM, secrets, distributed-runtime, Structured Logs, and OpenTelemetry store contract in the ratified denominator. The baseline MUST account for bookmark state and stimulus lookup; workflow executable artifacts and source references; activity and workflow execution state and inspection; durable values; scheduler, liveness, ownership, hold, and incident state; checkpoints and idempotency records; outbox, queue, poison, timer, trigger-binding, recurring-schedule, and publication-owned runtime projection state supporting trigger bindings and recurring schedules; Elsa IAM user, role, external-identity, tenant-membership, application, credential, claim-mapping, and provider-configuration contracts; secrets; distributed placement; distributed command transport; and both durable diagnostics stores.
 - **FR-002**: Each ledger entry MUST identify its owning store family, durable outcome, storage scope, required query shapes, concurrency semantics, restart and failure scenarios, provider evidence, required performance verdict, dependency, and delivery owner.
 - **FR-003**: Each durable outcome MUST select one accountable path: ordinary document storage, an operational store, a specialized primitive or query handler, adaptation to authority owned by another workstream, or an explicit linked exclusion.
 - **FR-004**: A baseline contract without a current durable implementation, including the scheduler poison contract, MUST remain incomplete until its durable outcome is implemented or accepted by its linked external owner.
-- **FR-005**: The ledger MUST route diagnostic-settings persistence to the diagnostics workstream, route authoritative user, role, and external-login documents to #644, and prevent this feature from creating parallel authority for those concepts.
+- **FR-005**: The ledger MUST keep in-memory runtime diagnostic-settings persistence separate from the durable Structured Logs and OpenTelemetry rows, route the latter to #642/#646, route authoritative user, role, and external-login documents to #644, and prevent this feature from creating parallel authority for those concepts.
 - **FR-006**: Every selected in-scope feature family MUST contribute its durable requirements to one host-selected storage composition before the host serves work.
 - **FR-007**: Composition validation MUST reject missing, duplicate, incompatible, or unsupported durable requirements with a diagnostic that identifies the owning features.
 - **FR-008**: A production-shaped host MUST prove that runtime, in-scope IAM, secrets, and distributed stores can be enabled together, used through their public contracts, disposed, and reopened over the same durable database.
-- **FR-009**: Every in-scope storage unit, including the selected Workflows Design, Activities Design, and Publishing manifest units outside the ALL32 coverage denominator, MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
+- **FR-009**: Every in-scope storage unit, including the selected Workflows Design, Activities Design, and Publishing manifest units outside the current 34-row coverage denominator, MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
 - **FR-010**: Tenant scope MUST be enforced for direct loads, writes, deletes, queries, mutations, recovery, and units of work at the persistence boundary; wrong-scope operations MUST NOT disclose whether another tenant's record exists.
 - **FR-011**: Privileged access MUST reject ordinary callers and record the access scope, named purpose, and outcome without exposing tenant identifiers as unbounded telemetry labels.
 - **FR-012**: Execution ownership MUST issue unique, strictly increasing fencing tokens across independent processes, release, failure, and restart.

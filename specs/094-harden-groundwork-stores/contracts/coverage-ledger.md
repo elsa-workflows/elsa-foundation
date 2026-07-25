@@ -1,6 +1,6 @@
 # Contract: Persistence Coverage Ledger
 
-The executable ledger is [`../coverage-ledger.json`](../coverage-ledger.json). This document defines its governance and provides the review view. The initial denominator is frozen to the merge-base of branch `codex/645-groundwork-store-hardening`; implementation work may advance or split rows but may not silently remove them.
+The executable ledger is [`../coverage-ledger.json`](../coverage-ledger.json). This document defines its governance and provides the review view. The original 32-row denominator is frozen to the merge-base of branch `codex/645-groundwork-store-hardening`; implementation work may advance or split rows but may not silently remove them. On 2026-07-25 the program owner ratified two additive diagnostics rows, bringing the current denominator to 34 without weakening the original 32-row floor.
 
 ## Completion rule
 
@@ -52,7 +52,7 @@ The `Groundwork fast gates` job in `.github/workflows/ci.yml` is the container-f
 
 The job fails when any of these evidence classes regress:
 
-- JSON Schema conformance, the exact 32-row denominator, status transitions, or evidence completeness;
+- JSON Schema conformance, the exact current 34-row denominator, status transitions, or evidence completeness;
 - immutable `baselineRef` test-case continuity or its exact architect-approval ledger;
 - discovered contract, Groundwork registration, manifest/storage-unit, or #644/#660 authority reconciliation;
 - provider-neutral core dependency boundaries or the reviewed shrink-only EF surface.

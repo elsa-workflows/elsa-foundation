@@ -488,7 +488,8 @@ dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa
 
 The command emits the exact version, seed, input fingerprint, expected result digest, and benchmark-admission
 status that `runtime.json` and `distributed-runtime.json` must contain. `WorkloadCatalog` binds every semantic
-JSON input field to the code-owned parameter set, checks independent literal goldens for all twelve workloads,
+JSON input field to the code-owned parameter set, checks independent literal goldens for all twelve
+then-current workloads,
 and rejects drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
 claim that they were reproducible or executed.
 
@@ -497,6 +498,35 @@ claim that they were reproducible or executed.
 synthetic comparator or waiver was added. Its explicit blocked admission is enforced before matrix child
 launch and again by comparison and gate, including against forged complete artifacts. It publishes no timings,
 physical-form selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+
+### Ratified diagnostics workload and additive ledger denominator
+
+On 2026-07-25 the program owner ratified `diagnostics-durable-history` as the thirteenth workload,
+split into Structured Logs and OpenTelemetry suboperations. The reviewed contract vector fixes one
+seed, every semantic input, the public-operation sequence, and an independent literal result digest.
+SQLite retains the same-provider EF diagnostics oracle. SQL Server, PostgreSQL, and MongoDB use the
+ratified absolute operational budgets with correctness, native-plan, physical-form, provider-work,
+queue-loss, drain, and restart evidence.
+
+The same amendment adds `diagnostics-structured-log-store` and
+`diagnostics-open-telemetry-store` as first-class coverage-ledger rows. The original ALL32 floor
+remains immutable; the current exact denominator is 34. `runtime-diagnostics-settings` remains a
+separate in-memory contract and supplies no evidence for either durable diagnostics row.
+
+This checkpoint passed:
+
+- workload catalog and independent-golden tests: 11/11, with the full harness at 63/63;
+- coverage-ledger and performance-handoff architecture tests: 69/69;
+- diagnostics feature/composition tests: 11/11; and
+- unified reference-host/schema composition tests: 31/31.
+
+After `dotnet restore Elsa.Server.slnx --force-evaluate`, the complete architecture suite passed
+306/306, including the restored-solution EF surface ratchet.
+
+The digest-verified `host-selection-all34` artifact records the eight selected feature identities,
+including `elsa-diagnostics`. It is composition evidence only. Both diagnostics rows remain
+`implemented` with empty provider evidence and no `performanceVerdict`; no row status advanced and
+T100 remains open.
 
 ### #646 workload-successor review disposition
 
@@ -508,7 +538,7 @@ candidate are:
 | Axis | Required finding and disposition | Candidate status |
 |---|---|---|
 | Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | PASS |
-| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve workloads now have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | PASS |
+| Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve then-current workloads have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | PASS |
 | Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | PASS |
 | Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | PASS |
 | Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | PASS |
