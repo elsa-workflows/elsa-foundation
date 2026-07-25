@@ -53,15 +53,33 @@ public sealed record GroundworkStoreSessionResources
         IDocumentStore documentStore,
         IBoundedDocumentStore boundedDocumentStore,
         IAsyncDisposable? lease = null)
+        : this(
+            documentStore,
+            boundedDocumentStore,
+            boundedDocumentStore as IBoundedDocumentMutationStore
+                ?? GroundworkUnavailableBoundedDocumentMutationStore.Instance,
+            lease)
+    {
+    }
+
+    public GroundworkStoreSessionResources(
+        IDocumentStore documentStore,
+        IBoundedDocumentStore boundedDocumentStore,
+        IBoundedDocumentMutationStore boundedDocumentMutationStore,
+        IAsyncDisposable? lease = null)
     {
         DocumentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
         BoundedDocumentStore = boundedDocumentStore ?? throw new ArgumentNullException(nameof(boundedDocumentStore));
+        BoundedDocumentMutationStore = boundedDocumentMutationStore
+            ?? throw new ArgumentNullException(nameof(boundedDocumentMutationStore));
         Lease = lease;
     }
 
     public IDocumentStore DocumentStore { get; }
 
     public IBoundedDocumentStore BoundedDocumentStore { get; }
+
+    public IBoundedDocumentMutationStore BoundedDocumentMutationStore { get; }
 
     public IAsyncDisposable? Lease { get; }
 }
@@ -130,6 +148,8 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     public IDocumentStore DocumentStore => Resources.DocumentStore;
 
     public IBoundedDocumentStore BoundedDocumentStore => Resources.BoundedDocumentStore;
+
+    public IBoundedDocumentMutationStore BoundedDocumentMutationStore => Resources.BoundedDocumentMutationStore;
 
     /// <summary>Records the terminal outcome of a privileged session exactly once.</summary>
     public void RecordPrivilegedOutcome(
@@ -217,6 +237,21 @@ public sealed class GroundworkStoreSession : IAsyncDisposable
     private sealed record PrivilegedCompletion(
         GroundworkPrivilegedAccessOutcome Outcome,
         Exception? Failure);
+}
+
+internal sealed class GroundworkUnavailableBoundedDocumentMutationStore : IBoundedDocumentMutationStore
+{
+    public static GroundworkUnavailableBoundedDocumentMutationStore Instance { get; } = new();
+
+    private GroundworkUnavailableBoundedDocumentMutationStore()
+    {
+    }
+
+    public Task<BoundedMutationResult> ExecuteAsync(
+        DocumentMutation mutation,
+        CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException(
+            "No bounded document-mutation runtime was admitted for this Groundwork session.");
 }
 
 internal static class GroundworkSessionFailure
