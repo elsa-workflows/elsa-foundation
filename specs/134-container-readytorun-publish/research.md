@@ -54,10 +54,12 @@ capture machine (see load caveat) and are reasoned from the spec-129 phase share
 
 ## Multi-arch / RID verification
 
-- `.github/workflows/docker.yml` builds `platforms: linux/amd64,linux/arm64` via buildx + QEMU. Each platform
-  builds in its own target-arch SDK image (emulated for the non-native arch), so crossgen runs native-for-target
-  per platform — no cross-arch crossgen. The Dockerfile's `TARGETARCH`→RID map (`${TARGETARCH:-amd64}`, `amd64`→
-  `x64`) covers both shipped arches and falls back to `linux-x64` for a plain non-BuildKit `docker build`.
+- `.github/workflows/docker.yml` builds `platforms: linux/amd64,linux/arm64` through Docker's maintained GitHub
+  Builder workflow. It fans the platforms out to matching GitHub-hosted runners (`ubuntu-24.04` and
+  `ubuntu-24.04-arm`) and assembles their digests into one multi-platform manifest. Each R2R publish therefore
+  runs natively for its target architecture instead of running ARM64 crossgen under QEMU.
+- The Dockerfile's `TARGETARCH`→RID map (`${TARGETARCH:-amd64}`, `amd64`→`x64`) covers both shipped arches and
+  falls back to `linux-x64` for a plain non-BuildKit `docker build`.
 - Local validation here targets `linux-x64` (the primary shipped RID) for the deterministic size A/B, plus
   `osx-arm64` for a runnable native smoke test.
 
@@ -95,6 +97,37 @@ Notes:
   IL, so per-assembly growth is expected — the documented R2R size-for-speed trade.
 - Most of the growth is in the transitive framework/package assemblies R2R also compiles (EF Core, OpenIddict,
   Jint, Npgsql, System.*), not just Elsa's own +14.8 MB — expected for a dependency-rich host.
+
+## CI publish-time follow-up (2026-07-25)
+
+Profiling four consecutive Docker Image runs showed that the original single-x64-runner design spent almost the
+entire critical path compiling the ARM64 R2R image under QEMU:
+
+| Run | x64 restore | x64 R2R publish | ARM64 restore (QEMU) | ARM64 R2R publish (QEMU) | Cache export | Build step |
+|---|---:|---:|---:|---:|---:|---:|
+| `30136536939` | 29 s | 4m32s | 5m37s | 34m06s | 7m01s | 47m30s |
+| `30140770269` | 32 s | 5m32s | 7m11s | 44m19s | 5m02s | 57m07s |
+| `30144631408` | 28 s | 5m57s | 7m33s | 46m49s | 3m45s | 58m40s |
+| `30150541194` | 28 s | 6m14s | 8m02s | 47m59s | 3m18s (failed) | 59m52s |
+
+The ARM64 publish was consistently about eight times slower than x64. This is an emulation tax, not an inherent
+requirement of R2R. The revised design keeps the runtime R2R policy but removes QEMU from the compile path:
+
+- Docker's maintained builder distributes x64 and ARM64 to native runners in parallel and publishes the final
+  tags only after both platform digests succeed.
+- GitHub Actions caches are isolated per platform, exported with `mode=max`, and treated as best-effort.
+- The Dockerfile restores from the repo build configuration plus the preserved `*.csproj`/`*.targets` tree before
+  copying source, so ordinary implementation changes no longer invalidate the RID-specific restore layer.
+- The workflow skips pushes that cannot affect the image and cancels an obsolete in-progress main build when a
+  newer main commit arrives.
+
+The post-change performance budget is **under 15 minutes** for an uncached source publish on standard public
+GitHub-hosted runners. The first main-branch run is the verification measurement; if it exceeds the budget,
+revisit the ARM64 R2R scope rather than accepting another hour-long publish.
+
+Local pre-merge validation on a native ARM64 development host completed the full ARM64 R2R publish in **5m26s**
+with a cached restore. This is not a substitute for the main-branch CI measurement, but it validates the expected
+order-of-magnitude improvement over the 34–48 minute emulated ARM64 publish.
 
 ## Boot-instrument phase table (INDICATIVE ONLY — noise-dominated, see caveat)
 
@@ -136,6 +169,9 @@ cleanly and are the same publish shape.
   "boot→healthy < 5 s" target.
 - **Known, bounded cost:** +87 MB (+43%) on the app publish layer. Acceptable for a workflow-server image; if
   image size later becomes a hard constraint (edge/function deployment), this is the first knob to reconsider.
+- **CI cost is bounded separately:** R2R remains enabled, but each RID is compiled on its native runner in
+  parallel. The 47–60 minute historical Docker builds were caused by QEMU and are no longer an accepted cost of
+  the startup policy.
 
 **Caveat on the claim:** the wall win could not be measured honestly on this fleet-loaded machine. Book the real
 boot→healthy delta by running the spec-129 recipe against the CI-built container on a quiet machine (`uptime`
