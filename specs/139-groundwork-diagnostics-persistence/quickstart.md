@@ -162,7 +162,7 @@ skip are gone.
 Root independently reproduced the final focused evidence:
 
 - complete OpenTelemetry Groundwork adapter suite: **75/75**;
-- grouped merge, supplementary-Unicode catalog behavior, retained-record union
+- grouped merge, supplementary-Unicode catalog behavior, pre-retention union
   boundary, and explicit pre-release reset behavior on SQLite, SQL Server,
   PostgreSQL, and MongoDB: **16/16**;
 - native grouped-query plan inspection across the same four providers: **4/4**.
@@ -186,12 +186,15 @@ providers admit the preview.86 definition on fresh storage. No migration or
 dual-format shim is supplied because Elsa Foundation is unreleased and the
 ratified program rule selects the clean end state.
 
-The trace stream admits at most 5,000 retained records. Each record may carry
-256 values per multi-value field, so the grouped profile declares the exact
-finite worst-case union of 1,280,000 values. A configured trace capacity above
-5,000 now fails before provider work. The four-provider boundary case merges
-and filters 257 distinct resources, services, and workflow ids without the
-former 256-value failure.
+The trace stream admits at most 5,000 retained records, and each normalized
+signal batch admits at most 1,000 records. A query may race retention after up
+to 499 newly committed records, so the drain commits one capture batch at a
+time and the grouped profile declares the exact finite pre-retention bound:
+`(5,000 + 499 + 1,000) × 256 = 1,663,744` union values. A configured trace
+capacity above 5,000 now fails before provider work. The four-provider boundary
+case appends 257 fragments directly to the admitted stream and queries before
+any trim, proving distinct resources, services, and workflow ids remain
+available in the window that triggered the review finding.
 
 ## Preview.86 grouped-trace independent review
 
@@ -202,13 +205,24 @@ Three adversarial reviewers inspected the exact candidate range from
   fingerprint had no explicit transition policy, and the 256-value group union
   rejected individually valid retained fragments. Both findings were accepted.
   The remediation is the explicit schema-v2 fresh-storage boundary plus the
-  retention-derived 1,280,000-value union contract and the four-provider tests
-  described above.
+  bounded pre-retention union contract and the four-provider tests described
+  above. The originating reviewer then found that the first 1,280,000-value
+  remediation covered only the post-retention state because a drain commit
+  could append 64 captures before trimming. That confirmed blocker was
+  remediated by sharing the 1,000-record admission limit, committing one capture
+  per drain unit, including the 499-record retention carry, and querying the
+  four real providers before trim. The resulting 1,663,744-value limit remains
+  finite and operationally useful; exact-head recertification passed 75/75,
+  16/16, and 4/4.
 - Evidence integrity found that the preview.86 pass totals existed only as
   narrative while the retained JSON manifests still described preview.81.
   The historical manifests remain immutable; the new hash-bound preview.86
   manifest records the exact implementation head, commands, totals, resolved
-  package family, source hashes, and provider topology.
+  package family, source hashes, and provider topology. Re-review found that
+  its SQL Server, PostgreSQL, and MongoDB image tags did not match the shared
+  fixture and that the fixture itself was not hashed. The manifest now records
+  the exact CU18, PostgreSQL 16, and MongoDB 7.0.37 tags and binds the fixture
+  hash.
 - Scope/test preservation passed: no EF oracle, migration, project, package,
   solution, or host file was removed or changed; the former #130 skip is the
   only removed skip; T050–T057 remain open.

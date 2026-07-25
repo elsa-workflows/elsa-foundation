@@ -4,10 +4,10 @@
   "scope": "preview.86-grouped-trace-follow-up",
   "outcome": "pass",
   "evidenceClassification": "hash-bound-focused-exact-implementation-head",
-  "recordedAtUtc": "2026-07-25T05:38:21Z",
-  "gitImplementationHeadAtRun": "c96bcc031eefffdc6b3727b4fc528a945d845ff0",
+  "recordedAtUtc": "2026-07-25T06:03:21Z",
+  "gitImplementationHeadAtRun": "476ce7cd600eb51a7bbfd86d17d336aada2fde50",
   "originMainAtRun": "f4eaee963da34f650b7e40d0e859ae10b92d4a30",
-  "testedSourceState": "The implementation and test tree exactly matched c96bcc031eefffdc6b3727b4fc528a945d845ff0; only evidence documentation was modified after the run.",
+  "testedSourceState": "The implementation and test tree exactly matched 476ce7cd600eb51a7bbfd86d17d336aada2fde50; only evidence documentation was modified after the run.",
   "groundworkPackageVersion": "0.0.1-preview.86",
   "groundworkToolVersion": "0.0.1-preview.86",
   "resolvedGroundworkLibraries": [
@@ -31,9 +31,9 @@
     ".config/dotnet-tools.json": "95677b4c5bcae63f62a6e74e804cfdc06c1d14537628da066ee780394728fe14"
   },
   "productionSourceSha256": {
-    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs": "02fe3a1cc1378d4932a7af9c7e43e345dfc5b40fe6588f5598865d22d3bb15fc",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs": "37f9c7cf73fb4abc790fcc6ddb3befe8f52da961ab8c5050e5b61426069f31fd",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs": "297b6d86ddaa6e2d06609049149e7fe130ef55cb008c5f29b7eecbfbc7d3bac2",
-    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "57c79ee4b19af71a8194823513710466b8e74c04f27febb844ecb289c2fcc4f8",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/OpenTelemetryRecordStreamDefinitions.cs": "801008e4d03fc607c58a6961f885c288ce21e7dff8f98e37c3e1617394f98532",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/CanonicalRecordSerializer.cs": "296e31ddfabeffb39a1eb38d9203409232422b5504c42dde1011a4351bf0e9d4",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocumentSerializer.cs": "a8475dae3905cd41a5aba4fe180caf44ab64f986a016a33ecda52597feb7a810",
     "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/CatalogDocuments.cs": "b5f45120b8f8636cc11b66eeb7630b3f547b3c2eebb3bb6211d01f444143423e"
@@ -41,9 +41,10 @@
   "testSourceSha256": {
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs": "f17d2ec5d4fd89642bdef25b144596c4cac9ad210065a8470fab088e253d884a",
     "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryStoreTests.cs": "3457f87c36f3770e80fee1a1c220dfc8198c425f5b0e1248498426da6f473166",
-    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "77f4be344189bbd54b6972e2f1d92d8dce0975ce75a1fd09bcd959a934c1b9f1",
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "87b8551750e0fe5ffa57451a26c8b97a125098e39cb8c719f3e124d4e8400f74",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/OpenTelemetryRecordStreamDefinitionTests.cs": "558ecb462fb49792ec93a618472c2baab8921fad3d4523b0b90db08224d6b595",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs": "e73f5b539a725fccca3ae72de4fc7667692b87b054c351e3dd36d708ef92ed4e",
     "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs": "6acc471b6e970a78ce658ce8c20f66e36f71fa49c6d2d0bf3d052ccc0ff88b03",
+    "tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs": "af242eccad4bd4b1bc11ab8beabbee2f243a36a6e0dab4a71bc4ba9c88c0910f",
     "tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsGroundworkProviderHarness.cs": "e85f601285d78dd57670594ce9e88792dfd4556066be15da70f5ea2ab2cf32b0"
   },
   "providerTopology": [
@@ -53,17 +54,17 @@
     },
     {
       "provider": "sqlserver",
-      "image": "mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04",
+      "image": "mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04",
       "driverSourceSha256": "346513931ae635100b044f1c79dbec26cfa5a32de36bdff584dee8db83dbc5cc"
     },
     {
       "provider": "postgresql",
-      "image": "postgres:17.6-alpine3.22",
+      "image": "postgres:16-alpine",
       "driverSourceSha256": "26c296cf78bf6f1dac6e8e84260f4918abc18c0c3fd3d9e1e68d3ae13055f55c"
     },
     {
       "provider": "mongodb",
-      "image": "mongo:7.0.24",
+      "image": "mongo:7.0.37",
       "topology": "transaction-capable replica set",
       "driverSourceSha256": "90a07f8237cfccdaad1481cec75049c3541e8584429216a095fe93dc73ba6e3c"
     }
@@ -76,16 +77,16 @@
       "failed": 0,
       "skipped": 0,
       "total": 75,
-      "durationSeconds": 2
+      "durationSeconds": 3
     },
     {
       "purpose": "Four-provider grouped trace, Unicode case policy, union boundary, and pre-release reset behavior",
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-restore --no-build --filter 'FullyQualifiedName~Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart|FullyQualifiedName~Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes|FullyQualifiedName~Grouped_trace_union_accepts_every_value_permitted_by_the_retained_record_boundary|FullyQualifiedName~Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage' --logger 'console;verbosity=minimal'",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj -c Release --no-restore --no-build --filter 'FullyQualifiedName~Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart|FullyQualifiedName~Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes|FullyQualifiedName~Grouped_trace_union_accepts_valid_values_observed_before_retention|FullyQualifiedName~Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage' --logger 'console;verbosity=minimal'",
       "passed": 16,
       "failed": 0,
       "skipped": 0,
       "total": 16,
-      "durationSeconds": 42
+      "durationSeconds": 37
     },
     {
       "purpose": "Four-provider native grouped-query plan inspection",
@@ -97,5 +98,5 @@
       "durationSeconds": 14
     }
   ],
-  "evidenceBoundary": "This focused manifest certifies only the preview.86 provider-native grouped trace reducer, its four-provider behavioral cases, the supplementary-Unicode catalog case policy, the retained-record union boundary, the explicit unreleased-storage reset boundary, and grouped native-plan inspection. Historical preview.81 manifests remain immutable. This is not #646 performance evidence, T057 promotion evidence, or authorization to delete either EF oracle."
+  "evidenceBoundary": "This focused manifest certifies only the preview.86 provider-native grouped trace reducer, its four-provider behavioral cases, the supplementary-Unicode catalog case policy, the bounded pre-retention union window, the explicit unreleased-storage reset boundary, and grouped native-plan inspection. Historical preview.81 manifests remain immutable. This is not #646 performance evidence, T057 promotion evidence, or authorization to delete either EF oracle."
 }
