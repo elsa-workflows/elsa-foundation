@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -299,7 +300,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Zero_signal_capacities_remove_every_current_record()
+    public async Task Zero_signal_capacities_remove_signal_records_without_suppressing_catalogs()
     {
         var providers = await _fixture.CreateProvidersAsync();
         var store = _fixture.CreateStore(
@@ -331,6 +332,35 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         Assert.Equal(
             (0, 0, 0, 0),
             (diagnostics.TraceCount, diagnostics.SpanCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+        Assert.Equal((1, 1), (diagnostics.ResourceCount, diagnostics.MetricInstrumentCount));
+        Assert.Equal([resource.Id],
+            (await store.QueryResourcesAsync(new() { Take = 20 })).Items.Select(x => x.Id));
+        Assert.Empty((await store.QueryTracesAsync(new() { Take = 20 })).Items);
+    }
+
+    [Fact]
+    public async Task Trace_query_take_is_bounded_by_the_grouped_profile_limit()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var store = _fixture.CreateStore(
+            providers,
+            options: new OpenTelemetryDiagnosticsOptions
+            {
+                TraceCapacity = OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
+                MaxQuerySize = OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity + 1
+            });
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", time);
+        var trace = Trace("trace-a", resource.Id, time, "process order", SpanStatus.Ok);
+
+        await store.WriteDurablyAsync(new([resource], [trace], [], [], [], []));
+
+        Assert.Equal(
+            [trace.TraceId],
+            (await store.QueryTracesAsync(new()
+            {
+                Take = OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity + 1
+            })).Items.Select(x => x.TraceId));
     }
 
     [Fact]

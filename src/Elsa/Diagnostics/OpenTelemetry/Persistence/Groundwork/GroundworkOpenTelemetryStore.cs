@@ -349,7 +349,7 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
-        if (take == 0 || _traceCapacity == 0)
+        if (take == 0 || _resourceCapacity == 0)
             return new([], _sourceRegistry?.DroppedCount ?? 0);
 
         try
@@ -421,7 +421,7 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         ArgumentNullException.ThrowIfNull(filter);
         ValidateRange(filter.From, filter.To, nameof(filter));
-        var take = ClampTake(filter.Take);
+        var take = Math.Min(ClampTake(filter.Take), _traceCapacity);
         if (take == 0)
             return new([], Interlocked.Read(ref _droppedTraces));
 
