@@ -779,7 +779,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         executableNodeId: null,
         IncidentSeverity.Error,
         IncidentStatus.Open,
-        IncidentResolutionAction.None,
+        null,
         failureType: "System.Exception",
         message: "boom",
         createdAt: DateTimeOffset.UnixEpoch,

@@ -258,7 +258,8 @@ public sealed class RuntimeBookmarkResumeContractTests
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)

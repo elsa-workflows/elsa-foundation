@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.86";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.88";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
@@ -91,7 +91,7 @@ public sealed class GroundworkTargetBaselineTests
         Assert.Equal(CurrentGroundworkVersion, packageFamilyVersion);
         Assert.Equal(CurrentGroundworkVersion, schemaToolVersion);
 
-        // preview.86 changes the physical target and plan fingerprints. Preserve the accepted preview.81
+        // preview.88 retains unaccepted physical target and plan fingerprint drift from the accepted preview.81
         // values and pin the observed drift without accepting it as evidence. The exact-source publication
         // work unit must review and ratify these captured values before it can enable evidence output.
         Assert.Equal(PendingTargetFingerprint, telemetrySnapshot.TargetFingerprint);
@@ -135,7 +135,7 @@ public sealed class GroundworkTargetBaselineTests
             evidence.PlanFingerprint != AcceptedPlanFingerprint)
         {
             throw new InvalidOperationException(
-                "The preview.86 target/plan fingerprint drift is captured but not accepted for evidence publication. " +
+                "The preview.88 target/plan fingerprint drift is captured but not accepted for evidence publication. " +
                 "Ratify it in the exact-source evidence work unit before enabling baseline evidence output.");
         }
 

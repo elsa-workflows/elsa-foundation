@@ -272,7 +272,13 @@ public sealed class ActivityFaultIncidentRecorder
             executableNodeId: request.ExecutableNodeId,
             severity: IncidentSeverity.Error,
             status: IncidentStatus.Blocking,
-            resolutionAction: IncidentResolutionAction.WaitForIntervention,
+            resolutionOutcome: activationFailure is null
+                ? null
+                : new IncidentResolutionOutcome(
+                    IncidentResolutionActionKinds.WaitForIntervention,
+                    occurredAt,
+                    strategy: null,
+                    systemSource: IncidentResolutionSystemSources.ActivityActivationFailure),
             failureType: activationFailure is null ? request.SubStatus : ActivityActivationFailureHandler.IncidentFailureType,
             message: faultInfo.Message,
             createdAt: occurredAt,

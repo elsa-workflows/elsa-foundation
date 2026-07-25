@@ -25,6 +25,7 @@ public class DesignContractSuiteShapeTests
             "Elsa.Workflows.Design.Core",
             "Elsa.Workflows.Design.Persistence.Core",
             "Elsa.Workflows.Design.Validations.Core",
+            "Elsa.Workflows.Primitives",
             "Microsoft.Extensions.DependencyInjection",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
             "Microsoft.VisualStudio.TestPlatform.ObjectModel",
@@ -63,6 +64,7 @@ public class DesignContractSuiteShapeTests
             "Elsa.Pipelines.Core",
             "Elsa.Workflows.Design.Core",
             "Elsa.Workflows.Design.Validations.Core",
+            "Elsa.Workflows.Primitives",
             "JetBrains.Annotations",
             "Microsoft.CodeCoverage",
             "Microsoft.Extensions.Configuration",
@@ -98,7 +100,8 @@ public class DesignContractSuiteShapeTests
             "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
             "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
             "src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
-            "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+            "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
+            "src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj"
         ],
         StringComparer.OrdinalIgnoreCase);
 

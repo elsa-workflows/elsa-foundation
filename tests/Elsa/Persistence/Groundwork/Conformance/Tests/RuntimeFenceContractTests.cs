@@ -532,7 +532,7 @@ public sealed class RuntimeFenceContractTests
             [new RuntimeStateChange<IncidentState>(
                 "incident-full",
                 RuntimeStateChangeOperation.Append,
-                new IncidentState("incident-full", workflowExecutionId, activity.Execution.ActivityExecutionId, "node-full", IncidentSeverity.Error, IncidentStatus.Open, IncidentResolutionAction.None, "System.Exception", "full bundle", Now, null),
+                new IncidentState("incident-full", workflowExecutionId, activity.Execution.ActivityExecutionId, "node-full", IncidentSeverity.Error, IncidentStatus.Open, null, "System.Exception", "full bundle", Now, null),
                 new Dictionary<string, string>())],
             [new RuntimeStateChange<ExecutionLivenessState>(
                 "operational-full",

@@ -182,7 +182,8 @@ public sealed class TypedActivityStateRecoveryTests
                 [ResumeTargetKey] = new(ResumeTargetKey, ExecutableNodeId, ResumeTargetKey, new Dictionary<string, string>())
             },
             Now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutionState NewWorkflowState(WorkflowExecutableIdentity identity)

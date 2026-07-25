@@ -52,7 +52,8 @@ public abstract class RuntimePipelineTestSupport
                 metadata: new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
 
     protected static WorkflowExecutionState NewWorkflowState(WorkflowExecutionStatus status) =>
         new(

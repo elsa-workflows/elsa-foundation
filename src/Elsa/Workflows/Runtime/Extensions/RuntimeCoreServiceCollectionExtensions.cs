@@ -93,6 +93,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>());
         services.TryAddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IncidentStrategyRuntimeDefaultsMarker)))
+        {
+            AddRuntimeOwnedIncidentStrategy<FaultIncidentStrategy>(services, IncidentStrategyBuiltIns.Fault);
+            AddRuntimeOwnedIncidentStrategy<ContinueWithIncidentsIncidentStrategy>(services, IncidentStrategyBuiltIns.ContinueWithIncidents);
+            services.AddSingleton(new IncidentStrategyRuntimeDefaultsMarker());
+        }
         services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
         services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddScoped<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
@@ -265,6 +271,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, PoisonedSchedulerWorkIncidentObserver>());
+        services.TryAddScoped<IncidentResolutionBatchExecutor>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, IncidentStrategyResolutionDrainObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
@@ -358,4 +366,51 @@ public static class RuntimeCoreServiceCollectionExtensions
             "Resolved {PipelineKind} runtime execution pipeline with {Count} middleware:{NewLine}{Steps}",
             plan.PipelineKind, plan.Steps.Count, Environment.NewLine, steps);
     }
+
+    private sealed class IncidentStrategyRuntimeDefaultsMarker
+    {
+    }
+
+    // The public registration extension deliberately rejects the two bare built-in aliases. The default Runtime
+    // assembly is their sole owner, so it contributes the same descriptor-to-scoped-service registration directly.
+    private static void AddRuntimeOwnedIncidentStrategy<TStrategy>(
+        IServiceCollection services,
+        IncidentStrategyDescriptor descriptor)
+        where TStrategy : class, IIncidentStrategy
+    {
+        var strategyType = typeof(TStrategy);
+        var matchingRegistrations = services
+            .Where(service => service.ServiceType == typeof(IncidentStrategyRegistration))
+            .Select(service => service.ImplementationInstance)
+            .OfType<IncidentStrategyRegistration>()
+            .Where(registration => registration.Descriptor.Reference.Equals(descriptor.Reference))
+            .ToArray();
+        if (matchingRegistrations.Length > 1 ||
+            matchingRegistrations is [var registration] &&
+            (registration.StrategyType != strategyType || !DescriptorsAreEquivalent(registration.Descriptor, descriptor)))
+        {
+            throw new InvalidOperationException($"Runtime-owned incident strategy '{descriptor.Reference}' is already registered.");
+        }
+
+        var existingStrategyServices = services
+            .Where(service => service.ServiceType == strategyType)
+            .ToArray();
+        if (existingStrategyServices.Length > 1 ||
+            existingStrategyServices is [var existingStrategyService] && existingStrategyService.Lifetime != ServiceLifetime.Scoped)
+        {
+            throw new InvalidOperationException(
+                $"Runtime-owned incident strategy type '{strategyType.FullName ?? strategyType.Name}' must have exactly one scoped service registration.");
+        }
+
+        services.AddIncidentStrategyRegistry();
+        if (existingStrategyServices.Length == 0)
+            services.AddScoped<TStrategy>();
+        if (matchingRegistrations.Length == 0)
+            services.AddSingleton(new IncidentStrategyRegistration(descriptor, strategyType));
+    }
+
+    private static bool DescriptorsAreEquivalent(IncidentStrategyDescriptor left, IncidentStrategyDescriptor right) =>
+        left.Reference.Equals(right.Reference) &&
+        StringComparer.Ordinal.Equals(left.DisplayName, right.DisplayName) &&
+        StringComparer.Ordinal.Equals(left.Description, right.Description);
 }

@@ -216,7 +216,8 @@ public sealed class BpmnEventStartTriggerTests
             rootActivity: TriggerNode(elements, flows, canStartWorkflow),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode TriggerNode(
         IReadOnlyCollection<BpmnElement> elements,

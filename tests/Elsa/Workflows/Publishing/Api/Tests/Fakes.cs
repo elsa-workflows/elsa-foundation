@@ -110,7 +110,8 @@ internal static class TestCompiler
         IWorkflowExecutableSourceReferenceReader? sourceReferences = null,
         WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
         IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
-        IExecutableNodeMetadataEnricher? metadataEnricher = null)
+        IExecutableNodeMetadataEnricher? metadataEnricher = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -141,7 +142,8 @@ internal static class TestCompiler
                 inputCompiler,
                 outputCompiler),
             placementSidecars,
-            metadataEnricher);
+            metadataEnricher,
+            incidentStrategyCatalog: incidentStrategyCatalog);
     }
 
     private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
@@ -265,7 +267,8 @@ internal static class TestExecutable
             DateTimeOffset.UtcNow,
             new Dictionary<string, string>(),
             inputContract: new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
-            dependencies);
+            dependencies,
+            IncidentStrategyBuiltIns.FaultReference);
 }
 
 /// <summary>Minimal in-memory activity version read port: only the routes the bridge uses are real.</summary>

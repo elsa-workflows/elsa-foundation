@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -39,7 +40,8 @@ public sealed class WorkflowExecutableCompiler(
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
     IExecutableNodeMetadataEnricher? metadataEnricher = null,
     IWorkflowExecutableStore? executableStore = null,
-    ActivityResultConversionPlanLinker? activityResultConversionPlanLinker = null)
+    ActivityResultConversionPlanLinker? activityResultConversionPlanLinker = null,
+    IIncidentStrategyCatalog? incidentStrategyCatalog = null)
     : IWorkflowExecutableCompiler
 {
     private readonly IWorkflowExecutableStore? _executableStore = executableStore;
@@ -215,7 +217,14 @@ public sealed class WorkflowExecutableCompiler(
             var dependencies = BuildDependencies(dependencyClaims);
             var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
             var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
-            var artifactHash = hasher.ComputeHash(compiledRoot, inputContract, dependencies, checkpointCadence, workflowVariables);
+            var incidentStrategy = ResolveIncidentStrategy(state.StrategyOptions, incidentStrategyCatalog);
+            var artifactHash = hasher.ComputeHash(
+                compiledRoot,
+                inputContract,
+                dependencies,
+                checkpointCadence,
+                workflowVariables,
+                incidentStrategy);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -257,7 +266,8 @@ public sealed class WorkflowExecutableCompiler(
                 inputContract: inputContract,
                 dependencies: dependencies,
                 checkpointCadence: checkpointCadence,
-                workflowVariables: workflowVariables);
+                workflowVariables: workflowVariables,
+                incidentStrategy: incidentStrategy);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             return executable;
         }
@@ -472,6 +482,32 @@ public sealed class WorkflowExecutableCompiler(
 
         throw new ArgumentException(
             $"Authored checkpoint cadence mode '{authored.Mode}' is not a recognised alias. Use '{WorkflowExecutableCheckpointCadence.ImmediateMode}' or '{WorkflowExecutableCheckpointCadence.CoalescedMode}'.");
+    }
+
+    private static IncidentStrategyReference ResolveIncidentStrategy(
+        WorkflowStrategyOptions? strategyOptions,
+        IIncidentStrategyCatalog? catalog)
+    {
+        var authored = strategyOptions?.IncidentStrategy;
+
+        // Compatibility constructors used by existing direct compiler tests predate the catalog. Production
+        // composition registers the catalog, whose DefaultStrategy already implements the Fault/1 fallback.
+        if (catalog is null)
+        {
+            if (authored is not null)
+                throw new ArgumentException(
+                    $"Authored incident strategy '{authored}' cannot be resolved because no {nameof(IIncidentStrategyCatalog)} is configured.");
+
+            return IncidentStrategyBuiltIns.FaultReference;
+        }
+
+        var requested = authored ?? catalog.DefaultStrategy;
+        if (!catalog.TryGet(requested, out var descriptor))
+            throw new ArgumentException($"Incident strategy '{requested}' is not registered.");
+
+        // Pin the descriptor identity so case-insensitive alias lookup cannot leak a non-canonical authored spelling
+        // into an executable's durable behavior or identity hash.
+        return descriptor.Reference;
     }
 
     private static WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)

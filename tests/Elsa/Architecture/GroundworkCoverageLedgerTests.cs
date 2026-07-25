@@ -9,29 +9,37 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.86";
-    private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.81";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.88";
+    private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.86";
+    private const string EarlierPublishedGroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
     private const string CurrentCheckpointFenceAttachmentRelativePath =
-        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json";
     private const string CurrentCheckpointFenceAttachmentSha256 =
-        "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
+        "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
-        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
+        "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
+    private const string EarlierCheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string EarlierCheckpointFenceAttachmentSha256 =
         "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34";
     private const string HistoricalCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
     private const string HistoricalCheckpointFenceAttachmentSha256 =
         "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
-    private const string PreviousCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
-    private const string PreviousCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
-    private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
-    private const string CurrentCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
-    private const string CurrentCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
-    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
+    private const string EarlierCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
+    private const string EarlierCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
+    private const string EarlierCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string PreviousCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
+    private const string PreviousCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
+    private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
+    private const string CurrentCheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
+    private const string CurrentCheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
+    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -95,6 +103,18 @@ public sealed class GroundworkCoverageLedgerTests
     public void Preview81_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
         AssertCheckpointFenceGeneration(
+            EarlierPublishedGroundworkVersion,
+            EarlierCheckpointFenceAttachmentRelativePath,
+            EarlierCheckpointFenceAttachmentSha256,
+            EarlierCheckpointFenceEvidenceCommit,
+            EarlierCheckpointFenceEvidenceTree,
+            EarlierCheckpointFenceRunIdentity);
+    }
+
+    [Fact]
+    public void Preview86_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
+    {
+        AssertCheckpointFenceGeneration(
             PreviousPublishedGroundworkVersion,
             PreviousCheckpointFenceAttachmentRelativePath,
             PreviousCheckpointFenceAttachmentSha256,
@@ -104,7 +124,7 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview86_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
+    public void Preview88_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
     {
         AssertCheckpointFenceGeneration(
             ExpectedGroundworkVersion,
@@ -122,7 +142,7 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview86_exact_attachment_guard_allows_valid_current_evidence_outside_its_closed_slice()
+    public void Preview88_exact_attachment_guard_allows_valid_later_evidence_outside_its_closed_slice()
     {
         var ledger = ReadLedger();
         var record = EvidenceRecord(
@@ -159,7 +179,7 @@ public sealed class GroundworkCoverageLedgerTests
         {
             ["elsaCommit"] = new string('a', 40),
             ["elsaTree"] = new string('b', 40),
-            ["runIdentity"] = "runtime-checkpoint-fence-preview86"
+            ["runIdentity"] = "runtime-checkpoint-fence-preview88"
         };
         WriteEvidenceArtifacts([record]);
         Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);

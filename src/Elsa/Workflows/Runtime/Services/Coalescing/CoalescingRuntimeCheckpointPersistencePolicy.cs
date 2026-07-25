@@ -36,6 +36,7 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         RuntimeCheckpointNames.WorkflowFaulted,
         RuntimeCheckpointNames.WorkflowCancelled,
         RuntimeCheckpointNames.IncidentRecorded,
+        RuntimeCheckpointNames.IncidentResolutionBatchApplied,
         RuntimeCheckpointNames.ActivitySuspended,
         RuntimeCheckpointNames.ActivityCancelled,
         RuntimeCheckpointNames.BookmarkCreated,

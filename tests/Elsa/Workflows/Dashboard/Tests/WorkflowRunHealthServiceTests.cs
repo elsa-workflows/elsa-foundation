@@ -171,7 +171,7 @@ public sealed class WorkflowRunHealthServiceTests
 
     private static IncidentState Incident(string id, string executionId) =>
         new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,
-            IncidentResolutionAction.Retry, "Failure", "Failed", Now, null);
+            null, "Failure", "Failed", Now, null);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

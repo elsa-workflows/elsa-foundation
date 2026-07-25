@@ -168,7 +168,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
             baseExecutable.RootActivity,
             baseExecutable.ResumeTargets,
             baseExecutable.CreatedAt,
-            new Dictionary<string, string> { ["activity.templateHash"] = template.TemplateHash });
+            new Dictionary<string, string> { ["activity.templateHash"] = template.TemplateHash },
+            baseExecutable.IncidentStrategy);
         await _executableStore.SaveAsync(executable);
         await _sourceReferenceStore.SaveAsync(Reference("wrapper-ref", executable.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
         await _sourceReferenceStore.SaveAsync(Reference("template-ref", template.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
@@ -379,7 +380,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
             createdAt: _now,
             compatibilityMetadata: new Dictionary<string, string>(),
             inputContract: null,
-            dependencies: dependencies);
+            dependencies: dependencies,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private async Task SaveAsync(params WorkflowExecutable[] executables)
     {

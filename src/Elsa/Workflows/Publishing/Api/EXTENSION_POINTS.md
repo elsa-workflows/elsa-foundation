@@ -10,6 +10,14 @@ Most contracts below are on the **override** axis: one implementation owns the r
 compilation enrichment is the documented contributor exception. Runtime's trigger validators and observers are
 separate add-don't-replace seams; see the Runtime catalog linked below.
 
+## Incident strategy discovery
+
+`GET publishing/incident-strategies` is the permission-protected authoring discovery surface. It returns the
+descriptor-only `IIncidentStrategyCatalog` in deterministic order together with the exact effective publishing
+default. It never constructs scoped strategy implementations and never exposes CLR type names. Contribute a
+strategy through Runtime's atomic `AddIncidentStrategy<TStrategy>(descriptor)` or attributed overload; the
+compiler validates and pins the selected alias/version into each executable.
+
 ## Overridable contracts
 
 | Contract | Built-in default | Replace when |

@@ -706,7 +706,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var incidentChanges = plan.IncidentChanges
             .Where(item => !StringComparer.Ordinal.Equals(item.IncidentId, incident.IncidentId))
             .ToList();
-        if (incident.Status is not (IncidentStatus.Resolved or IncidentStatus.Suppressed))
+        if (incident.Status is not (IncidentStatus.Resolved or IncidentStatus.Suppressed) &&
+            incident.ResolutionOutcome is null)
             incidentChanges.Add(ResolveAbsorbedIncident(incident, request, payload.ActivityExecutionId, workItem, occurredAt));
 
         return plan with { IncidentChanges = incidentChanges };
@@ -731,7 +732,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             incident.ExecutableNodeId,
             incident.Severity,
             IncidentStatus.Resolved,
-            IncidentResolutionAction.Continue,
+            new IncidentResolutionOutcome(
+                IncidentResolutionActionKinds.AbsorbFault,
+                resolvedAt,
+                strategy: null,
+                systemSource: IncidentResolutionSystemSources.StructuralFaultAbsorption),
             incident.FailureType,
             incident.Message,
             incident.CreatedAt,

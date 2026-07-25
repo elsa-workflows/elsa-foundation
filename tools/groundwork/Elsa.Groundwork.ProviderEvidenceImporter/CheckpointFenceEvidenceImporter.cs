@@ -8,19 +8,26 @@ namespace Elsa.Groundwork.Tools;
 
 /// <summary>
 /// Imports one retained, externally-staged checkpoint/fence evidence generation.
-/// The importer deliberately owns only the reviewed 36-record checkpoint/fence slice; it cannot
-/// be reused to advance statuses or to import another provider-evidence generation.
+/// The importer deliberately owns only the reviewed 36-record checkpoint/fence slice. Each
+/// invocation cannot advance statuses and can create only one evidence generation.
 /// </summary>
 public static class CheckpointFenceEvidenceImporter
 {
-    private const string Historical80AttachmentRelativePath =
-        "ledger-attachments/runtime-checkpoint-fence.json";
-    private const string Historical80AttachmentSha256 =
-        "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
-    private const string Historical81AttachmentRelativePath =
-        "versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
-    private const string Historical81AttachmentSha256 =
-        "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34";
+    private static readonly HistoricalGeneration[] HistoricalGenerations =
+    [
+        new(
+            "0.0.1-preview.80",
+            "ledger-attachments/runtime-checkpoint-fence.json",
+            "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c"),
+        new(
+            "0.0.1-preview.81",
+            "versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json",
+            "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34"),
+        new(
+            "0.0.1-preview.86",
+            "versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json",
+            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24")
+    ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -44,8 +51,8 @@ public static class CheckpointFenceEvidenceImporter
         var evidenceRoot = CanonicalPath(
             Path.GetDirectoryName(ledgerPath)
             ?? throw new InvalidOperationException("Coverage ledger has no containing evidence root."));
-        ValidateHistoricalGeneration(evidenceRoot, Historical80AttachmentRelativePath, Historical80AttachmentSha256);
-        ValidateHistoricalGeneration(evidenceRoot, Historical81AttachmentRelativePath, Historical81AttachmentSha256);
+        foreach (var historicalGeneration in HistoricalGenerations)
+            ValidateHistoricalGeneration(evidenceRoot, historicalGeneration);
 
         var ledger = ParseObject(await File.ReadAllTextAsync(ledgerPath, cancellationToken), "coverage ledger");
         if (StringValue(ledger, "groundworkVersion") != request.ProviderVersion)
@@ -201,6 +208,14 @@ public static class CheckpointFenceEvidenceImporter
         {
             throw new ArgumentException("A semantic Groundwork provider version is required.", nameof(providerVersion));
         }
+
+        if (HistoricalGenerations.Any(historicalGeneration =>
+                string.Equals(historicalGeneration.ProviderVersion, providerVersion, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                $"Groundwork provider version '{providerVersion}' is a retained historical generation and cannot be imported again.",
+                nameof(providerVersion));
+        }
     }
 
     private static void RequireExternalStaging(string evidenceRoot, string stagingRoot)
@@ -214,13 +229,16 @@ public static class CheckpointFenceEvidenceImporter
         }
     }
 
-    private static void ValidateHistoricalGeneration(string evidenceRoot, string attachmentRelativePath, string expectedAttachmentSha256)
+    private static void ValidateHistoricalGeneration(
+        string evidenceRoot,
+        HistoricalGeneration historicalGeneration)
     {
+        var attachmentRelativePath = historicalGeneration.AttachmentRelativePath;
         var attachmentPath = SafePath(evidenceRoot, attachmentRelativePath);
-        if (!File.Exists(attachmentPath) || FileSha256(attachmentPath) != expectedAttachmentSha256)
+        if (!File.Exists(attachmentPath) || FileSha256(attachmentPath) != historicalGeneration.AttachmentSha256)
         {
             throw new InvalidOperationException(
-                $"Historical attachment '{attachmentRelativePath}' changed; preview.80 and preview.81 provenance is immutable.");
+                $"Historical {historicalGeneration.ProviderVersion} attachment '{attachmentRelativePath}' changed; retained provenance is immutable.");
         }
 
         var records = ParseArray(File.ReadAllText(attachmentPath), attachmentRelativePath)
@@ -233,7 +251,7 @@ public static class CheckpointFenceEvidenceImporter
             if (!File.Exists(evidencePath) || FileSha256(evidencePath) != evidenceSha256)
             {
                 throw new InvalidOperationException(
-                    $"Historical artifact '{evidence}' changed; preview.80 and preview.81 provenance is immutable.");
+                    $"Historical {historicalGeneration.ProviderVersion} artifact '{evidence}' changed; retained provenance is immutable.");
             }
         }
     }
@@ -621,6 +639,11 @@ public static class CheckpointFenceEvidenceImporter
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
     }
+
+    private sealed record HistoricalGeneration(
+        string ProviderVersion,
+        string AttachmentRelativePath,
+        string AttachmentSha256);
 }
 
 public sealed record CheckpointFenceEvidenceProvenance(string ElsaCommit, string ElsaTree, string RunIdentity);

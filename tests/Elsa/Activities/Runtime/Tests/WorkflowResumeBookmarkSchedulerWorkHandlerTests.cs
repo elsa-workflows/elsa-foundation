@@ -156,7 +156,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 ["resume-target:delivery"] = new("resume-target:delivery", "node-wait", "test-handler", new Dictionary<string, string>())
             },
             DateTimeOffset.UtcNow,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private ActivityExecutionState NewTypedSuspendedState(ActivityContract contract, string pinnedText)

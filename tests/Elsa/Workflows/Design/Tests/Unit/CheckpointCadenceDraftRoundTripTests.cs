@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
@@ -53,6 +54,23 @@ public sealed class CheckpointCadenceDraftRoundTripTests
         Assert.NotNull(cadence);
         Assert.Equal("Immediate", cadence!.Mode);
         Assert.Null(cadence.MaxSegmentCheckpoints);
+    }
+
+    [Fact]
+    public async Task Draft_replace_preserves_the_exact_incident_strategy_reference()
+    {
+        using var host = await WorkflowsDesignTestHost.CreateAsync();
+        var draftId = await SeedEmptyDraft(host);
+        var strategy = new IncidentStrategyReference("Contoso.Operations", "vNext");
+        var state = State(activities: [Node("a")]) with
+        {
+            StrategyOptions = new WorkflowStrategyOptions { IncidentStrategy = strategy }
+        };
+
+        await Update(host, draftId, state);
+
+        var draft = await host.GetDraftAsync(draftId);
+        Assert.Equal(strategy, draft!.State.StrategyOptions!.IncidentStrategy);
     }
 
     private static WorkflowDefinitionState StateWithCadence(WorkflowCheckpointCadenceOptions cadence) =>

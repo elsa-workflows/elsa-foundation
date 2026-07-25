@@ -152,7 +152,8 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutableSourceReference PublishedReference(
         string sourceReferenceId,

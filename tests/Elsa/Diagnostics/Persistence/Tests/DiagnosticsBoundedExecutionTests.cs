@@ -48,6 +48,12 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
             AssertNativeDiagnosticPlan(records, DiagnosticRecordPlanOperation.Query, route.Name, plan);
         }
 
+        foreach (var route in DiagnosticGroupedRecordQueries(telemetryBinding))
+        {
+            var plan = await records.InspectGroupedQueryAsync(deployment, route.Query);
+            AssertNativeDiagnosticPlan(records, DiagnosticRecordPlanOperation.GroupedQuery, route.Name, plan);
+        }
+
         foreach (var route in DiagnosticRecordTrims(telemetryBinding, structuredBinding))
         {
             var plan = await records.InspectTrimSelectionAsync(deployment, route.Request);
@@ -118,41 +124,6 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 Limit: 1,
                 Predicate: DiagnosticRecordPredicate.Equal("replayToken", DiagnosticFieldValue.String("record-token"))));
         yield return (
-            "trace-latest-per-id",
-            new(scope, new(telemetry.TraceStreamId), Limit: 7,
-                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-                Predicate: new DiagnosticRecordPredicate.All(
-                [
-                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace-a"),
-                    DiagnosticRecordPredicate.Equal(RecordFields.ResourceId, DiagnosticFieldValue.String("resource")),
-                    DiagnosticRecordPredicate.Equal(RecordFields.ServiceName, DiagnosticFieldValue.String("orders")),
-                    DiagnosticRecordPredicate.Contains(RecordFields.WorkflowInstanceId, "workflow-a"),
-                    DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64(1)),
-                    DiagnosticRecordPredicate.RangeInclusive(RecordFields.StartTime, DiagnosticFieldValue.Timestamp(time), DiagnosticFieldValue.Timestamp(time.AddMinutes(1))),
-                    new DiagnosticRecordPredicate.Any(
-                    [
-                        DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace"),
-                        DiagnosticRecordPredicate.Contains(RecordFields.Name, "request")
-                    ])
-                ]),
-                LatestPerKeyField: RecordFields.TraceId));
-        yield return (
-            "trace-identity-filters",
-            new(scope, new(telemetry.TraceStreamId), Limit: 7,
-                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-                Predicate: new DiagnosticRecordPredicate.All(
-                [
-                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, "trace-a"),
-                    DiagnosticRecordPredicate.Contains(RecordFields.WorkflowInstanceId, "workflow-a")
-                ]),
-                LatestPerKeyField: RecordFields.TraceId));
-        yield return (
-            "trace-detail-summary",
-            new(scope, new(telemetry.TraceStreamId), Limit: 1,
-                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-                Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String("trace")),
-                LatestPerKeyField: RecordFields.TraceId));
-        yield return (
             "span-by-trace",
             new(scope, new(telemetry.SpanStreamId), Limit: 7,
                 Order: new(RecordFields.OrderKey, DiagnosticSortDirection.Ascending),
@@ -205,6 +176,52 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
         {
             yield return (name, DiagnosticTrimRequest.Create(scope, stream, new(issuedAt, $"plan-{name}"), keepNewest: name == "structured-log" ? 0 : 7));
         }
+    }
+
+    private static IEnumerable<(string Name, DiagnosticRecordGroupQuery Query)> DiagnosticGroupedRecordQueries(
+        GroundworkOpenTelemetryBinding telemetry)
+    {
+        var scope = new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId);
+        var time = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
+        yield return (
+            "trace-summary-merged-filter",
+            new(
+                scope,
+                new(telemetry.TraceStreamId),
+                OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+                Take: 7,
+                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                InputRecordLimit: OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
+                Predicate: new DiagnosticRecordGroupPredicate.All(
+                [
+                    new DiagnosticRecordGroupPredicate.Comparison(RecordFields.TraceId, DiagnosticPredicateOperator.Contains, [DiagnosticFieldValue.String("trace-a")]),
+                    new DiagnosticRecordGroupPredicate.Comparison(RecordFields.ResourceId, DiagnosticPredicateOperator.Equal, [DiagnosticFieldValue.String("resource")]),
+                    new DiagnosticRecordGroupPredicate.Comparison(RecordFields.ServiceName, DiagnosticPredicateOperator.Equal, [DiagnosticFieldValue.String("orders")]),
+                    new DiagnosticRecordGroupPredicate.Comparison(RecordFields.WorkflowInstanceId, DiagnosticPredicateOperator.Contains, [DiagnosticFieldValue.String("workflow-a")]),
+                    new DiagnosticRecordGroupPredicate.Comparison(RecordFields.Status, DiagnosticPredicateOperator.Equal, [DiagnosticFieldValue.Int64(1)]),
+                    new DiagnosticRecordGroupPredicate.Comparison(
+                        RecordFields.StartTime,
+                        DiagnosticPredicateOperator.RangeInclusive,
+                        [DiagnosticFieldValue.Timestamp(time), DiagnosticFieldValue.Timestamp(time.AddMinutes(1))]),
+                    new DiagnosticRecordGroupPredicate.Any(
+                    [
+                        new DiagnosticRecordGroupPredicate.Comparison(RecordFields.TraceId, DiagnosticPredicateOperator.Contains, [DiagnosticFieldValue.String("trace")]),
+                        new DiagnosticRecordGroupPredicate.Comparison(RecordFields.Name, DiagnosticPredicateOperator.Contains, [DiagnosticFieldValue.String("request")])
+                    ])
+                ])));
+        yield return (
+            "trace-detail-summary",
+            new(
+                scope,
+                new(telemetry.TraceStreamId),
+                OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+                Take: 1,
+                Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                InputRecordLimit: OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
+                Predicate: new DiagnosticRecordGroupPredicate.Comparison(
+                    RecordFields.TraceId,
+                    DiagnosticPredicateOperator.Equal,
+                    [DiagnosticFieldValue.String("trace")])));
     }
 
     private static IEnumerable<(string Name, DocumentQuery Query, bool IsCount)> CatalogQueries()

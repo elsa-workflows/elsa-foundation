@@ -194,7 +194,8 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static RuntimeInputBinding Literal(string inputName, string value) =>
