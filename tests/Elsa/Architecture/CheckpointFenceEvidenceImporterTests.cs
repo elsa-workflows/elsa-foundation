@@ -163,6 +163,9 @@ public sealed class CheckpointFenceEvidenceImporterTests
             Directory.CreateDirectory(EvidenceRoot);
             Directory.CreateDirectory(StagingRoot);
             File.Copy(SourceLedgerPath, LedgerPath);
+            var preImportLedger = Ledger();
+            RemoveEvidenceGeneration(preImportLedger, ProviderVersion);
+            File.WriteAllText(LedgerPath, preImportLedger.ToJsonString(JsonOptions));
             CopyHistoricalGeneration(
                 "ledger-attachments/runtime-checkpoint-fence.json",
                 Historical80AttachmentSha256);
@@ -207,6 +210,21 @@ public sealed class CheckpointFenceEvidenceImporterTests
                     provider.Value!.AsArray().OfType<JsonObject>()))
                 .Where(record => record["providerVersion"]!.GetValue<string>() == ProviderVersion)
                 .ToArray();
+
+        private static void RemoveEvidenceGeneration(JsonObject ledger, string providerVersion)
+        {
+            foreach (var providerRecords in ledger["entries"]!.AsArray()
+                         .OfType<JsonObject>()
+                         .SelectMany(entry => entry["providerEvidence"]!.AsObject())
+                         .Select(provider => provider.Value!.AsArray()))
+            {
+                for (var index = providerRecords.Count - 1; index >= 0; index--)
+                {
+                    if (providerRecords[index]?["providerVersion"]?.GetValue<string>() == providerVersion)
+                        providerRecords.RemoveAt(index);
+                }
+            }
+        }
 
         public JsonArray StagedRecords() => JsonNode.Parse(File.ReadAllText(StagingAttachmentPath))!.AsArray();
 

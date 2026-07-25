@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+  "sourceScenarioId": "runtime-execution-ownership-fencing",
+  "coverageEntryId": "runtime-execution-liveness",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "c29d70933f0e0fe158f1686339d1f16e18127ec6581ad91c0a2fcc2b790d1b60",
+  "executionPath": "provider-driver/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741",
+  "clients": 2,
+  "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+  "observations": [
+    {
+      "name": "stale-commit-count",
+      "value": "1"
+    },
+    {
+      "name": "token-order",
+      "value": "1,2"
+    },
+    {
+      "name": "winner-count",
+      "value": "1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2089f72873d95f831418f9ec61f13cd2111871a9",
+    "elsaTree": "af7c599a21583ec80e5bda2adf930f4f2a8f5709",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "concurrencySemantic": "strictly-increasing-fence",
+  "evidence": "versions/0.0.1-preview.86/evidence/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741.json"
+}

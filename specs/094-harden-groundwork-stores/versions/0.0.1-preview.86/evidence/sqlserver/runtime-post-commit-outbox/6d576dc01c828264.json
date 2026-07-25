@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "c29d70933f0e0fe158f1686339d1f16e18127ec6581ad91c0a2fcc2b790d1b60",
+  "executionPath": "provider-driver/sqlserver/runtime-post-commit-outbox/6d576dc01c828264",
+  "clients": 2,
+  "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+  "observations": [
+    {
+      "name": "conflicting-replay",
+      "value": "RuntimeCheckpointReplayConflictException"
+    },
+    {
+      "name": "durable-outcome-count",
+      "value": "1"
+    },
+    {
+      "name": "equivalent-replay",
+      "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2089f72873d95f831418f9ec61f13cd2111871a9",
+    "elsaTree": "af7c599a21583ec80e5bda2adf930f4f2a8f5709",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "versions/0.0.1-preview.86/evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json"
+}

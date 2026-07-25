@@ -200,7 +200,28 @@ generation-retention key; do not hand-author or infer missing obligations. The i
 checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance, digest-verified staged artifacts,
 and unchanged preview.80/preview.81 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
-restart obligation is present for all four providers and the linked #644/#660 authority evidence is current.
+restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
+
+### Preview.86 checkpoint/fence evidence refresh (2026-07-25)
+
+Against frozen Elsa source commit `2089f72873d95f831418f9ec61f13cd2111871a9` (tree
+`af7c599a21583ec80e5bda2adf930f4f2a8f5709`) and the exact Groundwork `0.0.1-preview.86`
+package/tool family published from Groundwork `fd6d1c1b3cb4ebfce03d4cd57e1420060e8c02ac`, the
+checkpoint/fence publisher passed for file-backed SQLite, SQL Server, PostgreSQL, and transaction-capable
+MongoDB (1/1, 2m29s). The external staging generation contained exactly 36 unique records: 28 for
+`runtime-checkpoint-commit`, four for `runtime-execution-liveness`, and four for
+`runtime-post-commit-outbox`, with nine records per provider, two independent clients per record, passing
+outcomes, and the required provider topology.
+
+Before import, all 36 artifact digests were recomputed successfully and the attachment was verified as
+`e5ebcfad293f9c4976f694bfebf587bad8df2bfc2f2e29bbff2c44e044ec7004`. The guarded importer then
+copied that create-new version directory and appended only the exact tuple-keyed records to the coverage
+ledger. The preview.80 attachment remains
+`b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c`; preview.81 remains
+`ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34`. The import left the
+ledger's 27 `implemented`, four `externally-blocked`, and one `planned` statuses unchanged. This refresh
+establishes current checkpoint/fence provenance only; it does not complete the remaining provider-evidence
+obligations or any #646 performance verdict.
 
 ### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
 

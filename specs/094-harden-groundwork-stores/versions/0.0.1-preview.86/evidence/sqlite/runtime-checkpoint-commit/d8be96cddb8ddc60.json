@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "18061eca9cfaaee3d690b0174ecb8706f073b20c5cde3c905eb22908f9e27b68",
+  "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/d8be96cddb8ddc60",
+  "clients": 2,
+  "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
+  "observations": [
+    {
+      "name": "committed-bundle-count",
+      "value": "1"
+    },
+    {
+      "name": "partial-bundle-count",
+      "value": "0"
+    },
+    {
+      "name": "recovered-state",
+      "value": "initial-complete-count:1;recovered-complete-count:1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2089f72873d95f831418f9ec61f13cd2111871a9",
+    "elsaTree": "af7c599a21583ec80e5bda2adf930f4f2a8f5709",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+  "evidence": "versions/0.0.1-preview.86/evidence/sqlite/runtime-checkpoint-commit/d8be96cddb8ddc60.json"
+}

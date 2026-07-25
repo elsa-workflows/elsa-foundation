@@ -14,6 +14,10 @@ public sealed class GroundworkCoverageLedgerTests
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
+    private const string CurrentCheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string CurrentCheckpointFenceAttachmentSha256 =
+        "e5ebcfad293f9c4976f694bfebf587bad8df2bfc2f2e29bbff2c44e044ec7004";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
@@ -25,6 +29,9 @@ public sealed class GroundworkCoverageLedgerTests
     private const string PreviousCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
     private const string PreviousCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
     private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string CurrentCheckpointFenceEvidenceCommit = "2089f72873d95f831418f9ec61f13cd2111871a9";
+    private const string CurrentCheckpointFenceEvidenceTree = "af7c599a21583ec80e5bda2adf930f4f2a8f5709";
+    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -85,103 +92,27 @@ public sealed class GroundworkCoverageLedgerTests
     [Fact]
     public void Preview81_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
-        var ledger = ReadLedger();
-        var attachmentPath = Path.Combine(
-            RepoRoot,
-            PreviousCheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
-        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
-                                    ?.OfType<JsonObject>()
-                                    .ToArray()
-                                ?? throw new InvalidOperationException(
-                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
-        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["runtime-checkpoint-commit"] = 28,
-            ["runtime-execution-liveness"] = 4,
-            ["runtime-post-commit-outbox"] = 4
-        };
-        var attachmentRecordsByEntry = attachmentRecords
-            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
-            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
-        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
-        var ledgerRecords = Entries(ledger)
-            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .Where(record => record["providerVersion"]?.GetValue<string>() == PreviousPublishedGroundworkVersion)
-            .ToArray();
-        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
-        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
-
-        Assert.Equal(36, attachmentRecords.Length);
-        Assert.Equal(
+        AssertCheckpointFenceGeneration(
+            PreviousPublishedGroundworkVersion,
+            PreviousCheckpointFenceAttachmentRelativePath,
             PreviousCheckpointFenceAttachmentSha256,
-            GroundworkEvidenceArtifactContract.FileSha256(attachmentPath));
-        Assert.Equal(
-            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
-            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
-        Assert.All(attachmentRecords, record =>
-        {
-            Assert.Equal(PreviousPublishedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
-            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
-            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
-            Assert.StartsWith(
-                $"versions/{PreviousPublishedGroundworkVersion}/evidence/",
-                relativeEvidencePath,
-                StringComparison.Ordinal);
-            var evidencePath = Path.Combine(
-                RepoRoot,
-                "specs/094-harden-groundwork-stores",
-                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
-            Assert.Equal(
-                record["evidenceSha256"]!.GetValue<string>(),
-                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
-            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
-            Assert.Equal(record["manifestFingerprint"]!.GetValue<string>(), artifact["manifestFingerprint"]!.GetValue<string>());
-            Assert.NotEmpty(artifact["observations"]!.AsArray());
-            Assert.Equal(
-                PreviousCheckpointFenceEvidenceCommit,
-                artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
-            Assert.Equal(
-                PreviousCheckpointFenceEvidenceTree,
-                artifact["provenance"]!["elsaTree"]!.GetValue<string>());
-            Assert.Equal(
-                PreviousCheckpointFenceRunIdentity,
-                artifact["provenance"]!["runIdentity"]!.GetValue<string>());
-        });
-        Assert.All(attachmentByKey, records => Assert.Single(records));
-        Assert.All(ledgerByKey, records => Assert.Single(records));
-        Assert.Equal(
-            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
-            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
-        foreach (var attachment in attachmentByKey)
-        {
-            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
-            Assert.True(
-                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
-                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
-        }
+            PreviousCheckpointFenceEvidenceCommit,
+            PreviousCheckpointFenceEvidenceTree,
+            PreviousCheckpointFenceRunIdentity);
     }
 
     [Fact]
-    public void Preview86_source_alignment_cannot_claim_current_provider_evidence_before_import()
+    public void Preview86_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
     {
-        var ledger = ReadLedger();
-        var entries = Entries(ledger).ToArray();
-        var currentRecords = entries
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
-            .ToArray();
-        var previousRecords = entries
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .Where(record =>
-                record["providerVersion"]?.GetValue<string>() == PreviousPublishedGroundworkVersion)
-            .ToArray();
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity);
 
-        Assert.Empty(currentRecords);
-        Assert.Equal(36, previousRecords.Length);
+        var entries = Entries(ReadLedger()).ToArray();
         Assert.DoesNotContain(
             entries,
             entry => entry["status"]?.GetValue<string>() is
@@ -192,6 +123,7 @@ public sealed class GroundworkCoverageLedgerTests
     public void Retained_current_checkpoint_fence_generation_rejects_a_partial_import()
     {
         var ledger = ReadLedger();
+        RemoveEvidenceGeneration(ledger, ExpectedGroundworkVersion);
         var record = EvidenceRecord(
             "runtime-checkpoint-commit",
             "sqlite",
@@ -1008,6 +940,86 @@ public sealed class GroundworkCoverageLedgerTests
             findings);
     }
 
+    private static void AssertCheckpointFenceGeneration(
+        string providerVersion,
+        string attachmentRelativePath,
+        string attachmentSha256,
+        string evidenceCommit,
+        string evidenceTree,
+        string runIdentity)
+    {
+        var ledger = ReadLedger();
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            attachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                                    ?.OfType<JsonObject>()
+                                    .ToArray()
+                                ?? throw new InvalidOperationException(
+                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
+        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["runtime-checkpoint-commit"] = 28,
+            ["runtime-execution-liveness"] = 4,
+            ["runtime-post-commit-outbox"] = 4
+        };
+        var attachmentRecordsByEntry = attachmentRecords
+            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
+        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
+        var ledgerRecords = Entries(ledger)
+            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .Where(record => record["providerVersion"]?.GetValue<string>() == providerVersion)
+            .ToArray();
+        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(36, attachmentRecords.Length);
+        Assert.Equal(attachmentSha256, GroundworkEvidenceArtifactContract.FileSha256(attachmentPath));
+        Assert.Equal(
+            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        Assert.All(attachmentRecords, record =>
+        {
+            Assert.Equal(providerVersion, record["providerVersion"]?.GetValue<string>());
+            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
+            Assert.StartsWith(
+                $"versions/{providerVersion}/evidence/",
+                relativeEvidencePath,
+                StringComparison.Ordinal);
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(
+                record["manifestFingerprint"]!.GetValue<string>(),
+                artifact["manifestFingerprint"]!.GetValue<string>());
+            Assert.NotEmpty(artifact["observations"]!.AsArray());
+            Assert.Equal(evidenceCommit, artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
+            Assert.Equal(evidenceTree, artifact["provenance"]!["elsaTree"]!.GetValue<string>());
+            Assert.Equal(runIdentity, artifact["provenance"]!["runIdentity"]!.GetValue<string>());
+        });
+        Assert.All(attachmentByKey, records => Assert.Single(records));
+        Assert.All(ledgerByKey, records => Assert.Single(records));
+        Assert.Equal(
+            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
+            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
+        foreach (var attachment in attachmentByKey)
+        {
+            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
+            Assert.True(
+                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
+                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
+        }
+    }
+
     private static GroundworkCoverageLedgerValidator CreateValidator() =>
         new(SchemaPath, ExpectedEntryIds);
 
@@ -1055,6 +1067,20 @@ public sealed class GroundworkCoverageLedgerTests
         record["coverageEntryId"]?.GetValue<string>() ?? "<missing-entry>",
         record["scenarioId"]?.GetValue<string>() ?? "<missing-scenario>",
         record["provider"]?.GetValue<string>() ?? "<missing-provider>");
+
+    private static void RemoveEvidenceGeneration(JsonObject ledger, string providerVersion)
+    {
+        foreach (var providerRecords in Entries(ledger)
+                     .SelectMany(entry => entry["providerEvidence"]!.AsObject())
+                     .Select(provider => provider.Value!.AsArray()))
+        {
+            for (var index = providerRecords.Count - 1; index >= 0; index--)
+            {
+                if (providerRecords[index]?["providerVersion"]?.GetValue<string>() == providerVersion)
+                    providerRecords.RemoveAt(index);
+            }
+        }
+    }
 
     private static void AddCompleteEvidence(JsonObject entry)
     {
