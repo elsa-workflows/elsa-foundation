@@ -123,6 +123,13 @@ public sealed class GroundworkOpenTelemetryStore :
         _logDefinition = OpenTelemetryRecordStreamDefinitions.CreateLogs(binding.LogStreamId);
         _timeProvider = timeProvider ?? TimeProvider.System;
         var value = options.Value;
+        if (value.TraceCapacity > OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                value.TraceCapacity,
+                $"Groundwork trace retention cannot exceed {OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity} records.");
+        }
         _traceCapacity = ClampRetentionCapacity(value.TraceCapacity);
         _spanCapacity = ClampRetentionCapacity(value.SpanCapacity);
         _metricPointCapacity = ClampRetentionCapacity(value.MetricPointCapacity);

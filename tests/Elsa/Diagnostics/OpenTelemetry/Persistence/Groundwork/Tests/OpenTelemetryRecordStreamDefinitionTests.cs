@@ -16,10 +16,10 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         var definitions = Definitions();
 
         Assert.Equal(4, definitions.Select(x => x.LogicalStorageName).Distinct(StringComparer.Ordinal).Count());
-        foreach (var definition in definitions)
+        foreach (var (definition, index) in definitions.Select((definition, index) => (definition, index)))
         {
             DiagnosticRecordStreamDefinitionValidator.ValidateAndThrow(definition);
-            Assert.Equal(CanonicalRecordSerializer.SchemaVersion, definition.SchemaVersion);
+            Assert.Equal(index == 0 ? 2 : CanonicalRecordSerializer.SchemaVersion, definition.SchemaVersion);
             Assert.Equal(definition.Fields.Count, definition.Limits.MaxFieldsPerRecord);
             Assert.InRange(definition.Limits.MaxBatchRecords, 1, 1_000);
             Assert.InRange(definition.Limits.MaxQueryLimit, 1, 5_000);
@@ -61,7 +61,9 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         Assert.Equal(OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName, summary.Name);
         Assert.Equal(RecordFields.TraceId, summary.GroupKeyField);
         Assert.Equal(5_000, summary.MaxTake);
-        Assert.Equal(256, summary.MaxUnionValues);
+        Assert.Equal(
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity * resourceId.MaxValues,
+            summary.MaxUnionValues);
         Assert.Contains(summary.Reducers, x =>
             x.Alias == RecordFields.SpanCount && x.Kind == DiagnosticGroupReducerKind.SumInt64);
         Assert.Contains(summary.Reducers, x =>

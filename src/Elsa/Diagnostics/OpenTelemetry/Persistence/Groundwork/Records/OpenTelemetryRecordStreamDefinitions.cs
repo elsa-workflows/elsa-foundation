@@ -6,16 +6,19 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 public static class OpenTelemetryRecordStreamDefinitions
 {
     public const string TraceSummaryProfileName = "trace-summary-v1";
+    public const int MaxTraceRecordCapacity = 5_000;
 
+    private const int TraceDefinitionSchemaVersion = 2;
     private const int MaxIdentifierBytes = 512;
     private const int MaxNameBytes = 4_096;
     private const int MaxBodyBytes = 65_536;
     private const int MaxMultiValues = 256;
+    private const int MaxTraceUnionValues = MaxTraceRecordCapacity * MaxMultiValues;
 
     /// <summary>Creates the trace-summary stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateTraces(string streamId) => Definition(
         streamId,
-        "elsa_open_telemetry_traces",
+        "elsa_open_telemetry_traces_v2",
         [
             String(RecordFields.TraceId, required: true, latestPerKey: true),
             String(RecordFields.RootSpanId),
@@ -31,7 +34,8 @@ public static class OpenTelemetryRecordStreamDefinitions
         // The public trace filter has nine value slots when every optional field is supplied:
         // trace, resource, service, workflow, status, two range bounds, and two search branches.
         maxPredicateValues: 9,
-        groupReductionProfiles: [CreateTraceSummaryProfile()]);
+        groupReductionProfiles: [CreateTraceSummaryProfile()],
+        schemaVersion: TraceDefinitionSchemaVersion);
 
     /// <summary>Creates the span stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateSpans(string streamId) => Definition(
@@ -100,13 +104,14 @@ public static class OpenTelemetryRecordStreamDefinitions
         string storageName,
         IReadOnlyList<DiagnosticFieldDefinition> fields,
         int maxPredicateValues = 8,
-        IReadOnlyList<DiagnosticGroupReductionProfile>? groupReductionProfiles = null)
+        IReadOnlyList<DiagnosticGroupReductionProfile>? groupReductionProfiles = null,
+        int schemaVersion = CanonicalRecordSerializer.SchemaVersion)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(streamId);
 
         var definition = new DiagnosticRecordStreamDefinition(
             new(streamId),
-            CanonicalRecordSerializer.SchemaVersion,
+            schemaVersion,
             storageName,
             fields,
             new(
@@ -160,7 +165,10 @@ public static class OpenTelemetryRecordStreamDefinitions
         ],
         Names(RecordFields.StartTime),
         MaxTake: 5_000,
-        MaxUnionValues: MaxMultiValues);
+        // Each retained trace record may contribute the complete declared 256-value
+        // field cardinality. The adapter caps trace retention at 5,000 records, so
+        // this is the finite worst-case union without rejecting a valid retained trace.
+        MaxUnionValues: MaxTraceUnionValues);
 
     private static DiagnosticFieldDefinition String(
         string name,
