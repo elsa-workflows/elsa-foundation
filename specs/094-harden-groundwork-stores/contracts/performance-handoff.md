@@ -53,9 +53,9 @@ evidence for the five lookup routes against exactly 100,000 physical records and
 candidate. The current Identity shape uses Groundwork physical entity tables. SQLite is mandatory; SQL Server,
 PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retains accepted exact-candidate
 Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
-provenance. Current execution uses the repository-pinned `preview.88` family and current Identity manifest; no
-historical `preview.60`/`preview.76`/`preview.77`/`preview.80`/`preview.81`/`preview.86` artifact is linked as an active
-exact-head pass. The 36-record preview.88 checkpoint/fence slice is mechanically imported from exact source but
+provenance. Current execution uses the repository-pinned `preview.90` family and current Identity manifest; no
+historical `preview.60`/`preview.76`/`preview.77`/`preview.80`/`preview.81`/`preview.86`/`preview.88` artifact is linked as an active
+exact-head pass. The 36-record preview.90 checkpoint/fence slice is mechanically imported from exact source but
 remains partial; it cannot advance a row status, and all other declared provider obligations still require current evidence.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
@@ -79,7 +79,7 @@ Groundwork PR #95 extends the certified provider-neutral keyset continuation int
 residual predicates over bounded physical routes. Groundwork PR #96 adds the portable substring search keys
 consumed by `preview.63`; Groundwork PR #97 adds provider-native latest-per-key execution; Groundwork PR #101
 admits sort-only index fields as residual predicates; and Groundwork PR #108 adds bounded linked hydration,
-all consumed by `preview.88`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
+all consumed by `preview.90`. Elsa-specific per-kind version policies, legacy-stamp parsing, JSON
 options, and concrete upcasters remain behind Elsa's provider marker and provider packages so
 core modules remain Groundwork-free. Any codec or manifest change invalidates prior composition fingerprints and
 requires fresh exact-head provider evidence before the workload can feed #646.

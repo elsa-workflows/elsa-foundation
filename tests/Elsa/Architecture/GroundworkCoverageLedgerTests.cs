@@ -19,7 +19,7 @@ public sealed class GroundworkCoverageLedgerTests
     private const string CurrentCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.90/ledger-attachments/runtime-checkpoint-fence.json";
     private const string CurrentCheckpointFenceAttachmentSha256 =
-        "0000000000000000000000000000000000000000000000000000000000000000";
+        "90e34d5a80a839d07f0e241ba594841e52e4546af562d2dd2f72f09e6c74abaf";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
@@ -45,8 +45,8 @@ public sealed class GroundworkCoverageLedgerTests
     private const string PreviousCheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
     private const string PreviousCheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
     private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
-    private const string CurrentCheckpointFenceEvidenceCommit = "0000000000000000000000000000000000000000";
-    private const string CurrentCheckpointFenceEvidenceTree = "0000000000000000000000000000000000000000";
+    private const string CurrentCheckpointFenceEvidenceCommit = "a95362f33ca272e353088e37263e8a310bc0fd9a";
+    private const string CurrentCheckpointFenceEvidenceTree = "e2148bc3e1665d1eac9489f00405efdc8fac8ed6";
     private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview90";
 
     private static readonly string[] ExpectedEntryIds =
