@@ -434,6 +434,19 @@ public sealed class GroundworkProviderEvidencePublisherTests
                 attachment.RelativePath);
             Assert.Equal(HashFile(directory, attachment.RelativePath), attachment.Sha256);
 
+            var existingEvidencePath = Path.Combine(
+                directory,
+                publication.LedgerRecords[0]!["evidence"]!.GetValue<string>());
+            var existingEvidence = await File.ReadAllBytesAsync(existingEvidencePath);
+            await Assert.ThrowsAsync<IOException>(() =>
+                GroundworkProviderEvidencePublisher.PublishVersionedAsync(
+                    directory,
+                    version,
+                    provenance,
+                    GroundworkLedgerObligation.OrdinaryRoundTrip("runtime-bookmark-state", "bounded-query"),
+                    MandatoryProviders.Select(provider => Result(provider, null, providerVersion: version))));
+            Assert.Equal(existingEvidence, await File.ReadAllBytesAsync(existingEvidencePath));
+
             var mismatch = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 GroundworkProviderEvidencePublisher.PublishVersionedAsync(
                     directory,

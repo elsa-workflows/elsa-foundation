@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Xunit;
@@ -12,7 +13,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
 {
     private const string PublishOptIn = "ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE";
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
-    private const string EvidenceVersion = "0.0.1-preview.85";
+    private const string EvidenceVersion = "0.0.1-preview.86";
     private const string SourceCommit = "ELSA_GROUNDWORK_SOURCE_COMMIT";
     private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
     private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";
@@ -232,7 +233,17 @@ public sealed class RuntimeProviderEvidencePublicationTests
                 $"Set {SourceCommit}, {SourceTree}, and {RunIdentity} to exact retained publication provenance.");
         }
 
-        return GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
+        var provenance = GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
+        var repositoryRoot = RepositoryRoot;
+        if (!string.Equals(Git(repositoryRoot, "rev-parse", "HEAD"), provenance.ElsaCommit, StringComparison.Ordinal) ||
+            !string.Equals(Git(repositoryRoot, "rev-parse", "HEAD^{tree}"), provenance.ElsaTree, StringComparison.Ordinal) ||
+            !string.IsNullOrWhiteSpace(Git(repositoryRoot, "status", "--porcelain")))
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be published from the exact clean source commit and tree recorded in its provenance.");
+        }
+
+        return provenance;
     }
 
     private static string Observation(GroundworkScenarioResult result, string name) =>
@@ -246,5 +257,60 @@ public sealed class RuntimeProviderEvidencePublicationTests
         Skip.If(
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(EvidenceOutput)),
             $"Set {EvidenceOutput} to an explicit artifact output directory before publication.");
+        var output = Path.GetFullPath(Environment.GetEnvironmentVariable(EvidenceOutput)!);
+        if (IsWithin(output, RepositoryRoot) || IsWithin(RepositoryRoot, output))
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be published to external staging, never into the tracked repository.");
+        }
+    }
+
+    private static string RepositoryRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                directory = directory.Parent;
+
+            return directory?.FullName
+                   ?? throw new InvalidOperationException("Could not locate the Elsa Foundation repository root.");
+        }
+    }
+
+    private static string Git(string repositoryRoot, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)
+                            ?? throw new InvalidOperationException("Could not start git for provider-evidence publication.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error.Trim()}");
+        return output.Trim();
+    }
+
+    private static bool IsWithin(string path, string root)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullRoot = Path.GetFullPath(root);
+        var rootPrefix = fullRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? fullRoot
+            : fullRoot + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(fullPath, fullRoot, comparison) ||
+               fullPath.StartsWith(rootPrefix, comparison);
     }
 }

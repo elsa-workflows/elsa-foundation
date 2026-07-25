@@ -9,7 +9,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.85";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.86";
     private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
@@ -164,7 +164,7 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview85_source_alignment_cannot_claim_current_provider_evidence_before_import()
+    public void Preview86_source_alignment_cannot_claim_current_provider_evidence_before_import()
     {
         var ledger = ReadLedger();
         var entries = Entries(ledger).ToArray();
@@ -186,6 +186,32 @@ public sealed class GroundworkCoverageLedgerTests
             entries,
             entry => entry["status"]?.GetValue<string>() is
                 "evidence-complete" or "performance-complete" or "ready");
+    }
+
+    [Fact]
+    public void Retained_current_checkpoint_fence_generation_rejects_a_partial_import()
+    {
+        var ledger = ReadLedger();
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:atomic-stale-fence-rejection");
+        record["sourceScenarioId"] = "runtime-execution-ownership-fencing";
+        record["concurrencySemantic"] = "atomic-stale-fence-rejection";
+        record["provenance"] = new JsonObject
+        {
+            ["elsaCommit"] = new string('a', 40),
+            ["elsaTree"] = new string('b', 40),
+            ["runIdentity"] = "runtime-checkpoint-fence-preview86"
+        };
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"retained checkpoint/fence generation '{ExpectedGroundworkVersion}' must contain exactly 36 records; found 1.",
+            findings);
     }
 
     [Fact]
@@ -789,7 +815,6 @@ public sealed class GroundworkCoverageLedgerTests
         var record = entry["providerEvidence"]!["sqlserver"]!.AsArray()[0]!.AsObject();
         var scenarioId = record["scenarioId"]!.GetValue<string>();
         record["providerIdentity"] = "groundwork-sqlite";
-        record["providerVersion"] = "0.0.0-invented";
         record["executionPath"] = "memory-fixture";
 
         var findings = CreateEvidenceValidator().Validate(ledger);
@@ -798,11 +823,61 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '{ExpectedGroundworkVersion}'.",
-            findings);
-        Assert.Contains(
             $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
             findings);
+    }
+
+    [Fact]
+    public void Evidence_complete_requires_a_current_provider_generation()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        foreach (var record in entry["providerEvidence"]!["sqlserver"]!.AsArray().OfType<JsonObject>())
+            record["providerVersion"] = "0.0.0-invented";
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            findings,
+            finding => finding.Contains(
+                $"uses provider version '0.0.0-invented', not ledger Groundwork version '{ExpectedGroundworkVersion}'",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            $"{EntryId}: status 'evidence-complete' requires sqlserver provider evidence.",
+            findings);
+    }
+
+    [Fact]
+    public void Evidence_complete_uses_only_current_records_while_retaining_prior_generations()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        foreach (var provider in new[] { "sqlite", "sqlserver", "postgresql", "mongodb" })
+        {
+            var records = entry["providerEvidence"]![provider]!.AsArray();
+            var retained = records[0]!.DeepClone().AsObject();
+            retained["providerVersion"] = PreviousPublishedGroundworkVersion;
+            retained["evidence"] = GroundworkEvidenceArtifactContract.VersionedEvidencePath(
+                PreviousPublishedGroundworkVersion,
+                provider,
+                EntryId,
+                retained["scenarioId"]!.GetValue<string>());
+            WriteEvidenceArtifacts([retained]);
+            records.Insert(0, retained);
+        }
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.DoesNotContain(
+            findings,
+            finding => finding.Contains(PreviousPublishedGroundworkVersion, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            findings,
+            finding => finding.Contains("occurs 2 times", StringComparison.Ordinal));
     }
 
     [Fact]

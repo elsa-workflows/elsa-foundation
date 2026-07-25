@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using Elsa.Groundwork.Tools;
 
 namespace Elsa.Architecture.Tests;
 
@@ -79,11 +80,93 @@ internal sealed class GroundworkCoverageLedgerValidator
                         findings);
             }
 
+            ValidateRetainedCheckpointFenceGeneration(
+                entries,
+                StringValue(ledger, "groundworkVersion"),
+                findings);
+
             if (ledger["compositionEvidence"] is JsonObject compositionEvidence)
                 ValidateCompositionEvidence(compositionEvidence, entries, findings);
         }
 
         return findings.Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static void ValidateRetainedCheckpointFenceGeneration(
+        JsonArray entries,
+        string? providerVersion,
+        ICollection<string> findings)
+    {
+        if (providerVersion is null)
+            return;
+
+        var expectedTuples = CheckpointFenceEvidenceCatalog.SourceScenarios
+            .SelectMany(pair => CheckpointFenceEvidenceCatalog.Providers
+                .Select(provider => $"{pair.Key}|{provider}"))
+            .ToHashSet(StringComparer.Ordinal);
+        var records = entries
+            .OfType<JsonObject>()
+            .Where(entry => CheckpointFenceEvidenceCatalog.SourceScenarios.Keys.Any(key =>
+                key.StartsWith($"{StringValue(entry, "id")}|", StringComparison.Ordinal)))
+            .SelectMany(entry => entry["providerEvidence"] is JsonObject evidence
+                ? evidence.SelectMany(pair => pair.Value is JsonArray values
+                    ? values.OfType<JsonObject>()
+                    : [])
+                : [])
+            .Where(record => StringValue(record, "providerVersion") == providerVersion)
+            .ToArray();
+        if (records.Length == 0)
+            return;
+
+        if (records.Length != expectedTuples.Count)
+        {
+            findings.Add(
+                $"retained checkpoint/fence generation '{providerVersion}' must contain exactly {expectedTuples.Count} records; found {records.Length}.");
+        }
+
+        JsonObject? exactProvenance = null;
+        var actualTuples = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var record in records)
+        {
+            var entryId = StringValue(record, "coverageEntryId") ?? "<missing-entry>";
+            var scenarioId = StringValue(record, "scenarioId") ?? "<missing-scenario>";
+            var provider = StringValue(record, "provider") ?? "<missing-provider>";
+            var tuple = $"{entryId}|{scenarioId}|{provider}";
+            if (!actualTuples.Add(tuple))
+                findings.Add($"retained checkpoint/fence generation '{providerVersion}' duplicates tuple '{tuple}'.");
+            if (!expectedTuples.Contains(tuple))
+                findings.Add($"retained checkpoint/fence generation '{providerVersion}' contains unexpected tuple '{tuple}'.");
+
+            var sourceScenarioKey = $"{entryId}|{scenarioId}";
+            if (CheckpointFenceEvidenceCatalog.SourceScenarios.TryGetValue(sourceScenarioKey, out var expectedSourceScenario) &&
+                StringValue(record, "sourceScenarioId") != expectedSourceScenario)
+            {
+                findings.Add(
+                    $"retained checkpoint/fence tuple '{tuple}' must retain source scenario '{expectedSourceScenario}'.");
+            }
+
+            if (record["provenance"] is not JsonObject provenance)
+            {
+                findings.Add($"retained checkpoint/fence tuple '{tuple}' lacks exact source provenance.");
+            }
+            else if (exactProvenance is null)
+            {
+                exactProvenance = provenance;
+            }
+            else if (!JsonNode.DeepEquals(exactProvenance, provenance))
+            {
+                findings.Add(
+                    $"retained checkpoint/fence generation '{providerVersion}' must use one exact source provenance tuple.");
+            }
+
+            if (record.ContainsKey("nativeEvidence") || record.ContainsKey("nativeEvidenceSha256"))
+            {
+                findings.Add($"retained checkpoint/fence tuple '{tuple}' must not claim native-plan evidence.");
+            }
+        }
+
+        foreach (var missing in expectedTuples.Where(tuple => !actualTuples.Contains(tuple)).Order(StringComparer.Ordinal))
+            findings.Add($"retained checkpoint/fence generation '{providerVersion}' is missing tuple '{missing}'.");
     }
 
     private void ValidateCompositionEvidence(
@@ -425,25 +508,41 @@ internal sealed class GroundworkCoverageLedgerValidator
         var evidenceByProvider = new Dictionary<string, IReadOnlyList<JsonObject>>(StringComparer.Ordinal);
         foreach (var provider in new[] { "sqlite", "sqlserver", "postgresql", "mongodb" })
         {
-            var records = entry["providerEvidence"]?[provider] is JsonArray evidence
-                ? evidence.OfType<JsonObject>()
-                    .Where(record => requireCurrentGeneration ||
-                                     StringValue(record, "providerVersion") == groundworkVersion)
-                    .ToArray()
+            var allRecords = entry["providerEvidence"]?[provider] is JsonArray evidence
+                ? evidence.OfType<JsonObject>().ToArray()
                 : [];
+            var records = allRecords
+                .Where(record => StringValue(record, "providerVersion") == groundworkVersion)
+                .ToArray();
             evidenceByProvider[provider] = records;
-
-            foreach (var duplicateScenario in records
-                         .Select(record => StringValue(record, "scenarioId"))
-                         .Where(scenario => scenario is not null)
-                         .Cast<string>()
-                         .GroupBy(scenario => scenario, StringComparer.Ordinal)
-                         .Where(group => group.Count() > 1))
+            if (requireCurrentGeneration && records.Length == 0)
             {
-                findings.Add($"{id}: {provider} evidence scenario '{duplicateScenario.Key}' occurs {duplicateScenario.Count()} times.");
+                foreach (var retained in allRecords)
+                {
+                    var retainedScenario = StringValue(retained, "scenarioId") ?? "<missing>";
+                    var retainedVersion = StringValue(retained, "providerVersion") ?? "<missing>";
+                    findings.Add(
+                        $"{id}: {provider} evidence record '{retainedScenario}' uses provider version '{retainedVersion}', not ledger Groundwork version '{groundworkVersion ?? "<missing>"}'.");
+                }
             }
 
-            foreach (var record in records)
+            var recordsToValidate = records;
+
+            foreach (var duplicateScenario in recordsToValidate
+                         .Select(record => (
+                             Scenario: StringValue(record, "scenarioId"),
+                             Version: StringValue(record, "providerVersion")))
+                         .Where(candidate => candidate.Scenario is not null)
+                         .GroupBy(
+                             candidate => $"{candidate.Version}\u001f{candidate.Scenario}",
+                             StringComparer.Ordinal)
+                         .Where(group => group.Count() > 1))
+            {
+                findings.Add(
+                    $"{id}: {provider} evidence scenario '{duplicateScenario.First().Scenario}' occurs {duplicateScenario.Count()} times in provider generation '{duplicateScenario.First().Version ?? "<missing>"}'.");
+            }
+
+            foreach (var record in recordsToValidate)
             {
                 var scenarioId = StringValue(record, "scenarioId") ?? "<missing>";
                 var declaredEntryId = StringValue(record, "coverageEntryId");
@@ -466,13 +565,6 @@ internal sealed class GroundworkCoverageLedgerValidator
                 {
                     findings.Add(
                         $"{id}: {provider} evidence record '{scenarioId}' requires provider identity '{expectedProviderIdentity}'; found '{providerIdentity ?? "<missing>"}'.");
-                }
-
-                var providerVersion = StringValue(record, "providerVersion");
-                if (requireCurrentGeneration && providerVersion != groundworkVersion)
-                {
-                    findings.Add(
-                        $"{id}: {provider} evidence record '{scenarioId}' uses provider version '{providerVersion ?? "<missing>"}', not ledger Groundwork version '{groundworkVersion ?? "<missing>"}'.");
                 }
 
                 var topology = StringValue(record, "topology");
