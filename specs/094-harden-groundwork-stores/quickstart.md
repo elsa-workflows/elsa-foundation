@@ -543,6 +543,24 @@ including `elsa-diagnostics`. It is composition evidence only. Both diagnostics 
 `implemented` with empty provider evidence and no `performanceVerdict`; no row status advanced, the
 workload is blocked from matrix/comparison/gate execution, and T100 remains open.
 
+### Diagnostics workload amendment review disposition
+
+Three adversarial read-only reviewers inspected the frozen implementation range
+`e5b8d02ed1c2499f75e33d17da409f1bf13601b6..90df018c0338ec1db5e5a4cdc8f2601f2cabe71f`
+on 2026-07-25. Each assumed the checkpoint had green-washed its completion claims:
+
+| Axis | Confirmed finding and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The initial candidate admitted diagnostics without an executable numeric absolute-budget gate, and a later review found direct construction of the public `MatrixPlan` could bypass CLI admission. Diagnostics now remains explicitly Blocked under `gate.diagnostics.absolute-budget-required`; catalog, request/artifact admission, matrix planning and execution, comparison, and gate evaluation all reject it before child execution. A regression test constructs the public plan directly and proves the child is never invoked. | PASS |
+| Evidence integrity | The reviewer independently recomputed the workload source, input, and result digests, verified the exact 34-row denominator and composition artifact, and confirmed both diagnostics rows still have empty provider evidence and no verdict. No numeric budget, timing, physical-form selection, or provider result was invented; the checkpoint records only the ratified workload contract and blocked admission. | PASS |
+| Scope/test preservation | The amendment is additive to ALL32, preserves immutable historical evidence and the load-bearing EF oracles, and does not claim #646 completion or advance T100. The diagnostics denominator is isolated from the existing #645 scenario catalog, while source-wide conformance requires the additive workload, both rows, and `host-selection-all34`. | PASS |
+
+Root revalidation of the final code candidate passed the complete non-provider benchmark suite
+**65/65**. The evidence reviewer independently repeated **65/65** and the workload-catalog selection
+**11/11**. A broader architecture rerun was blocked at build time by the unrelated
+`IncidentResolutionBatchExecutor.cs` missing `Elsa.Workflows.Primitives` reference outside this
+range; the hosted candidate checks remain the integration authority for that pre-existing failure.
+
 ### #646 workload-successor review disposition
 
 Three adversarial read-only reviewers inspected the frozen range
