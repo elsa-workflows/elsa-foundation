@@ -5,8 +5,13 @@ namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Exceptions;
 
 /// <summary>Raised before provider access when an OpenIddict operation has no admitted bounded route.</summary>
 public sealed class OpenIddictGroundworkCapabilityException(string operation) : InvalidOperationException(
-    $"OpenIddict Groundwork operation '{operation}' is not admitted by a bounded storage capability.")
+    $"{UnsupportedGenericQueryCode}: OpenIddict Groundwork operation '{operation}' is not admitted by a bounded storage capability.")
 {
+    /// <summary>The stable code for every rejected OpenIddict generic query delegate.</summary>
+    public const string UnsupportedGenericQueryCode = "ELSA-OIDC-GW-001";
+
+    public string Code => UnsupportedGenericQueryCode;
+
     public string Operation { get; } = string.IsNullOrWhiteSpace(operation)
         ? throw new ArgumentException("An operation identity is required.", nameof(operation))
         : operation;
@@ -29,7 +34,7 @@ public sealed class OpenIddictGroundworkProviderException(string operation, Exce
 
 public static class OpenIddictGroundworkFailureMapper
 {
-    public static OpenIddictGroundworkCapabilityException UnsupportedGenericDelegate(string operation) => new(operation);
+    public static OpenIddictGroundworkCapabilityException UnsupportedGenericQuery(string operation) => new(operation);
 
     public static Exception Translate(Exception exception, string operation = "storage")
     {

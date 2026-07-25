@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.OpenIddict.Groundwork;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork.Composition;
+using Elsa.Persistence.Groundwork;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests;
 
@@ -21,5 +22,7 @@ public sealed class OpenIddictGroundworkRegistrationTests
         Assert.Equal(4, declaration.Manifest.StorageUnits.Count);
         Assert.All(declaration.ScopeClassifications.Values, value =>
             Assert.Equal(Elsa.Persistence.Groundwork.Composition.GroundworkStorageScopeClassification.ExplicitlyGlobal, value));
+        Assert.Contains(declaration.TopologyRequirements, requirement =>
+            requirement.Identity == RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity);
     }
 }

@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
   </ItemGroup>
 
 </Project>
