@@ -12,8 +12,6 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-		<PackageReference Include="OpenIddict.Abstractions" />
-		<PackageReference Include="OpenIddict.AspNetCore" />
 		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
 	</ItemGroup>
 
@@ -22,7 +20,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
 		<ProjectReference Include="..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Nested behavior and Groundwork projects own their sources; this project is the frozen EF oracle. -->
+		<Compile Remove="Behavior/**/*.cs" />
+		<Compile Remove="Groundwork/**/*.cs" />
+		<EmbeddedResource Remove="Behavior/**/*.resx;Groundwork/**/*.resx" />
+		<None Remove="Behavior/**/bin/**;Behavior/**/obj/**;Groundwork/**/bin/**;Groundwork/**/obj/**" />
 	</ItemGroup>
 
 </Project>

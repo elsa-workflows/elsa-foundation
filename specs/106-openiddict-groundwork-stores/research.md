@@ -59,11 +59,11 @@
 - Provider-native cascades: rejected; not a portable public contract.
 - Read-then-mutate bulk loops: rejected; not bounded or interruption-safe.
 
-## Decision 6: Preview.76 public capability verification is a blocking prerequisite
+## Decision 6: Exact-head public capability verification is a blocking prerequisite
 
-**Decision**: Before implementation, verify an exact public `0.0.1-preview.76` package/tool family and executable probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native mutation plans, and four-provider CAS/UoW.
+**Decision**: Before production implementation, verify the exact Groundwork package/tool family configured on the reviewed head and execute probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native plans, and four-provider CAS/UoW.
 
-**Rationale**: The audit worktree pinned preview.72 when this prerequisite was recorded; a local or historical capability claim cannot establish the public integration contract. The repository now consumes preview.76, but linked multivalue projections remain permitted only after that public family proves the declaration/execution surface.
+**Rationale**: A local or historical capability claim cannot establish the public integration contract. Any package/tool change requires a fresh exact-head probe; linked multivalue projections remain unavailable to production code until that public family proves the declaration/execution surface.
 
 **Alternatives considered**:
 
