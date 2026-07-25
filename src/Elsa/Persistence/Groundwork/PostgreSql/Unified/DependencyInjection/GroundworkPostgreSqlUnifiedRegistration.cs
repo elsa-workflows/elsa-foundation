@@ -49,7 +49,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkPostgreSqlUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
     }
 

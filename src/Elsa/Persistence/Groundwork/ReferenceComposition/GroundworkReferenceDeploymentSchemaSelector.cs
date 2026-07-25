@@ -24,13 +24,32 @@ public static class GroundworkReferenceDeploymentSchemaSelector
         return Select(context) switch
         {
             var type when type == typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema) =>
-                AddDiagnosticsDeployment<GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema>(services),
+                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema>(),
             var type when type == typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema) =>
-                AddDiagnosticsDeployment<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(services),
+                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(),
             var type when type == typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema) =>
-                services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>(),
-            _ => services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>()
+                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithIdentityDeploymentSchema>(),
+            _ => services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesDeploymentSchema>()
         };
+    }
+
+    /// <summary>
+    /// Registers an explicit reference deployment schema and exposes its diagnostic deployment contract
+    /// when the selected source owns diagnostic streams.
+    /// </summary>
+    public static IServiceCollection AddGroundworkReferenceDeploymentSchema<TDeploymentSource>(
+        this IServiceCollection services)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        if (typeof(IDiagnosticRecordDeploymentManifestSource).IsAssignableFrom(typeof(TDeploymentSource)))
+        {
+            services.TryAddSingleton<IDiagnosticRecordDeploymentManifestSource>(provider =>
+                (IDiagnosticRecordDeploymentManifestSource)provider.GetRequiredService<TDeploymentSource>());
+        }
+
+        return services;
     }
 
     /// <summary>
@@ -89,12 +108,4 @@ public static class GroundworkReferenceDeploymentSchemaSelector
         string.Equals(marker, GroundworkSchemaFeatureMetadata.Identity, StringComparison.Ordinal) ||
         string.Equals(marker, GroundworkSchemaFeatureMetadata.Diagnostics, StringComparison.Ordinal);
 
-    private static IServiceCollection AddDiagnosticsDeployment<TDeploymentSource>(IServiceCollection services)
-        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, IDiagnosticRecordDeploymentManifestSource, new()
-    {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
-        services.TryAddSingleton<IDiagnosticRecordDeploymentManifestSource>(
-            provider => provider.GetRequiredService<TDeploymentSource>());
-        return services;
-    }
 }

@@ -47,7 +47,7 @@ public static class GroundworkMongoDbUnifiedRegistration
         bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkMongoDbUnifiedPersistenceCore(connectionString, databaseName, autoApplyOnStartup);
     }
 

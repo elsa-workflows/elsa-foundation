@@ -54,7 +54,7 @@ public static class GroundworkSqliteUnifiedRegistration
         bool skipInspectionWhenPlanUnchanged = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkSqliteUnifiedPersistenceCore(
             connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
     }

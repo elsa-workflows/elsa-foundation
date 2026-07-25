@@ -41,7 +41,7 @@ public static class GroundworkSqlServerUnifiedRegistration
         bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkSqlServerUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
     }
 

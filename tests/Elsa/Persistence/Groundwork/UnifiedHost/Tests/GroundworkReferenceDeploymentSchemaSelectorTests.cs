@@ -6,10 +6,14 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
+using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified;
+using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
+using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
+using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Groundwork.Core.SchemaEvolution;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -225,6 +229,35 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
             Assert.IsType<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
                 provider.GetRequiredService<IPhysicalSchemaManifestSource>());
             Assert.NotNull(provider.GetRequiredService<global::Groundwork.DiagnosticRecords.IDiagnosticRecordStoreSessionFactory>());
+        }
+    }
+
+    [Fact]
+    public void All_explicit_diagnostics_provider_overloads_register_the_deployment_manifest_source()
+    {
+        var providers = new Action<IServiceCollection>[]
+        {
+            services => services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
+                "Data Source=:memory:"),
+            services => services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
+                "Host=localhost;Database=elsa;Username=elsa;Password=secret"),
+            services => services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
+                "Server=localhost;Database=elsa;User Id=sa;Password=secret;TrustServerCertificate=True"),
+            services => services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
+                "mongodb://localhost:27017/?replicaSet=rs0",
+                "elsa")
+        };
+
+        foreach (var register in providers)
+        {
+            var services = new ServiceCollection();
+            register(services);
+            using var provider = services.BuildServiceProvider();
+
+            var selected = provider.GetRequiredService<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>();
+            Assert.Same(
+                selected,
+                provider.GetRequiredService<global::Groundwork.DiagnosticRecords.IDiagnosticRecordDeploymentManifestSource>());
         }
     }
 
