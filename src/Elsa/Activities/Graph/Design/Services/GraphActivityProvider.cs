@@ -145,6 +145,13 @@ public sealed class GraphActivityProvider(
             descriptorBytes,
             0,
             request.Contract.Inputs.Count + request.Contract.Outputs.Count + graph.Variables.Count);
+        var occurrences = nodes
+            .OrderBy(x => x.NodeId, StringComparer.Ordinal)
+            .Select(node => new ActivityTemplateOccurrenceCompilation(
+                node.NodeId,
+                ReadCanonicalArray(node.Element, "inputs"),
+                activityStructureService.CompileExecutableStructure(node.Activity)))
+            .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
             executableRoot,
@@ -161,7 +168,8 @@ public sealed class GraphActivityProvider(
             measurements,
             request.ProviderFingerprint,
             [],
-            orderedDiagnostics));
+            orderedDiagnostics,
+            occurrences));
     }
 
     public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(

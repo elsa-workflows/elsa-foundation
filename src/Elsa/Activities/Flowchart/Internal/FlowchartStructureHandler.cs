@@ -82,6 +82,29 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<FlowchartStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("Flowchart executable structure payload is invalid.");
+        var remapped = new FlowchartStructure(
+            executable.Connections
+                .Select(connection => new FlowchartConnection(
+                    new FlowchartEndpoint(Remap(connection.Source.NodeId, authoredToExecutableNodeIds)!, connection.Source.Port),
+                    new FlowchartEndpoint(Remap(connection.Target.NodeId, authoredToExecutableNodeIds)!, connection.Target.Port),
+                    connection.Id))
+                .ToArray(),
+            Remap(executable.StartNodeId, authoredToExecutableNodeIds),
+            executable.NodeMetadata.ToDictionary(
+                entry => Remap(entry.Key, authoredToExecutableNodeIds)!,
+                entry => entry.Value,
+                StringComparer.Ordinal),
+            executable.ConnectionMetadata,
+            executable.Variables);
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Variables;
 
@@ -93,4 +116,7 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<FlowchartAuthoredStructure>(SerializerOptions)
                ?? new FlowchartAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

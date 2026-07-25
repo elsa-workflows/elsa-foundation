@@ -62,6 +62,18 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<IfExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("If executable structure payload is invalid.");
+        var remapped = new IfExecutableStructure(
+            Remap(executable.Then, authoredToExecutableNodeIds),
+            Remap(executable.Else, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBranch(ActivityNode? branch) =>
         branch is null ? [] : [branch];
 
@@ -79,4 +91,7 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<IfAuthoredStructure>(SerializerOptions)
                ?? new IfAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

@@ -1,5 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -46,8 +49,15 @@ public sealed class ActivityTemplatePlacer(
     IActivityDefinitionVersionPublicationStore publications,
     IExecutableActivityTemplateReader templates,
     IWorkflowExecutableSourceReferenceReader sourceReferences,
-    IActivityPlacementHasher placementHasher)
+    IActivityPlacementHasher placementHasher,
+    IActivityStructureService activityStructureService,
+    RuntimeInputBindingCompiler inputBindingCompiler)
 {
+    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
     public async ValueTask<ActivityTemplatePlacement> PlaceAsync(
         ActivityTemplatePlacementRequest request,
         CancellationToken cancellationToken = default)
@@ -57,7 +67,7 @@ public sealed class ActivityTemplatePlacer(
 
         var generatedIds = new HashSet<string>(StringComparer.Ordinal);
         var stack = new Stack<PlacementFrame>();
-        stack.Push(new(request.Publication, request.Template, request.SourceReference, request.InvocationOrigin, request.ActivityTypeKey, null, null, "activity-graph", 0));
+        stack.Push(new(request.Publication, request.Template, request.SourceReference, request.InvocationOrigin, request.ActivityTypeKey, null, null, "activity-graph", 0, null));
         PlacementBuild? completed = null;
 
         while (stack.TryPeek(out var frame))
@@ -94,7 +104,8 @@ public sealed class ActivityTemplatePlacer(
                     dependency.OccurrenceId,
                     dependency.ParentOccurrenceId,
                     dependency.ChildSlotName,
-                    dependency.ChildIndex));
+                    dependency.ChildIndex,
+                    dependency.OccurrenceOverlay));
                 continue;
             }
 
@@ -179,7 +190,9 @@ public sealed class ActivityTemplatePlacer(
 
             var inputBindings = isBoundary && stackIsRoot(frame)
                 ? rootRequest.BoundaryInputBindings
-                : current.Node.InputBindings;
+                : isBoundary && frame.OccurrenceOverlay is not null
+                    ? CompileOccurrenceInputs(current.Node, frame)
+                    : current.Node.InputBindings;
             var outputCaptures = isBoundary && stackIsRoot(frame)
                 ? rootRequest.BoundaryOutputCaptures
                 : current.Node.OutputCaptures;
@@ -200,7 +213,9 @@ public sealed class ActivityTemplatePlacer(
                 outputCaptures,
                 metadata,
                 childSlots,
-                current.Node.Structure,
+                isBoundary && frame.OccurrenceOverlay is not null
+                    ? frame.OccurrenceOverlay.Structure
+                    : current.Node.Structure,
                 activityContract,
                 current.Node.IntrinsicKind,
                 current.Node.IntrinsicVariable);
@@ -258,7 +273,7 @@ public sealed class ActivityTemplatePlacer(
         static bool stackIsRoot(PlacementFrame candidate) => candidate.OccurrenceId is null;
     }
 
-    private static IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(IReadOnlyList<PlacementBuild> occurrences)
+    private IReadOnlyList<PlacementBuild> ReconstructOccurrenceRoots(IReadOnlyList<PlacementBuild> occurrences)
     {
         if (occurrences.Count == 0)
             return [];
@@ -291,7 +306,11 @@ public sealed class ActivityTemplatePlacer(
                              .GroupBy(x => x.ChildSlotName, StringComparer.Ordinal)
                              .OrderBy(x => x.Key, StringComparer.Ordinal))
                     MergeChildSlot(childSlots, slot.Key, slot.OrderBy(x => x.ChildIndex).Select(x => rebuilt[x.OccurrenceId!].Root));
-                root = CloneWithChildSlots(root, childSlots);
+                var placedNodeIds = authoredChildren.ToDictionary(
+                    x => x.OccurrenceId!,
+                    x => rebuilt[x.OccurrenceId!].Root.ExecutableNodeId,
+                    StringComparer.Ordinal);
+                root = CloneWithChildSlots(root, childSlots, RewriteStructure(root.Structure, placedNodeIds));
             }
 
             rebuilt.Add(occurrenceId, occurrence with { Root = root });
@@ -347,7 +366,10 @@ public sealed class ActivityTemplatePlacer(
             contract.SideEffectProfile);
     }
 
-    private static ExecutableNode CloneWithChildSlots(ExecutableNode node, IReadOnlyCollection<ExecutableChildSlot> childSlots) => new(
+    private static ExecutableNode CloneWithChildSlots(
+        ExecutableNode node,
+        IReadOnlyCollection<ExecutableChildSlot> childSlots,
+        ExecutableActivityStructure? structure) => new(
         node.ExecutableNodeId,
         node.AuthoredActivityId,
         node.ActivityType,
@@ -357,10 +379,42 @@ public sealed class ActivityTemplatePlacer(
         node.OutputCaptures,
         node.Metadata,
         childSlots,
-        node.Structure,
+        structure,
         node.ActivityContract,
         node.IntrinsicKind,
         node.IntrinsicVariable);
+
+    private IReadOnlyDictionary<string, RuntimeInputBinding> CompileOccurrenceInputs(
+        ExecutableNode templateRoot,
+        PlacementFrame frame)
+    {
+        var overlay = frame.OccurrenceOverlay!;
+        var inputStates = overlay.InputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [];
+        var contract = templateRoot.ActivityContract;
+        if (contract is null)
+        {
+            if (inputStates.Length == 0)
+                return templateRoot.InputBindings;
+
+            throw new InvalidOperationException(
+                $"Occurrence '{frame.OccurrenceId}' carries authored inputs but its exact template root has no pinned activity contract.");
+        }
+
+        return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
+    }
+
+    private ExecutableActivityStructure? RewriteStructure(
+        ExecutableActivityStructure? structure,
+        IReadOnlyDictionary<string, string> placedNodeIds)
+    {
+        if (structure is null)
+            return null;
+
+        var rewritten = activityStructureService.RemapExecutableStructure(
+            new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, structure.Payload),
+            placedNodeIds);
+        return new(rewritten.Kind, rewritten.SchemaVersion, rewritten.Payload);
+    }
 
     private RuntimeActivityDescriptor StampBoundaryDescriptor(
         RuntimeActivityDescriptor descriptor,
@@ -449,7 +503,8 @@ public sealed class ActivityTemplatePlacer(
         string? occurrenceId,
         string? parentOccurrenceId,
         string childSlotName,
-        int childIndex)
+        int childIndex,
+        ExecutableActivityTemplateOccurrenceOverlay? occurrenceOverlay)
     {
         public ActivityDefinitionVersionPublication Publication { get; } = publication;
         public ExecutableActivityTemplate Template { get; } = template;
@@ -460,6 +515,7 @@ public sealed class ActivityTemplatePlacer(
         public string? ParentOccurrenceId { get; } = parentOccurrenceId;
         public string ChildSlotName { get; } = childSlotName;
         public int ChildIndex { get; } = childIndex;
+        public ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay { get; } = occurrenceOverlay;
         public ExecutableActivityTemplateDependency[] Dependencies { get; } = template.DirectDependencies
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
             .ThenBy(x => x.DefinitionVersionId, StringComparer.Ordinal)

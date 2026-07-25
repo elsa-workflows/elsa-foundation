@@ -331,20 +331,69 @@ public sealed class ActivityTemplateCompiler(
         if (diagnostics.Any(IsError))
             return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
 
+        var resolvedOccurrenceIds = resolved.Select(x => x.OccurrenceId).ToHashSet(StringComparer.Ordinal);
+        var invalidOccurrence = compilation.Occurrences.FirstOrDefault(x =>
+            string.IsNullOrWhiteSpace(x.OccurrenceId) ||
+            x.InputBindings.ValueKind != JsonValueKind.Array);
+        var duplicateOccurrence = compilation.Occurrences
+            .GroupBy(x => x.OccurrenceId, StringComparer.Ordinal)
+            .FirstOrDefault(x => x.Count() > 1)?.Key;
+        var compiledOccurrenceIds = compilation.Occurrences
+            .Select(x => x.OccurrenceId)
+            .ToHashSet(StringComparer.Ordinal);
+        if (invalidOccurrence is not null ||
+            duplicateOccurrence is not null ||
+            compilation.Occurrences.Count > 0 && !compiledOccurrenceIds.SetEquals(resolvedOccurrenceIds))
+        {
+            diagnostics.Add(new(
+                "activity.provider.occurrence-compilation-invalid",
+                ActivityDiagnosticSeverity.Error,
+                invalidOccurrence is not null
+                    ? "The activity provider returned placement content with a blank occurrence identity or a non-array input-binding payload."
+                    : duplicateOccurrence is not null
+                    ? $"The activity provider returned duplicate placement content for occurrence '{duplicateOccurrence}'."
+                    : "The activity provider's placement content does not exactly match the resolved dependency occurrences.",
+                subject,
+                new(request.Draft.State.Provider.ProviderKey),
+                "Return at most one placement-content record for every resolved occurrence, without adding or omitting occurrences.",
+                new Dictionary<string, string>(StringComparer.Ordinal)));
+            return Failure(resolved, diagnostics, request.LayoutBytes, compilation.ResourceMeasurements);
+        }
+
+        var occurrenceCompilations = compilation.Occurrences.ToDictionary(x => x.OccurrenceId, StringComparer.Ordinal);
         var directRuntimeDependencies = resolved
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
             .ThenBy(x => x.VersionId, StringComparer.Ordinal)
-            .Select(x => new ExecutableActivityTemplateDependency(
-                x.DefinitionId,
-                x.VersionId,
-                x.Version,
-                x.TemplateId,
-                x.TemplateHash,
-                x.OccurrenceId,
-                ToInvocationOrigin(x.NodeOrigin),
-                x.ParentOccurrenceId,
-                x.ChildSlotName,
-                x.ChildIndex))
+            .Select(x =>
+            {
+                ExecutableActivityTemplateOccurrenceOverlay? overlay = null;
+                if (occurrenceCompilations.TryGetValue(x.OccurrenceId, out var occurrence))
+                {
+                    var structure = occurrence.Structure is null
+                        ? null
+                        : new ExecutableActivityStructure(
+                            occurrence.Structure.Kind,
+                            occurrence.Structure.SchemaVersion,
+                            occurrence.Structure.Payload);
+                    overlay = new(
+                        ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion,
+                        occurrence.InputBindings,
+                        structure);
+                }
+
+                return new ExecutableActivityTemplateDependency(
+                    x.DefinitionId,
+                    x.VersionId,
+                    x.Version,
+                    x.TemplateId,
+                    x.TemplateHash,
+                    x.OccurrenceId,
+                    ToInvocationOrigin(x.NodeOrigin),
+                    x.ParentOccurrenceId,
+                    x.ChildSlotName,
+                    x.ChildIndex,
+                    overlay);
+            })
             .ToArray();
         var closedTemplates = closure.Values
             .Select(x => new ExecutableActivityTemplateIdentity(x.TemplateId, x.TemplateHash))

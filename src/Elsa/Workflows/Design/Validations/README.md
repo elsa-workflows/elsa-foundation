@@ -22,7 +22,7 @@ Per framework §2.22 — this README documents what the feature registers.
 `WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` property; default `100`).
 
 - `MaxRecursionDepth` — safety net for the iterative activity-tree walker. Validators that
-  recurse into `ActivityNode.ChildActivities` (required-input/output, variable-expression
+  recurse through activity-owned structure (required-input, variable-expression
   resolver) stop descending past this depth. Iterative DFS internally, so the .NET call stack
   is never the actual risk — the bound guards against cyclic / malformed Draft data.
 
@@ -42,7 +42,7 @@ persisted.
 | `UnhandledActivityStructureValidator` | Root + nested (recurses) | `{NodeId}` · `Graph/UnhandledActivityStructure` |
 | `StartActivityValidator` | Root-level | `$workflow` · `RootActivity/Missing` |
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
-| `RequiredInputOutputValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
+| `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
 | `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
 
@@ -64,6 +64,11 @@ None (no startup / recurring / scheduled tasks).
   surface for `WorkflowDefinitionState.Inputs` / `Outputs` carries the `IsRequired` flag (per
   FR-036) but no default value or internal binding to validate against; the actionable
   workflow-level semantic is downstream (Unit D / E). Activity-level coverage is complete.
+- **Activity outputs are optional captures.** `OutputDefinition.IsRequired` describes the result
+  contract produced by the activity; it does not require every authored node to bind/capture that
+  result. The baseline validator therefore checks required activity inputs only.
+- **Engine intrinsics do not resolve through the catalog.** Intrinsic nodes are validated by their
+  dedicated validators and compiler and are skipped by catalog-consulting validators.
 - **Activity-specific validators** ship in their owning activity feature per FR-034 (e.g.
   `Elsa.Http.Activities.Design` ships HTTP validators), NOT here.
 - **Graph-specific validators** such as orphan checks belong to the activity feature that owns

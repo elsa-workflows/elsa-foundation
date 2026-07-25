@@ -54,6 +54,16 @@ internal sealed class ForEachStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<ForEachExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("ForEach executable structure payload is invalid.");
+        var remapped = new ForEachExecutableStructure(Remap(executable.Body, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBody(ActivityNode? body) =>
         body is null ? [] : [body];
 
@@ -71,4 +81,7 @@ internal sealed class ForEachStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<ForEachAuthoredStructure>(SerializerOptions)
                ?? new ForEachAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }
