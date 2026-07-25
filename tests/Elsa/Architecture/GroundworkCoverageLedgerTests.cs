@@ -14,10 +14,6 @@ public sealed class GroundworkCoverageLedgerTests
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
-    private const string CurrentCheckpointFenceAttachmentRelativePath =
-        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
-    private const string CurrentCheckpointFenceAttachmentSha256 =
-        "e5ebcfad293f9c4976f694bfebf587bad8df2bfc2f2e29bbff2c44e044ec7004";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
@@ -29,9 +25,6 @@ public sealed class GroundworkCoverageLedgerTests
     private const string PreviousCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
     private const string PreviousCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
     private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
-    private const string CurrentCheckpointFenceEvidenceCommit = "2089f72873d95f831418f9ec61f13cd2111871a9";
-    private const string CurrentCheckpointFenceEvidenceTree = "af7c599a21583ec80e5bda2adf930f4f2a8f5709";
-    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -102,17 +95,16 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview86_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
+    public void Preview86_source_boundary_has_no_current_provider_evidence_before_republication()
     {
-        AssertCheckpointFenceGeneration(
-            ExpectedGroundworkVersion,
-            CurrentCheckpointFenceAttachmentRelativePath,
-            CurrentCheckpointFenceAttachmentSha256,
-            CurrentCheckpointFenceEvidenceCommit,
-            CurrentCheckpointFenceEvidenceTree,
-            CurrentCheckpointFenceRunIdentity);
-
         var entries = Entries(ReadLedger()).ToArray();
+        var currentRecords = entries
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
+            .ToArray();
+
+        Assert.Empty(currentRecords);
         Assert.DoesNotContain(
             entries,
             entry => entry["status"]?.GetValue<string>() is
@@ -144,6 +136,24 @@ public sealed class GroundworkCoverageLedgerTests
         Assert.Contains(
             $"retained checkpoint/fence generation '{ExpectedGroundworkVersion}' must contain exactly 36 records; found 1.",
             findings);
+    }
+
+    [Fact]
+    public void Retained_checkpoint_fence_generation_allows_valid_current_evidence_outside_its_closed_slice()
+    {
+        var ledger = ReadLedger();
+        RemoveEvidenceGeneration(ledger, ExpectedGroundworkVersion);
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:expected-version-state-changes");
+        record["concurrencySemantic"] = "expected-version-state-changes";
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Empty(findings);
     }
 
     [Fact]
@@ -755,7 +765,7 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
+            $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its executed source scenario and physical target.",
             findings);
     }
 
@@ -1126,7 +1136,6 @@ public sealed class GroundworkCoverageLedgerTests
 
     private static JsonObject EvidenceRecord(string entryId, string provider, string scenarioId)
     {
-        var scenarioKey = GroundworkEvidenceArtifactContract.ScenarioKey(scenarioId);
         return new JsonObject
         {
             ["scenarioId"] = scenarioId,
@@ -1144,7 +1153,7 @@ public sealed class GroundworkCoverageLedgerTests
                 _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown test provider.")
             },
             ["manifestFingerprint"] = new string('a', 64),
-            ["executionPath"] = $"provider-driver/{provider}/{entryId}/{scenarioKey}",
+            ["executionPath"] = $"provider-driver/{provider}/fixture-source/{new string('a', 16)}",
             ["clients"] = 2,
             ["resultHash"] = new string('b', 64),
             ["outcome"] = "pass",

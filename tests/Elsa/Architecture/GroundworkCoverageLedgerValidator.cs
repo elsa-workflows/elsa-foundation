@@ -114,6 +114,11 @@ internal sealed class GroundworkCoverageLedgerValidator
                     : [])
                 : [])
             .Where(record => StringValue(record, "providerVersion") == providerVersion)
+            .Where(record => expectedTuples.Contains(string.Join(
+                '|',
+                StringValue(record, "coverageEntryId") ?? "<missing-entry>",
+                StringValue(record, "scenarioId") ?? "<missing-scenario>",
+                StringValue(record, "provider") ?? "<missing-provider>")))
             .ToArray();
         if (records.Length == 0)
             return;
@@ -613,12 +618,16 @@ internal sealed class GroundworkCoverageLedgerValidator
         if (!catalog.Contains(scenarioId))
             findings.Add($"{id}: {provider} evidence scenario '{scenarioId}' is outside the active scenario catalog.");
 
-        var scenarioKey = GroundworkEvidenceArtifactContract.ScenarioKey(scenarioId);
-        var expectedExecutionPath = $"provider-driver/{provider}/{id}/{scenarioKey}";
+        var sourceScenarioId = StringValue(record, "sourceScenarioId");
+        var manifestFingerprint = StringValue(record, "manifestFingerprint");
+        var expectedExecutionPath =
+            sourceScenarioId is not null && manifestFingerprint?.Length >= 16
+                ? $"provider-driver/{provider}/{sourceScenarioId}/{manifestFingerprint[..16]}"
+                : null;
         if (StringValue(record, "executionPath") != expectedExecutionPath)
         {
             findings.Add(
-                $"{id}: {provider} evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.");
+                $"{id}: {provider} evidence record '{scenarioId}' does not identify its executed source scenario and physical target.");
         }
 
         var declaredDimensions = new[] { "queryShape", "concurrencySemantic", "failureWindow", "restartScenario" }

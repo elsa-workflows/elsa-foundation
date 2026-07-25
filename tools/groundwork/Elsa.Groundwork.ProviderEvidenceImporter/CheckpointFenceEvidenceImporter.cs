@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -34,15 +35,15 @@ public static class CheckpointFenceEvidenceImporter
         ArgumentNullException.ThrowIfNull(request);
         ValidateExpectedProvenance(request);
         ValidateProviderVersion(request.ProviderVersion);
+        ValidateSourceRepository(request);
 
         var ledgerPath = Path.GetFullPath(request.LedgerPath);
         if (!File.Exists(ledgerPath))
             throw new InvalidOperationException($"Coverage ledger '{ledgerPath}' is unavailable.");
 
-        var evidenceRoot = Path.GetDirectoryName(ledgerPath)
-                           ?? throw new InvalidOperationException("Coverage ledger has no containing evidence root.");
-        var stagingRoot = Path.GetFullPath(request.ExternalStagingRoot);
-        RequireExternalStaging(evidenceRoot, stagingRoot);
+        var evidenceRoot = CanonicalPath(
+            Path.GetDirectoryName(ledgerPath)
+            ?? throw new InvalidOperationException("Coverage ledger has no containing evidence root."));
         ValidateHistoricalGeneration(evidenceRoot, Historical80AttachmentRelativePath, Historical80AttachmentSha256);
         ValidateHistoricalGeneration(evidenceRoot, Historical81AttachmentRelativePath, Historical81AttachmentSha256);
 
@@ -53,22 +54,34 @@ public static class CheckpointFenceEvidenceImporter
                 $"Coverage ledger must target Groundwork '{request.ProviderVersion}' before this importer can run.");
         }
 
-        var records = ReadStagedAttachment(stagingRoot, request.ProviderVersion);
-        ValidateStagedRecords(records, stagingRoot, request);
-        ValidateLedgerHasNoCurrentGeneration(ledger, request.ProviderVersion);
-
-        var ledgerWithImportedEvidence = AppendRecords(ledger, records);
-        EnsureStatusesUnchanged(ledger, ledgerWithImportedEvidence);
-
-        var destinationVersionDirectory = Path.Combine(
+        var destinationVersionDirectory = SafePath(
             evidenceRoot,
-            "versions",
-            request.ProviderVersion);
-        if (Directory.Exists(destinationVersionDirectory) || File.Exists(destinationVersionDirectory))
+            $"versions/{request.ProviderVersion}");
+        if (File.Exists(destinationVersionDirectory))
         {
             throw new InvalidOperationException(
-                $"Destination generation '{destinationVersionDirectory}' already exists; versioned evidence is create-new only.");
+                $"Destination generation '{destinationVersionDirectory}' is not a directory.");
         }
+        var recoverExistingGeneration = Directory.Exists(destinationVersionDirectory);
+        string? stagingRoot = null;
+        IReadOnlyList<JsonObject> records;
+        if (recoverExistingGeneration)
+        {
+            records = ReadStagedAttachment(evidenceRoot, request.ProviderVersion);
+            ValidateStagedRecords(records, evidenceRoot, request);
+            ValidateRecoverableGeneration(evidenceRoot, records, request.ProviderVersion);
+        }
+        else
+        {
+            stagingRoot = CanonicalPath(request.ExternalStagingRoot);
+            RequireExternalStaging(evidenceRoot, stagingRoot);
+            records = ReadStagedAttachment(stagingRoot, request.ProviderVersion);
+            ValidateStagedRecords(records, stagingRoot, request);
+        }
+
+        ValidateLedgerHasNoCurrentGeneration(ledger, request.ProviderVersion);
+        var ledgerWithImportedEvidence = AppendRecords(ledger, records);
+        EnsureStatusesUnchanged(ledger, ledgerWithImportedEvidence);
 
         var temporaryLedgerPath = Path.Combine(
             Path.GetDirectoryName(ledgerPath)!,
@@ -84,15 +97,18 @@ public static class CheckpointFenceEvidenceImporter
                 temporaryLedgerPath,
                 Serialize(ledgerWithImportedEvidence),
                 cancellationToken);
-            await CopyGenerationCreateNewAsync(
-                stagingRoot,
-                temporaryGenerationDirectory,
-                request.ProviderVersion,
-                records,
-                cancellationToken);
+            if (!recoverExistingGeneration)
+            {
+                await CopyGenerationCreateNewAsync(
+                    stagingRoot!,
+                    temporaryGenerationDirectory,
+                    request.ProviderVersion,
+                    records,
+                    cancellationToken);
 
-            Directory.Move(temporaryGenerationDirectory, destinationVersionDirectory);
-            generationMoved = true;
+                Directory.Move(temporaryGenerationDirectory, destinationVersionDirectory);
+                generationMoved = true;
+            }
             File.Move(temporaryLedgerPath, ledgerPath, overwrite: true);
         }
         catch
@@ -132,6 +148,48 @@ public static class CheckpointFenceEvidenceImporter
             throw new ArgumentException("The versioned import requires lowercase 40-character commit and tree identifiers.", nameof(request));
         if (!KebabCase(request.Provenance.RunIdentity))
             throw new ArgumentException("The versioned import requires a lowercase kebab-case run identity.", nameof(request));
+    }
+
+    private static void ValidateSourceRepository(CheckpointFenceEvidenceImportRequest request)
+    {
+        var sourceRepository = CanonicalPath(request.SourceRepositoryRoot);
+        if (!Directory.Exists(sourceRepository))
+            throw new InvalidOperationException($"Source repository '{sourceRepository}' is unavailable.");
+
+        var head = Git(sourceRepository, "rev-parse", "HEAD");
+        var tree = Git(sourceRepository, "rev-parse", "HEAD^{tree}");
+        if (head != request.Provenance.ElsaCommit || tree != request.Provenance.ElsaTree)
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be imported against the exact checked-out source commit and tree recorded in its provenance.");
+        }
+    }
+
+    private static string Git(string repositoryRoot, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("-C");
+        startInfo.ArgumentList.Add(repositoryRoot);
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)
+                            ?? throw new InvalidOperationException("Could not start Git source-provenance verification.");
+        var standardOutput = process.StandardOutput.ReadToEnd();
+        var standardError = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Git source-provenance verification failed: {standardError.Trim()}");
+        }
+
+        return standardOutput.Trim();
     }
 
     private static void ValidateProviderVersion(string providerVersion)
@@ -239,10 +297,10 @@ public static class CheckpointFenceEvidenceImporter
             if (!Sha256(manifestFingerprint))
                 throw new InvalidOperationException($"Staged evidence tuple '{tuple}' has an invalid manifest fingerprint.");
             if (RequiredString(record, "executionPath", tuple) !=
-                $"provider-driver/{provider}/{entry}/{ScenarioKey(scenario)}")
+                $"provider-driver/{provider}/{sourceScenario}/{manifestFingerprint[..16]}")
             {
                 throw new InvalidOperationException(
-                    $"Staged evidence tuple '{tuple}' is not bound to its provider, coverage entry, and obligation scenario.");
+                    $"Staged evidence tuple '{tuple}' is not bound to its provider, executed source scenario, and physical target.");
             }
 
             ValidateProvenance(record, tuple, request.Provenance);
@@ -345,6 +403,29 @@ public static class CheckpointFenceEvidenceImporter
         {
             throw new InvalidOperationException(
                 $"Coverage ledger already retains '{providerVersion}' provider evidence; this importer accepts one create-new 36-record generation only.");
+        }
+    }
+
+    private static void ValidateRecoverableGeneration(
+        string evidenceRoot,
+        IReadOnlyList<JsonObject> retainedRecords,
+        string providerVersion)
+    {
+        var destinationVersionDirectory = SafePath(evidenceRoot, $"versions/{providerVersion}");
+        var expectedFiles = retainedRecords
+            .Select(record => RequiredString(record, "evidence", "record"))
+            .Append(AttachmentRelativePath(providerVersion))
+            .ToHashSet(StringComparer.Ordinal);
+        var actualFiles = Directory.EnumerateFiles(
+                destinationVersionDirectory,
+                "*",
+                SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(evidenceRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        if (!actualFiles.SetEquals(expectedFiles))
+        {
+            throw new InvalidOperationException(
+                $"Existing destination generation '{providerVersion}' contains an incomplete or unexpected file set.");
         }
     }
 
@@ -456,8 +537,10 @@ public static class CheckpointFenceEvidenceImporter
 
     private static string SafePath(string root, string relativePath)
     {
-        var rootPath = Path.GetFullPath(root);
-        var path = Path.GetFullPath(Path.Combine(rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var rootPath = CanonicalPath(root);
+        var path = CanonicalPath(Path.Combine(
+            Path.GetFullPath(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
         if (!IsWithin(path, rootPath))
             throw new InvalidOperationException($"Evidence path '{relativePath}' escapes its root.");
         return path;
@@ -465,13 +548,51 @@ public static class CheckpointFenceEvidenceImporter
 
     private static bool IsWithin(string path, string root)
     {
-        var fullPath = Path.GetFullPath(path);
-        var fullRoot = Path.GetFullPath(root);
+        var fullPath = CanonicalPath(path);
+        var fullRoot = CanonicalPath(root);
         var rootPrefix = fullRoot.EndsWith(Path.DirectorySeparatorChar)
             ? fullRoot
             : fullRoot + Path.DirectorySeparatorChar;
         return string.Equals(fullPath, fullRoot, PathComparison) ||
                fullPath.StartsWith(rootPrefix, PathComparison);
+    }
+
+    private static string CanonicalPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var unresolved = new Stack<string>();
+        var existing = fullPath;
+        while (!Directory.Exists(existing) && !File.Exists(existing))
+        {
+            var name = Path.GetFileName(existing);
+            if (string.IsNullOrEmpty(name))
+                break;
+            unresolved.Push(name);
+            existing = Path.GetDirectoryName(existing)
+                       ?? throw new InvalidOperationException($"Path '{path}' has no resolvable ancestor.");
+        }
+
+        var root = Path.GetPathRoot(existing)
+                   ?? throw new InvalidOperationException($"Path '{path}' has no root.");
+        var resolved = root;
+        var relativeExisting = Path.GetRelativePath(root, existing);
+        if (relativeExisting != ".")
+        {
+            foreach (var segment in relativeExisting.Split(
+                         [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                         StringSplitOptions.RemoveEmptyEntries))
+            {
+                var candidate = Path.Combine(resolved, segment);
+                FileSystemInfo info = Directory.Exists(candidate)
+                    ? new DirectoryInfo(candidate)
+                    : new FileInfo(candidate);
+                resolved = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? candidate;
+            }
+        }
+
+        while (unresolved.TryPop(out var segment))
+            resolved = Path.Combine(resolved, segment);
+        return Path.GetFullPath(resolved);
     }
 
     private static StringComparison PathComparison =>
@@ -507,6 +628,7 @@ public sealed record CheckpointFenceEvidenceProvenance(string ElsaCommit, string
 public sealed record CheckpointFenceEvidenceImportRequest(
     string LedgerPath,
     string ExternalStagingRoot,
+    string SourceRepositoryRoot,
     string ProviderVersion,
     CheckpointFenceEvidenceProvenance Provenance);
 

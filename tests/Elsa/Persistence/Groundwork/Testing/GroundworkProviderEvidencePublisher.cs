@@ -329,7 +329,7 @@ public static class GroundworkProviderEvidencePublisher
             ["providerVersion"] = result.Provider.ProviderVersion,
             ["topology"] = result.Provider.Topology.Description,
             ["manifestFingerprint"] = result.CompositionFingerprint.Value,
-            ["executionPath"] = $"provider-driver/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}",
+            ["executionPath"] = result.ExecutionPath.Value,
             ["clients"] = result.Clients,
             ["resultHash"] = result.ResultDigest,
             ["observations"] = new JsonArray(result.Observations
@@ -486,15 +486,11 @@ public static class GroundworkProviderEvidencePublisher
         bool createNew,
         CancellationToken cancellationToken)
     {
-        var root = Path.GetFullPath(evidenceRoot);
-        var path = Path.GetFullPath(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-        var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar)
-            ? root
-            : root + Path.DirectorySeparatorChar;
-        if (!path.StartsWith(rootPrefix, StringComparison.Ordinal))
-            throw new InvalidOperationException("Evidence path escaped the publication root.");
-
+        Directory.CreateDirectory(evidenceRoot);
+        var root = GroundworkEvidencePath.Canonicalize(evidenceRoot);
+        var path = GroundworkEvidencePath.ResolveWithin(root, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        path = GroundworkEvidencePath.ResolveWithin(root, relativePath);
         if (createNew)
         {
             await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);

@@ -9,10 +9,6 @@ namespace Elsa.Architecture.Tests;
 public sealed class CheckpointFenceEvidenceImporterTests
 {
     private const string ProviderVersion = "0.0.1-preview.86";
-    private static readonly CheckpointFenceEvidenceProvenance Provenance = new(
-        "8468976be63b75d8c238b635264a78e055abd66d",
-        "39cd8a893ad5466f40c6e7d2131524703f1f0eba",
-        "runtime-checkpoint-fence-preview86");
 
     [Fact]
     public async Task Imports_only_the_complete_36_record_generation_without_advancing_statuses()
@@ -33,7 +29,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
         Assert.All(imported, record =>
         {
             Assert.Equal(ProviderVersion, record["providerVersion"]!.GetValue<string>());
-            Assert.True(JsonNode.DeepEquals(record["provenance"], ProvenanceNode()));
+            Assert.True(JsonNode.DeepEquals(record["provenance"], fixture.ProvenanceNode()));
         });
         Assert.Equal(28, imported.Count(record => record["coverageEntryId"]!.GetValue<string>() == "runtime-checkpoint-commit"));
         Assert.Equal(4, imported.Count(record => record["coverageEntryId"]!.GetValue<string>() == "runtime-execution-liveness"));
@@ -85,6 +81,24 @@ public sealed class CheckpointFenceEvidenceImporterTests
     }
 
     [Fact]
+    public async Task Rejects_caller_provenance_that_does_not_match_the_checked_out_source_repository()
+    {
+        using var fixture = new ImportFixture();
+        var request = fixture.Request with
+        {
+            Provenance = new CheckpointFenceEvidenceProvenance(
+                new string('a', 40),
+                new string('b', 40),
+                "runtime-checkpoint-fence-preview86")
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CheckpointFenceEvidenceImporter.ImportAsync(request));
+
+        Assert.Contains("exact checked-out source commit and tree", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Rejects_records_without_the_exact_provider_topology_and_independent_clients()
     {
         using var fixture = new ImportFixture();
@@ -96,6 +110,21 @@ public sealed class CheckpointFenceEvidenceImporterTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
 
         Assert.Contains("invalid provider topology", exception.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
+    }
+
+    [Fact]
+    public async Task Rejects_an_execution_path_synthesized_from_the_ledger_obligation()
+    {
+        using var fixture = new ImportFixture();
+        var records = fixture.StagedRecords();
+        records[0]!["executionPath"] =
+            "provider-driver/sqlite/runtime-checkpoint-commit/974e1222ea1cded8";
+        fixture.WriteStagedRecords(records);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
+
+        Assert.Contains("executed source scenario, and physical target", exception.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
     }
 
@@ -157,6 +186,56 @@ public sealed class CheckpointFenceEvidenceImporterTests
         Assert.Contains("external to the tracked", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Rejects_an_external_staging_symlink_that_resolves_into_the_tracked_evidence_tree()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new ImportFixture();
+        var stagingLink = Path.Combine(fixture.Root, "staging-link");
+        Directory.CreateSymbolicLink(stagingLink, fixture.EvidenceRoot);
+        var request = fixture.Request with { ExternalStagingRoot = stagingLink };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CheckpointFenceEvidenceImporter.ImportAsync(request));
+
+        Assert.Contains("external to the tracked", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_a_nested_staging_symlink_that_escapes_its_external_root()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new ImportFixture();
+        var stagingRoot = Path.Combine(fixture.Root, "nested-link-staging");
+        Directory.CreateDirectory(stagingRoot);
+        Directory.CreateSymbolicLink(
+            Path.Combine(stagingRoot, "versions"),
+            Path.Combine(fixture.EvidenceRoot, "versions"));
+        var request = fixture.Request with { ExternalStagingRoot = stagingRoot };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CheckpointFenceEvidenceImporter.ImportAsync(request));
+
+        Assert.Contains("escapes its root", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Recovers_the_exact_generation_left_after_the_post_move_crash_window()
+    {
+        using var fixture = new ImportFixture();
+        fixture.SeedRecoverableDestination();
+        Directory.Delete(fixture.StagingRoot, recursive: true);
+
+        var result = await fixture.ImportAsync();
+
+        Assert.Equal(36, result.ImportedRecordCount);
+        Assert.Equal(36, fixture.CurrentGenerationRecords(fixture.Ledger()).Length);
+    }
+
     private static string FileSha256(string path) =>
         Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
 
@@ -184,13 +263,6 @@ public sealed class CheckpointFenceEvidenceImporterTests
         return Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(digestInput)));
     }
 
-    private static JsonObject ProvenanceNode() => new()
-    {
-        ["elsaCommit"] = Provenance.ElsaCommit,
-        ["elsaTree"] = Provenance.ElsaTree,
-        ["runIdentity"] = Provenance.RunIdentity
-    };
-
     private sealed class ImportFixture : IDisposable
     {
         public const string Historical80AttachmentSha256 =
@@ -203,7 +275,8 @@ public sealed class CheckpointFenceEvidenceImporterTests
         public ImportFixture()
         {
             Root = Path.Combine(Path.GetTempPath(), $"elsa-checkpoint-fence-import-{Guid.NewGuid():N}");
-            EvidenceRoot = Path.Combine(Root, "target", "specs", "094-harden-groundwork-stores");
+            SourceRepositoryRoot = Path.Combine(Root, "source-repository");
+            EvidenceRoot = Path.Combine(SourceRepositoryRoot, "specs", "094-harden-groundwork-stores");
             StagingRoot = Path.Combine(Root, "external-staging");
             Directory.CreateDirectory(EvidenceRoot);
             Directory.CreateDirectory(StagingRoot);
@@ -217,12 +290,15 @@ public sealed class CheckpointFenceEvidenceImporterTests
             CopyHistoricalGeneration(
                 "versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json",
                 Historical81AttachmentSha256);
+            InitializeSourceRepository();
             WriteStagingGeneration();
         }
 
         public string Root { get; }
+        public string SourceRepositoryRoot { get; }
         public string EvidenceRoot { get; }
         public string StagingRoot { get; }
+        public CheckpointFenceEvidenceProvenance Provenance { get; private set; } = null!;
         public string LedgerPath => Path.Combine(EvidenceRoot, "coverage-ledger.json");
         public string DestinationGenerationPath => Path.Combine(EvidenceRoot, "versions", ProviderVersion);
         public string Historical80AttachmentPath => Path.Combine(EvidenceRoot, "ledger-attachments", "runtime-checkpoint-fence.json");
@@ -233,7 +309,8 @@ public sealed class CheckpointFenceEvidenceImporterTests
             "ledger-attachments",
             "runtime-checkpoint-fence.json");
         public string Historical80ArtifactPath { get; private set; } = string.Empty;
-        public CheckpointFenceEvidenceImportRequest Request => new(LedgerPath, StagingRoot, ProviderVersion, Provenance);
+        public CheckpointFenceEvidenceImportRequest Request =>
+            new(LedgerPath, StagingRoot, SourceRepositoryRoot, ProviderVersion, Provenance);
 
         public Task<CheckpointFenceEvidenceImportResult> ImportAsync() =>
             CheckpointFenceEvidenceImporter.ImportAsync(Request);
@@ -285,6 +362,25 @@ public sealed class CheckpointFenceEvidenceImporterTests
             var artifactPath = StagingArtifactPath(record);
             File.WriteAllText(artifactPath, CheckpointFenceEvidenceImporter.ArtifactPayload(record).ToJsonString());
             record["evidenceSha256"] = FileSha256(artifactPath);
+        }
+
+        public JsonObject ProvenanceNode() => new()
+        {
+            ["elsaCommit"] = Provenance.ElsaCommit,
+            ["elsaTree"] = Provenance.ElsaTree,
+            ["runIdentity"] = Provenance.RunIdentity
+        };
+
+        public void SeedRecoverableDestination()
+        {
+            var source = Path.Combine(StagingRoot, "versions", ProviderVersion);
+            foreach (var sourceFile in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            {
+                var destination = Path.Combine(
+                    DestinationGenerationPath,
+                    Path.GetRelativePath(source, sourceFile));
+                CopyFile(sourceFile, destination);
+            }
         }
 
         public void Dispose()
@@ -340,8 +436,12 @@ public sealed class CheckpointFenceEvidenceImporterTests
                 var provider = record["provider"]!.GetValue<string>();
                 var entry = record["coverageEntryId"]!.GetValue<string>();
                 var scenario = record["scenarioId"]!.GetValue<string>();
+                var sourceScenario = record["sourceScenarioId"]!.GetValue<string>();
+                var manifestFingerprint = record["manifestFingerprint"]!.GetValue<string>();
                 record["providerVersion"] = ProviderVersion;
                 record["provenance"] = ProvenanceNode();
+                record["executionPath"] =
+                    $"provider-driver/{provider}/{sourceScenario}/{manifestFingerprint[..16]}";
                 record["evidence"] = $"versions/{ProviderVersion}/evidence/{provider}/{entry}/{ScenarioKey(scenario)}.json";
                 record.Remove("nativeEvidence");
                 record.Remove("nativeEvidenceSha256");
@@ -363,6 +463,42 @@ public sealed class CheckpointFenceEvidenceImporterTests
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.Copy(source, destination, overwrite: false);
+        }
+
+        private void InitializeSourceRepository()
+        {
+            RunGit("init", "--quiet");
+            RunGit("config", "user.name", "Elsa Test");
+            RunGit("config", "user.email", "elsa-test@example.invalid");
+            RunGit("add", ".");
+            RunGit("commit", "--quiet", "-m", "seed evidence");
+            Provenance = new CheckpointFenceEvidenceProvenance(
+                RunGit("rev-parse", "HEAD"),
+                RunGit("rev-parse", "HEAD^{tree}"),
+                "runtime-checkpoint-fence-preview86");
+        }
+
+        private string RunGit(params string[] arguments)
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo("git")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("-C");
+            startInfo.ArgumentList.Add(SourceRepositoryRoot);
+            foreach (var argument in arguments)
+                startInfo.ArgumentList.Add(argument);
+
+            using var process = System.Diagnostics.Process.Start(startInfo)
+                                ?? throw new InvalidOperationException("Could not start fixture Git process.");
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"Fixture Git failed: {error.Trim()}");
+            return output.Trim();
         }
 
         private static string SourceLedgerPath => Path.Combine(SourceEvidenceRoot, "coverage-ledger.json");

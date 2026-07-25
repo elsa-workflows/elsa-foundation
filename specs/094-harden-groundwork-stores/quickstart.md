@@ -35,10 +35,12 @@ public `0.0.1-preview.86` release built from Groundwork
 `fd6d1c1b3cb4ebfce03d4cd57e1420060e8c02ac`. This source-only checkpoint changes no evidence artifact or
 tuple-keyed ledger record. Exact Elsa-source publication and mechanical import are a later step.
 The pre-publication safety gate adds a version-neutral external-staging importer, create-new versioned
-publication, exact 36-tuple/provenance/hash validation, immutable preview.80/preview.81 checks, and
-current-generation-only readiness evaluation. Root verification passed the full architecture suite (298),
-focused publisher tests (14), benchmark protocol tests (60), and the design fingerprint gate (1); no provider
-suite or evidence import ran before the source checkpoint was frozen.
+publication, exact 36-tuple/provenance/hash validation, four-provider result equivalence, physical
+source-scenario execution-path binding, symlink-aware containment, post-capture source revalidation,
+crash-window import recovery, immutable preview.80/preview.81 checks, and current-generation-only readiness
+evaluation. Root verification passed the full architecture suite (305), focused publisher tests
+(17 passed, two explicit publication tests skipped), benchmark protocol tests (60), and the design fingerprint
+gate (1); no provider suite or evidence import ran before the corrected source checkpoint was frozen.
 
 **2026-07-24 historical #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
 `0.0.1-preview.81` for batched schema apply. Elsa PR #1040 aligned the tool manifest and current-version
@@ -186,6 +188,7 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
 dotnet run --project tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/Elsa.Groundwork.ProviderEvidenceImporter.csproj -- \
   --ledger specs/094-harden-groundwork-stores/coverage-ledger.json \
   --staging-root "$ELSA_GROUNDWORK_EVIDENCE_OUTPUT" \
+  --source-repository "$(git rev-parse --show-toplevel)" \
   --provider-version "0.0.1-preview.86" \
   --elsa-commit "$ELSA_GROUNDWORK_SOURCE_COMMIT" \
   --elsa-tree "$ELSA_GROUNDWORK_SOURCE_TREE" \
@@ -201,27 +204,6 @@ checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance,
 and unchanged preview.80/preview.81 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
-
-### Preview.86 checkpoint/fence evidence refresh (2026-07-25)
-
-Against frozen Elsa source commit `2089f72873d95f831418f9ec61f13cd2111871a9` (tree
-`af7c599a21583ec80e5bda2adf930f4f2a8f5709`) and the exact Groundwork `0.0.1-preview.86`
-package/tool family published from Groundwork `fd6d1c1b3cb4ebfce03d4cd57e1420060e8c02ac`, the
-checkpoint/fence publisher passed for file-backed SQLite, SQL Server, PostgreSQL, and transaction-capable
-MongoDB (1/1, 2m29s). The external staging generation contained exactly 36 unique records: 28 for
-`runtime-checkpoint-commit`, four for `runtime-execution-liveness`, and four for
-`runtime-post-commit-outbox`, with nine records per provider, two independent clients per record, passing
-outcomes, and the required provider topology.
-
-Before import, all 36 artifact digests were recomputed successfully and the attachment was verified as
-`e5ebcfad293f9c4976f694bfebf587bad8df2bfc2f2e29bbff2c44e044ec7004`. The guarded importer then
-copied that create-new version directory and appended only the exact tuple-keyed records to the coverage
-ledger. The preview.80 attachment remains
-`b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c`; preview.81 remains
-`ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34`. The import left the
-ledger's 27 `implemented`, four `externally-blocked`, and one `planned` statuses unchanged. This refresh
-establishes current checkpoint/fence provenance only; it does not complete the remaining provider-evidence
-obligations or any #646 performance verdict.
 
 ### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
 

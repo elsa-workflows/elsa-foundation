@@ -11,7 +11,7 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public sealed class GroundworkProviderEvidencePublisherTests
 {
     [Fact]
-    public async Task Publishes_a_complete_equivalent_matrix_with_hashes_from_written_artifacts_and_native_route_evidence()
+    public async Task Publishes_a_complete_equivalent_matrix_with_source_scenario_execution_paths_and_physical_fingerprints()
     {
         var directory = TemporaryDirectory();
         try
@@ -46,7 +46,11 @@ public sealed class GroundworkProviderEvidencePublisherTests
                 Assert.Equal("find-by-workflow-and-bookmark", record["queryShape"]!.GetValue<string>());
                 Assert.Equal("find-by-workflow-and-bookmark", record["nativeQueryIdentity"]!.GetValue<string>());
                 Assert.Equal("fixture-document", record["documentKind"]!.GetValue<string>());
-                Assert.Equal($"provider-driver/{provider}/runtime-bookmark-state/{ScenarioKey(obligation.ScenarioId)}", record["executionPath"]!.GetValue<string>());
+                var result = results.Single(candidate => candidate.Provider.ProviderKey == provider);
+                Assert.Equal(result.ExecutionPath.Value, record["executionPath"]!.GetValue<string>());
+                Assert.Equal(
+                    GroundworkExecutionPath.Create(provider, result.ScenarioId, result.CompositionFingerprint).Value,
+                    record["executionPath"]!.GetValue<string>());
                 Assert.Equal($"evidence/{provider}/runtime-bookmark-state/{ScenarioKey(obligation.ScenarioId)}.json", evidencePath);
                 Assert.Equal($"evidence/{provider}/runtime-bookmark-state/{ScenarioKey(obligation.ScenarioId)}.plan.txt", nativePath);
                 Assert.Equal(HashFile(directory, evidencePath), record["evidenceSha256"]!.GetValue<string>());
@@ -159,7 +163,10 @@ public sealed class GroundworkProviderEvidencePublisherTests
                 Assert.Equal("failureWindow:before-provider-decision", record["scenarioId"]!.GetValue<string>());
                 Assert.Equal("before-provider-decision", record["failureWindow"]!.GetValue<string>());
                 Assert.Equal(
-                    $"provider-driver/{record["provider"]!.GetValue<string>()}/runtime-bookmark-state/{ScenarioKey(obligation.ScenarioId)}",
+                    GroundworkExecutionPath.Create(
+                        record["provider"]!.GetValue<string>(),
+                        obligation.SourceScenarioId,
+                        Composition).Value,
                     record["executionPath"]!.GetValue<string>());
                 Assert.False(record.ContainsKey("queryShape"));
                 Assert.False(record.ContainsKey("nativeEvidence"));
@@ -360,7 +367,7 @@ public sealed class GroundworkProviderEvidencePublisherTests
             var secondRecord = second.LedgerRecords[0]!.AsObject();
             Assert.Equal("ordinary-round-trip", secondRecord["scenarioId"]!.GetValue<string>());
             Assert.Equal(
-                $"provider-driver/sqlite/runtime-bookmark-state/{ScenarioKey("ordinary-round-trip")}",
+                GroundworkExecutionPath.Create("sqlite", "bounded-query", Composition).Value,
                 secondRecord["executionPath"]!.GetValue<string>());
             Assert.False(secondRecord.ContainsKey("queryShape"));
             Assert.False(secondRecord.ContainsKey("concurrencySemantic"));
@@ -538,6 +545,33 @@ public sealed class GroundworkProviderEvidencePublisherTests
         }
     }
 
+    [SkippableFact]
+    public async Task Rejects_a_nested_symlink_that_escapes_the_publication_root()
+    {
+        var directory = TemporaryDirectory();
+        var outside = TemporaryDirectory();
+        var nestedLink = Path.Combine(directory, "evidence");
+        try
+        {
+            Skip.If(!TryCreateDirectorySymlink(nestedLink, outside), "Symbolic links are not available for this test run.");
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                GroundworkProviderEvidencePublisher.PublishAsync(
+                    directory,
+                    GroundworkLedgerObligation.OrdinaryRoundTrip("runtime-bookmark-state", "bounded-query"),
+                    MandatoryProviders.Select(provider => Result(provider, null))));
+
+            Assert.Contains("escaped the publication root", exception.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(outside));
+        }
+        finally
+        {
+            DeleteDirectorySymlink(nestedLink);
+            Directory.Delete(directory, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
     private static readonly string[] MandatoryProviders = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly GroundworkCompositionFingerprint Composition =
         GroundworkCompositionFingerprint.Create("provider-evidence-publisher-contract:v1");
@@ -656,6 +690,25 @@ public sealed class GroundworkProviderEvidencePublisherTests
         var directory = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-provider-evidence-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         return directory;
+    }
+
+    private static bool TryCreateDirectorySymlink(string path, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(path, target);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static void DeleteDirectorySymlink(string path)
+    {
+        if (new DirectoryInfo(path).LinkTarget is not null)
+            Directory.Delete(path);
     }
 
     private static string HashFile(string root, string relativePath) => Convert.ToHexStringLower(

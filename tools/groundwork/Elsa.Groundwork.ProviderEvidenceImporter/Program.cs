@@ -8,6 +8,7 @@ try
         new CheckpointFenceEvidenceImportRequest(
             Required(arguments, "ledger"),
             Required(arguments, "staging-root"),
+            Required(arguments, "source-repository"),
             Required(arguments, "provider-version"),
             new CheckpointFenceEvidenceProvenance(
                 Required(arguments, "elsa-commit"),
@@ -31,7 +32,7 @@ static Dictionary<string, string> ParseArguments(string[] arguments)
             !values.TryAdd(arguments[index][2..], arguments[index + 1]))
         {
             throw new ArgumentException(
-                "Usage: --ledger <path> --staging-root <path> --provider-version <version> --elsa-commit <sha> --elsa-tree <sha> --run-identity <identity>");
+                "Usage: --ledger <path> --staging-root <path> --source-repository <path> --provider-version <version> --elsa-commit <sha> --elsa-tree <sha> --run-identity <identity>");
         }
     }
 
