@@ -32,6 +32,8 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
         lock (_syncRoot)
         {
             var key = new IncidentStateKey(state.WorkflowExecutionId, state.IncidentId);
+            _states.TryGetValue(key, out var existing);
+            IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, state);
             _states[key] = state;
             return new ValueTask<IncidentState>(state);
         }

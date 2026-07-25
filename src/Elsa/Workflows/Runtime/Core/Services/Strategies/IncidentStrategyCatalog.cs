@@ -22,7 +22,7 @@ public sealed class IncidentStrategyCatalog : IIncidentStrategyCatalog, IInciden
         foreach (var registration in registrations)
         {
             ArgumentNullException.ThrowIfNull(registration);
-            IncidentStrategyIdentity.ValidateDescriptor(registration.Descriptor);
+            IncidentStrategyIdentity.ValidateRegisteredDescriptor(registration.Descriptor);
             if (!byReference.TryAdd(registration.Descriptor.Reference, registration))
             {
                 var prior = byReference[registration.Descriptor.Reference];

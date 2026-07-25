@@ -106,7 +106,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
         var services = new ServiceCollection();
-        services.AddIncidentStrategy<FaultIncidentStrategy>(IncidentStrategyBuiltIns.Fault);
+        services.AddWorkflowRuntime();
         using var provider = services.BuildServiceProvider();
         var handler = new WorkflowStartSchedulerWorkHandler(
             executableStore,

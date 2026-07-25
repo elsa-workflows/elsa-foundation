@@ -9,18 +9,26 @@ internal static class IncidentStrategyIdentity
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         var reference = descriptor.Reference;
-        var isBuiltIn = StringComparer.OrdinalIgnoreCase.Equals(reference.Alias, IncidentStrategyBuiltIns.FaultReference.Alias) ||
-                        StringComparer.OrdinalIgnoreCase.Equals(reference.Alias, IncidentStrategyBuiltIns.ContinueWithIncidentsReference.Alias);
-
-        if (isBuiltIn)
-        {
-            if (!StringComparer.Ordinal.Equals(reference.Version, "1"))
-                throw new ArgumentException($"Built-in incident strategy alias '{reference.Alias}' is reserved at version '1'.", nameof(descriptor));
-            return;
-        }
+        if (IsBuiltInAlias(reference.Alias))
+            throw new ArgumentException(
+                $"Built-in incident strategy alias '{reference.Alias}' is reserved for runtime-owned registrations.",
+                nameof(descriptor));
 
         if (!IsNamespaced(reference.Alias))
             throw new ArgumentException($"Custom incident strategy alias '{reference.Alias}' must be dotted and namespaced.", nameof(descriptor));
+    }
+
+    public static void ValidateRegisteredDescriptor(IncidentStrategyDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!IsBuiltInAlias(descriptor.Reference.Alias))
+        {
+            ValidateDescriptor(descriptor);
+            return;
+        }
+
+        if (!StringComparer.Ordinal.Equals(descriptor.Reference.Version, "1"))
+            throw new ArgumentException($"Built-in incident strategy alias '{descriptor.Reference.Alias}' is reserved at version '1'.", nameof(descriptor));
     }
 
     public static void ValidateSafeIntentKind(string kind)
@@ -43,4 +51,8 @@ internal static class IncidentStrategyIdentity
         value.Split('.', StringSplitOptions.None) is var segments &&
         segments.Length >= 2 &&
         segments.All(segment => !String.IsNullOrWhiteSpace(segment));
+
+    private static bool IsBuiltInAlias(string alias) =>
+        StringComparer.OrdinalIgnoreCase.Equals(alias, IncidentStrategyBuiltIns.FaultReference.Alias) ||
+        StringComparer.OrdinalIgnoreCase.Equals(alias, IncidentStrategyBuiltIns.ContinueWithIncidentsReference.Alias);
 }

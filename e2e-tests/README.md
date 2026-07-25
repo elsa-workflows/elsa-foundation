@@ -230,7 +230,7 @@ node, the child runs, and the parent resumes with the child's terminal outcome (
 covered end-to-end by `bpmn/Test-BpmnCallActivity.ps1` (a BPMN `callActivity` is a waited `DispatchWorkflow`
 by convention). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
 
-**Known defect (issue #1031):** a **faulted** dispatched child ends `Faulted` via a scheduler-poison path — its
+**Known defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
 fault-recording checkpoint commit fails (`GroundworkRuntimeCheckpointWriterException`), so the child surfaces a
 `Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
 activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`

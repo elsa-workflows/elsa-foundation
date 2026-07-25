@@ -1553,7 +1553,13 @@ public sealed class RuntimeCheckpointCommitTests
                 executableNodeId: _incidentState.ExecutableNodeId,
                 severity: _incidentState.Severity,
                 status: status,
-                resolutionOutcome: _incidentState.ResolutionOutcome,
+                resolutionOutcome: status is IncidentStatus.Resolved or IncidentStatus.Suppressed
+                    ? new IncidentResolutionOutcome(
+                        "Acme.TestResolution",
+                        _incidentState.CreatedAt.AddMinutes(1),
+                        strategy: null,
+                        systemSource: "TestResolution")
+                    : null,
                 failureType: _incidentState.FailureType,
                 message: _incidentState.Message,
                 createdAt: _incidentState.CreatedAt,

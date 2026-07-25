@@ -12,9 +12,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// incident) is recorded only in <see cref="IWorkflowSchedulerPoisonStore"/>: the workflow stays Running, the
 /// activity stays Scheduled, and neither the incidents API nor the Studio timeline surfaces anything.
 ///
-/// <para>Runs as a drain observer <b>before</b> <see cref="BlockingIncidentWorkflowFaultObserver"/>: the blocking
-/// incident committed here is picked up by that observer in the same notification pass, which transitions the
-/// workflow execution to <see cref="WorkflowExecutionStatus.Faulted"/>.</para>
+/// <para>Runs as a drain observer <b>before</b> <see cref="BlockingIncidentWorkflowFaultObserver"/>. It records a
+/// system-authored <c>WaitForIntervention</c> outcome, so the downstream fault observer preserves the workflow's existing
+/// lifecycle state while operators can inspect the durable poison incident.</para>
 ///
 /// <para>Only <see cref="RuntimeSchedulerPoisonDisposition.Poisoned"/> records are surfaced — a
 /// <see cref="RuntimeSchedulerPoisonDisposition.RetryScheduled"/> record is still being re-driven by the retry

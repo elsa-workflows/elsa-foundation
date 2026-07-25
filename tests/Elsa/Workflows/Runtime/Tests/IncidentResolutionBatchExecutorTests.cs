@@ -262,8 +262,7 @@ public sealed class IncidentResolutionBatchExecutorTests
             Func<IRuntimeCheckpointCommitStore, IRuntimeCheckpointCommitStore>? decorateCommitStore = null)
         {
             var services = new ServiceCollection();
-            services.AddIncidentStrategy<FaultIncidentStrategy>(IncidentStrategyBuiltIns.Fault);
-            services.AddIncidentStrategy<ContinueWithIncidentsIncidentStrategy>(IncidentStrategyBuiltIns.ContinueWithIncidents);
+            services.AddWorkflowRuntime();
             services.AddIncidentStrategy<WaitStrategy>(new IncidentStrategyDescriptor(new IncidentStrategyReference("Contoso.Wait", "1"), "Wait"));
             services.AddIncidentStrategy<NullStrategy>(new IncidentStrategyDescriptor(new IncidentStrategyReference("Contoso.Null", "1"), "Null"));
             services.AddIncidentStrategy<SafeIntentStrategy>();

@@ -58,6 +58,7 @@ public sealed class GroundworkIncidentStateStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
 
         var existing = await LoadByLogicalIdentityAsync(state.WorkflowExecutionId, state.IncidentId, cancellationToken);
+        IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing?.State, state);
         var result = await SaveDocumentAsync(
             PhysicalDocumentId(state.WorkflowExecutionId, state.IncidentId),
             state,

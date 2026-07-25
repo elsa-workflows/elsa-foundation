@@ -2,8 +2,10 @@ using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Strategies;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -23,11 +25,11 @@ public sealed class IncidentStrategyRegistryTests
 
         var descriptors = catalog.List();
 
-        Assert.Equal(["Contoso.Alpha", "Contoso.Zeta", "Fault"], descriptors.Select(descriptor => descriptor.Reference.Alias));
+        Assert.Equal(["Contoso.Alpha", "Contoso.Fault", "Contoso.Zeta"], descriptors.Select(descriptor => descriptor.Reference.Alias));
         Assert.Equal(0, CountingStrategy.Constructions);
         Assert.True(catalog.TryGet(new IncidentStrategyReference("contoso.zeta", "1"), out var descriptor));
         Assert.Equal("Contoso.Zeta", descriptor.Reference.Alias);
-        Assert.Equal(IncidentStrategyBuiltIns.FaultReference, catalog.DefaultStrategy);
+        Assert.Equal(TestDefaultReference, catalog.DefaultStrategy);
     }
 
     [Fact]
@@ -105,6 +107,20 @@ public sealed class IncidentStrategyRegistryTests
             Descriptor("Unqualified", "1", "Unqualified")));
     }
 
+    [Theory]
+    [InlineData("Fault")]
+    [InlineData("ContinueWithIncidents")]
+    public void Registration_rejects_third_party_claims_of_reserved_builtin_aliases(string alias)
+    {
+        var services = new ServiceCollection();
+
+        var exception = Assert.Throws<ArgumentException>(() => services.AddIncidentStrategy<CountingStrategy>(
+            Descriptor(alias, "1", alias)));
+
+        Assert.Contains("reserved for runtime-owned registrations", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IncidentStrategyRegistration));
+    }
+
     [Fact]
     public void Catalog_requires_an_exact_registered_default_and_safe_intents_remain_third_party_namespaced()
     {
@@ -138,12 +154,49 @@ public sealed class IncidentStrategyRegistryTests
         Assert.Contains(IncidentStrategyBuiltIns.ContinueWithIncidentsReference, references);
     }
 
+    [Fact]
+    public void Runtime_composition_retry_completes_builtin_registration_after_the_second_builtin_initially_fails()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
+        services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRuntime());
+
+        services.RemoveAll<ContinueWithIncidentsIncidentStrategy>();
+        services.AddScoped<ContinueWithIncidentsIncidentStrategy>();
+        services.AddWorkflowRuntime();
+
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(FaultIncidentStrategy));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(ContinueWithIncidentsIncidentStrategy));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IncidentStrategyRegistration) &&
+            descriptor.ImplementationInstance is IncidentStrategyRegistration registration &&
+            registration.Descriptor.Reference.Equals(IncidentStrategyBuiltIns.FaultReference));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IncidentStrategyRegistration) &&
+            descriptor.ImplementationInstance is IncidentStrategyRegistration registration &&
+            registration.Descriptor.Reference.Equals(IncidentStrategyBuiltIns.ContinueWithIncidentsReference));
+
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        var references = provider.GetRequiredService<IIncidentStrategyCatalog>().List()
+            .Select(descriptor => descriptor.Reference)
+            .ToArray();
+        Assert.Contains(IncidentStrategyBuiltIns.FaultReference, references);
+        Assert.Contains(IncidentStrategyBuiltIns.ContinueWithIncidentsReference, references);
+    }
+
     private static ServiceCollection NewServices()
     {
         var services = new ServiceCollection();
-        services.AddIncidentStrategy<FaultStrategy>(IncidentStrategyBuiltIns.Fault);
+        services.AddIncidentStrategy<FaultStrategy>(new IncidentStrategyDescriptor(TestDefaultReference, "Fault"));
+        services.AddSingleton(new IncidentStrategyCatalogOptions { DefaultStrategy = TestDefaultReference });
         return services;
     }
+
+    private static IncidentStrategyReference TestDefaultReference { get; } = new("Contoso.Fault", "1");
 
     private static IncidentStrategyDescriptor Descriptor(string alias, string version, string displayName) =>
         new(new IncidentStrategyReference(alias, version), displayName);
