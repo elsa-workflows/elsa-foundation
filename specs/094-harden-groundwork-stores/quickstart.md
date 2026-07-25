@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.86` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.88` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.86`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.88`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,7 +18,7 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.86`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.88`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
@@ -26,9 +26,16 @@ the Elsa provider marker.
 The original checkpoint/fence attachment and its unversioned evidence paths retain the reviewed
 `0.0.1-preview.80` four-provider slice as immutable historical provenance. The later
 `0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
-versioned attachment by tuple as prior-generation provenance. The current `0.0.1-preview.86` checkpoint/fence
-slice lives under `versions/0.0.1-preview.86/` and is imported mechanically by tuple. All rows remain below
-`evidence-complete`: this 36-record slice is partial and cannot close the full provider-evidence gate.
+versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
+lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The current
+`0.0.1-preview.88` slice awaits exact-source mechanical publication and import. All rows remain below
+`evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
+
+**2026-07-25 preview.88 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
+public `0.0.1-preview.88` release built from Groundwork merge
+`6e79f7836ac7bb13c0153771531162886ca49971`. Exact Elsa source provenance, four-provider publication totals,
+and the retained attachment digest are recorded only after the external-staging publisher and tuple-keyed
+import complete.
 
 **2026-07-25 preview.86 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.86` release built from Groundwork
@@ -178,7 +185,7 @@ slice, publish first to an external staging directory, then import only that exa
 export ELSA_GROUNDWORK_EVIDENCE_OUTPUT="$(mktemp -d "${TMPDIR:-/tmp}/elsa-groundwork-evidence.XXXXXX")"
 export ELSA_GROUNDWORK_SOURCE_COMMIT="$(git rev-parse HEAD)"
 export ELSA_GROUNDWORK_SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview86"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview88"
 
 # The versioned publisher independently rejects a later or dirty checkout and
 # rejects output beneath this repository. These checks keep the shell flow
@@ -194,7 +201,7 @@ dotnet run --project tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/E
   --ledger specs/094-harden-groundwork-stores/coverage-ledger.json \
   --staging-root "$ELSA_GROUNDWORK_EVIDENCE_OUTPUT" \
   --source-repository "$(git rev-parse --show-toplevel)" \
-  --provider-version "0.0.1-preview.86" \
+  --provider-version "0.0.1-preview.88" \
   --elsa-commit "$ELSA_GROUNDWORK_SOURCE_COMMIT" \
   --elsa-tree "$ELSA_GROUNDWORK_SOURCE_TREE" \
   --run-identity "$ELSA_GROUNDWORK_RUN_IDENTITY"
@@ -391,7 +398,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.86` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.88` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
