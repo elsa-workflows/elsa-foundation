@@ -306,7 +306,7 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
 
     [Theory]
     [MemberData(nameof(ProviderKinds))]
-    public async Task Grouped_trace_union_accepts_every_value_permitted_by_the_retained_record_boundary(
+    public async Task Grouped_trace_union_accepts_valid_values_observed_before_retention(
         DiagnosticsProviderKind providerKind)
     {
         const int distinctValues = 257;
@@ -336,9 +336,18 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
             providerLease.Stores,
             Options.Create(new OpenTelemetryDiagnosticsOptions()),
             binding);
-        await store.WriteAsync(
-            DiagnosticsDrainBatchId.New(),
-            new(resources, fragments, [], [], [], []));
+        var serializer = new CanonicalRecordSerializer();
+        var records = fragments
+            .Select((trace, index) => serializer.ToRecord(
+                $"trace-fragment-{index:D3}",
+                trace,
+                [$"service-{index:D3}"]))
+            .ToArray();
+        await providerLease.Stores.Traces.AppendAsync(DiagnosticRecordBatch.Create(
+            new(binding.TenantId, binding.ScopeId),
+            new(binding.TraceStreamId),
+            new(DateTimeOffset.UtcNow, "pre-retention-trace-union"),
+            records));
 
         var trace = Assert.Single((await store.QueryTracesAsync(new()
         {

@@ -39,8 +39,8 @@ public sealed class GroundworkOpenTelemetryStore :
     IDisposable,
     IAsyncDisposable
 {
-    private const int DrainBatchSize = 64;
-    private const int DrainRetentionInterval = 500;
+    private const int DrainBatchSize = OpenTelemetryRecordStreamDefinitions.MaxCaptureBatchesPerDrainCommit;
+    private const int DrainRetentionInterval = OpenTelemetryRecordStreamDefinitions.RetentionRecordInterval;
     private const int MaxDrainAttempts = 8;
     private const int MaxLedgerWriteAttempts = 8;
     private const int LedgerSchemaVersion = 2;

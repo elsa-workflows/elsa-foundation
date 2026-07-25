@@ -7,13 +7,20 @@ public static class OpenTelemetryRecordStreamDefinitions
 {
     public const string TraceSummaryProfileName = "trace-summary-v1";
     public const int MaxTraceRecordCapacity = 5_000;
+    public const int MaxRecordsPerSignalBatch = 1_000;
+    public const int MaxCaptureBatchesPerDrainCommit = 1;
+    public const int RetentionRecordInterval = 500;
 
     private const int TraceDefinitionSchemaVersion = 2;
     private const int MaxIdentifierBytes = 512;
     private const int MaxNameBytes = 4_096;
     private const int MaxBodyBytes = 65_536;
     private const int MaxMultiValues = 256;
-    private const int MaxTraceUnionValues = MaxTraceRecordCapacity * MaxMultiValues;
+    private const int MaxTraceRecordsBeforeRetention =
+        MaxTraceRecordCapacity
+        + RetentionRecordInterval - 1
+        + MaxCaptureBatchesPerDrainCommit * MaxRecordsPerSignalBatch;
+    private const int MaxTraceUnionValues = MaxTraceRecordsBeforeRetention * MaxMultiValues;
 
     /// <summary>Creates the trace-summary stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateTraces(string streamId) => Definition(
@@ -115,7 +122,7 @@ public static class OpenTelemetryRecordStreamDefinitions
             storageName,
             fields,
             new(
-                MaxBatchRecords: 1_000,
+                MaxBatchRecords: MaxRecordsPerSignalBatch,
                 MaxPayloadBytes: 1_048_576,
                 // SQL Server's portable diagnostic-record contract admits at most 128 UTF-8
                 // bytes. Keep the shared stream definition within the narrowest provider bound.
@@ -165,9 +172,11 @@ public static class OpenTelemetryRecordStreamDefinitions
         ],
         Names(RecordFields.StartTime),
         MaxTake: 5_000,
-        // Each retained trace record may contribute the complete declared 256-value
-        // field cardinality. The adapter caps trace retention at 5,000 records, so
-        // this is the finite worst-case union without rejecting a valid retained trace.
+        // A query can race the asynchronous drain before periodic retention completes.
+        // Cover the retained prefix, the sub-threshold carry, and one admitted capture
+        // batch. The drain deliberately commits one capture at a time so this bound
+        // remains operationally useful to every provider. Each trace record may
+        // contribute all 256 declared values.
         MaxUnionValues: MaxTraceUnionValues);
 
     private static DiagnosticFieldDefinition String(
