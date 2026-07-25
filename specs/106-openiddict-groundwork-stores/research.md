@@ -81,6 +81,32 @@
 - Delete EF first: rejected; removes the oracle before correctness/performance evidence exists.
 - Keep EF as an optional in-repository provider: rejected by ADR 0042 and repository-wide zero-EF target.
 
+## Decision 8: Keep newly proven mutation gaps upstream
+
+**Decision**: Groundwork
+[#141](https://github.com/valence-works/groundwork/issues/141) owns fenced
+cross-unit relationship guards for dependent cleanup and prune. Groundwork
+[#143](https://github.com/valence-works/groundwork/issues/143) owns a
+manifest-fixed same-unit assignment action whose result is the exact matched
+count. Application/authorization/token operations that require either
+capability remain blocked until the public contracts are ratified, implemented,
+published, and recertified on all four providers.
+
+**Rationale**: Oracle re-verification found that the former prune transition
+shape was semantically unequal. OpenIddict prune reads related records under
+one atomic decision, while token revoke assigns `revoked` to every match,
+including already-revoked, null, and extension-defined statuses. A finite
+transition list or query-then-update loop cannot preserve those contracts.
+
+**Alternatives considered**:
+
+- Enumerate known status values: rejected because OpenIddict status is an
+  open-world string and matched-count semantics include every value.
+- Query then update/delete records one by one: rejected because it introduces
+  N+1 I/O, TOCTOU, client evaluation, and non-durable count/replay semantics.
+- Narrow the OpenIddict contract: rejected because these members are inside the
+  zero-EF completion gate.
+
 ## Evidence Baseline
 
 - OpenIddict packages are currently version 7.5.0; current OpenIddict project directly references EF Design, InMemory, Sqlite, and EntityFrameworkCore.
