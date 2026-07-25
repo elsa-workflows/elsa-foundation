@@ -508,7 +508,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
         Assert.Equal(0, status.ExitCode);
         Assert.Equal("ready", status.Report.GetProperty("outcome").GetString());
         Assert.Equal(providerKey, driver.Descriptor.ProviderKey);
-        Assert.Equal("0.0.1-preview.86", driver.Descriptor.ProviderVersion);
+        Assert.Equal("0.0.1-preview.88", driver.Descriptor.ProviderVersion);
         driver.Descriptor.Topology.EnsureSupports(
             GroundworkTopologyCapabilities.PersistentStorage |
             GroundworkTopologyCapabilities.IndependentClients |

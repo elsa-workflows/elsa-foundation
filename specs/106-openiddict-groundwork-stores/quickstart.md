@@ -23,10 +23,48 @@ route with provider-native plan evidence. The adapter test project passed 14/14
 for its current codec/manifest/failure/registration scaffold, and the focused
 architecture boundary passed 4/4.
 
-T005 remains open. The current probe does not yet execute naming/fingerprint
-transformation, multivalue routes, bounded mutation/count/cancellation/native
-plans, CAS, UoW, or CLI readiness. SQL Server, PostgreSQL, MongoDB, topology,
-restart, and full native-query/mutation evidence remain T006.
+T005 and T006 passed on Groundwork preview.88 on 2026-07-25. The focused
+capability selection passed 17/17 in 32 seconds. It executed naming/fingerprint
+transformation, exact multivalue membership and projection limits, expected-
+version CAS, cross-unit UoW, bounded prune count/cancellation/native plans,
+real schema CLI/readiness, and reopen behavior. The shared four-provider case
+passed on SQLite, SQL Server, PostgreSQL, and transaction-capable MongoDB with
+the same global OpenIddict declaration and with persistent storage, independent
+clients, multi-document transactions, and external-process restart admitted.
+No capability failed, so T007 required no new issue and no fallback.
+
+The restored tool reported `Groundwork.Tool 0.0.1-preview.88`. SHA-256 package
+identities used by this gate were:
+
+| Package | SHA-256 |
+|---|---|
+| Groundwork.Core | `1eb002c1ee3dd2627a3f933fca356d6312db144d6b0d17bb47477e845a83eead` |
+| Groundwork.DiagnosticRecords | `2f1fac115ede3c165319eb4f604b5815f6e709c0f4c32104706c863143a806f6` |
+| Groundwork.Documents | `6c707f4ccba9dbd1698d0cbd3d32a33fb70a3ce6991fa1e81c68ad54c7f099a7` |
+| Groundwork.MongoDb | `a085d3cafe26ab9bc98453a19ca9d3c13954453e329e485e41cb9ed5649eb859` |
+| Groundwork.PostgreSql | `f0ba9d3613ed03a92b5eabb472c66a3acb7d045c334c4a0e7f4b324c765af377` |
+| Groundwork.Sqlite | `ed83d7cf5740224d0a92e0a05773ba1834f6b05d69e5938ddfc491e622ce0383` |
+| Groundwork.SqlServer | `b3bf54480321fae72f7467d919b060df8a541644087f4a9367adf60237947e6a` |
+| Groundwork.Tool | `e602f014a0a015bd9f1a4175b417b68e9a4b18589eb8cdbf1ce5a230409b803b` |
+
+These results certify only the public capability gate and foundational record,
+codec, manifest, session, and failure seams. They do not claim that any of the
+145 OpenIddict store members, production replacement registration, host
+acceptance, performance verdict, or EF deletion is complete.
+
+Root reran the focused post-integration checks from commit `230dbdb39` plus the
+preview.88 assertion and solution-registration changes:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj -c Release --no-restore
+# 28 passed
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests
+# 17 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~OpenIddictPersistenceArchitectureTests
+# 4 passed
+```
 
 ## 2. Run direct adapter and registration tests
 

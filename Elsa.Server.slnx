@@ -152,6 +152,12 @@
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Foundation/Identity/OpenIddict/Behavior/">
+    <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Foundation/Identity/OpenIddict/Groundwork/">
+    <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Foundation/Identity/Persistence/">
     <Project Path="src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
   </Folder>
@@ -416,6 +422,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/">
+    <Project Path="tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
