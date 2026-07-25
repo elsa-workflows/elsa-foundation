@@ -177,9 +177,9 @@ deletion; those remain under T050-T057.
 
 ## Host-composition independent review (2026-07-25)
 
-Three adversarial read-only reviewers inspected exact initial range
-`6313171ff33f4c42a54507885a080ce185d35526..b0a2a646922bebc95105d37318fdcac10dd068fa`
-on correctness/mechanism, evidence integrity, and scope/test preservation:
+The correctness/mechanism and evidence-integrity reviewers first inspected exact pre-remediation
+range `6313171ff33f4c42a54507885a080ce185d35526..b0a2a646922bebc95105d37318fdcac10dd068fa`.
+An independent scope/test-preservation reviewer then joined the exact final-candidate audit:
 
 - Correctness found that the four explicit generic unified-provider overloads registered a session
   factory but did not expose the selected diagnostic deployment source. The remediation centralized
@@ -189,14 +189,31 @@ on correctness/mechanism, evidence integrity, and scope/test preservation:
   “rejects an EF store” overstated an absence assertion. The remediation added the hash-bound
   [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) manifest and
   narrowed the claim to “no EF diagnostics store is registered or selected.”
-- Scope/test preservation returned clean: Identity, OpenIddict, the frozen EF performance oracles,
-  non-diagnostics shell settings, architecture guards, and existing tests remain intact. Only
-  `shells.json` changed among the serialized files in this slice.
+- Scope/test preservation found that the shrink-only
+  `tests/Elsa/Architecture/Baselines/ef-core-surface.json` still required the two removed
+  diagnostics EF host references and shell keys. The prescribed full-solution restore and guarded
+  baseline generator removed the 18 downstream entries made stale by that narrow host switch:
+  2 direct project references, 12 transitive project-consumer paths, 2 transitive package-consumer
+  paths, and 2 host-configuration entries. It preserved every EF project/package entry and every
+  Identity/OpenIddict entry. The generated baseline passed its exact-match guard 1/1.
+
+The first full remote check independently reproduced that ratchet failure and exposed a second
+architecture blocker: six new diagnostics registration descriptors were valid immutable
+application-lifetime resources but were not present in the exact documented-exception inventory.
+The two deployment-manifest contracts alias immutable application-wide schema values. Each of the
+four provider session factories retains only immutable provider configuration and returns a fresh
+scope-bound, deterministically disposable session on every invocation. The lifetime guard now
+records those six exact paths, service types, and rationales rather than weakening its suffix scan
+or changing the application lifetime behind the singleton diagnostics stores. The focused lifetime
+suite passed 4/4 and the complete architecture suite passed 286/286 after remediation.
 
 The correctness reviewer withdrew a provisional fresh-schema concern after re-verifying the
 ratified pre-start deployment contract: runtime sessions must admit already-deployed storage and
-must not materialize or repair schema. The originating reviewers re-verified the remediations before
-merge; no finding was waived.
+must not materialize or repair schema. After both architecture remediations, three independent
+adversarial reviewers inspected the exact final candidate on correctness/mechanism, evidence
+integrity, and scope/test preservation. All three returned clean; no finding was waived. Identity,
+OpenIddict, the frozen EF performance oracles, non-diagnostics shell settings, and existing tests
+remain intact.
 
 ## Final dependency audit
 
