@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.20
 
 # =============================================================================
 # Elsa.Server production image
@@ -14,8 +14,8 @@
 # optional mounted shells.json. See docs/docker.md for the full surface.
 # =============================================================================
 
-# ---- Build stage ------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# ---- Restore stage ----------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
 
 # TARGETARCH is supplied automatically by BuildKit (amd64 or arm64) and drives the
@@ -25,14 +25,13 @@ WORKDIR /src
 # Why a RID at all: ReadyToRun (spec 134) is a per-RID AOT pre-compilation of the
 # app's own ~90 assemblies (crossgen2), which cuts first-request JIT cost. R2R
 # therefore REQUIRES a concrete RuntimeIdentifier — a portable (RID-less) publish
-# cannot be R2R-compiled. The multi-arch image (linux/amd64 + linux/arm64, see
-# .github/workflows/docker.yml) builds each platform in its own target-arch SDK
-# image (emulated for the non-native arch), so crossgen runs native-for-target on
-# every platform — no cross-arch crossgen is involved. The publish stays
-# framework-dependent (--self-contained false) so it still runs on the shared
-# aspnet runtime in the final stage and only the app assemblies grow, not the image
-# by a whole bundled runtime. Scoping R2R to the Dockerfile (not the csproj) keeps
-# every local `dotnet build`/dev inner-loop on the fast JIT publish.
+# cannot be R2R-compiled. Docker's GitHub builder routes linux/amd64 and linux/arm64
+# to matching native runners, so crossgen runs natively for each target instead of
+# under QEMU. The publish stays framework-dependent (--self-contained false) so it
+# still runs on the shared aspnet runtime in the final stage and only the app
+# assemblies grow, not the image by a whole bundled runtime. Scoping R2R to the
+# Dockerfile (not the csproj) keeps every local `dotnet build`/dev inner-loop on the
+# fast JIT publish.
 ARG TARGETARCH
 
 # Copy repo-root build configuration first so restore layers cache well.
@@ -48,10 +47,12 @@ COPY Directory.Packages.props ./
 COPY NuGet.config ./
 COPY Elsa.Server.slnx ./
 
-# Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
-COPY src/ ./src/
+# Copy only restore inputs while preserving their source-tree paths. Ordinary source
+# changes no longer invalidate the expensive RID-specific restore layer. The recursive
+# patterns cover the complete project graph without a manually maintained file list.
+COPY --parents src/**/*.csproj src/**/*.targets ./
 
-# Restore and publish only the server host; project references are pulled in transitively.
+# Restore only the server host; project references are pulled in transitively.
 #
 # WarningsNotAsErrors=NU1603 tolerates a restore-only warning that can appear in a clean
 # environment when a transitive preview dependency resolves to a newer available version,
@@ -63,6 +64,12 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
+
+# ---- Build stage ------------------------------------------------------------
+FROM restore AS build
+
+# Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
+COPY src/ ./src/
 
 # ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
 # TieredCompilation and TieredPGO are left at their .NET 10 defaults (both already

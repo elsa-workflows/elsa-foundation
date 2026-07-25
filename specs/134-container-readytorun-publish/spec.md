@@ -28,9 +28,9 @@ throughput is unaffected.
   is the only place the shipped image is produced, so that is where the cost belongs.
 - **RID: required, derived from `TARGETARCH`.** R2R is a per-RID AOT step and cannot run on a portable (RID-less)
   publish. The image ships multi-arch (`linux/amd64` + `linux/arm64`, `.github/workflows/docker.yml`), so the
-  Dockerfile maps BuildKit's `TARGETARCH` → `linux-x64` / `linux-arm64` and publishes per-RID. Each platform
-  builds in its own target-arch SDK image (emulated for the non-native arch under buildx/QEMU), so crossgen runs
-  native-for-target on every platform; no cross-arch crossgen is involved.
+  Dockerfile maps BuildKit's `TARGETARCH` → `linux-x64` / `linux-arm64` and publishes per-RID. Docker's maintained
+  GitHub Builder workflow distributes those platforms to matching x64 and ARM64 GitHub-hosted runners, so each
+  crossgen pass runs natively and the two RIDs build in parallel.
 - **Framework-dependent (`--self-contained false`).** Only the app assemblies get R2R'd and grow; the shared
   aspnet runtime in the final image stage is reused (and is already R2R upstream). The `dotnet Elsa.Server.dll`
   entrypoint is unchanged. This keeps the image-size cost to the app layer only.
