@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Composition;
 
@@ -19,7 +20,11 @@ public sealed class OpenIddictGroundworkStorageManifestSource : IGroundworkStora
             OpenIddictGroundworkStorageManifest.Create(),
             requiredStoreContracts: [],
             OpenIddictGroundworkStorageManifest.BoundedRoutes,
-            topologyRequirements: [],
+            topologyRequirements:
+            [
+                new GroundworkStorageTopologyRequirement(
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity)
+            ],
             coverageRows: ["openiddict-storage-declaration"]));
     }
 }

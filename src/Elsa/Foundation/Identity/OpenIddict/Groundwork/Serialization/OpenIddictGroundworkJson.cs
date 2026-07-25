@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Groundwork.Documents.Serialization;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Serialization;
@@ -27,6 +28,8 @@ public static class OpenIddictGroundworkJson
     // empty until a future schema version has a real predecessor to transform.
     public static IReadOnlyList<IDocumentJsonUpcaster> Upcasters { get; } = [];
 
+    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web);
+
     public static DocumentSchemaVersionPolicy CreateApplicationPolicy() =>
         new(ApplicationDocumentKind, minimumReadableVersion: 1, currentVersion: 1);
 
@@ -40,7 +43,7 @@ public static class OpenIddictGroundworkJson
         new(TokenDocumentKind, minimumReadableVersion: 1, currentVersion: 1);
 
     public static VersionedJsonDocumentCodec CreateCodec() =>
-        new(Policies, Upcasters, new DocumentSchemaVersionFormat(ParseVersion, FormatVersion));
+        new(Policies, Upcasters, new DocumentSchemaVersionFormat(ParseVersion, FormatVersion), Options);
 
     private static int? ParseVersion(string _, string stamp) =>
         stamp.StartsWith('v') &&

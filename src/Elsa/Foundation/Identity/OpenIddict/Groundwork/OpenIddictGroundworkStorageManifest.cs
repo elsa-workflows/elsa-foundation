@@ -20,10 +20,15 @@ public static class OpenIddictGroundworkStorageManifest
 {
     public const string ManifestIdentity = "elsa-openiddict";
     public const string ManifestVersion = "1";
+    public const int MaxIndexedUriLength = 256;
 
     public const string FindApplicationByClientIdQuery = "find-application-by-client-id";
+    public const string FindApplicationByRedirectUriQuery = "find-application-by-redirect-uri";
+    public const string FindApplicationByPostLogoutRedirectUriQuery = "find-application-by-post-logout-redirect-uri";
     public const string FindAuthorizationBySubjectQuery = "find-authorization-by-subject";
+    public const string FindAuthorizationByScopeQuery = "find-authorization-by-scope";
     public const string FindScopeByNameQuery = "find-scope-by-name";
+    public const string FindScopeByResourceQuery = "find-scope-by-resource";
     public const string FindTokenByReferenceIdQuery = "find-token-by-reference-id";
     public const string FindTokenBySubjectQuery = "find-token-by-subject";
     public const string PruneAuthorizationsMutation = "prune-openiddict-authorizations";
@@ -32,8 +37,12 @@ public static class OpenIddictGroundworkStorageManifest
     public static IReadOnlyList<GroundworkStorageRouteRequirement> BoundedRoutes { get; } =
     [
         Route(OpenIddictGroundworkJson.ApplicationDocumentKind, FindApplicationByClientIdQuery),
+        Route(OpenIddictGroundworkJson.ApplicationDocumentKind, FindApplicationByRedirectUriQuery),
+        Route(OpenIddictGroundworkJson.ApplicationDocumentKind, FindApplicationByPostLogoutRedirectUriQuery),
         Route(OpenIddictGroundworkJson.AuthorizationDocumentKind, FindAuthorizationBySubjectQuery),
+        Route(OpenIddictGroundworkJson.AuthorizationDocumentKind, FindAuthorizationByScopeQuery),
         Route(OpenIddictGroundworkJson.ScopeDocumentKind, FindScopeByNameQuery),
+        Route(OpenIddictGroundworkJson.ScopeDocumentKind, FindScopeByResourceQuery),
         Route(OpenIddictGroundworkJson.TokenDocumentKind, FindTokenByReferenceIdQuery),
         Route(OpenIddictGroundworkJson.TokenDocumentKind, FindTokenBySubjectQuery)
     ];
@@ -54,11 +63,15 @@ public static class OpenIddictGroundworkStorageManifest
         new StorageManifestVersion(ManifestVersion),
         [
             Unit(OpenIddictGroundworkJson.ApplicationDocumentKind, "OpenIddict application", CreateApplicationDefinition(),
-                [ClientIdIndex], [ClientIdQuery]),
+                [ClientIdIndex, ApplicationRedirectUriIndex, ApplicationPostLogoutRedirectUriIndex],
+                [ClientIdQuery, ApplicationRedirectUriQuery, ApplicationPostLogoutRedirectUriQuery]),
             Unit(OpenIddictGroundworkJson.AuthorizationDocumentKind, "OpenIddict authorization", CreateAuthorizationDefinition(),
-                [AuthorizationSubjectIndex], [AuthorizationSubjectQuery], [PruneAuthorizations]),
+                [AuthorizationSubjectIndex, AuthorizationScopeIndex],
+                [AuthorizationSubjectQuery, AuthorizationScopeQuery],
+                [PruneAuthorizations]),
             Unit(OpenIddictGroundworkJson.ScopeDocumentKind, "OpenIddict scope", CreateScopeDefinition(),
-                [ScopeNameIndex], [ScopeNameQuery]),
+                [ScopeNameIndex, ScopeResourceIndex],
+                [ScopeNameQuery, ScopeResourceQuery]),
             Unit(OpenIddictGroundworkJson.TokenDocumentKind, "OpenIddict token", CreateTokenDefinition(),
                 [TokenReferenceIndex, TokenSubjectIndex], [TokenReferenceQuery, TokenSubjectQuery], [PruneTokens])
         ],
@@ -67,19 +80,31 @@ public static class OpenIddictGroundworkStorageManifest
 
     public static PhysicalTableDefinition CreateApplicationDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_applications",
-        [Column("clientId", "clientId", isNullable: true)],
+        [
+            Column("clientId", "clientId", isNullable: true),
+            CollectionColumn("redirectUri", "redirectUris", length: MaxIndexedUriLength),
+            CollectionColumn("postLogoutRedirectUri", "postLogoutRedirectUris", length: MaxIndexedUriLength)
+        ],
         Envelope,
         [UniqueIndex(ClientIdIndex.Identity, "clientId")]);
 
     public static PhysicalTableDefinition CreateAuthorizationDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_authorizations",
-        [Column("subject", "subject", isNullable: true), Column("status", "status", isNullable: true), Column("expiration", "expiration", PortablePhysicalType.DateTime)],
+        [
+            Column("subject", "subject", isNullable: true),
+            Column("status", "status", isNullable: true),
+            Column("expiration", "expiration", PortablePhysicalType.DateTime),
+            CollectionColumn("scope", "scopes")
+        ],
         Envelope,
         [Index(AuthorizationSubjectIndex.Identity, "subject", "status", "expiration")]);
 
     public static PhysicalTableDefinition CreateScopeDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_scopes",
-        [Column("name", "name", isNullable: true)],
+        [
+            Column("name", "name", isNullable: true),
+            CollectionColumn("resource", "resources")
+        ],
         Envelope,
         [UniqueIndex(ScopeNameIndex.Identity, "name")]);
 
@@ -100,16 +125,32 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly DocumentEnvelopeDefinition Envelope = new();
 
     private static readonly LogicalIndexDeclaration ClientIdIndex = KeywordIndex("openiddict-application-by-client-id", "clientId", unique: true);
+    private static readonly LogicalIndexDeclaration ApplicationRedirectUriIndex =
+        CollectionIndex("openiddict-application-by-redirect-uri", "redirectUris");
+    private static readonly LogicalIndexDeclaration ApplicationPostLogoutRedirectUriIndex =
+        CollectionIndex("openiddict-application-by-post-logout-redirect-uri", "postLogoutRedirectUris");
     private static readonly LogicalIndexDeclaration AuthorizationSubjectIndex = CompoundIndex(
         "openiddict-authorization-by-subject-status-expiration", "subject", "status", "expiration");
+    private static readonly LogicalIndexDeclaration AuthorizationScopeIndex =
+        CollectionIndex("openiddict-authorization-by-scope", "scopes");
     private static readonly LogicalIndexDeclaration ScopeNameIndex = KeywordIndex("openiddict-scope-by-name", "name", unique: true);
+    private static readonly LogicalIndexDeclaration ScopeResourceIndex =
+        CollectionIndex("openiddict-scope-by-resource", "resources");
     private static readonly LogicalIndexDeclaration TokenReferenceIndex = KeywordIndex("openiddict-token-by-reference-id", "referenceId", unique: true);
     private static readonly LogicalIndexDeclaration TokenSubjectIndex = CompoundIndex(
         "openiddict-token-by-subject-status-expiration", "subject", "status", "expiration");
 
     private static readonly BoundedQueryDeclaration ClientIdQuery = PointQuery(FindApplicationByClientIdQuery, ClientIdIndex);
+    private static readonly BoundedQueryDeclaration ApplicationRedirectUriQuery =
+        CollectionQuery(FindApplicationByRedirectUriQuery, ApplicationRedirectUriIndex);
+    private static readonly BoundedQueryDeclaration ApplicationPostLogoutRedirectUriQuery =
+        CollectionQuery(FindApplicationByPostLogoutRedirectUriQuery, ApplicationPostLogoutRedirectUriIndex);
     private static readonly BoundedQueryDeclaration AuthorizationSubjectQuery = RangeQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectIndex);
+    private static readonly BoundedQueryDeclaration AuthorizationScopeQuery =
+        CollectionQuery(FindAuthorizationByScopeQuery, AuthorizationScopeIndex);
     private static readonly BoundedQueryDeclaration ScopeNameQuery = PointQuery(FindScopeByNameQuery, ScopeNameIndex);
+    private static readonly BoundedQueryDeclaration ScopeResourceQuery =
+        CollectionQuery(FindScopeByResourceQuery, ScopeResourceIndex);
     private static readonly BoundedQueryDeclaration TokenReferenceQuery = PointQuery(FindTokenByReferenceIdQuery, TokenReferenceIndex);
     private static readonly BoundedQueryDeclaration TokenSubjectQuery = RangeQuery(FindTokenBySubjectQuery, TokenSubjectIndex);
     private static readonly BoundedMutationDeclaration PruneAuthorizations = new(
@@ -152,8 +193,24 @@ public static class OpenIddictGroundworkStorageManifest
         bool isNullable = false) =>
         new(physicalName, jsonPath, type, Length: type == PortablePhysicalType.String ? 256 : null, IsNullable: isNullable);
 
+    private static ProjectedColumnDefinition CollectionColumn(
+        string physicalName,
+        string jsonPath,
+        int length = 256) =>
+        new(
+            physicalName,
+            jsonPath,
+            PortablePhysicalType.String,
+            Length: length,
+            IsNullable: true,
+            Cardinality: ProjectionCardinality.CollectionElements,
+            MaxCollectionElements: 64);
+
     private static LogicalIndexDeclaration KeywordIndex(string identity, string path, bool unique = false) =>
         new(identity, [new IndexField(path, IndexValueKind.Keyword)], IndexValueKind.Keyword, unique, MissingValueBehavior.Excluded);
+
+    private static LogicalIndexDeclaration CollectionIndex(string identity, string path) =>
+        new(identity, [new IndexField(path, IndexValueKind.String)], IndexValueKind.String, false, MissingValueBehavior.Excluded);
 
     private static LogicalIndexDeclaration CompoundIndex(string identity, params string[] paths) =>
         new(identity,
@@ -182,6 +239,19 @@ public static class OpenIddictGroundworkStorageManifest
         QueryPagingSupport.Offset,
         BoundedQueryExecutionClass.ScaleBearing,
         predicateFields: [new BoundedQueryPredicateField(index.Fields.Single().Path, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })]);
+
+    private static BoundedQueryDeclaration CollectionQuery(string identity, LogicalIndexDeclaration index) => new(
+        identity,
+        index.Identity,
+        new HashSet<PortableQueryOperation>
+        {
+            PortableQueryOperation.CollectionContains,
+            PortableQueryOperation.CollectionContainsAll
+        },
+        QuerySortSupport.None,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.ScaleBearing,
+        supportsTotalCount: true);
 
     private static BoundedQueryDeclaration RangeQuery(string identity, LogicalIndexDeclaration index) => new(
         identity,

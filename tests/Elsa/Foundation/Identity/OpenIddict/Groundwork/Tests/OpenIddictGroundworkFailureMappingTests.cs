@@ -8,8 +8,9 @@ public sealed class OpenIddictGroundworkFailureMappingTests
     [Fact]
     public void Unsupported_generic_delegate_has_a_stable_capability_outcome()
     {
-        var exception = OpenIddictGroundworkFailureMapper.UnsupportedGenericDelegate("token.GetAsync");
+        var exception = OpenIddictGroundworkFailureMapper.UnsupportedGenericQuery("token.GetAsync");
 
+        Assert.Equal(OpenIddictGroundworkCapabilityException.UnsupportedGenericQueryCode, exception.Code);
         Assert.Equal("token.GetAsync", exception.Operation);
         Assert.Contains("not admitted", exception.Message, StringComparison.Ordinal);
     }
