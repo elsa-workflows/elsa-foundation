@@ -236,9 +236,9 @@ caller predicate. The normal 64-capture drain batching is retained; correctness
 no longer depends on serializing the drain to one capture at a time.
 
 Root reproduced the exact focused evidence on implementation head
-`6d0e0eb3a76e2140dcb39ef8df2d560c8f637f16`:
+`a305b9811c603e50abe39c2d4e374b46cbfdf4f1`:
 
-- complete OpenTelemetry Groundwork adapter suite: **75/75**;
+- complete OpenTelemetry Groundwork adapter suite: **76/76**;
 - grouped trace, Unicode case policy, pre-retention union, newest-input-window,
   and pre-release reset behavior on all four providers: **20/20**;
 - native grouped-query plan inspection across all four providers: **4/4**.
@@ -249,6 +249,35 @@ provider topology, and result totals are retained in
 This remains focused correctness evidence only. It is not #646 performance
 evidence, T057 final zero-EF certification, or authorization to delete either
 EF oracle; T050–T057 remain open.
+
+### Preview.88 checkpoint review remediation
+
+The first exact-range adversarial review froze candidate `811900df7` and ran
+three read-only axes in parallel. Evidence integrity passed after independently
+recomputing the preview.88 attachment, all 36 current artifact hashes, all 108
+historical preview.80/preview.81/preview.86 artifact hashes, exact provenance,
+resolved package assets, and source-manifest hashes. Scope/test preservation
+passed with no EF, host, solution, shell, Studio, BPMN, or #420 deletion; it
+found one P3 wording omission, now corrected so the importer instructions name
+preview.86 among the guarded historical generations.
+
+Correctness/mechanism found three blockers in trace-capacity edge handling:
+
+1. resource queries were incorrectly short-circuited by zero trace capacity
+   rather than zero resource capacity;
+2. trace list queries passed an invalid zero grouped-input limit instead of
+   returning the empty retained stream; and
+3. a configured query size above 5,000 could exceed the grouped profile's
+   maximum take.
+
+Commit `a305b9811c603e50abe39c2d4e374b46cbfdf4f1` remediates all three by keeping
+catalog and signal capacities independent, returning empty before provider work
+for zero trace capacity, and capping grouped trace take to the admitted trace
+capacity. The strengthened zero-capacity and oversized-take regressions passed
+2/2; exact-head Release recertification then passed 76/76 adapter cases, 20/20
+four-provider behavior cases, and 8/8 newest-window plus native-plan cases.
+The checkpoint remains draft until the originating correctness reviewer and
+the evidence/scope reviewers re-verify the final exact range.
 
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 

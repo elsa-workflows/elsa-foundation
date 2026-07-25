@@ -80,7 +80,7 @@
 - [X] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
   - Evidence: Record mappings and canonical serializers compiled; the OpenTelemetry adapter suite passed 73 tests with one explicit #130 skip on the preview.81 integration head.
   - Preview.86 follow-up: the trace stream now declares the native `trace-summary-v1` grouped-reduction profile and stores the first root/name plus total span count needed to materialize it. Its schema-v2 pre-release reset boundary, exact pre-retention union limit, focused serializer/definition tests, and complete adapter suite passed 75/75.
-  - Preview.88 follow-up: the stream binds grouped reduction to the configured 5,000 newest raw records before predicates and caps each 256-value union at 1,280,000 values. The complete adapter suite passed 75/75.
+  - Preview.88 follow-up: the stream binds grouped reduction to the configured 5,000 newest raw records before predicates and caps each 256-value union at 1,280,000 values. The complete adapter suite passed 76/76, including independent zero-capacity catalogs/trace behavior and oversized query-take capping.
 - [X] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
   - Evidence: Catalog mappings/serializers compiled; the OpenTelemetry adapter suite passed 73 tests with one explicit #130 skip on the preview.81 integration head.
 - [X] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`

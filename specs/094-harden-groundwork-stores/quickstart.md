@@ -219,7 +219,7 @@ mechanically import those records by
 `(coverageEntryId, scenarioId, provider)` with `(coverageEntryId, scenarioId, provider, providerVersion)` as the
 generation-retention key; do not hand-author or infer missing obligations. The importer requires exactly the
 checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance, digest-verified staged artifacts,
-and unchanged preview.80/preview.81 history. Publication does
+and unchanged preview.80/preview.81/preview.86 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
 
