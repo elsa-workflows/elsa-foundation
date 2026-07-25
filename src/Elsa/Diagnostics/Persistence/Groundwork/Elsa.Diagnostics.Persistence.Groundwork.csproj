@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Elsa.Diagnostics.Persistence.csproj" />
     <ProjectReference Include="..\..\OpenTelemetry\Persistence\Groundwork\Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\StructuredLogs\Persistence\Groundwork\Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
   </ItemGroup>

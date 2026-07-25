@@ -25,10 +25,9 @@
             }
           },
           "DiagnosticsOpenTelemetry": {},
-          "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
+          "DiagnosticsGroundworkPersistence": {},
           "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
-          "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
           "Expressions": {},
           "ExpressionsApi": {},

@@ -49,6 +49,14 @@ public sealed class GroundworkPersistenceLifetimeTests
             "IPhysicalSchemaManifestSource",
             "The deployment schema source is one immutable application-wide value shared by runtime admission and schema tooling; it carries no request context or mutable operation state."),
         new(
+            "src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs",
+            "global::Groundwork.DiagnosticRecords.IDiagnosticRecordDeploymentManifestSource",
+            "The diagnostics deployment contract aliases the same immutable application-wide schema value used by runtime admission and schema tooling; it carries no request context or mutable operation state."),
+        new(
+            "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkReferenceDeploymentSchemaSelector.cs",
+            "IDiagnosticRecordDeploymentManifestSource",
+            "The diagnostics deployment contract aliases the selected immutable application-wide reference schema; it carries no request context or mutable operation state."),
+        new(
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
             "GroundworkStoreSessionSource",
             "The provider publishes one application-lifetime factory over admitted static resources; every invocation returns a fresh access-bound session and the source stores no request context."),
@@ -56,6 +64,22 @@ public sealed class GroundworkPersistenceLifetimeTests
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
             "IGroundworkStoreSessionSource",
             "This interface aliases the same provider-owned static session source; access selection remains an argument to each invocation and is never retained."),
+        new(
+            "src/Elsa/Persistence/Groundwork/Sqlite/Unified/DependencyInjection/GroundworkSqliteUnifiedRegistration.cs",
+            "IDiagnosticRecordStoreSessionFactory",
+            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
+        new(
+            "src/Elsa/Persistence/Groundwork/SqlServer/Unified/DependencyInjection/GroundworkSqlServerUnifiedRegistration.cs",
+            "IDiagnosticRecordStoreSessionFactory",
+            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
+        new(
+            "src/Elsa/Persistence/Groundwork/PostgreSql/Unified/DependencyInjection/GroundworkPostgreSqlUnifiedRegistration.cs",
+            "IDiagnosticRecordStoreSessionFactory",
+            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
+        new(
+            "src/Elsa/Persistence/Groundwork/MongoDb/Unified/DependencyInjection/GroundworkMongoDbUnifiedRegistration.cs",
+            "IDiagnosticRecordStoreSessionFactory",
+            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
         new(
             "src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs",
             "SqliteGroundworkDocumentStoreInitializer",

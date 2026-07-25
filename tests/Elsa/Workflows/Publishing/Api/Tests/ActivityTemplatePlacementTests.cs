@@ -3,8 +3,11 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -17,6 +20,71 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ActivityTemplatePlacementTests
 {
+    [Fact]
+    public async Task Placement_materializes_an_occurrence_overlays_authored_input_and_structure_against_placed_children()
+    {
+        // #1051: source-owned templates have bare roots. The occurrence overlay must restore the graph-authored
+        // input and reconcile the compiled structure after placement gives child nodes their final identities.
+        var sequenceOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json("""[{"referenceKey":"condition","value":{"value":true,"expressionType":"Literal"}}]"""),
+            new ExecutableActivityStructure(
+                "elsa.sequence.structure",
+                "1.0.0",
+                Json("""{"activities":["write"]}""")));
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
+        var graphTemplate = Template(
+            "template-graph",
+            "hash-graph",
+            Node("graph-root"),
+            [
+                new("definition-sequence", "version-sequence", "1.0.0", "template-sequence", "hash-sequence", "sequence", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, sequenceOverlay),
+                new("definition-write", "version-write", "1.0.0", "template-write", "hash-write", "write", ActivityInvocationOrigin.Empty, "sequence", "Activities", 0, emptyOverlay)
+            ]);
+        var sequenceTemplate = Template(
+            "template-sequence",
+            "hash-sequence",
+            new ExecutableNode(
+                "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+                new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition()));
+        var writeTemplate = Template("template-write", "hash-write", Node("source-owned-root"));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
+        var writePublication = Publication("definition-write", "version-write", "type.write", writeTemplate);
+        var references = new[]
+        {
+            Reference(graphPublication, ExecutableLayoutSidecar.Empty),
+            Reference(sequencePublication, ExecutableLayoutSidecar.Empty),
+            Reference(writePublication, ExecutableLayoutSidecar.Empty)
+        };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, sequencePublication, writePublication]),
+            new TemplateReader([graphTemplate, sequenceTemplate, writeTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher());
+
+        var placement = await placer.PlaceAsync(new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>()));
+
+        var sequence = Assert.Single(Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities);
+        var condition = Assert.Single(sequence.InputBindings);
+        Assert.Equal("condition", condition.Key);
+        Assert.Equal(RuntimeInputBindingSource.Literal, condition.Value.Source);
+        Assert.True(condition.Value.LiteralValue!.Value.GetBoolean());
+
+        var write = Assert.Single(Assert.Single(sequence.ChildSlots, x => x.Name == "Activities").Activities);
+        var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
+        var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
+        Assert.Equal([write.ExecutableNodeId], orderedChildIds);
+    }
+
     [Fact]
     public async Task Placement_preserves_nested_multi_slot_structure_and_exact_catalog_identity()
     {
@@ -139,7 +207,7 @@ public sealed class ActivityTemplatePlacementTests
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
         var publication = Publication("definition-wait", "version-wait", "type.wait", template);
         var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
-        var placer = new ActivityTemplatePlacer(
+        var placer = CreatePlacer(
             new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]), new Sha256ActivityPlacementHasher());
         ActivityTemplatePlacementRequest Request(string authoredNode) => new(
             publication, template, reference,
@@ -217,7 +285,7 @@ public sealed class ActivityTemplatePlacementTests
             publications.Add(publication);
             references.Add(Reference(publication, ExecutableLayoutSidecar.Empty));
         }
-        var placer = new ActivityTemplatePlacer(
+        var placer = CreatePlacer(
             new PublicationStore(publications), new TemplateReader(templates), new SourceReader(references), new Sha256ActivityPlacementHasher());
         var rootPublication = publications.Single(x => x.DefinitionVersionId == "version-0");
         var rootTemplate = templates.Single(x => x.TemplateId == "template-0");
@@ -260,7 +328,7 @@ public sealed class ActivityTemplatePlacementTests
         var template = Template("template-intrinsic", "hash-intrinsic", root);
         var publication = Publication("definition-intrinsic", "version-intrinsic", "type.intrinsic", template);
         var reference = Reference(publication, ExecutableLayoutSidecar.Empty);
-        var placer = new ActivityTemplatePlacer(
+        var placer = CreatePlacer(
             new PublicationStore([publication]), new TemplateReader([template]), new SourceReader([reference]),
             new Sha256ActivityPlacementHasher());
 
@@ -323,7 +391,7 @@ public sealed class ActivityTemplatePlacementTests
             var publicationStore = new PublicationStore(publications);
             var templateStore = new TemplateReader([topTemplate, ifTemplate, thenTemplate, elseTemplate, unrelatedTemplate]);
             var sourceStore = new SourceReader(references);
-            var placer = new ActivityTemplatePlacer(publicationStore, templateStore, sourceStore, hasher ?? new Sha256ActivityPlacementHasher());
+            var placer = CreatePlacer(publicationStore, templateStore, sourceStore, hasher ?? new Sha256ActivityPlacementHasher());
             var origin = new ActivityInvocationOrigin([
                 new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version"),
                 new(ActivityInvocationOriginSegmentKind.AuthoredNode, "composite-node"),
@@ -334,9 +402,47 @@ public sealed class ActivityTemplatePlacementTests
         }
     }
 
-    private static ExecutableActivityTemplate Template(string id, string hash, ExecutableNode root) => new(
-        id, hash, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "fingerprint",
+    private static ExecutableActivityTemplate Template(
+        string id,
+        string hash,
+        ExecutableNode root,
+        IReadOnlyCollection<ExecutableActivityTemplateDependency>? directDependencies = null) => new(
+        id, hash, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), directDependencies ?? [], [], [], "fingerprint",
         new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithCondition() => new(
+        "type.sequence",
+        "1",
+        "sequence",
+        Json("{}"),
+        [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+            "condition",
+            "Condition",
+            new ValueTypeDescriptor("Boolean"),
+            isRequired: true,
+            isNullable: false,
+            hasDefault: false,
+            defaultValue: null,
+            policy: ActivityValuePolicy.Default)],
+        new ActivityResultContract(
+            new ValueTypeDescriptor("Object"),
+            isRequired: true,
+            policy: ActivityValuePolicy.Default,
+            projections: []),
+        [ActivityOutcomes.Done],
+        new ActivityActivationRequirement("type.sequence", "sequence"));
+
+    private static ActivityTemplatePlacer CreatePlacer(
+        IActivityDefinitionVersionPublicationStore publications,
+        IExecutableActivityTemplateReader templates,
+        IWorkflowExecutableSourceReferenceReader references,
+        IActivityPlacementHasher hasher) => new(
+        publications,
+        templates,
+        references,
+        hasher,
+        new SequenceOccurrenceStructureService(),
+        new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
 
     private static ExecutableNode Node(string id, params ExecutableNode[] children) => new(
         id, id, "local", "1", new("local", "1", Json("{}")),
@@ -422,6 +528,32 @@ public sealed class ActivityTemplatePlacementTests
     private sealed class ConstantHasher : IActivityPlacementHasher
     {
         public string ComputeHash(byte[] canonicalOrigin) => new('a', 64);
+    }
+
+    private sealed class SequenceOccurrenceStructureService : IActivityStructureService
+    {
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
+
+        public ActivityNodeStructure RemapExecutableStructure(
+            ActivityNodeStructure structure,
+            IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+        {
+            var authoredIds = structure.Payload.GetProperty("activities")
+                .EnumerateArray()
+                .Select(value => value.GetString()!)
+                .ToArray();
+            return new(
+                structure.Kind,
+                structure.SchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    activities = authoredIds.Select(id => authoredToExecutableNodeIds[id]).ToArray()
+                }));
+        }
     }
 
     private sealed class PublicationStore(IEnumerable<ActivityDefinitionVersionPublication> values) : IActivityDefinitionVersionPublicationStore

@@ -1,14 +1,10 @@
 <#
 .SYNOPSIS
-    KNOWN ISSUE #1007 tracker: a reusable activity nested in a workflow Sequence faults at runtime.
+    A reusable activity nested in a workflow Sequence executes in order with its following sibling.
 .DESCRIPTION
-    Consuming a reusable activity as a child inside a workflow's `Sequence` structure publishes successfully but
-    faults at execution with "Sequence executable node '...' structure references missing child '...'". Reusable
-    activities only compose as the workflow ROOT or inside a Flowchart today (issue #1007).
-
-    This is a living tracker: it reproduces the fault and treats the known signature as an expected
-    KNOWN-ISSUE pass (so the suite stays green). If the workflow ever completes, it reports FIXED so the test
-    can be converted to a strict "completes + reusable ran" assertion. Any *other* failure is a real MISMATCH.
+    Regression coverage for issues #1007 and #1051. The parent Sequence must resolve the reusable
+    boundary by its authored id, the reusable's own Sequence root must retain its compiled structure,
+    and the following sibling must run after the reusable completes.
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -19,7 +15,7 @@ param(
 )
 . "$PSScriptRoot/_ReusableCommon.ps1"
 
-Write-Host "== Reusable activity nested in a workflow Sequence (issue #1007) ==  -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== Reusable activity nested in a workflow Sequence (issues #1007/#1051) ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $seq = Invoke-Step "resolve Sequence"  { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence' }
 $wl  = Invoke-Step "resolve WriteLine" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
@@ -47,13 +43,12 @@ foreach ($a in $inst.activities) {
 
 Write-Host ""
 $completed = $inst.instance.status -in @('Completed','Finished')
+$ranReusable = Test-ReusableRan -Instance $inst -ActivityTypeKey $ra.ActivityTypeKey
+$ranAfter = (Get-NodeRunCount -Instance $inst -NodeId "after") -ge 1
 
-if ($completed) {
-    Write-Host "FIXED - reusable activity now runs nested in a Sequence (was #1007; blocked by #1051). Convert this tracker to a strict assertion." -ForegroundColor Green
-} elseif (Test-Structure1051Fault -Instance $inst) {
-    # #1007 (references-missing-child) is fixed; the reusable's own Sequence root now faults with Structure=null (#1051).
-    Report-Structure1051
+if ($completed -and $ranReusable -and $ranAfter) {
+    Write-Host "SUCCESS - nested reusable and following Sequence sibling both ran." -ForegroundColor Green
 } else {
-    Write-Host ("MISMATCH - unexpected outcome: status '{0}', message '{1}'" -f $inst.instance.status, $faultMessage) -ForegroundColor Red
+    Write-Host ("MISMATCH - status '{0}', reusable-ran={1}, after-ran={2}, message '{3}'" -f $inst.instance.status, $ranReusable, $ranAfter, $faultMessage) -ForegroundColor Red
     exit 1
 }

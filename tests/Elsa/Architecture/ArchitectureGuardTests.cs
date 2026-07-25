@@ -194,6 +194,23 @@ public sealed class ArchitectureGuardTests
         Assert.True(features.ContainsKey("ActivitiesGraphDesign"));
     }
 
+    [Fact]
+    public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Dockerfile"));
+        var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
+        var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
+
+        Assert.True(restoreStart >= 0, "The server Dockerfile must contain a dotnet restore command.");
+        Assert.True(publishStart > restoreStart, "The server Dockerfile must restore before publishing.");
+
+        var restoreCommand = dockerfile[restoreStart..publishStart];
+        var publishCommand = dockerfile[publishStart..];
+        Assert.Contains("-p:PublishReadyToRun=true", restoreCommand, StringComparison.Ordinal);
+        Assert.Contains("--no-restore", publishCommand, StringComparison.Ordinal);
+        Assert.Contains("-p:PublishReadyToRun=true", publishCommand, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]

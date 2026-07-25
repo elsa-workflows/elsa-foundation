@@ -1,6 +1,13 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
+using Elsa.Diagnostics.Persistence.Groundwork;
+using Elsa.Diagnostics.StructuredLogs;
+using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Persistence.Core;
@@ -14,6 +21,7 @@ using Elsa.Serialization.Core;
 using System.Collections.Concurrent;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -54,6 +62,30 @@ public sealed class GroundworkShellSchemaActivationTests
             scope.ServiceProvider.GetRequiredService<IPhysicalSchemaManifestSource>());
         Assert.Null(scope.ServiceProvider.GetService<IUserStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
+    }
+
+    [Fact]
+    public async Task Diagnostics_feature_is_cataloged_and_activates_both_Groundwork_stores_without_an_EF_store()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await ApplyDiagnosticsSchemaAsync(database.ConnectionString);
+        await using var root = BuildRoot(database.ConnectionString, includeIdentity: false, includeDiagnostics: true);
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.BeginScope();
+
+        Assert.IsType<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
+            scope.ServiceProvider.GetRequiredService<IPhysicalSchemaManifestSource>());
+        Assert.IsType<GroundworkOpenTelemetryStore>(
+            scope.ServiceProvider.GetRequiredService<IOpenTelemetryStore>());
+        Assert.IsType<GroundworkStructuredLogStore>(
+            scope.ServiceProvider.GetRequiredService<IStructuredLogStore>());
+        Assert.DoesNotContain(
+            scope.ServiceProvider.GetServices<IOpenTelemetryStore>(),
+            store => store.GetType().Namespace?.Contains(".EFCore", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(
+            scope.ServiceProvider.GetServices<IStructuredLogStore>(),
+            store => store.GetType().Namespace?.Contains(".EFCore", StringComparison.Ordinal) == true);
     }
 
     [Fact]
@@ -105,6 +137,7 @@ public sealed class GroundworkShellSchemaActivationTests
     private static ServiceProvider BuildRoot(
         string connectionString,
         bool includeIdentity,
+        bool includeDiagnostics = false,
         bool autoApply = false,
         bool skipInspection = false,
         ILoggerProvider? loggerProvider = null)
@@ -126,6 +159,9 @@ public sealed class GroundworkShellSchemaActivationTests
                 .WithAssemblies(
                     typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
                     typeof(AspNetCoreIdentityGroundworkFeature).Assembly,
+                    typeof(DiagnosticsGroundworkPersistenceFeature).Assembly,
+                    typeof(OpenTelemetryFeature).Assembly,
+                    typeof(StructuredLogsFeature).Assembly,
                     typeof(GroundworkShellSchemaActivationTests).Assembly)
                 .AddShell(ShellName, shell =>
                 {
@@ -139,6 +175,8 @@ public sealed class GroundworkShellSchemaActivationTests
                         });
                     if (includeIdentity)
                         shell.WithFeature<AspNetCoreIdentityGroundworkFeature>();
+                    if (includeDiagnostics)
+                        shell.WithFeature<DiagnosticsGroundworkPersistenceFeature>();
                 });
         });
 
@@ -156,6 +194,14 @@ public sealed class GroundworkShellSchemaActivationTests
             .AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(connectionString)
             .BuildServiceProvider();
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
+    }
+
+    private static async Task ApplyDiagnosticsSchemaAsync(string connectionString)
+    {
+        await ApplySchemaAsync<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(connectionString);
+        var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
+        foreach (var stream in deployment.Streams)
+            _ = await SqliteDiagnosticRecordStoreFactory.CreateAsync(connectionString, stream);
     }
 
     private static string Flatten(Exception exception)

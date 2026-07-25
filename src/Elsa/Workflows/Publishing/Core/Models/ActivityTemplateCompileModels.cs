@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Core.Models;
@@ -24,7 +26,21 @@ public sealed record ActivityTemplateCompilation(
     ActivityResourceMeasurements ResourceMeasurements,
     string ProviderFingerprint,
     IReadOnlyList<ActivityVersionChange> ProviderCompatibilityChanges,
-    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+    IReadOnlyList<ActivityDiagnostic> Diagnostics,
+    IReadOnlyList<ActivityTemplateOccurrenceCompilation>? Occurrences = null)
+{
+    public IReadOnlyList<ActivityTemplateOccurrenceCompilation> Occurrences { get; init; } = Occurrences ?? [];
+}
+
+/// <summary>
+/// Provider-owned authored content that must be materialized only when an exact dependency occurrence
+/// is placed. Inputs remain opaque canonical JSON until Publishing lowers them against the selected
+/// dependency contract; structure is already compiled but still references authored child node ids.
+/// </summary>
+public sealed record ActivityTemplateOccurrenceCompilation(
+    string OccurrenceId,
+    JsonElement InputBindings,
+    ActivityNodeStructure? Structure);
 
 public sealed record ActivityTemplateDependencyDiscoveryRequest(
     string DefinitionId,

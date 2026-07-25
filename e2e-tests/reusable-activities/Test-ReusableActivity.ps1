@@ -43,8 +43,6 @@ $ranInline = Test-ReusableRan -Instance $inst -ActivityTypeKey $ra.ActivityTypeK
 Write-Host ""
 if ($inst.instance.status -in @('Completed','Finished') -and $ranInline) {
     Write-Host ("SUCCESS - parent completed and the reusable activity ran inline (type '{0}')" -f $ra.ActivityTypeKey) -ForegroundColor Green
-} elseif (Test-Structure1051Fault -Instance $inst) {
-    Report-Structure1051
 } else {
     Write-Host ("MISMATCH - status '{0}', reusable-ran={1}" -f $inst.instance.status, $ranInline) -ForegroundColor Red
     exit 1

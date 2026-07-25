@@ -2,7 +2,7 @@
 
 Backend REST tests for Foundation's "workflows used as activities". In Foundation this is a first-class
 **reusable Activity Definition** authored as an `elsa.activity-graph` graph with a public boundary contract
-(inputs / outputs / a single `done` outcome), published to an immutable version, and consumed by a parent
+(inputs / outputs / schema-1 `done` or schema-2 mapped outcomes), published to an immutable version, and consumed by a parent
 (workflow or another reusable activity) by **exact `activityVersionId`**. The consumer **inlines** the child at
 publish time (content-addressed template placement) — this is *not* the runtime `DispatchWorkflow` sub-execution.
 
@@ -26,15 +26,15 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Serv
 | `Test-DraftTestRun.ps1` | execute a **workflow DRAFT** via `publishing/workflows/drafts/test-runs` (no publish) |
 | `Test-ActivityDraftTestRun.ps1` | execute a **reusable-activity DRAFT** via `publishing/activity-drafts/{draftId}/test-runs` (no publish) |
 | `Test-SetOutcome.ps1` | **Set Outcome** (`Control` intrinsic) + Flowchart routes only the matching branch (both outcomes) |
-| `Test-ReusableActivityOutcomeLimit.ps1` | documents the boundary limitation — a reusable-activity graph may emit only the single `done` outcome |
-| `Test-ReusableSequenceNesting.ps1` | living tracker for **issue #1007** (see below) |
+| `Test-ReusableActivityOutcomeLimit.ps1` | publishes schema-2 mapped outcomes and proves only the matching parent branch runs |
+| `Test-ReusableSequenceNesting.ps1` | regression coverage for reusable placement inside a workflow Sequence |
 
 ## Composition: what works, what doesn't
 
 - ✅ **Reusable activity as the consumer's ROOT** — inlined and executed.
 - ✅ **Root-wrapping** — a reusable activity whose graph `rootActivity` *is* another reusable activity version. This wires the dependency (verified via the authoritative outbound edge) and executes all layers.
 - ✅ **Reusable reference nested in a reusable graph's `Sequence` structure** — the canonical `elsa.sequence.structure@1.0.0` contract records the dependency and executes the child. `Test-ReusableActivityDeep.ps1` is the runnable regression coverage.
-- ❌ **Reusable reference nested as one child inside a `Sequence` structure in a workflow.** This publishes but **faults at runtime** (`Sequence executable node '…' references missing child '…'`) — **issue #1007**.
+- ✅ **Reusable reference nested as one child inside a `Sequence` structure in a workflow.** The boundary keeps its authored id and both the reusable and following sibling execute.
 - (The compiler also supports reusable placement inside a **Flowchart**; not exercised by this suite.)
 
 ## Findings vs the Elsa-3 mental model
@@ -44,8 +44,4 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Serv
 - **Publishing successive reusable-activity versions** → supported through exact-version-bound publication preflight. `Test-ReusableActivityPinning` publishes C v1 and C v2 over REST, then verifies that consumer B remains pinned to C v1.
 - **"whole hierarchy in sync while in draft"** → **no draft-consumes-draft**; a parent draft binds only *published* child versions. Draft test-run compiles the draft under edit; nested children come from their published versions.
 - **"execute a draft"** → yes (`Test-DraftTestRun`, `Test-ActivityDraftTestRun`).
-- **"outcomes of workflows used as activities"** → Set Outcome + branch-routing works **inside a workflow** (`Control` + Flowchart, `Test-SetOutcome`); a reusable-activity **boundary** is limited to the single `done` outcome (`Test-ReusableActivityOutcomeLimit`), so a parent cannot branch on a *custom* outcome coming out of a reusable activity.
-
-## Open blockers surfaced here
-
-- **Issue #1007** — reusable activity nested in a workflow `Sequence` faults at runtime; only root/Flowchart placement works. Tracked by `Test-ReusableSequenceNesting.ps1`.
+- **"outcomes of workflows used as activities"** → schema-2 reusable boundaries map entry outcomes to public outcomes, and the parent routes them through generic Flowchart ports (`Test-ReusableActivityOutcomeLimit`).

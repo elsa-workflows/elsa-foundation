@@ -552,7 +552,9 @@ public sealed class WorkflowExecutableCompilerTests
             new SinglePublicationStore(publication),
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
-            new Sha256ActivityPlacementHasher());
+            new Sha256ActivityPlacementHasher(),
+            _activityStructureService,
+            new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()));
         var placed = await placer.PlaceAsync(new(
             publication,
             template,
@@ -2034,7 +2036,13 @@ public sealed class WorkflowExecutableCompilerTests
             publications,
             templates,
             references,
-            new ActivityTemplatePlacer(publications, templates, references, new Sha256ActivityPlacementHasher()),
+            new ActivityTemplatePlacer(
+                publications,
+                templates,
+                references,
+                new Sha256ActivityPlacementHasher(),
+                _activityStructureService,
+                inputCompiler),
             inputCompiler,
             outputCompiler,
             new WorkflowExecutableHasher(),

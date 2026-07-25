@@ -37,6 +37,13 @@ handoff. This lane consumes the resulting diagnostics verdict and retained artif
 create a private harness or self-authorize a replacement gate. Keep the EF oracle until #646 records
 a passing or program-owner-ratified verdict.
 
+On 2026-07-25 the program owner ratified expanding the supplied bundle from 12 to 13 workloads with
+`diagnostics-durable-history`, split into Structured Logs and OpenTelemetry suboperations. SQLite
+uses the retained same-provider EF oracle; SQL Server, PostgreSQL, and MongoDB use absolute
+operational budgets plus correctness digests, native plans, and Groundwork physical-form evidence.
+This records the workload contract only: T050 and T051 remain open until #646 retains and imports the
+measured verdicts.
+
 ## Replay-base evidence (not promotion evidence)
 
 On 2026-07-24, before integrating the then-current `main`/Groundwork preview.81, the replay implementation
@@ -140,6 +147,73 @@ provider-bounded query contract. The pending contract test is retained as an exp
 `valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks
 trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
 task, package/solution configuration, or task checkbox was changed by this intake.
+
+## Host-composition correction pending exact-head recertification (2026-07-25)
+
+Inspection found that the original `DiagnosticsGroundworkPersistence` feature contributed only its
+document manifest. The two concrete Groundwork adapters were not catalog-discoverable shell features, so
+enabling the composite host feature did not select either `IOpenTelemetryStore` or
+`IStructuredLogStore`. The correction makes that composite feature atomically delegate to both adapters,
+marks it with the `elsa-diagnostics` schema contribution, and extends the reference deployment-schema
+selector with diagnostics-only and identity-plus-diagnostics forms. The four unified provider leaves now
+register the provider-native diagnostic-record session factory required by the selected store bindings.
+
+`Elsa.Server` now references the combined diagnostics Groundwork composition project and selects
+`DiagnosticsGroundworkPersistence` in `shells.json`; only its two diagnostics EF project references were
+removed. Identity and all other EF oracle work remains outside this correction. A real SQLite CShell
+activation test pre-applies the combined document schema and all five diagnostic-record streams, then
+asserts both Groundwork stores resolve with no EF diagnostics store.
+
+On exact implementation head `e70995de5ea6ac14a8f1dacbb558121faf2c42e3`, the diagnostics
+persistence suite passed **148/148**, the combined deployment-schema suite passed **6/6**, and the
+complete unified-host suite passed **53/53**. The unified-host result contains all five real SQLite
+activation cases and all thirteen schema-selector cases, including the four explicit generic
+provider registrations. A clean `Elsa.Server` Release build completed with **0 errors** and 29
+disclosed pre-existing preview.81 obsolescence warnings in unchanged source. Commands, package
+resolution, source hashes, and retained-result hashes are in
+[`evidence/us4-composition-results.json`](evidence/us4-composition-results.json). These results
+complete T045 and T049. They do not certify the four-provider promotion matrix, performance, or EF
+deletion; those remain under T050-T057.
+
+## Host-composition independent review (2026-07-25)
+
+The correctness/mechanism and evidence-integrity reviewers first inspected exact pre-remediation
+range `6313171ff33f4c42a54507885a080ce185d35526..b0a2a646922bebc95105d37318fdcac10dd068fa`.
+An independent scope/test-preservation reviewer then joined the exact final-candidate audit:
+
+- Correctness found that the four explicit generic unified-provider overloads registered a session
+  factory but did not expose the selected diagnostic deployment source. The remediation centralized
+  conditional aliasing in `AddGroundworkReferenceDeploymentSchema<TDeploymentSource>`, routed all
+  four providers through it, and added a four-provider singleton-identity regression.
+- Evidence integrity found that T045/T049 had narrative totals but no exact-head manifest, and that
+  “rejects an EF store” overstated an absence assertion. The remediation added the hash-bound
+  [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) manifest and
+  narrowed the claim to “no EF diagnostics store is registered or selected.”
+- Scope/test preservation found that the shrink-only
+  `tests/Elsa/Architecture/Baselines/ef-core-surface.json` still required the two removed
+  diagnostics EF host references and shell keys. The prescribed full-solution restore and guarded
+  baseline generator removed the 18 downstream entries made stale by that narrow host switch:
+  2 direct project references, 12 transitive project-consumer paths, 2 transitive package-consumer
+  paths, and 2 host-configuration entries. It preserved every EF project/package entry and every
+  Identity/OpenIddict entry. The generated baseline passed its exact-match guard 1/1.
+
+The first full remote check independently reproduced that ratchet failure and exposed a second
+architecture blocker: six new diagnostics registration descriptors were valid immutable
+application-lifetime resources but were not present in the exact documented-exception inventory.
+The two deployment-manifest contracts alias immutable application-wide schema values. Each of the
+four provider session factories retains only immutable provider configuration and returns a fresh
+scope-bound, deterministically disposable session on every invocation. The lifetime guard now
+records those six exact paths, service types, and rationales rather than weakening its suffix scan
+or changing the application lifetime behind the singleton diagnostics stores. The focused lifetime
+suite passed 4/4 and the complete architecture suite passed 286/286 after remediation.
+
+The correctness reviewer withdrew a provisional fresh-schema concern after re-verifying the
+ratified pre-start deployment contract: runtime sessions must admit already-deployed storage and
+must not materialize or repair schema. After both architecture remediations, three independent
+adversarial reviewers inspected the exact final candidate on correctness/mechanism, evidence
+integrity, and scope/test preservation. All three returned clean; no finding was waived. Identity,
+OpenIddict, the frozen EF performance oracles, non-diagnostics shell settings, and existing tests
+remain intact.
 
 ## Final dependency audit
 

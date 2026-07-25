@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:process-restart-same-database",
+  "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "c29d70933f0e0fe158f1686339d1f16e18127ec6581ad91c0a2fcc2b790d1b60",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-bundle-process-restart/c29d70933f0e0fe1",
+  "clients": 2,
+  "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+  "observations": [
+    {
+      "name": "child-process-rehydration",
+      "value": "schema-version:1;document-version:1;distinct-process:true"
+    },
+    {
+      "name": "complete-bundle-count",
+      "value": "1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2dc442ea31061971cae6a86a8e8f0a13904cbeb7",
+    "elsaTree": "ae590a5d927e83b9688afa878a02214ed81ee9e9",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "restartScenario": "process-restart-same-database",
+  "evidence": "versions/0.0.1-preview.86/evidence/sqlserver/runtime-checkpoint-commit/8630b67155036d92.json"
+}

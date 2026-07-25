@@ -7,6 +7,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -30,6 +31,83 @@ public sealed class RuntimeInputBindingCompiler(
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
+
+    public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
+        string nodeId,
+        IEnumerable<InputDefinition> inputDefinitions,
+        IEnumerable<ArgumentState> inputStates)
+    {
+        var definitions = inputDefinitions.ToArray();
+        var states = inputStates.ToArray();
+        var definitionsByKey = definitions.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var state in states)
+        {
+            if (!definitionsByKey.TryGetValue(state.ReferenceKey, out var definition))
+                throw new ArgumentException($"Activity node '{nodeId}' input '{state.ReferenceKey}' does not match any declared input.");
+
+            AddBinding(bindings, Compile(nodeId, definition, state), nodeId, state.ReferenceKey);
+        }
+
+        foreach (var definition in definitions.Where(x => !bindings.ContainsKey(x.ReferenceKey)))
+        {
+            var binding = definition.DefaultValue.HasValue
+                ? Compile(nodeId, definition, new ArgumentValue(null, DefaultExpressionType))
+                : !definition.IsRequired
+                    ? CompileOmitted(definition)
+                    : throw MissingRequiredInput(nodeId, definition.ReferenceKey);
+            AddBinding(bindings, binding, nodeId, definition.ReferenceKey);
+        }
+
+        return bindings;
+    }
+
+    public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
+        string nodeId,
+        IEnumerable<RuntimeActivityInputContract> inputContracts,
+        IEnumerable<ArgumentState> inputStates)
+    {
+        var contracts = inputContracts.ToArray();
+        var states = inputStates.ToArray();
+        var contractsByKey = contracts.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        foreach (var state in states)
+        {
+            if (!contractsByKey.TryGetValue(state.ReferenceKey, out var contract))
+                throw new ArgumentException($"Activity node '{nodeId}' input '{state.ReferenceKey}' does not match any pinned activity input contract.");
+
+            var definition = ToInputDefinition(contract);
+            var owner = contract.Policy;
+            var authored = ValuePolicyCombiner.FromAuthoredStorage(state.StorageDriverType, state.IsSensitive == true);
+            var effective = ValuePolicyCombiner.Combine(owner, authored, $"Input '{contract.Key}' on activity node '{nodeId}'");
+            var binding = Compile(
+                nodeId,
+                definition,
+                state.Value,
+                ValuePolicyCombiner.ToProtectionPolicy(effective),
+                state.Conversion);
+            AddBinding(bindings, binding, nodeId, contract.Key);
+        }
+
+        foreach (var contract in contracts.Where(x => !bindings.ContainsKey(x.Key)))
+        {
+            var definition = ToInputDefinition(contract);
+            var policy = ValuePolicyCombiner.ToProtectionPolicy(contract.Policy);
+            var binding = contract.HasDefault
+                ? Compile(
+                    nodeId,
+                    definition,
+                    new ArgumentValue(contract.DefaultValue, LiteralExpressionType),
+                    policy,
+                    conversion: null)
+                : !contract.IsRequired
+                    ? CompileOmitted(definition, policy)
+                    : throw MissingRequiredInput(nodeId, contract.Key);
+            AddBinding(bindings, binding, nodeId, contract.Key);
+        }
+
+        return bindings;
+    }
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
@@ -55,9 +133,14 @@ public sealed class RuntimeInputBindingCompiler(
     public RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition)
     {
         ArgumentNullException.ThrowIfNull(inputDefinition);
+        var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
+        return CompileOmitted(inputDefinition, policy);
+    }
+
+    private RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition, ValueProtectionPolicy policy)
+    {
         var inputType = ResolveInputType(inputDefinition);
         var targetType = ToValueTypeDescriptor(inputDefinition);
-        var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
         if (!AcceptsNull(inputDefinition))
         {
             // An optional input the author didn't bind, whose target cannot represent omission via null, is pinned to
@@ -91,6 +174,36 @@ public sealed class RuntimeInputBindingCompiler(
             literal: ValueEnvelope.Absent(targetType, policy),
             metadata: BuildInputMetadata(inputDefinition));
     }
+
+    private static InputDefinition ToInputDefinition(RuntimeActivityInputContract contract) => new(
+        contract.Key,
+        contract.Name,
+        contract.Type.ToTypeReference(),
+        contract.Policy.StorageProfile,
+        contract.Name,
+        Category: null,
+        IsNullable: contract.IsNullable,
+        IsRequired: contract.IsRequired,
+        DefaultValue: contract.DefaultValue,
+        DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null);
+
+    private static void AddBinding(
+        IDictionary<string, RuntimeInputBinding> bindings,
+        RuntimeInputBinding binding,
+        string nodeId,
+        string referenceKey)
+    {
+        if (!bindings.TryAdd(binding.InputName, binding))
+        {
+            throw new ArgumentException(
+                $"VF-ACT-003: Activity node '{nodeId}' declares duplicate input '{referenceKey}'. " +
+                "Every published input must lower to exactly one canonical binding.");
+        }
+    }
+
+    private static ArgumentException MissingRequiredInput(string nodeId, string referenceKey) => new(
+        $"VF-ACT-003: Activity node '{nodeId}' omits required input '{referenceKey}', which has no pinned default. " +
+        "Every published input must lower to exactly one canonical binding.");
 
     /// <summary>
     /// Produces the CLR default for a non-nullable value type (the natural pinned default for an omitted optional

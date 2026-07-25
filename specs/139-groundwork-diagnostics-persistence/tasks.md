@@ -177,7 +177,7 @@
 - [X] T044 [P] [US4] Add schema validate/apply, missing-schema, drift, capability-mismatch, and concurrent-start tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsSchemaDeploymentTests.cs`
   - Evidence: Schema validate/apply/drift/capability/concurrency tests passed in the 34-test batch.
 - [X] T045 [P] [US4] Add enabled/disabled/provider-selection and one-store registration tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceFeatureTests.cs`
-  - Evidence: Feature selection and registration tests passed in the 34-test batch.
+  - Evidence: [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) binds exact implementation head `e70995de5` to 148/148 diagnostics persistence cases, 6/6 combined deployment-schema cases, and the full 53/53 unified-host suite. Its SQLite fixture resolves both Groundwork stores and proves no EF diagnostics store is registered or selected.
 - [X] T046 [P] [US4] Add readiness tests proving provider/schema failures never fall back to empty or in-memory durable results in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceReadinessTests.cs`
   - Evidence: Readiness and no-fallback tests passed in the 34-test batch.
 - [ ] T047 [US4] Add final dependency/public-surface tests for zero diagnostics EF and zero core Groundwork references in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs`
@@ -188,9 +188,9 @@
 - [X] T048 [US4] Contribute each concrete schema declaration to the shared Groundwork validate/apply CLI path from `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogsPersistenceFeature.cs` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs`
   - Evidence: Both concrete features contribute schema to the combined deployment source; schema and feature tests passed.
 - [X] T049 [US4] Implement Groundwork persistence feature composition and readiness in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/`
-  - Evidence: Both Groundwork persistence features and readiness paths compiled; focused feature/readiness tests passed.
+  - Evidence: [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) records 53/53 unified-host cases, including the four direct generic provider routes and real SQLite activation, plus a clean `Elsa.Server` Release build with 0 errors. The 29 clean-build warnings are existing preview.81 obsolescence debt in unchanged source and are disclosed in the manifest. Final four-provider promotion remains T057.
 - [ ] T050 [P] [US4] Consume the #646-owned diagnostics workload and retained-artifact contract; do not create a lane-local benchmark harness
-  - Evidence note: premature lane-local performance tests were removed in `5538d8414`; this task remains owned by the #646 handoff and has no passing verdict yet.
+  - Evidence note: premature lane-local performance tests were removed in `5538d8414`; the program owner ratified `diagnostics-durable-history` as the 13th spec-094 workload on 2026-07-25, but this task remains owned by the #646 handoff and has no retained passing verdict yet.
 - [ ] T051 [US4] Import the ratified #646 performance verdict for the diagnostics workload into `specs/139-groundwork-diagnostics-persistence/evidence/performance-decision.json`
 - [ ] T052 [US4] For every material correctness or #646 performance regression, record the failing gate, changed source/test paths, remediation commit, and rerun outcome, then repeat the relevant adapter gates until the #646 verdict passes
 - [ ] T053 [US4] Delete Structured Logs EF implementation projects and their tests under `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/` while preserving provider-neutral conformance coverage

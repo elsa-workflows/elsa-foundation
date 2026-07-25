@@ -46,6 +46,20 @@ public sealed class DiagnosticsPersistenceFeatureTests
     }
 
     [Fact]
+    public void Enabled_combined_Groundwork_persistence_feature_replaces_both_default_stores_once()
+    {
+        var services = ConfigureDiagnosticsDefaults();
+
+        new DiagnosticsGroundwork::Elsa.Diagnostics.Persistence.Groundwork.DiagnosticsGroundworkPersistenceFeature()
+            .ConfigureServices(services);
+
+        AssertSingleStore<IOpenTelemetryStore, GroundworkOpenTelemetryStore>(services);
+        AssertSingleStore<IStructuredLogStore, GroundworkStructuredLogStore>(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryOpenTelemetryStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryStructuredLogStore));
+    }
+
+    [Fact]
     public void Each_enabled_Groundwork_feature_replaces_only_its_own_store_contract()
     {
         var telemetryOnly = ConfigureDiagnosticsDefaults();

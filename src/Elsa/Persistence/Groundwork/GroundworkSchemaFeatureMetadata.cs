@@ -13,4 +13,7 @@ public static class GroundworkSchemaFeatureMetadata
 
     /// <summary>The Foundation Identity storage contribution.</summary>
     public const string Identity = "elsa-identity";
+
+    /// <summary>The combined Structured Logs and OpenTelemetry storage contribution.</summary>
+    public const string Diagnostics = "elsa-diagnostics";
 }
