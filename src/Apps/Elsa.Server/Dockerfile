@@ -61,6 +61,7 @@ COPY src/ ./src/
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
     && dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
         -r "$RID" \
+        -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
 
 # ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
