@@ -14,6 +14,10 @@ public sealed class GroundworkCoverageLedgerTests
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
+    private const string CurrentCheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string CurrentCheckpointFenceAttachmentSha256 =
+        "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
@@ -25,6 +29,9 @@ public sealed class GroundworkCoverageLedgerTests
     private const string PreviousCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
     private const string PreviousCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
     private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string CurrentCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
+    private const string CurrentCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
+    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -95,16 +102,17 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview86_source_boundary_has_no_current_provider_evidence_before_republication()
+    public void Preview86_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
     {
-        var entries = Entries(ReadLedger()).ToArray();
-        var currentRecords = entries
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
-            .ToArray();
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity);
 
-        Assert.Empty(currentRecords);
+        var entries = Entries(ReadLedger()).ToArray();
         Assert.DoesNotContain(
             entries,
             entry => entry["status"]?.GetValue<string>() is

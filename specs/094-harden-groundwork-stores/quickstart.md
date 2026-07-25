@@ -26,21 +26,26 @@ the Elsa provider marker.
 The original checkpoint/fence attachment and its unversioned evidence paths retain the reviewed
 `0.0.1-preview.80` four-provider slice as immutable historical provenance. The later
 `0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
-versioned attachment by tuple as prior-generation provenance. The current `0.0.1-preview.86` source alignment
-contains no imported provider record. All rows therefore remain below `evidence-complete` until an exact-source
-preview.86 publication is mechanically imported; a partial attachment cannot close that gate.
+versioned attachment by tuple as prior-generation provenance. The current `0.0.1-preview.86` checkpoint/fence
+slice lives under `versions/0.0.1-preview.86/` and is imported mechanically by tuple. All rows remain below
+`evidence-complete`: this 36-record slice is partial and cannot close the full provider-evidence gate.
 
 **2026-07-25 preview.86 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.86` release built from Groundwork
-`fd6d1c1b3cb4ebfce03d4cd57e1420060e8c02ac`. This source-only checkpoint changes no evidence artifact or
-tuple-keyed ledger record. Exact Elsa-source publication and mechanical import are a later step.
+`fd6d1c1b3cb4ebfce03d4cd57e1420060e8c02ac`. The corrected publication ran from exact Elsa source
+`2dc442ea31061971cae6a86a8e8f0a13904cbeb7` (tree
+`ae590a5d927e83b9688afa878a02214ed81ee9e9`) and passed the four-provider publisher gate
+(1/1, 2m20s). The importer retained 36 records with attachment SHA-256
+`954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24`.
 The pre-publication safety gate adds a version-neutral external-staging importer, create-new versioned
 publication, exact 36-tuple/provenance/hash validation, four-provider result equivalence, physical
 source-scenario execution-path binding, symlink-aware containment, post-capture source revalidation,
 crash-window import recovery, immutable preview.80/preview.81 checks, and current-generation-only readiness
-evaluation. Root verification passed the full architecture suite (305), focused publisher tests
-(17 passed, two explicit publication tests skipped), benchmark protocol tests (60), and the design fingerprint
-gate (1); no provider suite or evidence import ran before the corrected source checkpoint was frozen.
+evaluation. Before publication, root verification passed the full architecture suite (305), focused publisher
+tests (17 passed, two explicit publication tests skipped), benchmark protocol tests (60), and the design
+fingerprint gate (1). After publication, an independent read-only audit recomputed all 36 result and artifact
+hashes, confirmed nine equivalent four-provider scenario groups and the exact 37-file staged set, and found no
+credential material before the mechanical import.
 
 **2026-07-24 historical #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
 `0.0.1-preview.81` for batched schema apply. Elsa PR #1040 aligned the tool manifest and current-version
@@ -221,9 +226,9 @@ The original `.80` attachment hash and all 36 referenced historical artifact has
 An earlier full publication reached SQL Server and exposed that the fixture's reset query could select
 system sessions, which SQL Server refuses to kill. The fixture now limits the reset set to user processes;
 the focused SQL Server fence scenario and this complete publication both passed after the correction.
-This refresh preserves T050's historical preview.81 evidence. It does not prove the current preview.86
-generation, complete T058/T069/T076/T093/T100, or advance any ledger row status; #646 inherits those remaining
-publication and performance-verdict obligations.
+This refresh preserves T050's historical preview.81 evidence. It does not complete
+T058/T069/T076/T093/T100 or advance any ledger row status; #646 inherits the remaining provider publication
+and performance-verdict obligations.
 
 ### Preview.81 checkpoint/fence review disposition
 
