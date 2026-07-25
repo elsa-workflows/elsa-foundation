@@ -242,6 +242,20 @@ on correctness/mechanism, evidence integrity, and scope/test preservation:
 | Evidence integrity | Synthetic observations and a separately acquired physical fingerprint could green-wash the retained result. | One driver execution now returns the raw actual observations and physical fingerprint, rechecks the fingerprint, and binds both with provenance into the record, artifact, and digest. All nine four-provider matrices and exact ledger imports were independently recomputed. | PASS |
 | Scope/test preservation | The first refresh overwrote preview.80 history, then the runnable command could label a later checkout as the retained source snapshot. | Preview.80 was restored byte-for-byte and guarded by its attachment hash; preview.81 is version-namespaced. The reproduction command now short-circuits before publication unless HEAD, tree, and cleanliness exactly match the retained source snapshot; the originating reviewer exercised later, dirty, and exact-snapshot cases. | PASS |
 
+### Preview.86 source-alignment review disposition
+
+Three adversarial reviewers inspected the initial corrected-source range
+`4a5f517f293b54c370a5d0073ce7424f685bb8c5..a7fd50a7f9e089481932a3d677fcaaa2c2b0b4ad`
+and the imported candidate through `49b5b960ee5960798660a0da1afca732f5c7828f`. They assumed the
+implementation and evidence were green-washed and reviewed correctness/mechanism, evidence integrity, and
+scope/test preservation independently.
+
+| Axis | Confirmed finding | Disposition | Final verdict |
+|---|---|---|---|
+| Correctness/mechanism | Publication synthesized a coverage-obligation path instead of retaining the provider driver's physical execution path; source identity was checked only before capture; lexical containment admitted symlink escapes; a post-directory-move importer crash could strand a valid generation; and the exact-generation architecture guard rejected later valid current evidence outside the closed slice. | Publication now retains and validates the driver's source-scenario/fingerprint path, rechecks exact HEAD/tree/cleanliness before each versioned write and attachment, uses symlink-aware containment, recovers only a complete exact stranded generation, and filters the permanent attachment guard to the attachment's 36 tuple keys. A regression adds a valid non-slice current record and proves both the generic validator and exact attachment guard accept it. | Pending final exact-head re-verification. |
+| Evidence integrity | The first preview.86 attachment could be mislabeled because its retained execution path was synthesized rather than returned by the real provider driver. | That generation was deleted. The corrected four-provider publication ran from exact commit `2dc442ea31061971cae6a86a8e8f0a13904cbeb7` / tree `ae590a5d927e83b9688afa878a02214ed81ee9e9`; an independent auditor recomputed all result and artifact hashes, physical paths, provenance, and the exact file set before import. | Pending final exact-head re-verification. |
+| Scope/test preservation | Current-generation validation originally treated any later valid preview.86 evidence outside the partial checkpoint/fence slice as corruption, and pre-import documentation overstated the candidate state. | Both the production validator and permanent exact-attachment guard validate only the closed 36-tuple slice while the generic validator still validates additional declared evidence. Documentation now calls the import partial, preserves all historical generations, and advances no status or performance verdict. | Pending final exact-head re-verification. |
+
 For the performance handoff, `requiredNativeRoutes` in the versioned workload documents are exact current
 `BoundedQueryDeclaration.Identity` values, not coverage-ledger `queryShapes` or descriptive “bounded” aliases.
 For example the current workload set uses `list-claimable`, `list-due`,

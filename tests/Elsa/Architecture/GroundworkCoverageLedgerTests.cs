@@ -120,6 +120,29 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Preview86_exact_attachment_guard_allows_valid_current_evidence_outside_its_closed_slice()
+    {
+        var ledger = ReadLedger();
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:expected-version-state-changes");
+        record["concurrencySemantic"] = "expected-version-state-changes";
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
+
+        Assert.Empty(CreateEvidenceValidator().Validate(ledger));
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity,
+            ledger);
+    }
+
+    [Fact]
     public void Retained_current_checkpoint_fence_generation_rejects_a_partial_import()
     {
         var ledger = ReadLedger();
@@ -964,9 +987,10 @@ public sealed class GroundworkCoverageLedgerTests
         string attachmentSha256,
         string evidenceCommit,
         string evidenceTree,
-        string runIdentity)
+        string runIdentity,
+        JsonObject? ledgerOverride = null)
     {
-        var ledger = ReadLedger();
+        var ledger = ledgerOverride ?? ReadLedger();
         var attachmentPath = Path.Combine(
             RepoRoot,
             attachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -984,14 +1008,18 @@ public sealed class GroundworkCoverageLedgerTests
         var attachmentRecordsByEntry = attachmentRecords
             .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
             .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
+        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var attachmentKeys = attachmentByKey
+            .Select(records => records.Key)
+            .ToHashSet(StringComparer.Ordinal);
         var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
         var ledgerRecords = Entries(ledger)
             .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
             .SelectMany(entry => entry["providerEvidence"]!.AsObject()
                 .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
             .Where(record => record["providerVersion"]?.GetValue<string>() == providerVersion)
+            .Where(record => attachmentKeys.Contains(EvidenceTuple(record)))
             .ToArray();
-        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
         var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
 
         Assert.Equal(36, attachmentRecords.Length);
