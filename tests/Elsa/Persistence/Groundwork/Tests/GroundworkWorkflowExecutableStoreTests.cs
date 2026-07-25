@@ -783,7 +783,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 dependency.Identity.ArtifactHash,
                 ["root"])).ToArray(),
             runtimeRequirements: null,
-            storageDriverRequirements: [new RuntimeStorageDriverRequirement("sample.external")]);
+            storageDriverRequirements: [new RuntimeStorageDriverRequirement("sample.external")],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutableSourceReference Reference(

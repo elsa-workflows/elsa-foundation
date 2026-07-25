@@ -337,7 +337,8 @@ public sealed class ReplaySafeFusionGuardrailTests
             rootActivity: root,
             resumeTargets: resumeTargets,
             createdAt: FixedNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode NewReplaySafeWaitingNode(string nodeId) =>

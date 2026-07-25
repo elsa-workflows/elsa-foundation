@@ -79,7 +79,7 @@ public sealed class WorkflowRuntimeAttentionContributorTests
             null,
             IncidentSeverity.Critical,
             IncidentStatus.Blocking,
-            IncidentResolutionAction.WaitForIntervention,
+            null,
             "TestFailure",
             "Sensitive failure detail",
             now.AddMinutes(-124),

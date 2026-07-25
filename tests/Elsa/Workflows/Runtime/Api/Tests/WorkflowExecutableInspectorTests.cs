@@ -714,7 +714,8 @@ public sealed class WorkflowExecutableInspectorTests
             now,
             new Dictionary<string, string>(),
             inputContract,
-            dependencies);
+            dependencies,
+            IncidentStrategyBuiltIns.FaultReference);
 
     private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
     {

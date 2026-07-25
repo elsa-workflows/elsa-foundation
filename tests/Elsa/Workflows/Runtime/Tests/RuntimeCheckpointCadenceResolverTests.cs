@@ -147,6 +147,7 @@ public sealed class RuntimeCheckpointCadenceResolverTests
             dependencies: null,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: cadence);
     }
 

@@ -585,7 +585,8 @@ public abstract class TwoNodeAcceptanceTests
             root,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             new DateTimeOffset(2026, 7, 20, 8, 30, 0, TimeSpan.Zero),
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable NewParentExecutable(WorkflowExecutableIdentity childIdentity)
@@ -621,7 +622,8 @@ public abstract class TwoNodeAcceptanceTests
                     childIdentity.ArtifactId,
                     childIdentity.ArtifactHash,
                     [root.ExecutableNodeId])
-            ]);
+            ],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutableSourceReference NewChildSourceReference(WorkflowExecutableIdentity identity) =>

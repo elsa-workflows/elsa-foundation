@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Primitives.Models;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -17,7 +18,8 @@ public sealed class WorkflowExecutable
         ExecutableNode rootActivity,
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
-        IReadOnlyDictionary<string, string> compatibilityMetadata)
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        IncidentStrategyReference incidentStrategy)
         : this(
             identity,
             rootActivity,
@@ -27,7 +29,8 @@ public sealed class WorkflowExecutable
             inputContract: null,
             dependencies: null,
             runtimeRequirements: null,
-            storageDriverRequirements: null)
+            storageDriverRequirements: null,
+            incidentStrategy)
     {
     }
 
@@ -37,6 +40,7 @@ public sealed class WorkflowExecutable
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata,
+        IncidentStrategyReference incidentStrategy,
         IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements = null,
         IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements = null)
         : this(
@@ -48,7 +52,8 @@ public sealed class WorkflowExecutable
             inputContract: null,
             dependencies: null,
             runtimeRequirements,
-            storageDriverRequirements)
+            storageDriverRequirements,
+            incidentStrategy)
     {
     }
 
@@ -59,7 +64,8 @@ public sealed class WorkflowExecutable
         DateTimeOffset createdAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata,
         WorkflowExecutableInputContract? inputContract,
-        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies)
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
+        IncidentStrategyReference incidentStrategy)
         : this(
             identity,
             rootActivity,
@@ -69,7 +75,8 @@ public sealed class WorkflowExecutable
             inputContract,
             dependencies,
             runtimeRequirements: null,
-            storageDriverRequirements: null)
+            storageDriverRequirements: null,
+            incidentStrategy)
     {
     }
 
@@ -84,6 +91,7 @@ public sealed class WorkflowExecutable
         IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
         IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
         IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements,
+        IncidentStrategyReference incidentStrategy,
         WorkflowExecutableCheckpointCadence? checkpointCadence = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
@@ -91,6 +99,7 @@ public sealed class WorkflowExecutable
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
+        ArgumentNullException.ThrowIfNull(incidentStrategy);
 
         var nodeSnapshot = Flatten(rootActivity).ToArray();
 
@@ -103,6 +112,7 @@ public sealed class WorkflowExecutable
         Dependencies = SnapshotDependencies(dependencies, NodesById);
         CheckpointCadence = checkpointCadence;
         WorkflowVariables = SnapshotWorkflowVariables(workflowVariables);
+        IncidentStrategy = incidentStrategy;
         CreatedAt = createdAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         RuntimeRequirements = Array.AsReadOnly((runtimeRequirements ?? [])
@@ -144,6 +154,12 @@ public sealed class WorkflowExecutable
     /// Part of the behavioral content hash: they define the workflow frame's key set and defaults.
     /// </summary>
     public IReadOnlyCollection<RuntimeVariableDeclaration> WorkflowVariables { get; }
+
+    /// <summary>
+    /// The exact incident strategy selected at publication time. Runtime execution resolves this pinned reference
+    /// without loading the authored workflow or consulting a mutable host default.
+    /// </summary>
+    public IncidentStrategyReference IncidentStrategy { get; }
 
     public DateTimeOffset CreatedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }

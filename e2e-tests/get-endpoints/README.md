@@ -11,7 +11,7 @@ parameters, and asserts the HTTP status (and a light body predicate). Shared har
 |--------|-------------------|
 | `Test-RuntimeGets.ps1` | health; executables (list/get/provenance/input-sources); instances (list/filtered/paged/get/incidents); activity-executions (get/descendants/layout/value-evidence payload); dispatches (filtered/get); diagnostics settings — 20 cases |
 | `Test-DesignWorkflowGets.ps1` | definitions (list/get/versions); versions/{id}; drafts/{id}; drafts/{id}/validations — 8 cases |
-| `Test-PublishingGets.ps1` | activities (list) + construct; value-conversion/profiles; workflows/{id}/slots + /policy — 7 cases |
+| `Test-PublishingGets.ps1` | activities (list) + construct; value-conversion/profiles; incident-strategies; workflows/{id}/slots + /policy — 8 cases |
 | `Test-DesignActivityGets.ps1` | authoring-capabilities; catalog; definitions (list/get/picker/drafts/versions); versions/{id} + dependencies; drafts/{id} — 13 cases |
 | `Test-IdentityGets.ps1` | session; capabilities; bootstrap; token — 4 cases |
 

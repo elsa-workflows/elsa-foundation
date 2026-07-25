@@ -40,7 +40,7 @@ public class ActivityExecutionInspectionProjectionTests
             ],
             Incidents =
             [
-                new("incident", IncidentSeverity.Error, IncidentStatus.Blocking, IncidentResolutionAction.Retry,
+                new("incident", IncidentSeverity.Error, IncidentStatus.Blocking, null,
                     "TestFailure", "protected-incident", DateTimeOffset.UnixEpoch, null, true,
                     new Dictionary<string, string> { ["secret"] = "protected-incident-metadata" },
                     new("causal-incident", "child", "node-child", "graph-descendant-fault"))

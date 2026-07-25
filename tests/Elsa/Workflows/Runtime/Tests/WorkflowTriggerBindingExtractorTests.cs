@@ -378,7 +378,8 @@ public sealed class WorkflowTriggerBindingExtractorTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private WorkflowTriggerBinding Binding(string nodeId, string stimulusHash) =>
         new(

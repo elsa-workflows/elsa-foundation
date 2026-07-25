@@ -359,7 +359,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: node,
             resumeTargets: NewHttpEndpointResumeTargets(node.ExecutableNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — exactly the spec 089 D US4 independent test's shape.
@@ -421,7 +422,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: sequenceNode,
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
@@ -535,7 +537,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: sequence,
             resumeTargets: NewHttpEndpointResumeTargets(endpoint.ExecutableNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — the mid-flow route goes live off the bookmark-lifecycle notification.
@@ -565,7 +568,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 ? new Dictionary<string, WorkflowExecutableResumeTarget>()
                 : NewHttpEndpointResumeTargets(resumeTargetNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
@@ -894,7 +898,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     /// <summary>

@@ -78,7 +78,8 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             compiled.RootActivity,
             compiled.ResumeTargets,
             compiled.CreatedAt,
-            compiled.CompatibilityMetadata);
+            compiled.CompatibilityMetadata,
+            compiled.IncidentStrategy);
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var legacyJson = JsonSerializer.SerializeToNode(legacy, serializerOptions)!.AsObject();
         legacyJson.Remove("inputContract");

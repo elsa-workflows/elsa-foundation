@@ -291,7 +291,8 @@ public sealed class GroundworkDurableResumptionCrashTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     // Simulates a Window C crash: the drainer has picked up the work item, but the very first checkpoint commit throws

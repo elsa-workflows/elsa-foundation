@@ -85,6 +85,6 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests
 
     private static IncidentState Incident(string id, string executionId) =>
         new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,
-            IncidentResolutionAction.Retry, "Failure", "Failed", DateTimeOffset.UnixEpoch, null);
+            null, "Failure", "Failed", DateTimeOffset.UnixEpoch, null);
 
 }

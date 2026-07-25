@@ -66,6 +66,7 @@ All routes are relative to the host's Elsa API base path.
 |---|---|---|---|
 | `GET` | `publishing/activities` | `WorkflowPublishingRead` | List constructable activity catalog rows. |
 | `GET` | `publishing/activities/{activityId}/construct` | `WorkflowPublishingRead` | Construct an activity from a catalog row. |
+| `GET` | `publishing/incident-strategies` | `WorkflowPublishingRead` | List safe incident-strategy descriptors and the effective default publication strategy. |
 | `POST` | `publishing/workflows/{versionId}/preflight` | `WorkflowPublishingRead` | Resolve policy and return trigger changes/conflicts without changing authority. |
 | `POST` | `publishing/workflows/{versionId}/publish` | `WorkflowPublishingManage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
 | `GET` | `publishing/workflows/{definitionId}/slots` | `WorkflowPublishingRead` | List publication slots and visible lifecycle state. |

@@ -156,7 +156,8 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             node,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             Now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static RuntimeInputBinding DurableLiteral(string key, string value) =>

@@ -483,7 +483,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
-    public async Task Full_host_fault_reconciles_to_terminal_without_disclosing_provider_payload()
+    public async Task Full_host_fault_records_wait_for_intervention_without_disclosing_provider_payload()
     {
         var authoring = AuthoringState.Create();
         await using var provider = BuildProvider(
@@ -494,13 +494,20 @@ public sealed class ActivityDraftTestRunTests
 
         var started = await StartAsync(provider, authoring.Draft.Revision, "faulting-run");
         await RedriveAsync(provider);
-        var faulted = await provider.GetRequiredService<IActivityDraftTestRunService>().GetAsync(started.TestRunId);
+        var waiting = await provider.GetRequiredService<IActivityDraftTestRunService>().GetAsync(started.TestRunId);
+        await using var scope = provider.CreateAsyncScope();
+        var incident = Assert.Single(await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(started.WorkflowExecutionId));
 
-        Assert.Equal(WorkflowExecutionStatus.Faulted.ToString(), faulted.Status);
-        Assert.Null(faulted.Failure);
-        Assert.Null(faulted.Reason);
-        Assert.Equal(ActivityDraftTestRunCancellationStatus.Terminal.ToString(), faulted.Cancellation.Status);
-        Assert.NotNull(faulted.OuterActivityExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Running.ToString(), waiting.Status);
+        Assert.Null(waiting.Failure);
+        Assert.Null(waiting.Reason);
+        Assert.Equal(ActivityDraftTestRunCancellationStatus.Available.ToString(), waiting.Cancellation.Status);
+        Assert.NotNull(waiting.OuterActivityExecutionId);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome?.ActionKind);
+        Assert.Equal(IncidentResolutionSystemSources.PoisonedSchedulerWork, incident.ResolutionOutcome?.SystemSource);
+        Assert.DoesNotContain("provider-secret", incident.Message, StringComparison.Ordinal);
     }
 
     [Fact]

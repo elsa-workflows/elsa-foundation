@@ -143,6 +143,7 @@ public sealed class RuntimeRequirementPreflightTests
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             Now,
             new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference,
             requirements,
             drivers);
     }

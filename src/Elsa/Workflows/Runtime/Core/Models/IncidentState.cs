@@ -14,7 +14,7 @@ public sealed class IncidentState
         string? executableNodeId,
         IncidentSeverity severity,
         IncidentStatus status,
-        IncidentResolutionAction resolutionAction,
+        IncidentResolutionOutcome? resolutionOutcome,
         string failureType,
         string message,
         DateTimeOffset createdAt,
@@ -35,13 +35,19 @@ public sealed class IncidentState
         if (!IsTerminal(status) && resolvedAt is not null)
             throw new ArgumentException("A non-terminal incident status cannot carry a resolution time.", nameof(resolvedAt));
 
+        if (IsTerminal(status) && resolutionOutcome is null)
+            throw new ArgumentException("A terminal incident status requires a resolution outcome.", nameof(resolutionOutcome));
+
+        if (resolutionOutcome?.AppliedAt < createdAt)
+            throw new ArgumentException("Incident resolution outcome time cannot be earlier than creation time.", nameof(resolutionOutcome));
+
         IncidentId = incidentId;
         WorkflowExecutionId = workflowExecutionId;
         ActivityExecutionId = activityExecutionId;
         ExecutableNodeId = executableNodeId;
         Severity = severity;
         Status = status;
-        ResolutionAction = resolutionAction;
+        ResolutionOutcome = resolutionOutcome;
         FailureType = failureType;
         Message = message;
         CreatedAt = createdAt;
@@ -55,7 +61,7 @@ public sealed class IncidentState
     public string? ExecutableNodeId { get; }
     public IncidentSeverity Severity { get; }
     public IncidentStatus Status { get; }
-    public IncidentResolutionAction ResolutionAction { get; }
+    public IncidentResolutionOutcome? ResolutionOutcome { get; }
     public string FailureType { get; }
     public string Message { get; }
     public DateTimeOffset CreatedAt { get; }
@@ -143,14 +149,4 @@ public enum IncidentStatus
     Blocking,
     Resolved,
     Suppressed
-}
-
-public enum IncidentResolutionAction
-{
-    None,
-    Continue,
-    Retry,
-    SuspendWorkflow,
-    FaultWorkflow,
-    WaitForIntervention
 }

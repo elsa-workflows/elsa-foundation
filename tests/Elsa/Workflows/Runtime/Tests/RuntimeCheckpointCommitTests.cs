@@ -101,7 +101,7 @@ public sealed class RuntimeCheckpointCommitTests
             executableNodeId: "node-1",
             severity: IncidentSeverity.Error,
             status: IncidentStatus.Blocking,
-            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+            resolutionOutcome: null,
             failureType: "ActivityFaulted",
             message: "Activity failed.",
             createdAt: _now,
@@ -1553,7 +1553,13 @@ public sealed class RuntimeCheckpointCommitTests
                 executableNodeId: _incidentState.ExecutableNodeId,
                 severity: _incidentState.Severity,
                 status: status,
-                resolutionAction: _incidentState.ResolutionAction,
+                resolutionOutcome: status is IncidentStatus.Resolved or IncidentStatus.Suppressed
+                    ? new IncidentResolutionOutcome(
+                        "Acme.TestResolution",
+                        _incidentState.CreatedAt.AddMinutes(1),
+                        strategy: null,
+                        systemSource: "TestResolution")
+                    : null,
                 failureType: _incidentState.FailureType,
                 message: _incidentState.Message,
                 createdAt: _incidentState.CreatedAt,
@@ -1650,7 +1656,8 @@ public sealed class RuntimeCheckpointCommitTests
             _now,
             new Dictionary<string, string>(),
             inputContract: null,
-            dependencies: dependencies);
+            dependencies: dependencies,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private sealed class FixedPolicy(RuntimeCheckpointPersistenceMode mode) : IRuntimeCheckpointPersistencePolicy
     {

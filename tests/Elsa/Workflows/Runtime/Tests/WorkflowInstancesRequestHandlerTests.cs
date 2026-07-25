@@ -586,7 +586,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             executableNodeId: "node-activity-2",
             severity: IncidentSeverity.Error,
             status: IncidentStatus.Blocking,
-            resolutionAction: IncidentResolutionAction.Retry,
+            resolutionOutcome: null,
             failureType: "TestFailure",
             message: "The activity failed.",
             createdAt: Now(-7),

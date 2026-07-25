@@ -11,6 +11,7 @@ public static class PublishingApiCapabilities
         CapabilityId,
         1,
         [
+            new("incident-strategies", "publishing/incident-strategies"),
             new("publication-snapshot-preflight", "publishing/workflows/preflight"),
             new("publication-preflight", "publishing/workflows/{versionId}/preflight", templated: true),
             new("activity-publication-preflight", "design/activities/drafts/{draftId}/publication-preflight", templated: true),

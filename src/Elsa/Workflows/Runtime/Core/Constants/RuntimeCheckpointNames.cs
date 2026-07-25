@@ -18,6 +18,7 @@ public static class RuntimeCheckpointNames
     public const string BookmarkConsumed = nameof(BookmarkConsumed);
     public const string DurableValueCaptured = nameof(DurableValueCaptured);
     public const string IncidentRecorded = nameof(IncidentRecorded);
+    public const string IncidentResolutionBatchApplied = nameof(IncidentResolutionBatchApplied);
     public const string WorkflowSuspended = nameof(WorkflowSuspended);
     public const string WorkflowCompleted = nameof(WorkflowCompleted);
     public const string WorkflowFaulted = nameof(WorkflowFaulted);

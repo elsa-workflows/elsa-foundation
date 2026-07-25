@@ -3,8 +3,8 @@
     Shared helpers for the fault-handling test scripts.
 .DESCRIPTION
     Dot-sources ../_ElsaCommon.ps1 and adds the `Fault` activity node (the deterministic way to fault a
-    workflow) and an incidents fetch. Foundation has no incident-strategy layer, so every fault currently
-    parks as a `Blocking` / `WaitForIntervention` incident and the workflow ends `Faulted` (see issue #1015).
+    workflow) and an incidents fetch. Incident strategies are selected at publication and recorded through
+    immutable resolution outcomes.
 #>
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 

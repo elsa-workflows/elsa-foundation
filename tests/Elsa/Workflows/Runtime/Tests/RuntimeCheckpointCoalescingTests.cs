@@ -1055,6 +1055,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             dependencies: null,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: checkpointCadence);
     }
 
@@ -1094,6 +1095,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             dependencies: null,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: checkpointCadence);
     }
 

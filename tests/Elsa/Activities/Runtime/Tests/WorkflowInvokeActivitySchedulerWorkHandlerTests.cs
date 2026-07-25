@@ -849,7 +849,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             new Dictionary<string, string>(),
             [new ExecutableChildSlot("Test.Child", [child])],
             activityContract: contract);
-        return new WorkflowExecutable(NewIdentity(), parent, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+        return new WorkflowExecutable(NewIdentity(), parent, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable NewTypedExecutable(string literalText = "hello", bool isSensitive = false)
@@ -882,7 +882,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             new Dictionary<string, RuntimeInputBinding> { ["text"] = input },
             new Dictionary<string, string>(),
             activityContract: contract);
-        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable NewStructuralExecutable()
@@ -907,7 +907,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             new Dictionary<string, RuntimeInputBinding>(),
             new Dictionary<string, string>(),
             activityContract: contract);
-        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>());
+        return new WorkflowExecutable(NewIdentity(), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutableIdentity NewIdentity() =>

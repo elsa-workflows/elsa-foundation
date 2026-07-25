@@ -239,7 +239,8 @@ public sealed class ActivityDraftTestRunService(
             {
                 ["runtime.scope"] = "activity-draft-test-run",
                 ["activity.templateHash"] = compilation.Template.TemplateHash
-            });
+            },
+            IncidentStrategyBuiltIns.FaultReference);
         await workflowExecutables.SaveAsync(executable, cancellationToken);
 
         var wrapperReference = new WorkflowExecutableSourceReference(

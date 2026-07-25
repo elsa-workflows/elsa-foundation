@@ -196,6 +196,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 ["rejected"] = new("rejected", "node-start", "rejected", new Dictionary<string, string>())
             },
             executable.CreatedAt,
-            executable.CompatibilityMetadata);
+            executable.CompatibilityMetadata,
+            executable.IncidentStrategy);
     }
 }
