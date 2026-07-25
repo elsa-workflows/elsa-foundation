@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.Persistence.Tests.Fixtures;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -201,6 +202,168 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         Assert.Equal((1, 1, 1, 1, 1, 1),
             (diagnostics.ResourceCount, diagnostics.TraceCount, diagnostics.SpanCount,
                 diagnostics.MetricInstrumentCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "trace-summary-scope", "collector-a");
+        var start = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", start);
+        var alphaFirst = new TelemetryTrace(
+            "trace-alpha", "root-alpha", "first alpha", start, start.AddMilliseconds(10), TimeSpan.FromMilliseconds(10),
+            SpanStatus.Error, [resource.Id], [], 2);
+        var alphaSecond = new TelemetryTrace(
+            "trace-alpha", "root-later", "later alpha", start.AddSeconds(1), start.AddSeconds(1).AddMilliseconds(25),
+            TimeSpan.FromMilliseconds(25), SpanStatus.Ok, [resource.Id], ["workflow-alpha"], 3);
+        var beta = new TelemetryTrace(
+            "trace-beta", "root-beta", "beta", start.AddSeconds(2), start.AddSeconds(2).AddMilliseconds(5),
+            TimeSpan.FromMilliseconds(5), SpanStatus.Ok, [resource.Id], ["workflow-beta"], 1);
+        var gamma = new TelemetryTrace(
+            "trace-gamma", "root-gamma", "gamma", start.AddSeconds(3), start.AddSeconds(3).AddMilliseconds(5),
+            TimeSpan.FromMilliseconds(5), SpanStatus.Ok, [resource.Id], ["workflow-gamma"], 1);
+
+        await using (var firstProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var secondProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var first = new GroundworkOpenTelemetryStore(
+                         firstProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+                         binding))
+        await using (var second = new GroundworkOpenTelemetryStore(
+                         secondProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+                         binding))
+        {
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([resource], [], [], [], [], []));
+            await Task.WhenAll(
+                first.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [alphaFirst], [], [], [], [])).AsTask(),
+                second.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [alphaSecond], [], [], [], [])).AsTask());
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [beta, gamma], [], [], [], []));
+        }
+
+        await using var restartedProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await using var restarted = new GroundworkOpenTelemetryStore(
+            restartedProvider.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+            binding);
+
+        var merged = Assert.Single((await restarted.QueryTracesAsync(new()
+        {
+            TraceId = "ALPHA",
+            ResourceId = "RESOURCE-API",
+            ServiceName = "ORDERS",
+            WorkflowInstanceId = "WORKFLOW-ALPHA",
+            Status = SpanStatus.Error,
+            From = start,
+            To = alphaSecond.EndTime,
+            Search = "ALPHA",
+            Take = 10
+        })).Items);
+        var newestTwo = await restarted.QueryTracesAsync(new() { Take = 2 });
+        var detail = await restarted.GetTraceAsync("TRACE-ALPHA");
+
+        Assert.Equal((alphaFirst.StartTime, alphaSecond.EndTime, alphaSecond.EndTime - alphaFirst.StartTime),
+            (merged.StartTime, merged.EndTime, merged.Duration));
+        Assert.Equal(("root-alpha", "first alpha", SpanStatus.Error, 5),
+            (merged.RootSpanId, merged.Name, merged.Status, merged.SpanCount));
+        Assert.Equal([resource.Id], merged.ResourceIds);
+        Assert.Equal(["workflow-alpha"], merged.WorkflowInstanceIds);
+        Assert.Equal(["trace-beta", "trace-gamma"], newestTwo.Items.Select(trace => trace.TraceId));
+        Assert.NotNull(detail);
+        Assert.Equal(merged.TraceId, detail.Trace.TraceId);
+        Assert.Equal(merged.RootSpanId, detail.Trace.RootSpanId);
+        Assert.Equal(merged.Name, detail.Trace.Name);
+        Assert.Equal(merged.StartTime, detail.Trace.StartTime);
+        Assert.Equal(merged.EndTime, detail.Trace.EndTime);
+        Assert.Equal(merged.Duration, detail.Trace.Duration);
+        Assert.Equal(merged.Status, detail.Trace.Status);
+        Assert.Equal(merged.ResourceIds, detail.Trace.ResourceIds);
+        Assert.Equal(merged.WorkflowInstanceIds, detail.Trace.WorkflowInstanceIds);
+        Assert.Equal(merged.SpanCount, detail.Trace.SpanCount);
+
+        var scope = new DiagnosticStorageScope(binding.TenantId, binding.ScopeId);
+        var firstPage = await restartedProvider.Stores.Traces.QueryGroupsAsync(new(
+            scope,
+            new(binding.TraceStreamId),
+            OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+            2,
+            new(RecordFields.StartTime)));
+        var secondPage = await restartedProvider.Stores.Traces.QueryGroupsAsync(new(
+            scope,
+            new(binding.TraceStreamId),
+            OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+            2,
+            new(RecordFields.StartTime),
+            Continuation: firstPage.Continuation));
+
+        Assert.Equal(["trace-alpha", "trace-beta"], firstPage.Groups.Select(group => GroupString(group, RecordFields.TraceId)));
+        Assert.Equal(["trace-gamma"], secondPage.Groups.Select(group => GroupString(group, RecordFields.TraceId)));
+        Assert.Null(secondPage.Continuation);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "catalog-case-scope", "collector-a");
+        var foreignBinding = GroundworkOpenTelemetryBinding.Create("tenant-a", "catalog-case-foreign", "collector-a");
+        var time = new DateTimeOffset(2026, 7, 25, 14, 0, 0, TimeSpan.Zero);
+        var upperDeseret = "\U00010400";
+        var lowerDeseret = "\U00010428";
+        var originalId = $"resource-{upperDeseret}";
+        var collidingId = $"RESOURCE-{lowerDeseret}";
+        var original = Resource(originalId, $"Orders-{upperDeseret}", time);
+        var collision = Resource(collidingId, $"Orders-{lowerDeseret}", time.AddSeconds(1));
+
+        await using (var firstProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var first = new GroundworkOpenTelemetryStore(
+                         firstProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 2, MaxQuerySize = 10 }),
+                         binding))
+        {
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([original], [], [], [], [], []));
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([collision], [], [], [], [], []));
+
+            var loaded = Assert.Single((await first.QueryResourcesAsync(new()
+            {
+                ServiceName = $"ORDERS-{upperDeseret}",
+                Take = 10
+            })).Items);
+            Assert.Equal(collidingId, loaded.Id);
+            Assert.Equal(collision.ServiceName, loaded.ServiceName);
+        }
+
+        await using (var foreignProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, foreignBinding))
+        await using (var foreign = new GroundworkOpenTelemetryStore(
+                         foreignProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 2, MaxQuerySize = 10 }),
+                         foreignBinding))
+        {
+            await foreign.WriteAsync(DiagnosticsDrainBatchId.New(), new(
+                [Resource(originalId, "foreign-service", time.AddSeconds(2))], [], [], [], [], []));
+            Assert.Equal("foreign-service", Assert.Single((await foreign.QueryResourcesAsync(new() { Take = 10 })).Items).ServiceName);
+        }
+
+        await using var restartedProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await using var restarted = new GroundworkOpenTelemetryStore(
+            restartedProvider.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 1, MaxQuerySize = 10 }),
+            binding);
+
+        var restartedResource = Assert.Single((await restarted.QueryResourcesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(collidingId, restartedResource.Id);
+        Assert.Equal(collision.ServiceName, restartedResource.ServiceName);
+
+        var retained = Resource("resource-later", "later-service", time.AddSeconds(3));
+        await restarted.WriteAsync(DiagnosticsDrainBatchId.New(), new([retained], [], [], [], [], []));
+
+        Assert.Equal([retained.Id], (await restarted.QueryResourcesAsync(new() { Take = 10 })).Items.Select(resource => resource.Id));
+        Assert.Empty((await restarted.QueryResourcesAsync(new() { ServiceName = $"orders-{lowerDeseret}", Take = 10 })).Items);
     }
 
     [Theory]
@@ -443,6 +606,9 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         string severity,
         string body) =>
         new(id, resourceId, timestamp, severity, null, body, traceId, spanId, new Dictionary<string, string?>());
+
+    private static string GroupString(DiagnosticRecordGroup group, string field) =>
+        Assert.Single(group.Fields[field]).CanonicalValue;
 
     private sealed class AcknowledgementLosingRecordStore(IDiagnosticRecordStore inner) : IDiagnosticRecordStore
     {

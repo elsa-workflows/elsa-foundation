@@ -148,6 +148,31 @@ provider-bounded query contract. The pending contract test is retained as an exp
 trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
 task, package/solution configuration, or task checkbox was changed by this intake.
 
+## Preview.86 grouped-trace follow-up (2026-07-25)
+
+Groundwork preview.86 supplies the provider-native grouped diagnostic-record
+contract that was missing during the removal-ledger intake. The trace stream now
+declares `trace-summary-v1`: trace id is the group key; earliest root/name,
+minimum start, maximum end/status, case-policy-aware resource/service/workflow
+set unions, and total span count are reduced by the selected provider before
+filtering, ordering, take, or continuation. Trace list and detail both consume
+that bounded grouped route; the previous latest-fragment path and explicit #130
+skip are gone.
+
+Root independently reproduced the focused evidence:
+
+- complete OpenTelemetry Groundwork adapter suite: **74/74**;
+- grouped merge plus supplementary-Unicode catalog behavior on SQLite, SQL
+  Server, PostgreSQL, and MongoDB: **8/8**;
+- native grouped-query plan inspection across the same four providers: **4/4**.
+
+The provider case includes concurrent fragment writes, disposal/reopen, merged
+filtering, newest-window ordering/take, continuation, detail parity, Unicode
+case collision, scope isolation, and retention. This closes the previously
+disclosed #130 mechanism gap only. It is not #646 performance evidence, the
+T057 promotion matrix, or authorization to delete either EF oracle; T050–T057
+remain open.
+
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 
 Inspection found that the original `DiagnosticsGroundworkPersistence` feature contributed only its

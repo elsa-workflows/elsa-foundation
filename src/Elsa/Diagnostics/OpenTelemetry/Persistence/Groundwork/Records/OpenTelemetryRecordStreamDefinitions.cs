@@ -5,6 +5,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 /// <summary>Creates the bounded Groundwork stream contracts for immutable OpenTelemetry signals.</summary>
 public static class OpenTelemetryRecordStreamDefinitions
 {
+    public const string TraceSummaryProfileName = "trace-summary-v1";
+
     private const int MaxIdentifierBytes = 512;
     private const int MaxNameBytes = 4_096;
     private const int MaxBodyBytes = 65_536;
@@ -16,17 +18,20 @@ public static class OpenTelemetryRecordStreamDefinitions
         "elsa_open_telemetry_traces",
         [
             String(RecordFields.TraceId, required: true, latestPerKey: true),
+            String(RecordFields.RootSpanId),
             String(RecordFields.ResourceId, required: true, multiple: true),
             String(RecordFields.ServiceName, multiple: true),
             String(RecordFields.WorkflowInstanceId, multiple: true),
             Int64(RecordFields.Status, required: true),
             Timestamp(RecordFields.StartTime, required: true, orderable: true),
             Timestamp(RecordFields.EndTime, required: true),
-            String(RecordFields.Name, maxStringBytes: MaxNameBytes)
+            String(RecordFields.Name, maxStringBytes: MaxNameBytes),
+            Int64(RecordFields.SpanCount, required: true)
         ],
         // The public trace filter has nine value slots when every optional field is supplied:
         // trace, resource, service, workflow, status, two range bounds, and two search branches.
-        maxPredicateValues: 9);
+        maxPredicateValues: 9,
+        groupReductionProfiles: [CreateTraceSummaryProfile()]);
 
     /// <summary>Creates the span stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateSpans(string streamId) => Definition(
@@ -94,7 +99,8 @@ public static class OpenTelemetryRecordStreamDefinitions
         string streamId,
         string storageName,
         IReadOnlyList<DiagnosticFieldDefinition> fields,
-        int maxPredicateValues = 8)
+        int maxPredicateValues = 8,
+        IReadOnlyList<DiagnosticGroupReductionProfile>? groupReductionProfiles = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(streamId);
 
@@ -118,11 +124,43 @@ public static class OpenTelemetryRecordStreamDefinitions
                 MaxJsonDepth: 64),
             MaxOperationClockSkew: TimeSpan.FromMinutes(5),
             AppendIdempotencyWindow: TimeSpan.FromHours(1),
-            TrimIdempotencyWindow: TimeSpan.FromHours(1));
+            TrimIdempotencyWindow: TimeSpan.FromHours(1),
+            GroupReductionProfiles: groupReductionProfiles);
 
         DiagnosticRecordStreamDefinitionValidator.ValidateAndThrow(definition);
         return definition;
     }
+
+    private static DiagnosticGroupReductionProfile CreateTraceSummaryProfile() => new(
+        TraceSummaryProfileName,
+        RecordFields.TraceId,
+        [
+            new(RecordFields.TraceId, DiagnosticGroupReducerKind.FirstBy, RecordFields.TraceId,
+                RecordFields.StartTime, DiagnosticSortDirection.Ascending, DiagnosticGroupFirstByTieBreak.CursorAscending),
+            new(RecordFields.RootSpanId, DiagnosticGroupReducerKind.FirstBy, RecordFields.RootSpanId,
+                RecordFields.StartTime, DiagnosticSortDirection.Ascending, DiagnosticGroupFirstByTieBreak.CursorAscending),
+            new(RecordFields.Name, DiagnosticGroupReducerKind.FirstBy, RecordFields.Name,
+                RecordFields.StartTime, DiagnosticSortDirection.Ascending, DiagnosticGroupFirstByTieBreak.CursorAscending),
+            new(RecordFields.StartTime, DiagnosticGroupReducerKind.MinTimestamp, RecordFields.StartTime),
+            new(RecordFields.EndTime, DiagnosticGroupReducerKind.MaxTimestamp, RecordFields.EndTime),
+            new(RecordFields.Status, DiagnosticGroupReducerKind.MaxInt64, RecordFields.Status),
+            new(RecordFields.ResourceId, DiagnosticGroupReducerKind.SetUnionString, RecordFields.ResourceId),
+            new(RecordFields.ServiceName, DiagnosticGroupReducerKind.SetUnionString, RecordFields.ServiceName),
+            new(RecordFields.WorkflowInstanceId, DiagnosticGroupReducerKind.SetUnionString, RecordFields.WorkflowInstanceId),
+            new(RecordFields.SpanCount, DiagnosticGroupReducerKind.SumInt64, RecordFields.SpanCount)
+        ],
+        [
+            new(RecordFields.TraceId, Set(DiagnosticPredicateOperator.Equal, DiagnosticPredicateOperator.Contains)),
+            new(RecordFields.ResourceId, Set(DiagnosticPredicateOperator.Equal)),
+            new(RecordFields.ServiceName, Set(DiagnosticPredicateOperator.Equal)),
+            new(RecordFields.WorkflowInstanceId, Set(DiagnosticPredicateOperator.Contains)),
+            new(RecordFields.Status, Set(DiagnosticPredicateOperator.Equal)),
+            new(RecordFields.StartTime, Set(DiagnosticPredicateOperator.RangeInclusive)),
+            new(RecordFields.Name, Set(DiagnosticPredicateOperator.Contains))
+        ],
+        Names(RecordFields.StartTime),
+        MaxTake: 5_000,
+        MaxUnionValues: MaxMultiValues);
 
     private static DiagnosticFieldDefinition String(
         string name,
@@ -163,4 +201,7 @@ public static class OpenTelemetryRecordStreamDefinitions
 
     private static IReadOnlySet<DiagnosticPredicateOperator> Set(params DiagnosticPredicateOperator[] values) =>
         values.ToHashSet();
+
+    private static IReadOnlySet<string> Names(params string[] values) =>
+        values.ToHashSet(StringComparer.Ordinal);
 }

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -419,29 +420,39 @@ public sealed class GroundworkOpenTelemetryStore :
 
         try
         {
-            var predicates = new List<DiagnosticRecordPredicate>();
+            var predicates = new List<DiagnosticRecordGroupPredicate>();
             AddContainsTextPredicate(predicates, RecordFields.TraceId, filter.TraceId);
             AddExactTextPredicate(predicates, RecordFields.ResourceId, filter.ResourceId);
             AddExactTextPredicate(predicates, RecordFields.ServiceName, filter.ServiceName);
             AddContainsTextPredicate(predicates, RecordFields.WorkflowInstanceId, filter.WorkflowInstanceId);
             if (filter.Status is { } status)
-                predicates.Add(DiagnosticRecordPredicate.Equal(RecordFields.Status, DiagnosticFieldValue.Int64((long)status)));
+                predicates.Add(new DiagnosticRecordGroupPredicate.Comparison(
+                    RecordFields.Status,
+                    DiagnosticPredicateOperator.Equal,
+                    [DiagnosticFieldValue.Int64((long)status)]));
             AddRange(predicates, RecordFields.StartTime, filter.From, filter.To);
             if (!string.IsNullOrWhiteSpace(filter.Search))
-                predicates.Add(new DiagnosticRecordPredicate.Any([
-                    DiagnosticRecordPredicate.Contains(RecordFields.TraceId, filter.Search),
-                    DiagnosticRecordPredicate.Contains(RecordFields.Name, filter.Search)
+                predicates.Add(new DiagnosticRecordGroupPredicate.Any([
+                    new DiagnosticRecordGroupPredicate.Comparison(
+                        RecordFields.TraceId,
+                        DiagnosticPredicateOperator.Contains,
+                        [DiagnosticFieldValue.String(filter.Search)]),
+                    new DiagnosticRecordGroupPredicate.Comparison(
+                        RecordFields.Name,
+                        DiagnosticPredicateOperator.Contains,
+                        [DiagnosticFieldValue.String(filter.Search)])
                 ]));
 
-            var page = await _stores.Traces.QueryAsync(new(
+            var page = await _stores.Traces.QueryGroupsAsync(new(
                 _scope,
                 _traceStream,
+                OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 take,
                 new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
                 Predicate: All(predicates),
-                LatestPerKeyField: RecordFields.TraceId), cancellationToken);
+                Continuation: null), cancellationToken);
             return new(
-                page.Records.Select(_recordSerializer.ToTrace).Reverse().ToArray(),
+                page.Groups.Select(ToTrace).Reverse().ToArray(),
                 Interlocked.Read(ref _droppedTraces));
         }
         catch (OperationCanceledException)
@@ -466,18 +477,21 @@ public sealed class GroundworkOpenTelemetryStore :
 
         try
         {
-            var tracePage = await _stores.Traces.QueryAsync(new(
+            var tracePage = await _stores.Traces.QueryGroupsAsync(new(
                 _scope,
                 _traceStream,
+                OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 1,
                 new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
-                Predicate: DiagnosticRecordPredicate.Equal(RecordFields.TraceId, DiagnosticFieldValue.String(traceId)),
-                LatestPerKeyField: RecordFields.TraceId), cancellationToken);
-            var traceRecord = tracePage.Records.SingleOrDefault();
-            if (traceRecord is null)
+                Predicate: new DiagnosticRecordGroupPredicate.Comparison(
+                    RecordFields.TraceId,
+                    DiagnosticPredicateOperator.Equal,
+                    [DiagnosticFieldValue.String(traceId)])), cancellationToken);
+            var traceGroup = tracePage.Groups.SingleOrDefault();
+            if (traceGroup is null)
                 return null;
 
-            var trace = _recordSerializer.ToTrace(traceRecord);
+            var trace = ToTrace(traceGroup);
             var tracePredicate = DiagnosticRecordPredicate.Equal(
                 RecordFields.TraceId,
                 DiagnosticFieldValue.String(trace.TraceId));
@@ -1183,6 +1197,88 @@ public sealed class GroundworkOpenTelemetryStore :
         }
     }
 
+    private static TelemetryTrace ToTrace(DiagnosticRecordGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+
+        var start = Timestamp(group, RecordFields.StartTime);
+        var end = Timestamp(group, RecordFields.EndTime);
+        var status = checked((int)Int64(group, RecordFields.Status));
+        if (!Enum.IsDefined((SpanStatus)status))
+            throw new RecordPayloadException($"The grouped trace status '{status}' is not supported.");
+
+        return new(
+            String(group, RecordFields.TraceId),
+            OptionalString(group, RecordFields.RootSpanId),
+            OptionalString(group, RecordFields.Name),
+            start,
+            end,
+            end - start,
+            (SpanStatus)status,
+            Strings(group, RecordFields.ResourceId),
+            Strings(group, RecordFields.WorkflowInstanceId),
+            checked((int)Int64(group, RecordFields.SpanCount)));
+    }
+
+    private static DateTimeOffset Timestamp(DiagnosticRecordGroup group, string field)
+    {
+        var value = Single(group, field, DiagnosticFieldType.Timestamp).CanonicalValue;
+        try
+        {
+            return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime();
+        }
+        catch (FormatException exception)
+        {
+            throw new RecordPayloadException($"The grouped trace field '{field}' is not a timestamp.", exception);
+        }
+    }
+
+    private static long Int64(DiagnosticRecordGroup group, string field)
+    {
+        var value = Single(group, field, DiagnosticFieldType.Int64).CanonicalValue;
+        if (!long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
+            throw new RecordPayloadException($"The grouped trace field '{field}' is not an Int64.");
+        return result;
+    }
+
+    private static string String(DiagnosticRecordGroup group, string field) =>
+        Single(group, field, DiagnosticFieldType.String).CanonicalValue;
+
+    private static string? OptionalString(DiagnosticRecordGroup group, string field)
+    {
+        var values = Values(group, field);
+        return values.Count switch
+        {
+            0 => null,
+            1 when values[0].Type == DiagnosticFieldType.String => values[0].CanonicalValue,
+            _ => throw new RecordPayloadException($"The grouped trace field '{field}' is not an optional String.")
+        };
+    }
+
+    private static IReadOnlyList<string> Strings(DiagnosticRecordGroup group, string field) =>
+        Values(group, field).Select(value =>
+        {
+            if (value.Type != DiagnosticFieldType.String)
+                throw new RecordPayloadException($"The grouped trace field '{field}' is not a String set.");
+            return value.CanonicalValue;
+        }).ToArray();
+
+    private static DiagnosticFieldValue Single(
+        DiagnosticRecordGroup group,
+        string field,
+        DiagnosticFieldType type)
+    {
+        var values = Values(group, field);
+        if (values.Count != 1 || values[0].Type != type)
+            throw new RecordPayloadException($"The grouped trace field '{field}' is not one {type} value.");
+        return values[0];
+    }
+
+    private static IReadOnlyList<DiagnosticFieldValue> Values(DiagnosticRecordGroup group, string field) =>
+        group.Fields.TryGetValue(field, out var values)
+            ? values
+            : [];
+
     private static void AddRange(
         List<DiagnosticRecordPredicate> predicates,
         string field,
@@ -1196,12 +1292,36 @@ public sealed class GroundworkOpenTelemetryStore :
                 DiagnosticFieldValue.Timestamp(to ?? DateTimeOffset.MaxValue)));
     }
 
+    private static void AddRange(
+        List<DiagnosticRecordGroupPredicate> predicates,
+        string field,
+        DateTimeOffset? from,
+        DateTimeOffset? to)
+    {
+        if (from is not null || to is not null)
+            predicates.Add(new DiagnosticRecordGroupPredicate.Comparison(
+                field,
+                DiagnosticPredicateOperator.RangeInclusive,
+                [
+                    DiagnosticFieldValue.Timestamp(from ?? DateTimeOffset.MinValue),
+                    DiagnosticFieldValue.Timestamp(to ?? DateTimeOffset.MaxValue)
+                ]));
+    }
+
     private static DiagnosticRecordPredicate? All(IReadOnlyList<DiagnosticRecordPredicate> predicates) =>
         predicates.Count switch
         {
             0 => null,
             1 => predicates[0],
             _ => new DiagnosticRecordPredicate.All(predicates)
+        };
+
+    private static DiagnosticRecordGroupPredicate? All(IReadOnlyList<DiagnosticRecordGroupPredicate> predicates) =>
+        predicates.Count switch
+        {
+            0 => null,
+            1 => predicates[0],
+            _ => new DiagnosticRecordGroupPredicate.All(predicates)
         };
 
     private static void AddExactTextPredicate(
@@ -1213,6 +1333,18 @@ public sealed class GroundworkOpenTelemetryStore :
             predicates.Add(DiagnosticRecordPredicate.Equal(field, DiagnosticFieldValue.String(value)));
     }
 
+    private static void AddExactTextPredicate(
+        ICollection<DiagnosticRecordGroupPredicate> predicates,
+        string field,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            predicates.Add(new DiagnosticRecordGroupPredicate.Comparison(
+                field,
+                DiagnosticPredicateOperator.Equal,
+                [DiagnosticFieldValue.String(value)]));
+    }
+
     private static void AddContainsTextPredicate(
         ICollection<DiagnosticRecordPredicate> predicates,
         string field,
@@ -1220,6 +1352,18 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         if (!string.IsNullOrWhiteSpace(value))
             predicates.Add(DiagnosticRecordPredicate.Contains(field, value));
+    }
+
+    private static void AddContainsTextPredicate(
+        ICollection<DiagnosticRecordGroupPredicate> predicates,
+        string field,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            predicates.Add(new DiagnosticRecordGroupPredicate.Comparison(
+                field,
+                DiagnosticPredicateOperator.Contains,
+                [DiagnosticFieldValue.String(value)]));
     }
 
     private static void ValidateRange(DateTimeOffset? from, DateTimeOffset? to, string parameterName)

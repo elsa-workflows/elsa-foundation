@@ -128,7 +128,7 @@ public sealed class GroundworkOpenTelemetryQueryConformanceTests : IAsyncLifetim
         Assert.Equal(["trace-3", "trace-4"], result.Items.Select(x => x.TraceId));
     }
 
-    [Fact(Skip = "Blocked by valence-works/Groundwork#130: grouped trace reduction must execute provider-side.")]
+    [Fact]
     public async Task Repeated_trace_records_merge_to_one_summary_across_durable_batches()
     {
         var store = await _fixture.CreateStoreAsync();

@@ -57,6 +57,22 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         Assert.True(resourceId.IsRequired);
         Assert.Equal(256, resourceId.MaxValues);
 
+        var summary = Assert.Single(trace.GroupReductionProfiles!);
+        Assert.Equal(OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName, summary.Name);
+        Assert.Equal(RecordFields.TraceId, summary.GroupKeyField);
+        Assert.Equal(5_000, summary.MaxTake);
+        Assert.Equal(256, summary.MaxUnionValues);
+        Assert.Contains(summary.Reducers, x =>
+            x.Alias == RecordFields.SpanCount && x.Kind == DiagnosticGroupReducerKind.SumInt64);
+        Assert.Contains(summary.Reducers, x =>
+            x.Alias == RecordFields.ResourceId && x.Kind == DiagnosticGroupReducerKind.SetUnionString);
+        Assert.Contains(summary.Reducers, x =>
+            x.Alias == RecordFields.StartTime && x.Kind == DiagnosticGroupReducerKind.MinTimestamp);
+        Assert.Contains(summary.Reducers, x =>
+            x.Alias == RecordFields.EndTime && x.Kind == DiagnosticGroupReducerKind.MaxTimestamp);
+        Assert.Contains(summary.Reducers, x =>
+            x.Alias == RecordFields.Status && x.Kind == DiagnosticGroupReducerKind.MaxInt64);
+
         AssertOrderableRange(Field(trace, RecordFields.StartTime));
         AssertOrderableRange(Field(span, RecordFields.StartTime));
         AssertOrderableRange(Field(point, RecordFields.Timestamp));
