@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.90",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+  "executionPath": "provider-driver/postgresql/runtime-checkpoint-failure-recovery/1a1a351804143dc5",
+  "clients": 2,
+  "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+  "observations": [
+    {
+      "name": "committed-bundle-count",
+      "value": "1"
+    },
+    {
+      "name": "partial-bundle-count",
+      "value": "0"
+    },
+    {
+      "name": "recovered-state",
+      "value": "initial-complete-count:1;recovered-complete-count:1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+    "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+    "runIdentity": "runtime-checkpoint-fence-preview90"
+  },
+  "failureWindow": "during-provider-decision",
+  "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/d45b0461943784e6.json"
+}

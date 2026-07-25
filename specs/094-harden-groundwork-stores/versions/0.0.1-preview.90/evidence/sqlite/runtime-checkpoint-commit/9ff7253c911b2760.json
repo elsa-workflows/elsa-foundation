@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+  "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.90",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+  "executionPath": "provider-driver/sqlite/runtime-checkpoint-bundle-process-restart/e0c4a15841455818",
+  "clients": 2,
+  "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+  "observations": [
+    {
+      "name": "child-process-rehydration",
+      "value": "schema-version:1;document-version:1;distinct-process:true"
+    },
+    {
+      "name": "complete-bundle-count",
+      "value": "1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+    "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+    "runIdentity": "runtime-checkpoint-fence-preview90"
+  },
+  "restartScenario": "dispose-and-reopen-same-database",
+  "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/9ff7253c911b2760.json"
+}

@@ -47,6 +47,28 @@ identities used by this gate were:
 | Groundwork.SqlServer | `b3bf54480321fae72f7467d919b060df8a541644087f4a9367adf60237947e6a` |
 | Groundwork.Tool | `e602f014a0a015bd9f1a4175b417b68e9a4b18589eb8cdbf1ce5a230409b803b` |
 
+Fresh exact-source recertification on Groundwork preview.90 passed the same
+17/17 selection in 32 seconds from Elsa commit
+`a95362f33ca272e353088e37263e8a310bc0fd9a` (tree
+`e2148bc3e1665d1eac9489f00405efdc8fac8ed6`). The shared provider case again
+passed on SQLite, SQL Server, PostgreSQL, and transaction-capable MongoDB, and
+`dotnet groundwork --version` reported `Groundwork.Tool 0.0.1-preview.90`.
+The restored preview.90 package identities were:
+
+| Package | SHA-256 |
+|---|---|
+| Groundwork.Core | `3b9d9e2af957f034dd461780765bec21182fce2f88e12b40e2a4beb5c7613b56` |
+| Groundwork.DiagnosticRecords | `bbecc8b1ac0fb3fbf2f4913bdefcac757a67451d269d84884256a72932a6dabb` |
+| Groundwork.Documents | `5455f2a89cb302ea48a5122ca82056f279533391a506bf0bffffa519f1c80b50` |
+| Groundwork.MongoDb | `a6d7bd1458edebf0161499626dc83d4dfb924c89c32074eb7960e81abaa50e79` |
+| Groundwork.PostgreSql | `6877a461094187401bc52a03e5df00565c320631087522dcc98cb8d1a803b461` |
+| Groundwork.Sqlite | `56803ebdd0a28a125acd08944a98febd0b7ccc302aa05dceda7a191ba93adcf9` |
+| Groundwork.SqlServer | `8a597ff10900701a9afdb14a8096d015c5912e42ba4d4a0a0ecda5e4e6b1026a` |
+| Groundwork.Tool | `508e8dacd7005e5f2155c94796d431c82d037896738221a398a1f6f9175d995a` |
+
+This preview.90 run recertifies T005/T006 only. The preview.88 results and
+digests above remain immutable historical evidence.
+
 These results certify only the public capability gate and foundational record,
 codec, manifest, session, and failure seams. They do not claim that any of the
 145 OpenIddict store members, production replacement registration, host
@@ -131,7 +153,8 @@ store-contract denominator from the restored OpenIddict 7.5.0 XML:
 Application=42, Authorization=32, Scope=28, Token=43, total 145.
 
 These results prove only the behavior-preservation and
-manifest/codec/boundary slice described above. T005 and T006 remain open.
+manifest/codec/boundary slice described above. T005 and T006 are closed by the
+preview.90 recertification above; the later store-completion gates remain open.
 There is no `IOpenIddict*Store` implementation, replacement registration,
 session/UoW/CAS/redeem flow, four-provider matrix, unified deployment
 selection, or performance evidence. The EF oracle remains load-bearing for

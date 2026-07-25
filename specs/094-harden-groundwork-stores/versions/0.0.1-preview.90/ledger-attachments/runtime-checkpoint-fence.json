@@ -1,0 +1,1266 @@
+[
+  {
+    "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-execution-ownership-fencing/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "478831165c1b5e56a602919890a616aab2302a24af1c5b2f3172dbf1cdc444bf",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "atomic-stale-fence-rejection",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/974e1222ea1cded8.json",
+    "evidenceSha256": "4dcaa37471c70f1ec9caf73ece7883aa110797763aeb225872a04ead87641814"
+  },
+  {
+    "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-execution-ownership-fencing/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "478831165c1b5e56a602919890a616aab2302a24af1c5b2f3172dbf1cdc444bf",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "atomic-stale-fence-rejection",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/974e1222ea1cded8.json",
+    "evidenceSha256": "4d98807a723c4ffd48642ea626beda6d098d7ca90eec4c354a3f30b4ef9d5353"
+  },
+  {
+    "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-execution-ownership-fencing/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "478831165c1b5e56a602919890a616aab2302a24af1c5b2f3172dbf1cdc444bf",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "atomic-stale-fence-rejection",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/974e1222ea1cded8.json",
+    "evidenceSha256": "5eb9a71da56a3374abab2f63db9a70523a5393c39f5a0688b1f8c9310ec116c2"
+  },
+  {
+    "scenarioId": "concurrencySemantic:atomic-stale-fence-rejection",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-execution-ownership-fencing/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "478831165c1b5e56a602919890a616aab2302a24af1c5b2f3172dbf1cdc444bf",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "atomic-stale-fence-rejection",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/974e1222ea1cded8.json",
+    "evidenceSha256": "5dbe9b04297f77f869052a40231fe2d8ec378ca3f0a00bb13cd2014bd38663d7"
+  },
+  {
+    "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-idempotency/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "create-only-idempotency-marker",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/10f38a26e09d6b24.json",
+    "evidenceSha256": "02987029d07526966dee0cf5114781ba360499de5b21b7f2564eaea74df6cd21"
+  },
+  {
+    "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-idempotency/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "create-only-idempotency-marker",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24.json",
+    "evidenceSha256": "1e58577cf5d9fd6e77f7489fbd83693790fda7dbe99c40f5cd140b9da3072ffe"
+  },
+  {
+    "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-idempotency/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "create-only-idempotency-marker",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/10f38a26e09d6b24.json",
+    "evidenceSha256": "d8613f823a965cf4cddddffc45bd891e761ce2d742aa4f78d0ccf54c35934fe3"
+  },
+  {
+    "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-idempotency/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "create-only-idempotency-marker",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/10f38a26e09d6b24.json",
+    "evidenceSha256": "7172574a9da11eeeecca848276217ecd4d0714c7dfbf1ee5b420f9eeb2ba846e"
+  },
+  {
+    "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-failure-recovery/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
+    "evidenceSha256": "fa23369974c4f948b12f9deb617876bc56c4803b6631a8edaf7a961c11345929"
+  },
+  {
+    "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-failure-recovery/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
+    "evidenceSha256": "ceb2fc6e3b1b1bdea657c0360ad52a063ec1c0a106f7e03e15182dbe371fae8b"
+  },
+  {
+    "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-failure-recovery/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
+    "evidenceSha256": "e018bac0d0e885c52f8dd47e11f8e6de69cfa9f39ad589ab66b84a07ef5749bb"
+  },
+  {
+    "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-failure-recovery/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "2f1a19643e12b38b4d4a41fa4c200a64df2672eb1b349105e95ef485d44882d9",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/d8be96cddb8ddc60.json",
+    "evidenceSha256": "b7bc6d6b217188fc2bc1b6ad00c4703aa10ff386370aa0222f57be07b1b492d8"
+  },
+  {
+    "scenarioId": "failureWindow:before-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-failure-recovery/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "7057dfb465220eb0eebb683beb31a943189adea13bbe5b58f0a814ce3f55ff7c",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:0;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "before-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/11dab48c5b6ded59.json",
+    "evidenceSha256": "f49745b6d25f63341816d59c389c08b75237c13c669369672ed3fddfcc8590a0"
+  },
+  {
+    "scenarioId": "failureWindow:before-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-failure-recovery/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "7057dfb465220eb0eebb683beb31a943189adea13bbe5b58f0a814ce3f55ff7c",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:0;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "before-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/11dab48c5b6ded59.json",
+    "evidenceSha256": "095ea2d7a371ca5d73f52a79563a9afb5b5bed1feb5ccbfac40b106889a73410"
+  },
+  {
+    "scenarioId": "failureWindow:before-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-failure-recovery/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "7057dfb465220eb0eebb683beb31a943189adea13bbe5b58f0a814ce3f55ff7c",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:0;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "before-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/11dab48c5b6ded59.json",
+    "evidenceSha256": "498bae972d2a6a3fe9639d2a1a9f2825ab74f65bee2adff81e7fc135bbe9041d"
+  },
+  {
+    "scenarioId": "failureWindow:before-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-failure-recovery/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "7057dfb465220eb0eebb683beb31a943189adea13bbe5b58f0a814ce3f55ff7c",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:0;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "before-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/11dab48c5b6ded59.json",
+    "evidenceSha256": "9a42f1b18c716346e36e12602e7d42a6f36aef45b5736127059ea4cd61c7cf0a"
+  },
+  {
+    "scenarioId": "failureWindow:during-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-failure-recovery/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "during-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/d45b0461943784e6.json",
+    "evidenceSha256": "a4b416c0bae5acdb5802f7568b9fdcc8f2ffc66ba7e82d0f914f24003e7c253d"
+  },
+  {
+    "scenarioId": "failureWindow:during-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-failure-recovery/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "during-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/d45b0461943784e6.json",
+    "evidenceSha256": "3777b7f694753b9493d68a837f928fde91bba023c8c4f0eb4208e735945eeeb3"
+  },
+  {
+    "scenarioId": "failureWindow:during-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-failure-recovery/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "during-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/d45b0461943784e6.json",
+    "evidenceSha256": "dd04f0263f72ff6df650afe7085b712ad3159f7b0fa64e3e4377527bf021bc1d"
+  },
+  {
+    "scenarioId": "failureWindow:during-provider-decision",
+    "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-failure-recovery/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+    "observations": [
+      {
+        "name": "committed-bundle-count",
+        "value": "1"
+      },
+      {
+        "name": "partial-bundle-count",
+        "value": "0"
+      },
+      {
+        "name": "recovered-state",
+        "value": "initial-complete-count:1;recovered-complete-count:1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "failureWindow": "during-provider-decision",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/d45b0461943784e6.json",
+    "evidenceSha256": "544be0dff44ecf86c6a1122d2f47b65c809cb802c028604ea59b64e585b58aaa"
+  },
+  {
+    "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-bundle-process-restart/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "dispose-and-reopen-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/9ff7253c911b2760.json",
+    "evidenceSha256": "e514ca4fc63a386ad3ec52c96a6e7e8675e37232c405fa35749691576d8ffb29"
+  },
+  {
+    "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-bundle-process-restart/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "dispose-and-reopen-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/9ff7253c911b2760.json",
+    "evidenceSha256": "02440e28af7297709b3cf867db0522b02e3e7a63379d548b1393be2b77e739d8"
+  },
+  {
+    "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-bundle-process-restart/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "dispose-and-reopen-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/9ff7253c911b2760.json",
+    "evidenceSha256": "111d73d373d3350b8cd8bbf08622292efb2695a13aad0238016e567573781594"
+  },
+  {
+    "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-bundle-process-restart/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "dispose-and-reopen-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/9ff7253c911b2760.json",
+    "evidenceSha256": "5a51a73ea83ad29b8389c0a37088bcfb643c7d0b9a16e8eeaf5c603396b94c3b"
+  },
+  {
+    "scenarioId": "restartScenario:process-restart-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-bundle-process-restart/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "process-restart-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-checkpoint-commit/8630b67155036d92.json",
+    "evidenceSha256": "2519b441db1f24d42c1cfae1c9ca2cdc2128b2a23886633b89cec371bb1ead2d"
+  },
+  {
+    "scenarioId": "restartScenario:process-restart-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-bundle-process-restart/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "process-restart-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-checkpoint-commit/8630b67155036d92.json",
+    "evidenceSha256": "0f3cb0b798cc26fc5f20d7c24d9a9f501803cb712fe48ef2af43ee5de1688c32"
+  },
+  {
+    "scenarioId": "restartScenario:process-restart-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-bundle-process-restart/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "process-restart-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-checkpoint-commit/8630b67155036d92.json",
+    "evidenceSha256": "a78b9a008fa5a5e4d9226ab6b865985daf7d3e1de2a2825c285256dba6ed479f"
+  },
+  {
+    "scenarioId": "restartScenario:process-restart-same-database",
+    "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+    "coverageEntryId": "runtime-checkpoint-commit",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-bundle-process-restart/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+    "observations": [
+      {
+        "name": "child-process-rehydration",
+        "value": "schema-version:1;document-version:1;distinct-process:true"
+      },
+      {
+        "name": "complete-bundle-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "restartScenario": "process-restart-same-database",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-checkpoint-commit/8630b67155036d92.json",
+    "evidenceSha256": "60df2a598deb8211ac61bd3a01ef0c852b117b2a1b524da7747066e01deee81d"
+  },
+  {
+    "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-execution-liveness",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-execution-ownership-fencing/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "strictly-increasing-fence",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-execution-liveness/6c14c7b1ab7d6741.json",
+    "evidenceSha256": "c3eff95726851edcd69686e5a55554626ec0fbd7aee3554ea1f65bfef2b5f401"
+  },
+  {
+    "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-execution-liveness",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-execution-ownership-fencing/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "strictly-increasing-fence",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-execution-liveness/6c14c7b1ab7d6741.json",
+    "evidenceSha256": "69744f1252a094b252763eb511fc737a05eb36fc87a7e1bc9579d0fcc8ebd3fb"
+  },
+  {
+    "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-execution-liveness",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-execution-ownership-fencing/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "strictly-increasing-fence",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-execution-liveness/6c14c7b1ab7d6741.json",
+    "evidenceSha256": "f5275ad5857c8f8a22351bed63452aa5089f60462c5fce856f861a88cd6742b0"
+  },
+  {
+    "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+    "sourceScenarioId": "runtime-execution-ownership-fencing",
+    "coverageEntryId": "runtime-execution-liveness",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-execution-ownership-fencing/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+    "observations": [
+      {
+        "name": "stale-commit-count",
+        "value": "1"
+      },
+      {
+        "name": "token-order",
+        "value": "1,2"
+      },
+      {
+        "name": "winner-count",
+        "value": "1"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "strictly-increasing-fence",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741.json",
+    "evidenceSha256": "88d3da379a87f13f738a4ab3d190ace4dae7944190348b62acc77a56fa2c114e"
+  },
+  {
+    "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-post-commit-outbox",
+    "provider": "sqlite",
+    "providerIdentity": "groundwork-sqlite",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "file-backed-distinct-connections",
+    "manifestFingerprint": "e0c4a158414558189301450e28625ba41dedb75a3384b8b4bd63e722d3023b8b",
+    "executionPath": "provider-driver/sqlite/runtime-checkpoint-idempotency/e0c4a15841455818",
+    "clients": 2,
+    "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "checkpoint-bundle-write",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json",
+    "evidenceSha256": "88b784fd3ae35aa49146defe7ba3a89ca28e498451345fe4a5ff52fbfbfcc070"
+  },
+  {
+    "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-post-commit-outbox",
+    "provider": "sqlserver",
+    "providerIdentity": "groundwork-sqlserver",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-sqlserver-container",
+    "manifestFingerprint": "c0b234df451fc5baafb4f4d460e3684fc6a8d07fd3fbd7a627d12b292b1524b7",
+    "executionPath": "provider-driver/sqlserver/runtime-checkpoint-idempotency/c0b234df451fc5ba",
+    "clients": 2,
+    "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "checkpoint-bundle-write",
+    "evidence": "versions/0.0.1-preview.90/evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json",
+    "evidenceSha256": "475fc26593bdeff79207b7dc3358f0d187ae1411ecafb137dd9614e26bcde342"
+  },
+  {
+    "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-post-commit-outbox",
+    "provider": "postgresql",
+    "providerIdentity": "groundwork-postgresql",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "real-postgresql-container",
+    "manifestFingerprint": "1a1a351804143dc564c9b6606706f5911e70ceb01f1ad5da96a85792c59a949a",
+    "executionPath": "provider-driver/postgresql/runtime-checkpoint-idempotency/1a1a351804143dc5",
+    "clients": 2,
+    "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "checkpoint-bundle-write",
+    "evidence": "versions/0.0.1-preview.90/evidence/postgresql/runtime-post-commit-outbox/6d576dc01c828264.json",
+    "evidenceSha256": "5678330c1fff055316b66a4fea641271a047a6d6df3455d5987e3b6348215d23"
+  },
+  {
+    "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+    "sourceScenarioId": "runtime-checkpoint-idempotency",
+    "coverageEntryId": "runtime-post-commit-outbox",
+    "provider": "mongodb",
+    "providerIdentity": "groundwork-mongodb",
+    "providerVersion": "0.0.1-preview.90",
+    "topology": "transaction-capable-replica-set",
+    "manifestFingerprint": "7687ea59fd155e1dac8244ead92149454c084342f8e915eb1a76979076a1c281",
+    "executionPath": "provider-driver/mongodb/runtime-checkpoint-idempotency/7687ea59fd155e1d",
+    "clients": 2,
+    "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+    "observations": [
+      {
+        "name": "conflicting-replay",
+        "value": "RuntimeCheckpointReplayConflictException"
+      },
+      {
+        "name": "durable-outcome-count",
+        "value": "1"
+      },
+      {
+        "name": "equivalent-replay",
+        "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+      }
+    ],
+    "outcome": "pass",
+    "provenance": {
+      "elsaCommit": "a95362f33ca272e353088e37263e8a310bc0fd9a",
+      "elsaTree": "e2148bc3e1665d1eac9489f00405efdc8fac8ed6",
+      "runIdentity": "runtime-checkpoint-fence-preview90"
+    },
+    "concurrencySemantic": "checkpoint-bundle-write",
+    "evidence": "versions/0.0.1-preview.90/evidence/mongodb/runtime-post-commit-outbox/6d576dc01c828264.json",
+    "evidenceSha256": "a59d8ec5e2f17bbfdf44e8fe79bdecab33cc62dd1fba192863c9df8a9816ae8e"
+  }
+]

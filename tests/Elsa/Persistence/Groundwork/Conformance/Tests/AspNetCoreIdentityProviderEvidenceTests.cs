@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public sealed class AspNetCoreIdentityProviderEvidenceTests
 {
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.60";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.88";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.90";
     private static readonly Lazy<JsonSchema> EvidenceSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(EvidenceSchemaPath(RepositoryRoot()))));
 

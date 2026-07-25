@@ -102,6 +102,10 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(BoundedQueryResultOperation.Documents, query.ResultOperations);
         Assert.Contains(BoundedQueryResultOperation.Count, query.ResultOperations);
         Assert.True(query.SupportsTotalCount);
+        Assert.Equal(
+            BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField,
+            query.PredicateBindingMode);
+        Assert.Empty(query.PredicateFields);
     }
 
     [Fact]

@@ -14,8 +14,8 @@ dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/El
 dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj
 ```
 
-The replay targets Groundwork `0.0.1-preview.88`. Runs recorded against preview.73, preview.75,
-preview.80, preview.81, or preview.86 are historical provenance only and cannot promote the lane.
+The replay now consumes Groundwork `0.0.1-preview.90`. Runs recorded against preview.73, preview.75,
+preview.80, preview.81, preview.86, or preview.88 are historical provenance only and cannot promote the lane.
 The T043 manifest records one clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
 four-provider recertification required after any later `main` integration.
 
@@ -227,6 +227,12 @@ Three adversarial reviewers inspected the exact candidate range from
   only removed skip; T050–T057 remain open.
 
 ## Preview.88 grouped-trace window recertification (2026-07-25)
+
+The repository subsequently advanced to Groundwork preview.90 from exact
+upstream merge `d16e0f6c4a5c0c875d743820e63a7fab5b53e463`. The preview.88 manifest below
+remains immutable historical evidence. A fresh preview.90 diagnostics
+four-provider promotion run is still required before T057, performance
+promotion, or either diagnostics EF oracle deletion.
 
 Groundwork preview.88 retains the grouped-reduction contract and adds the
 atomic collection-bearing mutation mechanism required by OpenIddict. The
