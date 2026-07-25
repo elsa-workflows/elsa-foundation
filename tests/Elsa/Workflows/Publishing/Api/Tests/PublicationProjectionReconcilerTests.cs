@@ -188,7 +188,8 @@ public sealed class PublicationProjectionReconcilerTests
                     metadata: new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 now,
-                new Dictionary<string, string>());
+                new Dictionary<string, string>(),
+                IncidentStrategyBuiltIns.FaultReference);
     }
 
     private sealed class ServingProjectionObserver(IWorkflowTriggerBindingStore bindingStore) : IWorkflowTriggerIndexObserver

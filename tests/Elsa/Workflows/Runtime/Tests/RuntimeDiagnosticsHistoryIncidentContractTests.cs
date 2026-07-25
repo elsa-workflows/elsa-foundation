@@ -167,7 +167,13 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
             executableNodeId: "node-send",
             severity: IncidentSeverity.Error,
             status: status,
-            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+            resolutionOutcome: status is IncidentStatus.Resolved or IncidentStatus.Suppressed
+                ? new IncidentResolutionOutcome(
+                    "Acme.TestResolution",
+                    _now.AddMinutes(1),
+                    strategy: null,
+                    systemSource: "TestResolution")
+                : null,
             failureType: "ActivityFaulted",
             message: "Activity failed.",
             createdAt: _now,

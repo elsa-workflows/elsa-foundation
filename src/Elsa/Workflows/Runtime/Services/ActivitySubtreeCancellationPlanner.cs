@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -47,7 +48,8 @@ public sealed class ActivitySubtreeCancellationPlanner(
         var incidentChanges = (await incidentStateStore.ListAsync(workflowExecutionId, cancellationToken))
             .Where(incident => incident.ActivityExecutionId is { } activityExecutionId &&
                                scopeIds.Contains(activityExecutionId) &&
-                               incident.Status is IncidentStatus.Open or IncidentStatus.Blocking)
+                               incident.Status is IncidentStatus.Open or IncidentStatus.Blocking &&
+                               incident.ResolutionOutcome is null)
             .OrderBy(incident => incident.IncidentId, StringComparer.Ordinal)
             .Select(incident => Suppress(incident, occurredAt, metadata))
             .ToArray();
@@ -97,7 +99,11 @@ public sealed class ActivitySubtreeCancellationPlanner(
             incident.ExecutableNodeId,
             incident.Severity,
             IncidentStatus.Suppressed,
-            IncidentResolutionAction.None,
+            new IncidentResolutionOutcome(
+                IncidentResolutionActionKinds.SuppressIncident,
+                resolvedAt,
+                strategy: null,
+                systemSource: IncidentResolutionSystemSources.SubtreeCancellation),
             incident.FailureType,
             incident.Message,
             incident.CreatedAt,

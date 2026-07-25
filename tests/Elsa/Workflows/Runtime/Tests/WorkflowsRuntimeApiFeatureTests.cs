@@ -608,7 +608,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                             executableNodeId: "node-1",
                             severity: IncidentSeverity.Error,
                             status: IncidentStatus.Blocking,
-                            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+                            resolutionOutcome: null,
                             failureType: "ActivityFaulted",
                             message: "Activity failed.",
                             createdAt: now,

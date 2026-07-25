@@ -139,7 +139,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             executableNodeId: null,
             severity: IncidentSeverity.Critical,
             status: IncidentStatus.Blocking,
-            resolutionAction: IncidentResolutionAction.WaitForIntervention,
+            resolutionOutcome: new IncidentResolutionOutcome(
+                IncidentResolutionActionKinds.WaitForIntervention,
+                occurredAt,
+                strategy: null,
+                systemSource: IncidentResolutionSystemSources.PoisonedSchedulerWork),
             failureType: IncidentFailureType,
             message: $"Scheduler work item '{record.WorkItemId}' ({record.CommandKind}) was poisoned during dispatch " +
                      $"by handler '{record.HandlerName}' after {record.FailureCount} failure(s): {record.Fault.ToSummaryString()}" +

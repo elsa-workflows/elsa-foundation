@@ -503,7 +503,8 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: node,
             resumeTargets: resumeTargets,
             createdAt: now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable NewEndpointExecutableWithOptions(string path, bool authorize, string policy, long sizeLimit)
@@ -532,7 +533,8 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: withOptions,
             resumeTargets: executable.ResumeTargets,
             createdAt: executable.CreatedAt,
-            compatibilityMetadata: executable.CompatibilityMetadata);
+            compatibilityMetadata: executable.CompatibilityMetadata,
+            incidentStrategy: executable.IncidentStrategy);
     }
 
     private static WorkflowExecutable NewEndpointExecutableWithResponseMode(string path, ResponseMode mode)
@@ -561,7 +563,8 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: withMode,
             resumeTargets: executable.ResumeTargets,
             createdAt: executable.CreatedAt,
-            compatibilityMetadata: executable.CompatibilityMetadata);
+            compatibilityMetadata: executable.CompatibilityMetadata,
+            incidentStrategy: executable.IncidentStrategy);
     }
 
     private static ActivityContract EndpointContract(JsonElement descriptorPayload) =>

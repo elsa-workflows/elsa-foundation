@@ -1,0 +1,68 @@
+openapi: 3.1.0
+info:
+  title: Elsa Workflow Publishing Incident Strategy Discovery
+  version: 1.0.0
+paths:
+  /publishing/incident-strategies:
+    get:
+      operationId: listIncidentStrategies
+      summary: List registered incident strategy descriptors and the effective publishing default
+      security:
+        - elsaPermissions:
+            - workflow-publishing.read
+      responses:
+        "200":
+          description: Deterministically ordered descriptor catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentStrategiesResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: workflow-publishing.read permission required
+components:
+  securitySchemes:
+    elsaPermissions:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /identity/connect/token
+          scopes:
+            workflow-publishing.read: Read workflow publishing metadata
+  schemas:
+    IncidentStrategyReference:
+      type: object
+      additionalProperties: false
+      required: [alias, version]
+      properties:
+        alias:
+          type: string
+          minLength: 1
+        version:
+          type: string
+          minLength: 1
+    IncidentStrategyDescriptor:
+      type: object
+      additionalProperties: false
+      required: [alias, version, displayName]
+      properties:
+        alias:
+          type: string
+        version:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: [string, "null"]
+    IncidentStrategiesResponse:
+      type: object
+      additionalProperties: false
+      required: [items, defaultStrategy]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncidentStrategyDescriptor"
+        defaultStrategy:
+          $ref: "#/components/schemas/IncidentStrategyReference"

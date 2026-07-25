@@ -33,7 +33,8 @@ internal static class StructuralExecutionTestSupport
                     LocalResumeTargetId: WaitingActivity.ResumeTargetKey),
                 StringComparer.Ordinal),
             createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     public static ExecutableNode NewStructuralNode(string nodeId, Type activityType, params ExecutableNode[] children) =>
         new(

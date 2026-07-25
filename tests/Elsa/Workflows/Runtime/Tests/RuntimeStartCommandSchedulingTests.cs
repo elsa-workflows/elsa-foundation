@@ -3,10 +3,14 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Strategies;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Primitives.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -71,6 +75,55 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal("node-a", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MissingPinnedStrategyRecordsWaitIncidentAndKeepsWorkflowPending()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        var strategy = new IncidentStrategyReference("Contoso.Missing", "1");
+        var executable = NewExecutable(["node-start"], ["node-start"], strategy);
+        await executableStore.SaveAsync(executable);
+        await workflowStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            executable.Identity,
+            WorkflowExecutionStatus.Pending,
+            null,
+            _now,
+            null,
+            _now,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>()));
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: workflowStore,
+            incidentStateStore: incidentStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var services = new ServiceCollection();
+        services.AddIncidentStrategy<FaultIncidentStrategy>(IncidentStrategyBuiltIns.Fault);
+        using var provider = services.BuildServiceProvider();
+        var handler = new WorkflowStartSchedulerWorkHandler(
+            executableStore,
+            queue,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(_now),
+            incidentStrategyCatalog: provider.GetRequiredService<IIncidentStrategyCatalog>(),
+            checkpointCommitter: committer);
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity));
+
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionStatus.Pending, (await workflowStore.FindAsync("wfexec-1"))!.Status);
+        var incident = Assert.Single(await incidentStore.ListBlockingAsync("wfexec-1"));
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(IncidentResolutionSystemSources.MissingStrategyImplementation, incident.ResolutionOutcome.SystemSource);
+        Assert.Equal(strategy, incident.ResolutionOutcome.Strategy);
     }
 
     [Fact]
@@ -469,13 +522,21 @@ public sealed class RuntimeStartCommandSchedulingTests
             timeProvider: new FixedTimeProvider(_now),
             workflowExecutableStore: executableStore);
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
+    private static WorkflowExecutable NewExecutable(
+        IReadOnlyCollection<string> nodeIds,
+        IReadOnlyCollection<string> startNodeIds,
+        IncidentStrategyReference? incidentStrategy = null) =>
         new(
             identity: NewIdentity(),
             rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            incidentStrategy: incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
     {

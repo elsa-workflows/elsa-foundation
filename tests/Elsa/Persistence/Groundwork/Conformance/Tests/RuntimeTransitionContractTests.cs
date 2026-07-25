@@ -319,7 +319,7 @@ public sealed class RuntimeTransitionContractTests
             executableNodeId: null,
             IncidentSeverity.Error,
             IncidentStatus.Open,
-            IncidentResolutionAction.None,
+            null,
             failureType: "System.Exception",
             message,
             Now,

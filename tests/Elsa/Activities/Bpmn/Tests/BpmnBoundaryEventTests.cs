@@ -189,7 +189,7 @@ public sealed class BpmnBoundaryEventTests
         var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
-        Assert.Equal(IncidentResolutionAction.Continue, incident.ResolutionAction);
+        Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.NotNull(incident.ResolvedAt);
         Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
         Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);

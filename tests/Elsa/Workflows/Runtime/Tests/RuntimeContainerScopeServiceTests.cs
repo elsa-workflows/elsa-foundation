@@ -62,7 +62,8 @@ public sealed class RuntimeContainerScopeServiceTests
             executableRoot,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
         await _activities.SaveAsync(State("parent", executableRoot.ExecutableNodeId));
         var request = new LoopIterationScopeRequest("loop", "iteration-0", Values(("item", "apple")));
         var state = State("body", node.ExecutableNodeId, "parent") with
@@ -287,6 +288,7 @@ public sealed class RuntimeContainerScopeServiceTests
             dependencies: null,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: null,
             workflowVariables: workflowVariables);
 
@@ -345,7 +347,8 @@ public sealed class RuntimeContainerScopeServiceTests
             parent,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
         await _activities.SaveAsync(State("parent", parentNodeId));
         return (executable, body);
     }

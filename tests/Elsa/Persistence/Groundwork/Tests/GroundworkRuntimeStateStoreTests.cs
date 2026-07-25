@@ -760,7 +760,7 @@ public sealed class GroundworkRuntimeStateStoreTests
         executableNodeId: null,
         IncidentSeverity.Error,
         status,
-        IncidentResolutionAction.None,
+        null,
         failureType: "System.Exception",
         message: message,
         createdAt: DateTimeOffset.UnixEpoch,

@@ -93,6 +93,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>());
         services.TryAddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IncidentStrategyRuntimeDefaultsMarker)))
+        {
+            services.AddSingleton(new IncidentStrategyRuntimeDefaultsMarker());
+            services.AddIncidentStrategy<FaultIncidentStrategy>(IncidentStrategyBuiltIns.Fault);
+            services.AddIncidentStrategy<ContinueWithIncidentsIncidentStrategy>(IncidentStrategyBuiltIns.ContinueWithIncidents);
+        }
         services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
         services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddScoped<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
@@ -265,6 +271,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, PoisonedSchedulerWorkIncidentObserver>());
+        services.TryAddScoped<IncidentResolutionBatchExecutor>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, IncidentStrategyResolutionDrainObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
@@ -357,5 +365,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         logger.LogDebug(
             "Resolved {PipelineKind} runtime execution pipeline with {Count} middleware:{NewLine}{Steps}",
             plan.PipelineKind, plan.Steps.Count, Environment.NewLine, steps);
+    }
+
+    private sealed class IncidentStrategyRuntimeDefaultsMarker
+    {
     }
 }

@@ -107,7 +107,8 @@ public sealed class UndeclaredPayloadTypeResumeTests : IAsyncDisposable
                     Event.ResumeTargetId)
             },
             new DateTimeOffset(2026, 7, 23, 0, 0, 0, TimeSpan.Zero),
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode EventNode()

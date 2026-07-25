@@ -235,7 +235,8 @@ public sealed class WorkflowTriggerIndexerTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowTriggerBinding StaleBinding(string artifactId, string nodeId) =>
         new(

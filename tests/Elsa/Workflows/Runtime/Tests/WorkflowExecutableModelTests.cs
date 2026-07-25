@@ -180,7 +180,8 @@ public sealed class WorkflowExecutableModelTests
                 root,
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 DateTimeOffset.UnixEpoch,
-                new Dictionary<string, string>())
+                new Dictionary<string, string>(),
+                IncidentStrategyBuiltIns.FaultReference)
             : new WorkflowExecutable(
                 NewIdentity(),
                 root,
@@ -188,7 +189,8 @@ public sealed class WorkflowExecutableModelTests
                 DateTimeOffset.UnixEpoch,
                 new Dictionary<string, string>(),
                 inputContract,
-                dependencies);
+                dependencies,
+                IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode NewNode(string nodeId, IReadOnlyCollection<ExecutableNode>? children = null) =>

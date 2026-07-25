@@ -328,7 +328,8 @@ public sealed class WorkflowStartLineageTests
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutableSourceReference NewSourceReference() =>
         new(

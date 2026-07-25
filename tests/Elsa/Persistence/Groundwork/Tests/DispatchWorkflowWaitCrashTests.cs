@@ -697,7 +697,8 @@ public sealed class DispatchWorkflowWaitCrashTests
             Now,
             new Dictionary<string, string>(),
             new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
-            []);
+            [],
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable NewParentExecutable()
@@ -755,7 +756,8 @@ public sealed class DispatchWorkflowWaitCrashTests
                     ChildExecutableIdentity.ArtifactId,
                     ChildExecutableIdentity.ArtifactHash,
                     [node.ExecutableNodeId])
-            ]);
+            ],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     // Mirrors the node-scoped map the production ExecutableNodeCompiler emits: scoped key/id + local id,

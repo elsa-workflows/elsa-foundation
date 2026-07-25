@@ -133,7 +133,7 @@ public sealed class DispatchWorkflowEndToEndTests
                 "node-child",
                 IncidentSeverity.Error,
                 IncidentStatus.Blocking,
-                IncidentResolutionAction.FaultWorkflow,
+                null,
                 "SecretException",
                 "secret child message",
                 DispatchWorkflowRuntimeTestFixture.Now,

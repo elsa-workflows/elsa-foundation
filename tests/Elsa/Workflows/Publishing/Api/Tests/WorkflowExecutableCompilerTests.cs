@@ -30,6 +30,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -127,6 +128,45 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotEqual(unauthored.Identity.ArtifactHash, coalesced.Identity.ArtifactHash);
         Assert.NotEqual(unauthored.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
         Assert.NotEqual(coalesced.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Resolves_and_pins_the_authored_or_effective_default_incident_strategy_into_behavioral_identity()
+    {
+        var now = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
+        var catalog = new TestIncidentStrategyCatalog(
+            [
+                IncidentStrategyBuiltIns.Fault,
+                IncidentStrategyBuiltIns.ContinueWithIncidents
+            ],
+            IncidentStrategyBuiltIns.FaultReference);
+        var root = Node("write-one", Text("hello"));
+        var inherited = await Compiler(WorkflowVersion(root), catalog).CompileAsync(NewRequest(now));
+        var continued = await Compiler(
+                WorkflowVersion(root, incidentStrategy: new IncidentStrategyReference("continuewithincidents", "1")),
+                catalog)
+            .CompileAsync(NewRequest(now));
+
+        Assert.Equal(IncidentStrategyBuiltIns.FaultReference, inherited.IncidentStrategy);
+        Assert.Equal(IncidentStrategyBuiltIns.ContinueWithIncidentsReference, continued.IncidentStrategy);
+        Assert.Equal("ContinueWithIncidents", continued.IncidentStrategy.Alias);
+        Assert.NotEqual(inherited.Identity.ArtifactHash, continued.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Rejects_an_unknown_authored_incident_strategy_during_compilation()
+    {
+        var catalog = new TestIncidentStrategyCatalog(
+            [IncidentStrategyBuiltIns.Fault],
+            IncidentStrategyBuiltIns.FaultReference);
+        var compiler = Compiler(
+            WorkflowVersion(Node("write-one", Text("hello")), incidentStrategy: new IncidentStrategyReference("example.custom", "42")),
+            catalog);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("example.custom/42", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -568,7 +608,8 @@ public sealed class WorkflowExecutableCompilerTests
             placed.Root,
             placed.ResumeTargets,
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
         var opaque = new OpaqueOutput("opaque");
 
         var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
@@ -2094,7 +2135,9 @@ public sealed class WorkflowExecutableCompilerTests
         public ValueTask OnResumeAsync() => ValueTask.CompletedTask;
     }
 
-    private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion)
+    private WorkflowExecutableCompiler Compiler(
+        WorkflowDefinitionVersion workflowVersion,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
@@ -2102,7 +2145,8 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeVersionStore(workflowVersion),
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             _activityStructureService,
-            registry);
+            registry,
+            incidentStrategyCatalog: incidentStrategyCatalog);
     }
 
     private WorkflowExecutableCompiler CompilerWithPublication(
@@ -2119,13 +2163,34 @@ public sealed class WorkflowExecutableCompilerTests
     private static WorkflowDefinitionVersion WorkflowVersion(
         ActivityNode? rootActivity,
         IReadOnlyCollection<InputDefinition>? inputs = null,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+        IncidentStrategyReference? incidentStrategy = null) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState(variables ?? [], rootActivity, inputs ?? [], [], null)
+            State = new WorkflowDefinitionState(
+                variables ?? [],
+                rootActivity,
+                inputs ?? [],
+                [],
+                incidentStrategy is null ? null : new WorkflowStrategyOptions { IncidentStrategy = incidentStrategy })
         };
+
+    private sealed class TestIncidentStrategyCatalog(
+        IReadOnlyCollection<IncidentStrategyDescriptor> descriptors,
+        IncidentStrategyReference defaultStrategy) : IIncidentStrategyCatalog
+    {
+        private readonly IReadOnlyDictionary<IncidentStrategyReference, IncidentStrategyDescriptor> _descriptors =
+            descriptors.ToDictionary(descriptor => descriptor.Reference);
+
+        public IncidentStrategyReference DefaultStrategy { get; } = defaultStrategy;
+
+        public IReadOnlyCollection<IncidentStrategyDescriptor> List() => descriptors;
+
+        public bool TryGet(IncidentStrategyReference reference, out IncidentStrategyDescriptor descriptor) =>
+            _descriptors.TryGetValue(reference, out descriptor!);
+    }
 
     private static WorkflowDefinitionVersion WorkflowVersionWithCadence(
         ActivityNode? rootActivity,
