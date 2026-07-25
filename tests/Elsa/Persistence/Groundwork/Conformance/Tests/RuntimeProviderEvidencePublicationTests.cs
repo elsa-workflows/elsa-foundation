@@ -13,7 +13,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
 {
     private const string PublishOptIn = "ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE";
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
-    private const string EvidenceVersion = "0.0.1-preview.88";
+    private const string EvidenceVersion = "0.0.1-preview.90";
     private const string SourceCommit = "ELSA_GROUNDWORK_SOURCE_COMMIT";
     private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
     private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";

@@ -30,7 +30,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
             generation,
             "sqlite.json")))!.AsObject();
 
-        Assert.Equal("0.0.1-preview.88", ledgerVersion);
+        Assert.Equal("0.0.1-preview.90", ledgerVersion);
         var artifactVersion = artifact["testedCandidate"]!["groundworkPackageFamilyVersion"]!.GetValue<string>();
         Assert.Equal("0.0.1-preview.60", artifactVersion);
         Assert.NotEqual(ledgerVersion, artifactVersion);

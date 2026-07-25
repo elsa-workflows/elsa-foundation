@@ -26,7 +26,11 @@ public static class CheckpointFenceEvidenceImporter
         new(
             "0.0.1-preview.86",
             "versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json",
-            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24")
+            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24"),
+        new(
+            "0.0.1-preview.88",
+            "versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json",
+            "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2")
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
