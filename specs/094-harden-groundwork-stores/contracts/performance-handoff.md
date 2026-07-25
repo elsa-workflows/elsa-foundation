@@ -55,8 +55,8 @@ PostgreSQL, and MongoDB use the opt-in external-provider matrix. Spec 095 retain
 Groundwork `preview.60` / Identity manifest v1.0.4 evidence for all four topologies as immutable historical
 provenance. Current execution uses the repository-pinned `preview.86` family and current Identity manifest; no
 historical `preview.60`/`preview.76`/`preview.77`/`preview.80`/`preview.81` artifact is linked as an active
-exact-head pass. Preview.86 has no active provider evidence until the later exact-source publication and
-mechanical import.
+exact-head pass. The current `preview.86` checkpoint/fence slice is mechanically imported as 36 exact-source
+records across all four providers; it is partial provider evidence only and does not complete a coverage row.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
 
