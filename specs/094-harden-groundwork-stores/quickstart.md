@@ -28,14 +28,20 @@ The original checkpoint/fence attachment and its unversioned evidence paths reta
 `0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
 versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
 lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The current
-`0.0.1-preview.88` slice awaits exact-source mechanical publication and import. All rows remain below
+`0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and is imported mechanically by tuple. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
 
 **2026-07-25 preview.88 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.88` release built from Groundwork merge
-`6e79f7836ac7bb13c0153771531162886ca49971`. Exact Elsa source provenance, four-provider publication totals,
-and the retained attachment digest are recorded only after the external-staging publisher and tuple-keyed
-import complete.
+`6e79f7836ac7bb13c0153771531162886ca49971`. Publication ran from exact Elsa source
+`b0545e166fd45aa872f265c88782a7034a09c357` (tree
+`613afd96195b4ef28546a67f099d259e5ffbe448`) and passed the four-provider publisher gate
+(1/1, 2m33s). The importer retained 36 records with attachment SHA-256
+`f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2`.
+Root verification passed the full architecture suite (313), focused publisher tests (9 passed,
+four explicit publication tests skipped), benchmark protocol tests (60), and the OpenTelemetry adapter suite (75).
+The pre-import audit recomputed all 36 artifact hashes, confirmed the exact 37-file staged set and one
+exact-source provenance tuple, and found no connection-value or credential material.
 
 **2026-07-25 preview.86 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.86` release built from Groundwork

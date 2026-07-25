@@ -15,6 +15,10 @@ public sealed class GroundworkCoverageLedgerTests
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
+    private const string CurrentCheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string CurrentCheckpointFenceAttachmentSha256 =
+        "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2";
     private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
     private const string PreviousCheckpointFenceAttachmentSha256 =
@@ -33,6 +37,9 @@ public sealed class GroundworkCoverageLedgerTests
     private const string PreviousCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
     private const string PreviousCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
     private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
+    private const string CurrentCheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
+    private const string CurrentCheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
+    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -115,15 +122,17 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview88_checkpoint_fence_evidence_awaits_mechanical_import()
+    public void Preview88_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
     {
-        var entries = Entries(ReadLedger()).ToArray();
-        Assert.DoesNotContain(
-            entries.SelectMany(entry => entry["providerEvidence"]!.AsObject())
-                .SelectMany(pair => pair.Value!.AsArray())
-                .OfType<JsonObject>(),
-            record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion);
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity);
 
+        var entries = Entries(ReadLedger()).ToArray();
         Assert.DoesNotContain(
             entries,
             entry => entry["status"]?.GetValue<string>() is
@@ -131,7 +140,7 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview86_exact_attachment_guard_allows_valid_later_evidence_outside_its_closed_slice()
+    public void Preview88_exact_attachment_guard_allows_valid_later_evidence_outside_its_closed_slice()
     {
         var ledger = ReadLedger();
         var record = EvidenceRecord(
@@ -144,12 +153,12 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Empty(CreateEvidenceValidator().Validate(ledger));
         AssertCheckpointFenceGeneration(
-            PreviousPublishedGroundworkVersion,
-            PreviousCheckpointFenceAttachmentRelativePath,
-            PreviousCheckpointFenceAttachmentSha256,
-            PreviousCheckpointFenceEvidenceCommit,
-            PreviousCheckpointFenceEvidenceTree,
-            PreviousCheckpointFenceRunIdentity,
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity,
             ledger);
     }
 
