@@ -1,6 +1,9 @@
 using CShells.Features;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Groundwork.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
@@ -18,9 +21,16 @@ public static class GroundworkReferenceDeploymentSchemaSelector
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        return Select(context) == typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema)
-            ? services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>()
-            : services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
+        return Select(context) switch
+        {
+            var type when type == typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema) =>
+                AddDiagnosticsDeployment<GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema>(services),
+            var type when type == typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema) =>
+                AddDiagnosticsDeployment<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(services),
+            var type when type == typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema) =>
+                services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>(),
+            _ => services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>()
+        };
     }
 
     /// <summary>
@@ -46,10 +56,7 @@ public static class GroundworkReferenceDeploymentSchemaSelector
             .ToArray();
 
         var unsupported = schemaFeatures
-            .Where(feature => !string.Equals(
-                feature.Marker,
-                GroundworkSchemaFeatureMetadata.Identity,
-                StringComparison.Ordinal))
+            .Where(feature => !IsSupportedMarker(feature.Marker))
             .ToArray();
         if (unsupported.Length > 0)
         {
@@ -60,8 +67,34 @@ public static class GroundworkReferenceDeploymentSchemaSelector
                 $"Register a deployment schema mapping for every '{GroundworkSchemaFeatureMetadata.Key}' value before enabling the feature.");
         }
 
-        return schemaFeatures.Length == 0
-            ? typeof(GroundworkAllFeaturesDeploymentSchema)
-            : typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema);
+        var identityEnabled = schemaFeatures.Any(feature => string.Equals(
+            feature.Marker,
+            GroundworkSchemaFeatureMetadata.Identity,
+            StringComparison.Ordinal));
+        var diagnosticsEnabled = schemaFeatures.Any(feature => string.Equals(
+            feature.Marker,
+            GroundworkSchemaFeatureMetadata.Diagnostics,
+            StringComparison.Ordinal));
+
+        return (identityEnabled, diagnosticsEnabled) switch
+        {
+            (true, true) => typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema),
+            (true, false) => typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema),
+            (false, true) => typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema),
+            _ => typeof(GroundworkAllFeaturesDeploymentSchema)
+        };
+    }
+
+    private static bool IsSupportedMarker(string? marker) =>
+        string.Equals(marker, GroundworkSchemaFeatureMetadata.Identity, StringComparison.Ordinal) ||
+        string.Equals(marker, GroundworkSchemaFeatureMetadata.Diagnostics, StringComparison.Ordinal);
+
+    private static IServiceCollection AddDiagnosticsDeployment<TDeploymentSource>(IServiceCollection services)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, IDiagnosticRecordDeploymentManifestSource, new()
+    {
+        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.TryAddSingleton<IDiagnosticRecordDeploymentManifestSource>(
+            provider => provider.GetRequiredService<TDeploymentSource>());
+        return services;
     }
 }

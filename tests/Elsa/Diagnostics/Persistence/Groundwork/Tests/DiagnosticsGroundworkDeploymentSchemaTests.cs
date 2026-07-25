@@ -44,7 +44,7 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
     }
 
     [Fact]
-    public void Feature_registers_the_manifest_contributor_without_claiming_store_activation()
+    public void Feature_registers_the_manifest_contributor_and_both_diagnostics_store_replacements()
     {
         var services = new ServiceCollection();
 
@@ -54,9 +54,12 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
             descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             descriptor.ImplementationType == typeof(DiagnosticsGroundworkStorageManifestSource)));
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
-        Assert.DoesNotContain(services, descriptor =>
-            descriptor.ServiceType.FullName is "Elsa.Diagnostics.OpenTelemetry.Core.Contracts.IOpenTelemetryStore" or
-            "Elsa.Diagnostics.StructuredLogs.Core.Contracts.IStructuredLogStore");
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType.FullName == "Elsa.Diagnostics.OpenTelemetry.Core.Contracts.IOpenTelemetryStore" &&
+            descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType.FullName == "Elsa.Diagnostics.StructuredLogs.Core.Contracts.IStructuredLogStore" &&
+            descriptor.ImplementationFactory is not null);
     }
 
     [Fact]
@@ -98,6 +101,9 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
 
         var source = provider.GetRequiredService<IPhysicalSchemaManifestSource>();
         Assert.IsType<DiagnosticsGroundworkDeploymentSchema>(source);
+        var deployment = provider.GetRequiredService<IDiagnosticRecordDeploymentManifestSource>();
+        Assert.IsType<DiagnosticsGroundworkDeploymentSchema>(deployment);
+        Assert.Equal(5, deployment.CreateDeploymentManifest().Streams.Count);
         Assert.Equal(
             new DiagnosticsGroundworkDeploymentSchema().CreateManifest().StorageUnits.Select(unit => unit.Identity.Value).Order(),
             source.CreateManifest().StorageUnits.Select(unit => unit.Identity.Value).Order());

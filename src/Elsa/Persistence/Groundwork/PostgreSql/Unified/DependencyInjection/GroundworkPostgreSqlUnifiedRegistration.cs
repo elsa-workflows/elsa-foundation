@@ -4,7 +4,10 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Groundwork.DiagnosticRecords;
+using Groundwork.PostgreSql.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 
@@ -58,6 +61,8 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddPostgreSqlGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
+            _ => PostgreSqlDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
         services.AddGroundworkUnifiedStoreFamilies();
         services.AddGroundworkWorkflowRunHealth(
             _ => new Npgsql.NpgsqlConnection(connectionString),

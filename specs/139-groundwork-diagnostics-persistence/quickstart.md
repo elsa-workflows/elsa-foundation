@@ -37,6 +37,13 @@ handoff. This lane consumes the resulting diagnostics verdict and retained artif
 create a private harness or self-authorize a replacement gate. Keep the EF oracle until #646 records
 a passing or program-owner-ratified verdict.
 
+On 2026-07-25 the program owner ratified expanding the supplied bundle from 12 to 13 workloads with
+`diagnostics-durable-history`, split into Structured Logs and OpenTelemetry suboperations. SQLite
+uses the retained same-provider EF oracle; SQL Server, PostgreSQL, and MongoDB use absolute
+operational budgets plus correctness digests, native plans, and Groundwork physical-form evidence.
+This records the workload contract only: T050 and T051 remain open until #646 retains and imports the
+measured verdicts.
+
 ## Replay-base evidence (not promotion evidence)
 
 On 2026-07-24, before integrating the then-current `main`/Groundwork preview.81, the replay implementation
@@ -140,6 +147,28 @@ provider-bounded query contract. The pending contract test is retained as an exp
 `valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks
 trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
 task, package/solution configuration, or task checkbox was changed by this intake.
+
+## Host-composition correction pending exact-head recertification (2026-07-25)
+
+Inspection found that the original `DiagnosticsGroundworkPersistence` feature contributed only its
+document manifest. The two concrete Groundwork adapters were not catalog-discoverable shell features, so
+enabling the composite host feature did not select either `IOpenTelemetryStore` or
+`IStructuredLogStore`. The correction makes that composite feature atomically delegate to both adapters,
+marks it with the `elsa-diagnostics` schema contribution, and extends the reference deployment-schema
+selector with diagnostics-only and identity-plus-diagnostics forms. The four unified provider leaves now
+register the provider-native diagnostic-record session factory required by the selected store bindings.
+
+`Elsa.Server` now references the combined diagnostics Groundwork composition project and selects
+`DiagnosticsGroundworkPersistence` in `shells.json`; only its two diagnostics EF project references were
+removed. Identity and all other EF oracle work remains outside this correction. A real SQLite CShell
+activation test pre-applies the combined document schema and all five diagnostic-record streams, then
+asserts both Groundwork stores resolve with no EF diagnostics store.
+
+On the exact 2026-07-25 composition candidate, the diagnostics persistence suite passed **148/148**,
+the combined deployment-schema suite passed **6/6**, the real SQLite activation fixture passed
+**5/5**, and the complete unified-host suite passed **52/52**. `Elsa.Server` then built in Release
+with **0 warnings and 0 errors**. These results complete T045 and T049. They do not certify the
+four-provider promotion matrix, performance, or EF deletion; those remain under T050-T057.
 
 ## Final dependency audit
 

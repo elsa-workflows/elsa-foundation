@@ -3,7 +3,10 @@ using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Groundwork.DiagnosticRecords;
+using Groundwork.MongoDb.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 
@@ -58,6 +61,8 @@ public static class GroundworkMongoDbUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
         services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
+            _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
         return services.AddGroundworkUnifiedStoreFamilies();
     }
 }
