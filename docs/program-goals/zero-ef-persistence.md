@@ -34,7 +34,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 ## Active Objectives
 
 1. Finish Spec 094 current-head provider evidence publication and consume linked diagnostics evidence without advancing incomplete rows.
-2. Consume #646 accepted-shape verdicts for every ALL32 performance lane and remediate every Redesign or Blocked result.
+2. Preserve ALL32 as the immutable historical floor, consume #646 accepted-shape verdicts for every current ALL32 + DIAGNOSTICS2 lane, and remediate every Redesign or Blocked result.
 3. Complete the production-shaped four-provider host matrix, operational documentation, and generated-map refresh.
 4. Complete diagnostics #642's remaining preview.88 provider-evidence, performance, and EF-removal gates; replay checkpoints #1048 and #1072 are on `main`, and stale PR #660 is closed as historical reference.
 5. Complete #647 only after every correctness, provider, performance, reference-host, and transitive-dependency gate passes.

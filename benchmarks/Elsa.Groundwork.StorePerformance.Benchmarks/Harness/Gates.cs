@@ -46,11 +46,13 @@ public static class GateEvaluator
 {
     public static GateResult Evaluate(GatePolicy policy, ComparisonResult comparison)
     {
-        if (comparison.WorkloadId == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId)
+        if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(
+                comparison.WorkloadId,
+                out var blockedReason))
             return Blocked(
                 policy,
                 comparison,
-                $"Workload '{comparison.WorkloadId}' is blocked from benchmark gating: {ReproducibleWorkloadScenarioCatalog.BlockedReasonCode}.");
+                $"Workload '{comparison.WorkloadId}' is blocked from benchmark gating: {blockedReason}.");
         if (!comparison.Complete || !comparison.CorrectnessEqual) return Blocked(policy, comparison, comparison.BlockReason ?? "Comparison is incomplete.");
         var oracleOperations = comparison.OracleOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();
         var targetOperations = comparison.TargetOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();

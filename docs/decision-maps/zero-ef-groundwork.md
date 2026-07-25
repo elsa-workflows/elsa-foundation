@@ -228,7 +228,7 @@ What reproducible datasets, payload sizes, concurrency levels, warm/cold runs, m
 
 ### Answer
 
-Spec 094 now supplies versioned correctness workloads, fixed input/result digests, exact native-route prerequisites, and closed ALL32 ledger mapping to [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646). Groundwork physical-form benchmarking remains [Groundwork #50](https://github.com/valence-works/Groundwork/issues/50). No lane may advance on missing, Redesign, or Blocked verdicts, and no timing verdict is inferred from a passing correctness matrix.
+Spec 094 now supplies versioned correctness workloads, fixed input/result digests, exact native-route prerequisites, and a closed current mapping of the immutable ALL32 floor plus the two additive diagnostics rows to [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646). Groundwork physical-form benchmarking remains [Groundwork #50](https://github.com/valence-works/Groundwork/issues/50). No lane may advance on missing, Redesign, or Blocked verdicts, and no timing verdict is inferred from a passing correctness matrix.
 
 ## elsa-store-migration: In What Vertical Order Do Elsa Stores Move?
 

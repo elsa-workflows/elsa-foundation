@@ -160,7 +160,10 @@ public sealed class WorkloadCatalog
                 !SemanticInputMatches(actual.Input.Values, successor.Parameters) ||
                 !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal))
                 throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible v1.1 contract vector, including every semantic input field.");
-            RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
+            if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(actual.Id, out var blockedReason))
+                RequireAdmission(actual, "blocked", blockedReason);
+            else
+                RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
             return;
         }
 
@@ -289,7 +292,7 @@ public sealed class WorkloadCatalog
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
-        ["diagnostics.json"] = "056dcb72e3e7b8f27cd5cfef1088c1ef00e960ff3bd6fc978d05a8ab167a498a"
+        ["diagnostics.json"] = "16ba05d98250fa5917baf40116b454a1106a3247cde2a94444a97cd49b53f8ad"
     };
     private static readonly IReadOnlyDictionary<string, ExpectedWorkload> Expected = new Dictionary<string, ExpectedWorkload>(StringComparer.Ordinal)
     {

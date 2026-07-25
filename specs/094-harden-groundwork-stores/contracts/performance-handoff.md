@@ -79,11 +79,13 @@ admission reject the blocked Secret contract even when supplied artifacts claim 
 `diagnostics.json` contract maps to the additive `diagnostics-structured-log-store` and
 `diagnostics-open-telemetry-store` ledger rows and keeps both public-store suboperations visible in
 the retained artifacts. SQLite compares the retained same-provider EF diagnostics oracle. SQL
-Server, PostgreSQL, and MongoDB have no same-provider EF diagnostics oracle and therefore use the
-ratified workload-specific absolute operational budgets plus correctness digest, native diagnostic
+Server, PostgreSQL, and MongoDB have no same-provider EF diagnostics oracle and therefore require
+workload-specific numeric absolute operational budgets plus correctness digest, native diagnostic
 record/catalog plans, Groundwork physical-form evidence, provider-work/round-trip/storage evidence,
-and queue shed/drain/restart outcomes. Those three provider gates are not inferred from the default
-ratio policy.
+and queue shed/drain/restart outcomes. The policy shape is ratified, but no numeric budgets or
+executable absolute-budget gate are yet approved. `diagnostics-durable-history` remains blocked under
+`gate.diagnostics.absolute-budget-required`; those three provider verdicts cannot be inferred from
+the default ratio policy.
 
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with

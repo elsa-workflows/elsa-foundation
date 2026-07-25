@@ -68,7 +68,7 @@
           "reopen preserves committed history and cross-scope queries remain empty",
           "all scale-bearing queries expose provider-native bounded plans"
         ],
-        "timingGate": "SQLite compares the retained same-provider EF oracle; SQL Server, PostgreSQL, and MongoDB use the ratified absolute operational budgets with correctness, plan, and physical-form evidence."
+        "timingGate": "SQLite compares the retained same-provider EF oracle. SQL Server, PostgreSQL, and MongoDB require independently reviewed numeric absolute budgets plus an executable absolute-budget gate; neither exists yet."
       },
       "efContractBaseline": {
         "baselineIdentity": "retained-sqlite-diagnostics-ef-oracle",
@@ -77,8 +77,8 @@
         "purpose": "The retained diagnostics EF implementation is the SQLite oracle only; #646 owns live execution and deletion follows the accepted verdict."
       },
       "benchmarkAdmission": {
-        "status": "ready",
-        "reason": "benchmark.ready"
+        "status": "blocked",
+        "reason": "gate.diagnostics.absolute-budget-required"
       },
       "physicalFormsFor646": [
         "specialized-diagnostic-record-streams-with-shared-document-catalogs",

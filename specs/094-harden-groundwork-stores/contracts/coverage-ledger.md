@@ -74,6 +74,8 @@ The job is container-free and does not create provider or restart evidence. SQLi
 
 | Row | Contract / state | Target outcome | Target scope | Authority | Initial gap | Performance mapping |
 |---|---|---|---|---|---|---|
+| `diagnostics-open-telemetry-store` | `IOpenTelemetryStore` | Specialized primitive | Scoped | #642 | Current four-provider evidence and verdict incomplete | `diagnostics-durable-history` |
+| `diagnostics-structured-log-store` | `IStructuredLogStore` | Specialized primitive | Scoped | #642 | Current four-provider evidence and verdict incomplete | `diagnostics-durable-history` |
 | `runtime-activity-execution-inspection` | `IActivityExecutionInspectionStore`, `IActivityExecutionInspectionWriter` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Not hot path |
 | `runtime-activity-execution-state` | `IActivityExecutionStateStore` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Checkpoint bundle representative |
 | `runtime-bookmark-state` | `IBookmarkStateStore` | Ordinary document + bounded route | Scoped | #645 | Client filtering / matrix | `bookmark-lookup` |

@@ -152,13 +152,17 @@ public sealed class GroundworkPerformanceHandoffTests
             Assert.Equal("not-executed", workload["efContractBaseline"]!["executionStatus"]!.GetValue<string>());
             Assert.Equal("#646", workload["efContractBaseline"]!["executionOwner"]!.GetValue<string>());
             var admission = workload["benchmarkAdmission"]!.AsObject();
+            var expectedBlockedReason = id switch
+            {
+                "diagnostics-durable-history" => "gate.diagnostics.absolute-budget-required",
+                "secret-create-read-list" => "comparator.secret.real-ef-required",
+                _ => null
+            };
             Assert.Equal(
-                id == "secret-create-read-list" ? "blocked" : "ready",
+                expectedBlockedReason is null ? "ready" : "blocked",
                 admission["status"]!.GetValue<string>());
             Assert.Equal(
-                id == "secret-create-read-list"
-                    ? "comparator.secret.real-ef-required"
-                    : "benchmark.ready",
+                expectedBlockedReason ?? "benchmark.ready",
                 admission["reason"]!.GetValue<string>());
         }
     }

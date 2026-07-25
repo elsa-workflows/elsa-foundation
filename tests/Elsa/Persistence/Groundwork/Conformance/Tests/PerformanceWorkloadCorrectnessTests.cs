@@ -16,6 +16,7 @@ public sealed class PerformanceWorkloadCorrectnessTests
             ["bookmark-lookup"] = ("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
             ["checkpoint-commit"] = ("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = ("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
+            ["diagnostics-durable-history"] = ("448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667", "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7"),
             ["due-timer-selection"] = ("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
             ["iam-normalized-lookup-update"] = ("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = ("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
@@ -71,7 +72,7 @@ public sealed class PerformanceWorkloadCorrectnessTests
             Assert.Equal(actual[id], coveredRows);
         }
 
-        Assert.Equal(32, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(34, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -95,7 +96,7 @@ public sealed class PerformanceWorkloadCorrectnessTests
                 workload["requiredProviderEvidence"]!.AsObject(),
                 prerequisite => Assert.False(string.IsNullOrWhiteSpace(prerequisite.Value!.GetValue<string>())));
             Assert.Equal(
-                id == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ? "blocked" : "ready",
+                ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(id, out _) ? "blocked" : "ready",
                 workload["benchmarkAdmission"]!["status"]!.GetValue<string>());
         }
 
@@ -122,6 +123,11 @@ public sealed class PerformanceWorkloadCorrectnessTests
             ReproducibleWorkloadScenarioCatalog.BlockedReasonCode,
             secret["benchmarkAdmission"]!["reason"]!.GetValue<string>());
         Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
+
+        var diagnostics = workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode,
+            diagnostics["benchmarkAdmission"]!["reason"]!.GetValue<string>());
     }
 
     [Fact]
@@ -155,7 +161,8 @@ public sealed class PerformanceWorkloadCorrectnessTests
     [
         Path.Combine(WorkloadsDirectory, "runtime.json"),
         Path.Combine(WorkloadsDirectory, "iam-secrets.json"),
-        Path.Combine(WorkloadsDirectory, "distributed-runtime.json")
+        Path.Combine(WorkloadsDirectory, "distributed-runtime.json"),
+        Path.Combine(WorkloadsDirectory, "diagnostics.json")
     ];
 
     private static string WorkloadsDirectory => Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads");

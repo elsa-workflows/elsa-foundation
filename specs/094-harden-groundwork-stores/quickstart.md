@@ -517,9 +517,11 @@ physical-form selection, performance verdict, or coverage-ledger advancement; T1
 On 2026-07-25 the program owner ratified `diagnostics-durable-history` as the thirteenth workload,
 split into Structured Logs and OpenTelemetry suboperations. The reviewed contract vector fixes one
 seed, every semantic input, the public-operation sequence, and an independent literal result digest.
-SQLite retains the same-provider EF diagnostics oracle. SQL Server, PostgreSQL, and MongoDB use the
-ratified absolute operational budgets with correctness, native-plan, physical-form, provider-work,
-queue-loss, drain, and restart evidence.
+SQLite retains the same-provider EF diagnostics oracle. SQL Server, PostgreSQL, and MongoDB require
+independently reviewed numeric absolute budgets with correctness, native-plan, physical-form,
+provider-work, queue-loss, drain, and restart evidence. No numeric budgets or executable
+absolute-budget gate exist yet, so the workload fails closed under
+`gate.diagnostics.absolute-budget-required`.
 
 The same amendment adds `diagnostics-structured-log-store` and
 `diagnostics-open-telemetry-store` as first-class coverage-ledger rows. The original ALL32 floor
@@ -528,7 +530,7 @@ separate in-memory contract and supplies no evidence for either durable diagnost
 
 This checkpoint passed:
 
-- workload catalog and independent-golden tests: 11/11, with the full harness at 63/63;
+- workload catalog and independent-golden tests: 11/11, with the remediated full harness at 64/64;
 - coverage-ledger and performance-handoff architecture tests: 69/69;
 - diagnostics feature/composition tests: 11/11; and
 - unified reference-host/schema composition tests: 31/31.
@@ -538,8 +540,8 @@ After `dotnet restore Elsa.Server.slnx --force-evaluate`, the complete architect
 
 The digest-verified `host-selection-all34` artifact records the eight selected feature identities,
 including `elsa-diagnostics`. It is composition evidence only. Both diagnostics rows remain
-`implemented` with empty provider evidence and no `performanceVerdict`; no row status advanced and
-T100 remains open.
+`implemented` with empty provider evidence and no `performanceVerdict`; no row status advanced, the
+workload is blocked from matrix/comparison/gate execution, and T100 remains open.
 
 ### #646 workload-successor review disposition
 

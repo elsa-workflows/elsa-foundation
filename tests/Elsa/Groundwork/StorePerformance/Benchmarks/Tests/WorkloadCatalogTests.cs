@@ -21,7 +21,9 @@ public sealed class WorkloadCatalogTests
             Assert.Equal(expected.PhysicalForms, actual.PhysicalFormsFor646);
             Assert.Equal(["sqlite", "sqlserver", "postgresql", "mongodb"], actual.RequiredProviders);
             Assert.Equal(["mongodb", "postgresql", "sqlite", "sqlserver"], actual.RequiredProviderEvidence.Keys.Order(StringComparer.Ordinal));
-            Assert.Equal(id == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ? "blocked" : "ready", actual.BenchmarkAdmission.Status);
+            Assert.Equal(
+                ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(id, out _) ? "blocked" : "ready",
+                actual.BenchmarkAdmission.Status);
         }
     }
 
@@ -49,7 +51,11 @@ public sealed class WorkloadCatalogTests
             Assert.Equal(golden.InputFingerprint, scenario.ComputeInputFingerprint());
             Assert.Equal(golden.ResultDigest, scenario.ComputeResultDigest());
             Assert.NotEmpty(scenario.CreateExpectedObservations());
-            Assert.Equal(new BenchmarkAdmission("ready", "benchmark.ready"), workload.BenchmarkAdmission);
+            Assert.Equal(
+                ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(id, out var blockedReason)
+                    ? new BenchmarkAdmission("blocked", blockedReason)
+                    : new BenchmarkAdmission("ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode),
+                workload.BenchmarkAdmission);
         }
 
         var secret = catalog.Workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
@@ -57,6 +63,11 @@ public sealed class WorkloadCatalogTests
         Assert.DoesNotContain(secret.Id, ReproducibleWorkloadScenarioCatalog.Successors.Keys);
         Assert.Equal(new BenchmarkAdmission("blocked", "comparator.secret.real-ef-required"), secret.BenchmarkAdmission);
         Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
+
+        var diagnostics = catalog.Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        Assert.Equal(
+            new BenchmarkAdmission("blocked", ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode),
+            diagnostics.BenchmarkAdmission);
     }
 
     [Fact]

@@ -107,28 +107,35 @@ public sealed class ProtocolAndGateTests
             MatrixPlan.Create(workload, Request() with { ProviderConfiguration = new Dictionary<string, string> { ["host"] = "db.internal" } }));
     }
 
-    [Fact]
-    public void Matrix_and_direct_gate_reject_the_blocked_secret_contract_before_execution()
+    [Theory]
+    [InlineData(
+        ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId,
+        ReproducibleWorkloadScenarioCatalog.BlockedReasonCode)]
+    [InlineData(
+        ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId,
+        ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode)]
+    public void Matrix_and_direct_gate_reject_blocked_contracts_before_execution(
+        string workloadId,
+        string reasonCode)
     {
-        var secret = WorkloadCatalog.Load(Repository.Root())
-            .Workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
+        var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[workloadId];
         var request = Request() with
         {
-            WorkloadId = secret.Id,
-            WorkloadVersion = secret.Version,
-            Seed = secret.Input.Seed,
-            InputFingerprintSha256 = secret.Input.FingerprintSha256
+            WorkloadId = workload.Id,
+            WorkloadVersion = workload.Version,
+            Seed = workload.Input.Seed,
+            InputFingerprintSha256 = workload.Input.FingerprintSha256
         };
 
         var matrixError = Assert.Throws<PerformanceContractException>(() =>
-            MatrixPlan.Create(secret, request));
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, matrixError.Message);
+            MatrixPlan.Create(workload, request));
+        Assert.Contains(reasonCode, matrixError.Message);
 
         var forgedCompleteComparison = new ComparisonResult(
             1,
             new string('c', 64),
-            secret.Id,
-            secret.Version,
+            workload.Id,
+            workload.Version,
             "sqlite",
             "100k",
             "sqlite/ef/document-type-specific-tables",
@@ -143,7 +150,7 @@ public sealed class ProtocolAndGateTests
             forgedCompleteComparison);
 
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
+        Assert.Contains(reasonCode, gate.Reason);
     }
 
     [Fact]

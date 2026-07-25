@@ -29,7 +29,7 @@ public class GroundworkStoreScenarioCatalogTests
     }
 
     [Fact]
-    public void Catalog_matches_the_checked_in_coverage_ledger()
+    public void Catalog_preserves_the_original_all32_floor_beside_the_two_diagnostics_rows()
     {
         using var ledger = JsonDocument.Parse(File.ReadAllText(FindRepositoryFile(
             "specs",
@@ -41,7 +41,11 @@ public class GroundworkStoreScenarioCatalogTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(GroundworkStoreScenarioCatalog.CoverageEntryIds, ledgerEntryIds);
+        Assert.Equal(
+            GroundworkStoreScenarioCatalog.CoverageEntryIds
+                .Concat(["diagnostics-open-telemetry-store", "diagnostics-structured-log-store"])
+                .Order(StringComparer.Ordinal),
+            ledgerEntryIds);
     }
 
     [Fact]

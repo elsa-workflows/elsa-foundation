@@ -5,14 +5,16 @@ provider, EF, Groundwork, connection, or secret dependency. Adapter leaves must 
 `IBenchmarkAdapter` in their own projects and use `ProcessMeasurement` to write `ProcessArtifact` files.
 `workload-vectors` prints deterministic contract definitions for future adapters; it does not execute the
 named public operations. Every workload carries an explicit ready/blocked benchmark-admission status. The
-Secret workload remains blocked until a real EF comparator exists.
+Secret workload remains blocked until a real EF comparator exists; diagnostics remains blocked until
+numeric absolute budgets and an executable absolute-budget gate are independently reviewed.
 
 The thirteenth workload, `diagnostics-durable-history`, is the program-owner-ratified 2026-07-25
 extension. It keeps Structured Logs and OpenTelemetry as separate suboperations under one reproducible
 input/result vector. SQLite uses the retained same-provider EF diagnostics oracle. SQL Server,
-PostgreSQL, and MongoDB require the ratified workload-specific absolute budgets plus correctness,
-native-plan, physical-form, and provider-work evidence; the default ratio gate is not silently applied
-to those three providers.
+PostgreSQL, and MongoDB require workload-specific numeric absolute budgets plus correctness,
+native-plan, physical-form, and provider-work evidence. The policy shape is ratified, but the numeric
+budgets and evaluator do not yet exist; `gate.diagnostics.absolute-budget-required` prevents the
+default ratio gate from being silently applied to those three providers.
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan

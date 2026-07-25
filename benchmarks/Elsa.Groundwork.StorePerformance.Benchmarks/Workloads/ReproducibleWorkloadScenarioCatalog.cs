@@ -12,6 +12,10 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 public static class ReproducibleWorkloadScenarioCatalog
 {
     public const string ReadyReasonCode = "benchmark.ready";
+    public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
+    public const string DiagnosticsBlockedReasonCode = "gate.diagnostics.absolute-budget-required";
+    public const string DiagnosticsBlockedReason =
+        "Numeric absolute budgets and an executable absolute-budget gate require independent review before diagnostics measurement.";
     public const string BlockedWorkloadId = "secret-create-read-list";
     public const string BlockedVersion = "1.0.0";
     public const string BlockedInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";
@@ -54,6 +58,17 @@ public static class ReproducibleWorkloadScenarioCatalog
             ? scenario
             : throw new ArgumentOutOfRangeException(nameof(workloadId), workloadId, "No reproducible v1.1 workload successor is registered.");
 
+    public static bool TryGetBlockedReason(string workloadId, out string reason)
+    {
+        reason = workloadId switch
+        {
+            DiagnosticsWorkloadId => DiagnosticsBlockedReasonCode,
+            BlockedWorkloadId => BlockedReasonCode,
+            _ => ""
+        };
+        return reason.Length > 0;
+    }
+
     public static string SerializeDefinitionSummary() => JsonSerializer.Serialize(new
     {
         definitions = Successors.Values.OrderBy(scenario => scenario.WorkloadId).Select(scenario => new
@@ -63,7 +78,9 @@ public static class ReproducibleWorkloadScenarioCatalog
             scenario.Seed,
             inputFingerprintSha256 = scenario.ComputeInputFingerprint(),
             resultDigestSha256 = scenario.ComputeResultDigest(),
-            benchmarkAdmission = new { status = "ready", reason = ReadyReasonCode }
+            benchmarkAdmission = TryGetBlockedReason(scenario.WorkloadId, out var reason)
+                ? new { status = "blocked", reason }
+                : new { status = "ready", reason = ReadyReasonCode }
         }),
         blocked = new
         {
