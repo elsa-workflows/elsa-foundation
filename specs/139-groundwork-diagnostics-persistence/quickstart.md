@@ -276,8 +276,20 @@ for zero trace capacity, and capping grouped trace take to the admitted trace
 capacity. The strengthened zero-capacity and oversized-take regressions passed
 2/2; exact-head Release recertification then passed 76/76 adapter cases, 20/20
 four-provider behavior cases, and 8/8 newest-window plus native-plan cases.
-The checkpoint remains draft until the originating correctness reviewer and
-the evidence/scope reviewers re-verify the final exact range.
+
+Final re-verification of exact range
+`b55aabc54a845e1d0366beb28bf3d9f91cddd613..b4cbf14723c8d6081349f83a2c83237e3bfafdfe`
+passed all three axes:
+
+- correctness/mechanism: **PASS**; the originating reviewer traced all three
+  fixes, reran the strengthened regressions (2/2) and four-provider newest-window
+  cases (4/4), and found no remaining blocker;
+- evidence integrity: **PASS**; every preview.88 and historical artifact hash,
+  ledger tuple/status, package asset, manifest hash, and exact-head result claim
+  recomputed, with independent 76/76 adapter and 20/20 four-provider reruns; and
+- scope/test preservation: **PASS**; no EF oracle, host, solution, shell,
+  incident-strategy, Studio, BPMN, #420, or in-memory boundary changed, no test
+  was weakened, and T015 plus T050–T057 remain open.
 
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 
