@@ -3,7 +3,10 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Groundwork.DiagnosticRecords;
+using Groundwork.SqlServer.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 
@@ -38,7 +41,7 @@ public static class GroundworkSqlServerUnifiedRegistration
         bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkSqlServerUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
     }
 
@@ -50,6 +53,8 @@ public static class GroundworkSqlServerUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
+            _ => SqlServerDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
         return services.AddGroundworkUnifiedStoreFamilies();
     }
 }

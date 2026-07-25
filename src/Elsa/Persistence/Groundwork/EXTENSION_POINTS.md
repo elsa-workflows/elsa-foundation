@@ -30,7 +30,12 @@ never batched, and a failed batch degrades to per-member individual commits.
 
 The unified features share one host-selected provider-neutral manifest snapshot for Runtime, Secrets,
 Distributed Runtime, Workflows Design, Activities Design, and Publishing. Identity contributes its own
-manifest only when the host explicitly selects it and uses the matching deployment schema. SQLite stays the default composition; PostgreSQL is opt-in via
+manifest only when the host explicitly selects it and uses the matching deployment schema.
+`DiagnosticsGroundworkPersistence` is the corresponding atomic host feature for Structured Logs and
+OpenTelemetry: it selects both Groundwork adapters, contributes the combined diagnostics document schema,
+and selects a deployment schema that also exposes the five diagnostic-record streams. The selected unified
+provider leaf supplies the matching `IDiagnosticRecordStoreSessionFactory`; the streams must be applied by
+Groundwork.Tool before runtime admission. SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
 **Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema

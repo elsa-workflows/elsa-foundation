@@ -4,7 +4,10 @@ using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Groundwork.DiagnosticRecords;
+using Groundwork.Sqlite.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 
@@ -51,7 +54,7 @@ public static class GroundworkSqliteUnifiedRegistration
         bool skipInspectionWhenPlanUnchanged = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
-        services.AddGroundworkStorageComposition<TDeploymentSource>();
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
         return services.AddGroundworkSqliteUnifiedPersistenceCore(
             connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
     }
@@ -66,6 +69,8 @@ public static class GroundworkSqliteUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddSqliteGroundworkDocumentStore(
             connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
+        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
+            _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
         services.AddGroundworkUnifiedStoreFamilies();
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),

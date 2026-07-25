@@ -28,8 +28,8 @@ using Elsa.Agent.Workflows;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs;
-using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
@@ -296,7 +296,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(SecretsAttentionFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
-            typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
+            typeof(DiagnosticsGroundworkPersistenceFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
 
             // Engine self-instrumentation (MS-9): puts the WorkflowsRuntimeTracing feature in the catalog so it can be
