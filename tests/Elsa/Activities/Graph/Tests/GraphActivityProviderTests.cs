@@ -311,16 +311,34 @@ public sealed class GraphActivityProviderTests
                   "kind": "Sequence"
                 },
                 "outputs": [],
-                "inputs": [],
+                "inputs": [{
+                  "referenceKey": "condition",
+                  "value": { "value": true, "expressionType": "Literal" }
+                }],
                 "activityVersionId": "activity-ver-root",
                 "nodeId": "root"
               }
             }
             """);
+        var rootContract = CreateContract() with
+        {
+            Inputs =
+            [
+                new Elsa.Activities.Design.Core.Models.ActivityInputContract(
+                    "condition",
+                    "Condition",
+                    new TypeReference("Boolean"),
+                    true,
+                    false,
+                    null,
+                    "elsa.json")
+            ]
+        };
         var rootDependency = CreateDependency(
             "root",
             "activity-ver-root",
             "root-origin",
+            rootContract,
             declaredStructure: new("Sequence", "1"));
         var childDependency = CreateDependency("child", "activity-ver-child", "child-origin");
         var request = new ActivityTemplateCompilationRequest(
@@ -359,6 +377,11 @@ public sealed class GraphActivityProviderTests
         Assert.Equal("total", totalProjection.Value.Path);
         Assert.True(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("occurrences", out var occurrences));
         Assert.Equal(2, occurrences.GetArrayLength());
+        var rootOccurrence = first.Occurrences.Single(x => x.OccurrenceId == "root");
+        Assert.Equal("condition", Assert.Single(rootOccurrence.InputBindings.EnumerateArray()).GetProperty("referenceKey").GetString());
+        Assert.NotNull(rootOccurrence.Structure);
+        Assert.Equal("Sequence", rootOccurrence.Structure.Kind);
+        Assert.Equal("child", Assert.Single(rootOccurrence.Structure.Payload.GetProperty("activities").EnumerateArray()).GetString());
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("rootActivity", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("provider", out _));
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
@@ -1009,7 +1032,22 @@ public sealed class GraphActivityProviderTests
             }
             return activity with { Structure = new(activity.Structure.Kind, activity.Structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, Options)) };
         }
-        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => activity.Structure;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity)
+        {
+            if (activity.Structure is null)
+                return null;
+            if (!IsSequence(activity.Structure))
+                return activity.Structure;
+
+            var childIds = ProjectChildren(activity)
+                .SelectMany(x => x.Activities)
+                .Select(x => x.NodeId)
+                .ToArray();
+            return new(
+                activity.Structure.Kind,
+                activity.Structure.SchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = childIds }, Options));
+        }
         public bool HasHandler(ActivityNodeStructure structure) =>
             hasHandlers &&
             (IsSequence(structure) ||

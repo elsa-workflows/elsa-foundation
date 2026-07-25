@@ -52,8 +52,6 @@ $ranB = Test-ReusableRan -Instance $inst -ActivityTypeKey $B.ActivityTypeKey
 Write-Host ""
 if ($inst.instance.status -in @('Completed','Finished') -and $bDependsOnC -and $ranC -and $ranB) {
     Write-Host "SUCCESS - 3-deep hierarchy published bottom-up; B's Sequence depends on C; top completed with both B and C running inline." -ForegroundColor Green
-} elseif (Test-Structure1051Fault -Instance $inst) {
-    Report-Structure1051
 } else {
     Write-Host ("MISMATCH - status '{0}', B->C dep={1}, C ran={2}, B ran={3}" -f $inst.instance.status, $bDependsOnC, $ranC, $ranB) -ForegroundColor Red
     exit 1

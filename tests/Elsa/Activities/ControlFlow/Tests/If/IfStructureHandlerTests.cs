@@ -113,6 +113,27 @@ public sealed class IfStructureHandlerTests : IDisposable
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("else").ValueKind);
     }
 
+    [Fact]
+    public void RemapExecutableStructure_RewritesBothSemanticBranchIds()
+    {
+        var node = _handler.ReplaceChildren(NewNode(),
+        [
+            new ActivityChildProjection(IfActivity.ThenSlotName, [NewBranchNode("then-branch")]),
+            new ActivityChildProjection(IfActivity.ElseSlotName, [NewBranchNode("else-branch")])
+        ]);
+        var compiled = _handler.CompileExecutableStructure(node);
+
+        var remapped = _handler.RemapExecutableStructure(compiled, new Dictionary<string, string>
+        {
+            ["then-branch"] = "node-then",
+            ["else-branch"] = "node-else"
+        });
+
+        using var document = JsonDocument.Parse(remapped.Payload.GetRawText());
+        Assert.Equal("node-then", document.RootElement.GetProperty("then").GetString());
+        Assert.Equal("node-else", document.RootElement.GetProperty("else").GetString());
+    }
+
     private static IEnumerable<ActivityNode> SlotActivities(IReadOnlyCollection<ActivityChildProjection> projections, string slotName) =>
         projections.Single(slot => slot.Name == slotName).Activities;
 

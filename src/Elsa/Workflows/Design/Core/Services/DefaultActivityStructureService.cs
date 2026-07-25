@@ -60,6 +60,21 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(authoredToExecutableNodeIds);
+        if (authoredToExecutableNodeIds.Count == 0)
+            return structure;
+
+        if (!TryGetHandler(structure, out var handler))
+            throw new NotSupportedException($"Activity structure '{structure.Kind}@{structure.SchemaVersion}' has no handler for executable child-node remapping.");
+
+        return handler.RemapExecutableStructure(structure, authoredToExecutableNodeIds);
+    }
+
     public bool HasHandler(ActivityNodeStructure structure)
     {
         ArgumentNullException.ThrowIfNull(structure);

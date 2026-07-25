@@ -96,7 +96,38 @@ public sealed record ExecutableActivityTemplateDependency(
     ActivityInvocationOrigin NodeOrigin,
     string? ParentOccurrenceId = null,
     string ChildSlotName = "activity-graph",
-    int ChildIndex = 0);
+    int ChildIndex = 0,
+    ExecutableActivityTemplateOccurrenceOverlay? OccurrenceOverlay = null);
+
+/// <summary>
+/// Immutable placement-time content for one exact dependency occurrence. The input array is opaque to
+/// Runtime and interpreted only by Publishing; executable structure references are reconciled with
+/// content-addressed child node ids during placement.
+/// </summary>
+public sealed record ExecutableActivityTemplateOccurrenceOverlay
+{
+    public const string SupportedSchemaVersion = "1";
+
+    public ExecutableActivityTemplateOccurrenceOverlay(
+        string schemaVersion,
+        JsonElement inputBindings,
+        ExecutableActivityStructure? structure)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(schemaVersion);
+        if (!StringComparer.Ordinal.Equals(schemaVersion, SupportedSchemaVersion))
+            throw new ArgumentException($"Occurrence overlay schema version '{schemaVersion}' is not supported.", nameof(schemaVersion));
+        if (inputBindings.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException("An occurrence overlay input binding payload must be an array.", nameof(inputBindings));
+
+        SchemaVersion = schemaVersion;
+        InputBindings = inputBindings.Clone();
+        Structure = structure;
+    }
+
+    public string SchemaVersion { get; }
+    public JsonElement InputBindings { get; }
+    public ExecutableActivityStructure? Structure { get; }
+}
 
 /// <summary>A readable placement path. Its canonical length-framed bytes produce the placement namespace.</summary>
 public sealed record ActivityInvocationOrigin(IReadOnlyList<ActivityInvocationOriginSegment> Segments)

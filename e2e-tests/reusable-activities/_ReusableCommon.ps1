@@ -178,24 +178,3 @@ function Test-ReusableRan {
         $_.activityType -and $_.activityType.ToLowerInvariant() -eq $ActivityTypeKey.ToLowerInvariant() -and $_.status -in @('Completed','Finished')
     })
 }
-
-# True if the instance Faulted because of the reusable container-root bare-compilation bug (issue #1051):
-# CompileSourceOwnedRoot builds the reusable root as an empty ActivityNode (no inputs, no structure), so a
-# structural-container root loses its Structure (Sequence -> "requires structure") AND an input-carrying root
-# loses its authored inputs (If -> "cannot materialize a complete input snapshot. Missing keys: [Condition]").
-# The graph boundary re-wraps a descendant fault as "descendant activity faulted inside the graph boundary".
-function Test-Structure1051Fault {
-    param([Parameter(Mandatory)] $Instance)
-    if ($Instance.instance.status -ne 'Faulted') { return $false }
-    $msgs = @($Instance.incidents | ForEach-Object { $_.message })
-    [bool]($msgs | Where-Object {
-        $_ -match "requires structure '" -or
-        $_ -match 'descendant activity faulted inside the graph boundary' -or
-        $_ -match 'cannot materialize a complete input snapshot'
-    })
-}
-
-# Emit the standard KNOWN ISSUE #1051 line (a reusable-with-container-root tracker; auto-passes once the fix lands).
-function Report-Structure1051 {
-    Write-Host "KNOWN ISSUE #1051 - reusable activity with a structural-container (Sequence) root faults at runtime: the inlined container publishes with Structure=null. This tracker passes; convert to a strict assertion once #1051 is fixed." -ForegroundColor Yellow
-}
