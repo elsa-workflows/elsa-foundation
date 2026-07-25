@@ -1,9 +1,7 @@
 namespace Elsa.Foundation.Identity.OpenIddict;
 
 /// <summary>
-/// Stable constants for the OpenIddict identity module: the composite scheme-selector authentication scheme
-/// that routes requests to the right handler (first-party bearer, external bearer, or cookie), and the
-/// persistence defaults for the companion token-store database.
+/// Stable constants for the provider-neutral OpenIddict identity behavior.
 /// </summary>
 public static class OpenIddictIdentityDefaults
 {
@@ -14,16 +12,6 @@ public static class OpenIddictIdentityDefaults
     /// (interactive requests). Suitable as the host's default authenticate/challenge scheme.
     /// </summary>
     public const string SelectorScheme = "Elsa.Identity.Selector";
-
-    /// <summary>
-    /// Default Sqlite connection string for the OpenIddict token store. Intentionally the same database file
-    /// as the ASP.NET Core Identity module so the out-of-the-box setup keeps all identity state in one place;
-    /// the store uses its own migrations-history table so both contexts can migrate independently.
-    /// </summary>
-    public const string DefaultConnectionString = "Data Source=identity.db";
-
-    /// <summary>Migrations-history table for the companion context, distinct from the identity context's.</summary>
-    public const string MigrationsHistoryTable = "__EFMigrationsHistory_OpenIddict";
 
     /// <summary>
     /// The custom grant type naming the first-party cookie→bearer exchange driven through

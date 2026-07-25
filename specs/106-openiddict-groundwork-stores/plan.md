@@ -12,7 +12,7 @@ Replace the EF-backed OpenIddict persistence integration with one concrete `Elsa
 
 **Language/Version**: C# 14 on .NET 10 (`net10.0`)
 
-**Primary Dependencies**: OpenIddict.Abstractions/Core/AspNetCore 7.5.0; Elsa Identity abstractions; Groundwork Core, Documents, provider packages, and Tool from one public binary-compatible `0.0.1-preview.76` family; Microsoft.Extensions dependency injection and options
+**Primary Dependencies**: OpenIddict.Abstractions/Core/AspNetCore 7.5.0; Elsa Identity abstractions; Groundwork Core, Documents, provider packages, and Tool from one exact binary-compatible family configured on the reviewed head; Microsoft.Extensions dependency injection and options
 
 **Storage**: Four global Groundwork physical entity tables—applications, authorizations, scopes, and tokens—with canonical JSON authoritative and only workload-proven native projections/indexes; SQLite, SQL Server, PostgreSQL, and MongoDB
 
@@ -47,11 +47,11 @@ The Elsa and framework constitutions are draft/provisional. This matters because
 | Elsa §E6 naming | PASS | New Elsa-owned types use the provider prefix and one role suffix; external OpenIddict names are retained only when mirroring external contracts. |
 | Accepted zero-EF ADR | PASS | Groundwork is the completed first-party persistence lane; EF remains only as an oracle until all exit gates pass. |
 
-**Post-design re-check**: PASS. The data model confines physical projections and Groundwork session mechanics to the provider package, the contract defines bounded-query and mutation admission, and the quickstart makes public preview.76 verification and real-provider evidence blocking gates.
+**Post-design re-check**: The data model confines physical projections and Groundwork session mechanics to the provider package, the contract defines bounded-query and mutation admission, and the quickstart makes exact-head public capability verification and real-provider evidence blocking gates. This plan records no admission result until T006 executes.
 
 ## Hard Prerequisite Gate
 
-No implementation task may begin until the exact public `0.0.1-preview.76` Groundwork Core/Documents/provider/Tool family restores together and the following capabilities are demonstrated from its public API with a focused executable probe:
+No production implementation task may begin until the exact configured Groundwork Core/Documents/provider/Tool family restores together and the following capabilities are demonstrated from its public API with a focused executable probe:
 
 1. Version-aware document codec admission, current/minimum-readable policy, upcaster-chain validation, and rejection before deserialization.
 2. Four physical entity-table definitions with deterministic host naming, schema fingerprinting, CLI plan/validate/status/apply, and runtime validate-only admission.
@@ -107,7 +107,7 @@ tests/Elsa/Architecture/               # Provider-neutral core and final EF remo
 
 ## Delivery Sequencing
 
-1. **Verify upstream capability**: record exact public preview.76 packages/tool, provider topology, public capability probes, and baseline test identities. Stop for upstream work if a hard prerequisite fails.
+1. **Verify upstream capability**: record the exact configured packages/tool, provider topology, public capability probes, and baseline test identities. Stop for upstream work if a hard prerequisite fails.
 2. **Freeze contract denominator**: encode all 145 OpenIddict store members by capability group, descriptor round trips, named route catalog, generic-delegate rejection, current token-service behavior, and every legacy test objective.
 3. **Build the provider boundary**: add the Groundwork package, global four-table manifest, codec policies, physical field/index declarations, scoped registration, and Core builder replacement of all four stores.
 4. **Implement named behavior**: add document mapping, CRUD/accessors, deterministic pages/counts, typed/multivalue named lookups, stable capability errors for unsupported generic delegates, and direct §2.23 branch tests.
