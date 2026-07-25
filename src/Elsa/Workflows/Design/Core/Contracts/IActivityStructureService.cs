@@ -17,6 +17,22 @@ public interface IActivityStructureService
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>
+    /// Rewrites activity-owned references in a compiled structure from authored child node IDs to
+    /// their placement-specific executable node IDs.
+    /// </summary>
+    ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(authoredToExecutableNodeIds);
+        if (authoredToExecutableNodeIds.Count == 0)
+            return structure;
+
+        throw new NotSupportedException("The activity structure service does not support executable child-node remapping.");
+    }
+
+    /// <summary>
     /// Whether a structure handler is registered for <paramref name="structure"/>'s kind and schema
     /// version. Lets publish-time guards distinguish a legitimately opaque structure (spec 071
     /// FR-008: unknown kinds are copied as opaque non-composite structure) from a composite

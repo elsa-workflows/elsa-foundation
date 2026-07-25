@@ -65,6 +65,36 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<BpmnStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
+        var remapped = new BpmnStructure(
+            executable.Elements.Select(element => new BpmnElement(
+                element.ElementId,
+                element.ElementType,
+                element.Name,
+                Remap(element.ChildNodeId, authoredToExecutableNodeIds),
+                element.LaneId,
+                element.DefaultFlowId,
+                element.EventDefinitions,
+                element.Properties,
+                element.AttachedToRef,
+                element.CancelActivity,
+                element.LoopCharacteristics,
+                element.IsForCompensation,
+                element.CompensationHandlerElementId,
+                element.IsTransaction,
+                element.TriggeredByEvent,
+                Remap(element.ListenerNodeId, authoredToExecutableNodeIds))).ToArray(),
+            executable.SequenceFlows,
+            executable.Variables,
+            executable.IsTransaction);
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Variables;
 
@@ -76,4 +106,7 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
                ?? new BpmnAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

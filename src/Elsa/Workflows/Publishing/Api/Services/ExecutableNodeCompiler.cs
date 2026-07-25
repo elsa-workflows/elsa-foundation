@@ -109,47 +109,8 @@ public sealed class ExecutableNodeCompiler(
         var clrActivityType = ResolveClrActivityType(descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
 
-        var inputDefinitionsByReferenceKey = inputDefinitions.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
         var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
-
-        foreach (var inputState in activity.Inputs)
-        {
-            if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
-                throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
-
-            var binding = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState);
-            if (!inputBindings.TryAdd(binding.InputName, binding))
-            {
-                throw new ArgumentException(
-                    $"VF-ACT-003: Activity node '{activity.NodeId}' declares duplicate input '{inputState.ReferenceKey}'. " +
-                    "Every published input must lower to exactly one canonical binding.");
-            }
-        }
-
-        foreach (var inputDefinition in inputDefinitions.Where(input => !inputBindings.ContainsKey(input.ReferenceKey)))
-        {
-            if (inputDefinition.DefaultValue.HasValue)
-            {
-                var binding = inputBindingCompiler.Compile(
-                    activity.NodeId,
-                    inputDefinition,
-                    new ArgumentValue(null, "Default"));
-                inputBindings.Add(binding.InputName, binding);
-                continue;
-            }
-
-            if (!inputDefinition.IsRequired)
-            {
-                var binding = inputBindingCompiler.CompileOmitted(inputDefinition);
-                inputBindings.Add(binding.InputName, binding);
-                continue;
-            }
-
-            throw new ArgumentException(
-                $"VF-ACT-003: Activity node '{activity.NodeId}' omits required input '{inputDefinition.ReferenceKey}', which has no pinned default. " +
-                "Every published input must lower to exactly one canonical binding.");
-        }
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");

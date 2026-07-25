@@ -91,4 +91,41 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         Assert.Equal("Pool_Shipping", messageFlow.TargetPoolId);
         Assert.Equal("OrderPlaced", messageFlow.MessageName);
     }
+
+    [Fact]
+    public void RemapExecutableStructure_RewritesOnlyElementActivityBindings()
+    {
+        var authored = new BpmnAuthoredStructure(
+            activities: [new ActivityNode("task-child", "task-version", [], []), new ActivityNode("listener-child", "listener-version", [], [])],
+            elements:
+            [
+                new BpmnElement(
+                    "Task_One",
+                    BpmnElementTypes.Task,
+                    childNodeId: "task-child",
+                    listenerNodeId: "listener-child",
+                    properties: new Dictionary<string, string> { ["externalId"] = "task-child" })
+            ]);
+        var activity = new ActivityNode(
+            "Process1",
+            "bpmn-process-version-1",
+            [],
+            [],
+            new ActivityNodeStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(authored, SerializerOptions)));
+        var compiled = _handler.CompileExecutableStructure(activity);
+
+        var remapped = _handler.RemapExecutableStructure(compiled, new Dictionary<string, string>
+        {
+            ["task-child"] = "node-task",
+            ["listener-child"] = "node-listener"
+        });
+        var element = Assert.Single(remapped.Payload.Deserialize<BpmnStructure>(SerializerOptions)!.Elements);
+
+        Assert.Equal("node-task", element.ChildNodeId);
+        Assert.Equal("node-listener", element.ListenerNodeId);
+        Assert.Equal("task-child", element.Properties["externalId"]);
+    }
 }

@@ -20,6 +20,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
@@ -765,6 +766,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IActivityDefinitionDraftStore>(authoring.Drafts);
         services.AddSingleton<IActivityDefinitionLayoutStore>(authoring.Layouts);
         services.AddSingleton<IActivityDefinitionVersionPublicationStore, EmptyPublicationStore>();
+        services.AddSingleton<IWellKnownTypeRegistry>(TestWellKnownTypeRegistry.Create());
         services.AddSingleton<IActivityTemplateCompiler>(
             templateCompiler ?? new SuspendingTemplateCompiler());
         services.AddScoped<IActivityActivationStrategy, SuspendingActivityActivationStrategy>();

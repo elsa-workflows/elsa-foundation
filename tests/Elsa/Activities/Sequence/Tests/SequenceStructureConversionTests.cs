@@ -78,4 +78,31 @@ public sealed class SequenceStructureConversionTests
         Assert.NotNull(input.Conversion);
         Assert.Equal(AuthoredValueConversionMode.Json, input.Conversion!.Mode);
     }
+
+    [Fact]
+    public void RemapExecutableStructure_RewritesOnlyProjectedChildNodeIds()
+    {
+        var service = StructureService();
+        var compiled = service.CompileExecutableStructure(SequenceNodeFromWire())!;
+
+        var remapped = service.RemapExecutableStructure(compiled, new Dictionary<string, string>
+        {
+            ["write-one"] = "node-placed-write"
+        });
+
+        using var document = JsonDocument.Parse(remapped.Payload.GetRawText());
+        Assert.Equal("node-placed-write", Assert.Single(document.RootElement.GetProperty("activities").EnumerateArray()).GetString());
+    }
+
+    [Fact]
+    public void RemapExecutableStructure_FailsSafeWhenNoOwnerIsRegistered()
+    {
+        var service = StructureService();
+        var opaque = new ActivityNodeStructure("vendor.opaque", "1", JsonSerializer.SerializeToElement(new { child = "write-one" }));
+
+        Assert.Throws<NotSupportedException>(() => service.RemapExecutableStructure(opaque, new Dictionary<string, string>
+        {
+            ["write-one"] = "node-placed-write"
+        }));
+    }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -79,5 +80,43 @@ public sealed class FlowchartStructureConversionTests
         Assert.Equal("Text", input.ReferenceKey);
         Assert.NotNull(input.Conversion);
         Assert.Equal(AuthoredValueConversionMode.Json, input.Conversion!.Mode);
+    }
+
+    [Fact]
+    public void RemapExecutableStructure_RewritesGraphReferencesAndNodeMetadataKeysOnly()
+    {
+        var service = StructureService();
+        var authored = new FlowchartAuthoredStructure(
+            activities: [new ActivityNode("first", "activity-first", [], []), new ActivityNode("second", "activity-second", [], [])],
+            connections: [new(new("first", "approved"), new("second"), "first")],
+            startNodeId: "first",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["first"] = new("policy", new Dictionary<string, string> { ["externalId"] = "first" })
+            });
+        var node = new ActivityNode(
+            "flow",
+            "activity-flowchart",
+            [],
+            [],
+            new ActivityNodeStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(authored)));
+        var compiled = service.CompileExecutableStructure(node)!;
+
+        var remapped = service.RemapExecutableStructure(compiled, new Dictionary<string, string>
+        {
+            ["first"] = "node-first",
+            ["second"] = "node-second"
+        });
+        var structure = remapped.Payload.Deserialize<FlowchartStructure>()!;
+        var connection = Assert.Single(structure.Connections);
+
+        Assert.Equal("node-first", structure.StartNodeId);
+        Assert.Equal("node-first", connection.Source.NodeId);
+        Assert.Equal("node-second", connection.Target.NodeId);
+        Assert.Equal("first", connection.Id);
+        Assert.Contains("node-first", structure.NodeMetadata.Keys);
     }
 }
