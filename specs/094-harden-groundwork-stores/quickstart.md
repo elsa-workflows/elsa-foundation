@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.81` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.85` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.81`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.85`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,18 +18,24 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.81`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.85`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
 
 The original checkpoint/fence attachment and its unversioned evidence paths retain the reviewed
-`0.0.1-preview.80` four-provider slice as immutable historical provenance. The current
-`0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger imports that
-versioned attachment by tuple. A partial attachment does not advance a row to evidence-complete or close the
-package-generation readiness gate.
+`0.0.1-preview.80` four-provider slice as immutable historical provenance. The later
+`0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
+versioned attachment by tuple as prior-generation provenance. The current `0.0.1-preview.85` source alignment
+contains no imported provider record. All rows therefore remain below `evidence-complete` until an exact-source
+preview.85 publication is mechanically imported; a partial attachment cannot close that gate.
 
-**2026-07-24 #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
+**2026-07-25 preview.85 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
+public `0.0.1-preview.85` release built from Groundwork
+`f4450175a853cc6eb1a6ef2e7c81802a6ae5dc18`. This source-only checkpoint changes no evidence artifact or
+tuple-keyed ledger record. Exact Elsa-source publication and mechanical import are a later step.
+
+**2026-07-24 historical #646 takeover evidence**: Groundwork PR #126 / Elsa PR #1039 advanced the seven packages to
 `0.0.1-preview.81` for batched schema apply. Elsa PR #1040 aligned the tool manifest and current-version
 ratchets; the versioned checkpoint/fence publication below then refreshed the tuple-keyed evidence without
 rewriting the `.80` attachment or artifacts.
@@ -213,9 +219,9 @@ The original `.80` attachment hash and all 36 referenced historical artifact has
 An earlier full publication reached SQL Server and exposed that the fixture's reset query could select
 system sessions, which SQL Server refuses to kill. The fixture now limits the reset set to user processes;
 the focused SQL Server fence scenario and this complete publication both passed after the correction.
-This refresh preserves T050's completed evidence at the current package family. It does not complete
-T058/T069/T076/T093/T100 or advance any ledger row status; #646 inherits those remaining evidence and
-performance-verdict obligations.
+This refresh preserves T050's historical preview.81 evidence. It does not prove the current preview.85
+generation, complete T058/T069/T076/T093/T100, or advance any ledger row status; #646 inherits those remaining
+publication and performance-verdict obligations.
 
 ### Preview.81 checkpoint/fence review disposition
 
@@ -364,7 +370,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.81` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.85` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
