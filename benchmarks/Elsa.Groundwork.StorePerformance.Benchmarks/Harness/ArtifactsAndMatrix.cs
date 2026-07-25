@@ -384,6 +384,9 @@ public static class ProcessMatrixRunner
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(runChild);
+        BenchmarkAdmissionGuard.RequireReady(plan.Workload);
+        foreach (var run in plan.Runs)
+            ArtifactAdmission.ValidateRequest(plan.Workload, run);
         var expected = plan.Runs.Select(run => (Run: run, Path: ArtifactStore.PathFor(outputDirectory, run))).ToArray();
         if (expected.Length != 4 ||
             expected.Select(item => item.Path).Distinct(StringComparer.Ordinal).Count() != 4 ||

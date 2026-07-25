@@ -154,6 +154,30 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public async Task Manually_constructed_matrix_plan_cannot_bypass_diagnostics_admission()
+    {
+        var diagnostics = WorkloadCatalog.Load(Repository.Root())
+            .Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        var admittedPlan = MatrixPlan.Create(Workload(), Request());
+        var bypassPlan = new MatrixPlan(diagnostics, admittedPlan.Protocol, admittedPlan.Runs);
+        var childCalled = false;
+
+        var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+            ProcessMatrixRunner.RunForTestAsync(
+                bypassPlan,
+                Path.GetTempPath(),
+                (_, _, _) =>
+                {
+                    childCalled = true;
+                    return Task.FromResult(0);
+                },
+                CancellationToken.None));
+
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, error.Message);
+        Assert.False(childCalled);
+    }
+
+    [Fact]
     public async Task Matrix_rejects_a_preexisting_planned_artifact_from_a_noop_child()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"elsa646-matrix-{Guid.NewGuid():N}");

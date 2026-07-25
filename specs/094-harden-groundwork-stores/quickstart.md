@@ -530,7 +530,7 @@ separate in-memory contract and supplies no evidence for either durable diagnost
 
 This checkpoint passed:
 
-- workload catalog and independent-golden tests: 11/11, with the remediated full harness at 64/64;
+- workload catalog and independent-golden tests: 11/11, with the remediated full harness at 65/65;
 - coverage-ledger and performance-handoff architecture tests: 69/69;
 - diagnostics feature/composition tests: 11/11; and
 - unified reference-host/schema composition tests: 31/31.

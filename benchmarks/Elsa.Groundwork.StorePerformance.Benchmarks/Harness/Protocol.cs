@@ -217,6 +217,7 @@ public static class ArtifactAdmission
 
     public static void ValidateRequest(PerformanceWorkload workload, RunRequest request)
     {
+        BenchmarkAdmissionGuard.RequireReady(workload);
         ArtifactSafety.ValidateRequest(request);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
