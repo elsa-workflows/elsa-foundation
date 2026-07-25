@@ -164,11 +164,39 @@ removed. Identity and all other EF oracle work remains outside this correction. 
 activation test pre-applies the combined document schema and all five diagnostic-record streams, then
 asserts both Groundwork stores resolve with no EF diagnostics store.
 
-On the exact 2026-07-25 composition candidate, the diagnostics persistence suite passed **148/148**,
-the combined deployment-schema suite passed **6/6**, the real SQLite activation fixture passed
-**5/5**, and the complete unified-host suite passed **52/52**. `Elsa.Server` then built in Release
-with **0 warnings and 0 errors**. These results complete T045 and T049. They do not certify the
-four-provider promotion matrix, performance, or EF deletion; those remain under T050-T057.
+On exact implementation head `e70995de5ea6ac14a8f1dacbb558121faf2c42e3`, the diagnostics
+persistence suite passed **148/148**, the combined deployment-schema suite passed **6/6**, and the
+complete unified-host suite passed **53/53**. The unified-host result contains all five real SQLite
+activation cases and all thirteen schema-selector cases, including the four explicit generic
+provider registrations. A clean `Elsa.Server` Release build completed with **0 errors** and 29
+disclosed pre-existing preview.81 obsolescence warnings in unchanged source. Commands, package
+resolution, source hashes, and retained-result hashes are in
+[`evidence/us4-composition-results.json`](evidence/us4-composition-results.json). These results
+complete T045 and T049. They do not certify the four-provider promotion matrix, performance, or EF
+deletion; those remain under T050-T057.
+
+## Host-composition independent review (2026-07-25)
+
+Three adversarial read-only reviewers inspected exact initial range
+`6313171ff33f4c42a54507885a080ce185d35526..b0a2a646922bebc95105d37318fdcac10dd068fa`
+on correctness/mechanism, evidence integrity, and scope/test preservation:
+
+- Correctness found that the four explicit generic unified-provider overloads registered a session
+  factory but did not expose the selected diagnostic deployment source. The remediation centralized
+  conditional aliasing in `AddGroundworkReferenceDeploymentSchema<TDeploymentSource>`, routed all
+  four providers through it, and added a four-provider singleton-identity regression.
+- Evidence integrity found that T045/T049 had narrative totals but no exact-head manifest, and that
+  “rejects an EF store” overstated an absence assertion. The remediation added the hash-bound
+  [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) manifest and
+  narrowed the claim to “no EF diagnostics store is registered or selected.”
+- Scope/test preservation returned clean: Identity, OpenIddict, the frozen EF performance oracles,
+  non-diagnostics shell settings, architecture guards, and existing tests remain intact. Only
+  `shells.json` changed among the serialized files in this slice.
+
+The correctness reviewer withdrew a provisional fresh-schema concern after re-verifying the
+ratified pre-start deployment contract: runtime sessions must admit already-deployed storage and
+must not materialize or repair schema. The originating reviewers re-verified the remediations before
+merge; no finding was waived.
 
 ## Final dependency audit
 
