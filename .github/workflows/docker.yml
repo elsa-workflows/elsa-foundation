@@ -3,56 +3,54 @@ name: Docker Image
 # Builds and pushes the Elsa 4 server image to Docker Hub as elsaworkflows/elsa-server.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
+# Docker's maintained builder fans the platforms out to native x64 and ARM64
+# GitHub-hosted runners, then assembles the multi-platform manifest.
 
 on:
   push:
     branches: [main]
+    paths:
+      - .dockerignore
+      - .github/workflows/docker.yml
+      - Directory.Build.props
+      - Directory.Packages.props
+      - Elsa.Server.slnx
+      - NuGet.config
+      - src/**
 
-env:
-  IMAGE: elsaworkflows/elsa-server
-  BASE_VERSION: '4.0.0'
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-push:
     name: Build & push elsa-server
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          labels: |
-            org.opencontainers.image.title=Elsa Server
-            org.opencontainers.image.description=Elsa 4 workflow server
-          tags: |
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ env.BASE_VERSION }}-preview.${{ github.run_number }},enable={{is_default_branch}}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      output: image
+      push: true
+      context: .
+      file: src/Apps/Elsa.Server/Dockerfile
+      platforms: linux/amd64,linux/arm64
+      cache: true
+      cache-mode: max
+      cache-scope: elsa-server
+      meta-images: elsaworkflows/elsa-server
+      meta-tags: |
+        type=sha
+        type=raw,value=latest
+        type=raw,value=4.0.0-preview.${{ github.run_number }}
+      labels: |
+        org.opencontainers.image.title=Elsa Server
+        org.opencontainers.image.description=Elsa 4 workflow server
+    secrets:
+      registry-auths: |
+        - registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: src/Apps/Elsa.Server/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
