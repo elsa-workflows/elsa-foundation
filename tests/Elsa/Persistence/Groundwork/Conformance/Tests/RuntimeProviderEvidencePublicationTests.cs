@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Xunit;
@@ -12,7 +13,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
 {
     private const string PublishOptIn = "ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE";
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
-    private const string EvidenceVersion = "0.0.1-preview.81";
+    private const string EvidenceVersion = "0.0.1-preview.86";
     private const string SourceCommit = "ELSA_GROUNDWORK_SOURCE_COMMIT";
     private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
     private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";
@@ -58,6 +59,54 @@ public sealed class RuntimeProviderEvidencePublicationTests
             capture.ProcessRestart.DocumentVersion.ToString(),
             Observation(restart, "child-process-rehydration"),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rejects_a_versioned_publication_when_the_source_changes_after_provider_capture()
+    {
+        var provenance = GroundworkProviderEvidenceProvenance.Create(
+            new string('a', 40),
+            new string('b', 40),
+            "runtime-checkpoint-fence-preview86");
+
+        RequireExactCleanSource(provenance, provenance.ElsaCommit, provenance.ElsaTree, isClean: true);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            RequireExactCleanSource(
+                provenance,
+                new string('c', 40),
+                provenance.ElsaTree,
+                isClean: true));
+
+        Assert.Contains("exact clean source commit and tree", exception.Message, StringComparison.Ordinal);
+    }
+
+    [SkippableFact]
+    public void Rejects_an_output_inside_the_repository_through_a_symlinked_temp_parent()
+    {
+        var fixture = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-publication-path-{Guid.NewGuid():N}");
+        var physicalTemp = Path.Combine(fixture, "physical-temp");
+        var tempAlias = Path.Combine(fixture, "tmp");
+        var repository = Path.Combine(physicalTemp, "repository");
+        Directory.CreateDirectory(repository);
+
+        try
+        {
+            Skip.If(!TryCreateDirectorySymlink(tempAlias, physicalTemp), "Symbolic links are not available for this test run.");
+
+            Assert.True(
+                GroundworkEvidencePath.IsWithin(Path.Combine(tempAlias, "repository", "evidence"), repository),
+                $"Expected '{GroundworkEvidencePath.Canonicalize(Path.Combine(tempAlias, "repository", "evidence"))}' to be inside '{GroundworkEvidencePath.Canonicalize(repository)}'.");
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                RequireExternalEvidenceOutput(Path.Combine(tempAlias, "repository", "evidence"), repository));
+
+            Assert.Contains("external staging", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySymlink(tempAlias);
+            Directory.Delete(fixture, recursive: true);
+        }
     }
 
     [SkippableFact]
@@ -199,6 +248,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
         }
 
         Assert.All(publications, publication => Assert.Equal(4, publication.LedgerRecords.Count));
+        RequireCurrentExactCleanSource(provenance);
         await GroundworkProviderEvidencePublisher.WriteVersionedLedgerAttachmentAsync(
             output,
             EvidenceVersion,
@@ -211,13 +261,16 @@ public sealed class RuntimeProviderEvidencePublicationTests
         GroundworkProviderEvidenceProvenance provenance,
         GroundworkLedgerObligation obligation,
         IEnumerable<RuntimeCheckpointFenceExecutionResult> captures,
-        Func<RuntimeCheckpointFenceExecutionResult, GroundworkScenarioResult> createResult) =>
-        GroundworkProviderEvidencePublisher.PublishVersionedAsync(
+        Func<RuntimeCheckpointFenceExecutionResult, GroundworkScenarioResult> createResult)
+    {
+        RequireCurrentExactCleanSource(provenance);
+        return GroundworkProviderEvidencePublisher.PublishVersionedAsync(
             output,
             EvidenceVersion,
             provenance,
             obligation,
             captures.Select(createResult));
+    }
 
     private static GroundworkProviderEvidenceProvenance RequireVersionedPublicationProvenance()
     {
@@ -232,7 +285,34 @@ public sealed class RuntimeProviderEvidencePublicationTests
                 $"Set {SourceCommit}, {SourceTree}, and {RunIdentity} to exact retained publication provenance.");
         }
 
-        return GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
+        var provenance = GroundworkProviderEvidenceProvenance.Create(commit, tree, runIdentity);
+        RequireCurrentExactCleanSource(provenance);
+        return provenance;
+    }
+
+    private static void RequireCurrentExactCleanSource(GroundworkProviderEvidenceProvenance provenance)
+    {
+        var repositoryRoot = RepositoryRoot;
+        RequireExactCleanSource(
+            provenance,
+            Git(repositoryRoot, "rev-parse", "HEAD"),
+            Git(repositoryRoot, "rev-parse", "HEAD^{tree}"),
+            isClean: string.IsNullOrWhiteSpace(Git(repositoryRoot, "status", "--porcelain")));
+    }
+
+    private static void RequireExactCleanSource(
+        GroundworkProviderEvidenceProvenance provenance,
+        string commit,
+        string tree,
+        bool isClean)
+    {
+        if (!string.Equals(commit, provenance.ElsaCommit, StringComparison.Ordinal) ||
+            !string.Equals(tree, provenance.ElsaTree, StringComparison.Ordinal) ||
+            !isClean)
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be published from the exact clean source commit and tree recorded in its provenance.");
+        }
     }
 
     private static string Observation(GroundworkScenarioResult result, string name) =>
@@ -246,5 +326,70 @@ public sealed class RuntimeProviderEvidencePublicationTests
         Skip.If(
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(EvidenceOutput)),
             $"Set {EvidenceOutput} to an explicit artifact output directory before publication.");
+        RequireExternalEvidenceOutput(Environment.GetEnvironmentVariable(EvidenceOutput)!, RepositoryRoot);
+    }
+
+    private static void RequireExternalEvidenceOutput(string output, string repositoryRoot)
+    {
+        if (GroundworkEvidencePath.IsWithin(output, repositoryRoot) ||
+            GroundworkEvidencePath.IsWithin(repositoryRoot, output))
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be published to external staging, never into the tracked repository.");
+        }
+    }
+
+    private static string RepositoryRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                directory = directory.Parent;
+
+            return directory?.FullName
+                   ?? throw new InvalidOperationException("Could not locate the Elsa Foundation repository root.");
+        }
+    }
+
+    private static string Git(string repositoryRoot, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)
+                            ?? throw new InvalidOperationException("Could not start git for provider-evidence publication.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error.Trim()}");
+        return output.Trim();
+    }
+
+    private static bool TryCreateDirectorySymlink(string path, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(path, target);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static void DeleteDirectorySymlink(string path)
+    {
+        if (new DirectoryInfo(path).LinkTarget is not null)
+            Directory.Delete(path);
     }
 }

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "147af38e77bf71eb94a0147176073a67b87608c694ee4da172290af6e2fe9cd8",
+  "executionPath": "provider-driver/mongodb/runtime-checkpoint-idempotency/147af38e77bf71eb",
+  "clients": 2,
+  "resultHash": "537633fe2c04583a8488ca15c6771ee52787891e82d2ff7597b97bcacd6b74d8",
+  "observations": [
+    {
+      "name": "conflicting-replay",
+      "value": "RuntimeCheckpointReplayConflictException"
+    },
+    {
+      "name": "durable-outcome-count",
+      "value": "1"
+    },
+    {
+      "name": "equivalent-replay",
+      "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2dc442ea31061971cae6a86a8e8f0a13904cbeb7",
+    "elsaTree": "ae590a5d927e83b9688afa878a02214ed81ee9e9",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "concurrencySemantic": "create-only-idempotency-marker",
+  "evidence": "versions/0.0.1-preview.86/evidence/mongodb/runtime-checkpoint-commit/10f38a26e09d6b24.json"
+}

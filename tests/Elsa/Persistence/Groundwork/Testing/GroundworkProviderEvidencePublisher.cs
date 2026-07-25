@@ -94,7 +94,12 @@ public static class GroundworkProviderEvidencePublisher
             {
                 var nativePath = record["nativeEvidence"]!.GetValue<string>();
                 var nativeBytes = Encoding.UTF8.GetBytes(RequireSanitized(nativeRoute.Evidence));
-                var nativeSha256 = await WriteAndHashAsync(evidenceRoot, nativePath, nativeBytes, cancellationToken);
+                var nativeSha256 = await WriteAndHashAsync(
+                    evidenceRoot,
+                    nativePath,
+                    nativeBytes,
+                    createNew: artifactNamespace is not null,
+                    cancellationToken);
                 record["nativeEvidenceSha256"] = nativeSha256;
                 artifacts.Add(new GroundworkProviderEvidenceArtifact(nativePath, nativeSha256));
             }
@@ -103,7 +108,12 @@ public static class GroundworkProviderEvidencePublisher
             var payloadBytes = Serialize(payload);
             _ = GroundworkSanitizedEvidence.Create("provider-evidence", Encoding.UTF8.GetString(payloadBytes));
             var evidencePath = record["evidence"]!.GetValue<string>();
-            var evidenceSha256 = await WriteAndHashAsync(evidenceRoot, evidencePath, payloadBytes, cancellationToken);
+            var evidenceSha256 = await WriteAndHashAsync(
+                evidenceRoot,
+                evidencePath,
+                payloadBytes,
+                createNew: artifactNamespace is not null,
+                cancellationToken);
             record["evidenceSha256"] = evidenceSha256;
             artifacts.Add(new GroundworkProviderEvidenceArtifact(evidencePath, evidenceSha256));
             records.Add(record);
@@ -173,7 +183,8 @@ public static class GroundworkProviderEvidencePublisher
                     '\u001f',
                     record["coverageEntryId"]!.GetValue<string>(),
                     record["scenarioId"]!.GetValue<string>(),
-                    record["provider"]!.GetValue<string>()),
+                    record["provider"]!.GetValue<string>(),
+                    record["providerVersion"]!.GetValue<string>()),
                 StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicate is not null)
@@ -194,6 +205,7 @@ public static class GroundworkProviderEvidencePublisher
             evidenceRoot,
             relativePath,
             Serialize(ordered),
+            createNew: attachmentNamespace is not null,
             cancellationToken);
         return new GroundworkProviderEvidenceArtifact(relativePath, sha256);
     }
@@ -317,7 +329,7 @@ public static class GroundworkProviderEvidencePublisher
             ["providerVersion"] = result.Provider.ProviderVersion,
             ["topology"] = result.Provider.Topology.Description,
             ["manifestFingerprint"] = result.CompositionFingerprint.Value,
-            ["executionPath"] = $"provider-driver/{result.Provider.ProviderKey}/{obligation.CoverageEntryId}/{ScenarioKey(obligation.ScenarioId)}",
+            ["executionPath"] = result.ExecutionPath.Value,
             ["clients"] = result.Clients,
             ["resultHash"] = result.ResultDigest,
             ["observations"] = new JsonArray(result.Observations
@@ -471,18 +483,23 @@ public static class GroundworkProviderEvidencePublisher
         string evidenceRoot,
         string relativePath,
         byte[] content,
+        bool createNew,
         CancellationToken cancellationToken)
     {
-        var root = Path.GetFullPath(evidenceRoot);
-        var path = Path.GetFullPath(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-        var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar)
-            ? root
-            : root + Path.DirectorySeparatorChar;
-        if (!path.StartsWith(rootPrefix, StringComparison.Ordinal))
-            throw new InvalidOperationException("Evidence path escaped the publication root.");
-
+        Directory.CreateDirectory(evidenceRoot);
+        var root = GroundworkEvidencePath.Canonicalize(evidenceRoot);
+        var path = GroundworkEvidencePath.ResolveWithin(root, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllBytesAsync(path, content, cancellationToken);
+        path = GroundworkEvidencePath.ResolveWithin(root, relativePath);
+        if (createNew)
+        {
+            await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await stream.WriteAsync(content, cancellationToken);
+        }
+        else
+        {
+            await File.WriteAllBytesAsync(path, content, cancellationToken);
+        }
         return Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path, cancellationToken)));
     }
 

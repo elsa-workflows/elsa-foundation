@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.86",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "18061eca9cfaaee3d690b0174ecb8706f073b20c5cde3c905eb22908f9e27b68",
+  "executionPath": "provider-driver/sqlite/runtime-checkpoint-idempotency/18061eca9cfaaee3",
+  "clients": 2,
+  "resultHash": "69f63d0f8b2369f06cae21a61a1686660df64ed279f371d4922c57b523248d44",
+  "observations": [
+    {
+      "name": "conflicting-replay",
+      "value": "RuntimeCheckpointReplayConflictException"
+    },
+    {
+      "name": "durable-outcome-count",
+      "value": "1"
+    },
+    {
+      "name": "equivalent-replay",
+      "value": "marker-version-before:1;marker-version-after:1;pending-work-match:true"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "2dc442ea31061971cae6a86a8e8f0a13904cbeb7",
+    "elsaTree": "ae590a5d927e83b9688afa878a02214ed81ee9e9",
+    "runIdentity": "runtime-checkpoint-fence-preview86"
+  },
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "versions/0.0.1-preview.86/evidence/sqlite/runtime-post-commit-outbox/6d576dc01c828264.json"
+}

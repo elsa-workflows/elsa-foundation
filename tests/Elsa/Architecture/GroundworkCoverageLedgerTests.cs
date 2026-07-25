@@ -9,19 +9,29 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.81";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.86";
+    private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
-    private const string CheckpointFenceAttachmentRelativePath =
+    private const string CurrentCheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string CurrentCheckpointFenceAttachmentSha256 =
+        "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
+    private const string PreviousCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string PreviousCheckpointFenceAttachmentSha256 =
+        "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34";
     private const string HistoricalCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
     private const string HistoricalCheckpointFenceAttachmentSha256 =
         "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
-    private const string ExpectedCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
-    private const string ExpectedCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
-    private const string ExpectedCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string PreviousCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
+    private const string PreviousCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
+    private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string CurrentCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
+    private const string CurrentCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
+    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -80,81 +90,101 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Checked_in_checkpoint_fence_attachment_is_imported_exactly_once_by_declared_tuple()
+    public void Preview81_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
+    {
+        AssertCheckpointFenceGeneration(
+            PreviousPublishedGroundworkVersion,
+            PreviousCheckpointFenceAttachmentRelativePath,
+            PreviousCheckpointFenceAttachmentSha256,
+            PreviousCheckpointFenceEvidenceCommit,
+            PreviousCheckpointFenceEvidenceTree,
+            PreviousCheckpointFenceRunIdentity);
+    }
+
+    [Fact]
+    public void Preview86_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
+    {
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity);
+
+        var entries = Entries(ReadLedger()).ToArray();
+        Assert.DoesNotContain(
+            entries,
+            entry => entry["status"]?.GetValue<string>() is
+                "evidence-complete" or "performance-complete" or "ready");
+    }
+
+    [Fact]
+    public void Preview86_exact_attachment_guard_allows_valid_current_evidence_outside_its_closed_slice()
     {
         var ledger = ReadLedger();
-        var attachmentPath = Path.Combine(
-            RepoRoot,
-            CheckpointFenceAttachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
-        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
-                                    ?.OfType<JsonObject>()
-                                    .ToArray()
-                                ?? throw new InvalidOperationException(
-                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
-        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["runtime-checkpoint-commit"] = 28,
-            ["runtime-execution-liveness"] = 4,
-            ["runtime-post-commit-outbox"] = 4
-        };
-        var attachmentRecordsByEntry = attachmentRecords
-            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
-            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
-        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
-        var ledgerRecords = Entries(ledger)
-            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
-            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
-                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
-            .Where(record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion)
-            .ToArray();
-        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
-        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:expected-version-state-changes");
+        record["concurrencySemantic"] = "expected-version-state-changes";
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
 
-        Assert.Equal(36, attachmentRecords.Length);
-        Assert.Equal(
-            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
-            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
-        Assert.All(attachmentRecords, record =>
+        Assert.Empty(CreateEvidenceValidator().Validate(ledger));
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            CurrentCheckpointFenceAttachmentRelativePath,
+            CurrentCheckpointFenceAttachmentSha256,
+            CurrentCheckpointFenceEvidenceCommit,
+            CurrentCheckpointFenceEvidenceTree,
+            CurrentCheckpointFenceRunIdentity,
+            ledger);
+    }
+
+    [Fact]
+    public void Retained_current_checkpoint_fence_generation_rejects_a_partial_import()
+    {
+        var ledger = ReadLedger();
+        RemoveEvidenceGeneration(ledger, ExpectedGroundworkVersion);
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:atomic-stale-fence-rejection");
+        record["sourceScenarioId"] = "runtime-execution-ownership-fencing";
+        record["concurrencySemantic"] = "atomic-stale-fence-rejection";
+        record["provenance"] = new JsonObject
         {
-            Assert.Equal(ExpectedGroundworkVersion, record["providerVersion"]?.GetValue<string>());
-            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
-            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
-            Assert.StartsWith(
-                $"versions/{ExpectedGroundworkVersion}/evidence/",
-                relativeEvidencePath,
-                StringComparison.Ordinal);
-            var evidencePath = Path.Combine(
-                RepoRoot,
-                "specs/094-harden-groundwork-stores",
-                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
-            Assert.Equal(
-                record["evidenceSha256"]!.GetValue<string>(),
-                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
-            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
-            Assert.Equal(record["manifestFingerprint"]!.GetValue<string>(), artifact["manifestFingerprint"]!.GetValue<string>());
-            Assert.NotEmpty(artifact["observations"]!.AsArray());
-            Assert.Equal(
-                ExpectedCheckpointFenceEvidenceCommit,
-                artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
-            Assert.Equal(
-                ExpectedCheckpointFenceEvidenceTree,
-                artifact["provenance"]!["elsaTree"]!.GetValue<string>());
-            Assert.Equal(
-                ExpectedCheckpointFenceRunIdentity,
-                artifact["provenance"]!["runIdentity"]!.GetValue<string>());
-        });
-        Assert.All(attachmentByKey, records => Assert.Single(records));
-        Assert.All(ledgerByKey, records => Assert.Single(records));
-        Assert.Equal(
-            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
-            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
-        foreach (var attachment in attachmentByKey)
-        {
-            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
-            Assert.True(
-                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
-                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
-        }
+            ["elsaCommit"] = new string('a', 40),
+            ["elsaTree"] = new string('b', 40),
+            ["runIdentity"] = "runtime-checkpoint-fence-preview86"
+        };
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            $"retained checkpoint/fence generation '{ExpectedGroundworkVersion}' must contain exactly 36 records; found 1.",
+            findings);
+    }
+
+    [Fact]
+    public void Retained_checkpoint_fence_generation_allows_valid_current_evidence_outside_its_closed_slice()
+    {
+        var ledger = ReadLedger();
+        RemoveEvidenceGeneration(ledger, ExpectedGroundworkVersion);
+        var record = EvidenceRecord(
+            "runtime-checkpoint-commit",
+            "sqlite",
+            "concurrencySemantic:expected-version-state-changes");
+        record["concurrencySemantic"] = "expected-version-state-changes";
+        WriteEvidenceArtifacts([record]);
+        Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Empty(findings);
     }
 
     [Fact]
@@ -758,7 +788,6 @@ public sealed class GroundworkCoverageLedgerTests
         var record = entry["providerEvidence"]!["sqlserver"]!.AsArray()[0]!.AsObject();
         var scenarioId = record["scenarioId"]!.GetValue<string>();
         record["providerIdentity"] = "groundwork-sqlite";
-        record["providerVersion"] = "0.0.0-invented";
         record["executionPath"] = "memory-fixture";
 
         var findings = CreateEvidenceValidator().Validate(ledger);
@@ -767,11 +796,61 @@ public sealed class GroundworkCoverageLedgerTests
             $"{EntryId}: sqlserver evidence record '{scenarioId}' requires provider identity 'groundwork-sqlserver'; found 'groundwork-sqlite'.",
             findings);
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' uses provider version '0.0.0-invented', not ledger Groundwork version '{ExpectedGroundworkVersion}'.",
+            $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its executed source scenario and physical target.",
             findings);
+    }
+
+    [Fact]
+    public void Evidence_complete_requires_a_current_provider_generation()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        foreach (var record in entry["providerEvidence"]!["sqlserver"]!.AsArray().OfType<JsonObject>())
+            record["providerVersion"] = "0.0.0-invented";
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
         Assert.Contains(
-            $"{EntryId}: sqlserver evidence record '{scenarioId}' does not identify its catalog-bound provider-driver execution path.",
+            findings,
+            finding => finding.Contains(
+                $"uses provider version '0.0.0-invented', not ledger Groundwork version '{ExpectedGroundworkVersion}'",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            $"{EntryId}: status 'evidence-complete' requires sqlserver provider evidence.",
             findings);
+    }
+
+    [Fact]
+    public void Evidence_complete_uses_only_current_records_while_retaining_prior_generations()
+    {
+        var ledger = ReadLedger();
+        var entry = Entry(ledger, EntryId);
+        entry["status"] = "evidence-complete";
+        AddCompleteEvidence(entry);
+        foreach (var provider in new[] { "sqlite", "sqlserver", "postgresql", "mongodb" })
+        {
+            var records = entry["providerEvidence"]![provider]!.AsArray();
+            var retained = records[0]!.DeepClone().AsObject();
+            retained["providerVersion"] = PreviousPublishedGroundworkVersion;
+            retained["evidence"] = GroundworkEvidenceArtifactContract.VersionedEvidencePath(
+                PreviousPublishedGroundworkVersion,
+                provider,
+                EntryId,
+                retained["scenarioId"]!.GetValue<string>());
+            WriteEvidenceArtifacts([retained]);
+            records.Insert(0, retained);
+        }
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.DoesNotContain(
+            findings,
+            finding => finding.Contains(PreviousPublishedGroundworkVersion, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            findings,
+            finding => finding.Contains("occurs 2 times", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -902,6 +981,91 @@ public sealed class GroundworkCoverageLedgerTests
             findings);
     }
 
+    private static void AssertCheckpointFenceGeneration(
+        string providerVersion,
+        string attachmentRelativePath,
+        string attachmentSha256,
+        string evidenceCommit,
+        string evidenceTree,
+        string runIdentity,
+        JsonObject? ledgerOverride = null)
+    {
+        var ledger = ledgerOverride ?? ReadLedger();
+        var attachmentPath = Path.Combine(
+            RepoRoot,
+            attachmentRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var attachmentRecords = JsonNode.Parse(File.ReadAllText(attachmentPath))?.AsArray()
+                                    ?.OfType<JsonObject>()
+                                    .ToArray()
+                                ?? throw new InvalidOperationException(
+                                    $"Checkpoint/fence ledger attachment '{attachmentPath}' is empty.");
+        var expectedRecordsByEntry = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["runtime-checkpoint-commit"] = 28,
+            ["runtime-execution-liveness"] = 4,
+            ["runtime-post-commit-outbox"] = 4
+        };
+        var attachmentRecordsByEntry = attachmentRecords
+            .GroupBy(record => record["coverageEntryId"]!.GetValue<string>(), StringComparer.Ordinal)
+            .ToDictionary(records => records.Key, records => records.Count(), StringComparer.Ordinal);
+        var attachmentByKey = attachmentRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+        var attachmentKeys = attachmentByKey
+            .Select(records => records.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var attachmentEntryIds = expectedRecordsByEntry.Keys.ToHashSet(StringComparer.Ordinal);
+        var ledgerRecords = Entries(ledger)
+            .Where(entry => attachmentEntryIds.Contains(EntryIdOf(entry)))
+            .SelectMany(entry => entry["providerEvidence"]!.AsObject()
+                .SelectMany(provider => provider.Value!.AsArray().OfType<JsonObject>()))
+            .Where(record => record["providerVersion"]?.GetValue<string>() == providerVersion)
+            .Where(record => attachmentKeys.Contains(EvidenceTuple(record)))
+            .ToArray();
+        var ledgerByKey = ledgerRecords.GroupBy(EvidenceTuple, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(36, attachmentRecords.Length);
+        Assert.Equal(attachmentSha256, GroundworkEvidenceArtifactContract.FileSha256(attachmentPath));
+        Assert.Equal(
+            expectedRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+            attachmentRecordsByEntry.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        Assert.All(attachmentRecords, record =>
+        {
+            Assert.Equal(providerVersion, record["providerVersion"]?.GetValue<string>());
+            Assert.Equal("pass", record["outcome"]?.GetValue<string>());
+            var relativeEvidencePath = record["evidence"]!.GetValue<string>();
+            Assert.StartsWith(
+                $"versions/{providerVersion}/evidence/",
+                relativeEvidencePath,
+                StringComparison.Ordinal);
+            var evidencePath = Path.Combine(
+                RepoRoot,
+                "specs/094-harden-groundwork-stores",
+                relativeEvidencePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.Equal(
+                record["evidenceSha256"]!.GetValue<string>(),
+                GroundworkEvidenceArtifactContract.FileSha256(evidencePath));
+            var artifact = JsonNode.Parse(File.ReadAllText(evidencePath))!.AsObject();
+            Assert.Equal(
+                record["manifestFingerprint"]!.GetValue<string>(),
+                artifact["manifestFingerprint"]!.GetValue<string>());
+            Assert.NotEmpty(artifact["observations"]!.AsArray());
+            Assert.Equal(evidenceCommit, artifact["provenance"]!["elsaCommit"]!.GetValue<string>());
+            Assert.Equal(evidenceTree, artifact["provenance"]!["elsaTree"]!.GetValue<string>());
+            Assert.Equal(runIdentity, artifact["provenance"]!["runIdentity"]!.GetValue<string>());
+        });
+        Assert.All(attachmentByKey, records => Assert.Single(records));
+        Assert.All(ledgerByKey, records => Assert.Single(records));
+        Assert.Equal(
+            attachmentByKey.Select(records => records.Key).Order(StringComparer.Ordinal),
+            ledgerByKey.Select(records => records.Key).Order(StringComparer.Ordinal));
+        foreach (var attachment in attachmentByKey)
+        {
+            var ledgerRecord = ledgerByKey.Single(records => records.Key == attachment.Key).Single();
+            Assert.True(
+                JsonNode.DeepEquals(attachment.Single(), ledgerRecord),
+                $"Checkpoint/fence evidence tuple '{attachment.Key}' differs from its attachment record.");
+        }
+    }
+
     private static GroundworkCoverageLedgerValidator CreateValidator() =>
         new(SchemaPath, ExpectedEntryIds);
 
@@ -950,6 +1114,20 @@ public sealed class GroundworkCoverageLedgerTests
         record["scenarioId"]?.GetValue<string>() ?? "<missing-scenario>",
         record["provider"]?.GetValue<string>() ?? "<missing-provider>");
 
+    private static void RemoveEvidenceGeneration(JsonObject ledger, string providerVersion)
+    {
+        foreach (var providerRecords in Entries(ledger)
+                     .SelectMany(entry => entry["providerEvidence"]!.AsObject())
+                     .Select(provider => provider.Value!.AsArray()))
+        {
+            for (var index = providerRecords.Count - 1; index >= 0; index--)
+            {
+                if (providerRecords[index]?["providerVersion"]?.GetValue<string>() == providerVersion)
+                    providerRecords.RemoveAt(index);
+            }
+        }
+    }
+
     private static void AddCompleteEvidence(JsonObject entry)
     {
         var entryId = EntryIdOf(entry);
@@ -994,7 +1172,6 @@ public sealed class GroundworkCoverageLedgerTests
 
     private static JsonObject EvidenceRecord(string entryId, string provider, string scenarioId)
     {
-        var scenarioKey = GroundworkEvidenceArtifactContract.ScenarioKey(scenarioId);
         return new JsonObject
         {
             ["scenarioId"] = scenarioId,
@@ -1012,7 +1189,7 @@ public sealed class GroundworkCoverageLedgerTests
                 _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown test provider.")
             },
             ["manifestFingerprint"] = new string('a', 64),
-            ["executionPath"] = $"provider-driver/{provider}/{entryId}/{scenarioKey}",
+            ["executionPath"] = $"provider-driver/{provider}/fixture-source/{new string('a', 16)}",
             ["clients"] = 2,
             ["resultHash"] = new string('b', 64),
             ["outcome"] = "pass",
