@@ -9,11 +9,12 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// SC-022(d) + SC-022(e) activity-level. Branch coverage — required satisfied, required missing,
-/// required present-but-empty, recursion into ChildActivities, unknown version skipped (the
-/// unknown-version *error* is <see cref="UnknownActivityVersionValidator"/>'s concern per the
-/// FR-033 2026-07-05 amendment; this validator resolves via <c>CatalogVersionResolver</c> and
-/// skips the unresolvable node rather than double-reporting or faulting the gate).
+/// SC-022(d) + SC-022(e) activity-level. Branch coverage — required input satisfied, missing, or
+/// present-but-empty; optional author-side result capture; recursion into ChildActivities; unknown
+/// version skipped (the unknown-version *error* is
+/// <see cref="UnknownActivityVersionValidator"/>'s concern per the FR-033 2026-07-05 amendment;
+/// this validator resolves via <c>CatalogVersionResolver</c> and skips the unresolvable node rather
+/// than double-reporting or faulting the gate).
 /// </summary>
 public sealed class RequiredInputOutputValidatorTests
 {
@@ -72,15 +73,14 @@ public sealed class RequiredInputOutputValidatorTests
     }
 
     [Fact]
-    public async Task Required_output_missing_emits_error()
+    public async Task Required_activity_result_does_not_require_an_authored_output_binding()
     {
         var catalog = new StubActivityCatalog().Add("av-1", outputs: [RequiredOutput("result")]);
 
         var state = State(activities: [Node("n1", "av-1")]);
         var errors = await Validate(Validator(catalog), state);
 
-        var error = Assert.Single(errors);
-        Assert.Equal("n1/outputs/result", error.Path);
+        Assert.Empty(errors);
     }
 
     [Fact]
