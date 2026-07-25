@@ -60,13 +60,15 @@ public sealed class CanonicalRecordSerializer
                     trace.SpanCount)),
                 Fields(
                     (RecordFields.TraceId, Strings(traceId)),
+                    (RecordFields.RootSpanId, OptionalString(trace.RootSpanId)),
                     (RecordFields.ResourceId, Strings(resourceIds)),
                     (RecordFields.ServiceName, Strings(canonicalServiceNames)),
                     (RecordFields.WorkflowInstanceId, Strings(workflowInstanceIds)),
                     (RecordFields.Status, Int64((long)trace.Status)),
                     (RecordFields.StartTime, Timestamp(trace.StartTime)),
                     (RecordFields.EndTime, Timestamp(trace.EndTime)),
-                    (RecordFields.Name, OptionalString(trace.Name))));
+                    (RecordFields.Name, OptionalString(trace.Name)),
+                    (RecordFields.SpanCount, Int64(trace.SpanCount))));
         });
     }
 

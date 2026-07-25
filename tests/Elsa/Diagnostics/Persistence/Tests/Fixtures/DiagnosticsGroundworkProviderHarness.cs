@@ -23,6 +23,16 @@ namespace Elsa.Diagnostics.Persistence.Tests.Fixtures;
 
 internal static class DiagnosticsGroundworkProviderHarness
 {
+    public static async Task CreateDiagnosticRecordStreamAsync(
+        DiagnosticsProviderLease provider,
+        DiagnosticRecordStreamDefinition definition,
+        CancellationToken cancellationToken = default)
+    {
+        var lease = await CreateRecordStoreAsync(provider, definition, cancellationToken);
+        if (lease.Owner is not null)
+            await lease.Owner.DisposeAsync();
+    }
+
     public static async Task<GroundworkOpenTelemetryProviderLease> CreateOpenTelemetryAsync(
         DiagnosticsProviderLease provider,
         GroundworkOpenTelemetryBinding binding,

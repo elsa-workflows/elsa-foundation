@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.Persistence.Tests.Fixtures;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -201,6 +202,381 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         Assert.Equal((1, 1, 1, 1, 1, 1),
             (diagnostics.ResourceCount, diagnostics.TraceCount, diagnostics.SpanCount,
                 diagnostics.MetricInstrumentCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "trace-summary-scope", "collector-a");
+        var start = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "Orders", start);
+        var alphaFirst = new TelemetryTrace(
+            "trace-alpha", "root-alpha", "first alpha", start, start.AddMilliseconds(10), TimeSpan.FromMilliseconds(10),
+            SpanStatus.Error, [resource.Id], [], 2);
+        var alphaSecond = new TelemetryTrace(
+            "trace-alpha", "root-later", "later alpha", start.AddSeconds(1), start.AddSeconds(1).AddMilliseconds(25),
+            TimeSpan.FromMilliseconds(25), SpanStatus.Ok, [resource.Id], ["workflow-alpha"], 3);
+        var beta = new TelemetryTrace(
+            "trace-beta", "root-beta", "beta", start.AddSeconds(2), start.AddSeconds(2).AddMilliseconds(5),
+            TimeSpan.FromMilliseconds(5), SpanStatus.Ok, [resource.Id], ["workflow-beta"], 1);
+        var gamma = new TelemetryTrace(
+            "trace-gamma", "root-gamma", "gamma", start.AddSeconds(3), start.AddSeconds(3).AddMilliseconds(5),
+            TimeSpan.FromMilliseconds(5), SpanStatus.Ok, [resource.Id], ["workflow-gamma"], 1);
+
+        await using (var firstProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var secondProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var first = new GroundworkOpenTelemetryStore(
+                         firstProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+                         binding))
+        await using (var second = new GroundworkOpenTelemetryStore(
+                         secondProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+                         binding))
+        {
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([resource], [], [], [], [], []));
+            await Task.WhenAll(
+                first.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [alphaFirst], [], [], [], [])).AsTask(),
+                second.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [alphaSecond], [], [], [], [])).AsTask());
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [beta, gamma], [], [], [], []));
+        }
+
+        await using var restartedProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await using var restarted = new GroundworkOpenTelemetryStore(
+            restartedProvider.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 }),
+            binding);
+
+        var merged = Assert.Single((await restarted.QueryTracesAsync(new()
+        {
+            TraceId = "ALPHA",
+            ResourceId = "RESOURCE-API",
+            ServiceName = "ORDERS",
+            WorkflowInstanceId = "WORKFLOW-ALPHA",
+            Status = SpanStatus.Error,
+            From = start,
+            To = alphaSecond.EndTime,
+            Search = "ALPHA",
+            Take = 10
+        })).Items);
+        var newestTwo = await restarted.QueryTracesAsync(new() { Take = 2 });
+        var detail = await restarted.GetTraceAsync("TRACE-ALPHA");
+
+        Assert.Equal((alphaFirst.StartTime, alphaSecond.EndTime, alphaSecond.EndTime - alphaFirst.StartTime),
+            (merged.StartTime, merged.EndTime, merged.Duration));
+        Assert.Equal(("root-alpha", "first alpha", SpanStatus.Error, 5),
+            (merged.RootSpanId, merged.Name, merged.Status, merged.SpanCount));
+        Assert.Equal([resource.Id], merged.ResourceIds);
+        Assert.Equal(["workflow-alpha"], merged.WorkflowInstanceIds);
+        Assert.Equal(["trace-beta", "trace-gamma"], newestTwo.Items.Select(trace => trace.TraceId));
+        Assert.NotNull(detail);
+        Assert.Equal(merged.TraceId, detail.Trace.TraceId);
+        Assert.Equal(merged.RootSpanId, detail.Trace.RootSpanId);
+        Assert.Equal(merged.Name, detail.Trace.Name);
+        Assert.Equal(merged.StartTime, detail.Trace.StartTime);
+        Assert.Equal(merged.EndTime, detail.Trace.EndTime);
+        Assert.Equal(merged.Duration, detail.Trace.Duration);
+        Assert.Equal(merged.Status, detail.Trace.Status);
+        Assert.Equal(merged.ResourceIds, detail.Trace.ResourceIds);
+        Assert.Equal(merged.WorkflowInstanceIds, detail.Trace.WorkflowInstanceIds);
+        Assert.Equal(merged.SpanCount, detail.Trace.SpanCount);
+
+        var scope = new DiagnosticStorageScope(binding.TenantId, binding.ScopeId);
+        var firstPage = await restartedProvider.Stores.Traces.QueryGroupsAsync(new(
+            scope,
+            new(binding.TraceStreamId),
+            OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+            2,
+            new(RecordFields.StartTime),
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity));
+        var secondPage = await restartedProvider.Stores.Traces.QueryGroupsAsync(new(
+            scope,
+            new(binding.TraceStreamId),
+            OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
+            2,
+            new(RecordFields.StartTime),
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
+            Continuation: firstPage.Continuation));
+
+        Assert.Equal(["trace-alpha", "trace-beta"], firstPage.Groups.Select(group => GroupString(group, RecordFields.TraceId)));
+        Assert.Equal(["trace-gamma"], secondPage.Groups.Select(group => GroupString(group, RecordFields.TraceId)));
+        Assert.Null(secondPage.Continuation);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Grouped_trace_union_accepts_valid_values_observed_before_retention(
+        DiagnosticsProviderKind providerKind)
+    {
+        const int distinctValues = 257;
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "trace-union-boundary", "collector-a");
+        var start = new DateTimeOffset(2026, 7, 25, 15, 0, 0, TimeSpan.Zero);
+        var resources = Enumerable.Range(0, distinctValues)
+            .Select(index => Resource($"resource-{index:D3}", $"service-{index:D3}", start.AddTicks(index)))
+            .ToArray();
+        var fragments = resources
+            .Select((resource, index) => new TelemetryTrace(
+                "trace-wide",
+                index == 0 ? "root-wide" : null,
+                index == 0 ? "wide trace" : null,
+                start.AddTicks(index),
+                start.AddTicks(index + 1),
+                TimeSpan.FromTicks(1),
+                SpanStatus.Ok,
+                [resource.Id],
+                [$"workflow-{index:D3}"],
+                1))
+            .ToArray();
+
+        await using var providerLease =
+            await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await using var store = new GroundworkOpenTelemetryStore(
+            providerLease.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions()),
+            binding);
+        var serializer = new CanonicalRecordSerializer();
+        var records = fragments
+            .Select((trace, index) => serializer.ToRecord(
+                $"trace-fragment-{index:D3}",
+                trace,
+                [$"service-{index:D3}"]))
+            .ToArray();
+        await providerLease.Stores.Traces.AppendAsync(DiagnosticRecordBatch.Create(
+            new(binding.TenantId, binding.ScopeId),
+            new(binding.TraceStreamId),
+            new(DateTimeOffset.UtcNow, "pre-retention-trace-union"),
+            records));
+
+        var trace = Assert.Single((await store.QueryTracesAsync(new()
+        {
+            TraceId = "TRACE-WIDE",
+            ServiceName = "SERVICE-256",
+            WorkflowInstanceId = "WORKFLOW-256",
+            Take = 1
+        })).Items);
+
+        Assert.Equal(distinctValues, trace.ResourceIds.Count);
+        Assert.Equal(distinctValues, trace.WorkflowInstanceIds.Count);
+        Assert.Equal(distinctValues, trace.SpanCount);
+        Assert.Contains("resource-256", trace.ResourceIds);
+        Assert.Contains("workflow-256", trace.WorkflowInstanceIds);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "trace-input-window", "collector-a");
+        var start = new DateTimeOffset(2026, 7, 25, 16, 0, 0, TimeSpan.Zero);
+        var serializer = new CanonicalRecordSerializer();
+        var traces = Enumerable.Range(0, 3)
+            .Select(index => Trace(
+                $"trace-{index}",
+                $"resource-{index}",
+                start.AddSeconds(index),
+                $"trace {index}",
+                SpanStatus.Ok))
+            .ToArray();
+
+        await using var providerLease =
+            await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await providerLease.Stores.Traces.AppendAsync(DiagnosticRecordBatch.Create(
+            new(binding.TenantId, binding.ScopeId),
+            new(binding.TraceStreamId),
+            new(DateTimeOffset.UtcNow, "pre-retention-trace-window"),
+            traces.Select((trace, index) =>
+                serializer.ToRecord($"trace-window-{index}", trace, [$"service-{index}"])).ToArray()));
+        await using var store = new GroundworkOpenTelemetryStore(
+            providerLease.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { TraceCapacity = 2 }),
+            binding);
+
+        var visible = await store.QueryTracesAsync(new() { Take = 10 });
+        var excludedByWindow = await store.QueryTracesAsync(new() { TraceId = "trace-0", Take = 10 });
+        var excludedDetail = await store.GetTraceAsync("trace-0");
+
+        Assert.Equal(["trace-1", "trace-2"], visible.Items.Select(trace => trace.TraceId));
+        Assert.Empty(excludedByWindow.Items);
+        Assert.Null(excludedDetail);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage(
+        DiagnosticsProviderKind providerKind)
+    {
+        var previousProvider = await providers.CreateIsolatedAsync(providerKind);
+        const string streamId = "otel:upgrade-proof:traces";
+        await DiagnosticsGroundworkProviderHarness.CreateDiagnosticRecordStreamAsync(
+            previousProvider,
+            Preview81TraceDefinition(streamId));
+
+        var incompatible = await Assert.ThrowsAnyAsync<Exception>(() =>
+            DiagnosticsGroundworkProviderHarness.CreateDiagnosticRecordStreamAsync(
+                previousProvider,
+                OpenTelemetryRecordStreamDefinitions.CreateTraces(streamId)));
+        Assert.Contains("incompatible persisted definition", incompatible.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        var freshProvider = await providers.CreateIsolatedAsync(providerKind);
+        await DiagnosticsGroundworkProviderHarness.CreateDiagnosticRecordStreamAsync(
+            freshProvider,
+            OpenTelemetryRecordStreamDefinitions.CreateTraces(streamId));
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "catalog-case-scope", "collector-a");
+        var foreignBinding = GroundworkOpenTelemetryBinding.Create("tenant-a", "catalog-case-foreign", "collector-a");
+        var time = new DateTimeOffset(2026, 7, 25, 14, 0, 0, TimeSpan.Zero);
+        var upperDeseret = "\U00010400";
+        var lowerDeseret = "\U00010428";
+        var originalId = $"resource-{upperDeseret}";
+        var collidingId = $"RESOURCE-{lowerDeseret}";
+        var original = Resource(originalId, $"Orders-{upperDeseret}", time);
+        var collision = Resource(collidingId, $"Orders-{lowerDeseret}", time.AddSeconds(1));
+
+        await using (var firstProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding))
+        await using (var first = new GroundworkOpenTelemetryStore(
+                         firstProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 2, MaxQuerySize = 10 }),
+                         binding))
+        {
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([original], [], [], [], [], []));
+            await first.WriteAsync(DiagnosticsDrainBatchId.New(), new([collision], [], [], [], [], []));
+
+            var loaded = Assert.Single((await first.QueryResourcesAsync(new()
+            {
+                ServiceName = $"ORDERS-{upperDeseret}",
+                Take = 10
+            })).Items);
+            Assert.Equal(collidingId, loaded.Id);
+            Assert.Equal(collision.ServiceName, loaded.ServiceName);
+        }
+
+        await using (var foreignProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, foreignBinding))
+        await using (var foreign = new GroundworkOpenTelemetryStore(
+                         foreignProvider.Stores,
+                         Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 2, MaxQuerySize = 10 }),
+                         foreignBinding))
+        {
+            await foreign.WriteAsync(DiagnosticsDrainBatchId.New(), new(
+                [Resource(originalId, "foreign-service", time.AddSeconds(2))], [], [], [], [], []));
+            Assert.Equal("foreign-service", Assert.Single((await foreign.QueryResourcesAsync(new() { Take = 10 })).Items).ServiceName);
+        }
+
+        await using var restartedProvider = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await using var restarted = new GroundworkOpenTelemetryStore(
+            restartedProvider.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { ResourceCapacity = 1, MaxQuerySize = 10 }),
+            binding);
+
+        var restartedResource = Assert.Single((await restarted.QueryResourcesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(collidingId, restartedResource.Id);
+        Assert.Equal(collision.ServiceName, restartedResource.ServiceName);
+
+        var retained = Resource("resource-later", "later-service", time.AddSeconds(3));
+        await restarted.WriteAsync(DiagnosticsDrainBatchId.New(), new([retained], [], [], [], [], []));
+
+        Assert.Equal([retained.Id], (await restarted.QueryResourcesAsync(new() { Take = 10 })).Items.Select(resource => resource.Id));
+        Assert.Empty((await restarted.QueryResourcesAsync(new() { ServiceName = $"orders-{lowerDeseret}", Take = 10 })).Items);
+    }
+
+    private static DiagnosticRecordStreamDefinition Preview81TraceDefinition(string streamId)
+    {
+        const int maxIdentifierBytes = 512;
+        const int maxNameBytes = 4_096;
+        const int maxMultiValues = 256;
+        var fields = new[]
+        {
+            String(RecordFields.TraceId, required: true, latestPerKey: true),
+            String(RecordFields.ResourceId, required: true, multiple: true),
+            String(RecordFields.ServiceName, multiple: true),
+            String(RecordFields.WorkflowInstanceId, multiple: true),
+            Int64(RecordFields.Status, required: true),
+            Timestamp(RecordFields.StartTime, required: true, orderable: true),
+            Timestamp(RecordFields.EndTime, required: true),
+            String(RecordFields.Name, maxStringBytes: maxNameBytes)
+        };
+        var definition = new DiagnosticRecordStreamDefinition(
+            new(streamId),
+            1,
+            "elsa_open_telemetry_traces",
+            fields,
+            new(
+                MaxBatchRecords: 1_000,
+                MaxPayloadBytes: 1_048_576,
+                MaxRecordIdBytes: 128,
+                MaxFieldsPerRecord: fields.Length,
+                MaxQueryLimit: 5_000,
+                MaxPredicateNodes: 32,
+                MaxPredicateValues: 9,
+                MaxJsonDepth: 64),
+            MaxOperationClockSkew: TimeSpan.FromMinutes(5),
+            AppendIdempotencyWindow: TimeSpan.FromHours(1),
+            TrimIdempotencyWindow: TimeSpan.FromHours(1));
+        DiagnosticRecordStreamDefinitionValidator.ValidateAndThrow(definition);
+        return definition;
+
+        static DiagnosticFieldDefinition String(
+            string name,
+            bool required = false,
+            bool orderable = false,
+            bool latestPerKey = false,
+            bool multiple = false,
+            int maxStringBytes = maxIdentifierBytes) => new(
+            name,
+            DiagnosticFieldType.String,
+            multiple ? DiagnosticFieldCardinality.Multiple : DiagnosticFieldCardinality.Scalar,
+            new HashSet<DiagnosticPredicateOperator>
+            {
+                DiagnosticPredicateOperator.Equal,
+                DiagnosticPredicateOperator.In,
+                DiagnosticPredicateOperator.Contains
+            },
+            IsRequired: required,
+            IsOrderable: orderable,
+            SupportsLatestPerKey: latestPerKey,
+            CasePolicy: DiagnosticStringCasePolicy.UnicodeOrdinalIgnoreCase,
+            MaxValues: multiple ? maxMultiValues : 1,
+            MaxStringBytes: maxStringBytes);
+
+        static DiagnosticFieldDefinition Int64(string name, bool required = false) => new(
+            name,
+            DiagnosticFieldType.Int64,
+            DiagnosticFieldCardinality.Scalar,
+            new HashSet<DiagnosticPredicateOperator>
+            {
+                DiagnosticPredicateOperator.Equal,
+                DiagnosticPredicateOperator.In,
+                DiagnosticPredicateOperator.RangeInclusive
+            },
+            IsRequired: required);
+
+        static DiagnosticFieldDefinition Timestamp(
+            string name,
+            bool required = false,
+            bool orderable = false) => new(
+            name,
+            DiagnosticFieldType.Timestamp,
+            DiagnosticFieldCardinality.Scalar,
+            new HashSet<DiagnosticPredicateOperator>
+            {
+                DiagnosticPredicateOperator.Equal,
+                DiagnosticPredicateOperator.In,
+                DiagnosticPredicateOperator.RangeInclusive
+            },
+            IsRequired: required,
+            IsOrderable: orderable);
     }
 
     [Theory]
@@ -443,6 +819,9 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         string severity,
         string body) =>
         new(id, resourceId, timestamp, severity, null, body, traceId, spanId, new Dictionary<string, string?>());
+
+    private static string GroupString(DiagnosticRecordGroup group, string field) =>
+        Assert.Single(group.Fields[field]).CanonicalValue;
 
     private sealed class AcknowledgementLosingRecordStore(IDiagnosticRecordStore inner) : IDiagnosticRecordStore
     {

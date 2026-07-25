@@ -59,6 +59,25 @@ public sealed class GroundworkOpenTelemetryStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Trace_capacity_above_the_grouped_union_contract_fails_before_provider_work()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var options = Options.Create(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity + 1
+        });
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new GroundworkOpenTelemetryStore(providers, options, _fixture.Binding));
+
+        Assert.Equal("options", exception.ParamName);
+        Assert.Contains(
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity.ToString(),
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Document_session_must_match_the_explicit_tenant_scope_and_source_binding()
     {
         var providers = await _fixture.CreateProvidersAsync();
