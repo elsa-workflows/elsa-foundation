@@ -188,7 +188,7 @@ internal sealed class GroundworkCoverageLedgerValidator
         var coveredSet = coveredRows.ToHashSet(StringComparer.Ordinal);
 
         foreach (var missing in entriesById.Keys.Where(id => !coveredSet.Contains(id)).Order(StringComparer.Ordinal))
-            findings.Add($"composition evidence: coverage row '{missing}' is missing from ALL32 host selection.");
+            findings.Add($"composition evidence: coverage row '{missing}' is missing from the reviewed host selection.");
         foreach (var unknown in coveredSet.Where(id => !entriesById.ContainsKey(id)).Order(StringComparer.Ordinal))
             findings.Add($"composition evidence: coverage row '{unknown}' is outside the reviewed ledger denominator.");
 

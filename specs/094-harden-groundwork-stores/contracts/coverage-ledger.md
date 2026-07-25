@@ -1,6 +1,6 @@
 # Contract: Persistence Coverage Ledger
 
-The executable ledger is [`../coverage-ledger.json`](../coverage-ledger.json). This document defines its governance and provides the review view. The initial denominator is frozen to the merge-base of branch `codex/645-groundwork-store-hardening`; implementation work may advance or split rows but may not silently remove them.
+The executable ledger is [`../coverage-ledger.json`](../coverage-ledger.json). This document defines its governance and provides the review view. The original 32-row denominator is frozen to the merge-base of branch `codex/645-groundwork-store-hardening`; implementation work may advance or split rows but may not silently remove them. On 2026-07-25 the program owner ratified two additive diagnostics rows, bringing the current denominator to 34 without weakening the original 32-row floor.
 
 ## Completion rule
 
@@ -52,7 +52,7 @@ The `Groundwork fast gates` job in `.github/workflows/ci.yml` is the container-f
 
 The job fails when any of these evidence classes regress:
 
-- JSON Schema conformance, the exact 32-row denominator, status transitions, or evidence completeness;
+- JSON Schema conformance, the exact current 34-row denominator, status transitions, or evidence completeness;
 - immutable `baselineRef` test-case continuity or its exact architect-approval ledger;
 - discovered contract, Groundwork registration, manifest/storage-unit, or #644/#660 authority reconciliation;
 - provider-neutral core dependency boundaries or the reviewed shrink-only EF surface.
@@ -74,6 +74,8 @@ The job is container-free and does not create provider or restart evidence. SQLi
 
 | Row | Contract / state | Target outcome | Target scope | Authority | Initial gap | Performance mapping |
 |---|---|---|---|---|---|---|
+| `diagnostics-open-telemetry-store` | `IOpenTelemetryStore` | Specialized primitive | Scoped | #642 | Current four-provider evidence and verdict incomplete | `diagnostics-durable-history` |
+| `diagnostics-structured-log-store` | `IStructuredLogStore` | Specialized primitive | Scoped | #642 | Current four-provider evidence and verdict incomplete | `diagnostics-durable-history` |
 | `runtime-activity-execution-inspection` | `IActivityExecutionInspectionStore`, `IActivityExecutionInspectionWriter` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Not hot path |
 | `runtime-activity-execution-state` | `IActivityExecutionStateStore` | Ordinary document | Scoped | #645 | Provider/restart/OCC evidence | Checkpoint bundle representative |
 | `runtime-bookmark-state` | `IBookmarkStateStore` | Ordinary document + bounded route | Scoped | #645 | Client filtering / matrix | `bookmark-lookup` |

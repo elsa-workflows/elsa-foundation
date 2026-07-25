@@ -11,7 +11,8 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 /// </summary>
 public sealed class WorkloadCatalog
 {
-    private static readonly string[] RequiredFiles = ["runtime.json", "iam-secrets.json", "distributed-runtime.json"];
+    private static readonly string[] RequiredFiles =
+        ["runtime.json", "iam-secrets.json", "distributed-runtime.json", "diagnostics.json"];
     private static readonly string[] Providers = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly Regex Slug = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -34,7 +35,8 @@ public sealed class WorkloadCatalog
 
         var discovered = Directory.EnumerateFiles(workloadDirectory, "*.json").Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
         if (!discovered.SequenceEqual(RequiredFiles.Order(StringComparer.Ordinal), StringComparer.Ordinal))
-            throw new WorkloadContractException("The workload directory must contain exactly runtime.json, iam-secrets.json, and distributed-runtime.json.");
+            throw new WorkloadContractException(
+                "The workload directory must contain exactly runtime.json, iam-secrets.json, distributed-runtime.json, and diagnostics.json.");
 
         var workloads = new Dictionary<string, PerformanceWorkload>(StringComparer.Ordinal);
         foreach (var file in RequiredFiles)
@@ -62,7 +64,7 @@ public sealed class WorkloadCatalog
         }
 
         if (workloads.Count != Expected.Count || !workloads.Keys.Order(StringComparer.Ordinal).SequenceEqual(Expected.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal))
-            throw new WorkloadContractException("The #646 catalog must contain exactly the twelve frozen Spec 094 workload definitions.");
+            throw new WorkloadContractException("The #646 catalog must contain exactly the thirteen reviewed Spec 094 workload definitions.");
         foreach (var (id, expected) in Expected)
             ValidateFrozenContract(workloads[id], expected);
         return new WorkloadCatalog(workloads);
@@ -158,7 +160,10 @@ public sealed class WorkloadCatalog
                 !SemanticInputMatches(actual.Input.Values, successor.Parameters) ||
                 !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal))
                 throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible v1.1 contract vector, including every semantic input field.");
-            RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
+            if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(actual.Id, out var blockedReason))
+                RequireAdmission(actual, "blocked", blockedReason);
+            else
+                RequireAdmission(actual, "ready", ReproducibleWorkloadScenarioCatalog.ReadyReasonCode);
             return;
         }
 
@@ -286,7 +291,8 @@ public sealed class WorkloadCatalog
     {
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
-        ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837"
+        ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
+        ["diagnostics.json"] = "16ba05d98250fa5917baf40116b454a1106a3247cde2a94444a97cd49b53f8ad"
     };
     private static readonly IReadOnlyDictionary<string, ExpectedWorkload> Expected = new Dictionary<string, ExpectedWorkload>(StringComparer.Ordinal)
     {
@@ -301,7 +307,10 @@ public sealed class WorkloadCatalog
         ["iam-normalized-lookup-update"] = new(["iam-application", "iam-claim-mapping", "iam-credential", "iam-external-identity", "iam-provider-configuration-tenant", "iam-role", "iam-tenant-membership", "iam-user"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables-current-identity-shape"]),
         ["secret-create-read-list"] = new(["secrets-repository"], ["shared-documents-with-linked-index-tables", "document-type-specific-tables", "entity-type-specific-physical-tables"]),
         ["placement-takeover"] = new(["distributed-execution-placement"], ["dedicated-placement-lease-documents", "shared-documents-with-linked-index-tables", "placement-owner-expiry-index"]),
-        ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"])
+        ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"]),
+        ["diagnostics-durable-history"] = new(
+            ["diagnostics-open-telemetry-store", "diagnostics-structured-log-store"],
+            ["specialized-diagnostic-record-streams-with-shared-document-catalogs", "specialized-diagnostic-record-streams-with-dedicated-document-catalogs"])
     };
 }
 

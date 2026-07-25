@@ -73,7 +73,7 @@
       "properties": {
         "evidenceId": {
           "type": "string",
-          "const": "host-selection-all32"
+          "const": "host-selection-all34"
         },
         "outcome": {
           "type": "string",
@@ -81,11 +81,12 @@
         },
         "selectedFeatureIdentities": {
           "type": "array",
-          "minItems": 7,
-          "maxItems": 7,
+          "minItems": 8,
+          "maxItems": 8,
           "uniqueItems": true,
           "prefixItems": [
             { "type": "string", "const": "elsa-activities-design" },
+            { "type": "string", "const": "elsa-diagnostics" },
             { "type": "string", "const": "elsa-identity" },
             { "type": "string", "const": "elsa-secrets" },
             { "type": "string", "const": "elsa-workflows-design" },
@@ -97,8 +98,8 @@
         },
         "coveredEntryIds": {
           "type": "array",
-          "minItems": 32,
-          "maxItems": 32,
+          "minItems": 34,
+          "maxItems": 34,
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -114,7 +115,7 @@
         },
         "artifact": {
           "type": "string",
-          "const": "evidence/composition/host-selection-all32.json"
+          "const": "evidence/composition/host-selection-all34.json"
         },
         "artifactSha256": {
           "type": "string",
@@ -351,7 +352,7 @@
         },
         "family": {
           "type": "string",
-          "enum": ["runtime", "iam", "secrets", "distributed-runtime"]
+          "enum": ["runtime", "iam", "secrets", "distributed-runtime", "diagnostics"]
         },
         "contract": {
           "type": "string",

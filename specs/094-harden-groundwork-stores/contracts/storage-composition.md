@@ -16,7 +16,12 @@ The acyclic `Elsa.Persistence.Groundwork.Composition` implementation project own
 - an immutable registry/snapshot populated before synchronous provider materialization;
 - one `IPhysicalSchemaManifestSource` exposed to both runtime initialization and `Groundwork.Tool`.
 
-`Unified` references Composition and removes hard-coded references to Runtime, Workflows Design, Activities Design, and Publishing. Runtime, Workflows Design, Activities Design, Publishing, IAM, Secrets, and Distributed Runtime each register their own source when selected. Diagnostics remains a linked #660 source/evidence dependency. This dependency shape is acyclic and keeps domain behavior out of the composition contract.
+`Unified` references Composition and removes hard-coded references to Runtime, Workflows Design,
+Activities Design, and Publishing. Runtime, Workflows Design, Activities Design, Publishing, IAM,
+Secrets, Distributed Runtime, and Diagnostics each register their own source when selected. The
+in-memory `IRuntimeDiagnosticsSettingsStore` remains a separate linked #660 source/evidence
+dependency; it does not stand in for the two durable diagnostics stores. This dependency shape is
+acyclic and keeps domain behavior out of the composition contract.
 
 Feature-specific Groundwork modules register a source; they do not materialize providers and do not each register an event handler for the fan-in. The app host selects a source by selecting that Groundwork feature. No selected source means no durable claim for that feature.
 
@@ -62,13 +67,13 @@ The test matrix includes:
 
 The same selected feature set must compile on every mandatory provider without changing core contracts or domain behavior.
 
-## ALL32 host-selection evidence
+## 34-row host-selection evidence
 
-The checked-in coverage ledger carries one digest-verified `host-selection-all32` composition record.
-Its selected source identities cover the complete host composition, while the Runtime, IAM, Secrets,
-and Distributed Runtime declarations contribute every one of the 32 durable coverage-row identities
-exactly once. Design, Activities Design, and Publishing remain selected composition sources but do not
-claim rows from this runtime/IAM/secrets/distributed denominator.
+The checked-in coverage ledger carries one digest-verified `host-selection-all34` composition record.
+Its selected source identities cover the complete host composition. Runtime, IAM, Secrets, and
+Distributed Runtime preserve the original 32-row denominator; the ratified 2026-07-25 amendment adds
+the durable Structured Logs and OpenTelemetry rows contributed by `elsa-diagnostics`. Design,
+Activities Design, and Publishing remain selected composition sources but do not claim ledger rows.
 
 This record is composition evidence, not provider conformance evidence and not a new durability
 authority. In particular:
@@ -76,12 +81,13 @@ authority. In particular:
 - `iam-user`, `iam-role`, and `iam-external-identity` remain adapter-only links to authority `#644`;
 - `runtime-diagnostics-settings` remains linked source/evidence owned by authority `#660`;
 - each ledger entry retains its own delivery owner, status, and four-provider evidence obligations;
-- the composition artifact proves only that host selection cannot silently omit or duplicate an ALL32
+- the composition artifact proves only that host selection cannot silently omit or duplicate a current
   durable requirement.
 
-The ledger validator compares the composition record with the exact 32-row denominator, checks the
+The ledger validator compares the composition record with the exact 34-row denominator, checks the
 external-authority links and their reviewed relationships against the row-level authority fields, and verifies the durable artifact at
-`evidence/composition/host-selection-all32.json` by SHA-256 and payload equality.
+`evidence/composition/host-selection-all34.json` by SHA-256 and payload equality. The earlier
+`host-selection-all32` artifact remains immutable historical evidence.
 
 ## Scope/session acquisition
 

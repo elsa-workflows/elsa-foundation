@@ -41,6 +41,7 @@ Timing is invalid until the correctness digest and provider conformance scenario
 | `secret-create-read-list` | Concurrent create, point read, and bounded deterministic list | Exactly one create winner, exact value/version, bounded page and continuation | Secrets repository |
 | `placement-takeover` | Claim, renew, expire, and take over execution placement | One current lease, monotonic version, stale release rejected | Distributed placement |
 | `command-send-lease-ack` | Concurrent send, bounded lease, visibility expiry/re-lease, acknowledgement | Unique identity/sequence, ordered lease, stale ack rejected, no loss after restart | Distributed transport |
+| `diagnostics-durable-history` | Append, query, inspect, trim, reopen, and isolate Structured Logs and OpenTelemetry durable history as separate suboperations | No unexplained loss/duplication, exact bounded results/counts, trim-independent high-water, cross-scope isolation, restart parity, native plans | Structured Log and OpenTelemetry durable stores |
 
 The #644 Identity workload definition is versioned in
 [`../workloads/iam-secrets.json`](../workloads/iam-secrets.json) as
@@ -60,7 +61,7 @@ remains partial; it cannot advance a row status, and all other declared provider
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
 equality, and all timing.
 
-The ten non-Identity, non-Secret workloads now have v1.1.0 contract-vector successors owned by the benchmark
+The eleven non-Identity, non-Secret workloads now have v1.1.0 contract-vector successors owned by the benchmark
 harness. `workload-vectors` reproduces their version, seed, input fingerprint, and expected result digest from
 code-owned deterministic parameters, operation names, and expected observations. These are definitions that
 future real EF and Groundwork adapters must execute; they are not public-operation runners. The committed
@@ -73,6 +74,18 @@ reinterpreted.
 waiver, or Groundwork-vs-Groundwork comparison cannot advance that workload or its ledger row.
 Every workload document carries an explicit `benchmarkAdmission` status/reason. Matrix, comparison, and gate
 admission reject the blocked Secret contract even when supplied artifacts claim a complete measurement.
+
+`diagnostics-durable-history` is the program-owner-ratified 2026-07-25 extension. Its
+`diagnostics.json` contract maps to the additive `diagnostics-structured-log-store` and
+`diagnostics-open-telemetry-store` ledger rows and keeps both public-store suboperations visible in
+the retained artifacts. SQLite compares the retained same-provider EF diagnostics oracle. SQL
+Server, PostgreSQL, and MongoDB have no same-provider EF diagnostics oracle and therefore require
+workload-specific numeric absolute operational budgets plus correctness digest, native diagnostic
+record/catalog plans, Groundwork physical-form evidence, provider-work/round-trip/storage evidence,
+and queue shed/drain/restart outcomes. The policy shape is ratified, but no numeric budgets or
+executable absolute-budget gate are yet approved. `diagnostics-durable-history` remains blocked under
+`gate.diagnostics.absolute-budget-required`; those three provider verdicts cannot be inferred from
+the default ratio policy.
 
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with
