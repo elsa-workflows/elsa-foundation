@@ -159,7 +159,8 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
             dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(
                 dependency.Identity.ArtifactId,
                 dependency.Identity.ArtifactHash,
-                ["node-root"])).ToArray());
+                ["node-root"])).ToArray(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static string Hash(string artifactId) => $"sha256:{artifactId}";
 

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -33,7 +34,8 @@ public sealed class WorkflowExecutableHasher
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         WorkflowExecutableCheckpointCadence? checkpointCadence = null,
-        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
+        IncidentStrategyReference? incidentStrategy = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -41,7 +43,14 @@ public sealed class WorkflowExecutableHasher
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
-            WriteBehavioralPayload(writer, rootActivity, inputContract, dependencies, checkpointCadence, workflowVariables);
+            WriteBehavioralPayload(
+                writer,
+                rootActivity,
+                inputContract,
+                dependencies,
+                checkpointCadence,
+                workflowVariables,
+                incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
 
         return Hash(stream.ToArray());
     }
@@ -189,11 +198,17 @@ public sealed class WorkflowExecutableHasher
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         WorkflowExecutableCheckpointCadence? checkpointCadence,
-        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables)
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
+        IncidentStrategyReference incidentStrategy)
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", 1);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
+
+        writer.WriteStartObject("incidentStrategy");
+        writer.WriteString("alias", incidentStrategy.Alias);
+        writer.WriteString("version", incidentStrategy.Version);
+        writer.WriteEndObject();
 
         // Authored checkpoint cadence is behavioral content (ADR 0032 R5): it changes the artifact's durability
         // behavior, so equal-hash must imply equal cadence. Written only when authored, so a workflow that authors no

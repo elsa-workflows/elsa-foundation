@@ -191,11 +191,12 @@ function Submit-Workflow {
         [string] $Description = "",
         [Parameter(Mandatory)] $RootActivity,
         [array] $Variables = @(),
-        [array] $Inputs = @()
+        [array] $Inputs = @(),
+        $StrategyOptions = $null
     )
     $state = @{
         variables = $Variables; inputs = $Inputs; outputs = @()
-        workflowActivityOptions = $null; strategyOptions = $null
+        workflowActivityOptions = $null; strategyOptions = $StrategyOptions
         rootActivity = $RootActivity
     }
     $body = @{ name = $Name; description = $Description; state = $state } | ConvertTo-Json -Depth 30

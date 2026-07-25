@@ -109,7 +109,7 @@ public sealed class GraphActivityRecoveryTests
         await states.SaveAsync(State("child", "outer", "outer", ActivityExecutionStatus.Faulted));
         await incidents.SaveAsync(new IncidentState(
             "incident-child", WorkflowId, "child", "child-node",
-            IncidentSeverity.Error, IncidentStatus.Blocking, IncidentResolutionAction.WaitForIntervention,
+            IncidentSeverity.Error, IncidentStatus.Blocking, null,
             "TestFault", "child faulted", Now, null));
 
         var handler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
@@ -330,7 +330,7 @@ public sealed class GraphActivityRecoveryTests
             new Dictionary<string, RuntimeInputBinding>(),
             new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>());
-        return new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>());
+        return new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutableIdentity Identity() => new("artifact", "definition", "version-id", "1.0.0", "sha256:artifact");

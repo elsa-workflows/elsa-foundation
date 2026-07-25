@@ -35,7 +35,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-f").Status);
         var incident = Assert.Single(await ListIncidentsAsync(harness));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
-        Assert.Equal(IncidentResolutionAction.Continue, incident.ResolutionAction);
+        Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.NotNull(incident.ResolvedAt);
         Assert.Equal("actexec-parent", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
         Assert.Equal("test-absorb", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
@@ -157,7 +157,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-f").Status);
         var incident = Assert.Single(await ListIncidentsAsync(harness));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
-        Assert.Equal(IncidentResolutionAction.Continue, incident.ResolutionAction);
+        Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.Equal("actexec-parent", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
     }
 

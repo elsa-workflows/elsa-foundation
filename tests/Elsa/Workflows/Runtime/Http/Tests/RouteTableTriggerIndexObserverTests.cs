@@ -206,7 +206,8 @@ public sealed class RouteTableTriggerIndexObserverTests
             rootActivity: TestNodes.Root(),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     /// <summary>An extractor that ignores the executable and returns a fixed binding set — isolates the observer path.</summary>
     private sealed class StaticExtractor(params WorkflowTriggerBinding[] bindings) : IWorkflowTriggerBindingExtractor

@@ -101,7 +101,8 @@ public sealed class EventCorrelationRoutingTests
                     Event.ResumeTargetId)
             },
             new DateTimeOffset(2026, 7, 23, 0, 0, 0, TimeSpan.Zero),
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static async Task<BookmarkState> ReadBookmarkAsync(WorkflowExecutionHarness harness)

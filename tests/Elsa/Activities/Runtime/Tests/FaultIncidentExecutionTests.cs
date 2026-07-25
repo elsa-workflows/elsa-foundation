@@ -132,7 +132,8 @@ public sealed class FaultIncidentExecutionTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>

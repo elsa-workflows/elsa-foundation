@@ -79,6 +79,7 @@ internal static class DelayTestExecutable
                     new Dictionary<string, string>())
             },
             createdAt: createdAt,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 }

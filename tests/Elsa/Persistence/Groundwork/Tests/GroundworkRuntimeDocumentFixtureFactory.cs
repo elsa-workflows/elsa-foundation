@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -457,7 +458,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                             new ValueTypeDescriptor("System.String"),
                             JsonSerializer.SerializeToElement("nobody@example.com"),
                             ValueProtectionPolicy.InstanceInline)))
-            ]);
+            ],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableActivityTemplate ActivityTemplate()
@@ -669,7 +671,12 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         executableNodeId: null,
         IncidentSeverity.Error,
         IncidentStatus.Open,
-        IncidentResolutionAction.None,
+        new IncidentResolutionOutcome(
+            IncidentResolutionActionKinds.ContinueWithIncidents,
+            DateTimeOffset.UnixEpoch,
+            IncidentStrategyBuiltIns.ContinueWithIncidentsReference,
+            systemSource: null,
+            new Dictionary<string, string> { ["fixture"] = "v2" }),
         failureType: "System.Exception",
         message: "boom",
         createdAt: DateTimeOffset.UnixEpoch,

@@ -308,7 +308,7 @@ public sealed record ActivityExecutionIncidentSummaryView(
     string IncidentId,
     string Severity,
     string Status,
-    string ResolutionAction,
+    IncidentResolutionOutcomeView? ResolutionOutcome,
     string FailureType,
     string Message,
     DateTimeOffset CreatedAt,
@@ -324,7 +324,7 @@ public sealed record ActivityExecutionIncidentSummaryView(
             summary.IncidentId,
             summary.Severity.ToString(),
             summary.Status.ToString(),
-            summary.ResolutionAction.ToString(),
+            IncidentResolutionOutcomeView.From(summary.ResolutionOutcome),
             summary.FailureType,
             canInspectSensitiveValues ? summary.Message : "Incident details are redacted.",
             summary.CreatedAt,
@@ -524,7 +524,7 @@ public sealed record IncidentStateView(
     string? ExecutableNodeId,
     string Severity,
     string Status,
-    string ResolutionAction,
+    IncidentResolutionOutcomeView? ResolutionOutcome,
     string FailureType,
     string Message,
     DateTimeOffset CreatedAt,
@@ -540,13 +540,35 @@ public sealed record IncidentStateView(
             state.ExecutableNodeId,
             state.Severity.ToString(),
             state.Status.ToString(),
-            state.ResolutionAction.ToString(),
+            IncidentResolutionOutcomeView.From(state.ResolutionOutcome),
             state.FailureType,
             canInspectSensitiveValues ? state.Message : "Incident details are redacted.",
             state.CreatedAt,
             state.ResolvedAt,
             state.IsBlocking,
             ActivityExecutionInspectionDisclosure.Metadata(state.Metadata, canInspectSensitiveValues));
+}
+
+public sealed record IncidentStrategyReferenceView(string Alias, string Version);
+
+public sealed record IncidentResolutionOutcomeView(
+    string ActionKind,
+    DateTimeOffset AppliedAt,
+    IncidentStrategyReferenceView? Strategy,
+    string? SystemSource,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static IncidentResolutionOutcomeView? From(IncidentResolutionOutcome? outcome) =>
+        outcome is null
+            ? null
+            : new(
+                outcome.ActionKind,
+                outcome.AppliedAt,
+                outcome.Strategy is null
+                    ? null
+                    : new IncidentStrategyReferenceView(outcome.Strategy.Alias, outcome.Strategy.Version),
+                outcome.SystemSource,
+                outcome.Metadata);
 }
 
 internal static class ActivityExecutionInspectionDisclosure

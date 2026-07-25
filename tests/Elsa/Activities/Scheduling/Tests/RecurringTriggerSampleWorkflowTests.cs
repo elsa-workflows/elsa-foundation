@@ -134,7 +134,8 @@ public sealed class RecurringTriggerSampleWorkflowTests
             rootActivity: trigger,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode TimerNode(string interval) =>
         TriggerNode(Timer.ActivityType, nameof(Timer.Interval), interval);

@@ -16,13 +16,17 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
+    private readonly IIncidentStrategyCatalog? _incidentStrategyCatalog;
+    private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider,
-        IWorkflowExecutableReader? executableReader = null)
+        IWorkflowExecutableReader? executableReader = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        RuntimeCheckpointCommitter? checkpointCommitter = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -34,6 +38,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
+        _incidentStrategyCatalog = incidentStrategyCatalog;
+        _checkpointCommitter = checkpointCommitter;
     }
 
     public string Name => HandlerName;
@@ -59,6 +65,16 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
         var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
+        if (_incidentStrategyCatalog is not null &&
+            !_incidentStrategyCatalog.TryGet(executable.IncidentStrategy, out _))
+        {
+            if (_checkpointCommitter is null)
+                throw new InvalidOperationException("The runtime cannot record a missing incident strategy without a checkpoint committer.");
+
+            await CommitMissingIncidentStrategyAsync(workItem, executable, workItem.EnqueuedAt, cancellationToken);
+            return;
+        }
+
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
         var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
@@ -66,6 +82,69 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
         await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
+    }
+
+    private async ValueTask CommitMissingIncidentStrategyAsync(
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutable executable,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var strategy = executable.IncidentStrategy;
+        var fingerprint = RuntimeChainId.Fingerprint($"{strategy.Alias}\n{strategy.Version}");
+        var incidentId = $"incident:{workItem.WorkflowExecutionId}:missing-strategy:{fingerprint}";
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.CheckpointReason] = IncidentResolutionSystemSources.MissingStrategyImplementation,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory
+        };
+        var outcome = new IncidentResolutionOutcome(
+            IncidentResolutionActionKinds.WaitForIntervention,
+            occurredAt,
+            strategy,
+            IncidentResolutionSystemSources.MissingStrategyImplementation,
+            new Dictionary<string, string>());
+        var incident = new IncidentState(
+            incidentId,
+            workItem.WorkflowExecutionId,
+            null,
+            executable.RootActivity.ExecutableNodeId,
+            IncidentSeverity.Critical,
+            IncidentStatus.Blocking,
+            outcome,
+            "MissingIncidentStrategyImplementation",
+            $"Pinned incident strategy '{strategy}' is not available in this runtime deployment.",
+            occurredAt,
+            null,
+            new Dictionary<string, string>());
+        var commit = new RuntimeCheckpointCommit(
+            $"commit:{workItem.WorkflowExecutionId}:missing-strategy:{fingerprint}",
+            new RuntimeCheckpoint(
+                $"checkpoint:{workItem.WorkflowExecutionId}:missing-strategy:{fingerprint}",
+                RuntimeCheckpointNames.IncidentResolutionBatchApplied,
+                workItem.WorkflowExecutionId,
+                occurredAt,
+                [],
+                metadata),
+            new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents:
+                [
+                    new RuntimeStateChange<IncidentState>(
+                        incidentId,
+                        RuntimeStateChangeOperation.Upsert,
+                        incident,
+                        metadata)
+                ],
+                operational: [],
+                activityExecutionInspections: []),
+            [],
+            metadata);
+        await _checkpointCommitter!.CommitAsync(commit, cancellationToken);
     }
 
     private static WorkflowExecutionStartCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem) =>

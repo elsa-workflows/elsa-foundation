@@ -526,7 +526,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             rootActivity: NewNode("node-wait", document.RootElement),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>

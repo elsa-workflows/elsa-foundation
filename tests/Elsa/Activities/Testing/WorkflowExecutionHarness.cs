@@ -282,6 +282,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             dependencies: null,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: null,
             workflowVariables: workflowVariables);
 
@@ -364,6 +365,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             dependencies: executable.Dependencies,
             runtimeRequirements: null,
             storageDriverRequirements: null,
+            incidentStrategy: executable.IncidentStrategy,
             checkpointCadence: executable.CheckpointCadence,
             workflowVariables: executable.WorkflowVariables);
 

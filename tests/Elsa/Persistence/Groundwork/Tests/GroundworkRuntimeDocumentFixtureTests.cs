@@ -46,7 +46,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
         Assert.Equal(
-            7,
+            8,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
         Assert.Equal(
@@ -65,17 +65,30 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Fact]
-    public void Workflow_executable_declares_a_clean_v7_baseline()
+    public void Workflow_executable_declares_a_clean_v8_baseline()
     {
-        // v7 adds the compiled workflow-scope variable declarations (workflowVariables, #972).
+        // v8 adds the exact incident strategy pinned by publication (#1015).
         Assert.Equal(
-            7,
+            8,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
         Assert.Equal(
-            7,
+            8,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+    }
+
+    [Fact]
+    public void Incident_state_declares_a_clean_v2_baseline()
+    {
+        Assert.Equal(
+            2,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.IncidentStateDocumentKind));
+        Assert.Equal(
+            2,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+                ElsaRuntimeStorageManifest.IncidentStateDocumentKind));
     }
 
     [Fact]

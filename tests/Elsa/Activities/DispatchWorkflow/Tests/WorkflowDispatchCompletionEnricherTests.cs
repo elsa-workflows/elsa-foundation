@@ -421,7 +421,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             "node-child",
             IncidentSeverity.Error,
             IncidentStatus.Blocking,
-            IncidentResolutionAction.FaultWorkflow,
+            null,
             failureType,
             message,
             Now,
