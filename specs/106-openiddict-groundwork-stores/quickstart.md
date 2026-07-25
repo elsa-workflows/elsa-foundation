@@ -159,3 +159,50 @@ There is no `IOpenIddict*Store` implementation, replacement registration,
 session/UoW/CAS/redeem flow, four-provider matrix, unified deployment
 selection, or performance evidence. The EF oracle remains load-bearing for
 #646 and must not be deleted by this checkpoint.
+
+## Scope-store checkpoint — 2026-07-25
+
+The first complete public store slice now implements all 28
+`IOpenIddictScopeStore<OpenIddictGroundworkScope>` members. Named name-set and
+resource queries execute through declared scale-bearing routes, and Groundwork's
+compiled plan supplies the provider-side identity tie-break even when the
+caller-visible route declares no optional sort. Full enumerations stream fixed
+256-row provider pages; no page is client-filtered or client-sorted. A name-set
+request is deduplicated and rejected above 900 distinct values before a
+provider session opens.
+
+The direct SQLite fixture applies the real physical schema and opens a fresh
+leased connection for every store session. It proves descriptor round trips,
+unique-name rejection, CAS update/delete with concurrency-token rotation,
+deterministic pages and membership results, exact count, cancellation, local
+empty/zero-count handling, invalid/oversized input rejection, adapter-scoped
+serialization failure, and generic-delegate rejection before delegate or
+provider access.
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --no-restore \
+  --filter 'FullyQualifiedName~GroundworkOpenIddictScopeStoreTests|FullyQualifiedName~OpenIddictGroundworkStorageManifestTests'
+# 23 passed
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  -c Release --no-restore \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Sqlite_executes_the_declared_token_prune_mutation_with_an_exact_count_and_cancellation&FullyQualifiedName!~Four_provider_public_capabilities_execute_the_same_openiddict_contract'
+# 12 passed
+```
+
+This closes T035 and T040 only. T011/T016 remain open because the complete
+four-store manifest and its bounded mutations are not truthful until Groundwork
+#141 and #143 land. Registration, the shared 145-member suite, the real
+four-provider store matrix, host acceptance, performance, and EF removal also
+remain open.
+
+An adversarial read-only implementation review initially challenged the
+all-results stream as unbounded and found weak boundary proof. Root accepted
+the proof gaps, added exact duplicate-concurrency, empty/default/oversized,
+zero-count, invalid-culture, and independent-client coverage, and rejected the
+total-result cap because it would violate OpenIddict's nullable-count contract.
+On re-review, the reviewer withdrew the blocker after verifying fixed 256-row
+provider pages and Groundwork's compiled provider-side ID tie-break, and
+reported no remaining Scope blocker. This is an implementation checkpoint, not
+the three-review exact-HEAD merge gate required by T070.
