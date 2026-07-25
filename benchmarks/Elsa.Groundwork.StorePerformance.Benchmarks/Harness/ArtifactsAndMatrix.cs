@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -525,10 +526,10 @@ public static class Comparison
             !workload.RequiredProviders.Contains(anchor.Provider, StringComparer.Ordinal) ||
             !workload.PhysicalFormsFor646.Contains(anchor.PhysicalForm, StringComparer.Ordinal))
             return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/provider/form contract.");
-        if (!workload.BenchmarkAdmission.IsReady)
+        if (BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var blockedReason))
             return TargetValidation.Invalid(
                 anchor,
-                $"Workload '{workload.Id}' is blocked from benchmark comparison: {workload.BenchmarkAdmission.Reason}.");
+                $"Workload '{workload.Id}' is blocked from benchmark comparison: {blockedReason}.");
         if (artifacts.Any(item => !ArtifactAdmission.SameTargetTuple(anchor, item.Request))) return TargetValidation.Invalid(anchor, "A target contains more than one immutable run tuple.");
         var machine = artifacts[0].Machine;
         if (artifacts.Any(item => !ArtifactAdmission.SameMachineEnvironment(machine, item.Machine))) return TargetValidation.Invalid(anchor, "Machine metadata must be complete and stable within a comparison target.");
@@ -583,10 +584,24 @@ public static class Comparison
 
 public static class BenchmarkAdmissionGuard
 {
+    public static bool TryGetBlockedReason(PerformanceWorkload workload, out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(workload);
+        if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(workload.Id, out reason))
+            return true;
+        if (!workload.BenchmarkAdmission.IsReady)
+        {
+            reason = workload.BenchmarkAdmission.Reason;
+            return true;
+        }
+        reason = "";
+        return false;
+    }
+
     public static void RequireReady(PerformanceWorkload workload)
     {
-        if (!workload.BenchmarkAdmission.IsReady)
+        if (TryGetBlockedReason(workload, out var reason))
             throw new PerformanceContractException(
-                $"Workload '{workload.Id}' is blocked from benchmark execution: {workload.BenchmarkAdmission.Reason}.");
+                $"Workload '{workload.Id}' is blocked from benchmark execution: {reason}.");
     }
 }

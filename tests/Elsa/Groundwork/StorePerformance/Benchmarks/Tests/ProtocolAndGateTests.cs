@@ -158,10 +158,18 @@ public sealed class ProtocolAndGateTests
     {
         var diagnostics = WorkloadCatalog.Load(Repository.Root())
             .Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        var forgedDiagnostics = diagnostics with
+        {
+            BenchmarkAdmission = new BenchmarkAdmission(
+                "ready",
+                ReproducibleWorkloadScenarioCatalog.ReadyReasonCode)
+        };
         var admittedPlan = MatrixPlan.Create(Workload(), Request());
-        var bypassPlan = new MatrixPlan(diagnostics, admittedPlan.Protocol, admittedPlan.Runs);
+        var bypassPlan = new MatrixPlan(forgedDiagnostics, admittedPlan.Protocol, admittedPlan.Runs);
         var childCalled = false;
 
+        var directError = Assert.Throws<PerformanceContractException>(() =>
+            BenchmarkAdmissionGuard.RequireReady(forgedDiagnostics));
         var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
             ProcessMatrixRunner.RunForTestAsync(
                 bypassPlan,
@@ -173,6 +181,7 @@ public sealed class ProtocolAndGateTests
                 },
                 CancellationToken.None));
 
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, directError.Message);
         Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, error.Message);
         Assert.False(childCalled);
     }
