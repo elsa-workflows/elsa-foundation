@@ -4,7 +4,7 @@
 .DESCRIPTION
     Exercises the reachable GET endpoints under the publishing area against a fixture (a published workflow
     definition + a known activity version), plus negative (404) cases.
-    Covered: activities (list) + activities/{id}/construct; value-conversion/profiles; descriptors;
+    Covered: activities (list) + activities/{id}/construct; value-conversion/profiles; incident-strategies; descriptors;
     workflows/{definitionId}/slots + /policy.
     Requires the server running from source (see ../README.md).
 #>
@@ -32,6 +32,12 @@ Write-Host ""
 Assert-Get -Ctx $ctx -Label "activities (list)" -Path "publishing/activities" | Out-Null
 Assert-Get -Ctx $ctx -Label "activities/{id}/construct" -Path "publishing/activities/$wl/construct" -Validate { param($r) $null -ne $r.Json } | Out-Null
 Assert-Get -Ctx $ctx -Label "value-conversion/profiles" -Path "publishing/value-conversion/profiles" -Validate { param($r) $null -ne $r.Json.items } | Out-Null
+Assert-Get -Ctx $ctx -Label "incident-strategies" -Path "publishing/incident-strategies" -Validate {
+    param($r)
+    $r.Json.items.Count -ge 2 -and
+    $r.Json.defaultStrategy.alias -eq "Fault" -and
+    $r.Json.defaultStrategy.version -eq "1"
+} | Out-Null
 Assert-Get -Ctx $ctx -Label "workflows/{definitionId}/slots" -Path "publishing/workflows/$definitionId/slots" | Out-Null
 Assert-Get -Ctx $ctx -Label "workflows/{definitionId}/policy" -Path "publishing/workflows/$definitionId/policy" | Out-Null
 

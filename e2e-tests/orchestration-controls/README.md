@@ -16,7 +16,7 @@ Foundation's controls are **activity-driven and stimulus-based**, not operator-c
 | **Terminate (in-workflow)** | `Finish` intrinsic (`elsa.intrinsic.finish@1`, input `outcome`). | ✅ |
 | **Cancel (operator/external)** | Status `Cancelled` + internal cancellation exist; **no REST endpoint** for a normal instance. | ❌ (deferred — see below) |
 | **Retry / redrive** | `POST runtime/workflows/dispatches/{dispatchId}/redrive` re-drives a **DispatchWorkflow parent/child dispatch** (not a stimulus resume). | (deferred) |
-| **Incident remediation** | Engine records `WaitForIntervention` incidents but exposes only `GET …/incidents`; no retry/resolve endpoint. | ❌ feature req **#1015** |
+| **Incident remediation** | Incident outcomes may be `FaultWorkflow`, `ContinueWithIncidents`, or system-owned `WaitForIntervention`; the API exposes only `GET …/incidents` and has no retry/resolve endpoint. | ❌ deferred |
 
 ## Scripts
 

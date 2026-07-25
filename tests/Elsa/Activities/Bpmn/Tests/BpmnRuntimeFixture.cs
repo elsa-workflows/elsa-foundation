@@ -150,7 +150,8 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             rootActivity: executable.RootActivity,
             resumeTargets: resumeTargets.ToDictionary(target => target.ResumeTargetId, StringComparer.Ordinal),
             createdAt: executable.CreatedAt,
-            compatibilityMetadata: executable.CompatibilityMetadata);
+            compatibilityMetadata: executable.CompatibilityMetadata,
+            incidentStrategy: executable.IncidentStrategy);
     }
 
     /// <summary>

@@ -5,7 +5,7 @@
     Uses the dedicated `Fault` activity (`Elsa.Activities.Primitives.Activities.Fault`, input `message`) to fault
     deterministically. The workflow is Sequence[ WriteLine("before"), Fault(message), WriteLine("after") ].
     Asserts: status `Faulted`; the pre-fault step ran; the post-fault step did NOT; exactly one incident is
-    recorded (`Blocking` / `WaitForIntervention` — the only resolution today, see issue #1015).
+    recorded (`Blocking` with a `FaultWorkflow` strategy outcome).
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -44,6 +44,9 @@ if ($inst.instance.status -ne 'Faulted') { $fail += "status=$($inst.instance.sta
 if (-not $beforeRan) { $fail += "pre-fault step did not run" }
 if ($afterRan) { $fail += "post-fault step ran (should have been skipped)" }
 if ($incidents.Count -ne 1) { $fail += "incident count=$($incidents.Count) (expected 1)" }
+if ($incidents.Count -eq 1 -and $incidents[0].resolutionOutcome.actionKind -ne 'FaultWorkflow') {
+    $fail += "resolutionOutcome.actionKind=$($incidents[0].resolutionOutcome.actionKind) (expected FaultWorkflow)"
+}
 
 Write-Host ""
 if ($fail.Count -eq 0) {

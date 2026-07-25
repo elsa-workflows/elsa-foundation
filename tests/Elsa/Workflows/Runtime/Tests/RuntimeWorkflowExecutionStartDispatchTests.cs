@@ -701,7 +701,8 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>(),
             inputContract: null,
-            dependencies: dependencies);
+            dependencies: dependencies,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private WorkflowStartDispatcher NewDispatcher(IWorkflowExecutableStartPolicy policy) =>
         new(

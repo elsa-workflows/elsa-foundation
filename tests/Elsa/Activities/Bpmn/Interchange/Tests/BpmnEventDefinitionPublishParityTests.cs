@@ -62,7 +62,8 @@ public sealed class BpmnEventDefinitionPublishParityTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
         var bindings = new WorkflowTriggerBindingExtractor([new BpmnProcessTriggerStimulusProvider()]).Extract(executable);
         Assert.Equal(3, bindings.Count);
 

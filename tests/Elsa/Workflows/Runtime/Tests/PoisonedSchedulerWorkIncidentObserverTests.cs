@@ -8,9 +8,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
 /// Guardrails for dispatch-fault surfacing: a scheduler work item parked in the poison store must become a
-/// blocking incident (visible on the incidents API) and — through the blocking-incident fault observer running
-/// next in the chain — transition the workflow execution to <see cref="WorkflowExecutionStatus.Faulted"/>,
-/// instead of leaving the instance silently stuck in Running.
+/// blocking incident (visible on the incidents API) with a system-authored Wait outcome. The terminal safety
+/// observer must preserve that explicit intervention decision and leave the workflow nonterminal.
 /// </summary>
 public sealed class PoisonedSchedulerWorkIncidentObserverTests
 {
@@ -30,7 +29,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.NotNull(incident);
         Assert.Equal(IncidentStatus.Blocking, incident!.Status);
         Assert.Equal(IncidentSeverity.Critical, incident.Severity);
-        Assert.Equal(IncidentResolutionAction.WaitForIntervention, incident.ResolutionAction);
+        Assert.Equal("WaitForIntervention", incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal("PoisonedSchedulerWork", incident.ResolutionOutcome.SystemSource);
         Assert.Equal(PoisonedSchedulerWorkIncidentObserver.IncidentFailureType, incident.FailureType);
         Assert.Null(incident.ActivityExecutionId);
         Assert.Contains("workitem-1", incident.Message);
@@ -114,7 +114,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             executableNodeId: null,
             severity: IncidentSeverity.Critical,
             status: IncidentStatus.Resolved,
-            resolutionAction: IncidentResolutionAction.None,
+            resolutionOutcome: new IncidentResolutionOutcome(
+                "Acme.OperatorResolution",
+                _now.AddMinutes(-1),
+                strategy: null,
+                systemSource: "TestResolution"),
             failureType: PoisonedSchedulerWorkIncidentObserver.IncidentFailureType,
             message: "resolved by operator",
             createdAt: _now.AddMinutes(-5),
@@ -165,7 +169,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     }
 
     [Fact]
-    public async Task ObserverChain_PoisonedRecord_TransitionsWorkflowToFaulted()
+    public async Task ObserverChain_PoisonedRecord_PreservesSystemWaitAndNonterminalWorkflow()
     {
         await _harness.SaveWorkflow(WorkflowExecutionStatus.Running);
         await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
@@ -174,8 +178,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         await _harness.FaultObserver.OnDrainedAsync(_harness.Envelope, _harness.FaultedDrainResult);
 
         var state = await _harness.WorkflowStore.FindAsync("wfexec-1");
-        Assert.Equal(WorkflowExecutionStatus.Faulted, state!.Status);
-        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(WorkflowExecutionStatus.Running, state!.Status);
+        Assert.Null(state.CompletedAt);
+        var incident = Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(IncidentResolutionSystemSources.PoisonedSchedulerWork, incident.ResolutionOutcome.SystemSource);
     }
 
     private sealed class Harness

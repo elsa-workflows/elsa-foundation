@@ -233,7 +233,7 @@ public sealed class GroundworkWorkflowRuntimeAttentionQueryTests
         null,
         IncidentSeverity.Critical,
         status,
-        IncidentResolutionAction.WaitForIntervention,
+        null,
         "TestFailure",
         "Sensitive failure detail",
         createdAt,

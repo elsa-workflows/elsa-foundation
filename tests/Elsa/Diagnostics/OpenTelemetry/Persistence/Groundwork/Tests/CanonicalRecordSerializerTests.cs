@@ -114,11 +114,13 @@ public sealed class CanonicalRecordSerializerTests
         var point = _serializer.ToRecord("point-record-1", Point());
         var log = _serializer.ToRecord("log-record-1", Log());
 
-        Assert.Equal(7, trace.Fields!.Count);
+        Assert.Equal(9, trace.Fields!.Count);
         Assert.Equal(9, span.Fields!.Count);
         Assert.Equal(7, point.Fields!.Count);
         Assert.Equal(8, log.Fields!.Count);
         Assert.Equal("trace-1", Assert.Single(trace.Fields[RecordFields.TraceId]).CanonicalValue);
+        Assert.Equal("root-span", Assert.Single(trace.Fields[RecordFields.RootSpanId]).CanonicalValue);
+        Assert.Equal("2", Assert.Single(trace.Fields[RecordFields.SpanCount]).CanonicalValue);
         Assert.Equal(Timestamp.ToUniversalTime().ToString("O"), Assert.Single(point.Fields[RecordFields.Timestamp]).CanonicalValue);
         Assert.Equal("Information", Assert.Single(log.Fields[RecordFields.SeverityText]).CanonicalValue);
         Assert.EndsWith(":point-1", Assert.Single(point.Fields[RecordFields.OrderKey]).CanonicalValue);

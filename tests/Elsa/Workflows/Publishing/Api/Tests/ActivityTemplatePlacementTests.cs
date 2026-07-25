@@ -133,7 +133,8 @@ public sealed class ActivityTemplatePlacementTests
             placement.Root,
             placement.ResumeTargets,
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>()));
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference));
         await references.SaveAsync(fixture.Request.SourceReference with { LayoutSidecar = placement.LayoutSidecar });
         var hierarchy = new BoundaryHierarchyStore(new(
             "ActivityGraph",

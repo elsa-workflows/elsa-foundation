@@ -511,7 +511,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private RuntimeSchedulerDrainResult EmptyDrainResult(string workflowExecutionId) =>

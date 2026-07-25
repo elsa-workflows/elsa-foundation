@@ -346,7 +346,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                         false,
                         JsonSerializer.SerializeToElement("from-default"))
                 ]),
-            dependencies: []);
+            dependencies: [],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutable NewParentExecutable(
         string caseId,
@@ -428,7 +429,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     ChildIdentity.ArtifactId,
                     ChildIdentity.ArtifactHash,
                     [node.ExecutableNodeId])
-            ]);
+            ],
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     /// <summary>

@@ -8,7 +8,7 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class CheckpointFenceEvidenceImporterTests
 {
-    private const string ProviderVersion = "0.0.1-preview.86";
+    private const string ProviderVersion = "0.0.1-preview.88";
 
     [Fact]
     public async Task Imports_only_the_complete_36_record_generation_without_advancing_statuses()
@@ -36,6 +36,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
         Assert.Equal(4, imported.Count(record => record["coverageEntryId"]!.GetValue<string>() == "runtime-post-commit-outbox"));
         Assert.Equal(ImportFixture.Historical80AttachmentSha256, FileSha256(fixture.Historical80AttachmentPath));
         Assert.Equal(ImportFixture.Historical81AttachmentSha256, FileSha256(fixture.Historical81AttachmentPath));
+        Assert.Equal(ImportFixture.Historical86AttachmentSha256, FileSha256(fixture.Historical86AttachmentPath));
     }
 
     [Fact]
@@ -67,6 +68,18 @@ public sealed class CheckpointFenceEvidenceImporterTests
     }
 
     [Fact]
+    public async Task Rejects_reimporting_the_immutable_preview86_generation()
+    {
+        using var fixture = new ImportFixture();
+        var request = fixture.Request with { ProviderVersion = "0.0.1-preview.86" };
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            CheckpointFenceEvidenceImporter.ImportAsync(request));
+
+        Assert.Contains("retained historical generation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Rejects_records_with_wrong_exact_source_provenance()
     {
         using var fixture = new ImportFixture();
@@ -89,7 +102,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
             Provenance = new CheckpointFenceEvidenceProvenance(
                 new string('a', 40),
                 new string('b', 40),
-                "runtime-checkpoint-fence-preview86")
+                "runtime-checkpoint-fence-preview88")
         };
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -162,15 +175,33 @@ public sealed class CheckpointFenceEvidenceImporterTests
         Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
     }
 
-    [Fact]
-    public async Task Rejects_an_import_when_immutable_preview80_or_preview81_history_has_changed()
+    [Theory]
+    [InlineData("0.0.1-preview.80")]
+    [InlineData("0.0.1-preview.81")]
+    [InlineData("0.0.1-preview.86")]
+    public async Task Rejects_an_import_when_immutable_artifact_history_has_changed(string providerVersion)
     {
         using var fixture = new ImportFixture();
-        File.AppendAllText(fixture.Historical80ArtifactPath, "tampered");
+        File.AppendAllText(fixture.HistoricalArtifactPath(providerVersion), "tampered");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
 
-        Assert.Contains("Historical artifact", exception.Message, StringComparison.Ordinal);
+        Assert.Contains($"Historical {providerVersion} artifact", exception.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
+    }
+
+    [Theory]
+    [InlineData("0.0.1-preview.80")]
+    [InlineData("0.0.1-preview.81")]
+    [InlineData("0.0.1-preview.86")]
+    public async Task Rejects_an_import_when_immutable_attachment_history_has_changed(string providerVersion)
+    {
+        using var fixture = new ImportFixture();
+        File.AppendAllText(fixture.HistoricalAttachmentPath(providerVersion), "tampered");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
+
+        Assert.Contains($"Historical {providerVersion} attachment", exception.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
     }
 
@@ -269,6 +300,8 @@ public sealed class CheckpointFenceEvidenceImporterTests
             "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
         public const string Historical81AttachmentSha256 =
             "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34";
+        public const string Historical86AttachmentSha256 =
+            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
 
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -283,6 +316,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
             File.Copy(SourceLedgerPath, LedgerPath);
             var preImportLedger = Ledger();
             RemoveEvidenceGeneration(preImportLedger, ProviderVersion);
+            preImportLedger["groundworkVersion"] = ProviderVersion;
             File.WriteAllText(LedgerPath, preImportLedger.ToJsonString(JsonOptions));
             CopyHistoricalGeneration(
                 "ledger-attachments/runtime-checkpoint-fence.json",
@@ -290,6 +324,9 @@ public sealed class CheckpointFenceEvidenceImporterTests
             CopyHistoricalGeneration(
                 "versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json",
                 Historical81AttachmentSha256);
+            CopyHistoricalGeneration(
+                "versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json",
+                Historical86AttachmentSha256);
             InitializeSourceRepository();
             WriteStagingGeneration();
         }
@@ -308,9 +345,28 @@ public sealed class CheckpointFenceEvidenceImporterTests
             "0.0.1-preview.81",
             "ledger-attachments",
             "runtime-checkpoint-fence.json");
-        public string Historical80ArtifactPath { get; private set; } = string.Empty;
+        public string Historical86AttachmentPath => Path.Combine(
+            EvidenceRoot,
+            "versions",
+            "0.0.1-preview.86",
+            "ledger-attachments",
+            "runtime-checkpoint-fence.json");
+        private Dictionary<string, string> HistoricalArtifactPaths { get; } = new(StringComparer.Ordinal);
         public CheckpointFenceEvidenceImportRequest Request =>
             new(LedgerPath, StagingRoot, SourceRepositoryRoot, ProviderVersion, Provenance);
+
+        public string HistoricalAttachmentPath(string providerVersion) => providerVersion switch
+        {
+            "0.0.1-preview.80" => Historical80AttachmentPath,
+            "0.0.1-preview.81" => Historical81AttachmentPath,
+            "0.0.1-preview.86" => Historical86AttachmentPath,
+            _ => throw new ArgumentOutOfRangeException(nameof(providerVersion), providerVersion, null)
+        };
+
+        public string HistoricalArtifactPath(string providerVersion) =>
+            HistoricalArtifactPaths.TryGetValue(providerVersion, out var path)
+                ? path
+                : throw new InvalidOperationException($"No historical artifact was copied for '{providerVersion}'.");
 
         public Task<CheckpointFenceEvidenceImportResult> ImportAsync() =>
             CheckpointFenceEvidenceImporter.ImportAsync(Request);
@@ -417,8 +473,18 @@ public sealed class CheckpointFenceEvidenceImporterTests
                 var sourceEvidence = Path.Combine(SourceEvidenceRoot, evidence.Replace('/', Path.DirectorySeparatorChar));
                 var destinationEvidence = Path.Combine(EvidenceRoot, evidence.Replace('/', Path.DirectorySeparatorChar));
                 CopyFile(sourceEvidence, destinationEvidence);
-                if (attachmentRelativePath.StartsWith("ledger-attachments/", StringComparison.Ordinal))
-                    Historical80ArtifactPath = destinationEvidence;
+                var providerVersion = attachmentRelativePath switch
+                {
+                    var path when path.StartsWith("ledger-attachments/", StringComparison.Ordinal) =>
+                        "0.0.1-preview.80",
+                    var path when path.StartsWith("versions/0.0.1-preview.81/", StringComparison.Ordinal) =>
+                        "0.0.1-preview.81",
+                    var path when path.StartsWith("versions/0.0.1-preview.86/", StringComparison.Ordinal) =>
+                        "0.0.1-preview.86",
+                    _ => throw new InvalidOperationException(
+                        $"Unknown historical attachment '{attachmentRelativePath}'.")
+                };
+                HistoricalArtifactPaths.TryAdd(providerVersion, destinationEvidence);
             }
         }
 
@@ -475,7 +541,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
             Provenance = new CheckpointFenceEvidenceProvenance(
                 RunGit("rev-parse", "HEAD"),
                 RunGit("rev-parse", "HEAD^{tree}"),
-                "runtime-checkpoint-fence-preview86");
+                "runtime-checkpoint-fence-preview88");
         }
 
         private string RunGit(params string[] arguments)

@@ -260,7 +260,8 @@ public class ActivityExecutionLayoutInspectionTests
             node,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static WorkflowExecutable FlowchartExecutable()
@@ -354,7 +355,8 @@ public class ActivityExecutionLayoutInspectionTests
         root,
         new Dictionary<string, WorkflowExecutableResumeTarget>(),
         DateTimeOffset.UnixEpoch,
-        new Dictionary<string, string>());
+        new Dictionary<string, string>(),
+        IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode Node(
         string executableNodeId,

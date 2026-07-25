@@ -14,9 +14,9 @@ dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/El
 dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj
 ```
 
-The replay targets Groundwork `0.0.1-preview.81`. Runs recorded against preview.73, preview.75, or
-preview.80 are historical provenance only and cannot promote the lane. The T043 manifest records one
-clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
+The replay targets Groundwork `0.0.1-preview.88`. Runs recorded against preview.73, preview.75,
+preview.80, preview.81, or preview.86 are historical provenance only and cannot promote the lane.
+The T043 manifest records one clean exact-branch-head preview.81 lifecycle certification; it does not replace the focused and
 four-provider recertification required after any later `main` integration.
 
 ## Required provider certification
@@ -147,6 +147,149 @@ provider-bounded query contract. The pending contract test is retained as an exp
 `valence-works/Groundwork#130`, which owns provider-native grouped diagnostic reduction. This blocks
 trace parity and T054; it is not deletion evidence. No EF deletion, performance task, architecture
 task, package/solution configuration, or task checkbox was changed by this intake.
+
+## Preview.86 grouped-trace follow-up (2026-07-25)
+
+Groundwork preview.86 supplies the provider-native grouped diagnostic-record
+contract that was missing during the removal-ledger intake. The trace stream now
+declares `trace-summary-v1`: trace id is the group key; earliest root/name,
+minimum start, maximum end/status, case-policy-aware resource/service/workflow
+set unions, and total span count are reduced by the selected provider before
+filtering, ordering, take, or continuation. Trace list and detail both consume
+that bounded grouped route; the previous latest-fragment path and explicit #130
+skip are gone.
+
+Root independently reproduced the final focused evidence:
+
+- complete OpenTelemetry Groundwork adapter suite: **75/75**;
+- grouped merge, supplementary-Unicode catalog behavior, pre-retention union
+  boundary, and explicit pre-release reset behavior on SQLite, SQL Server,
+  PostgreSQL, and MongoDB: **16/16**;
+- native grouped-query plan inspection across the same four providers: **4/4**.
+
+The exact implementation head, resolved preview.86 package/tool family, source
+hashes, provider images/topology, exact commands, and raw totals are retained
+in
+[`evidence/preview86-grouped-trace-results.json`](evidence/preview86-grouped-trace-results.json).
+
+The provider case includes concurrent fragment writes, disposal/reopen, merged
+filtering, newest-window ordering/take, continuation, detail parity, Unicode
+case collision, scope isolation, and retention. This closes the previously
+disclosed #130 mechanism gap only. It is not #646 performance evidence, the
+T057 promotion matrix, or authorization to delete either EF oracle; T050–T057
+remain open.
+
+The grouped trace definition is an intentional pre-release reset boundary. It
+uses schema version 2 and a distinct logical storage name. A preview.81
+definition is rejected fail-closed on all four providers, and the same four
+providers admit the preview.86 definition on fresh storage. No migration or
+dual-format shim is supplied because Elsa Foundation is unreleased and the
+ratified program rule selects the clean end state.
+
+The trace stream admits at most 5,000 retained records, and every grouped query
+reduces exactly the newest 5,000 raw records before applying predicates. Each
+record contributes at most 256 values to a resource, service, or workflow union,
+so the grouped profile declares the exact finite bound `5,000 × 256 =
+1,280,000` values. A configured trace capacity above 5,000 now fails before
+provider work. The four-provider boundary cases prove both that 257 distinct
+values remain available before trim and that an older matching fragment cannot
+re-enter after the 5,000-record input window has been selected.
+
+## Preview.86 grouped-trace independent review
+
+Three adversarial reviewers inspected the exact candidate range from
+`f4eaee963da34f650b7e40d0e859ae10b92d4a30`.
+
+- Correctness/mechanism found two blockers: the immutable preview.81 stream
+  fingerprint had no explicit transition policy, and the 256-value group union
+  rejected individually valid retained fragments. Both findings were accepted.
+  The remediation is the explicit schema-v2 fresh-storage boundary plus the
+  bounded pre-retention union contract and the four-provider tests described
+  above. The originating reviewer then found that the first 1,280,000-value
+  remediation covered only the post-retention state because a drain commit
+  could append 64 captures before trimming. That confirmed blocker was
+  remediated by sharing the 1,000-record admission limit, committing one capture
+  per drain unit, including the 499-record retention carry, and querying the
+  four real providers before trim. The resulting 1,663,744-value limit remains
+  finite and operationally useful; exact-head recertification passed 75/75,
+  16/16, and 4/4.
+- Evidence integrity found that the preview.86 pass totals existed only as
+  narrative while the retained JSON manifests still described preview.81.
+  The historical manifests remain immutable; the new hash-bound preview.86
+  manifest records the exact implementation head, commands, totals, resolved
+  package family, source hashes, and provider topology. Re-review found that
+  its SQL Server, PostgreSQL, and MongoDB image tags did not match the shared
+  fixture and that the fixture itself was not hashed. The manifest now records
+  the exact CU18, PostgreSQL 16, and MongoDB 7.0.37 tags and binds the fixture
+  hash.
+- Scope/test preservation passed: no EF oracle, migration, project, package,
+  solution, or host file was removed or changed; the former #130 skip is the
+  only removed skip; T050–T057 remain open.
+
+## Preview.88 grouped-trace window recertification (2026-07-25)
+
+Groundwork preview.88 retains the grouped-reduction contract and adds the
+atomic collection-bearing mutation mechanism required by OpenIddict. The
+diagnostics integration additionally makes the grouped input window explicit:
+the newest 5,000 raw trace records are selected before grouping and before any
+caller predicate. The normal 64-capture drain batching is retained; correctness
+no longer depends on serializing the drain to one capture at a time.
+
+Root reproduced the exact focused evidence on implementation head
+`a305b9811c603e50abe39c2d4e374b46cbfdf4f1`:
+
+- complete OpenTelemetry Groundwork adapter suite: **76/76**;
+- grouped trace, Unicode case policy, pre-retention union, newest-input-window,
+  and pre-release reset behavior on all four providers: **20/20**;
+- native grouped-query plan inspection across all four providers: **4/4**.
+
+The resolved preview.88 package/tool family, exact commands, source hashes,
+provider topology, and result totals are retained in
+[`evidence/preview88-grouped-trace-results.json`](evidence/preview88-grouped-trace-results.json).
+This remains focused correctness evidence only. It is not #646 performance
+evidence, T057 final zero-EF certification, or authorization to delete either
+EF oracle; T050–T057 remain open.
+
+### Preview.88 checkpoint review remediation
+
+The first exact-range adversarial review froze candidate `811900df7` and ran
+three read-only axes in parallel. Evidence integrity passed after independently
+recomputing the preview.88 attachment, all 36 current artifact hashes, all 108
+historical preview.80/preview.81/preview.86 artifact hashes, exact provenance,
+resolved package assets, and source-manifest hashes. Scope/test preservation
+passed with no EF, host, solution, shell, Studio, BPMN, or #420 deletion; it
+found one P3 wording omission, now corrected so the importer instructions name
+preview.86 among the guarded historical generations.
+
+Correctness/mechanism found three blockers in trace-capacity edge handling:
+
+1. resource queries were incorrectly short-circuited by zero trace capacity
+   rather than zero resource capacity;
+2. trace list queries passed an invalid zero grouped-input limit instead of
+   returning the empty retained stream; and
+3. a configured query size above 5,000 could exceed the grouped profile's
+   maximum take.
+
+Commit `a305b9811c603e50abe39c2d4e374b46cbfdf4f1` remediates all three by keeping
+catalog and signal capacities independent, returning empty before provider work
+for zero trace capacity, and capping grouped trace take to the admitted trace
+capacity. The strengthened zero-capacity and oversized-take regressions passed
+2/2; exact-head Release recertification then passed 76/76 adapter cases, 20/20
+four-provider behavior cases, and 8/8 newest-window plus native-plan cases.
+
+Final re-verification of exact range
+`b55aabc54a845e1d0366beb28bf3d9f91cddd613..b4cbf14723c8d6081349f83a2c83237e3bfafdfe`
+passed all three axes:
+
+- correctness/mechanism: **PASS**; the originating reviewer traced all three
+  fixes, reran the strengthened regressions (2/2) and four-provider newest-window
+  cases (4/4), and found no remaining blocker;
+- evidence integrity: **PASS**; every preview.88 and historical artifact hash,
+  ledger tuple/status, package asset, manifest hash, and exact-head result claim
+  recomputed, with independent 76/76 adapter and 20/20 four-provider reruns; and
+- scope/test preservation: **PASS**; no EF oracle, host, solution, shell,
+  incident-strategy, Studio, BPMN, #420, or in-memory boundary changed, no test
+  was weakened, and T015 plus T050–T057 remain open.
 
 ## Host-composition correction pending exact-head recertification (2026-07-25)
 

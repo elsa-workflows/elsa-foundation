@@ -127,7 +127,7 @@ public sealed class ListIncidentsRequestHandlerTests
             executableNodeId: "node-1",
             severity: IncidentSeverity.Error,
             status: status,
-            resolutionAction: IncidentResolutionAction.WaitForIntervention,
+            resolutionOutcome: null,
             failureType: "System.InvalidOperationException",
             message: "boom",
             createdAt: _now,

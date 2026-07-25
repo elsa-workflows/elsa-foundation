@@ -1,8 +1,8 @@
 ﻿namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
-/// Workflow strategy selections. Each strategy is identified by its stable type alias (the shared
-/// <c>TypeAliasConvention</c>), never an assembly-qualified name.
+/// Workflow strategy selections. Extension identities use durable aliases/references, never
+/// assembly-qualified CLR type names.
 /// </summary>
 public sealed class WorkflowStrategyOptions
 {
@@ -12,9 +12,10 @@ public sealed class WorkflowStrategyOptions
     public string? ActivationStrategyType { get; set; }
 
     /// <summary>
-    /// The alias of the <see cref="IIncidentStrategy"/> to use when a fault occurs in the workflow.
+    /// The exact incident strategy to use when a fault occurs, or <see langword="null"/> to inherit
+    /// the publishing host's effective default.
     /// </summary>
-    public string? IncidentStrategyType { get; set; }
+    public Elsa.Workflows.Primitives.Models.IncidentStrategyReference? IncidentStrategy { get; set; }
 
     /// <summary>
     /// The alias of the strategy for committing workflow state.

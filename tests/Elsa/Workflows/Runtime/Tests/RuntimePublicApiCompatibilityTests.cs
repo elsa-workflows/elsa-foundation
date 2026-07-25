@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -15,7 +16,7 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(WorkflowExecutable),
             typeof(WorkflowExecutableIdentity), typeof(ExecutableNode),
             typeof(IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>), typeof(DateTimeOffset),
-            typeof(IReadOnlyDictionary<string, string>));
+            typeof(IReadOnlyDictionary<string, string>), typeof(IncidentStrategyReference));
         // spec 117 D4 extended these convenience constructors with a trailing optional trigger-metadata channel
         // (pre-release, source-compatible for existing positional callers).
         AssertConstructor(

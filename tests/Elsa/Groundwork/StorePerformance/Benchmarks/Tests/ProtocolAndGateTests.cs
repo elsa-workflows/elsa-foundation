@@ -436,7 +436,7 @@ public sealed class ProtocolAndGateTests
         var workload = BookmarkScenario;
         var request = new MatrixRequest(
             cohort, measurementSet, workload.WorkloadId, workload.Version, "sqlite", adapter, "document-type-specific-tables", "100k",
-            new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.86" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), workload.Seed, workload.ComputeInputFingerprint(), "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
+            new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.88" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), workload.Seed, workload.ComputeInputFingerprint(), "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
         return request with { NativePlanContentSha256 = Hash(NativePlanPayload(request)) };
     }
 

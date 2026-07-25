@@ -620,7 +620,8 @@ public sealed class DispatchWorkflowDesignTests
             Now,
             new Dictionary<string, string>(),
             new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []),
-            []);
+            [],
+            IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutable LegacyExecutable(string artifactId, string definitionId, ExecutableNode root) =>
         new(
@@ -628,7 +629,8 @@ public sealed class DispatchWorkflowDesignTests
             root,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             Now,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutableInputContract Contract(params WorkflowDeclaredInput[] inputs) =>
         new(WorkflowExecutableInputContract.CurrentVersion, inputs);
@@ -650,7 +652,8 @@ public sealed class DispatchWorkflowDesignTests
             Now,
             new Dictionary<string, string>(),
             inputContract,
-            []);
+            [],
+            IncidentStrategyBuiltIns.FaultReference);
         await executables.SaveAsync(executable);
         await references.SaveAsync(Source(
             "child-source",

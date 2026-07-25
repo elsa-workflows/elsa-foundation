@@ -542,7 +542,8 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             node,
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode NewConsumerNode(

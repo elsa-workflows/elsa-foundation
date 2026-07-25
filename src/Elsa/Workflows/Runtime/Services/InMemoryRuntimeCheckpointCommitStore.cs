@@ -230,7 +230,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ValidateActivityExecutionInspectionChanges(commit);
         ValidateBookmarkStateChanges(commit);
         ValidateDurableValueStateChanges(commit);
-        ValidateIncidentStateChanges(commit);
+        await ValidateIncidentStateChangesAsync(commit, cancellationToken);
         ValidateOperationalStateChanges(commit);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
@@ -1037,7 +1037,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
-    private void ValidateIncidentStateChanges(RuntimeCheckpointCommit commit)
+    private async ValueTask ValidateIncidentStateChangesAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
     {
         if (_incidentStateStore is null)
             return;
@@ -1053,6 +1055,15 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Incident state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+
+            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
+            {
+                var existing = await _incidentStateStore.FindAsync(
+                    stateChange.State.WorkflowExecutionId,
+                    stateChange.State.IncidentId,
+                    cancellationToken);
+                IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
+            }
         }
     }
 

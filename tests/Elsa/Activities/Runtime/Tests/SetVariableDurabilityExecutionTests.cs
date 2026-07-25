@@ -358,6 +358,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var executable = new WorkflowExecutable(
             identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
             inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             workflowVariables: workflowVariables);
         var executableStore = new InMemoryWorkflowExecutableStore();
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
