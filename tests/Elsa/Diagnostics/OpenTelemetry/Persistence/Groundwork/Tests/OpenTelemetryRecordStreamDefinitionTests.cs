@@ -62,13 +62,9 @@ public sealed class OpenTelemetryRecordStreamDefinitionTests
         Assert.Equal(RecordFields.TraceId, summary.GroupKeyField);
         Assert.Equal(5_000, summary.MaxTake);
         Assert.Equal(OpenTelemetryRecordStreamDefinitions.MaxRecordsPerSignalBatch, trace.Limits.MaxBatchRecords);
+        Assert.Equal(OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity, trace.Limits.MaxGroupedQueryInputRecords);
         Assert.Equal(
-            (
-                OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity
-                + OpenTelemetryRecordStreamDefinitions.RetentionRecordInterval - 1
-                + OpenTelemetryRecordStreamDefinitions.MaxCaptureBatchesPerDrainCommit
-                * OpenTelemetryRecordStreamDefinitions.MaxRecordsPerSignalBatch
-            ) * resourceId.MaxValues,
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity * resourceId.MaxValues,
             summary.MaxUnionValues);
         Assert.Contains(summary.Reducers, x =>
             x.Alias == RecordFields.SpanCount && x.Kind == DiagnosticGroupReducerKind.SumInt64);

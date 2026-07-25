@@ -39,7 +39,7 @@ public sealed class GroundworkOpenTelemetryStore :
     IDisposable,
     IAsyncDisposable
 {
-    private const int DrainBatchSize = OpenTelemetryRecordStreamDefinitions.MaxCaptureBatchesPerDrainCommit;
+    private const int DrainBatchSize = 64;
     private const int DrainRetentionInterval = OpenTelemetryRecordStreamDefinitions.RetentionRecordInterval;
     private const int MaxDrainAttempts = 8;
     private const int MaxLedgerWriteAttempts = 8;
@@ -349,7 +349,7 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
-        if (take == 0)
+        if (take == 0 || _traceCapacity == 0)
             return new([], _sourceRegistry?.DroppedCount ?? 0);
 
         try
@@ -456,6 +456,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 take,
                 new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                _traceCapacity,
                 Predicate: All(predicates),
                 Continuation: null), cancellationToken);
             return new(
@@ -481,6 +482,8 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
+        if (_traceCapacity == 0)
+            return null;
 
         try
         {
@@ -490,6 +493,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 1,
                 new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                _traceCapacity,
                 Predicate: new DiagnosticRecordGroupPredicate.Comparison(
                     RecordFields.TraceId,
                     DiagnosticPredicateOperator.Equal,

@@ -191,6 +191,7 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 Take: 7,
                 Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                InputRecordLimit: OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
                 Predicate: new DiagnosticRecordGroupPredicate.All(
                 [
                     new DiagnosticRecordGroupPredicate.Comparison(RecordFields.TraceId, DiagnosticPredicateOperator.Contains, [DiagnosticFieldValue.String("trace-a")]),
@@ -216,6 +217,7 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
                 Take: 1,
                 Order: new(RecordFields.StartTime, DiagnosticSortDirection.Descending),
+                InputRecordLimit: OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
                 Predicate: new DiagnosticRecordGroupPredicate.Comparison(
                     RecordFields.TraceId,
                     DiagnosticPredicateOperator.Equal,

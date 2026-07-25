@@ -8,7 +8,6 @@ public static class OpenTelemetryRecordStreamDefinitions
     public const string TraceSummaryProfileName = "trace-summary-v1";
     public const int MaxTraceRecordCapacity = 5_000;
     public const int MaxRecordsPerSignalBatch = 1_000;
-    public const int MaxCaptureBatchesPerDrainCommit = 1;
     public const int RetentionRecordInterval = 500;
 
     private const int TraceDefinitionSchemaVersion = 2;
@@ -16,11 +15,7 @@ public static class OpenTelemetryRecordStreamDefinitions
     private const int MaxNameBytes = 4_096;
     private const int MaxBodyBytes = 65_536;
     private const int MaxMultiValues = 256;
-    private const int MaxTraceRecordsBeforeRetention =
-        MaxTraceRecordCapacity
-        + RetentionRecordInterval - 1
-        + MaxCaptureBatchesPerDrainCommit * MaxRecordsPerSignalBatch;
-    private const int MaxTraceUnionValues = MaxTraceRecordsBeforeRetention * MaxMultiValues;
+    private const int MaxTraceUnionValues = MaxTraceRecordCapacity * MaxMultiValues;
 
     /// <summary>Creates the trace-summary stream definition for a host-selected stream identity.</summary>
     public static DiagnosticRecordStreamDefinition CreateTraces(string streamId) => Definition(
@@ -129,6 +124,7 @@ public static class OpenTelemetryRecordStreamDefinitions
                 MaxRecordIdBytes: 128,
                 MaxFieldsPerRecord: fields.Count,
                 MaxQueryLimit: 5_000,
+                MaxGroupedQueryInputRecords: MaxTraceRecordCapacity,
                 MaxPredicateNodes: 32,
                 // Non-trace streams keep the tighter eight-value budget because a telemetry-log
                 // body can be 64 KiB. Traces opt into nine for their declared full-filter shape.
@@ -172,11 +168,9 @@ public static class OpenTelemetryRecordStreamDefinitions
         ],
         Names(RecordFields.StartTime),
         MaxTake: 5_000,
-        // A query can race the asynchronous drain before periodic retention completes.
-        // Cover the retained prefix, the sub-threshold carry, and one admitted capture
-        // batch. The drain deliberately commits one capture at a time so this bound
-        // remains operationally useful to every provider. Each trace record may
-        // contribute all 256 declared values.
+        // Grouped trace queries reduce at most MaxTraceRecordCapacity newest raw records.
+        // Each admitted trace record may contribute all 256 declared values, so this
+        // bound is independent of retention timing and concurrent writers.
         MaxUnionValues: MaxTraceUnionValues);
 
     private static DiagnosticFieldDefinition String(

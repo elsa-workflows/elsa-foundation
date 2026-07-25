@@ -290,13 +290,15 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
             new(binding.TraceStreamId),
             OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
             2,
-            new(RecordFields.StartTime)));
+            new(RecordFields.StartTime),
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity));
         var secondPage = await restartedProvider.Stores.Traces.QueryGroupsAsync(new(
             scope,
             new(binding.TraceStreamId),
             OpenTelemetryRecordStreamDefinitions.TraceSummaryProfileName,
             2,
             new(RecordFields.StartTime),
+            OpenTelemetryRecordStreamDefinitions.MaxTraceRecordCapacity,
             Continuation: firstPage.Continuation));
 
         Assert.Equal(["trace-alpha", "trace-beta"], firstPage.Groups.Select(group => GroupString(group, RecordFields.TraceId)));
@@ -362,6 +364,46 @@ public sealed class DiagnosticsGroundworkProviderConformanceTests(DiagnosticsPro
         Assert.Equal(distinctValues, trace.SpanCount);
         Assert.Contains("resource-256", trace.ResourceIds);
         Assert.Contains("workflow-256", trace.WorkflowInstanceIds);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderKinds))]
+    public async Task Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(
+        DiagnosticsProviderKind providerKind)
+    {
+        var provider = await providers.CreateIsolatedAsync(providerKind);
+        var binding = GroundworkOpenTelemetryBinding.Create("tenant-a", "trace-input-window", "collector-a");
+        var start = new DateTimeOffset(2026, 7, 25, 16, 0, 0, TimeSpan.Zero);
+        var serializer = new CanonicalRecordSerializer();
+        var traces = Enumerable.Range(0, 3)
+            .Select(index => Trace(
+                $"trace-{index}",
+                $"resource-{index}",
+                start.AddSeconds(index),
+                $"trace {index}",
+                SpanStatus.Ok))
+            .ToArray();
+
+        await using var providerLease =
+            await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, binding);
+        await providerLease.Stores.Traces.AppendAsync(DiagnosticRecordBatch.Create(
+            new(binding.TenantId, binding.ScopeId),
+            new(binding.TraceStreamId),
+            new(DateTimeOffset.UtcNow, "pre-retention-trace-window"),
+            traces.Select((trace, index) =>
+                serializer.ToRecord($"trace-window-{index}", trace, [$"service-{index}"])).ToArray()));
+        await using var store = new GroundworkOpenTelemetryStore(
+            providerLease.Stores,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { TraceCapacity = 2 }),
+            binding);
+
+        var visible = await store.QueryTracesAsync(new() { Take = 10 });
+        var excludedByWindow = await store.QueryTracesAsync(new() { TraceId = "trace-0", Take = 10 });
+        var excludedDetail = await store.GetTraceAsync("trace-0");
+
+        Assert.Equal(["trace-1", "trace-2"], visible.Items.Select(trace => trace.TraceId));
+        Assert.Empty(excludedByWindow.Items);
+        Assert.Null(excludedDetail);
     }
 
     [Theory]
