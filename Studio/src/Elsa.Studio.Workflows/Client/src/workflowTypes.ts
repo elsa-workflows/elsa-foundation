@@ -86,6 +86,26 @@ export interface WorkflowDraft {
   validationErrors: ValidationError[];
 }
 
+export interface IncidentStrategyReference {
+  alias: string;
+  version: string;
+}
+
+export interface IncidentStrategyDescriptor extends IncidentStrategyReference {
+  displayName: string;
+  description?: string | null;
+}
+
+export interface IncidentStrategiesResponse {
+  items: IncidentStrategyDescriptor[];
+  defaultStrategy: IncidentStrategyReference;
+}
+
+export interface WorkflowStrategyOptions {
+  incidentStrategy?: IncidentStrategyReference | null;
+  [key: string]: unknown;
+}
+
 export interface WorkflowDefinitionState {
   variables?: VariableDefinition[];
   rootActivity?: ActivityNode | null;

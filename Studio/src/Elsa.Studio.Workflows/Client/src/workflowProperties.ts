@@ -1,4 +1,14 @@
-import type { ArgumentType, ArgumentValue, CollectionKind, VariableDefinition, VariableTypeDescriptor, WorkflowInput, WorkflowOutput } from "./workflowTypes";
+import type {
+  ArgumentType,
+  ArgumentValue,
+  CollectionKind,
+  IncidentStrategyReference,
+  VariableDefinition,
+  VariableTypeDescriptor,
+  WorkflowInput,
+  WorkflowOutput,
+  WorkflowStrategyOptions
+} from "./workflowTypes";
 
 /**
  * Shape construction for workflow Variables / Inputs / Outputs.
@@ -14,6 +24,31 @@ import type { ArgumentType, ArgumentValue, CollectionKind, VariableDefinition, V
 // alias the descriptor reports; "String" is the safe default when descriptors are unavailable.
 export const defaultArgumentTypeName = "String";
 export const defaultInputUiHint = "singleline";
+
+export function readIncidentStrategyReference(strategyOptions: unknown): IncidentStrategyReference | null {
+  if (!isPlainRecord(strategyOptions) || !isPlainRecord(strategyOptions.incidentStrategy)) return null;
+  const { alias, version } = strategyOptions.incidentStrategy;
+  return typeof alias === "string" && alias.trim().length > 0
+    && typeof version === "string" && version.trim().length > 0
+    ? { alias, version }
+    : null;
+}
+
+export function updateIncidentStrategyReference(
+  strategyOptions: unknown,
+  incidentStrategy: IncidentStrategyReference | null
+): WorkflowStrategyOptions {
+  const options = isPlainRecord(strategyOptions) ? strategyOptions : {};
+  const storedReference = isPlainRecord(options.incidentStrategy)
+    ? options.incidentStrategy
+    : {};
+  return {
+    ...options,
+    incidentStrategy: incidentStrategy
+      ? { ...storedReference, ...incidentStrategy }
+      : null
+  };
+}
 
 export function isCollectionKind(value: unknown): value is CollectionKind {
   return value === "Single" || value === "Array" || value === "List" || value === "HashSet";

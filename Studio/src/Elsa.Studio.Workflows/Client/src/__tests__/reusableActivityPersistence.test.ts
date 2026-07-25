@@ -10,6 +10,47 @@ import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 afterEach(() => clearApiCapabilityCache());
 
 describe("reusable activity draft persistence", () => {
+  it("round-trips incident strategy options through the draft update client", async () => {
+    const state = {
+      strategyOptions: {
+        activationStrategyType: "Singleton",
+        futureOption: { preserve: true },
+        incidentStrategy: { alias: "Acme.Operations.Review", version: "2026.07" }
+      }
+    };
+    const putJson = vi.fn(async (_path: string, body: { state: WorkflowDraft["state"]; layout: WorkflowDraft["layout"] }) => ({
+      id: "workflow-draft-1",
+      definitionId: "workflow-definition-1",
+      state: body.state,
+      layout: body.layout,
+      validationErrors: []
+    }));
+    const context = {
+      baseUrl: `test://incident-strategy-persistence-${Math.random()}`,
+      http: {
+        getJson: vi.fn(async (path: string) => {
+          if (path === "/capabilities") return capabilities;
+          throw new Error(`Unexpected GET ${path}`);
+        }),
+        putJson
+      }
+    } as unknown as StudioEndpointContext;
+
+    const saved = await updateDraft(context, {
+      id: "workflow-draft-1",
+      definitionId: "workflow-definition-1",
+      state,
+      layout: [],
+      validationErrors: []
+    });
+
+    expect(putJson).toHaveBeenCalledWith("/design/workflows/drafts/workflow-draft-1", {
+      state,
+      layout: []
+    });
+    expect(saved.state.strategyOptions).toEqual(state.strategyOptions);
+  });
+
   it("derives identity and presentation after the server saves and reloads only the exact activityVersionId", async () => {
     const catalog = [
       reusableCatalogItem("invoice-version-2", "2.0.0"),

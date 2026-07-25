@@ -10,14 +10,49 @@ import {
   literalDefault,
   makeArgumentType,
   readArgumentType,
+  readIncidentStrategyReference,
   readStringField,
   readVariableDefault,
   shortenTypeName,
   updateInput,
+  updateIncidentStrategyReference,
   updateOutput,
   updateVariable
 } from "../workflowProperties";
 import type { VariableDefinition, VariableTypeDescriptor } from "../workflowTypes";
+
+describe("incident strategy options", () => {
+  it("updates an exact strategy reference without losing unknown strategy-option fields", () => {
+    const existing = {
+      activationStrategyType: "Singleton",
+      futureOption: { preserve: true },
+      incidentStrategy: {
+        alias: "Fault",
+        version: "1",
+        futureReferenceField: { preserve: true }
+      }
+    };
+
+    const updated = updateIncidentStrategyReference(existing, {
+      alias: "Acme.Operations.Review",
+      version: "2026.07"
+    });
+
+    expect(readIncidentStrategyReference(updated)).toEqual({
+      alias: "Acme.Operations.Review",
+      version: "2026.07"
+    });
+    expect(updated).toMatchObject({
+      activationStrategyType: "Singleton",
+      futureOption: { preserve: true },
+      incidentStrategy: {
+        alias: "Acme.Operations.Review",
+        version: "2026.07",
+        futureReferenceField: { preserve: true }
+      }
+    });
+  });
+});
 
 describe("variable shape construction", () => {
   it("creates a canonical VariableDefinition with a generated reference key and the expected keys", () => {

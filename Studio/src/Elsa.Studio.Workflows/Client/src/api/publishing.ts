@@ -2,6 +2,9 @@ import type { StudioActivityDiagnostic, StudioEndpointContext } from "@elsa-work
 import { canonicalizeStateForWire } from "../activityInputWire";
 import type {
   DesignMetadataRecord,
+  IncidentStrategiesResponse,
+  IncidentStrategyDescriptor,
+  IncidentStrategyReference,
   StartWorkflowDraftTestRunRequest,
   WorkflowDefinitionState,
   WorkflowTestRunView
@@ -14,6 +17,52 @@ export interface PublicationIntent {
   action?: "replace" | "sideBySide";
   expectedPublicationId?: string | null;
   preflightToken?: string;
+}
+
+export async function listIncidentStrategies(context: StudioEndpointContext): Promise<IncidentStrategiesResponse> {
+  const path = await resolveCapabilityLink(context, capabilityIds.publishing, "incident-strategies");
+  return parseIncidentStrategiesResponse(await context.http.getJson<unknown>(path));
+}
+
+function parseIncidentStrategiesResponse(value: unknown): IncidentStrategiesResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) throw invalidIncidentStrategiesResponse();
+  const defaultStrategy = parseIncidentStrategyReference(value.defaultStrategy);
+  if (!defaultStrategy) throw invalidIncidentStrategiesResponse();
+  const items: IncidentStrategyDescriptor[] = [];
+  for (const item of value.items) {
+    const descriptor = parseIncidentStrategyDescriptor(item);
+    if (!descriptor) throw invalidIncidentStrategiesResponse();
+    items.push(descriptor);
+  }
+  return { items, defaultStrategy };
+}
+
+function parseIncidentStrategyDescriptor(value: unknown): IncidentStrategyDescriptor | null {
+  if (!isRecord(value)) return null;
+  const reference = parseIncidentStrategyReference(value);
+  if (!reference || typeof value.displayName !== "string") return null;
+  if (value.description !== undefined && value.description !== null && typeof value.description !== "string") return null;
+  return {
+    ...reference,
+    displayName: value.displayName,
+    ...(value.description !== undefined ? { description: value.description as string | null } : {})
+  };
+}
+
+function parseIncidentStrategyReference(value: unknown): IncidentStrategyReference | null {
+  if (!isRecord(value)) return null;
+  return typeof value.alias === "string" && value.alias.length > 0
+    && typeof value.version === "string" && value.version.length > 0
+    ? { alias: value.alias, version: value.version }
+    : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function invalidIncidentStrategiesResponse() {
+  return new Error("Incident strategy discovery returned an invalid response.");
 }
 
 export interface PublicationSnapshotPreflightRequest extends PublicationIntent {

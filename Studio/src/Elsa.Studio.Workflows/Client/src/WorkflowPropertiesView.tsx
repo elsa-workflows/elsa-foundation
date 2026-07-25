@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { formatDate } from "./workflowFormatting";
+import { IncidentStrategySection } from "./IncidentStrategySection";
 import {
   argumentNameKeys,
   createInput,
@@ -19,6 +20,7 @@ import {
   referenceKeyKeys,
   storageDriverKeys,
   updateInput,
+  updateIncidentStrategyReference,
   updateOutput,
   updateVariable,
   variableNameKeys
@@ -610,6 +612,15 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         definition={details?.definition}
         definitionId={draft.definitionId}
         onMetaChange={onDefinitionMetaChange}
+      />
+
+      <IncidentStrategySection
+        strategyOptions={draft.state.strategyOptions}
+        context={context}
+        onChange={incidentStrategy => onStateChange(state => ({
+          ...state,
+          strategyOptions: updateIncidentStrategyReference(state.strategyOptions, incidentStrategy)
+        }))}
       />
 
       <VariablesEditor

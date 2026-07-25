@@ -11,7 +11,12 @@ import {
   renameWorkflowFolder
 } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
+import {
+  listIncidentStrategies,
+  preflightPublication,
+  preflightPublicationSnapshot,
+  startWorkflowDraftTestRun
+} from "../api/publishing";
 import { getActivityExecutionDescendants, getActivityExecutionLayout, getExecutable, getExecutableInputSources, listExecutables, runExecutable } from "../api/runtime";
 import { parseWorkflowRunInputs } from "../workflowRunInputs";
 import type { WorkflowInput } from "../workflowTypes";
@@ -36,7 +41,8 @@ const capabilities = {
       links: [
         { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
         { rel: "publication-snapshot-preflight", href: "publishing/workflows/preflight" },
-        { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
+        { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" },
+        { rel: "incident-strategies", href: "publishing/incident-strategies" }
       ]
     },
     {
@@ -66,6 +72,33 @@ const pagedDefinitionCapabilities = {
 };
 
 describe("canonical domain clients", () => {
+  it("discovers incident strategies only through the advertised publishing relation", async () => {
+    const response = {
+      items: [{
+        alias: "Acme.Operations.Review",
+        version: "2026.07",
+        displayName: "Operations review",
+        description: "Keeps the incident blocking for review."
+      }],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : response);
+
+    await expect(listIncidentStrategies(createContext({ getJson }))).resolves.toEqual(response);
+    expect(getJson).toHaveBeenNthCalledWith(1, "/capabilities");
+    expect(getJson).toHaveBeenNthCalledWith(2, "/publishing/incident-strategies");
+  });
+
+  it("rejects an incident-strategy response that does not match the discovered contract", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? capabilities
+      : { items: null, defaultStrategy: { alias: "Fault" } });
+
+    await expect(listIncidentStrategies(createContext({ getJson }))).rejects.toThrow(
+      "Incident strategy discovery returned an invalid response."
+    );
+  });
+
   it("normalizes the unpaged Design items response for Studio paging", async () => {
     const items = Array.from({ length: 12 }, (_, index) => ({
       id: `definition-${index + 1}`,

@@ -38,6 +38,30 @@ function setInputValue(input: HTMLInputElement, value: string) {
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
 }
 
+function click(element: HTMLElement) {
+  flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+}
+
+function incidentStrategyContext(
+  name: string,
+  loadCatalog: () => unknown | Promise<unknown>
+) {
+  const getJson = vi.fn(async (url: string) => {
+    if (url === "/capabilities") {
+      return { capabilities: [{
+        id: "elsa.api.publishing",
+        contractVersion: "1",
+        links: [{ rel: "incident-strategies", href: "publishing/incident-strategies" }]
+      }] };
+    }
+    return loadCatalog();
+  });
+  return {
+    context: { baseUrl: `test://${name}`, http: { getJson } } as never,
+    getJson
+  };
+}
+
 const typeOptions = [
   { value: "String", label: "String", group: "Primitives" },
   { value: "Boolean", label: "Boolean", group: "Primitives" },
@@ -186,6 +210,258 @@ describe("properties view", () => {
     await vi.waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
     expect(getJson).toHaveBeenNthCalledWith(1, "/capabilities");
     expect(getJson).toHaveBeenNthCalledWith(2, "/expressions/variable-types");
+  });
+
+  it("pins the exact advertised incident strategy while preserving sibling strategy options", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      activationStrategyType: "Singleton",
+      futureOption: { preserve: true },
+      incidentStrategy: null
+    };
+    const { context } = incidentStrategyContext("incident-strategies", () => ({
+      items: [{
+        alias: "Acme.Operations.Review",
+        version: "2026.07",
+        displayName: "Operations review",
+        description: "Keeps the incident blocking for review."
+      }],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    }));
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
+    const reviewOption = [...select.options].find(option => option.textContent?.includes("Operations review"))!;
+    setSelectValue(select, reviewOption.value);
+
+    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).strategyOptions).toEqual({
+      activationStrategyType: "Singleton",
+      futureOption: { preserve: true },
+      incidentStrategy: { alias: "Acme.Operations.Review", version: "2026.07" }
+    });
+  });
+
+  it("uses null for host-default inheritance without losing sibling strategy options", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      activationStrategyType: "Singleton",
+      incidentStrategy: { alias: "Fault", version: "1" }
+    };
+    const { context } = incidentStrategyContext("host-default", () => ({
+      items: [{ alias: "Fault", version: "1", displayName: "Fault" }],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    }));
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
+    setSelectValue(container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!, "");
+
+    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).strategyOptions).toEqual({
+      activationStrategyType: "Singleton",
+      incidentStrategy: null
+    });
+  });
+
+  it("keeps an unresolved exact strategy reference selected and disabled", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "Acme.Missing", version: "legacy-v2" }
+    };
+    const { context } = incidentStrategyContext("unresolved-strategy", () => ({
+      items: [{ alias: "Fault", version: "1", displayName: "Fault" }],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    }));
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
+    const unresolved = [...select.options].find(option => option.textContent?.includes("Acme.Missing / legacy-v2"));
+    expect(unresolved).toMatchObject({ disabled: true, selected: true });
+    expect(container.textContent).toContain("will be preserved until you choose another option");
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("resolves aliases case-insensitively without rewriting the stored reference", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "fault", version: "1" }
+    };
+    const { context } = incidentStrategyContext("case-insensitive-strategy", () => ({
+      items: [{ alias: "Fault", version: "1", displayName: "Fault", description: "Stops the workflow at the faulting activity." }],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    }));
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
+    expect(select.selectedOptions[0]?.textContent).toBe("Fault — Fault / 1");
+    expect([...select.options].some(option => option.textContent?.includes("(unresolved)"))).toBe(false);
+    expect(select.labels[0]?.textContent).toBe("Incident strategy");
+    expect(container.querySelector(`#${select.getAttribute("aria-describedby")}`)?.textContent)
+      .toContain("Stops the workflow at the faulting activity.");
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("shows the stored reference without mutating it while discovery is loading", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "Acme.Operations.Review", version: "2026.07" }
+    };
+    const pendingCatalog = new Promise<never>(() => {});
+    const { context, getJson } = incidentStrategyContext("loading-strategies", () => pendingCatalog);
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledWith("/publishing/incident-strategies"));
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Loading incident strategies");
+    expect(container.textContent).toContain("Acme.Operations.Review / 2026.07");
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("does not probe a guessed incident-strategy route when the capability relation is unavailable", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "Acme.Stored", version: "v3" }
+    };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? { capabilities: [{
+          id: "elsa.api.expressions",
+          contractVersion: "1",
+          links: [{ rel: "variable-types", href: "expressions/variable-types" }]
+        }] }
+      : { items: [] });
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={{ baseUrl: "test://strategies-unavailable", http: { getJson } } as never}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.textContent).toContain("discovery is not available"));
+    expect(container.textContent).toContain("Acme.Stored / v3");
+    expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("incident-strategies"));
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("preserves the stored selection on request failure and retries discovery explicitly", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "Acme.Stored", version: "v3" }
+    };
+    let catalogRequests = 0;
+    const { context } = incidentStrategyContext("strategies-error", () => {
+      catalogRequests += 1;
+      if (catalogRequests === 1) throw new Error("Network unavailable");
+      return {
+        items: [{ alias: "Fault", version: "1", displayName: "Fault" }],
+        defaultStrategy: { alias: "Fault", version: "1" }
+      };
+    });
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("[role='alert']")).not.toBeNull());
+    expect(container.textContent).toContain("Acme.Stored / v3");
+    click(container.querySelector<HTMLButtonElement>("[role='alert'] button")!);
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Incident strategy']")).not.toBeNull());
+    expect(catalogRequests).toBe(2);
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps the stored selection intact when strategy discovery is permission-denied", async () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      incidentStrategy: { alias: "Acme.Restricted", version: "1" }
+    };
+    const { context } = incidentStrategyContext("strategies-forbidden", () => {
+      throw Object.assign(new Error("Forbidden"), { status: 403 });
+    });
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={workflow}
+        context={context}
+        onStateChange={onStateChange}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.querySelector("[role='alert']")).not.toBeNull());
+    expect(container.textContent).toContain("Acme.Restricted / 1");
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it("shows an explicit empty state without inventing selectable strategies", async () => {
+    const { context } = incidentStrategyContext("strategies-empty", () => ({
+      items: [],
+      defaultStrategy: { alias: "Fault", version: "1" }
+    }));
+    const container = render(
+      <WorkflowPropertiesView
+        details={details()}
+        draft={draft()}
+        context={context}
+        onStateChange={vi.fn()}
+      />
+    );
+
+    await vi.waitFor(() => expect(container.textContent).toContain("No incident strategies are advertised"));
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Incident strategy']")!;
+    expect([...select.options].map(option => option.textContent)).toEqual([
+      "Use host default — Fault / 1"
+    ]);
   });
 
   it("commits a name edit through the metadata handler on blur", () => {
