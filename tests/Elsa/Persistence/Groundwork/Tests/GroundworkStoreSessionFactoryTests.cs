@@ -120,6 +120,8 @@ public sealed class GroundworkStoreSessionFactoryTests
         Assert.Equal("tenant-b", second.Access.Scope?.Value);
         Assert.NotSame(first.DocumentStore, second.DocumentStore);
         Assert.NotSame(first.BoundedDocumentStore, second.BoundedDocumentStore);
+        Assert.NotNull(first.BoundedDocumentMutationStore);
+        Assert.NotNull(second.BoundedDocumentMutationStore);
     }
 
     [Fact]
@@ -324,6 +326,7 @@ public sealed class GroundworkStoreSessionFactoryTests
         Assert.Equal(1, lease.DisposeCount);
         Assert.Throws<ObjectDisposedException>(() => session.DocumentStore);
         Assert.Throws<ObjectDisposedException>(() => session.BoundedDocumentStore);
+        Assert.Throws<ObjectDisposedException>(() => session.BoundedDocumentMutationStore);
     }
 
     [Fact]
