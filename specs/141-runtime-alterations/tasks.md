@@ -11,17 +11,17 @@ prove complete preflight, one atomic target checkpoint, rollback, and acknowledg
 
 ## Phase 1: Shared contracts, protected payload, and registry
 
-- [ ] T001 [US1] Add failing validation/serialization tests for plan, target/job, claim, outcome, envelope, selector, and lifecycle invariants in `tests/Elsa/Workflows/Runtime/Tests/Alterations/AlterationModelTests.cs`
-- [ ] T002 [P] [US1] Add failing canonicalization/idempotency tests covering alteration order, explicit-ID normalization, query/default normalization, tenant/authority scope, JSON scalar interpretation, and hash conflicts in `tests/Elsa/Workflows/Runtime/Tests/Alterations/AlterationRequestCanonicalizerTests.cs`
-- [ ] T003 [P] [US6] Add failing registration tests for built-in reservations, custom namespaces, exact schema versions, duplicate rejection, scoped lifetime, and no persisted CLR identities in `tests/Elsa/Workflows/Runtime/Tests/Alterations/WorkflowAlterationRegistryTests.cs`
-- [ ] T004 [P] [US3] Add failing protected-payload/redaction tests for tenant-bound associated data, restart-stable keys, wrong-key/tenant rejection, plan DTO redaction, and no value leakage in `tests/Elsa/Workflows/Runtime/Tests/Alterations/WorkflowAlterationPayloadProtectionTests.cs`
-- [ ] T005 [US1] Implement the plan, target/job, claim, outcome, selector, authority, provenance, safe-failure, envelope, descriptor, and exact lifecycle models under `src/Elsa/Workflows/Runtime/Core/Models/Alterations/`
-- [ ] T006 [US1] Implement deterministic plan/job/commit identities and canonical request hashing under `src/Elsa/Workflows/Runtime/Services/Alterations/`
-- [ ] T007 [US6] Add scoped handler/staging contracts and startup-built descriptor/service registry contracts under `src/Elsa/Workflows/Runtime/Core/Contracts/Alterations/`
-- [ ] T008 [US6] Implement `AddWorkflowAlterationHandler<T>` registration, immutable startup validation, and the five reserved built-in descriptors in `src/Elsa/Workflows/Runtime/Core/Extensions/` and `src/Elsa/Workflows/Runtime/Services/Alterations/WorkflowAlterationRegistry.cs`
-- [ ] T009 [US3] Add `IWorkflowAlterationPayloadProtector`, protected payload model, configured key-ring options, and authenticated encryption implementation under `src/Elsa/Workflows/Runtime/Core/Contracts/Alterations/` and `src/Elsa/Workflows/Runtime/Services/Alterations/`
-- [ ] T010 [US1] Register scoped services, immutable registries/options, TimeProvider, and in-memory development payload protection in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`
-- [ ] T011 [US1] Add feature-registration/lifetime tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowsRuntimeFeatureTests.cs` and re-run T001–T004
+- [x] T001 [US1] Add failing validation/serialization tests for plan, target/job, claim, outcome, envelope, selector, and lifecycle invariants in `tests/Elsa/Workflows/Runtime/Tests/Alterations/AlterationModelTests.cs`
+- [x] T002 [P] [US1] Add failing canonicalization/idempotency tests covering alteration order, explicit-ID normalization, query/default normalization, tenant/authority scope, JSON scalar interpretation, and hash conflicts in `tests/Elsa/Workflows/Runtime/Tests/Alterations/AlterationRequestCanonicalizerTests.cs`
+- [x] T003 [P] [US6] Add failing registration tests for built-in reservations, custom namespaces, exact schema versions, duplicate rejection, scoped lifetime, and no persisted CLR identities in `tests/Elsa/Workflows/Runtime/Tests/Alterations/WorkflowAlterationRegistryTests.cs`
+- [x] T004 [P] [US3] Add failing protected-payload/redaction tests for tenant-bound associated data, restart-stable keys, wrong-key/tenant rejection, plan DTO redaction, and no value leakage in `tests/Elsa/Workflows/Runtime/Tests/Alterations/WorkflowAlterationPayloadProtectionTests.cs`
+- [x] T005 [US1] Implement the plan, target/job, claim, outcome, selector, authority, provenance, safe-failure, envelope, descriptor, and exact lifecycle models under `src/Elsa/Workflows/Runtime/Core/Models/Alterations/`
+- [x] T006 [US1] Implement deterministic plan/job/commit identities and canonical request hashing under `src/Elsa/Workflows/Runtime/Services/Alterations/`
+- [x] T007 [US6] Add scoped handler/staging contracts and startup-built descriptor/service registry contracts under `src/Elsa/Workflows/Runtime/Core/Contracts/Alterations/`
+- [x] T008 [US6] Implement `AddWorkflowAlterationHandler<T>` registration, immutable startup validation, and the five reserved built-in descriptors in `src/Elsa/Workflows/Runtime/Core/Extensions/` and `src/Elsa/Workflows/Runtime/Services/Alterations/WorkflowAlterationRegistry.cs`
+- [x] T009 [US3] Add `IWorkflowAlterationPayloadProtector`, protected payload model, configured key-ring options, and authenticated encryption implementation under `src/Elsa/Workflows/Runtime/Core/Contracts/Alterations/` and `src/Elsa/Workflows/Runtime/Services/Alterations/`
+- [x] T010 [US1] Register scoped services, immutable registries/options, TimeProvider, and in-memory development payload protection in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`
+- [x] T011 [US1] Add feature-registration/lifetime tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowsRuntimeFeatureTests.cs` and re-run T001–T004
 
 **Checkpoint**: Stable Runtime-owned vocabulary, deterministic request identity, protected deferred
 payloads, and handler resolution exist without persistence or orchestration.

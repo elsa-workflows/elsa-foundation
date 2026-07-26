@@ -2,6 +2,7 @@ using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Services;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -43,6 +45,15 @@ public static class RuntimeCoreServiceCollectionExtensions
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
         services.TryAddSingleton(TimeProvider.System);
+
+        // Durable alteration envelopes are protected before a later orchestration slice persists them. The default
+        // in-memory composition uses one process-local random key only; durable hosts must replace this with a
+        // retained configured key ring before they admit a plan that must survive restart.
+        services.AddOptions<WorkflowAlterationPayloadProtectionOptions>()
+            .Configure(options => options.AllowEphemeralDevelopmentKey = true);
+        services.TryAddSingleton<WorkflowAlterationEphemeralKeyRing>();
+        services.TryAddScoped<IWorkflowAlterationPayloadProtector, AesGcmWorkflowAlterationPayloadProtector>();
+        services.TryAddSingleton<IWorkflowAlterationRegistry, WorkflowAlterationRegistry>();
 
         // spec 123: ReplaySafe hop-fusion toggle (default ON, ratification resolution #3) + the deterministic
         // dispatch/fusion counters (FR-008). Singleton counters survive the per-command drain scopes.
