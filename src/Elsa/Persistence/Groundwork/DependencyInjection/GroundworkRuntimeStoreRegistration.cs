@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
@@ -64,6 +65,11 @@ public static class GroundworkRuntimeStoreRegistration
             ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
         services.AddScoped<IWorkflowExecutionStateStore>(serviceProvider =>
             serviceProvider.GetRequiredService<GroundworkWorkflowExecutionStateStore>());
+        services.RemoveAll<IWorkflowAlterationStore>();
+        services.RemoveAll<GroundworkWorkflowAlterationStore>();
+        services.AddScoped<GroundworkWorkflowAlterationStore>();
+        services.AddScoped<IWorkflowAlterationStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<GroundworkWorkflowAlterationStore>());
         services.RemoveAll<IWorkflowTestScopeStore>();
         services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
         services.RemoveAll<IWorkflowTestScopeCleanupStore>();

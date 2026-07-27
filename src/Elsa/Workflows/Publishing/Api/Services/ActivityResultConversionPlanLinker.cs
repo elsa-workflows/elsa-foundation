@@ -28,7 +28,8 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         var childSlots = node.ChildSlots
             .Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(child => LinkNode(child, nodesById)).ToArray()))
+                slot.Activities.Select(child => LinkNode(child, nodesById)).ToArray(),
+                slot.OperatorSchedulingCapability))
             .ToArray();
 
         return new ExecutableNode(

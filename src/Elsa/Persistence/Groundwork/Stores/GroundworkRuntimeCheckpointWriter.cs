@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -295,6 +296,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     {
         await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
         var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
+        await ValidateAlterationJobTerminalChangeAsync(stores.AlterationStore, commit.StateChanges.AlterationJobTerminalChange, cancellationToken);
         await ValidateAndTouchTestScopesAsync(stores, commit, cancellationToken);
         await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
         await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
@@ -309,6 +311,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         await ApplyConsumedSchedulerWorkItemsAsync(stores.SchedulerWorkQueue, commit.StateChanges.ConsumedSchedulerWorkItems, cancellationToken);
         await ApplyWorkflowDispatchChangesAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatches, cancellationToken);
         await ApplyWorkflowDispatchCancellationsAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatchCancellations, cancellationToken);
+        await ApplyAlterationJobTerminalChangeAsync(stores.AlterationStore, commit.StateChanges.AlterationJobTerminalChange, cancellationToken);
         await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
         await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
         return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit))
@@ -328,6 +331,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
             ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
             ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
@@ -529,6 +533,24 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await store.SavePendingAsync(stateChange.State, cancellationToken);
     }
 
+    private static async ValueTask ValidateAlterationJobTerminalChangeAsync(
+        IWorkflowAlterationStore store,
+        WorkflowAlterationJobTerminalChange? change,
+        CancellationToken cancellationToken)
+    {
+        if (change is not null)
+            await store.ValidateTerminalJobChangeAsync(change, cancellationToken);
+    }
+
+    private static async ValueTask ApplyAlterationJobTerminalChangeAsync(
+        IWorkflowAlterationStore store,
+        WorkflowAlterationJobTerminalChange? change,
+        CancellationToken cancellationToken)
+    {
+        if (change is not null)
+            await store.ApplyTerminalJobChangeAsync(change, cancellationToken);
+    }
+
     private static async ValueTask ApplyWorkflowDispatchChangesAsync(
         IWorkflowDispatchStore store,
         IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>> stateChanges,
@@ -717,6 +739,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
             stateChange.State.EnsureValueFlowCompatible();
+            stateChange.State.EnsureSupersessionCompatible();
             if (stateChange.State.ExecutionScopeId is not null &&
                 stateChange.State.Provenance.ExecutionScopeId is not null &&
                 !StringComparer.Ordinal.Equals(stateChange.State.ExecutionScopeId, stateChange.State.Provenance.ExecutionScopeId))
@@ -887,6 +910,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
         IExecutionLivenessStateStore ExecutionLivenessStateStore,
+        GroundworkWorkflowAlterationStore AlterationStore,
         GroundworkWorkflowTestScopeStore WorkflowTestScopeStore,
         GroundworkWorkflowDispatchStore WorkflowDispatchStore,
         GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore,
@@ -907,6 +931,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkDurableValueStateStore(store, serializer),
                 new GroundworkIncidentStateStore(store, serializer),
                 new GroundworkExecutionLivenessStateStore(store, serializer),
+                new GroundworkWorkflowAlterationStore(store, serializer, accessContextAccessor),
                 new GroundworkWorkflowTestScopeStore(store, serializer, accessContextAccessor),
                 new GroundworkWorkflowDispatchStore(store, serializer, accessContextAccessor),
                 new GroundworkRuntimePostCommitOutboxStore(store, serializer),

@@ -1,0 +1,435 @@
+using System.Security.Cryptography;
+using System.Text;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
+
+namespace Elsa.Workflows.Runtime.Services.Alterations;
+
+/// <summary>Shared in-memory durability state. A production provider replaces this as one durable storage unit.</summary>
+public sealed class InMemoryWorkflowAlterationStoreState
+{
+    internal object SyncRoot { get; } = new();
+    // The alteration actor's checkpoint must hold this gate across validation, workflow-state persistence, and job
+    // terminalization. ClaimNext takes the same gate so an expired lease cannot be taken over in that gap.
+    internal SemaphoreSlim TerminalCheckpointGate { get; } = new(1, 1);
+    internal Dictionary<string, WorkflowAlterationPlanState> Plans { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, WorkflowAlterationJobState> Jobs { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> PlansByTenantIdempotency { get; } = new(StringComparer.Ordinal);
+}
+
+/// <summary>In-memory conformance implementation for plan admission, capture, leasing, cancellation, and reconciliation.</summary>
+public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationStoreState? state = null) : IWorkflowAlterationStore
+{
+    private readonly InMemoryWorkflowAlterationStoreState _state = state ?? new();
+
+    public ValueTask<WorkflowAlterationPlanAdmissionResult> AdmitAsync(WorkflowAlterationPlanState plan, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var key = IdempotencyKey(plan.AuthorityScope.TenantPartition, plan.IdempotencyKeyHash);
+            if (_state.PlansByTenantIdempotency.TryGetValue(key, out var existingId))
+            {
+                var existing = _state.Plans[existingId];
+                if (!StringComparer.Ordinal.Equals(existing.CanonicalRequestHash, plan.CanonicalRequestHash))
+                    throw new WorkflowAlterationIdempotencyConflictException(existing.PlanId);
+                return ValueTask.FromResult(new WorkflowAlterationPlanAdmissionResult(existing, true));
+            }
+
+            if (_state.Plans.ContainsKey(plan.PlanId))
+                throw new InvalidOperationException($"Alteration plan '{plan.PlanId}' already exists.");
+            _state.Plans.Add(plan.PlanId, plan);
+            _state.PlansByTenantIdempotency.Add(key, plan.PlanId);
+            return ValueTask.FromResult(new WorkflowAlterationPlanAdmissionResult(plan, false));
+        }
+    }
+
+    public ValueTask<WorkflowAlterationPlanState?> FindPlanAsync(string planId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+            return ValueTask.FromResult(_state.Plans.GetValueOrDefault(planId));
+    }
+
+    public ValueTask<WorkflowAlterationActivePlanPage> ListActivePlansAsync(int pageSize, string? cursor = null, CancellationToken cancellationToken = default)
+    {
+        if (pageSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pageSize));
+        if (cursor is not null && string.IsNullOrWhiteSpace(cursor))
+            throw new ArgumentException("The active alteration-plan cursor cannot be blank.", nameof(cursor));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            var items = _state.Plans.Values
+                .Where(plan => !IsTerminal(plan.Status))
+                .OrderBy(plan => plan.PlanId, StringComparer.Ordinal)
+                .Where(plan => cursor is null || StringComparer.Ordinal.Compare(plan.PlanId, cursor) > 0)
+                .Take(checked(pageSize + 1))
+                .ToArray();
+            var hasNext = items.Length > pageSize;
+            if (hasNext)
+                items = items[..pageSize];
+            return ValueTask.FromResult(new WorkflowAlterationActivePlanPage(items, hasNext ? items[^1].PlanId : null, hasNext));
+        }
+    }
+
+    public ValueTask<WorkflowAlterationPlanState> CaptureAsync(string planId, long expectedRevision, IReadOnlyCollection<WorkflowAlterationCapturedTarget> targets, string? nextCursor, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        ArgumentNullException.ThrowIfNull(targets);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            EnsureRevision(plan, expectedRevision);
+            if (plan.Status != WorkflowAlterationPlanStatus.CapturingTargets)
+                throw new InvalidOperationException("Only a capturing alteration plan can accept target pages.");
+
+            var ordinal = plan.CapturedSoFar;
+            foreach (var target in targets.OrderBy(target => target.WorkflowExecutionId, StringComparer.Ordinal))
+            {
+                if (!StringComparer.Ordinal.Equals(target.TenantPartition, plan.AuthorityScope.TenantPartition))
+                    throw new InvalidOperationException("A captured target must belong to the plan tenant partition.");
+                var jobId = WorkflowAlterationIdentity.CreateJobId(plan.PlanId, target.WorkflowExecutionId);
+                if (_state.Jobs.ContainsKey(jobId))
+                    continue;
+                var missing = target.SafeFailure is not null;
+                _state.Jobs.Add(jobId, new WorkflowAlterationJobState(
+                    jobId, plan.PlanId, target.WorkflowExecutionId, target.TenantPartition, ordinal++,
+                    missing ? WorkflowAlterationJobStatus.Failed : WorkflowAlterationJobStatus.Pending, null, 0, [], null, target.SafeFailure, plan.CreatedAt, null, missing ? plan.CreatedAt : null, 0,
+                    target.CapturedConcurrency));
+            }
+
+            var updated = CopyPlan(plan, changeCaptureCursor: true, captureCursor: nextCursor, capturedSoFar: ordinal, revision: plan.Revision + 1);
+            _state.Plans[planId] = updated;
+            return ValueTask.FromResult(updated);
+        }
+    }
+
+    public ValueTask<WorkflowAlterationPlanState> SealAsync(string planId, long expectedRevision, DateTimeOffset sealedAt, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            EnsureRevision(plan, expectedRevision);
+            if (plan.Status == WorkflowAlterationPlanStatus.Cancelling)
+            {
+                var captured = _state.Jobs.Values.LongCount(job => StringComparer.Ordinal.Equals(job.PlanId, planId));
+                var sealedCancelling = CopyPlan(plan, targetCount: captured, sealedAt: sealedAt, revision: plan.Revision + 1);
+                _state.Plans[planId] = sealedCancelling;
+                return ValueTask.FromResult(sealedCancelling);
+            }
+            if (plan.Status != WorkflowAlterationPlanStatus.CapturingTargets)
+                throw new InvalidOperationException("Only a capturing alteration plan can be sealed.");
+
+            var targetCount = _state.Jobs.Values.LongCount(job => StringComparer.Ordinal.Equals(job.PlanId, planId));
+            var status = targetCount == 0 ? WorkflowAlterationPlanStatus.Completed : WorkflowAlterationPlanStatus.Queued;
+            var sealedPlan = CopyPlan(plan, status: status, targetCount: targetCount, sealedAt: sealedAt, completedAt: targetCount == 0 ? sealedAt : null, revision: plan.Revision + 1);
+            _state.Plans[planId] = sealedPlan;
+            return ValueTask.FromResult(sealedPlan);
+        }
+    }
+
+    public ValueTask<WorkflowAlterationPlanState> CancelUnsealedCaptureAsync(string planId, DateTimeOffset cancelledAt, CancellationToken cancellationToken = default) =>
+        TerminalizeUnsealedCapture(planId, WorkflowAlterationPlanStatus.Cancelled, null, cancelledAt, cancellationToken);
+
+    public ValueTask<WorkflowAlterationPlanState> FailUnsealedCaptureAsync(string planId, WorkflowAlterationSafeFailure safeFailure, DateTimeOffset failedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(safeFailure);
+        return TerminalizeUnsealedCapture(planId, WorkflowAlterationPlanStatus.Failed, safeFailure, failedAt, cancellationToken);
+    }
+
+    public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            if (IsTerminal(plan.Status))
+                return ValueTask.FromResult(plan);
+            var updated = CopyPlan(plan, status: WorkflowAlterationPlanStatus.Cancelling, cancellationRequestedAt: requestedAt, revision: plan.Revision + 1);
+            _state.Plans[planId] = updated;
+            return ValueTask.FromResult(updated);
+        }
+    }
+
+    private ValueTask<WorkflowAlterationPlanState> TerminalizeUnsealedCapture(
+        string planId,
+        WorkflowAlterationPlanStatus terminalStatus,
+        WorkflowAlterationSafeFailure? safeFailure,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            if (plan.Status is not (WorkflowAlterationPlanStatus.CapturingTargets or WorkflowAlterationPlanStatus.Cancelling) || plan.SealedAt is not null)
+                return ValueTask.FromResult(plan);
+
+            foreach (var jobId in _state.Jobs.Values
+                         .Where(job => StringComparer.Ordinal.Equals(job.PlanId, planId))
+                         .Select(job => job.JobId)
+                         .ToArray())
+            {
+                _state.Jobs.Remove(jobId);
+            }
+
+            var terminal = CopyPlan(
+                plan,
+                status: terminalStatus,
+                changeCaptureCursor: true,
+                captureCursor: null,
+                capturedSoFar: plan.CapturedSoFar,
+                targetCount: 0,
+                succeededJobCount: 0,
+                failedJobCount: 0,
+                cancelledJobCount: 0,
+                completedAt: completedAt,
+                cancellationRequestedAt: terminalStatus == WorkflowAlterationPlanStatus.Cancelled ? completedAt : null,
+                safeFailure: safeFailure,
+                revision: plan.Revision + 1);
+            _state.Plans[planId] = terminal;
+            return ValueTask.FromResult(terminal);
+        }
+    }
+
+    public ValueTask CancelPendingJobsAsync(string planId, IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes, DateTimeOffset completedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(skippedOutcomes);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            if (plan.Status != WorkflowAlterationPlanStatus.Cancelling)
+                throw new InvalidOperationException("Only a cancelling alteration plan can cancel pending jobs.");
+            foreach (var pending in _state.Jobs.Values.Where(job => StringComparer.Ordinal.Equals(job.PlanId, planId) && job.Status == WorkflowAlterationJobStatus.Pending).ToArray())
+                _state.Jobs[pending.JobId] = CopyJob(pending, status: WorkflowAlterationJobStatus.Cancelled, outcomes: skippedOutcomes.ToArray(), completedAt: completedAt, revision: pending.Revision + 1);
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+            return ValueTask.FromResult(_state.Jobs.GetValueOrDefault(jobId));
+    }
+
+    public ValueTask<WorkflowAlterationJobState?> FindJobByCheckpointCommitIdAsync(string checkpointCommitId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpointCommitId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+            return ValueTask.FromResult(_state.Jobs.Values.FirstOrDefault(job =>
+                StringComparer.Ordinal.Equals(job.CheckpointCommitId, checkpointCommitId)));
+    }
+
+    public ValueTask<WorkflowAlterationJobCounts> GetJobCountsAsync(string planId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            _ = GetPlan(planId);
+            var jobs = _state.Jobs.Values.Where(job => StringComparer.Ordinal.Equals(job.PlanId, planId));
+            return ValueTask.FromResult(new WorkflowAlterationJobCounts(
+                jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Pending),
+                jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Running),
+                jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Succeeded),
+                jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Failed),
+                jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Cancelled)));
+        }
+    }
+
+    public ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        if (pageSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pageSize));
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            _ = GetPlan(planId);
+            (long Ordinal, string JobId)? after = cursor is null ? null : DecodeJobCursor(cursor, planId);
+            var jobs = _state.Jobs.Values
+                .Where(job => StringComparer.Ordinal.Equals(job.PlanId, planId))
+                .OrderBy(job => job.CaptureOrdinal)
+                .ThenBy(job => job.JobId, StringComparer.Ordinal)
+                .Where(job => after is null || job.CaptureOrdinal > after.Value.Ordinal || (job.CaptureOrdinal == after.Value.Ordinal && StringComparer.Ordinal.Compare(job.JobId, after.Value.JobId) > 0))
+                .Take(checked(pageSize + 1))
+                .ToArray();
+            var hasNext = jobs.Length > pageSize;
+            if (hasNext)
+                jobs = jobs[..pageSize];
+            return ValueTask.FromResult(new WorkflowAlterationJobPage(jobs, hasNext ? EncodeJobCursor(planId, jobs[^1]) : null, hasNext));
+        }
+    }
+
+    public async ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (leaseDuration <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(leaseDuration));
+        cancellationToken.ThrowIfCancellationRequested();
+        await _state.TerminalCheckpointGate.WaitAsync(cancellationToken);
+        try
+        {
+            lock (_state.SyncRoot)
+            {
+                var candidate = _state.Jobs.Values
+                    .Where(job => _state.Plans.TryGetValue(job.PlanId, out var plan) && plan.Status is WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running)
+                    .Where(job => job.Status == WorkflowAlterationJobStatus.Pending || (job.Status == WorkflowAlterationJobStatus.Running && job.Claim!.ExpiresAt <= now))
+                    .OrderBy(job => job.CaptureOrdinal).ThenBy(job => job.JobId, StringComparer.Ordinal).FirstOrDefault();
+                if (candidate is null)
+                    return null;
+
+                var claim = new WorkflowAlterationJobClaim(ownerId, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), now + leaseDuration);
+                var claimed = CopyJob(candidate, status: WorkflowAlterationJobStatus.Running, claim: claim, attemptCount: candidate.AttemptCount + 1, startedAt: candidate.StartedAt ?? now, revision: candidate.Revision + 1);
+                _state.Jobs[candidate.JobId] = claimed;
+                var plan = _state.Plans[candidate.PlanId];
+                if (plan.Status == WorkflowAlterationPlanStatus.Queued)
+                    _state.Plans[plan.PlanId] = CopyPlan(plan, status: WorkflowAlterationPlanStatus.Running, startedAt: plan.StartedAt ?? now, revision: plan.Revision + 1);
+                return claimed;
+            }
+        }
+        finally
+        {
+            _state.TerminalCheckpointGate.Release();
+        }
+    }
+
+    public ValueTask ValidateTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+            ValidateTerminalChange(change, GetJob(change.JobId));
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ApplyTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var job = GetJob(change.JobId);
+            ValidateTerminalChange(change, job);
+            // Retain the completed claim as immutable checkpoint evidence. It is not an active lease once the job is
+            // terminal, but acknowledgement reconciliation must prove the exact claimant that wrote this commit.
+            _state.Jobs[job.JobId] = CopyJob(job, status: change.Status, claim: job.Claim, outcomes: change.Outcomes.ToArray(), checkpointCommitId: change.CheckpointCommitId, safeFailure: change.SafeFailure, completedAt: change.CompletedAt, revision: job.Revision + 1);
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask CommitTerminalJobChangeAtomicallyAsync(
+        WorkflowAlterationJobTerminalChange change,
+        Func<CancellationToken, ValueTask> commitWorkflowCheckpointAsync,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentNullException.ThrowIfNull(commitWorkflowCheckpointAsync);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _state.TerminalCheckpointGate.WaitAsync(cancellationToken);
+        try
+        {
+            lock (_state.SyncRoot)
+                ValidateTerminalChange(change, GetJob(change.JobId));
+
+            await commitWorkflowCheckpointAsync(cancellationToken);
+        }
+        finally
+        {
+            _state.TerminalCheckpointGate.Release();
+        }
+    }
+
+    public ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_state.SyncRoot)
+        {
+            var plan = GetPlan(planId);
+            if (IsTerminal(plan.Status))
+                return ValueTask.FromResult(plan);
+            var jobs = _state.Jobs.Values.Where(job => StringComparer.Ordinal.Equals(job.PlanId, planId)).ToArray();
+            if (plan.SealedAt is null || jobs.Any(job => job.Status is WorkflowAlterationJobStatus.Pending or WorkflowAlterationJobStatus.Running))
+                return ValueTask.FromResult(plan);
+
+            var succeeded = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Succeeded);
+            var failed = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Failed);
+            var cancelledCount = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Cancelled);
+            var status = plan.Status == WorkflowAlterationPlanStatus.Cancelling
+                ? WorkflowAlterationPlanStatus.Cancelled
+                : failed > 0 ? WorkflowAlterationPlanStatus.CompletedWithFailures : WorkflowAlterationPlanStatus.Completed;
+            var completed = CopyPlan(plan, status: status, succeededJobCount: succeeded, failedJobCount: failed, cancelledJobCount: cancelledCount, completedAt: now, revision: plan.Revision + 1);
+            _state.Plans[planId] = completed;
+            return ValueTask.FromResult(completed);
+        }
+    }
+
+    private WorkflowAlterationPlanState GetPlan(string planId) => _state.Plans.GetValueOrDefault(planId) ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found.");
+    private WorkflowAlterationJobState GetJob(string jobId) => _state.Jobs.GetValueOrDefault(jobId) ?? throw new KeyNotFoundException($"Alteration job '{jobId}' was not found.");
+    private static void EnsureRevision(WorkflowAlterationPlanState plan, long expectedRevision)
+    {
+        if (plan.Revision != expectedRevision)
+            throw new WorkflowAlterationConcurrencyException(plan.PlanId);
+    }
+
+    private static void ValidateTerminalChange(WorkflowAlterationJobTerminalChange change, WorkflowAlterationJobState job)
+    {
+        if (job.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled)
+        {
+            if (StringComparer.Ordinal.Equals(job.CheckpointCommitId, change.CheckpointCommitId) &&
+                job.Status == change.Status &&
+                job.CompletedAt == change.CompletedAt &&
+                job.SafeFailure == change.SafeFailure &&
+                job.Outcomes.SequenceEqual(change.Outcomes))
+                return;
+            throw new InvalidOperationException("A terminal alteration job cannot be terminalized with conflicting checkpoint evidence.");
+        }
+        if (job.Status != WorkflowAlterationJobStatus.Running || job.Claim is null || !StringComparer.Ordinal.Equals(job.Claim.Token, change.ClaimToken))
+            throw new WorkflowAlterationClaimFenceException(change.JobId);
+    }
+
+    private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
+    private static string IdempotencyKey(string tenant, string hash) => tenant + "\u001f" + hash;
+
+    private static string EncodeJobCursor(string planId, WorkflowAlterationJobState job) => Convert.ToBase64String(Encoding.UTF8.GetBytes($"v1|{Convert.ToBase64String(Encoding.UTF8.GetBytes(planId))}|{job.CaptureOrdinal}|{Convert.ToBase64String(Encoding.UTF8.GetBytes(job.JobId))}"));
+    private static (long Ordinal, string JobId) DecodeJobCursor(string cursor, string planId)
+    {
+        try
+        {
+            var parts = Encoding.UTF8.GetString(Convert.FromBase64String(cursor)).Split('|');
+            if (parts.Length != 4 || parts[0] != "v1" || !long.TryParse(parts[2], out var ordinal) || !StringComparer.Ordinal.Equals(Encoding.UTF8.GetString(Convert.FromBase64String(parts[1])), planId))
+                throw new FormatException();
+            return (ordinal, Encoding.UTF8.GetString(Convert.FromBase64String(parts[3])));
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new ArgumentException("The alteration job page cursor is invalid or does not belong to this plan.", nameof(cursor), exception);
+        }
+    }
+
+    private static WorkflowAlterationPlanState CopyPlan(WorkflowAlterationPlanState plan, WorkflowAlterationPlanStatus? status = null, bool changeCaptureCursor = false, string? captureCursor = null, long? capturedSoFar = null, long? targetCount = null, long? succeededJobCount = null, long? failedJobCount = null, long? cancelledJobCount = null, DateTimeOffset? sealedAt = null, DateTimeOffset? startedAt = null, DateTimeOffset? completedAt = null, DateTimeOffset? cancellationRequestedAt = null, WorkflowAlterationSafeFailure? safeFailure = null, long? revision = null) =>
+        new(plan.PlanId, plan.AuthorityScope, plan.SubmittedBy, plan.IdempotencyKeyHash, plan.CanonicalRequestHash, plan.ProtectedPayload, plan.Target, status ?? plan.Status, plan.CreatedAt,
+            changeCaptureCursor ? captureCursor : plan.CaptureCursor, capturedSoFar ?? plan.CapturedSoFar, targetCount ?? plan.TargetCount, succeededJobCount ?? plan.SucceededJobCount, failedJobCount ?? plan.FailedJobCount, cancelledJobCount ?? plan.CancelledJobCount,
+            sealedAt ?? plan.SealedAt, startedAt ?? plan.StartedAt, completedAt ?? plan.CompletedAt, cancellationRequestedAt ?? plan.CancellationRequestedAt, safeFailure ?? plan.SafeFailure, revision ?? plan.Revision,
+            plan.AlterationDescriptors);
+
+    private static WorkflowAlterationJobState CopyJob(WorkflowAlterationJobState job, WorkflowAlterationJobStatus? status = null, WorkflowAlterationJobClaim? claim = null, int? attemptCount = null, IReadOnlyList<WorkflowAlterationOutcome>? outcomes = null, string? checkpointCommitId = null, WorkflowAlterationSafeFailure? safeFailure = null, DateTimeOffset? startedAt = null, DateTimeOffset? completedAt = null, long? revision = null) =>
+        new(job.JobId, job.PlanId, job.WorkflowExecutionId, job.TenantPartition, job.CaptureOrdinal, status ?? job.Status, claim, attemptCount ?? job.AttemptCount, (outcomes ?? job.Outcomes).ToArray(), checkpointCommitId ?? job.CheckpointCommitId, safeFailure ?? job.SafeFailure, job.CreatedAt, startedAt ?? job.StartedAt, completedAt ?? job.CompletedAt, revision ?? job.Revision, job.CapturedConcurrency);
+}
+
+public sealed class WorkflowAlterationIdempotencyConflictException(string planId) : InvalidOperationException($"The idempotency key is already associated with alteration plan '{planId}' and a different request.");
+public sealed class WorkflowAlterationConcurrencyException(string planId) : InvalidOperationException($"The alteration plan '{planId}' changed while the operation was in progress.");
+public sealed class WorkflowAlterationClaimFenceException(string jobId) : InvalidOperationException($"The alteration job claim for '{jobId}' is no longer current.");

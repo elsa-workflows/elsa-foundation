@@ -84,7 +84,7 @@ public sealed record WorkflowAlterationOperatorProvenance
 /// <summary>Exactly one execution target selector for a submitted plan.</summary>
 public sealed record WorkflowAlterationTargetSelector
 {
-    public WorkflowAlterationTargetSelector(IReadOnlyCollection<string>? executionIds, WorkflowAlterationQuerySelector? query)
+    public WorkflowAlterationTargetSelector(IReadOnlyList<string>? executionIds, WorkflowAlterationQuerySelector? query)
     {
         var normalizedIds = NormalizeExecutionIds(executionIds);
         if ((normalizedIds.Count == 0) == (query is null))
@@ -97,10 +97,10 @@ public sealed record WorkflowAlterationTargetSelector
     public IReadOnlyList<string> ExecutionIds { get; }
     public WorkflowAlterationQuerySelector? Query { get; }
 
-    public static WorkflowAlterationTargetSelector ForExecutionIds(IReadOnlyCollection<string> executionIds) => new(executionIds, null);
+    public static WorkflowAlterationTargetSelector ForExecutionIds(IReadOnlyCollection<string> executionIds) => new(executionIds?.ToArray(), null);
     public static WorkflowAlterationTargetSelector ForQuery(WorkflowAlterationQuerySelector query) => new(null, query ?? throw new ArgumentNullException(nameof(query)));
 
-    private static IReadOnlyList<string> NormalizeExecutionIds(IReadOnlyCollection<string>? ids)
+    private static IReadOnlyList<string> NormalizeExecutionIds(IReadOnlyList<string>? ids)
     {
         if (ids is null)
             return [];
@@ -266,7 +266,8 @@ public sealed record WorkflowAlterationPlanState
         DateTimeOffset? completedAt = null,
         DateTimeOffset? cancellationRequestedAt = null,
         WorkflowAlterationSafeFailure? safeFailure = null,
-        long revision = 0)
+        long revision = 0,
+        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentNullException.ThrowIfNull(authorityScope);
@@ -303,6 +304,7 @@ public sealed record WorkflowAlterationPlanState
         CancellationRequestedAt = cancellationRequestedAt;
         SafeFailure = safeFailure;
         Revision = revision;
+        AlterationDescriptors = alterationDescriptors?.ToArray() ?? [];
     }
 
     public string PlanId { get; }
@@ -326,6 +328,8 @@ public sealed record WorkflowAlterationPlanState
     public DateTimeOffset? CancellationRequestedAt { get; }
     public WorkflowAlterationSafeFailure? SafeFailure { get; }
     public long Revision { get; }
+    /// <summary>Payload-free registry descriptors persisted at admission for safe read projections.</summary>
+    public IReadOnlyList<WorkflowAlterationDescriptor> AlterationDescriptors { get; }
 
     public static WorkflowAlterationPlanState CreateCapturing(
         string planId,
@@ -335,15 +339,17 @@ public sealed record WorkflowAlterationPlanState
         string canonicalRequestHash,
         ProtectedWorkflowAlterationPayload protectedPayload,
         WorkflowAlterationTargetSelector target,
-        DateTimeOffset createdAt) =>
-        new(planId, authorityScope, submittedBy, idempotencyKeyHash, canonicalRequestHash, protectedPayload, target, WorkflowAlterationPlanStatus.CapturingTargets, createdAt);
+        DateTimeOffset createdAt,
+        IReadOnlyList<WorkflowAlterationDescriptor>? alterationDescriptors = null) =>
+        new(planId, authorityScope, submittedBy, idempotencyKeyHash, canonicalRequestHash, protectedPayload, target, WorkflowAlterationPlanStatus.CapturingTargets, createdAt, alterationDescriptors: alterationDescriptors);
 }
 
 /// <summary>Immutable optimistic facts captured for one target before job execution.</summary>
 public sealed record WorkflowAlterationCapturedConcurrency(
     string? WorkflowStateRevision,
     long? RootVariableFrameRevision,
-    WorkflowExecutableIdentity? PinnedExecutable);
+    WorkflowExecutableIdentity? PinnedExecutable,
+    IReadOnlyDictionary<string, string>? ActivityStateRevisions = null);
 
 /// <summary>Lease carried by an at-least-once alteration job worker.</summary>
 public sealed record WorkflowAlterationJobClaim
@@ -400,7 +406,7 @@ public sealed record WorkflowAlterationOutcome
 /// <summary>One durable target/job state; terminal forms later join the runtime checkpoint.</summary>
 public sealed record WorkflowAlterationJobState
 {
-    public WorkflowAlterationJobState(string jobId, string planId, string workflowExecutionId, string tenantPartition, long captureOrdinal, WorkflowAlterationJobStatus status, WorkflowAlterationJobClaim? claim, int attemptCount, IReadOnlyCollection<WorkflowAlterationOutcome> outcomes, string? checkpointCommitId, WorkflowAlterationSafeFailure? safeFailure, DateTimeOffset createdAt, DateTimeOffset? startedAt, DateTimeOffset? completedAt, long revision)
+    public WorkflowAlterationJobState(string jobId, string planId, string workflowExecutionId, string tenantPartition, long captureOrdinal, WorkflowAlterationJobStatus status, WorkflowAlterationJobClaim? claim, int attemptCount, IReadOnlyList<WorkflowAlterationOutcome> outcomes, string? checkpointCommitId, WorkflowAlterationSafeFailure? safeFailure, DateTimeOffset createdAt, DateTimeOffset? startedAt, DateTimeOffset? completedAt, long revision, WorkflowAlterationCapturedConcurrency? capturedConcurrency = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
@@ -432,6 +438,7 @@ public sealed record WorkflowAlterationJobState
         StartedAt = startedAt;
         CompletedAt = completedAt;
         Revision = revision;
+        CapturedConcurrency = capturedConcurrency;
     }
 
     public string JobId { get; }
@@ -449,6 +456,7 @@ public sealed record WorkflowAlterationJobState
     public DateTimeOffset? StartedAt { get; }
     public DateTimeOffset? CompletedAt { get; }
     public long Revision { get; }
+    public WorkflowAlterationCapturedConcurrency? CapturedConcurrency { get; }
 }
 
 internal static class WorkflowAlterationModelSnapshots

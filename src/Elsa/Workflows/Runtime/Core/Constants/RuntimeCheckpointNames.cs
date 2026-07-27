@@ -24,6 +24,7 @@ public static class RuntimeCheckpointNames
     public const string WorkflowFaulted = nameof(WorkflowFaulted);
     public const string WorkflowCancelled = nameof(WorkflowCancelled);
     public const string PostCommitIntentRecorded = nameof(PostCommitIntentRecorded);
+    public const string RuntimeAlterationJob = nameof(RuntimeAlterationJob);
 
     public static readonly IReadOnlyCollection<string> All = typeof(RuntimeCheckpointNames)
         .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)

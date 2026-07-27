@@ -683,3 +683,25 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 - HTTP endpoint behaviour overrides: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.
+
+## Runtime alteration contracts
+
+| Contract | Ownership and use |
+|---|---|
+| `IWorkflowAlterationStore` | Single-owner durable plan/target/job storage. Its claim, seal, terminal, and paging operations preserve fenced at-least-once execution. |
+| `IWorkflowAlterationPayloadProtector` | Protects deferred envelope JSON with plan/tenant/request associated data. Durable hosts replace the development-only key material with a restart-stable retained key ring. |
+| `IWorkflowAlterationRegistry` | Singleton descriptor-only catalog. It returns stable kind/version/display metadata and never resolves handler instances. |
+| `IWorkflowAlterationPreflightHandler` | Scoped, trusted custom contribution registered through `AddWorkflowAlterationHandler<T>`. It validates its own payload and may only update projection/staging state. |
+| `IWorkflowAlterationProjectedState` | Per-job mutable in-memory view shared in envelope order. A handler can expose its staged logical state to later handlers without persistence. |
+| `IWorkflowAlterationStagingWorkspace` | Per-job collector for deterministic checkpoint-bound changes. Duplicate change keys fail preflight. |
+| `IWorkflowAlterationRuntimeCheckpointStagedChange` | Handler-owned change that applies through the Runtime alteration checkpoint builder after all preflights pass. |
+| `IWorkflowAlterationCheckpointWriter` | Single-owner atomic checkpoint collaborator. It persists terminal job evidence with workflow/activity/bookmark/value/scheduler/outbox changes and supports acknowledgement reconciliation. |
+| `IWorkflowAlterationHandlerResolver` | Scoped exact `(kind, schemaVersion)` resolver. Hosts do not replace it to choose a handler dynamically or infer a latest version. |
+
+Custom handlers are trusted code. They must use only stable envelope identity, must not serialize or log payloads,
+must return bounded safe failures, and must make their changes replay-safe under the deterministic job checkpoint.
+They must not use the alteration path to bypass activity ownership, authorization sealed at submission, workflow actor
+serialization, or Runtime's persistence/checkpoint boundary.
+
+The public envelope and persisted plan use only `kind`, `schemaVersion`, and protected JSON. Do not persist a CLR
+type name, assembly-qualified type, service key, or executable payload schema type as an alteration identity.

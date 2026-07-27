@@ -35,6 +35,15 @@ public sealed class WorkflowAlterationRegistryTests
         Assert.DoesNotContain(registry.Descriptors, item => item.GetType().FullName!.Contains("Handler", StringComparison.Ordinal));
     }
 
-    private sealed class TestHandler : IWorkflowAlterationHandler { }
-    private sealed class SecondHandler : IWorkflowAlterationHandler { }
+    private sealed class TestHandler : IWorkflowAlterationPreflightHandler
+    {
+        public ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(WorkflowAlterationPreflightResult.Accepted());
+    }
+
+    private sealed class SecondHandler : IWorkflowAlterationPreflightHandler
+    {
+        public ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(WorkflowAlterationPreflightResult.Accepted());
+    }
 }

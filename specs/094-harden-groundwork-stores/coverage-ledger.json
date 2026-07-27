@@ -11,7 +11,7 @@
     "mongodb"
   ],
   "compositionEvidence": {
-    "evidenceId": "host-selection-all34",
+    "evidenceId": "host-selection-all35",
     "outcome": "pass",
     "selectedFeatureIdentities": [
       "elsa-activities-design",
@@ -41,6 +41,7 @@
       "runtime-executable-source-reference",
       "runtime-workflow-executable",
       "runtime-workflow-execution-state",
+      "runtime-workflow-alteration",
       "runtime-workflow-hold-state",
       "runtime-scheduler-poison",
       "runtime-scheduler-work-queue",
@@ -77,8 +78,8 @@
         ]
       }
     ],
-    "artifact": "evidence/composition/host-selection-all34.json",
-    "artifactSha256": "60351a13b0a736e213b2636aa54a44eaf54e764648a648ddaa2758e408306cd6"
+    "artifact": "evidence/composition/host-selection-all35.json",
+    "artifactSha256": "a165286ae138c101966128200be6f81c3a499e7e32efdf8427537583be9ddd33"
   },
   "entries": [
     {
@@ -4836,6 +4837,58 @@
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionStatePagingTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs",
         "tests/Elsa/Persistence/Groundwork/Tests/WorkflowExecutionHistoryProviderConformance.cs"
+      ]
+    },
+    {
+      "id": "runtime-workflow-alteration",
+      "family": "runtime",
+      "contract": "IWorkflowAlterationStore; IWorkflowAlterationCheckpointWriter",
+      "outcome": "operational-store",
+      "scope": "tenant-scoped",
+      "authority": "#1016",
+      "status": "planned",
+      "initialGap": "Four-provider restart, lease-race, and native-plan evidence is not yet attached to the Groundwork coverage ledger.",
+      "performanceWorkload": "operator-control-plane",
+      "accessPolicy": "ordinary",
+      "queryShapes": [
+        "list-plans-bounded",
+        "find-plan-by-tenant-and-idempotency",
+        "page-active-plans-bounded",
+        "page-jobs-by-plan-bounded",
+        "list-claimable-jobs-bounded",
+        "count-jobs-by-plan-and-status",
+        "find-job-by-checkpoint-commit"
+      ],
+      "concurrencySemantics": [
+        "create-only-idempotent-admission",
+        "expected-version-capture-and-seal",
+        "lease-token-claim-and-completion",
+        "checkpoint-bundle-write"
+      ],
+      "atomicBoundary": "Plan admission and capture transitions use optimistic document writes; each target alteration and terminal job transition joins one runtime checkpoint unit of work.",
+      "failureWindows": [
+        "before-provider-decision",
+        "during-provider-decision",
+        "after-durable-decision-before-caller-acknowledgement"
+      ],
+      "restartScenarios": [
+        "dispose-and-reopen-same-database",
+        "process-restart-same-database"
+      ],
+      "providerEvidence": {
+        "sqlite": [],
+        "sqlserver": [],
+        "postgresql": [],
+        "mongodb": []
+      },
+      "requiredPerformanceVerdict": "pass-or-reviewed-not-hot-path",
+      "dependency": "none",
+      "deliveryOwner": "#1016/runtime-alterations",
+      "behavioralBaseline": [
+        "tests/Elsa/Persistence/Groundwork/Tests/Alterations/GroundworkWorkflowAlterationStoreTests.cs",
+        "tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeCheckpointWriterTests.Alterations.cs",
+        "tests/Elsa/Workflows/Runtime/Tests/Alterations/WorkflowAlterationOrchestrationTests.cs",
+        "e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1"
       ]
     },
     {

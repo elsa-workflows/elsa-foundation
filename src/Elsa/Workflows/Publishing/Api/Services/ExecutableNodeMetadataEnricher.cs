@@ -72,7 +72,8 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
             metadata[node.ExecutableNodeId],
             node.ChildSlots.Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(child => Rebuild(child, metadata)).ToArray())).ToArray(),
+                slot.Activities.Select(child => Rebuild(child, metadata)).ToArray(),
+                slot.OperatorSchedulingCapability)).ToArray(),
             node.Structure,
             node.ActivityContract,
             node.IntrinsicKind,

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue
+public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
@@ -135,6 +135,26 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
                 .ToArray();
 
             return new ValueTask<IReadOnlyCollection<string>>(executionIds);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
+        string workflowExecutionId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            var claims = _claimsByScopedId
+                .Where(entry => StringComparer.Ordinal.Equals(entry.Key.WorkflowExecutionId, workflowExecutionId))
+                .Where(entry => entry.Value.ClaimedAt is not null && entry.Value.VisibleAfter is { } visibleAfter && visibleAfter > now)
+                .Select(entry => NewClaim(_workItemsByScopedId[entry.Key], entry.Value))
+                .OrderBy(claim => claim.Item.RecordedAt)
+                .ThenBy(claim => claim.Item.WorkItemId, StringComparer.Ordinal)
+                .ToArray();
+            return new ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>>(claims);
         }
     }
 

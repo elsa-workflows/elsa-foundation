@@ -173,7 +173,10 @@ public sealed class WorkflowExecutableHasher
             .Select(slot =>
             {
                 var activities = string.Join(';', slot.Activities.Select(activity => activity.ExecutableNodeId).Order(StringComparer.Ordinal));
-                return $"{slot.Name}({activities})";
+                var capability = slot.OperatorSchedulingCapability is null
+                    ? string.Empty
+                    : $":operator={slot.OperatorSchedulingCapability.PolicyKey}:{slot.OperatorSchedulingCapability.SchemaVersion}:{CanonicalJson(slot.OperatorSchedulingCapability.Configuration)}";
+                return $"{slot.Name}({activities}){capability}";
             }));
         var structure = node.Structure is null
             ? string.Empty
@@ -369,6 +372,15 @@ public sealed class WorkflowExecutableHasher
             foreach (var activity in slot.Activities.OrderBy(activity => activity.ExecutableNodeId, StringComparer.Ordinal))
                 writer.WriteStringValue(activity.ExecutableNodeId);
             writer.WriteEndArray();
+            if (slot.OperatorSchedulingCapability is { } capability)
+            {
+                writer.WriteStartObject("operatorSchedulingCapability");
+                writer.WriteString("policyKey", capability.PolicyKey);
+                writer.WriteNumber("schemaVersion", capability.SchemaVersion);
+                writer.WritePropertyName("configuration");
+                WriteCanonicalJson(writer, capability.Configuration);
+                writer.WriteEndObject();
+            }
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

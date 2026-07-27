@@ -159,7 +159,8 @@ public sealed class ActivityTemplatePlacer(
             var childSlots = current.Node.ChildSlots
                 .Select(slot => new ExecutableChildSlot(
                     slot.Name,
-                    slot.Activities.Select(child => placedNodes[child.ExecutableNodeId]).ToArray()))
+                    slot.Activities.Select(child => placedNodes[child.ExecutableNodeId]).ToArray(),
+                    slot.OperatorSchedulingCapability))
                 .ToList();
             if (ReferenceEquals(current.Node, frame.Template.Root) && frame.Children.Count > 0)
             {
@@ -338,7 +339,8 @@ public sealed class ActivityTemplatePlacer(
     {
         var existingIndex = slots.ToList().FindIndex(x => StringComparer.Ordinal.Equals(x.Name, slotName));
         var existing = existingIndex < 0 ? [] : slots[existingIndex].Activities;
-        var merged = new ExecutableChildSlot(slotName, existing.Concat(authoredChildren).ToArray());
+        var capability = existingIndex < 0 ? null : slots[existingIndex].OperatorSchedulingCapability;
+        var merged = new ExecutableChildSlot(slotName, existing.Concat(authoredChildren).ToArray(), capability);
         if (existingIndex < 0)
             slots.Add(merged);
         else

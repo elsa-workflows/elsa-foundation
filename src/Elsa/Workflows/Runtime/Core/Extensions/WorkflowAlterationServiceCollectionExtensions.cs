@@ -13,7 +13,7 @@ public static class WorkflowAlterationServiceCollectionExtensions
     /// dotted/namespaced so persisted envelopes never depend on a deployment-local CLR type name.
     /// </summary>
     public static IServiceCollection AddWorkflowAlterationHandler<THandler>(this IServiceCollection services, WorkflowAlterationDescriptor descriptor)
-        where THandler : class, IWorkflowAlterationHandler
+        where THandler : class, IWorkflowAlterationPreflightHandler
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(descriptor);

@@ -24,6 +24,7 @@ public sealed class GroundworkActivityExecutionStateStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
         state.EnsureValueFlowCompatible();
+        state.EnsureSupersessionCompatible();
 
         var existing = await LoadByLogicalIdentityAsync(
             state.Execution.WorkflowExecutionId,
@@ -119,6 +120,7 @@ public sealed class GroundworkActivityExecutionStateStore(
 
         var document = Serializer.Deserialize<ActivityExecutionStateDocument>(envelope);
         var state = document.State;
+        state.EnsureSupersessionCompatible();
         if (!StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId)
             || !StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, activityExecutionId))
         {
@@ -155,7 +157,12 @@ public sealed class GroundworkActivityExecutionStateStore(
         return new RuntimeStorePage<ActivityExecutionState>(
             query,
             result.Documents
-                .Select(envelope => Serializer.Deserialize<ActivityExecutionStateDocument>(envelope).State)
+                .Select(envelope =>
+                {
+                    var state = Serializer.Deserialize<ActivityExecutionStateDocument>(envelope).State;
+                    state.EnsureSupersessionCompatible();
+                    return state;
+                })
                 .ToArray(),
             result.NextContinuation);
     }

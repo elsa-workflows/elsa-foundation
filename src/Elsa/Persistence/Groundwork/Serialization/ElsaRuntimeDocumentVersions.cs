@@ -27,6 +27,8 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 4,
+        [ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowTestScopeDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,

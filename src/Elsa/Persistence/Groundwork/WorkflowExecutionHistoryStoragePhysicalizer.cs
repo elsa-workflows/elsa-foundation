@@ -64,6 +64,15 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             IndexValueKind.Number,
             isUnique: false,
             MissingValueBehavior.Excluded);
+        var alterationCaptureIndex = new LogicalIndexDeclaration(
+            ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
+            [
+                new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+                new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
+            ],
+            IndexValueKind.Keyword,
+            isUnique: false,
+            MissingValueBehavior.Excluded);
         var pinnedArtifactIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex,
             [
@@ -145,6 +154,14 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                             SortTicksColumn,
                             1,
                             PhysicalSortDirection.Descending),
+                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
+                        new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
+                    ]),
+                new PhysicalIndexDefinition(
+                    alterationCaptureIndex.Identity,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(TenantIdColumn, 1),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
                     ]),
@@ -265,6 +282,64 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     IndexValueKind.Keyword,
                     Equal)
             ]);
+        var alterationCaptureQuery = new BoundedQueryDeclaration(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery,
+            alterationCaptureIndex.Identity,
+            new HashSet<PortableQueryOperation>
+            {
+                PortableQueryOperation.Equal,
+                PortableQueryOperation.GreaterThanOrEqual,
+                PortableQueryOperation.LessThanOrEqual
+            },
+            QuerySortSupport.Ascending,
+            QueryPagingSupport.Cursor,
+            BoundedQueryExecutionClass.ScaleBearing,
+            supportsTotalCount: true,
+            sortFields:
+            [
+                new BoundedQuerySortField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                    PhysicalSortDirection.Ascending)
+            ],
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+                    Equal)
+            ],
+            resultOperations: new HashSet<BoundedQueryResultOperation>
+            {
+                BoundedQueryResultOperation.Documents,
+                BoundedQueryResultOperation.Count
+            },
+            residualPredicateFields:
+            [
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField,
+                    IndexValueKind.Keyword,
+                    Equal),
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField,
+                    IndexValueKind.Number,
+                    Equal),
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindField,
+                    IndexValueKind.Number,
+                    Equal),
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryCorrelationIdField,
+                    IndexValueKind.Keyword,
+                    Equal),
+                Residual(PhysicalDocumentFieldPaths.Id, IndexValueKind.Keyword, Equal),
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
+                    IndexValueKind.Keyword,
+                    Equal),
+                Residual(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                    IndexValueKind.Number,
+                    Range)
+            ]);
         var pinnedArtifactQuery = new BoundedQueryDeclaration(
             ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
             pinnedArtifactIndex.Identity,
@@ -309,11 +384,14 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         ElsaRuntimeStorageManifest.WorkflowExecutionHistoryOrderIndex))
                     .Where(index => !StringComparer.Ordinal.Equals(
                         index.Identity,
+                        ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex))
+                    .Where(index => !StringComparer.Ordinal.Equals(
+                        index.Identity,
                         ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex))
                     .Where(index => !StringComparer.Ordinal.Equals(
                         index.Identity,
                         ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex))
-                    .Concat([historyIndex, faultedAttentionIndex, pinnedArtifactIndex])
+                    .Concat([historyIndex, alterationCaptureIndex, faultedAttentionIndex, pinnedArtifactIndex])
                     .ToArray(),
                 storage.BoundedQueries
                     .Where(query => !StringComparer.Ordinal.Equals(
@@ -324,11 +402,14 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery))
                     .Where(query => !StringComparer.Ordinal.Equals(
                         query.Identity,
+                        ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery))
+                    .Where(query => !StringComparer.Ordinal.Equals(
+                        query.Identity,
                         ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery))
                     .Where(query => !StringComparer.Ordinal.Equals(
                         query.Identity,
                         ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery))
-                    .Concat([historyQuery, faultedAttentionQuery, pinnedArtifactQuery])
+                    .Concat([historyQuery, alterationCaptureQuery, faultedAttentionQuery, pinnedArtifactQuery])
                     .ToArray(),
                 storage.NameOverrides,
                 storage.BoundedMutations)

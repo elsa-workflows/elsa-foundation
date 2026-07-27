@@ -17,7 +17,7 @@ public static class RuntimeCheckpointCommitFingerprint
         // Consumed scheduler work items only appear on the WU-1 atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
-        object stateChanges = commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0
+        object stateChanges = commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 || commit.StateChanges.AlterationJobTerminalChange is not null
             ? new
             {
                 commit.StateChanges.WorkflowExecution,
@@ -39,6 +39,7 @@ public static class RuntimeCheckpointCommitFingerprint
                 ConsumedSchedulerWorkItems = commit.StateChanges.ConsumedSchedulerWorkItems
                     .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
                     .ToArray(),
+                commit.StateChanges.AlterationJobTerminalChange,
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
             }
             : commit.StateChanges.WorkflowDispatchCancellations.Count > 0

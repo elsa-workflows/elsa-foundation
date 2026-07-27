@@ -166,9 +166,11 @@ manifest and stores.
 4. **RescheduleActivity** adds the `Superseded` activity state and successor lineage. A new
    supersession planner reclaims only the source-owned subtree/resources, clones immutable pinned
    inputs, and stages the successor. Blocking incidents and terminal workflows reject preflight.
-5. **Migrate** runs a strict compatibility validator while the workflow is suspended and quiescent,
-   updates every retained artifact-bound Runtime projection plus artifact reference leases, and
-   exposes the staged target artifact to later handlers in the same job.
+5. **Migrate** runs a strict compatibility validator while the workflow is operationally suspended
+   and quiescent. A parked execution may retain a `Running` aggregate with a `Suspended` wait/root
+   activity, but the quiescence probe must still reject every running activity and active delivery or
+   ownership lane. Migration updates every retained artifact-bound Runtime projection plus artifact
+   reference leases and exposes the staged target artifact to later handlers in the same job.
 
 ## Persistence Integration
 

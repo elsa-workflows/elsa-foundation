@@ -46,6 +46,8 @@ belong in the glossary.
    coverage.
 5. Route any post-delivery expansion, such as active migration, explicit mapping, or Studio UX, into
    a bounded follow-up objective or another owning bucket.
+6. Complete four-provider runtime-alteration store evidence for the additive 35th Groundwork
+   coverage-ledger row without mutating the immutable all-34 composition artifact.
 
 ## Linked Surfaces
 

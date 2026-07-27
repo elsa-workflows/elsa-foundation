@@ -26,7 +26,9 @@ public sealed record ActivityExecutionInspectionProjection(
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots,
     IReadOnlyDictionary<string, string> Metadata,
     string? ExecutionScopeId = null,
-    ActivityExecutionAttemptLineage? Attempt = null)
+    ActivityExecutionAttemptLineage? Attempt = null,
+    string? SupersededByActivityExecutionId = null,
+    DateTimeOffset? SupersededAt = null)
 {
     public static ActivityExecutionInspectionProjection FromState(
         ActivityExecutionState state,
@@ -64,6 +66,8 @@ public sealed record ActivityExecutionInspectionProjection(
             Provenance: state.Provenance,
             ExecutionScopeId: state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
             Attempt: state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId: state.SupersededByActivityExecutionId,
+            SupersededAt: state.SupersededAt,
             OutcomeNames: outcomeNames ?? [],
             Bookmarks: bookmarks ?? [],
             Incidents: incidents ?? [],
@@ -100,6 +104,8 @@ public sealed record ActivityExecutionInspectionProjection(
             Provenance = state.Provenance,
             ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
             Attempt = state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId = state.SupersededByActivityExecutionId,
+            SupersededAt = state.SupersededAt,
             OutcomeNames = outcomeNames ?? OutcomeNames,
             Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.Identity.BookmarkId),
             Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),

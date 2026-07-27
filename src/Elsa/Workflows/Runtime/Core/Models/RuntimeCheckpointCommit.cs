@@ -93,7 +93,8 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox,
         IReadOnlyCollection<ActivityScopeCleanupRequest>? activityScopeCleanups,
         IReadOnlyCollection<WorkflowDispatchCancellationRequest>? workflowDispatchCancellations,
-        IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null)
+        IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumedSchedulerWorkItems = null,
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null)
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
@@ -123,6 +124,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         WorkflowDispatches = workflowDispatches;
         WorkflowDispatchCancellations = NormalizeCancellations(workflowDispatchCancellations);
         ConsumedSchedulerWorkItems = NormalizeConsumedSchedulerWorkItems(consumedSchedulerWorkItems);
+        AlterationJobTerminalChange = NormalizeAlterationJobTerminalChange(alterationJobTerminalChange);
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -149,6 +151,9 @@ public sealed class RuntimeCheckpointStateChangeSet
     /// </summary>
     public IReadOnlyCollection<ConsumedSchedulerWorkItem> ConsumedSchedulerWorkItems { get; }
 
+    /// <summary>Terminal alteration-job evidence committed in the same atomic unit as the workflow mutation.</summary>
+    public WorkflowAlterationJobTerminalChange? AlterationJobTerminalChange { get; }
+
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
     /// checkpoint committer from <see cref="RuntimeCheckpointCommit.PostCommitIntents"/>; folding them into the
@@ -173,7 +178,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             postCommitOutbox,
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
-            ConsumedSchedulerWorkItems);
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange);
 
     /// <summary>Returns a copy with the supplied workflow-dispatch lifecycle changes.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatches(
@@ -191,7 +197,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             PostCommitOutbox,
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
-            ConsumedSchedulerWorkItems);
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange);
 
     /// <summary>Returns a copy with the supplied provider-resolved dispatch cancellation requests.</summary>
     public RuntimeCheckpointStateChangeSet WithWorkflowDispatchCancellations(
@@ -209,7 +216,8 @@ public sealed class RuntimeCheckpointStateChangeSet
             PostCommitOutbox,
             ActivityScopeCleanups,
             workflowDispatchCancellations,
-            ConsumedSchedulerWorkItems);
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange);
 
     /// <summary>Returns a copy with the supplied claimed scheduler work items folded in for atomic consumption.</summary>
     public RuntimeCheckpointStateChangeSet WithConsumedSchedulerWorkItems(
@@ -227,7 +235,39 @@ public sealed class RuntimeCheckpointStateChangeSet
             PostCommitOutbox,
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
-            consumedSchedulerWorkItems);
+            consumedSchedulerWorkItems,
+            AlterationJobTerminalChange);
+
+    /// <summary>Returns a copy with checkpoint-integrated terminal alteration evidence.</summary>
+    public RuntimeCheckpointStateChangeSet WithAlterationJobTerminalChange(
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            alterationJobTerminalChange);
+
+    private static WorkflowAlterationJobTerminalChange? NormalizeAlterationJobTerminalChange(WorkflowAlterationJobTerminalChange? change) =>
+        change is null
+            ? null
+            : new WorkflowAlterationJobTerminalChange(
+                change.JobId,
+                change.ClaimToken,
+                change.Status,
+                change.Outcomes.OrderBy(outcome => outcome.Ordinal).ToArray(),
+                change.CheckpointCommitId,
+                change.CompletedAt,
+                change.SafeFailure);
 
     private static IReadOnlyCollection<ConsumedSchedulerWorkItem> NormalizeConsumedSchedulerWorkItems(
         IReadOnlyCollection<ConsumedSchedulerWorkItem> items)

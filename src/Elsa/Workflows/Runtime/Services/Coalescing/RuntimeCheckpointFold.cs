@@ -31,6 +31,7 @@ public static class RuntimeCheckpointFold
         var workflowDispatchCancellations = new List<WorkflowDispatchCancellationRequest>();
         var activityScopeCleanups = new List<ActivityScopeCleanupRequest>();
         var consumedSchedulerWorkItems = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null;
 
         foreach (var changeSet in changeSets)
         {
@@ -53,6 +54,12 @@ public static class RuntimeCheckpointFold
             // lost or duplicated in the fold.
             foreach (var consumed in changeSet.ConsumedSchedulerWorkItems)
                 consumedSchedulerWorkItems[consumed.WorkItemId] = consumed;
+            if (changeSet.AlterationJobTerminalChange is { } terminal)
+            {
+                if (alterationJobTerminalChange is not null)
+                    throw new InvalidOperationException("Alteration job terminal evidence is a mandatory checkpoint boundary and cannot be folded.");
+                alterationJobTerminalChange = terminal;
+            }
         }
 
         return new RuntimeCheckpointStateChangeSet(
@@ -68,7 +75,8 @@ public static class RuntimeCheckpointFold
             postCommitOutbox: null,
             activityScopeCleanups: activityScopeCleanups,
             workflowDispatchCancellations: workflowDispatchCancellations,
-            consumedSchedulerWorkItems: consumedSchedulerWorkItems.Values.ToArray());
+            consumedSchedulerWorkItems: consumedSchedulerWorkItems.Values.ToArray(),
+            alterationJobTerminalChange: alterationJobTerminalChange);
     }
 
     private sealed class MergeBuffer<TState>

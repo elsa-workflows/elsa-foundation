@@ -117,7 +117,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 104 | 0 | retained, deferred, out of scope |
-| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 79 | 9 | - |
+| [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 87 | 1 | superseded |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
@@ -158,3 +158,23 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | 124-bpmn-compensation | unknown | - | 0 | 0 | retained, out of scope |
 | [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | 125-bpmn-transactions | unknown | - | 0 | 0 | deferred, out of scope |
 | [126-runtime-child-parent-notification](../../specs/126-runtime-child-parent-notification/spec.md) | 126-runtime-child-parent-notification | unknown | - | 0 | 0 | out of scope |
+| [127-bpmn-escalation](../../specs/127-bpmn-escalation/spec.md) | 127-bpmn-escalation | unknown | - | 0 | 0 | out of scope |
+| [128-bpmn-event-subprocesses](../../specs/128-bpmn-event-subprocesses/spec.md) | 128-bpmn-event-subprocesses | unknown | - | 0 | 0 | deferred, out of scope |
+| [128-runtime-actor-terminal-eviction](../../specs/128-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Draft (implemented) | - | 0 | 0 | retained, deferred |
+| [129-cold-start-phase-instrument](../../specs/129-cold-start-phase-instrument/spec.md) | 129-cold-start-phase-instrument | unknown | - | 0 | 0 | deferred |
+| [130-runtime-envelope-build-cpu](../../specs/130-runtime-envelope-build-cpu/spec.md) | Per-hop envelope-building CPU — measure-first characterization | Complete — **KILL verdict** (envelope-building-CPU hypothesis refuted; instrument landed as permanent tripwire; store-read follow-up re-aimed). See [research.md](./research.md). | - | 0 | 0 | deferred |
+| [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | 131-coalesced-inspection-read-memo | unknown | - | 0 | 0 | retained, out of scope |
+| [132-deferred-fault-absorption](../../specs/132-deferred-fault-absorption/spec.md) | 132-deferred-fault-absorption | unknown | - | 0 | 0 | deferred, out of scope |
+| [132-eager-shell-activation](../../specs/132-eager-shell-activation/spec.md) | 132-eager-shell-activation | unknown | - | 0 | 0 | - |
+| [133-bpmn-call-activity](../../specs/133-bpmn-call-activity/spec.md) | 133-bpmn-call-activity | unknown | - | 0 | 0 | out of scope |
+| [133-schema-admission-skip-and-batch](../../specs/133-schema-admission-skip-and-batch/spec.md) | 133-schema-admission-skip-and-batch | unknown | - | 0 | 0 | deferred |
+| [134-bpmn-event-subprocess-tier2](../../specs/134-bpmn-event-subprocess-tier2/spec.md) | 134-bpmn-event-subprocess-tier2 | unknown | - | 0 | 0 | superseded, deferred, out of scope |
+| [134-container-readytorun-publish](../../specs/134-container-readytorun-publish/spec.md) | 134-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
+| [135-bpmn-message-send](../../specs/135-bpmn-message-send/spec.md) | 135-bpmn-message-send | unknown | - | 0 | 0 | out of scope |
+| [136-bpmn-collaboration-import](../../specs/136-bpmn-collaboration-import/spec.md) | 136-bpmn-collaboration-import | unknown | - | 0 | 0 | out of scope |
+| [137-dispatch-cancel-on-subtree](../../specs/137-dispatch-cancel-on-subtree/spec.md) | Cancel Waited Dispatches on Subtree Teardown | Draft | - | 12 | 0 | - |
+| [137-receive-correlation](../../specs/137-receive-correlation/spec.md) | Receive Event Correlation | Draft | - | 15 | 0 | retained, out of scope |
+| [138-reusable-boundary-outcomes](../../specs/138-reusable-boundary-outcomes/spec.md) | Reusable Activity Boundary Outcomes | Draft | - | 18 | 1 | - |
+| [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 47 | 15 | retained, out of scope |
+| [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
+| [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 80 | 6 | superseded, retained, deferred |

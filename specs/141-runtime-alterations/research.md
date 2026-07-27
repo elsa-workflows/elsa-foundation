@@ -181,11 +181,15 @@ orphan work, duplicate branches, or completion a parent cannot consume.
 
 ## Decision 11: Migration uses explicit compatibility proof
 
-**Decision**: Admit only suspended, fully quiescent workflows and an exact retained artifact from the
-same definition. Validate all retained node descriptors/contracts, bookmark resume targets, scopes,
-variable declarations, artifact-bound inspection/provenance, requirements, and dependency/reference
-leases. Migration updates every affected projection in one checkpoint. Later alterations see the
-staged target artifact.
+**Decision**: Admit only operationally suspended, fully quiescent workflows and an exact retained
+artifact from the same definition. Elsa can represent a parked execution with a `Running` workflow
+aggregate and a `Suspended` wait/root activity, so either aggregate suspension or a retained suspended
+activity establishes the suspension boundary. The separate quiescence proof still rejects every
+running activity, invocation, scheduler/outbox/timer/dispatch lane, or foreign ownership fence.
+Validate all retained node descriptors/contracts, bookmark resume targets, scopes, variable
+declarations, artifact-bound inspection/provenance, requirements, and dependency/reference leases.
+Migration updates every affected projection in one checkpoint. Later alterations see the staged
+target artifact.
 
 **Rationale**: `WorkflowExecutableIdentityComparer` proves equality, not compatibility. Foundation
 state is split across several artifact-bound document families.

@@ -1,6 +1,9 @@
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Capabilities;
 
@@ -51,6 +54,31 @@ public sealed class RuntimeOperationalCapabilitySource(
                 1,
                 [new ApiCapabilityLink("runtime-diagnostics", "runtime/workflows/diagnostics/settings")],
                 $"{RuntimeApiCapabilities.SourceFeatureId}.Operational")];
+        return ValueTask.FromResult(declarations);
+    }
+}
+
+/// <summary>Advertises alteration routes only when this shell composed both durable plan state and the orchestration service.</summary>
+public sealed class RuntimeAlterationCapabilitySource(IServiceProvider serviceProvider) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var hasStore = serviceProvider.GetService<IWorkflowAlterationStore>() is not null;
+        var hasPlanService = serviceProvider.GetService<WorkflowAlterationPlanService>() is not null;
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = !hasStore || !hasPlanService
+            ? []
+            : [new(
+                RuntimeApiCapabilities.CapabilityId,
+                1,
+                [
+                    new ApiCapabilityLink("workflow-alteration-plans", "runtime/workflows/alteration-plans"),
+                    new ApiCapabilityLink("workflow-alteration-plan", "runtime/workflows/alteration-plans/{planId}", templated: true),
+                    new ApiCapabilityLink("workflow-alteration-plan-jobs-page", "runtime/workflows/alteration-plans/{planId}/jobs/page", templated: true),
+                    new ApiCapabilityLink("workflow-alteration-job", "runtime/workflows/alteration-plans/{planId}/jobs/{jobId}", templated: true),
+                    new ApiCapabilityLink("workflow-alteration-plan-cancel", "runtime/workflows/alteration-plans/{planId}/cancel", templated: true)
+                ],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.Alterations")];
         return ValueTask.FromResult(declarations);
     }
 }

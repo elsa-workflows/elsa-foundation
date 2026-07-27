@@ -6,14 +6,14 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <summary>Startup-built immutable lookup for Runtime-owned and host-contributed alteration descriptors.</summary>
 public sealed class WorkflowAlterationRegistry : IWorkflowAlterationRegistry
 {
-    private static readonly IReadOnlyCollection<WorkflowAlterationDescriptor> BuiltIns =
-    [
-        new("CancelWorkflow", 1, "Cancel workflow"),
-        new("ModifyVariable", 1, "Modify variable"),
-        new("ScheduleActivity", 1, "Schedule activity"),
-        new("RescheduleActivity", 1, "Reschedule activity"),
-        new("Migrate", 1, "Migrate workflow")
-    ];
+    private static readonly IReadOnlySet<string> BuiltInKinds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "CancelWorkflow",
+        "ModifyVariable",
+        "ScheduleActivity",
+        "RescheduleActivity",
+        "Migrate"
+    };
 
     private readonly IReadOnlyDictionary<(string Kind, int SchemaVersion), WorkflowAlterationDescriptor> _descriptors;
 
@@ -21,12 +21,12 @@ public sealed class WorkflowAlterationRegistry : IWorkflowAlterationRegistry
     public WorkflowAlterationRegistry(IEnumerable<WorkflowAlterationHandlerContribution> contributions)
     {
         ArgumentNullException.ThrowIfNull(contributions);
-        var descriptors = BuiltIns.Concat(contributions.Select(contribution =>
+        var descriptors = contributions.Select(contribution =>
         {
             contribution.Validate();
-            ValidateCustomDescriptor(contribution.Descriptor);
+            ValidateDescriptor(contribution.Descriptor);
             return contribution.Descriptor;
-        })).ToArray();
+        }).ToArray();
         var duplicate = descriptors
             .GroupBy(descriptor => (descriptor.Kind, descriptor.SchemaVersion), StringComparerTuple.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
@@ -59,10 +59,17 @@ public sealed class WorkflowAlterationRegistry : IWorkflowAlterationRegistry
     public static void ValidateCustomDescriptor(WorkflowAlterationDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        if (BuiltIns.Any(builtIn => StringComparer.Ordinal.Equals(builtIn.Kind, descriptor.Kind)))
+        if (BuiltInKinds.Contains(descriptor.Kind))
             throw new ArgumentException($"'{descriptor.Kind}' is reserved for a Runtime-owned alteration.", nameof(descriptor));
         if (!descriptor.Kind.Contains('.', StringComparison.Ordinal) || descriptor.Kind.Split('.').Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Custom workflow alteration kinds must be dotted and namespaced.", nameof(descriptor));
+    }
+
+    private static void ValidateDescriptor(WorkflowAlterationDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!BuiltInKinds.Contains(descriptor.Kind))
+            ValidateCustomDescriptor(descriptor);
     }
 
     private sealed class StringComparerTuple : IEqualityComparer<(string Kind, int SchemaVersion)>

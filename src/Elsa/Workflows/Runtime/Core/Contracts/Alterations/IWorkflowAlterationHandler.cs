@@ -4,7 +4,8 @@ namespace Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 
 /// <summary>
 /// Marker for a trusted, scoped alteration handler. The registry owns its stable descriptor so handler CLR identities
-/// never enter a deferred envelope or durable plan record.
+/// never enter a deferred envelope or durable plan record. Hosts register the executable
+/// <see cref="IWorkflowAlterationPreflightHandler"/> subtype.
 /// </summary>
 public interface IWorkflowAlterationHandler;
 
@@ -29,7 +30,7 @@ public sealed record WorkflowAlterationHandlerContribution(WorkflowAlterationDes
     {
         ArgumentNullException.ThrowIfNull(Descriptor);
         ArgumentNullException.ThrowIfNull(HandlerType);
-        if (!typeof(IWorkflowAlterationHandler).IsAssignableFrom(HandlerType))
-            throw new ArgumentException($"Handler type '{HandlerType}' does not implement {nameof(IWorkflowAlterationHandler)}.", nameof(HandlerType));
+        if (!typeof(IWorkflowAlterationPreflightHandler).IsAssignableFrom(HandlerType))
+            throw new ArgumentException($"Handler type '{HandlerType}' does not implement {nameof(IWorkflowAlterationPreflightHandler)}.", nameof(HandlerType));
     }
 }

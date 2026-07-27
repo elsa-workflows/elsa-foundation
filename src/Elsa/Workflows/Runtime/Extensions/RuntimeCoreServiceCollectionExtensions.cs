@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -6,11 +7,13 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -54,6 +57,37 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<WorkflowAlterationEphemeralKeyRing>();
         services.TryAddScoped<IWorkflowAlterationPayloadProtector, AesGcmWorkflowAlterationPayloadProtector>();
         services.TryAddSingleton<IWorkflowAlterationRegistry, WorkflowAlterationRegistry>();
+        services.AddOptions<WorkflowAlterationTargetCaptureOptions>();
+        services.AddOptions<WorkflowAlterationOrchestrationOptions>();
+        services.TryAddSingleton<InMemoryWorkflowAlterationStoreState>();
+        services.TryAddSingleton<IWorkflowAlterationStore, InMemoryWorkflowAlterationStore>();
+        services.TryAddScoped<IWorkflowAlterationHandlerResolver, WorkflowAlterationHandlerResolver>();
+        services.TryAddSingleton<IOperatorActivitySchedulingPolicyRegistry, OperatorActivitySchedulingPolicyRegistry>();
+        services.TryAddScoped<WorkflowCancellationPlanner>();
+        services.TryAddScoped<CancelWorkflowAlterationHandler>();
+        services.TryAddScoped<ModifyVariableAlterationHandler>();
+        services.TryAddScoped<ScheduleActivityAlterationHandler>();
+        services.TryAddScoped<WorkflowMigrationCompatibilityValidator>();
+        services.TryAddScoped<WorkflowMigrationPlanner>();
+        services.TryAddScoped<IWorkflowMigrationQuiescenceProbe, RuntimeWorkflowMigrationQuiescenceProbe>();
+        services.TryAddScoped<MigrateWorkflowAlterationHandler>();
+        services.TryAddScoped<RescheduleActivityAlterationHandler>();
+        services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
+        AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(services, new("ModifyVariable", 1, "Modify variable"), typeof(ModifyVariableAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(services, new("ScheduleActivity", 1, "Schedule activity"), typeof(ScheduleActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(services, new("Migrate", 1, "Migrate workflow"), typeof(MigrateWorkflowAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(services, new("RescheduleActivity", 1, "Reschedule activity"), typeof(RescheduleActivityAlterationHandler));
+        services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
+        services.TryAddScoped<WorkflowAlterationJobExecutor>();
+        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
+        services.TryAddScoped<WorkflowAlterationPlanService>();
+        services.TryAddScoped<IWorkflowAlterationJobDispatcher, WorkflowAlterationJobDispatcher>();
+        services.TryAddScoped<WorkflowAlterationTargetCaptureTask>();
+        services.TryAddScoped<WorkflowAlterationJobTask>();
+        services.TryAddScoped<WorkflowAlterationPlanReconciliationTask>();
+        services.TryAddScoped<WorkflowAlterationOrchestrationSweep>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, WorkflowAlterationOrchestrationPumpTask>());
 
         // spec 123: ReplaySafe hop-fusion toggle (default ON, ratification resolution #3) + the deterministic
         // dispatch/fusion counters (FR-008). Singleton counters survive the per-command drain scopes.
@@ -380,6 +414,26 @@ public static class RuntimeCoreServiceCollectionExtensions
 
     private sealed class IncidentStrategyRuntimeDefaultsMarker
     {
+    }
+
+    private static void AddRuntimeOwnedAlterationContribution(
+        IServiceCollection services,
+        WorkflowAlterationDescriptor descriptor,
+        Type handlerType)
+    {
+        var existing = services
+            .Where(service => service.ServiceType == typeof(WorkflowAlterationHandlerContribution))
+            .Select(service => service.ImplementationInstance)
+            .OfType<WorkflowAlterationHandlerContribution>()
+            .Where(contribution => StringComparer.Ordinal.Equals(contribution.Descriptor.Kind, descriptor.Kind) && contribution.Descriptor.SchemaVersion == descriptor.SchemaVersion)
+            .ToArray();
+        if (existing.Length > 1 || existing is [var contribution] &&
+            (contribution.HandlerType != handlerType || contribution.Descriptor != descriptor))
+        {
+            throw new InvalidOperationException($"Runtime-owned workflow alteration '{descriptor.Kind}/{descriptor.SchemaVersion}' is already registered.");
+        }
+        if (existing.Length == 0)
+            services.AddSingleton(new WorkflowAlterationHandlerContribution(descriptor, handlerType));
     }
 
     // The public registration extension deliberately rejects the two bare built-in aliases. The default Runtime

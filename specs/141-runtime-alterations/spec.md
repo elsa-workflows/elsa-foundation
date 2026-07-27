@@ -294,8 +294,11 @@ sensitive result material are rejected.
 - **FR-031**: `Migrate` MUST appear at most once and, when present, MUST be the first alteration in its
   job.
 - **FR-032**: Migration MUST accept only an exact target artifact for the same workflow definition and
-  MUST require the execution to be suspended and fully quiescent with no in-flight invocation,
-  scheduler work, or uncommitted continuation.
+  MUST require the execution to be operationally suspended and fully quiescent with no in-flight
+  invocation, scheduler work, or uncommitted continuation. Operational suspension means either the
+  workflow aggregate is `Suspended` or at least one retained activity is `Suspended`; because a parked
+  Elsa execution can retain a `Running` aggregate, the full quiescence proof MUST additionally reject
+  every running activity or active delivery/ownership lane.
 - **FR-032a**: The migration request MUST identify the target by its complete immutable artifact
   identity: artifact ID, definition ID, definition version ID, artifact version, and artifact hash.
   A compatible retained artifact MAY be older or newer than the current artifact.
