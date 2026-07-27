@@ -4846,9 +4846,9 @@
       "outcome": "operational-store",
       "scope": "tenant-scoped",
       "authority": "#1016",
-      "status": "planned",
-      "initialGap": "Four-provider restart, lease-race, and native-plan evidence is not yet attached to the Groundwork coverage ledger.",
-      "performanceWorkload": "operator-control-plane",
+      "status": "implemented",
+      "initialGap": "Retained four-provider restart, lease-race, and native-plan evidence artifacts are not yet attached to the Groundwork coverage ledger.",
+      "performanceWorkload": "not-hot-path",
       "accessPolicy": "ordinary",
       "queryShapes": [
         "list-plans-bounded",

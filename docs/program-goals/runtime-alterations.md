@@ -67,14 +67,25 @@ belong in the glossary.
 - The implementation is under review in
   [draft PR #1080](https://github.com/elsa-workflows/elsa-foundation/pull/1080) from
   `codex/1016-runtime-alterations`.
-- The remaining draft gates are the four-provider admission smoke/evidence for the additive 35th
-  Groundwork row and a complete solution test run without the unrelated external SQL Server
-  diagnostics conformance timeout.
+- The additive 35th Groundwork row is now represented by the runtime alteration store family, its
+  complete bounded-route catalog, a 65-route SQLite acceptance-scale native-plan run, and passing
+  SQLite/PostgreSQL/SQL Server/MongoDB schema-admission smoke.
+- All local draft gates are closed. The serialized full-solution run eliminated the earlier
+  load-sensitive failures, exposed two additive coverage-ratchet gaps, and otherwise passed every
+  assembly. The rebuilt Groundwork conformance suite reconciled both gaps; its sole transient MongoDB
+  bootstrap miss passed when retried alone.
 
 ## Delivery Evidence
 
 - Full solution build: succeeded with zero errors.
+- Full solution test reconciliation: every non-Groundwork-conformance assembly passed; the rebuilt
+  conformance suite passed 221 tests with 18 expected opt-in skips and one transient MongoDB startup
+  miss whose exact theory case passed 1/1 on isolated retry.
 - Focused alteration tests: Runtime 83/83, Runtime API 21/21, and Groundwork 15/15.
+- Groundwork provider admission: SQLite/PostgreSQL/SQL Server/MongoDB 4/4; the SQL Server target
+  additionally proves that the alteration compound indexes remain within its 1,700-byte key budget.
+- Provider-native routing: all 75 scale-bearing manifest routes are catalogued; SQLite executed the
+  65 query-bearing routes at acceptance scale.
 - Full architecture suite: 316/316.
 - Backend evidence: alteration plans, replay/restart, runtime writes 10/10, instance paging,
   suspend/resume, typed variables, fault activity, and restart recovery all passed.

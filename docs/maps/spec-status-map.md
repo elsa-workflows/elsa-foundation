@@ -177,4 +177,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [138-reusable-boundary-outcomes](../../specs/138-reusable-boundary-outcomes/spec.md) | Reusable Activity Boundary Outcomes | Draft | - | 18 | 1 | - |
 | [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 47 | 15 | retained, out of scope |
 | [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
-| [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 84 | 2 | superseded, retained, deferred |
+| [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 86 | 0 | superseded, retained, deferred |

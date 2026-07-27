@@ -18,8 +18,8 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    private const string PendingTargetFingerprint = "f80396f60d623b1f6ac19066fa4101343ba386056dbd6b3d522803fe7f34bbb8";
-    private const string PendingPlanFingerprint = "719587410b1ac0d169510ca8dc52a30dcb45a83fbd0e45037765b224bc793357";
+    private const string PendingTargetFingerprint = "4bb7a7c5c0a78f6b0cbef864553d140a304926c8ab311135bd772b13fe22e11b";
+    private const string PendingPlanFingerprint = "df931ec4bf5c6fdcd5d918dbe2603458a2e39083e3b644f08a120649c54972c4";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

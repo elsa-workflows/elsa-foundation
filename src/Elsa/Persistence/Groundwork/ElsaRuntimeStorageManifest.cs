@@ -566,8 +566,8 @@ public static class ElsaRuntimeStorageManifest
     /// over the provider-neutral legacy declarations.
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
-        WorkflowAlterationStoragePhysicalizer.AddRoutes(
-            ElsaGroundworkQueryRoutes.AddPhysicalRoutes(
+        ElsaGroundworkQueryRoutes.AddPhysicalRoutes(
+            WorkflowAlterationStoragePhysicalizer.AddRoutes(
             WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
             ExecutionLivenessStatePagingPhysicalizer.AddRoutes(
             ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(

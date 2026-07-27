@@ -41,7 +41,7 @@ payloads, and handler resolution exist without persistence or orchestration.
 - [x] T022 [US1] Add alteration plan/job document kinds, versions, projections, indexes, and bounded query routes in `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`, `Serialization/`, `Querying/`, and schema admission fixtures
 - [x] T023 [US1] Implement Groundwork alteration admission/capture/claim/page/reconcile stores under `src/Elsa/Persistence/Groundwork/Stores/` and register them in `DependencyInjection/GroundworkRuntimeStoreRegistration.cs`
 - [x] T024 [US1] Apply terminal alteration job changes in the same Groundwork unit-of-work, validation, fingerprint, and commit marker as the workflow checkpoint in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimeCheckpointWriter.cs`
-- [ ] T025 [US1] Run the shared conformance suite against InMemory and unified Groundwork, plus the existing SQLite/PostgreSQL/SQL Server/MongoDB admission smoke lanes
+- [x] T025 [US1] Run the shared conformance suite against InMemory and unified Groundwork, plus the existing SQLite/PostgreSQL/SQL Server/MongoDB admission smoke lanes
 
 **Checkpoint**: A target cohort can be durably captured and sealed, jobs can be claimed/replayed, and
 terminal job truth can commit atomically with a workflow checkpoint.
@@ -150,7 +150,7 @@ prove unknown/duplicate/version/host-defect and sensitive-result cases remain de
 - [x] T078 [P] Add restart, target-capture continuation, duplicate delivery, idempotency, and acknowledgement-reconciliation coverage in `e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1`
 - [x] T079 [P] Add Runtime write-endpoint status/shape assertions to `e2e-tests/write-endpoints/Test-RuntimeWrites.ps1` and update its README count
 - [x] T080 Add architecture tests proving Runtime remains Design-free, public wire state contains no CLR type names, and feature/capability/store registrations are complete under `tests/Elsa/Architecture/`
-- [ ] T081 Run focused unit/API/Groundwork/architecture projects, all relevant existing backend e2e suites from `quickstart.md`, then full `dotnet test Elsa.Server.slnx`; reconcile regressions rather than weakening tests
+- [x] T081 Run focused unit/API/Groundwork/architecture projects, all relevant existing backend e2e suites from `quickstart.md`, then full `dotnet test Elsa.Server.slnx`; reconcile regressions rather than weakening tests
 - [x] T082 Check `docs/maps/manifest.json`, refresh the narrow domain/dependency/extension-point maps using the selected map-shell preference, and review generated findings before staging
 - [x] T083 Update `docs/program-goals/runtime-alterations.md` with the PR and verification evidence, and mark objectives/completion state truthfully
 - [x] T084 Run `git diff --check`, validate OpenAPI YAML, search for payload/value/exception leakage and persisted CLR handler identities, and inspect project-reference drift

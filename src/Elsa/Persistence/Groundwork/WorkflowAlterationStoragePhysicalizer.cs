@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
@@ -8,6 +9,7 @@ namespace Elsa.Persistence.Groundwork;
 /// <summary>Provider-native, scale-bearing indexes for alteration coordination.</summary>
 internal static class WorkflowAlterationStoragePhysicalizer
 {
+    private const int Sha256HexProjectionLength = 64;
     private static readonly IReadOnlySet<PortableQueryOperation> Equal = new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
     private static readonly IReadOnlySet<PortableQueryOperation> Due = new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual };
 
@@ -49,10 +51,10 @@ internal static class WorkflowAlterationStoragePhysicalizer
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField));
         var columns = Columns(definition, [
-            Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PortablePhysicalType.String),
-            Column(tenant, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, PortablePhysicalType.String),
-            Column(idempotency, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField, PortablePhysicalType.String),
-            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, PortablePhysicalType.String)]);
+            Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+            Column(tenant, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+            Column(idempotency, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField, PortablePhysicalType.String, Sha256HexProjectionLength),
+            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength)]);
         var listCollectionColumn = ColumnName(columns, ElsaRuntimeStorageManifest.CollectionField);
         var planIdColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField);
         var tenantColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField);
@@ -109,12 +111,12 @@ internal static class WorkflowAlterationStoragePhysicalizer
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField),
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField));
         var columns = Columns(definition, [
-            Column(jobId, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PortablePhysicalType.String),
-            Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, PortablePhysicalType.String),
+            Column(jobId, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+            Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
             Column(ordinal, ElsaRuntimeStorageManifest.WorkflowAlterationJobCaptureOrdinalField, PortablePhysicalType.Int64),
             Column(claimable, ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PortablePhysicalType.DateTime),
-            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, PortablePhysicalType.String),
-            Column(checkpoint, ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField, PortablePhysicalType.String)]);
+            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength),
+            Column(checkpoint, ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)]);
         var jobIdColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField);
         var planIdColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField);
         var ordinalColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobCaptureOrdinalField);
@@ -130,8 +132,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
                 .Concat([
                     Physical(envelope, page, planIdColumn, ordinalColumn, jobIdColumn),
                     Physical(envelope, claim, claimableColumn, jobIdColumn),
-                    Physical(envelope, counts, planIdColumn, statusColumn, jobIdColumn),
-                    Physical(envelope, commit, checkpointColumn, jobIdColumn)])
+                    PhysicalExact(envelope, counts, planIdColumn, statusColumn, jobIdColumn),
+                    PhysicalExact(envelope, commit, checkpointColumn, jobIdColumn)])
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
@@ -150,17 +152,45 @@ internal static class WorkflowAlterationStoragePhysicalizer
         if (storage.Policy is not PhysicalStoragePolicy.ExplicitPolicy { Definition: var definition } || definition.Form != PhysicalStorageForm.SharedDocuments) throw new InvalidOperationException("Alteration storage requires shared documents.");
         return (storage, definition);
     }
-    private static ProjectedColumnDefinition Column(string name, string path, PortablePhysicalType type) => new(name, path, type, type == PortablePhysicalType.String ? 450 : null);
-    private static ProjectedColumnDefinition[] Columns(PhysicalTableDefinition definition, ProjectedColumnDefinition[] additions) =>
-        definition.ProjectedColumns
+    private static ProjectedColumnDefinition Column(string name, string path, PortablePhysicalType type, int? length = null) =>
+        new(name, path, type, type == PortablePhysicalType.String ? length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength : null);
+    private static ProjectedColumnDefinition[] Columns(PhysicalTableDefinition definition, ProjectedColumnDefinition[] additions)
+    {
+        var additionsByPath = additions.ToDictionary(addition => addition.Path, StringComparer.Ordinal);
+        return definition.ProjectedColumns
+            .Select(existing => additionsByPath.TryGetValue(existing.Path, out var replacement)
+                ? existing with { Length = replacement.Length }
+                : existing)
             .Concat(additions.Where(addition => definition.ProjectedColumns.All(existing => existing.Path != addition.Path)))
             .ToArray();
+    }
     private static string ColumnName(IReadOnlyCollection<ProjectedColumnDefinition> columns, string path) =>
         columns.Single(column => StringComparer.Ordinal.Equals(column.Path, path)).LogicalName;
     private static IndexField Field(string path, IndexValueKind kind = IndexValueKind.Keyword) => new(path, kind);
     private static LogicalIndexDeclaration Index(string id, IndexValueKind valueKind, params IndexField[] fields) =>
         new(id, fields, valueKind, false, MissingValueBehavior.Excluded);
-    private static PhysicalIndexDefinition Physical(DocumentEnvelopeDefinition envelope, LogicalIndexDeclaration index, params string[] columns) => new(index.Identity, [new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0), .. columns.Select((c, i) => new PhysicalIndexColumnDefinition(c, i + 1)), new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, columns.Length + 1)]);
+    private static PhysicalIndexDefinition Physical(
+        DocumentEnvelopeDefinition envelope,
+        LogicalIndexDeclaration index,
+        params string[] columns) =>
+        new(
+            index.Identity,
+            [
+                new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1)),
+                new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, columns.Length + 1)
+            ]);
+
+    private static PhysicalIndexDefinition PhysicalExact(
+        DocumentEnvelopeDefinition envelope,
+        LogicalIndexDeclaration index,
+        params string[] columns) =>
+        new(
+            index.Identity,
+            [
+                new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1))
+            ]);
     private static BoundedQueryDeclaration Query(string id, LogicalIndexDeclaration index, IReadOnlyList<BoundedQueryPredicateField> predicates, IReadOnlyList<BoundedQuerySortField> sort) => new(
         id,
         index.Identity,

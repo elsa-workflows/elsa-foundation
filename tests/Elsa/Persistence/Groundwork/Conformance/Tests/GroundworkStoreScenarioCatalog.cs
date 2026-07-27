@@ -298,6 +298,7 @@ internal static class GroundworkStoreScenarioCatalog
             "runtime-scheduler-work-queue",
             "runtime-trigger-binding",
             "runtime-workflow-executable",
+            "runtime-workflow-alteration",
             "runtime-workflow-execution-state",
             "runtime-workflow-hold-state"
         });
@@ -380,6 +381,7 @@ internal static class GroundworkStoreScenarioCatalog
                     "runtime-executable-source-reference",
                     "runtime-trigger-binding",
                     "runtime-workflow-executable",
+                    "runtime-workflow-alteration",
                     "runtime-workflow-execution-state"
                 ],
                 ["native-execution", "ordered-identities", "returned-count"],
@@ -670,7 +672,7 @@ internal static class GroundworkStoreScenarioCatalog
             .Order(StringComparer.Ordinal)
             .ToArray();
         if (!CoverageEntryIds.SequenceEqual(coveredEntries, StringComparer.Ordinal))
-            throw new InvalidOperationException("The scenario catalog does not cover the exact ALL32 ledger denominator.");
+            throw new InvalidOperationException("The scenario catalog does not cover the exact ALL33 ledger denominator.");
 
         foreach (var definition in All)
         {

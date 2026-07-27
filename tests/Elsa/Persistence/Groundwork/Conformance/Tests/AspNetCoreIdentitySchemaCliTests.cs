@@ -53,13 +53,24 @@ public sealed class AspNetCoreIdentitySchemaCliTests
             await driver.InitializeAsync(CancellationToken.None);
             var (deploymentManifest, manifestSources) = await ShellSelectedManifestSourcesAsync();
             var source = await driver.PrepareSchemaParityAsync(manifestSources, CancellationToken.None);
+            var admittedManifest = source.CreateManifest();
             Assert.Equal(
                 deploymentManifest.StorageUnits.Select(unit => unit.Identity.Value).Order(StringComparer.Ordinal),
-                source.CreateManifest().StorageUnits.Select(unit => unit.Identity.Value).Order(StringComparer.Ordinal));
-            Assert.Contains(source.CreateManifest().StorageUnits, unit =>
+                admittedManifest.StorageUnits.Select(unit => unit.Identity.Value).Order(StringComparer.Ordinal));
+            Assert.Contains(admittedManifest.StorageUnits, unit =>
                 unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
-            Assert.Contains(source.CreateManifest().StorageUnits, unit =>
+            Assert.Contains(admittedManifest.StorageUnits, unit =>
                 unit.Identity.Value == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
+            Assert.Contains(admittedManifest.StorageUnits, unit =>
+                unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind
+                && unit.PhysicalStorage!.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery));
+            Assert.Contains(admittedManifest.StorageUnits, unit =>
+                unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind
+                && unit.PhysicalStorage!.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery)
+                && unit.PhysicalStorage.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery));
 
             var pendingState = await driver.CaptureSchemaStateAsync(CancellationToken.None);
 
@@ -120,7 +131,9 @@ public sealed class AspNetCoreIdentitySchemaCliTests
                 SelectedSchemaType,
                 CancellationToken.None,
                 "--safe");
-            Assert.Equal(Success, apply.ExitCode);
+            Assert.True(
+                apply.ExitCode == Success,
+                $"Schema apply failed with exit code {apply.ExitCode}. Report: {apply.Report.GetRawText()} Error: {apply.StandardError}");
             Assert.Equal("applied", apply.Report.GetProperty("outcome").GetString());
             Assert.True(apply.Report.GetProperty("targetMutated").GetBoolean());
             AssertTargetFingerprint(source.TargetFingerprint, apply.Report);
