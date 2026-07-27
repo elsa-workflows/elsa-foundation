@@ -334,7 +334,9 @@ sensitive result material are rejected.
   retry.
 - **FR-044**: Plan cancellation MUST stop target capture and undispatched jobs but MUST allow a job
   already inside its workflow single-writer boundary to complete its atomic checkpoint.
-- **FR-044a**: Cancelling during target capture MUST leave the plan unsealed and create no jobs.
+- **FR-044a**: Cancelling during target capture MUST leave the plan unsealed. Already-persisted
+  provisional jobs MUST remain non-claimable and be deleted in bounded, restartable pages while the
+  plan is `Cancelling`; no provisional jobs may remain when the plan becomes terminal.
   Cancelling a sealed plan MUST mark each never-started job `Cancelled` and its alteration outcomes
   `Skipped` with a plan-cancelled code.
 - **FR-045**: Plan reads MUST expose durable lifecycle state and target/job counts; job reads MUST

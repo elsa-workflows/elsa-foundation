@@ -1,6 +1,7 @@
 {
   "collection": "workflowExecutionState",
   "historyArtifactId": "artifact-wf-1",
+  "historyAuthorityPartition": null,
   "historyCorrelationId": "correlation-1",
   "historyDefinitionId": "definition-1",
   "historyRunKind": 0,

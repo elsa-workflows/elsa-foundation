@@ -10,7 +10,12 @@ namespace Elsa.Persistence.Groundwork;
 internal static class WorkflowAlterationStoragePhysicalizer
 {
     private const int Sha256HexProjectionLength = 64;
+    private const int TenantIdempotencyProjectionLength =
+        ElsaRuntimeStorageManifest.RuntimeTenantProjectionLength + 1 + Sha256HexProjectionLength;
+    private const int ActiveOrderKeyProjectionLength =
+        19 + 1 + ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength;
     private static readonly IReadOnlySet<PortableQueryOperation> Equal = new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal };
+    private static readonly IReadOnlySet<PortableQueryOperation> After = new HashSet<PortableQueryOperation> { PortableQueryOperation.GreaterThan };
     private static readonly IReadOnlySet<PortableQueryOperation> Due = new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual };
 
     public static StorageManifest AddRoutes(StorageManifest manifest) => manifest with
@@ -26,7 +31,9 @@ internal static class WorkflowAlterationStoragePhysicalizer
     private static StorageUnit PhysicalizePlans(StorageUnit unit)
     {
         var (storage, definition) = Shared(unit);
-        const string planId = "alteration_plan_id", tenant = "alteration_tenant", idempotency = "alteration_idempotency", status = "alteration_status";
+        const string planId = "alteration_plan_id", tenant = "alteration_tenant", idempotency = "alteration_idempotency",
+            tenantIdempotency = "alteration_tenant_idempotency", status = "alteration_status",
+            activeOrder = "alteration_active_order";
         var envelope = new DocumentEnvelopeDefinition();
         var list = Index(
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanByCollection,
@@ -37,7 +44,7 @@ internal static class WorkflowAlterationStoragePhysicalizer
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField,
             IndexValueKind.Keyword,
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
-            Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField));
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField));
         var admission = Index(
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndIdempotency,
             IndexValueKind.Keyword,
@@ -49,18 +56,28 @@ internal static class WorkflowAlterationStoragePhysicalizer
             IndexValueKind.Keyword,
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField),
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
-            Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField));
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField));
+        var uniqueAdmission = new LogicalIndexDeclaration(
+            ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyUniqueness,
+            [Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField)],
+            IndexValueKind.Keyword,
+            isUnique: true,
+            MissingValueBehavior.Excluded);
         var columns = Columns(definition, [
             Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
-            Column(tenant, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+            Column(tenant, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeTenantProjectionLength),
             Column(idempotency, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField, PortablePhysicalType.String, Sha256HexProjectionLength),
-            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength)]);
+            Column(tenantIdempotency, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField, PortablePhysicalType.String, TenantIdempotencyProjectionLength),
+            Column(status, ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength),
+            Column(activeOrder, ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, PortablePhysicalType.String, ActiveOrderKeyProjectionLength)]);
         var listCollectionColumn = ColumnName(columns, ElsaRuntimeStorageManifest.CollectionField);
         var planIdColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField);
         var tenantColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField);
         var idempotencyColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField);
+        var tenantIdempotencyColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField);
         var statusColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField);
-        var indexes = new[] { list, active, admission, activeByTenant };
+        var activeOrderColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField);
+        var indexes = new[] { list, active, admission, activeByTenant, uniqueAdmission };
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
             columns,
@@ -68,9 +85,10 @@ internal static class WorkflowAlterationStoragePhysicalizer
                 .Where(index => indexes.All(replacement => replacement.Identity != index.LogicalName))
                 .Concat([
                     Physical(envelope, list, listCollectionColumn, planIdColumn),
-                    Physical(envelope, active, statusColumn, planIdColumn),
+                    Physical(envelope, active, statusColumn, activeOrderColumn),
                     Physical(envelope, admission, tenantColumn, idempotencyColumn, planIdColumn),
-                    Physical(envelope, activeByTenant, tenantColumn, statusColumn, planIdColumn)])
+                    Physical(envelope, activeByTenant, tenantColumn, statusColumn, activeOrderColumn),
+                    PhysicalExact(envelope, uniqueAdmission, tenantIdempotencyColumn)])
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
@@ -78,8 +96,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
             definition.LinkedKey);
         return Replace(unit, storage, physical, indexes, [
             Query(ElsaRuntimeStorageManifest.ListWorkflowAlterationPlansQuery, list, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.CollectionField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PhysicalSortDirection.Ascending)]),
-            Query(ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery, active, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PhysicalSortDirection.Ascending)]),
-            Query(ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery, activeByTenant, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery, active, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, After)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery, activeByTenant, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, After)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, PhysicalSortDirection.Ascending)]),
             Query(ElsaRuntimeStorageManifest.FindWorkflowAlterationPlanByTenantAndIdempotencyQuery, admission, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PhysicalSortDirection.Ascending)])]);
     }
 
@@ -97,6 +115,19 @@ internal static class WorkflowAlterationStoragePhysicalizer
         var claim = Index(
             ElsaRuntimeStorageManifest.WorkflowAlterationJobByClaimability,
             IndexValueKind.DateTime,
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, IndexValueKind.DateTime),
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField));
+        var claimByPlan = Index(
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanAndClaimability,
+            IndexValueKind.Keyword,
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, IndexValueKind.DateTime),
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField));
+        var claimByPlanAndStatus = Index(
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanStatusAndClaimability,
+            IndexValueKind.Keyword,
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField),
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, IndexValueKind.DateTime),
             Field(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField));
         var counts = Index(
@@ -123,7 +154,7 @@ internal static class WorkflowAlterationStoragePhysicalizer
         var claimableColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField);
         var statusColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField);
         var checkpointColumn = ColumnName(columns, ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField);
-        var indexes = new[] { page, claim, counts, commit };
+        var indexes = new[] { page, claim, claimByPlan, claimByPlanAndStatus, counts, commit };
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
             columns,
@@ -132,6 +163,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
                 .Concat([
                     Physical(envelope, page, planIdColumn, ordinalColumn, jobIdColumn),
                     Physical(envelope, claim, claimableColumn, jobIdColumn),
+                    Physical(envelope, claimByPlan, planIdColumn, claimableColumn, jobIdColumn),
+                    Physical(envelope, claimByPlanAndStatus, planIdColumn, statusColumn, claimableColumn, jobIdColumn),
                     PhysicalExact(envelope, counts, planIdColumn, statusColumn, jobIdColumn),
                     PhysicalExact(envelope, commit, checkpointColumn, jobIdColumn)])
                 .ToArray(),
@@ -142,6 +175,10 @@ internal static class WorkflowAlterationStoragePhysicalizer
         return Replace(unit, storage, physical, indexes, [
             Query(ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery, page, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobCaptureOrdinalField, PhysicalSortDirection.Ascending), new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
             Query(ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery, claim, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, Due)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending), new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery, claimByPlan, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, Due)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending), new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery, claimByPlanAndStatus, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, Due)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending), new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery, claimByPlanAndStatus, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, Due)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending), new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
+            Query(ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery, counts, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
             Query(ElsaRuntimeStorageManifest.CountWorkflowAlterationJobsByPlanAndStatusQuery, counts, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, Equal), new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)]),
             Query(ElsaRuntimeStorageManifest.FindWorkflowAlterationJobByCheckpointCommitIdQuery, commit, [new BoundedQueryPredicateField(ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField, Equal)], [new BoundedQuerySortField(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)])]);
     }

@@ -44,6 +44,8 @@ public sealed class WorkflowAlterationPlanApiTests
         var read = new GetWorkflowAlterationPlanRequestHandler(fixture.Store, fixture.Context);
         var own = await read.Handle(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None);
         Assert.Equal("CancelWorkflow", Assert.Single(own.Alterations).Kind);
+        Assert.Equal("operator-1", own.SubmittedBy.Subject);
+        Assert.Equal("test-request", own.SubmittedBy.CorrelationId);
         await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => new GetWorkflowAlterationPlanRequestHandler(fixture.Store, Fixture.CreateContext("tenant-b"))
             .Handle(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None));
         var serialized = JsonSerializer.Serialize(own);
@@ -70,6 +72,10 @@ public sealed class WorkflowAlterationPlanApiTests
         Assert.Equal(2, page.TotalCount);
         Assert.Equal(2, progress.Counts.CapturedSoFar);
         Assert.Equal(0, progress.Counts.TargetCount);
+        var jobRead = await new GetWorkflowAlterationJobRequestHandler(fixture.Store, fixture.Context)
+            .Handle(new GetWorkflowAlterationJob(plan.PlanId, page.Items.First().JobId), CancellationToken.None);
+        Assert.Equal("operator-1", jobRead.SubmittedBy.Subject);
+        Assert.Equal("test-request", jobRead.SubmittedBy.CorrelationId);
         var foreignPlan = await fixture.Submit.Handle(Submit("key-4", ["execution-c"]), CancellationToken.None);
         var firstJob = page.Items.First();
         await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => new GetWorkflowAlterationJobRequestHandler(fixture.Store, fixture.Context)

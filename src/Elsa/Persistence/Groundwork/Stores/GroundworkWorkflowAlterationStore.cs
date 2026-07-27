@@ -23,6 +23,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
 {
     private const int TransitionAttempts = 16;
+    private const int UnsealedCleanupPageSize = 100;
     private readonly IDocumentStore _store;
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
@@ -108,6 +109,16 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
                     DocumentQueryClause.Of(DocumentQueryComparison.Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, tenantPartition)),
                     DocumentQueryClause.Of(DocumentQueryComparison.Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, status.ToString()))
                 ];
+            if (cursor is not null)
+            {
+                clauses =
+                [
+                    .. clauses,
+                    DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
+                        ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField,
+                        cursor))
+                ];
+            }
             return await Queries.QueryAsync(
                 new DocumentQuery(
                     ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
@@ -115,22 +126,50 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
                         ? ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery
                         : ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery,
                     clauses,
-                    [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PhysicalSortDirection.Ascending)],
+                    [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField, PhysicalSortDirection.Ascending)],
                     take: pageSize + 1), cancellationToken);
         }));
         var items = pages.SelectMany(page => page.Documents)
             .Select(_serializer.Deserialize<WorkflowAlterationPlanDocument>)
-            .Select(document => document.Plan)
-            .Where(plan => cursor is null || StringComparer.Ordinal.Compare(plan.PlanId, cursor) > 0)
-            .OrderBy(plan => plan.PlanId, StringComparer.Ordinal)
+            .Where(document => cursor is null || StringComparer.Ordinal.Compare(document.ActiveOrderKey, cursor) > 0)
+            .OrderBy(document => document.ActiveOrderKey, StringComparer.Ordinal)
             .Take(pageSize + 1)
             .ToArray();
         if (tenantPartition is not null)
-            foreach (var plan in items)
-                _accessContextAccessor.Current.EnsureTenantScope(plan.AuthorityScope.TenantPartition);
+            foreach (var document in items)
+                _accessContextAccessor.Current.EnsureTenantScope(document.Plan.AuthorityScope.TenantPartition);
         var hasNext = items.Length > pageSize;
         var pageItems = hasNext ? items[..pageSize] : items;
-        return new(pageItems, hasNext ? pageItems[^1].PlanId : null, hasNext);
+        return new(pageItems.Select(document => document.Plan).ToArray(), hasNext ? pageItems[^1].ActiveOrderKey : null, hasNext);
+    }
+
+    public async ValueTask RescheduleActivePlanAsync(string planId, DateTimeOffset servicedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        for (var attempt = 0; attempt < TransitionAttempts; attempt++)
+        {
+            var loaded = await LoadPlanAsync(_store, planId, cancellationToken)
+                ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found.");
+            _accessContextAccessor.Current.EnsureTenantScope(loaded.Document.Plan.AuthorityScope.TenantPartition);
+            if (IsTerminal(loaded.Document.Plan.Status))
+                return;
+            var document = loaded.Document with
+            {
+                ActiveOrderKey = NextActivePlanOrderKey(loaded.Document.ActiveOrderKey, servicedAt, planId)
+            };
+            var saved = await SaveAsync(
+                _store,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
+                PhysicalId(planId),
+                document,
+                loaded.Envelope.Version,
+                cancellationToken);
+            if (saved.Status == DocumentStoreWriteStatus.Saved)
+                return;
+            if (saved.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+                throw Rejected("reschedule", planId, saved);
+        }
+        throw new WorkflowAlterationConcurrencyException(planId);
     }
 
     public async ValueTask<WorkflowAlterationPlanState> CaptureAsync(
@@ -204,33 +243,46 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
 
     public async ValueTask<WorkflowAlterationPlanState> SealAsync(string planId, long expectedRevision, DateTimeOffset sealedAt, CancellationToken cancellationToken = default)
     {
-        var targetCount = 0L;
-        string? cursor = null;
-        do
+        for (var attempt = 0; attempt < TransitionAttempts; attempt++)
         {
-            var page = await PageJobsAsync(planId, ElsaGroundworkQueryRoutes.MaximumResultCount, cursor, cancellationToken);
-            targetCount += page.Items.Count;
-            cursor = page.NextCursor;
-        } while (cursor is not null);
-
-        return await UpdatePlanAsync(planId, plan =>
-        {
+            var loaded = await LoadPlanAsync(_store, planId, cancellationToken)
+                ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found.");
+            var plan = loaded.Document.Plan;
+            _accessContextAccessor.Current.EnsureTenantScope(plan.AuthorityScope.TenantPartition);
             EnsureRevision(plan, expectedRevision);
+            if (loaded.Document.UnsealedCaptureCleanup is not null)
+                return plan;
+            var targetCount = plan.CapturedSoFar;
+            WorkflowAlterationPlanState sealedPlan;
             if (plan.Status == WorkflowAlterationPlanStatus.Cancelling)
                 // Preserve the cancellation barrier until the coordinator has written a safe skipped
                 // outcome for every captured but unclaimed job. Reconciliation owns the terminal
                 // transition and aggregate counts.
-                return CopyPlan(plan, targetCount: targetCount, sealedAt: sealedAt, revision: plan.Revision + 1);
-            if (plan.Status != WorkflowAlterationPlanStatus.CapturingTargets)
+                sealedPlan = CopyPlan(plan, targetCount: targetCount, sealedAt: sealedAt, revision: plan.Revision + 1);
+            else if (plan.Status != WorkflowAlterationPlanStatus.CapturingTargets)
                 throw new InvalidOperationException("Only a capturing alteration plan can be sealed.");
-            return CopyPlan(
-                plan,
-                status: targetCount == 0 ? WorkflowAlterationPlanStatus.Completed : WorkflowAlterationPlanStatus.Queued,
-                targetCount: targetCount,
-                sealedAt: sealedAt,
-                completedAt: targetCount == 0 ? sealedAt : null,
-                revision: plan.Revision + 1);
-        }, cancellationToken);
+            else
+                sealedPlan = CopyPlan(
+                    plan,
+                    status: targetCount == 0 ? WorkflowAlterationPlanStatus.Completed : WorkflowAlterationPlanStatus.Queued,
+                    targetCount: targetCount,
+                    sealedAt: sealedAt,
+                    completedAt: targetCount == 0 ? sealedAt : null,
+                    revision: plan.Revision + 1);
+
+            var saved = await SaveAsync(
+                _store,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
+                PhysicalId(planId),
+                WorkflowAlterationPlanDocument.From(sealedPlan, loaded.Document.ActiveOrderKey),
+                loaded.Envelope.Version,
+                cancellationToken);
+            if (saved.Status == DocumentStoreWriteStatus.Saved)
+                return sealedPlan;
+            if (saved.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+                throw Rejected("seal", planId, saved);
+        }
+        throw new WorkflowAlterationConcurrencyException(planId);
     }
 
     public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default) =>
@@ -254,32 +306,47 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
         string planId,
         IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes,
         DateTimeOffset completedAt,
+        int maximumCount,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skippedOutcomes);
-        _ = await RequirePlanAsync(planId, cancellationToken);
-        string? cursor = null;
-        do
+        if (maximumCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        var plan = await RequirePlanAsync(planId, cancellationToken);
+        if (plan.Status != WorkflowAlterationPlanStatus.Cancelling)
+            throw new InvalidOperationException("Only a cancelling alteration plan can cancel pending jobs.");
+        var candidates = await Queries.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery,
+                [
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField,
+                        planId)),
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField,
+                        WorkflowAlterationJobStatus.Pending.ToString()))
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)],
+                take: maximumCount),
+            cancellationToken);
+        foreach (var envelope in candidates.Documents)
         {
-            var page = await PageJobsAsync(planId, ElsaGroundworkQueryRoutes.MaximumResultCount, cursor, cancellationToken);
-            foreach (var candidate in page.Items.Where(job => job.Status == WorkflowAlterationJobStatus.Pending))
-            {
-                var loaded = await LoadJobAsync(_store, candidate.JobId, cancellationToken);
-                if (loaded is null || loaded.Value.Document.Job.Status != WorkflowAlterationJobStatus.Pending)
-                    continue;
-                var cancelled = CopyJob(
-                    loaded.Value.Document.Job,
-                    status: WorkflowAlterationJobStatus.Cancelled,
-                    claim: null,
-                    outcomes: skippedOutcomes,
-                    completedAt: completedAt,
-                    revision: loaded.Value.Document.Job.Revision + 1);
-                var saved = await SaveJobAsync(_store, cancelled, loaded.Value.Envelope.Version, cancellationToken);
-                if (saved.Status is not (DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict))
-                    throw Rejected("cancel pending", candidate.JobId, saved);
-            }
-            cursor = page.NextCursor;
-        } while (cursor is not null);
+            var document = _serializer.Deserialize<WorkflowAlterationJobDocument>(envelope);
+            var current = document.Job;
+            if (current.Status != WorkflowAlterationJobStatus.Pending)
+                continue;
+            var cancelled = CopyJob(
+                current,
+                status: WorkflowAlterationJobStatus.Cancelled,
+                claim: null,
+                outcomes: skippedOutcomes,
+                completedAt: completedAt,
+                revision: current.Revision + 1);
+            var saved = await SaveJobAsync(_store, cancelled, envelope.Version, cancellationToken);
+            if (saved.Status is not (DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict))
+                throw Rejected("cancel pending", current.JobId, saved);
+        }
     }
 
     public async ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default)
@@ -362,53 +429,115 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
         }
     }
 
-    public async ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string planId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         if (leaseDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseDuration));
+        if (_store.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
+            throw new InvalidOperationException("Groundwork alteration-job claims require cross-unit atomic transactions.");
 
         for (var attempt = 0; attempt < TransitionAttempts; attempt++)
         {
-            var candidates = await Queries.QueryAsync(
-                new DocumentQuery(
-                    ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
-                    ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, now.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)))],
-                    [
-                        new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending),
-                        new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)
-                    ],
-                    take: 1),
-                cancellationToken);
-            var envelope = candidates.Documents.FirstOrDefault();
-            if (envelope is null)
+            var sawConcurrencyConflict = false;
+            var observedPlan = await RequirePlanAsync(planId, cancellationToken);
+            if (observedPlan.Status is not (WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running or WorkflowAlterationPlanStatus.Cancelling))
                 return null;
-            var document = _serializer.Deserialize<WorkflowAlterationJobDocument>(envelope);
-            var job = document.Job;
-            _accessContextAccessor.Current.EnsureTenantScope(job.TenantPartition);
-            var plan = await FindPlanAsync(job.PlanId, cancellationToken);
-            if (plan is null || plan.Status is not (WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running))
-                continue;
-            if (job.Status is not WorkflowAlterationJobStatus.Pending and not WorkflowAlterationJobStatus.Running ||
-                job.Claim is { ExpiresAt: var expiresAt } && expiresAt > now)
-                continue;
-
-            if (plan.Status == WorkflowAlterationPlanStatus.Queued)
-                await UpdatePlanAsync(
-                    plan.PlanId,
-                    current => current.Status == WorkflowAlterationPlanStatus.Queued
-                        ? CopyPlan(current, status: WorkflowAlterationPlanStatus.Running, startedAt: current.StartedAt ?? now, revision: current.Revision + 1)
-                        : current,
+            var reclaimOnly = observedPlan.Status == WorkflowAlterationPlanStatus.Cancelling;
+            // Reconcile in-flight work before admitting new work. A successful re-claim grants a fresh lease, so
+            // pending jobs become eligible again while that actor remains non-due.
+            var candidateRoutes = reclaimOnly
+                ? new[] { (WorkflowAlterationJobStatus.Running, ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery) }
+                : new[]
+                {
+                    (WorkflowAlterationJobStatus.Running, ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery),
+                    (WorkflowAlterationJobStatus.Pending, ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery)
+                };
+            foreach (var (expectedStatus, queryIdentity) in candidateRoutes)
+            {
+                var candidates = await Queries.QueryAsync(
+                    new DocumentQuery(
+                        ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                        queryIdentity,
+                        [
+                            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField,
+                                planId)),
+                            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                                ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField,
+                                expectedStatus.ToString())),
+                            DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                                ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField,
+                                now.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)))
+                        ],
+                        [
+                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, PhysicalSortDirection.Ascending),
+                            new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField, PhysicalSortDirection.Ascending)
+                        ],
+                        take: ElsaGroundworkQueryRoutes.MaximumResultCount),
                     cancellationToken);
+                foreach (var envelope in candidates.Documents)
+                {
+                    var document = _serializer.Deserialize<WorkflowAlterationJobDocument>(envelope);
+                    if (!StringComparer.Ordinal.Equals(document.Job.PlanId, planId))
+                        throw new InvalidOperationException($"Groundwork claim query returned job '{document.Job.JobId}' for a different alteration plan.");
 
-            var claim = new WorkflowAlterationJobClaim(ownerId, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), now + leaseDuration);
-            var claimed = CopyJob(job, status: WorkflowAlterationJobStatus.Running, claim: claim, attemptCount: job.AttemptCount + 1, startedAt: job.StartedAt ?? now, revision: job.Revision + 1);
-            var saved = await SaveJobAsync(_store, claimed, envelope.Version, cancellationToken);
-            if (saved.Status == DocumentStoreWriteStatus.Saved)
-                return claimed;
-            if (saved.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
-                throw Rejected("claim", job.JobId, saved);
+                    await using var unit = await _store.BeginAsync(
+                        DocumentCommitScope.Of(
+                            ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
+                            ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind),
+                        cancellationToken);
+                    var transactional = new GroundworkDocumentUnitOfWorkStore(_store, unit);
+                    var loadedPlan = await LoadPlanAsync(transactional, planId, cancellationToken);
+                    var loadedJob = await LoadJobAsync(transactional, document.Job.JobId, cancellationToken);
+                    if (loadedPlan is null || loadedJob is null)
+                        continue;
+
+                    var plan = loadedPlan.Value.Document.Plan;
+                    var job = loadedJob.Value.Document.Job;
+                    _accessContextAccessor.Current.EnsureTenantScope(plan.AuthorityScope.TenantPartition);
+                    _accessContextAccessor.Current.EnsureTenantScope(job.TenantPartition);
+                    if (!StringComparer.Ordinal.Equals(job.PlanId, planId) ||
+                        job.Status != expectedStatus ||
+                        plan.Status is not (WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running) &&
+                        (plan.Status != WorkflowAlterationPlanStatus.Cancelling || job.Status != WorkflowAlterationJobStatus.Running) ||
+                        job.Claim is { ExpiresAt: var expiresAt } && expiresAt > now)
+                    {
+                        continue;
+                    }
+
+                    if (plan.Status == WorkflowAlterationPlanStatus.Queued)
+                    {
+                        var runningPlan = CopyPlan(plan, status: WorkflowAlterationPlanStatus.Running, startedAt: plan.StartedAt ?? now, revision: plan.Revision + 1);
+                        var planSaved = await SavePlanAsync(transactional, runningPlan, loadedPlan.Value.Envelope.Version, cancellationToken);
+                        if (planSaved.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                        {
+                            sawConcurrencyConflict = true;
+                            break;
+                        }
+                        if (planSaved.Status != DocumentStoreWriteStatus.Saved)
+                            throw Rejected("claim plan", plan.PlanId, planSaved);
+                    }
+
+                    var claim = new WorkflowAlterationJobClaim(ownerId, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), now + leaseDuration);
+                    var claimed = CopyJob(job, status: WorkflowAlterationJobStatus.Running, claim: claim, attemptCount: job.AttemptCount + 1, startedAt: job.StartedAt ?? now, revision: job.Revision + 1);
+                    var jobSaved = await SaveJobAsync(transactional, claimed, loadedJob.Value.Envelope.Version, cancellationToken);
+                    if (jobSaved.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                    {
+                        sawConcurrencyConflict = true;
+                        break;
+                    }
+                    if (jobSaved.Status != DocumentStoreWriteStatus.Saved)
+                        throw Rejected("claim", job.JobId, jobSaved);
+                    await unit.CommitAsync(cancellationToken);
+                    return claimed;
+                }
+                if (sawConcurrencyConflict)
+                    break;
+            }
+            if (!sawConcurrencyConflict)
+                return null;
         }
         return null;
     }
@@ -443,26 +572,23 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
         var plan = await RequirePlanAsync(planId, cancellationToken);
         if (IsTerminal(plan.Status) || plan.SealedAt is null)
             return plan;
-        var jobs = new List<WorkflowAlterationJobState>();
-        string? cursor = null;
-        do
-        {
-            var page = await PageJobsAsync(planId, ElsaGroundworkQueryRoutes.MaximumResultCount, cursor, cancellationToken);
-            jobs.AddRange(page.Items);
-            cursor = page.NextCursor;
-        } while (cursor is not null);
-        if (jobs.Any(job => job.Status is WorkflowAlterationJobStatus.Pending or WorkflowAlterationJobStatus.Running))
+        var counts = await GetJobCountsAsync(planId, cancellationToken);
+        if (counts.Pending > 0 || counts.Running > 0)
             return plan;
-        var succeeded = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Succeeded);
-        var failed = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Failed);
-        var cancelled = jobs.LongCount(job => job.Status == WorkflowAlterationJobStatus.Cancelled);
-        var status = plan.Status == WorkflowAlterationPlanStatus.Cancelling
-            ? WorkflowAlterationPlanStatus.Cancelled
-            : failed > 0 ? WorkflowAlterationPlanStatus.CompletedWithFailures : WorkflowAlterationPlanStatus.Completed;
         return await UpdatePlanAsync(planId, current =>
             IsTerminal(current.Status)
                 ? current
-                : CopyPlan(current, status: status, targetCount: jobs.Count, succeededJobCount: succeeded, failedJobCount: failed, cancelledJobCount: cancelled, completedAt: now, revision: current.Revision + 1), cancellationToken);
+                : CopyPlan(
+                    current,
+                    status: current.Status == WorkflowAlterationPlanStatus.Cancelling
+                        ? WorkflowAlterationPlanStatus.Cancelled
+                        : counts.Failed > 0 ? WorkflowAlterationPlanStatus.CompletedWithFailures : WorkflowAlterationPlanStatus.Completed,
+                    targetCount: counts.Total,
+                    succeededJobCount: counts.Succeeded,
+                    failedJobCount: counts.Failed,
+                    cancelledJobCount: counts.Cancelled,
+                    completedAt: now,
+                    revision: current.Revision + 1), cancellationToken);
     }
 
     private async ValueTask<WorkflowAlterationPlanState> UpdatePlanAsync(string planId, Func<WorkflowAlterationPlanState, WorkflowAlterationPlanState> transition, CancellationToken cancellationToken)
@@ -500,14 +626,7 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
             if (observed.Status is not (WorkflowAlterationPlanStatus.CapturingTargets or WorkflowAlterationPlanStatus.Cancelling) || observed.SealedAt is not null)
                 return observed;
 
-            var jobs = new List<WorkflowAlterationJobState>();
-            string? cursor = null;
-            do
-            {
-                var page = await PageJobsAsync(planId, ElsaGroundworkQueryRoutes.MaximumResultCount, cursor, cancellationToken);
-                jobs.AddRange(page.Items);
-                cursor = page.NextCursor;
-            } while (cursor is not null);
+            var page = await PageJobsAsync(planId, UnsealedCleanupPageSize, cancellationToken: cancellationToken);
 
             await using var unit = await _store.BeginAsync(
                 DocumentCommitScope.Of(
@@ -518,15 +637,20 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
             var loadedPlan = await LoadPlanAsync(transactional, planId, cancellationToken)
                 ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found.");
             var current = loadedPlan.Document.Plan;
-            if (current.Revision != observed.Revision ||
-                current.Status is not (WorkflowAlterationPlanStatus.CapturingTargets or WorkflowAlterationPlanStatus.Cancelling) ||
-                current.SealedAt is not null)
+            _accessContextAccessor.Current.EnsureTenantScope(current.AuthorityScope.TenantPartition);
+            if (current.Revision != observed.Revision || current.SealedAt is not null ||
+                current.Status is not (WorkflowAlterationPlanStatus.CapturingTargets or WorkflowAlterationPlanStatus.Cancelling))
             {
                 continue;
             }
 
+            var cleanup = loadedPlan.Document.UnsealedCaptureCleanup ??
+                          (current.Status == WorkflowAlterationPlanStatus.Cancelling && current.CancellationRequestedAt is { } requestedAt
+                              ? new WorkflowAlterationUnsealedCaptureCleanup(WorkflowAlterationPlanStatus.Cancelled, null, requestedAt)
+                              : new WorkflowAlterationUnsealedCaptureCleanup(terminalStatus, safeFailure, completedAt));
             var retry = false;
-            foreach (var candidate in jobs)
+            var deletedCount = 0L;
+            foreach (var candidate in page.Items)
             {
                 var loadedJob = await LoadJobAsync(transactional, candidate.JobId, cancellationToken);
                 if (loadedJob is null)
@@ -539,29 +663,49 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
                     retry = true;
                     break;
                 }
+                deletedCount++;
             }
             if (retry)
                 continue;
 
-            var terminal = CopyPlan(
-                current,
-                status: terminalStatus,
-                changeCaptureCursor: true,
-                captureCursor: null,
-                capturedSoFar: current.CapturedSoFar,
-                targetCount: 0,
-                succeededJobCount: 0,
-                failedJobCount: 0,
-                cancelledJobCount: 0,
-                completedAt: completedAt,
-                cancellationRequestedAt: terminalStatus == WorkflowAlterationPlanStatus.Cancelled ? completedAt : null,
-                safeFailure: safeFailure,
-                revision: current.Revision + 1);
-            var saved = await SavePlanAsync(transactional, terminal, loadedPlan.Envelope.Version, cancellationToken);
+            var deletedTotal = checked(cleanup.DeletedCount + deletedCount);
+            var isComplete = deletedTotal >= current.CapturedSoFar;
+            var updatedCleanup = cleanup with { DeletedCount = deletedTotal };
+            var updated = isComplete
+                ? CopyPlan(
+                    current,
+                    status: cleanup.TerminalStatus,
+                    changeCaptureCursor: true,
+                    captureCursor: null,
+                    capturedSoFar: current.CapturedSoFar,
+                    targetCount: 0,
+                    succeededJobCount: 0,
+                    failedJobCount: 0,
+                    cancelledJobCount: 0,
+                    completedAt: cleanup.CompletedAt,
+                    cancellationRequestedAt: cleanup.TerminalStatus == WorkflowAlterationPlanStatus.Cancelled ? cleanup.CompletedAt : null,
+                    safeFailure: cleanup.SafeFailure,
+                    revision: current.Revision + 1)
+                : CopyPlan(
+                    current,
+                    status: WorkflowAlterationPlanStatus.Cancelling,
+                    cancellationRequestedAt: cleanup.TerminalStatus == WorkflowAlterationPlanStatus.Cancelled ? cleanup.CompletedAt : null,
+                    revision: current.Revision + 1);
+            var document = WorkflowAlterationPlanDocument.From(
+                updated,
+                loadedPlan.Document.ActiveOrderKey,
+                isComplete ? null : updatedCleanup);
+            var saved = await SaveAsync(
+                transactional,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
+                PhysicalId(planId),
+                document,
+                loadedPlan.Envelope.Version,
+                cancellationToken);
             if (saved.Status != DocumentStoreWriteStatus.Saved)
                 continue;
             await unit.CommitAsync(cancellationToken);
-            return terminal;
+            return updated;
         }
 
         throw new WorkflowAlterationConcurrencyException(planId);
@@ -620,8 +764,22 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
         return (envelope, document);
     }
 
-    private Task<DocumentStoreWriteResult> SavePlanAsync(IDocumentStore store, WorkflowAlterationPlanState plan, long expectedVersion, CancellationToken cancellationToken) =>
-        SaveAsync(store, ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, PhysicalId(plan.PlanId), WorkflowAlterationPlanDocument.From(plan), expectedVersion, cancellationToken);
+    private async Task<DocumentStoreWriteResult> SavePlanAsync(IDocumentStore store, WorkflowAlterationPlanState plan, long expectedVersion, CancellationToken cancellationToken)
+    {
+        var existing = expectedVersion == 0
+            ? null
+            : await LoadPlanAsync(store, plan.PlanId, cancellationToken);
+        return await SaveAsync(
+            store,
+            ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
+            PhysicalId(plan.PlanId),
+            WorkflowAlterationPlanDocument.From(
+                plan,
+                existing?.Document.ActiveOrderKey,
+                existing?.Document.UnsealedCaptureCleanup),
+            expectedVersion,
+            cancellationToken);
+    }
 
     private Task<DocumentStoreWriteResult> SaveJobAsync(IDocumentStore store, WorkflowAlterationJobState job, long expectedVersion, CancellationToken cancellationToken) =>
         SaveAsync(store, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, PhysicalId(job.JobId), WorkflowAlterationJobDocument.From(job), expectedVersion, cancellationToken);
@@ -658,6 +816,12 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
 
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
     private static bool IsTerminal(WorkflowAlterationJobStatus status) => status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled;
+    private static string NextActivePlanOrderKey(string current, DateTimeOffset servicedAt, string planId)
+    {
+        var separator = current.IndexOf(':', StringComparison.Ordinal);
+        var currentTicks = long.Parse(current.AsSpan(0, separator), CultureInfo.InvariantCulture);
+        return $"{Math.Max(servicedAt.UtcTicks, checked(currentTicks + 1)):D19}:{planId}";
+    }
     private static bool OutcomesEqual(IReadOnlyList<WorkflowAlterationOutcome> left, IReadOnlyCollection<WorkflowAlterationOutcome> right) =>
         left.Count == right.Count && left.Zip(right.OrderBy(outcome => outcome.Ordinal)).All(pair =>
             pair.First.Ordinal == pair.Second.Ordinal &&
@@ -684,17 +848,37 @@ public sealed class GroundworkWorkflowAlterationStore : IWorkflowAlterationStore
         new(job.JobId, job.PlanId, job.WorkflowExecutionId, job.TenantPartition, job.CaptureOrdinal, status ?? job.Status, claim, attemptCount ?? job.AttemptCount, (outcomes ?? job.Outcomes).ToArray(), checkpointCommitId ?? job.CheckpointCommitId, safeFailure ?? job.SafeFailure, job.CreatedAt, startedAt ?? job.StartedAt, completedAt ?? job.CompletedAt, revision ?? job.Revision, job.CapturedConcurrency);
 }
 
-internal sealed record WorkflowAlterationPlanDocument(string Collection, string PlanId, string TenantPartition, string IdempotencyKeyHash, string TenantIdempotencyKey, string Status, WorkflowAlterationPlanState Plan)
+internal sealed record WorkflowAlterationPlanDocument(
+    string Collection,
+    string PlanId,
+    string TenantPartition,
+    string IdempotencyKeyHash,
+    string TenantIdempotencyKey,
+    string Status,
+    string ActiveOrderKey,
+    WorkflowAlterationPlanState Plan,
+    WorkflowAlterationUnsealedCaptureCleanup? UnsealedCaptureCleanup = null)
 {
-    public static WorkflowAlterationPlanDocument From(WorkflowAlterationPlanState plan) => new(
+    public static WorkflowAlterationPlanDocument From(
+        WorkflowAlterationPlanState plan,
+        string? activeOrderKey = null,
+        WorkflowAlterationUnsealedCaptureCleanup? unsealedCaptureCleanup = null) => new(
         ElsaRuntimeStorageManifest.WorkflowAlterationPlanCollection,
         plan.PlanId,
         plan.AuthorityScope.TenantPartition,
         plan.IdempotencyKeyHash,
         plan.AuthorityScope.TenantPartition + "\u001f" + plan.IdempotencyKeyHash,
         plan.Status.ToString(),
-        plan);
+        activeOrderKey ?? $"{plan.CreatedAt.UtcTicks:D19}:{plan.PlanId}",
+        plan,
+        unsealedCaptureCleanup);
 }
+
+internal sealed record WorkflowAlterationUnsealedCaptureCleanup(
+    WorkflowAlterationPlanStatus TerminalStatus,
+    WorkflowAlterationSafeFailure? SafeFailure,
+    DateTimeOffset CompletedAt,
+    long DeletedCount = 0);
 
 internal sealed record WorkflowAlterationJobDocument(string JobId, string PlanId, long CaptureOrdinal, DateTimeOffset? ClaimableAt, string Status, string? CheckpointCommitId, WorkflowAlterationJobState Job)
 {

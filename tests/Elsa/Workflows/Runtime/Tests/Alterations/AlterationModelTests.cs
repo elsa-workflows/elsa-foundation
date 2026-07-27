@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Xunit;
 
@@ -52,5 +53,23 @@ public sealed class AlterationModelTests
         Assert.Contains("Cancelled", json);
         Assert.DoesNotContain("payload", json, StringComparison.OrdinalIgnoreCase);
         Assert.Throws<ArgumentException>(() => new WorkflowAlterationOutcome(0, "CancelWorkflow", 1, WorkflowAlterationOutcomeStatus.Succeeded, "ok", null, DateTimeOffset.UnixEpoch, new Dictionary<string, string> { ["payload"] = "secret" }));
+    }
+
+    [Fact]
+    public void ExecutionAuthorityPartitionKey_IsUnambiguousAndIncludesMetadata()
+    {
+        var first = WorkflowExecutionAuthoritySnapshot.PartitionKey("system\u001froot", "initiator");
+        var second = WorkflowExecutionAuthoritySnapshot.PartitionKey("system", "root\u001finitiator");
+        var approved = WorkflowExecutionAuthoritySnapshot.PartitionKey(
+            "system",
+            "initiator",
+            new Dictionary<string, string> { ["permission"] = "approved" });
+        var denied = WorkflowExecutionAuthoritySnapshot.PartitionKey(
+            "system",
+            "initiator",
+            new Dictionary<string, string> { ["permission"] = "denied" });
+
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(approved, denied);
     }
 }

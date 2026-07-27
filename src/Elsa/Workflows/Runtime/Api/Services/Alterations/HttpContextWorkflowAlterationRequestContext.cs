@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Microsoft.AspNetCore.Http;
 
@@ -18,16 +19,16 @@ public sealed class HttpContextWorkflowAlterationRequestContext(
     public WorkflowAlterationAuthorityScope AuthorityScope => new(
         TenantPartition,
         SystemIdentity,
-        Subject,
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["authorizationScope"] = TenantPartition
-        });
+        SystemIdentity);
 
     public WorkflowAlterationOperatorProvenance Operator => new(Subject, HttpContext?.TraceIdentifier);
 
     public bool CanAccess(WorkflowAlterationPlanState plan) =>
-        plan is not null && StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, TenantPartition);
+        plan is not null &&
+        StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, TenantPartition) &&
+        StringComparer.Ordinal.Equals(plan.AuthorityScope.SystemIdentity, SystemIdentity) &&
+        StringComparer.Ordinal.Equals(plan.AuthorityScope.RootInitiator, SystemIdentity) &&
+        WorkflowExecutionAuthoritySnapshot.MetadataEquals(plan.AuthorityScope.Metadata, AuthorityScope.Metadata);
 
     private string Subject
     {

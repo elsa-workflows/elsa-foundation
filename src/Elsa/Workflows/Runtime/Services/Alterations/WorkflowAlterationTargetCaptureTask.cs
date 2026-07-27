@@ -84,7 +84,14 @@ public sealed class WorkflowAlterationTargetCaptureTask
         if (plan.Target.Query is { } query)
         {
             var page = await _workflowExecutions.QueryAlterationCapturePageAsync(
-                new WorkflowExecutionAlterationCaptureQuery(plan.AuthorityScope.TenantPartition, query, pageSize, plan.CaptureCursor),
+                new WorkflowExecutionAlterationCaptureQuery(
+                    plan.AuthorityScope.TenantPartition,
+                    plan.AuthorityScope.SystemIdentity,
+                    plan.AuthorityScope.RootInitiator,
+                    plan.AuthorityScope.Metadata,
+                    query,
+                    pageSize,
+                    plan.CaptureCursor),
                 cancellationToken);
             return new CapturePage(
                 await ToCapturedTargetsAsync(page.Items, activityConcurrencyIds, cancellationToken),
@@ -99,9 +106,7 @@ public sealed class WorkflowAlterationTargetCaptureTask
         {
             var state = await _workflowExecutions.FindAsync(executionId, cancellationToken);
             targets.Add(state is not null &&
-                        StringComparer.Ordinal.Equals(
-                            state.TenantId ?? WorkflowExecutionPartition.DefaultValue,
-                            plan.AuthorityScope.TenantPartition)
+                        MatchesAuthority(state, plan.AuthorityScope)
                 ? await ToCapturedTargetAsync(state, activityConcurrencyIds, cancellationToken)
                 : new WorkflowAlterationCapturedTarget(
                     executionId,
@@ -146,8 +151,20 @@ public sealed class WorkflowAlterationTargetCaptureTask
                 WorkflowAlterationCapturedConcurrencyValidator.WorkflowRevision(state),
                 state.RootVariableFrame?.Revision,
                 state.PinnedExecutable,
-                WorkflowAlterationCapturedConcurrencyValidator.CaptureActivities(activities)));
+                WorkflowAlterationCapturedConcurrencyValidator.CaptureActivities(activities),
+                state.Authority));
     }
+
+    private static bool MatchesAuthority(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>
+        StringComparer.Ordinal.Equals(
+            state.TenantId ?? WorkflowExecutionPartition.DefaultValue,
+            scope.TenantPartition) &&
+        state.Authority is { } authority &&
+        WorkflowExecutionAuthoritySnapshot.Matches(
+            authority,
+            scope.SystemIdentity,
+            scope.RootInitiator,
+            scope.Metadata);
 
     private IReadOnlyCollection<string> ReadActivityConcurrencyIds(WorkflowAlterationPlanState plan)
     {

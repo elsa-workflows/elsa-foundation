@@ -23,11 +23,13 @@ public sealed class WorkflowAlterationJobTask
     }
 
     public async ValueTask<IReadOnlyList<WorkflowAlterationActorDispatchResult>> DispatchAvailableAsync(
+        string planId,
         string workerId,
         int maximumClaims,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workerId);
         if (maximumClaims <= 0)
             throw new ArgumentOutOfRangeException(nameof(maximumClaims));
@@ -37,7 +39,7 @@ public sealed class WorkflowAlterationJobTask
         var results = new List<WorkflowAlterationActorDispatchResult>(maximumClaims);
         for (var count = 0; count < maximumClaims; count++)
         {
-            var job = await _store.ClaimNextAsync(workerId, _timeProvider.GetUtcNow(), leaseDuration, cancellationToken);
+            var job = await _store.ClaimNextAsync(planId, workerId, _timeProvider.GetUtcNow(), leaseDuration, cancellationToken);
             if (job is null)
                 break;
             results.Add(await _dispatcher.DispatchAsync(job, cancellationToken));

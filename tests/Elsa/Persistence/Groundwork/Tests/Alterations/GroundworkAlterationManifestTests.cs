@@ -34,6 +34,7 @@ public sealed class GroundworkAlterationManifestTests
         Assert.Contains(job.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationJobByClaimability);
         Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery);
         Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery);
+        Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery);
     }
 
     [Fact]
@@ -66,6 +67,10 @@ public sealed class GroundworkAlterationManifestTests
         Assert.Contains(plan.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery);
         Assert.Contains(job.PhysicalStorage!.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery);
         Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery);
+        Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery);
+        Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery);
+        Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery);
+        Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery);
         Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.CountWorkflowAlterationJobsByPlanAndStatusQuery);
         Assert.Contains(job.PhysicalStorage.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.FindWorkflowAlterationJobByCheckpointCommitIdQuery);
         Assert.Contains(execution.PhysicalStorage!.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery);
@@ -92,7 +97,11 @@ public sealed class GroundworkAlterationManifestTests
         AssertProjectionLength(
             planTable,
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField,
-            ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength);
+            ElsaRuntimeStorageManifest.RuntimeTenantProjectionLength);
+        AssertProjectionLength(
+            planTable,
+            ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField,
+            19 + 1 + ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength);
         AssertProjectionLength(
             planTable,
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField,
@@ -101,6 +110,10 @@ public sealed class GroundworkAlterationManifestTests
             planTable,
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField,
             ElsaRuntimeStorageManifest.RuntimeStatusProjectionLength);
+        AssertProjectionLength(
+            planTable,
+            ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField,
+            ElsaRuntimeStorageManifest.RuntimeTenantProjectionLength + 1 + 64);
         AssertProjectionLength(
             jobTable,
             ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField,
@@ -124,6 +137,15 @@ public sealed class GroundworkAlterationManifestTests
             Assert.DoesNotContain(index.Columns, column => column.ColumnLogicalName == envelope.IdLookupKeyColumn);
             Assert.Equal(envelope.StorageScopeColumn, index.Columns[0].ColumnLogicalName);
         }
+
+        var uniqueAdmission = Assert.Single(
+            plan.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyUniqueness);
+        Assert.True(uniqueAdmission.IsUnique);
+        var uniquePhysical = Assert.Single(
+            planTable.Indexes,
+            index => index.LogicalName == ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyUniqueness);
+        Assert.DoesNotContain(uniquePhysical.Columns, column => column.ColumnLogicalName == envelope.IdLookupKeyColumn);
     }
 
     private static void AssertProjectionLength(

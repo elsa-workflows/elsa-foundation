@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
@@ -10,6 +9,7 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <summary>Admits validated, protected alteration plans with tenant-scoped idempotency before target capture starts.</summary>
 public sealed class WorkflowAlterationPlanService
 {
+    private const int CancellationPageSize = 100;
     private readonly IWorkflowAlterationRegistry _registry;
     private readonly IWorkflowAlterationPayloadProtector _payloadProtector;
     private readonly IWorkflowAlterationStore _store;
@@ -65,8 +65,9 @@ public sealed class WorkflowAlterationPlanService
     }
 
     /// <summary>
-    /// Requests cooperative cancellation for a sealed cohort. An interrupted capture is terminalized without sealing
-    /// or retaining provisional jobs. A running actor job is deliberately left to finish its checkpoint.
+    /// Requests cooperative cancellation for a sealed cohort. An interrupted capture remains unsealed while its
+    /// non-claimable provisional jobs are deleted in bounded, restartable pages. A running actor job is deliberately
+    /// left to finish its checkpoint.
     /// </summary>
     public async ValueTask<WorkflowAlterationPlanState> CancelAsync(string planId, CancellationToken cancellationToken = default)
     {
@@ -74,7 +75,8 @@ public sealed class WorkflowAlterationPlanService
         var now = _timeProvider.GetUtcNow();
         var current = await _store.FindPlanAsync(planId, cancellationToken)
             ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found.");
-        if (current.Status == WorkflowAlterationPlanStatus.CapturingTargets && current.SealedAt is null)
+        if ((current.Status is WorkflowAlterationPlanStatus.CapturingTargets or WorkflowAlterationPlanStatus.Cancelling) &&
+            current.SealedAt is null)
         {
             current = await _store.CancelUnsealedCaptureAsync(planId, now, cancellationToken);
             if (current.SealedAt is null || IsTerminal(current.Status))
@@ -91,7 +93,7 @@ public sealed class WorkflowAlterationPlanService
             return await _store.CancelUnsealedCaptureAsync(plan.PlanId, now, cancellationToken);
 
         var skippedOutcomes = CreateCancellationOutcomes(plan, now);
-        await _store.CancelPendingJobsAsync(plan.PlanId, skippedOutcomes, now, cancellationToken);
+        await _store.CancelPendingJobsAsync(plan.PlanId, skippedOutcomes, now, CancellationPageSize, cancellationToken);
         return await _store.ReconcileAsync(plan.PlanId, now, cancellationToken);
     }
 
@@ -120,22 +122,15 @@ public sealed class WorkflowAlterationPlanService
         WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or
         WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
 
-    private IReadOnlyCollection<WorkflowAlterationOutcome> CreateCancellationOutcomes(
+    private static IReadOnlyCollection<WorkflowAlterationOutcome> CreateCancellationOutcomes(
         WorkflowAlterationPlanState plan,
         DateTimeOffset recordedAt)
     {
-        var plaintext = _payloadProtector.Unprotect(
-            plan.PlanId,
-            plan.AuthorityScope.TenantPartition,
-            plan.CanonicalRequestHash,
-            plan.ProtectedPayload);
-        using var document = JsonDocument.Parse(plaintext);
-        return document.RootElement.GetProperty("alterations")
-            .EnumerateArray()
-            .Select((item, ordinal) => new WorkflowAlterationOutcome(
+        return plan.AlterationDescriptors
+            .Select((descriptor, ordinal) => new WorkflowAlterationOutcome(
                 ordinal,
-                item.GetProperty("kind").GetString()!,
-                item.GetProperty("schemaVersion").GetInt32(),
+                descriptor.Kind,
+                descriptor.SchemaVersion,
                 WorkflowAlterationOutcomeStatus.Skipped,
                 "PlanCancelled",
                 "Not applied because the plan was cancelled before this target entered actor execution.",

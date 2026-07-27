@@ -21,7 +21,7 @@ public sealed class WorkflowAlterationQueryRouteCatalogTests
             .ThenBy(pair => pair.Physical.Identity, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(9, routes.Length);
+        Assert.Equal(13, routes.Length);
         Assert.All(routes, pair =>
         {
             Assert.Equal(ElsaGroundworkQueryRoutes.MaximumResultCount, pair.Route.MaximumResultCount);
@@ -36,6 +36,7 @@ public sealed class WorkflowAlterationQueryRouteCatalogTests
             ElsaGroundworkQueryContinuation.Cursor,
             [ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField],
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField),
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField),
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField),
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindField),
@@ -62,15 +63,17 @@ public sealed class WorkflowAlterationQueryRouteCatalogTests
             ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery,
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField,
             ElsaGroundworkQueryContinuation.Cursor,
-            [ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField],
-            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField));
+            [ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
+            GreaterThan(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField));
         AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
             ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery,
             ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndStatus,
             ElsaGroundworkQueryContinuation.Cursor,
-            [ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField],
+            [ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField],
             Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField),
-            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField));
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
+            GreaterThan(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField));
 
         AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
             ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery,
@@ -85,7 +88,37 @@ public sealed class WorkflowAlterationQueryRouteCatalogTests
             [ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
             LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField));
         AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+            ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery,
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanAndClaimability,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField));
+        AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+            ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery,
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanStatusAndClaimability,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField),
+            LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField));
+        AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+            ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery,
+            ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanStatusAndClaimability,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField),
+            LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField));
+        AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
             ElsaRuntimeStorageManifest.CountWorkflowAlterationJobsByPlanAndStatusQuery,
+            "alteration_jobs_counts",
+            ElsaGroundworkQueryContinuation.None,
+            [ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField));
+        AssertRoute(routes, ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+            ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery,
             "alteration_jobs_counts",
             ElsaGroundworkQueryContinuation.None,
             [ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
@@ -119,6 +152,7 @@ public sealed class WorkflowAlterationQueryRouteCatalogTests
     }
 
     private static ExpectedPredicate Equal(string path) => new(path, [PortableQueryOperation.Equal]);
+    private static ExpectedPredicate GreaterThan(string path) => new(path, [PortableQueryOperation.GreaterThan]);
     private static ExpectedPredicate GreaterThanOrEqual(string path) => new(path, [PortableQueryOperation.GreaterThanOrEqual]);
     private static ExpectedPredicate LessThanOrEqual(string path) => new(path, [PortableQueryOperation.LessThanOrEqual]);
 

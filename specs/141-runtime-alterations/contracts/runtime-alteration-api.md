@@ -128,6 +128,11 @@ The response carries `Location` with the `self` link.
     "cancelled": 0
   },
   "failure": null,
+  "submittedBy": {
+    "subject": "operator-42",
+    "correlationId": "request-...",
+    "displayName": null
+  },
   "links": {}
 }
 ```
@@ -149,7 +154,7 @@ backoff; a non-retryable orchestration failure becomes `Failed`.
 
 ## Job paging and order
 
-`GET .../jobs/page?take=25&cursor=...` defaults to 25 and clamps at 100. The opaque cursor is scoped to
+`GET .../jobs/page?take=25&cursor=...` defaults to 25 and rejects values above 100. The opaque cursor is scoped to
 the plan and invalid under another plan. Order is `captureOrdinal` ascending, then `jobId` ordinal.
 Execution-state changes never affect order.
 
@@ -189,6 +194,11 @@ Stable job states:
     "code": "AlterationPreflightFailed",
     "message": "The requested alteration is not valid for the current execution."
   },
+  "submittedBy": {
+    "subject": "operator-42",
+    "correlationId": "request-...",
+    "displayName": null
+  },
   "outcomes": [
     {
       "ordinal": 0,
@@ -197,7 +207,8 @@ Stable job states:
       "status": "Failed",
       "code": "VariableRevisionConflict",
       "message": "The captured variable frame is no longer current.",
-      "recordedAt": "..."
+      "recordedAt": "...",
+      "structuralMetadata": {}
     },
     {
       "ordinal": 1,
@@ -206,7 +217,8 @@ Stable job states:
       "status": "Skipped",
       "code": "SkippedAfterPreflightFailure",
       "message": "Not applied because an earlier alteration failed preflight.",
-      "recordedAt": "..."
+      "recordedAt": "...",
+      "structuralMetadata": {}
     }
   ]
 }
@@ -214,6 +226,8 @@ Stable job states:
 
 If complete preflight fails at ordinal N, ordinals before N are also `Skipped` with
 `NotAppliedDueToPreflightFailure`; they are never labelled successful because no mutation committed.
+Plan and individual-job reads include the safe submitting-operator provenance (subject, correlation,
+and optional display name), but never authentication or session material.
 
 ## Cancellation
 
@@ -231,7 +245,7 @@ Cancellation stops capture or pending jobs. A running job finishes its atomic ch
 | 400 | Malformed JSON/header/path/cursor or invalid page syntax |
 | 401/403 | Framework authentication/permission result |
 | 404 | Missing or inaccessible plan/job |
-| 409 | Idempotency content conflict or job/plan path mismatch |
+| 409 | Idempotency content conflict |
 | 422 | Unknown kind/version, invalid selector/query, invalid built-in payload, or invalid alteration composition |
 | 429 | Admission backpressure before plan creation; includes `Retry-After` |
 | 500 | Unexpected error; ProblemDetails contains no raw exception |

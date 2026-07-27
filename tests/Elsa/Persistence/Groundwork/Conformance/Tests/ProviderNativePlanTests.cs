@@ -51,7 +51,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(75, declared.Length);
+        Assert.Equal(79, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -188,7 +188,7 @@ public sealed class ProviderNativePlanTests
                 }
             }
 
-            Assert.Equal(65, results.Count);
+            Assert.Equal(69, results.Count);
             Assert.Equal(
                 results.Count,
                 results.Select(result => RouteKey(
@@ -754,7 +754,7 @@ public sealed class ProviderNativePlanTests
                 ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
                 ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery,
                 [Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, capturingTargets)],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField)]),
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField)]),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
                 ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery,
@@ -762,7 +762,7 @@ public sealed class ProviderNativePlanTests
                     Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField, TenantId),
                     Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField, capturingTargets)
                 ],
-                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField)]),
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField)]),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
                 ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery,
@@ -779,6 +779,41 @@ public sealed class ProviderNativePlanTests
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)
                 ]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, "alteration-plan-id"),
+                    LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, now)
+                ],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)
+                ]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, "alteration-plan-id"),
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, WorkflowAlterationJobStatus.Running.ToString()),
+                    LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, now)
+                ],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)
+                ]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, "alteration-plan-id"),
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, pendingAlterationJob),
+                    LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField, now)
+                ],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)
+                ]),
             new DocumentQuery(
                 ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
                 ElsaRuntimeStorageManifest.CountWorkflowAlterationJobsByPlanAndStatusQuery,
@@ -789,6 +824,15 @@ public sealed class ProviderNativePlanTests
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)],
                 take: 1,
                 resultOperation: BoundedQueryResultOperation.Count),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+                ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField, "alteration-plan-id"),
+                    Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField, pendingAlterationJob)
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField)],
+                take: 100),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
                 ElsaRuntimeStorageManifest.FindWorkflowAlterationJobByCheckpointCommitIdQuery,
@@ -923,7 +967,12 @@ public sealed class ProviderNativePlanTests
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
                 ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery,
-                [Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField, TenantId)],
+                [
+                    Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField, TenantId),
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
+                        "alteration-authority-partition")
+                ],
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)]),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,

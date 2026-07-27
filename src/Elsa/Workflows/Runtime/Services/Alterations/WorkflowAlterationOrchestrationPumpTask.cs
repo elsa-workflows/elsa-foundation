@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,8 @@ public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
     private readonly IOptions<WorkflowAlterationOrchestrationOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<WorkflowAlterationOrchestrationPumpTask> _logger;
+    private readonly ConcurrentDictionary<string, string> _scopeCursors = new(StringComparer.Ordinal);
+    private string? _directCursor;
     private int _consecutiveFailures;
 
     [ActivatorUtilitiesConstructor]
@@ -69,15 +72,21 @@ public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
         {
             if (_scopeRunner is null)
             {
-                await _directSweep!.ExecuteAsync(options, workerId, cancellationToken);
+                var result = await _directSweep!.ExecuteAsync(options, workerId, _directCursor, cancellationToken);
+                _directCursor = result.NextCursor;
             }
             else
             {
-                await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
+                await _scopeRunner.RunAsync(async (scope, operationScope, operationCancellationToken) =>
                 {
-                    await operationScope.ServiceProvider
+                    _scopeCursors.TryGetValue(scope.Value, out var cursor);
+                    var result = await operationScope.ServiceProvider
                         .GetRequiredService<WorkflowAlterationOrchestrationSweep>()
-                        .ExecuteAsync(options, workerId, operationCancellationToken);
+                        .ExecuteAsync(options, workerId, cursor, operationCancellationToken);
+                    if (result.NextCursor is null)
+                        _scopeCursors.TryRemove(scope.Value, out _);
+                    else
+                        _scopeCursors[scope.Value] = result.NextCursor;
                 }, cancellationToken);
             }
 

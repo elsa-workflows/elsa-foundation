@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
@@ -128,6 +129,12 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
         var after = query.Cursor is null ? null : DecodeAlterationCaptureCursor(query.Cursor, query);
         var items = states
             .Where(state => StringComparer.Ordinal.Equals(state.TenantId, query.TenantPartition))
+            .Where(state => state.Authority is { } authority &&
+                            WorkflowExecutionAuthoritySnapshot.Matches(
+                                authority,
+                                query.SystemIdentity,
+                                query.RootInitiator,
+                                query.AuthorityMetadata))
             .Where(state => MatchesAlterationSelector(state, query.Selector))
             .OrderBy(state => state.TenantId, StringComparer.Ordinal)
             .ThenBy(state => state.WorkflowExecutionId, StringComparer.Ordinal)
@@ -183,17 +190,24 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
     }
 
     private static string AlterationCaptureScope(WorkflowExecutionAlterationCaptureQuery query) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('|',
+        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
             query.TenantPartition,
+            query.SystemIdentity,
+            query.RootInitiator,
+            query.AuthorityPartitionKey,
+            AuthorityMetadata = query.AuthorityMetadata.OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                .Select(entry => new { entry.Key, entry.Value }),
             query.Selector.DefinitionId,
             query.Selector.Status,
             query.Selector.RunKind,
-            query.Selector.From?.UtcTicks,
-            query.Selector.To?.UtcTicks,
+            FromTicks = query.Selector.From?.UtcTicks,
+            ToTicks = query.Selector.To?.UtcTicks,
             query.Selector.CorrelationId,
             query.Selector.WorkflowExecutionId,
             query.Selector.ArtifactId,
-            query.Selector.MatchAllAuthorized))));
+            query.Selector.MatchAllAuthorized
+        })));
 
     private static string EncodeCursor(
         WorkflowExecutionState state,

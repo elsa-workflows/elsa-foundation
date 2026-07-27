@@ -58,8 +58,8 @@ Rules:
 CapturingTargets
   -> Queued                         capture sealed with targets
   -> Completed                      capture sealed with zero targets
-  -> Cancelling -> Cancelled        cancelled before seal
-  -> Failed                         non-retryable capture failure
+  -> Cancelling -> Cancelled        bounded provisional-job cleanup after cancellation
+               -> Failed           bounded provisional-job cleanup after capture failure
 
 Queued
   -> Running                        first job claimed

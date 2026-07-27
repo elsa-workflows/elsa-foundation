@@ -133,7 +133,7 @@ Notes for the CShells maintainer:
 
 ## Interim (until the hook lands)
 
-Unit 2 sizing continues to use: the whole-activation wall (spec-129 instrument) + the deterministic 922-op schema
+Unit 2 sizing continues to use: the whole-activation wall (spec-129 instrument) + the deterministic 930-op schema
 count (`ColdStartSchemaOperationCountTests`) + targeted timing added temporarily inside the specific initializers
 under investigation. Opt-in eager activation (spec 132) does **not** depend on this hook — it moves the whole wall
 off the request path regardless of per-initializer visibility.

@@ -26,6 +26,7 @@ public sealed record WorkflowAlterationPlanView(
     IReadOnlyCollection<WorkflowAlterationDescriptorView> Alterations,
     WorkflowAlterationPlanCountsView Counts,
     WorkflowAlterationFailureView? Failure,
+    WorkflowAlterationOperatorProvenanceView SubmittedBy,
     WorkflowAlterationLinksView Links);
 
 public sealed record WorkflowAlterationPlanCancellationView(WorkflowAlterationPlanView Plan, bool IsTerminalNoOp);
@@ -96,11 +97,13 @@ public sealed record WorkflowAlterationJobView(
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
     WorkflowAlterationFailureView? Failure,
+    WorkflowAlterationOperatorProvenanceView SubmittedBy,
     IReadOnlyCollection<WorkflowAlterationOutcomeView> Outcomes)
 {
-    public static WorkflowAlterationJobView From(WorkflowAlterationJobState job) =>
+    public static WorkflowAlterationJobView From(WorkflowAlterationJobState job, WorkflowAlterationOperatorProvenance submittedBy) =>
         new(job.JobId, job.PlanId, job.WorkflowExecutionId, job.Status.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
-            WorkflowAlterationFailureView.From(job.SafeFailure), job.Outcomes.Select(WorkflowAlterationOutcomeView.From).ToArray());
+            WorkflowAlterationFailureView.From(job.SafeFailure), WorkflowAlterationOperatorProvenanceView.From(submittedBy),
+            job.Outcomes.Select(WorkflowAlterationOutcomeView.From).ToArray());
 }
 
 public sealed record WorkflowAlterationOutcomeView(
@@ -121,6 +124,13 @@ public sealed record WorkflowAlterationFailureView(string Code, string? Message)
 {
     public static WorkflowAlterationFailureView? From(WorkflowAlterationSafeFailure? failure) =>
         failure is null ? null : new(failure.Code, failure.Message);
+}
+
+/// <summary>Safe submitting-operator audit evidence; it contains no authentication token or session material.</summary>
+public sealed record WorkflowAlterationOperatorProvenanceView(string Subject, string? CorrelationId, string? DisplayName)
+{
+    public static WorkflowAlterationOperatorProvenanceView From(WorkflowAlterationOperatorProvenance provenance) =>
+        new(provenance.Subject, provenance.CorrelationId, provenance.DisplayName);
 }
 
 public sealed record WorkflowAlterationLinksView(string Self, string JobsPage, string Cancel)

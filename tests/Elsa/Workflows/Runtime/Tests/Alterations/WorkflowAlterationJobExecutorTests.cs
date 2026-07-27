@@ -92,7 +92,55 @@ public sealed class WorkflowAlterationJobExecutorTests
         Assert.Equal(1, checkpointWriter.CommitCount);
     }
 
-    private static WorkflowAlterationJobExecutionRequest NewRequest(string jobId, params WorkflowAlterationEnvelope[] envelopes)
+    [Fact]
+    public async Task ExecuteAsync_RejectsCapturedAuthorityMetadataThatChangedBeforePreflight()
+    {
+        var handler = new RecordingHandler("Contoso.First", stageValue: "first");
+        var checkpointWriter = new RecordingCheckpointWriter();
+        var executor = new WorkflowAlterationJobExecutor(new DictionaryHandlerResolver(handler), checkpointWriter, TimeProvider.System);
+        var capturedAuthority = new WorkflowExecutionAuthoritySnapshot(
+            "system",
+            "operator",
+            new Dictionary<string, string> { ["permission"] = "approved" });
+        var workflow = new WorkflowExecutionState(
+            "workflow-job-1",
+            new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running,
+            null,
+            Now,
+            Now,
+            Now,
+            null,
+            null,
+            null,
+            "tenant-a",
+            new Dictionary<string, string>())
+        {
+            Authority = new WorkflowExecutionAuthoritySnapshot(
+                "system",
+                "operator",
+                new Dictionary<string, string> { ["permission"] = "revoked" })
+        };
+        var result = await executor.ExecuteAsync(NewRequestWithCapturedAuthority(
+            "job-1",
+            new WorkflowAlterationProjectedState([workflow]),
+            new WorkflowAlterationCapturedConcurrency(null, null, null, Authority: capturedAuthority),
+            handler.Envelope));
+
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, result.Job.Status);
+        Assert.Equal("ExecutionAuthorityConflict", Assert.Single(result.Job.Outcomes).Code);
+        Assert.Equal(0, handler.PreflightCount);
+        Assert.Empty(checkpointWriter.AppliedValues);
+    }
+
+    private static WorkflowAlterationJobExecutionRequest NewRequest(string jobId, params WorkflowAlterationEnvelope[] envelopes) =>
+        NewRequestWithCapturedAuthority(jobId, null, null, envelopes);
+
+    private static WorkflowAlterationJobExecutionRequest NewRequestWithCapturedAuthority(
+        string jobId,
+        WorkflowAlterationProjectedState? projectedState = null,
+        WorkflowAlterationCapturedConcurrency? capturedConcurrency = null,
+        params WorkflowAlterationEnvelope[] envelopes)
     {
         var job = new WorkflowAlterationJobState(
             jobId,
@@ -109,9 +157,10 @@ public sealed class WorkflowAlterationJobExecutorTests
             Now,
             Now,
             null,
-            0);
+            0,
+            capturedConcurrency);
 
-        return new WorkflowAlterationJobExecutionRequest(job, envelopes, new WorkflowAlterationProjectedState());
+        return new WorkflowAlterationJobExecutionRequest(job, envelopes, projectedState ?? new WorkflowAlterationProjectedState());
     }
 
     private sealed class RecordingHandler : IWorkflowAlterationPreflightHandler

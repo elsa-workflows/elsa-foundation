@@ -314,7 +314,10 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
         {
             DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
-                query.TenantPartition))
+                query.TenantPartition)),
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
+                query.AuthorityPartitionKey))
         };
         AddEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField, selector.DefinitionId);
         AddEqual(
@@ -368,6 +371,7 @@ internal sealed record WorkflowExecutionStateDocument(
     long HistorySortTicks,
     string HistoryWorkflowExecutionId,
     string? HistoryTenantId,
+    string? HistoryAuthorityPartition,
     string HistoryDefinitionId,
     int HistoryStatus,
     int HistoryRunKind,
@@ -380,6 +384,12 @@ internal sealed record WorkflowExecutionStateDocument(
         WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks,
         state.WorkflowExecutionId,
         state.TenantId,
+        state.Authority is null
+            ? null
+            : WorkflowExecutionAuthoritySnapshot.PartitionKey(
+                state.Authority.SystemIdentity,
+                state.Authority.RootInitiator,
+                state.Authority.Metadata),
         state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
         (int)state.Status,
         (int)state.RunKind,

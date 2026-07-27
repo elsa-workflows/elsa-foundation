@@ -182,10 +182,11 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             var capture = scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>();
             await capture.CaptureNextAsync(planId, 100);
             var jobs = scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>();
-            await jobs.DispatchAvailableAsync("api-test", 100, TimeSpan.FromMinutes(1));
+            await jobs.DispatchAvailableAsync(planId, "api-test", 100, TimeSpan.FromMinutes(1));
         }
 
         await WaitForTerminalJobsAsync(host.Services, planId, 2);
+        string jobId;
         using (var scope = host.Services.CreateScope())
         {
             var workflows = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -194,14 +195,22 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             var store = scope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>();
             var jobs = await store.PageJobsAsync(planId, 100, null);
             Assert.All(jobs.Items, job => Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status));
+            jobId = jobs.Items.First().JobId;
         }
 
         host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
-        using var read = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}");
-        var readBody = await read.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
-        Assert.DoesNotContain("payload", readBody, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("value", readBody, StringComparison.OrdinalIgnoreCase);
+        using var planRead = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}");
+        using var jobRead = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}/jobs/{jobId}");
+        var planBody = await planRead.Content.ReadAsStringAsync();
+        var jobBody = await jobRead.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, planRead.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, jobRead.StatusCode);
+        Assert.DoesNotContain("payload", planBody + jobBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("value", planBody + jobBody, StringComparison.OrdinalIgnoreCase);
+        using var planDocument = JsonDocument.Parse(planBody);
+        using var jobDocument = JsonDocument.Parse(jobBody);
+        Assert.Equal("operator-1", planDocument.RootElement.GetProperty("submittedBy").GetProperty("subject").GetString());
+        Assert.Equal("operator-1", jobDocument.RootElement.GetProperty("submittedBy").GetProperty("subject").GetString());
     }
 
     [Fact]
@@ -231,7 +240,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         using (var scope = host.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>().CaptureNextAsync(planId, 100);
-            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 10, TimeSpan.FromMinutes(1));
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 10, TimeSpan.FromMinutes(1));
         }
         await WaitForTerminalJobsAsync(host.Services, planId, 1);
 
@@ -309,7 +318,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         using (var scope = host.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>().CaptureNextAsync(planId, 100);
-            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 10, TimeSpan.FromMinutes(1));
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 10, TimeSpan.FromMinutes(1));
         }
         await WaitForTerminalJobsAsync(host.Services, planId, 1);
         using (var scope = host.Services.CreateScope())
@@ -476,7 +485,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         if (afterCapture is not null)
             await afterCapture(host.Services);
         using (var scope = host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 10, TimeSpan.FromMinutes(1));
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 10, TimeSpan.FromMinutes(1));
         await WaitForTerminalJobsAsync(host.Services, planId, 1);
 
         var jobId = await ReadOnlyJobIdAsync(host.Services, planId);
@@ -520,7 +529,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
     {
         using var scope = services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>().CaptureNextAsync(planId, 100);
-        await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 100, TimeSpan.FromMinutes(1));
+        await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 100, TimeSpan.FromMinutes(1));
     }
 
     // Alteration actors commit continuations to the durable post-commit outbox. The normal scheduler drain owns
@@ -592,7 +601,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         if (afterCapture is not null)
             await afterCapture(host.Services, source);
         using (var scope = host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 100, TimeSpan.FromMinutes(1));
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 100, TimeSpan.FromMinutes(1));
         await WaitForTerminalJobsAsync(host.Services, planId, 1);
 
         var jobId = await ReadOnlyJobIdAsync(host.Services, planId);
@@ -627,7 +636,8 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(new WorkflowExecutionState(
             executionId, identity, workflowStatus, null, DateTimeOffset.UtcNow, null, DateTimeOffset.UtcNow, null, null, null, "tenant-a", new Dictionary<string, string>())
         {
-            Partition = new WorkflowExecutionPartition("tenant-a")
+            Partition = new WorkflowExecutionPartition("tenant-a"),
+            Authority = new WorkflowExecutionAuthoritySnapshot("runtime-api", "runtime-api")
         });
         await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(ParentActivity(executionId));
     }
@@ -646,7 +656,8 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(new WorkflowExecutionState(
             executionId, identity, WorkflowExecutionStatus.Running, null, DateTimeOffset.UtcNow, null, DateTimeOffset.UtcNow, null, null, null, "tenant-a", new Dictionary<string, string>())
         {
-            Partition = new WorkflowExecutionPartition("tenant-a")
+            Partition = new WorkflowExecutionPartition("tenant-a"),
+            Authority = new WorkflowExecutionAuthoritySnapshot("runtime-api", "runtime-api")
         });
         var source = SourceActivity(executionId, sourceStatus);
         await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(source);
@@ -686,7 +697,11 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             null,
             null,
             "tenant-a",
-            new Dictionary<string, string>()) { Partition = new WorkflowExecutionPartition("tenant-a") });
+            new Dictionary<string, string>())
+        {
+            Partition = new WorkflowExecutionPartition("tenant-a"),
+            Authority = new WorkflowExecutionAuthoritySnapshot("runtime-api", "runtime-api")
+        });
     }
 
     private static async Task AssertMigrationFailureAsync(
@@ -718,7 +733,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             await scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>().CaptureNextAsync(planId, 100);
         await mutateTarget(host.Services, identities.Target);
         using (var scope = host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync("api-test", 10, TimeSpan.FromMinutes(1));
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 10, TimeSpan.FromMinutes(1));
         await WaitForTerminalJobsAsync(host.Services, planId, 1);
 
         using var verificationScope = host.Services.CreateScope();
@@ -745,6 +760,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             null, null, null, "tenant-a", new Dictionary<string, string>())
         {
             Partition = new WorkflowExecutionPartition("tenant-a"),
+            Authority = new WorkflowExecutionAuthoritySnapshot("runtime-api", "runtime-api"),
             PinnedSource = new WorkflowExecutableSourceProvenance("migration-source-ref", "published", "source", null, source.DefinitionId, source.DefinitionVersionId, source.ArtifactVersion, null, null)
         });
         return (source, target);
@@ -774,7 +790,11 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             workflowVariables: [new RuntimeVariableDeclaration("stable-name", "VisibleName", type, policy ?? ValueProtectionPolicy.InstanceInline)]);
         await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var workflow = new WorkflowExecutionState(executionId, identity, WorkflowExecutionStatus.Running, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow, null, null, null, "tenant-a", new Dictionary<string, string>()) { Partition = new WorkflowExecutionPartition("tenant-a") };
+            DateTimeOffset.UtcNow, null, null, null, "tenant-a", new Dictionary<string, string>())
+        {
+            Partition = new WorkflowExecutionPartition("tenant-a"),
+            Authority = new WorkflowExecutionAuthoritySnapshot("runtime-api", "runtime-api")
+        };
         if (rootFrame)
         {
             workflow = workflow with

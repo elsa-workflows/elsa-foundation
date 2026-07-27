@@ -132,7 +132,7 @@ public sealed class GetWorkflowAlterationJobRequestHandler(
         var job = await store.FindJobAsync(request.JobId, cancellationToken);
         if (job is null || !StringComparer.Ordinal.Equals(job.PlanId, plan.PlanId))
             throw new WorkflowAlterationResourceNotFoundException();
-        return WorkflowAlterationJobView.From(job);
+        return WorkflowAlterationJobView.From(job, plan.SubmittedBy);
     }
 }
 
@@ -187,6 +187,7 @@ internal static class WorkflowAlterationProjection
             Alterations(plan),
             counts,
             WorkflowAlterationFailureView.From(plan.SafeFailure),
+            WorkflowAlterationOperatorProvenanceView.From(plan.SubmittedBy),
             WorkflowAlterationLinksView.For(plan.PlanId));
     }
 

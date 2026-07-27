@@ -18,6 +18,9 @@ internal static class WorkflowAlterationCapturedConcurrencyValidator
         WorkflowAlterationJobState job,
         WorkflowExecutionState workflow)
     {
+        if (ValidateAuthority(job, workflow) is { } authorityConflict)
+            return authorityConflict;
+
         var captured = job.CapturedConcurrency;
         if (captured is null)
             return null; // Plans admitted before captured-concurrency facts existed remain safely compatible.
@@ -26,6 +29,26 @@ internal static class WorkflowAlterationCapturedConcurrencyValidator
         if (captured.PinnedExecutable is not null && !Equals(captured.PinnedExecutable, workflow.PinnedExecutable))
             return new WorkflowAlterationSafeFailure("PinnedExecutableConflict", "The workflow executable changed after target capture.");
         return null;
+    }
+
+    public static WorkflowAlterationSafeFailure? ValidateAuthority(
+        WorkflowAlterationJobState job,
+        WorkflowExecutionState workflow)
+    {
+        var authority = job.CapturedConcurrency?.Authority;
+        if (authority is null)
+            return null;
+        if (workflow.Authority is { } currentAuthority &&
+            WorkflowExecutionAuthoritySnapshot.Matches(
+                currentAuthority,
+                authority.SystemIdentity,
+                authority.RootInitiator,
+                authority.Metadata))
+        {
+            return null;
+        }
+
+        return new WorkflowAlterationSafeFailure("ExecutionAuthorityConflict", "The workflow execution authority changed after target capture.");
     }
 
     public static WorkflowAlterationSafeFailure? ValidateActivity(

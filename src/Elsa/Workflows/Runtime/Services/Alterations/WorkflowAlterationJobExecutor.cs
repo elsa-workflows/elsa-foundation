@@ -58,6 +58,12 @@ public sealed class WorkflowAlterationJobExecutor
         WorkflowAlterationStagingWorkspace staging,
         CancellationToken cancellationToken)
     {
+        if (request.ProjectedState.TryGetOriginal<WorkflowExecutionState>(out var workflow) &&
+            WorkflowAlterationCapturedConcurrencyValidator.ValidateAuthority(request.Job, workflow!) is { } authorityConflict)
+        {
+            return PreflightRun.Failed(0, authorityConflict);
+        }
+
         for (var ordinal = 0; ordinal < request.Envelopes.Count; ordinal++)
         {
             var envelope = request.Envelopes[ordinal];

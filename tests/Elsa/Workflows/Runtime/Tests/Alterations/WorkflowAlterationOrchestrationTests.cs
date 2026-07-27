@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -84,6 +85,73 @@ public sealed class WorkflowAlterationOrchestrationTests
     }
 
     [Fact]
+    public async Task Capture_IsolatesTargetsByExecutionAuthorityWithinTheSameTenant()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(NewExecution("execution-authorized"));
+        await executions.SaveAsync(NewExecution("execution-other") with
+        {
+            Authority = new WorkflowExecutionAuthoritySnapshot("system", "other-root")
+        });
+        var service = NewPlanService(store);
+        var queryPlan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForQuery(new WorkflowAlterationQuerySelector(matchAllAuthorized: true))),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "authority-query");
+        var explicitPlan = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-other"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "authority-explicit");
+        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now));
+
+        await capture.CaptureNextAsync(queryPlan.Plan.PlanId, 10);
+        await capture.CaptureNextAsync(explicitPlan.Plan.PlanId, 10);
+
+        var queryJob = Assert.Single((await store.PageJobsAsync(queryPlan.Plan.PlanId, 10)).Items);
+        var inaccessibleJob = Assert.Single((await store.PageJobsAsync(explicitPlan.Plan.PlanId, 10)).Items);
+        Assert.Equal("execution-authorized", queryJob.WorkflowExecutionId);
+        Assert.Equal("operator", queryJob.CapturedConcurrency!.Authority!.RootInitiator);
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, inaccessibleJob.Status);
+        Assert.Equal("TargetNotFound", inaccessibleJob.SafeFailure!.Code);
+    }
+
+    [Fact]
+    public async Task Capture_IsolatesTargetsByAuthorityMetadataWithinTheSameTenant()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        var approved = new Dictionary<string, string> { ["permission"] = "approved" };
+        await executions.SaveAsync(NewExecution("execution-approved") with
+        {
+            Authority = new WorkflowExecutionAuthoritySnapshot("system", "operator", approved)
+        });
+        await executions.SaveAsync(NewExecution("execution-other") with
+        {
+            Authority = new WorkflowExecutionAuthoritySnapshot(
+                "system",
+                "operator",
+                new Dictionary<string, string> { ["permission"] = "other" })
+        });
+        var service = NewPlanService(store);
+        var submission = new WorkflowAlterationSubmission(
+            new WorkflowAlterationAuthorityScope("tenant-a", "system", "operator", approved),
+            WorkflowAlterationTargetSelector.ForQuery(new WorkflowAlterationQuerySelector(matchAllAuthorized: true)),
+            [new WorkflowAlterationEnvelope("CancelWorkflow", 1, JsonSerializer.SerializeToElement(new { }))]);
+        var plan = await service.SubmitAsync(
+            submission,
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "authority-metadata-query");
+
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now))
+            .CaptureNextAsync(plan.Plan.PlanId, 10);
+
+        var job = Assert.Single((await store.PageJobsAsync(plan.Plan.PlanId, 10)).Items);
+        Assert.Equal("execution-approved", job.WorkflowExecutionId);
+        Assert.Equal("approved", job.CapturedConcurrency!.Authority!.Metadata["permission"]);
+    }
+
+    [Fact]
     public async Task Cancellation_StopsPendingJobsWithSafeSkippedOutcomesAndReconcilesTerminalCounts()
     {
         var store = new InMemoryWorkflowAlterationStore();
@@ -106,6 +174,60 @@ public sealed class WorkflowAlterationOrchestrationTests
         var outcome = Assert.Single(job.Outcomes);
         Assert.Equal(WorkflowAlterationOutcomeStatus.Skipped, outcome.Status);
         Assert.Equal("PlanCancelled", outcome.Code);
+    }
+
+    [Fact]
+    public async Task Cancellation_UsesPersistedDescriptorsWhenProtectedPayloadCannotBeRead()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var service = NewPlanService(store);
+        var admission = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "key-with-unavailable-payload");
+        var captured = await store.CaptureAsync(
+            admission.Plan.PlanId,
+            admission.Plan.Revision,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")],
+            null);
+        await store.SealAsync(captured.PlanId, captured.Revision, Now);
+        var cancellationService = NewPlanService(store, new ThrowingUnprotectPayloadProtector());
+
+        var cancelled = await cancellationService.CancelAsync(admission.Plan.PlanId);
+        var outcome = Assert.Single(Assert.Single((await store.PageJobsAsync(admission.Plan.PlanId, 10)).Items).Outcomes);
+
+        Assert.Equal(WorkflowAlterationPlanStatus.Cancelled, cancelled.Status);
+        Assert.Equal("CancelWorkflow", outcome.Kind);
+        Assert.Equal(1, outcome.SchemaVersion);
+        Assert.Equal("PlanCancelled", outcome.Code);
+    }
+
+    [Fact]
+    public async Task Cancellation_RedeliversAnExpiredRunningJobSoItsAtomicCheckpointCanFinish()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var service = NewPlanService(store);
+        var admission = await service.SubmitAsync(
+            NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1"])),
+            new WorkflowAlterationOperatorProvenance("operator", null),
+            "cancelling-running-job");
+        var captured = await store.CaptureAsync(
+            admission.Plan.PlanId,
+            admission.Plan.Revision,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")],
+            null);
+        await store.SealAsync(captured.PlanId, captured.Revision, Now);
+        var originalClaim = await store.ClaimNextAsync(admission.Plan.PlanId, "worker-1", Now, TimeSpan.FromMinutes(1));
+
+        var cancelling = await service.CancelAsync(admission.Plan.PlanId);
+        var finishingClaim = await store.ClaimNextAsync(admission.Plan.PlanId, "worker-2", Now.AddMinutes(1), TimeSpan.FromMinutes(1));
+
+        Assert.Equal(WorkflowAlterationPlanStatus.Cancelling, cancelling.Status);
+        Assert.NotNull(originalClaim);
+        Assert.NotNull(finishingClaim);
+        Assert.Equal(originalClaim!.JobId, finishingClaim!.JobId);
+        Assert.NotEqual(originalClaim.Claim!.Token, finishingClaim.Claim!.Token);
+        Assert.Equal(WorkflowAlterationJobStatus.Running, finishingClaim.Status);
     }
 
     [Fact]
@@ -200,9 +322,9 @@ public sealed class WorkflowAlterationOrchestrationTests
             null);
         await store.SealAsync(plan.PlanId, plan.Revision, Now);
 
-        var first = await store.ClaimNextAsync("worker-1", Now, TimeSpan.FromSeconds(1));
-        var second = await store.ClaimNextAsync("worker-2", Now, TimeSpan.FromSeconds(1));
-        var redelivery = await store.ClaimNextAsync("worker-3", Now.AddSeconds(2), TimeSpan.FromSeconds(1));
+        var first = await store.ClaimNextAsync(admission.Plan.PlanId, "worker-1", Now, TimeSpan.FromSeconds(1));
+        var second = await store.ClaimNextAsync(admission.Plan.PlanId, "worker-2", Now, TimeSpan.FromSeconds(1));
+        var redelivery = await store.ClaimNextAsync(admission.Plan.PlanId, "worker-3", Now.AddSeconds(2), TimeSpan.FromSeconds(1));
 
         Assert.NotNull(first);
         Assert.NotNull(second);
@@ -233,7 +355,9 @@ public sealed class WorkflowAlterationOrchestrationTests
         Assert.DoesNotContain("payload", first.Command.Payload!.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static WorkflowAlterationPlanService NewPlanService(IWorkflowAlterationStore store) =>
+    private static WorkflowAlterationPlanService NewPlanService(
+        IWorkflowAlterationStore store,
+        IWorkflowAlterationPayloadProtector? payloadProtector = null) =>
         new(
             new WorkflowAlterationRegistry(
             [
@@ -241,7 +365,7 @@ public sealed class WorkflowAlterationOrchestrationTests
                     new WorkflowAlterationDescriptor("CancelWorkflow", 1, "Cancel workflow"),
                     typeof(CancelWorkflowAlterationHandler))
             ]),
-            new TestPayloadProtector(),
+            payloadProtector ?? new TestPayloadProtector(),
             store,
             new FixedTimeProvider(Now));
 
@@ -266,6 +390,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             "tenant-a",
             new Dictionary<string, string>())
         {
+            Authority = new WorkflowExecutionAuthoritySnapshot("system", "operator"),
             RootVariableFrame = new VariableFrameState("frame-1", "scope-1", "activation-1", null, VariableFrameKind.Root, new Dictionary<string, ValueEnvelope>(), 7)
         };
 
@@ -280,6 +405,15 @@ public sealed class WorkflowAlterationOrchestrationTests
 
         public string Unprotect(string planId, string tenantPartition, string canonicalRequestHash, ProtectedWorkflowAlterationPayload payload) =>
             System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload.Ciphertext));
+    }
+
+    private sealed class ThrowingUnprotectPayloadProtector : IWorkflowAlterationPayloadProtector
+    {
+        public ProtectedWorkflowAlterationPayload Protect(string planId, string tenantPartition, string canonicalRequestHash, string plaintext) =>
+            throw new NotSupportedException();
+
+        public string Unprotect(string planId, string tenantPartition, string canonicalRequestHash, ProtectedWorkflowAlterationPayload payload) =>
+            throw new CryptographicException("The key is unavailable.");
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
@@ -299,6 +433,8 @@ public sealed class WorkflowAlterationOrchestrationTests
             inner.FindPlanAsync(planId, cancellationToken);
         public ValueTask<WorkflowAlterationActivePlanPage> ListActivePlansAsync(int pageSize, string? cursor = null, CancellationToken cancellationToken = default) =>
             inner.ListActivePlansAsync(pageSize, cursor, cancellationToken);
+        public ValueTask RescheduleActivePlanAsync(string planId, DateTimeOffset servicedAt, CancellationToken cancellationToken = default) =>
+            inner.RescheduleActivePlanAsync(planId, servicedAt, cancellationToken);
         public ValueTask<WorkflowAlterationPlanState> CaptureAsync(string planId, long expectedRevision, IReadOnlyCollection<WorkflowAlterationCapturedTarget> targets, string? nextCursor, CancellationToken cancellationToken = default) =>
             inner.CaptureAsync(planId, expectedRevision, targets, nextCursor, cancellationToken);
         public ValueTask<WorkflowAlterationPlanState> SealAsync(string planId, long expectedRevision, DateTimeOffset at, CancellationToken cancellationToken = default) =>
@@ -316,8 +452,8 @@ public sealed class WorkflowAlterationOrchestrationTests
             inner.FailUnsealedCaptureAsync(planId, safeFailure, failedAt, cancellationToken);
         public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default) =>
             inner.RequestCancellationAsync(planId, requestedAt, cancellationToken);
-        public ValueTask CancelPendingJobsAsync(string planId, IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes, DateTimeOffset completedAt, CancellationToken cancellationToken = default) =>
-            inner.CancelPendingJobsAsync(planId, skippedOutcomes, completedAt, cancellationToken);
+        public ValueTask CancelPendingJobsAsync(string planId, IReadOnlyCollection<WorkflowAlterationOutcome> skippedOutcomes, DateTimeOffset completedAt, int maximumCount, CancellationToken cancellationToken = default) =>
+            inner.CancelPendingJobsAsync(planId, skippedOutcomes, completedAt, maximumCount, cancellationToken);
         public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default) =>
             inner.FindJobAsync(jobId, cancellationToken);
         public ValueTask<WorkflowAlterationJobCounts> GetJobCountsAsync(string planId, CancellationToken cancellationToken = default) =>
@@ -326,8 +462,8 @@ public sealed class WorkflowAlterationOrchestrationTests
             inner.FindJobByCheckpointCommitIdAsync(checkpointCommitId, cancellationToken);
         public ValueTask<WorkflowAlterationJobPage> PageJobsAsync(string planId, int pageSize, string? cursor = null, CancellationToken cancellationToken = default) =>
             inner.PageJobsAsync(planId, pageSize, cursor, cancellationToken);
-        public ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default) =>
-            inner.ClaimNextAsync(ownerId, now, leaseDuration, cancellationToken);
+        public ValueTask<WorkflowAlterationJobState?> ClaimNextAsync(string planId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken = default) =>
+            inner.ClaimNextAsync(planId, ownerId, now, leaseDuration, cancellationToken);
         public ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default) =>
             inner.ReconcileAsync(planId, now, cancellationToken);
         public ValueTask ValidateTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default) =>

@@ -16,6 +16,7 @@ paths:
           schema:
             type: string
             minLength: 1
+            pattern: ".*\\S.*"
             maxLength: 256
       requestBody:
         required: true
@@ -51,6 +52,12 @@ paths:
               schema:
                 type: integer
                 minimum: 1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /runtime/workflows/alteration-plans/{planId}:
     get:
       operationId: getWorkflowAlterationPlan
@@ -65,12 +72,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AlterationPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /runtime/workflows/alteration-plans/{planId}/jobs/page:
     get:
       operationId: pageWorkflowAlterationJobs
@@ -104,6 +115,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}:
     get:
       operationId: getWorkflowAlterationJob
@@ -119,14 +132,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AlterationJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /runtime/workflows/alteration-plans/{planId}/cancel:
     post:
       operationId: cancelWorkflowAlterationPlan
@@ -147,12 +162,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AlterationPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     elsaPermissions:
@@ -192,13 +211,19 @@ components:
     NotFound:
       description: Resource missing or outside caller scope
     Conflict:
-      description: Idempotency or path identity conflict
+      description: Idempotency content conflict
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     Unprocessable:
       description: Syntactically valid request rejected before capture
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    InternalError:
+      description: Unexpected safe server error
       content:
         application/problem+json:
           schema:
@@ -295,7 +320,7 @@ components:
     AlterationPlan:
       type: object
       additionalProperties: false
-      required: [planId, status, createdAt, target, alterations, counts, links]
+      required: [planId, status, createdAt, target, alterations, counts, submittedBy, links]
       properties:
         planId:
           type: string
@@ -328,6 +353,8 @@ components:
           anyOf:
             - $ref: "#/components/schemas/SafeFailure"
             - type: "null"
+        submittedBy:
+          $ref: "#/components/schemas/OperatorProvenance"
         links:
           $ref: "#/components/schemas/AlterationLinks"
     AlterationPlanStatus:
@@ -449,22 +476,44 @@ components:
             - $ref: "#/components/schemas/SafeFailure"
             - type: "null"
     AlterationJob:
-      allOf:
-        - $ref: "#/components/schemas/AlterationJobSummary"
-        - type: object
-          required: [outcomes]
-          properties:
-            outcomes:
-              type: array
-              items:
-                $ref: "#/components/schemas/AlterationOutcome"
+      type: object
+      additionalProperties: false
+      required: [jobId, planId, workflowExecutionId, status, createdAt, submittedBy, outcomes]
+      properties:
+        jobId:
+          type: string
+        planId:
+          type: string
+        workflowExecutionId:
+          type: string
+        status:
+          $ref: "#/components/schemas/AlterationJobStatus"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        failure:
+          anyOf:
+            - $ref: "#/components/schemas/SafeFailure"
+            - type: "null"
+        submittedBy:
+          $ref: "#/components/schemas/OperatorProvenance"
+        outcomes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlterationOutcome"
     AlterationJobStatus:
       type: string
       enum: [Pending, Running, Succeeded, Failed, Cancelled]
     AlterationOutcome:
       type: object
       additionalProperties: false
-      required: [ordinal, kind, schemaVersion, status, code, recordedAt]
+      required: [ordinal, kind, schemaVersion, status, code, recordedAt, structuralMetadata]
       properties:
         ordinal:
           type: integer
@@ -483,6 +532,10 @@ components:
         recordedAt:
           type: string
           format: date-time
+        structuralMetadata:
+          type: object
+          additionalProperties:
+            type: string
     SafeFailure:
       type: object
       additionalProperties: false
@@ -491,7 +544,18 @@ components:
         code:
           type: string
         message:
+          type: [string, "null"]
+    OperatorProvenance:
+      type: object
+      additionalProperties: false
+      required: [subject, correlationId, displayName]
+      properties:
+        subject:
           type: string
+        correlationId:
+          type: [string, "null"]
+        displayName:
+          type: [string, "null"]
     ProblemDetails:
       type: object
       additionalProperties: true

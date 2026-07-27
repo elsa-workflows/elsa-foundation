@@ -70,7 +70,13 @@ public sealed class AspNetCoreIdentitySchemaCliTests
                 && unit.PhysicalStorage!.BoundedQueries.Any(query =>
                     query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery)
                 && unit.PhysicalStorage.BoundedQueries.Any(query =>
-                    query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery));
+                    query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery)
+                && unit.PhysicalStorage.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery)
+                && unit.PhysicalStorage.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery)
+                && unit.PhysicalStorage.BoundedQueries.Any(query =>
+                    query.Identity == ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery));
 
             var pendingState = await driver.CaptureSchemaStateAsync(CancellationToken.None);
 

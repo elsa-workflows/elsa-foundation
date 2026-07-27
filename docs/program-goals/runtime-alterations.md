@@ -64,11 +64,11 @@ belong in the glossary.
 - Target capture completes and seals before execution begins; execution then proceeds with bounded
   concurrency and no fixed API target-count limit.
 - Treat the constitutions as draft quality gates where their provisional status affects planning.
-- The implementation is under review in
-  [draft PR #1080](https://github.com/elsa-workflows/elsa-foundation/pull/1080) from
+- The implementation is ready for review in
+  [PR #1080](https://github.com/elsa-workflows/elsa-foundation/pull/1080) from
   `codex/1016-runtime-alterations`.
 - The additive 35th Groundwork row is now represented by the runtime alteration store family, its
-  complete bounded-route catalog, a 65-route SQLite acceptance-scale native-plan run, and passing
+  complete bounded-route catalog, a 69-route SQLite acceptance-scale native-plan run, and passing
   SQLite/PostgreSQL/SQL Server/MongoDB schema-admission smoke.
 - All local draft gates are closed. The serialized full-solution run eliminated the earlier
   load-sensitive failures, exposed two additive coverage-ratchet gaps, and otherwise passed every
@@ -79,14 +79,15 @@ belong in the glossary.
 
 - Full solution build: succeeded with zero errors.
 - Full solution test reconciliation: every non-Groundwork-conformance assembly passed; the rebuilt
-  conformance suite passed 221 tests with 18 expected opt-in skips and one transient MongoDB startup
+  conformance suite passed 222 tests with 18 expected opt-in skips and one transient MongoDB startup
   miss whose exact theory case passed 1/1 on isolated retry.
-- Focused alteration tests: Runtime 83/83, Runtime API 21/21, and Groundwork 15/15.
+- Focused alteration tests: Runtime 94/94, Runtime API 21/21, Groundwork 29/29, and architecture
+  contract 2/2.
 - Groundwork provider admission: SQLite/PostgreSQL/SQL Server/MongoDB 4/4; the SQL Server target
   additionally proves that the alteration compound indexes remain within its 1,700-byte key budget.
-- Provider-native routing: all 75 scale-bearing manifest routes are catalogued; SQLite executed the
-  65 query-bearing routes at acceptance scale.
-- Full architecture suite: 316/316.
+- Provider-native routing: all 79 scale-bearing manifest routes are catalogued; SQLite executed the
+  69 Foundation query-bearing routes at acceptance scale.
+- Full architecture suite: 318/318.
 - Backend evidence: alteration plans, replay/restart, runtime writes 10/10, instance paging,
   suspend/resume, typed variables, fault activity, and restart recovery all passed.
 - Static review: diff whitespace, OpenAPI YAML, PowerShell AST, JSON documents, public-payload

@@ -207,7 +207,7 @@ state is split across several artifact-bound document families.
 
 - `POST /runtime/workflows/alteration-plans`
 - `GET /runtime/workflows/alteration-plans/{planId}`
-- `GET /runtime/workflows/alteration-plans/{planId}/jobs`
+- `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`
 - `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`
 - `POST /runtime/workflows/alteration-plans/{planId}/cancel`
 

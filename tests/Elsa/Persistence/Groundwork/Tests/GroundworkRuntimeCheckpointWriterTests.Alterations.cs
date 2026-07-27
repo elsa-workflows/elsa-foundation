@@ -20,7 +20,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         var captured = await alterations.CaptureAsync(plan.PlanId, plan.Revision,
             [new WorkflowAlterationCapturedTarget("wf-1", GroundworkTestAccess.DefaultScopeValue)], null);
         await alterations.SealAsync(plan.PlanId, captured.Revision, DateTimeOffset.UnixEpoch);
-        var claimed = (await alterations.ClaimNextAsync("worker", DateTimeOffset.UnixEpoch, TimeSpan.FromMinutes(1)))!;
+        var claimed = (await alterations.ClaimNextAsync(plan.PlanId, "worker", DateTimeOffset.UnixEpoch, TimeSpan.FromMinutes(1)))!;
         var outcome = new WorkflowAlterationOutcome(0, "CancelWorkflow", 1, WorkflowAlterationOutcomeStatus.Succeeded, "Cancelled", null, DateTimeOffset.UnixEpoch);
         var invalid = new WorkflowAlterationJobTerminalChange(claimed.JobId, "stale-claim", WorkflowAlterationJobStatus.Succeeded, [outcome], "checkpoint-alteration", DateTimeOffset.UnixEpoch);
         var baseCommit = BuildCommit("checkpoint-alteration");

@@ -3,21 +3,48 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Immutable-key capture request used only by alteration target capture.</summary>
-public sealed record WorkflowExecutionAlterationCaptureQuery(
-    string TenantPartition,
-    WorkflowAlterationQuerySelector Selector,
-    int PageSize,
-    string? Cursor = null)
+public sealed record WorkflowExecutionAlterationCaptureQuery
 {
+    public WorkflowExecutionAlterationCaptureQuery(
+        string tenantPartition,
+        string systemIdentity,
+        string rootInitiator,
+        IReadOnlyDictionary<string, string>? authorityMetadata,
+        WorkflowAlterationQuerySelector selector,
+        int pageSize,
+        string? cursor = null)
+    {
+        TenantPartition = tenantPartition;
+        SystemIdentity = systemIdentity;
+        RootInitiator = rootInitiator;
+        AuthorityMetadata = RuntimeModelMetadata.Snapshot(authorityMetadata);
+        Selector = selector;
+        PageSize = pageSize;
+        Cursor = cursor;
+    }
+
+    public string TenantPartition { get; }
+    public string SystemIdentity { get; }
+    public string RootInitiator { get; }
+    public IReadOnlyDictionary<string, string> AuthorityMetadata { get; }
+    public WorkflowAlterationQuerySelector Selector { get; }
+    public int PageSize { get; }
+    public string? Cursor { get; }
+
     public void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(TenantPartition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(SystemIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(RootInitiator);
         ArgumentNullException.ThrowIfNull(Selector);
         if (PageSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(PageSize));
         if (Cursor is not null && string.IsNullOrWhiteSpace(Cursor))
             throw new ArgumentException("The alteration capture cursor cannot be blank.", nameof(Cursor));
     }
+
+    public string AuthorityPartitionKey =>
+        WorkflowExecutionAuthoritySnapshot.PartitionKey(SystemIdentity, RootInitiator, AuthorityMetadata);
 }
 
 /// <summary>A bounded page ordered only by (tenant partition, workflow execution ID).</summary>
@@ -54,8 +81,9 @@ public sealed record WorkflowAlterationCapturedTarget
 public sealed record WorkflowAlterationPlanAdmissionResult(WorkflowAlterationPlanState Plan, bool IsReplay);
 
 /// <summary>
-/// Bounded restart-recovery page of non-terminal alteration plans, ordered by stable plan identity within the current
-/// persistence/tenant scope. The recurring coordinator resumes capture, dispatch, and reconciliation from this page.
+/// Bounded restart-recovery page of non-terminal alteration plans, ordered by a durable least-recently-serviced key
+/// within the current persistence/tenant scope. The recurring coordinator resumes capture, dispatch, and
+/// reconciliation from this page.
 /// </summary>
 public sealed record WorkflowAlterationActivePlanPage(
     IReadOnlyList<WorkflowAlterationPlanState> Items,

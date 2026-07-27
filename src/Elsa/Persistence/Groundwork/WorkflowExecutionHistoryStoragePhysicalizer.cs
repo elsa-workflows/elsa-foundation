@@ -17,6 +17,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
     private const string SortTicksColumn = "history_sort_ticks";
     private const string WorkflowExecutionIdColumn = "history_workflow_execution_id";
     private const string TenantIdColumn = "history_tenant_id";
+    private const string AuthorityPartitionColumn = "history_authority_partition";
     private const string DefinitionIdColumn = "history_definition_id";
     private const string StatusColumn = "history_status";
     private const string RunKindColumn = "history_run_kind";
@@ -68,6 +69,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
             [
                 new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+                new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField),
                 new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
             ],
             IndexValueKind.Keyword,
@@ -121,7 +123,13 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                 Projected(
                     TenantIdColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
-                    PortablePhysicalType.String),
+                    PortablePhysicalType.String,
+                    ElsaRuntimeStorageManifest.RuntimeTenantProjectionLength),
+                Projected(
+                    AuthorityPartitionColumn,
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
+                    PortablePhysicalType.String,
+                    64),
                 Projected(
                     DefinitionIdColumn,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField,
@@ -162,8 +170,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     [
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(TenantIdColumn, 1),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
-                        new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
+                        new PhysicalIndexColumnDefinition(AuthorityPartitionColumn, 2),
+                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3),
+                        new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
                     ]),
                 new PhysicalIndexDefinition(
                     faultedAttentionIndex.Identity,
@@ -305,6 +314,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             [
                 new BoundedQueryPredicateField(
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+                    Equal),
+                new BoundedQueryPredicateField(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
                     Equal)
             ],
             resultOperations: new HashSet<BoundedQueryResultOperation>

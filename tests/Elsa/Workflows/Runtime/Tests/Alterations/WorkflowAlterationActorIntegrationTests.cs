@@ -79,6 +79,113 @@ public sealed class WorkflowAlterationActorIntegrationTests
     }
 
     [Fact]
+    public async Task OrchestrationSweep_RotatesAcrossActivePlanPages()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStore.SaveAsync(NewWorkflow("workflow-1"));
+        await workflowStore.SaveAsync(NewWorkflow("workflow-2"));
+        await AdmitPlanAsync(store, "plan-1", "workflow-1");
+        await AdmitPlanAsync(store, "plan-2", "workflow-2");
+        var dispatcher = new RecordingDispatcher();
+        var sweep = new WorkflowAlterationOrchestrationSweep(
+            store,
+            new WorkflowAlterationTargetCaptureTask(store, workflowStore, TimeProvider.System),
+            new WorkflowAlterationJobTask(store, dispatcher, TimeProvider.System),
+            new WorkflowAlterationPlanReconciliationTask(store, TimeProvider.System),
+            new WorkflowAlterationPlanService(new WorkflowAlterationRegistry([]), NewProtector(), store, TimeProvider.System));
+        var options = new WorkflowAlterationOrchestrationOptions
+        {
+            MaxPlansPerSweep = 1,
+            CapturePageSize = 1,
+            MaxJobClaimsPerSweep = 1,
+            JobLeaseDuration = TimeSpan.FromMinutes(1)
+        };
+
+        var pump = WorkflowAlterationOrchestrationPumpTask.CreateForSweep(
+            sweep,
+            Options.Create(options),
+            TimeProvider.System,
+            NullLogger<WorkflowAlterationOrchestrationPumpTask>.Instance);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(
+            ["plan-1", "plan-2"],
+            dispatcher.Jobs.Select(job => job.PlanId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task OrchestrationSweep_SharesItsClaimBudgetAcrossDiscoveredPlans()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStore.SaveAsync(NewWorkflow("workflow-1"));
+        await workflowStore.SaveAsync(NewWorkflow("workflow-2"));
+        await AdmitPlanAsync(store, "plan-1", "workflow-1");
+        await AdmitPlanAsync(store, "plan-2", "workflow-2");
+        var dispatcher = new RecordingDispatcher();
+        var sweep = new WorkflowAlterationOrchestrationSweep(
+            store,
+            new WorkflowAlterationTargetCaptureTask(store, workflowStore, TimeProvider.System),
+            new WorkflowAlterationJobTask(store, dispatcher, TimeProvider.System),
+            new WorkflowAlterationPlanReconciliationTask(store, TimeProvider.System),
+            new WorkflowAlterationPlanService(new WorkflowAlterationRegistry([]), NewProtector(), store, TimeProvider.System));
+
+        await sweep.ExecuteAsync(
+            new WorkflowAlterationOrchestrationOptions
+            {
+                MaxPlansPerSweep = 2,
+                CapturePageSize = 1,
+                MaxJobClaimsPerSweep = 2,
+                JobLeaseDuration = TimeSpan.FromMinutes(1)
+            },
+            "fair-worker");
+
+        Assert.Equal(["plan-1", "plan-2"], dispatcher.Jobs.Select(job => job.PlanId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task OrchestrationSweep_RedeliversExpiredRunningWorkWhilePlanIsCancelling()
+    {
+        var store = new InMemoryWorkflowAlterationStore();
+        var originalClaim = await AdmitSealAndClaimAsync(store);
+        var later = new FixedTimeProvider(Now.AddMinutes(2));
+        var planService = new WorkflowAlterationPlanService(
+            new WorkflowAlterationRegistry([]),
+            NewProtector(),
+            store,
+            later);
+        await planService.CancelAsync(originalClaim.PlanId);
+        var dispatcher = new RecordingDispatcher();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var sweep = new WorkflowAlterationOrchestrationSweep(
+            store,
+            new WorkflowAlterationTargetCaptureTask(store, workflowStore, later),
+            new WorkflowAlterationJobTask(store, dispatcher, later),
+            new WorkflowAlterationPlanReconciliationTask(store, later),
+            planService,
+            later);
+
+        await sweep.ExecuteAsync(
+            new WorkflowAlterationOrchestrationOptions
+            {
+                MaxPlansPerSweep = 1,
+                CapturePageSize = 1,
+                MaxJobClaimsPerSweep = 1,
+                JobLeaseDuration = TimeSpan.FromMinutes(1)
+            },
+            "replacement-worker");
+
+        var redelivered = Assert.Single(dispatcher.Jobs);
+        Assert.Equal(originalClaim.JobId, redelivered.JobId);
+        Assert.NotEqual(originalClaim.Claim!.Token, redelivered.Claim!.Token);
+        Assert.Equal("replacement-worker", redelivered.Claim.OwnerId);
+        Assert.Equal(WorkflowAlterationPlanStatus.Cancelling, (await store.FindPlanAsync(originalClaim.PlanId))!.Status);
+    }
+
+    [Fact]
     public async Task ActorCommand_LoadsProtectedPlan_AndCommitsWorkflowAndTerminalEvidenceInOneMandatoryCheckpoint()
     {
         var alterationStore = new InMemoryWorkflowAlterationStore();
@@ -155,7 +262,7 @@ public sealed class WorkflowAlterationActorIntegrationTests
             planId,
             submission.AuthorityScope,
             new WorkflowAlterationOperatorProvenance("operator", null),
-            "key-hash",
+            $"key-hash-{planId}",
             hash,
             NewProtector().Protect(planId, "tenant-a", hash, canonical),
             submission.Target,
@@ -163,23 +270,25 @@ public sealed class WorkflowAlterationActorIntegrationTests
         await store.AdmitAsync(plan);
         var captured = await store.CaptureAsync(planId, 0, [new WorkflowAlterationCapturedTarget("workflow-1", "tenant-a")], null);
         await store.SealAsync(planId, captured.Revision, Now);
-        return (await store.ClaimNextAsync("worker", Now, TimeSpan.FromMinutes(1)))!;
+        return (await store.ClaimNextAsync(planId, "worker", Now, TimeSpan.FromMinutes(1)))!;
     }
 
-    private static async Task AdmitPlanAsync(InMemoryWorkflowAlterationStore store)
+    private static async Task AdmitPlanAsync(
+        InMemoryWorkflowAlterationStore store,
+        string planId = "plan-1",
+        string workflowExecutionId = "workflow-1")
     {
         var submission = new WorkflowAlterationSubmission(
             new WorkflowAlterationAuthorityScope("tenant-a", "runtime", "operator"),
-            WorkflowAlterationTargetSelector.ForExecutionIds(["workflow-1"]),
+            WorkflowAlterationTargetSelector.ForExecutionIds([workflowExecutionId]),
             [new WorkflowAlterationEnvelope("Contoso.Complete", 1, JsonSerializer.SerializeToElement(new { }))]);
         var canonical = WorkflowAlterationRequestCanonicalizer.Canonicalize(submission);
         var hash = WorkflowAlterationRequestCanonicalizer.Hash(submission);
-        const string planId = "plan-1";
         await store.AdmitAsync(WorkflowAlterationPlanState.CreateCapturing(
             planId,
             submission.AuthorityScope,
             new WorkflowAlterationOperatorProvenance("operator", null),
-            "key-hash",
+            $"key-hash-{planId}",
             hash,
             NewProtector().Protect(planId, "tenant-a", hash, canonical),
             submission.Target,
@@ -189,8 +298,8 @@ public sealed class WorkflowAlterationActorIntegrationTests
     private static AesGcmWorkflowAlterationPayloadProtector NewProtector() =>
         new(Options.Create(new WorkflowAlterationPayloadProtectionOptions { AllowEphemeralDevelopmentKey = true }), TestKeyRing);
 
-    private static WorkflowExecutionState NewWorkflow() => new(
-        "workflow-1",
+    private static WorkflowExecutionState NewWorkflow(string workflowExecutionId = "workflow-1") => new(
+        workflowExecutionId,
         new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
         WorkflowExecutionStatus.Running,
         null,
@@ -201,7 +310,11 @@ public sealed class WorkflowAlterationActorIntegrationTests
         null,
         null,
         "tenant-a",
-        new Dictionary<string, string>()) { Partition = new WorkflowExecutionPartition("tenant-a") };
+        new Dictionary<string, string>())
+    {
+        Partition = new WorkflowExecutionPartition("tenant-a"),
+        Authority = new WorkflowExecutionAuthoritySnapshot("runtime", "operator")
+    };
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowAlterationJobState job)
     {
@@ -261,5 +374,10 @@ public sealed class WorkflowAlterationActorIntegrationTests
                 new WorkflowExecutionCommandDispatchResult("envelope", job.WorkflowExecutionId, WorkflowExecutionCommandDispatchStatus.Accepted, Now),
                 new WorkflowExecutionActorDescriptor(job.WorkflowExecutionId, "actor", "test", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, Now)));
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }
