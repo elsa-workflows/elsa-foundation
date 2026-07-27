@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 
@@ -31,6 +32,8 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 typeof(IActivityExecutionInspectionStore),
                 typeof(IActivityExecutionInspectionWriter),
                 typeof(IWorkflowExecutionStateStore),
+                typeof(IWorkflowAlterationStore),
+                typeof(IWorkflowAlterationCheckpointWriter),
                 typeof(IWorkflowTestScopeStore),
                 typeof(IWorkflowTestScopeAdmissionStore),
                 typeof(IWorkflowTestScopeCleanupStore),
@@ -77,6 +80,7 @@ public sealed class RuntimeGroundworkStorageManifestSource : IGroundworkStorageM
                 "runtime-scheduler-state",
                 "runtime-executable-source-reference",
                 "runtime-workflow-executable",
+                "runtime-workflow-alteration",
                 "runtime-workflow-execution-state",
                 "runtime-workflow-hold-state",
                 "runtime-scheduler-poison",

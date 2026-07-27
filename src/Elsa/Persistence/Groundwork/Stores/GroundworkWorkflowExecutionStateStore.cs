@@ -162,6 +162,54 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
             result.TotalCount);
     }
 
+    /// <summary>
+    /// Reads alteration candidates using the immutable execution-id keyset rather than mutable history order.
+    /// The cursor is provider-issued for this exact bounded route, so a changed selector or tenant cannot resume
+    /// a different capture stream.
+    /// </summary>
+    public async ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(
+        WorkflowExecutionAlterationCaptureQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
+        _accessContextAccessor.Current.EnsureTenantScope(query.TenantPartition);
+
+        DocumentQueryResult result;
+        try
+        {
+            result = await Queries.QueryAsync(
+                new DocumentQuery(
+                    ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+                    ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery,
+                    BuildAlterationCaptureClauses(query),
+                    [
+                        new DocumentQueryOrder(
+                            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                            PhysicalSortDirection.Ascending)
+                    ],
+                    take: query.PageSize,
+                    continuation: query.Cursor),
+                cancellationToken);
+        }
+        catch (InvalidDocumentQueryContinuationException exception)
+        {
+            throw new ArgumentException(
+                "The alteration capture cursor is invalid or does not belong to this query.",
+                nameof(query),
+                exception);
+        }
+
+        var states = result.Documents
+            .Select(Serializer.Deserialize<WorkflowExecutionStateDocument>)
+            .Select(document => document.State)
+            .ToArray();
+        return new WorkflowExecutionAlterationCapturePage(
+            states,
+            result.NextContinuation,
+            result.NextContinuation is not null);
+    }
+
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
         var artifactIds = new List<string>();
@@ -258,6 +306,55 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
         }
     }
 
+    private static IReadOnlyList<DocumentQueryClause> BuildAlterationCaptureClauses(
+        WorkflowExecutionAlterationCaptureQuery query)
+    {
+        var selector = query.Selector;
+        var clauses = new List<DocumentQueryClause>
+        {
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField,
+                query.TenantPartition)),
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
+                query.AuthorityPartitionKey))
+        };
+        AddEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField, selector.DefinitionId);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField,
+            selector.Status is { } status
+                ? ((int)status).ToString(CultureInfo.InvariantCulture)
+                : null);
+        AddEqual(
+            ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindField,
+            selector.RunKind is { } runKind
+                ? ((int)runKind).ToString(CultureInfo.InvariantCulture)
+                : null);
+        AddEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryCorrelationIdField, selector.CorrelationId);
+        AddEqual(PhysicalDocumentFieldPaths.Id, selector.WorkflowExecutionId);
+        AddEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField, selector.ArtifactId);
+        if (selector.From is { } from)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.GreaterThanOrEqual(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                from.UtcTicks.ToString(CultureInfo.InvariantCulture))));
+        }
+        if (selector.To is { } to)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField,
+                to.UtcTicks.ToString(CultureInfo.InvariantCulture))));
+        }
+
+        return clauses;
+
+        void AddEqual(string path, string? value)
+        {
+            if (value is not null)
+                clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value)));
+        }
+    }
+
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -274,6 +371,7 @@ internal sealed record WorkflowExecutionStateDocument(
     long HistorySortTicks,
     string HistoryWorkflowExecutionId,
     string? HistoryTenantId,
+    string? HistoryAuthorityPartition,
     string HistoryDefinitionId,
     int HistoryStatus,
     int HistoryRunKind,
@@ -286,6 +384,12 @@ internal sealed record WorkflowExecutionStateDocument(
         WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks,
         state.WorkflowExecutionId,
         state.TenantId,
+        state.Authority is null
+            ? null
+            : WorkflowExecutionAuthoritySnapshot.PartitionKey(
+                state.Authority.SystemIdentity,
+                state.Authority.RootInitiator,
+                state.Authority.Metadata),
         state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
         (int)state.Status,
         (int)state.RunKind,

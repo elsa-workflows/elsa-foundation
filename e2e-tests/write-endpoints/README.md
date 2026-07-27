@@ -13,7 +13,7 @@ round-trip that doesn't change global state. Runs against a from-source server (
 | `Test-DesignWorkflowWrites.ps1` | submit; add; patch metadata; replace draft; promote (including Event-result and intrinsic parity); soft-delete; restore; permanent-delete; discard draft (22 cases) |
 | `Test-PublishingWrites.ps1` | workflow preflight/publish/version-test-run/draft-test-run; activity draft preflight/publish/test-run (10 cases) |
 | `Test-DesignActivityWrites.ps1` | create/validate/replace/patch/publish; version retire/revoke (recommendation-gated); discard (10 cases) |
-| `Test-RuntimeWrites.ps1` | execute; stimuli (match + no-op); diagnostics settings round-trip; redrive (6 cases) |
+| `Test-RuntimeWrites.ps1` | execute; stimuli (match + no-op); diagnostics settings round-trip; redrive; durable alteration-plan submit/read/page/cancel shape (10 cases) |
 | `Test-IdentityWrites.ps1` | login (valid + bad-creds); refresh; logout (4 cases) |
 
 ## Bugs found (filed, tracked in-test as accept-4xx-or-500 so the scripts stay green and flip clean when fixed)

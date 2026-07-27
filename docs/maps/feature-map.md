@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 100
+- Discovered feature classes: 101
 
 ## Features
 
@@ -31,6 +31,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | AspNetCoreIdentityEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | IShellFeature | [AspNetCoreIdentityEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/AspNetCoreIdentityEntityFrameworkCoreFeature.cs) |
 | AspNetCoreIdentityGroundworkFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork | IShellFeature | [AspNetCoreIdentityGroundworkFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
+| DiagnosticsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.Persistence.Groundwork | IShellFeature | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | DispatchWorkflowDesignFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Design | IShellFeature | [DispatchWorkflowDesignFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Design/DispatchWorkflowDesignFeature.cs) |
 | DispatchWorkflowRuntimeFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Runtime | IShellFeature | [DispatchWorkflowRuntimeFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs) |
 | Elsa3ImportActivitiesGroundworkFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.Groundwork | IShellFeature | [Elsa3ImportActivitiesGroundworkFeature.cs](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3ImportActivitiesGroundworkFeature.cs) |

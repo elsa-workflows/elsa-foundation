@@ -188,7 +188,7 @@ public static class ActivityExecutionHierarchyProjector
         var scheduled = items.LongCount(x => x.Status == ActivityExecutionStatus.Scheduled);
         var running = items.LongCount(x => x.Status is ActivityExecutionStatus.Running or ActivityExecutionStatus.Waiting);
         var suspended = items.LongCount(x => x.Status == ActivityExecutionStatus.Suspended);
-        var completed = items.LongCount(x => x.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Recovered);
+        var completed = items.LongCount(x => x.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded);
         var faulted = items.LongCount(x => x.Status == ActivityExecutionStatus.Faulted);
         var cancelled = items.LongCount(x => x.Status == ActivityExecutionStatus.Cancelled);
         var blocking = items.Sum(x => (long)x.BlockingIncidentCount);

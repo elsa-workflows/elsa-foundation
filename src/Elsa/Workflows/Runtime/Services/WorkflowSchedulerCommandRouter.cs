@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -13,6 +14,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IWorkflowBurstScopeAccessor? _burstScopeAccessor;
     private readonly RuntimeBurstCacheOptions _burstCacheOptions;
+    private readonly IWorkflowAlterationActorCommandExecutor? _alterationActorCommandExecutor;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -21,7 +23,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         TimeProvider? timeProvider = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
         IWorkflowBurstScopeAccessor? burstScopeAccessor = null,
-        RuntimeBurstCacheOptions? burstCacheOptions = null)
+        RuntimeBurstCacheOptions? burstCacheOptions = null,
+        IWorkflowAlterationActorCommandExecutor? alterationActorCommandExecutor = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -34,6 +37,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _activityExecutionStateStore = activityExecutionStateStore;
         _burstScopeAccessor = burstScopeAccessor;
         _burstCacheOptions = burstCacheOptions ?? new RuntimeBurstCacheOptions();
+        _alterationActorCommandExecutor = alterationActorCommandExecutor;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -48,6 +52,14 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(options);
+
+        if (envelope.Command.Kind == WorkflowExecutionCommandKind.AlterWorkflow)
+        {
+            if (_alterationActorCommandExecutor is null)
+                throw new InvalidOperationException("Runtime alterations are not composed for this runtime host.");
+            await _alterationActorCommandExecutor.ExecuteAsync(envelope, cancellationToken);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
+        }
 
         var executionScopeId = await ResolveExecutionScopeIdAsync(envelope, cancellationToken);
         var workItem = new RuntimeSchedulerWorkItem(

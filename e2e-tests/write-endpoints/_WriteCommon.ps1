@@ -12,9 +12,10 @@
 function Invoke-Write {
     param(
         [Parameter(Mandatory)] $Ctx,
-        [Parameter(Mandatory)][ValidateSet('POST','PUT','PATCH','DELETE')][string] $Method,
+        [Parameter(Mandatory)][ValidateSet('POST','PUT','PATCH','DELETE','GET')][string] $Method,
         [Parameter(Mandatory)][string] $Path,
-        $Body = $null
+        $Body = $null,
+        [hashtable] $Headers = @{}
     )
     $url = if ($Path -match '^https?://') { $Path } else { "$($Ctx.BaseUrl)/$($Path.TrimStart('/'))" }
     $p = @{ Uri = $url; Method = $Method; WebSession = $Ctx.Session; UseBasicParsing = $true }
@@ -22,6 +23,7 @@ function Invoke-Write {
         $p.ContentType = 'application/json'
         $p.Body = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 40 }
     }
+    if ($Headers.Count -gt 0) { $p.Headers = $Headers }
     try {
         $resp = Invoke-WebRequest @p
         $json = $null; try { $json = $resp.Content | ConvertFrom-Json } catch {}
@@ -39,14 +41,15 @@ function Assert-Write {
     param(
         [Parameter(Mandatory)] $Ctx,
         [Parameter(Mandatory)][string] $Label,
-        [Parameter(Mandatory)][ValidateSet('POST','PUT','PATCH','DELETE')][string] $Method,
+        [Parameter(Mandatory)][ValidateSet('POST','PUT','PATCH','DELETE','GET')][string] $Method,
         [Parameter(Mandatory)][string] $Path,
         $Body = $null,
         [int[]] $ExpectStatus = @(200,201,202,204),
-        [scriptblock] $Validate = $null
+        [scriptblock] $Validate = $null,
+        [hashtable] $Headers = @{}
     )
     $script:WTotal++
-    $r = Invoke-Write -Ctx $Ctx -Method $Method -Path $Path -Body $Body
+    $r = Invoke-Write -Ctx $Ctx -Method $Method -Path $Path -Body $Body -Headers $Headers
     $statusOk = $ExpectStatus -contains $r.Code
     $validOk = $true
     if ($statusOk -and $Validate) { try { $validOk = [bool](& $Validate $r) } catch { $validOk = $false } }

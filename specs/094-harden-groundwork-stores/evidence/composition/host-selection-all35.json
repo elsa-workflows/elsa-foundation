@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "host-selection-all35",
+  "outcome": "pass",
+  "selectedFeatureIdentities": [
+    "elsa-activities-design",
+    "elsa-diagnostics",
+    "elsa-identity",
+    "elsa-secrets",
+    "elsa-workflows-design",
+    "elsa-workflows-publishing",
+    "elsa-workflows-runtime",
+    "elsa-workflows-runtime-distributed"
+  ],
+  "coveredEntryIds": [
+    "diagnostics-open-telemetry-store",
+    "diagnostics-structured-log-store",
+    "runtime-activity-execution-inspection",
+    "runtime-activity-execution-state",
+    "runtime-bookmark-state",
+    "runtime-durable-timer",
+    "runtime-durable-value-state",
+    "runtime-execution-liveness",
+    "runtime-incident-state",
+    "runtime-recurring-trigger-schedule",
+    "runtime-checkpoint-commit",
+    "runtime-diagnostics-settings",
+    "runtime-post-commit-outbox",
+    "runtime-scheduler-state",
+    "runtime-executable-source-reference",
+    "runtime-workflow-executable",
+    "runtime-workflow-execution-state",
+    "runtime-workflow-alteration",
+    "runtime-workflow-hold-state",
+    "runtime-scheduler-poison",
+    "runtime-scheduler-work-queue",
+    "runtime-trigger-binding",
+    "runtime-publication-projection-state",
+    "iam-user",
+    "iam-role",
+    "iam-application",
+    "iam-credential",
+    "iam-external-identity",
+    "iam-claim-mapping",
+    "iam-provider-configuration-tenant",
+    "iam-provider-configuration-global",
+    "iam-tenant-membership",
+    "secrets-repository",
+    "distributed-execution-placement",
+    "distributed-command-transport"
+  ],
+  "externalAuthorityLinks": [
+    {
+      "authority": "#644",
+      "relationship": "adapter-only",
+      "coverageRows": [
+        "iam-user",
+        "iam-role",
+        "iam-external-identity"
+      ]
+    },
+    {
+      "authority": "#660",
+      "relationship": "linked-source-evidence",
+      "coverageRows": [
+        "runtime-diagnostics-settings"
+      ]
+    }
+  ],
+  "artifact": "evidence/composition/host-selection-all35.json"
+}

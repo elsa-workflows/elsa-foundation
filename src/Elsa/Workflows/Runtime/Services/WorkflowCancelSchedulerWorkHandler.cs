@@ -11,15 +11,15 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
-    private readonly IRuntimeActivityExecutionInspectionAccumulator _inspectionAccumulator;
-    private readonly TimeProvider _timeProvider;
+    private readonly WorkflowCancellationPlanner _cancellationPlanner;
 
     public WorkflowCancelSchedulerWorkHandler(
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IActivityScopeCleanupStore? activityScopeCleanupStore = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -30,8 +30,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
-        _inspectionAccumulator = inspectionAccumulator;
-        _timeProvider = timeProvider;
+        _cancellationPlanner = new WorkflowCancellationPlanner(inspectionAccumulator, timeProvider, activityScopeCleanupStore);
     }
 
     public string Name => HandlerName;
@@ -64,62 +63,24 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var occurredAt = _timeProvider.GetUtcNow();
         var workflowState = await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
         if (workflowState is null)
             throw new InvalidOperationException($"Cancel scheduler work item '{workItem.WorkItemId}' references missing workflow execution '{workItem.WorkflowExecutionId}'.");
 
-        // #412 item 5: a Cancel that arrives after the workflow already reached a terminal status
-        // (Completed/Faulted/Cancelled) must not clobber that outcome. Short-circuit to a no-op (no commit)
-        // rather than overwriting Status/CompletedAt — this preserves the real terminal result for
-        // Completed/Faulted and keeps a redelivered cancel idempotent for the already-Cancelled case.
-        if (workflowState.Status.IsTerminal())
-            return null;
-
-        var cancelledWorkflowState = RuntimeContainerScopeService.CloseRootFrame(workflowState with
-        {
-            Status = WorkflowExecutionStatus.Cancelled,
-            UpdatedAt = occurredAt,
-            CompletedAt = occurredAt
-        });
-        var cancellableStates = (await _activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken))
-            .Where(IsCancellable)
-            .Select(state => RuntimeContainerScopeService.CloseOwnedFrames(state with
-            {
-                Status = ActivityExecutionStatus.Cancelled,
-                CompletedAt = occurredAt
-            }))
-            .OrderBy(state => state.ExecutionSequence)
-            .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
-            .ToArray();
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:cancel";
         var stateChangeMetadata = new Dictionary<string, string>
         {
             [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
             [RuntimeMetadataKeys.CheckpointReason] = CancellationReason
         };
-        var activityStateChanges = cancellableStates
-            .Select(state => new RuntimeStateChange<ActivityExecutionState>(
-                StateId: state.Execution.ActivityExecutionId,
-                Operation: RuntimeStateChangeOperation.Upsert,
-                State: state,
-                Metadata: stateChangeMetadata))
-            .ToArray();
-        var activityInspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
-        foreach (var state in cancellableStates)
-        {
-            var inspection = await _inspectionAccumulator.BuildProjectionAsync(
-                state,
-                checkpointId,
-                occurredAt,
-                metadata: stateChangeMetadata,
-                cancellationToken: cancellationToken);
-            activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                StateId: state.Execution.ActivityExecutionId,
-                Operation: RuntimeStateChangeOperation.Upsert,
-                State: inspection,
-                Metadata: stateChangeMetadata));
-        }
+        var plan = await _cancellationPlanner.PlanAsync(
+            workflowState,
+            await _activityExecutionStateStore.ListAllAsync(workItem.WorkflowExecutionId, cancellationToken),
+            checkpointId,
+            stateChangeMetadata,
+            cancellationToken);
+        if (plan is null)
+            return null;
 
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{workItem.WorkItemId}:cancel",
@@ -127,8 +88,8 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.ActivityCancelled,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
-                OccurredAt: occurredAt,
-                ActivityExecutionIds: cancellableStates.Select(state => state.Execution.ActivityExecutionId).ToArray(),
+                OccurredAt: plan.WorkflowExecution.CompletedAt!.Value,
+                ActivityExecutionIds: plan.ActivityExecutions.Select(state => state.StateId).ToArray(),
                 Metadata: new Dictionary<string, string>
                 {
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
@@ -137,17 +98,17 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 }),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
-                    StateId: cancelledWorkflowState.WorkflowExecutionId,
+                    StateId: plan.WorkflowExecution.WorkflowExecutionId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    State: cancelledWorkflowState,
+                    State: plan.WorkflowExecution,
                     Metadata: stateChangeMetadata),
                 scheduler: null,
-                activityExecutions: activityStateChanges,
+                activityExecutions: plan.ActivityExecutions,
                 bookmarks: [],
                 durableValues: [],
                 incidents: [],
                 operational: [],
-                activityExecutionInspections: activityInspectionChanges),
+                activityExecutionInspections: plan.ActivityExecutionInspections),
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>
             {
@@ -157,10 +118,4 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
 
         return commit;
     }
-
-    private static bool IsCancellable(ActivityExecutionState state) =>
-        state.Status is not ActivityExecutionStatus.Completed
-            and not ActivityExecutionStatus.Faulted
-            and not ActivityExecutionStatus.Cancelled
-            and not ActivityExecutionStatus.Recovered;
 }

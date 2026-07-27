@@ -7,10 +7,10 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public class GroundworkStoreScenarioCatalogTests
 {
     [Fact]
-    public void Catalog_is_the_exact_sorted_all32_release_gate_denominator()
+    public void Catalog_is_the_exact_sorted_all33_release_gate_denominator()
     {
         Assert.Equal(41, GroundworkStoreScenarioCatalog.All.Count);
-        Assert.Equal(32, GroundworkStoreScenarioCatalog.CoverageEntryIds.Count);
+        Assert.Equal(33, GroundworkStoreScenarioCatalog.CoverageEntryIds.Count);
         Assert.Equal(
             GroundworkStoreScenarioCatalog.CoverageEntryIds.Order(StringComparer.Ordinal),
             GroundworkStoreScenarioCatalog.CoverageEntryIds);
@@ -29,7 +29,7 @@ public class GroundworkStoreScenarioCatalogTests
     }
 
     [Fact]
-    public void Catalog_preserves_the_original_all32_floor_beside_the_two_diagnostics_rows()
+    public void Catalog_preserves_the_original_all33_floor_beside_the_two_diagnostics_rows()
     {
         using var ledger = JsonDocument.Parse(File.ReadAllText(FindRepositoryFile(
             "specs",

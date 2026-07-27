@@ -37,7 +37,12 @@
           },
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
-          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",

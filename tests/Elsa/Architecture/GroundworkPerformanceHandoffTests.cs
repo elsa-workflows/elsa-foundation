@@ -33,7 +33,11 @@ public sealed class GroundworkPerformanceHandoffTests
                 "iam-user"
             ],
             ["not-hot-path"] =
-            ["iam-provider-configuration-global", "runtime-activity-execution-inspection"],
+            [
+                "iam-provider-configuration-global",
+                "runtime-activity-execution-inspection",
+                "runtime-workflow-alteration"
+            ],
             ["outbox-drain"] = ["runtime-post-commit-outbox"],
             ["placement-takeover"] = ["distributed-execution-placement"],
             ["queue-drain"] = ["runtime-scheduler-poison", "runtime-scheduler-work-queue"],
@@ -106,7 +110,7 @@ public sealed class GroundworkPerformanceHandoffTests
     }
 
     [Fact]
-    public void Ledger_maps_the_ratified_34_row_denominator_to_reviewed_workload_lanes()
+    public void Ledger_maps_the_additive_35_row_denominator_to_reviewed_workload_lanes()
     {
         var ledger = ReadJson(LedgerPath);
         var actual = ledger["entries"]!.AsArray()
@@ -120,7 +124,7 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Equal(ExpectedLedgerMapping.Keys.Order(StringComparer.Ordinal), actual.Keys.Order(StringComparer.Ordinal));
         foreach (var (workload, expectedRows) in ExpectedLedgerMapping)
             Assert.Equal(expectedRows.Order(StringComparer.Ordinal), actual[workload]);
-        Assert.Equal(34, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(35, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

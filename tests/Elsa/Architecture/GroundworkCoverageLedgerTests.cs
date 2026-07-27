@@ -60,6 +60,7 @@ public sealed class GroundworkCoverageLedgerTests
         "runtime-executable-source-reference",
         "runtime-workflow-executable",
         "runtime-workflow-execution-state",
+        "runtime-workflow-alteration",
         "runtime-workflow-hold-state",
         "runtime-scheduler-poison",
         "runtime-scheduler-work-queue",
@@ -80,7 +81,7 @@ public sealed class GroundworkCoverageLedgerTests
     ];
 
     [Fact]
-    public void Checked_in_ledger_conforms_to_its_schema_and_preserves_the_ratified_34_row_denominator()
+    public void Checked_in_ledger_conforms_to_its_schema_and_preserves_the_additive_35_row_denominator()
     {
         var ledger = ReadLedger();
 
@@ -95,7 +96,7 @@ public sealed class GroundworkCoverageLedgerTests
             .ToArray();
 
         Assert.Empty(findings);
-        Assert.Equal(34, actualEntryIds.Length);
+        Assert.Equal(35, actualEntryIds.Length);
         Assert.Equal(ExpectedEntryIds.Order(StringComparer.Ordinal), actualEntryIds);
     }
 
@@ -250,13 +251,13 @@ public sealed class GroundworkCoverageLedgerTests
         Assert.Equal(ExpectedGroundworkVersion, ledger.GroundworkVersion);
         Assert.Equal(ExpectedEntryIds, ledger.Entries.Select(entry => entry.Id));
         Assert.Equal(["sqlite", "sqlserver", "postgresql", "mongodb"], ledger.MandatoryProviders);
-        Assert.Equal("host-selection-all34", ledger.CompositionEvidence.EvidenceId);
+        Assert.Equal("host-selection-all35", ledger.CompositionEvidence.EvidenceId);
         Assert.Equal(ExpectedEntryIds, ledger.CompositionEvidence.CoveredEntryIds);
         Assert.Equal(8, ledger.CompositionEvidence.SelectedFeatureIdentities.Count);
     }
 
     [Fact]
-    public void Composition_evidence_covers_all_34_rows_once_and_preserves_external_authority_links()
+    public void Composition_evidence_covers_all_35_rows_once_and_preserves_external_authority_links()
     {
         var ledger = ReadLedger();
         var evidence = ledger["compositionEvidence"]!.AsObject();
@@ -264,8 +265,8 @@ public sealed class GroundworkCoverageLedgerTests
             .Select(row => row!.GetValue<string>())
             .ToArray();
 
-        Assert.Equal(34, coveredRows.Length);
-        Assert.Equal(34, coveredRows.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(35, coveredRows.Length);
+        Assert.Equal(35, coveredRows.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(ExpectedEntryIds, coveredRows);
 
         var links = evidence["externalAuthorityLinks"]!.AsArray().OfType<JsonObject>().ToArray();
@@ -299,7 +300,7 @@ public sealed class GroundworkCoverageLedgerTests
             "composition evidence: coverage row 'diagnostics-open-telemetry-store' is missing from the reviewed host selection.",
             findings);
         Assert.Contains(
-            "composition evidence: artifact 'evidence/composition/host-selection-all34.json' digest does not match its contents.",
+            "composition evidence: artifact 'evidence/composition/host-selection-all35.json' digest does not match its contents.",
             findings);
     }
 

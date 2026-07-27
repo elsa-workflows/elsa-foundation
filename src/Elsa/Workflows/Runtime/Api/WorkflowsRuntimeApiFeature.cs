@@ -6,9 +6,12 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Api.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,6 +35,16 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
     /// </summary>
     public string? ActivityExecutionHierarchyCursorSigningKey { get; set; }
 
+    /// <summary>
+    /// The selected restart-stable key identifier for durable alteration requests. Hosts must also configure the
+    /// corresponding base64 AES-256 material in <see cref="WorkflowAlterationPayloadProtectionKeys"/>; leaving this
+    /// unset preserves the in-memory development-only key configured by the Runtime core.
+    /// </summary>
+    public string? WorkflowAlterationPayloadProtectionActiveKeyId { get; set; }
+
+    /// <summary>Key ring retained for as long as durable alteration plans may be read or cancelled.</summary>
+    public IDictionary<string, string>? WorkflowAlterationPayloadProtectionKeys { get; set; }
+
     public override void ConfigureServices(IServiceCollection services)
     {
         base.ConfigureServices(services);
@@ -43,6 +56,16 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.Configure<ActivityExecutionHierarchyCursorOptions>(options =>
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);
+        if (!string.IsNullOrWhiteSpace(WorkflowAlterationPayloadProtectionActiveKeyId))
+        {
+            services.Configure<WorkflowAlterationPayloadProtectionOptions>(options =>
+            {
+                options.ActiveKeyId = WorkflowAlterationPayloadProtectionActiveKeyId;
+                options.AllowEphemeralDevelopmentKey = false;
+                if (WorkflowAlterationPayloadProtectionKeys is not null)
+                    options.Keys = new Dictionary<string, string>(WorkflowAlterationPayloadProtectionKeys, StringComparer.Ordinal);
+            });
+        }
         services.TryAddScoped<WorkflowExecutableInspector>();
 
         // API-only wiring: the FastEndpoints request and command handlers this feature's endpoints dispatch through.
@@ -58,7 +81,10 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityExecutionValuePayloadReader, ActivityExecutionValuePayloadReader>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IActivityExecutionValuePayloadAuditSink, LoggingActivityExecutionValuePayloadAuditSink>();
+        services.TryAddScoped<IWorkflowAlterationRequestContext, HttpContextWorkflowAlterationRequestContext>();
+        services.TryAddScoped<IWorkflowAlterationAdmissionGate, AllowWorkflowAlterationAdmissionGate>();
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
     }
 }

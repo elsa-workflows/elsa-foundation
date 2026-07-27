@@ -73,7 +73,7 @@
       "properties": {
         "evidenceId": {
           "type": "string",
-          "const": "host-selection-all34"
+          "const": "host-selection-all35"
         },
         "outcome": {
           "type": "string",
@@ -98,8 +98,8 @@
         },
         "coveredEntryIds": {
           "type": "array",
-          "minItems": 34,
-          "maxItems": 34,
+          "minItems": 35,
+          "maxItems": 35,
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -115,7 +115,7 @@
         },
         "artifact": {
           "type": "string",
-          "const": "evidence/composition/host-selection-all34.json"
+          "const": "evidence/composition/host-selection-all35.json"
         },
         "artifactSha256": {
           "type": "string",

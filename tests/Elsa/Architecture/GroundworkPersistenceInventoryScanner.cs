@@ -52,6 +52,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             ["IActivityExecutionHierarchyStore"] = ["ActivityExecutionHierarchyDocumentKind"],
             ["IActivityExecutionHierarchyWriter"] = ["ActivityExecutionHierarchyDocumentKind"],
             ["IWorkflowExecutionStateStore"] = ["WorkflowExecutionStateDocumentKind"],
+            ["IWorkflowAlterationStore"] =
+                ["WorkflowAlterationPlanDocumentKind", "WorkflowAlterationJobDocumentKind"],
             ["IWorkflowTestScopeStore"] = ["WorkflowTestScopeDocumentKind"],
             ["IWorkflowTestScopeAdmissionStore"] = ["WorkflowTestScopeDocumentKind", "WorkflowDispatchDocumentKind"],
             ["IWorkflowTestScopeCleanupStore"] =

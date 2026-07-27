@@ -55,6 +55,19 @@ public sealed class RuntimeBoundedQueryContractTests
         "workflowExecutable/page-all",
         "executableActivityTemplate/find-by-template-hash",
         "executableActivityTemplate/page-all",
+        "workflowAlterationJob/count-by-plan-and-status",
+        "workflowAlterationJob/find-by-checkpoint-commit-id",
+        "workflowAlterationJob/list-claimable",
+        "workflowAlterationJob/list-claimable-by-plan",
+        "workflowAlterationJob/list-pending-by-plan",
+        "workflowAlterationJob/list-pending-claimable-by-plan",
+        "workflowAlterationJob/list-running-claimable-by-plan",
+        "workflowAlterationJob/page-by-plan",
+        "workflowAlterationPlan/find-by-tenant-and-idempotency-key",
+        "workflowAlterationPlan/list-all",
+        "workflowAlterationPlan/page-active",
+        "workflowAlterationPlan/page-active-by-tenant",
+        "workflowExecutionState/page-alteration-capture",
         "workflowExecutionState/page-faulted-for-attention",
         "workflowExecutionState/page-history",
         "workflowExecutionState/page-pinned-executable-artifact-ids",
@@ -74,7 +87,11 @@ public sealed class RuntimeBoundedQueryContractTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(ExpectedB7PhysicalRoutes.Order(StringComparer.Ordinal), physicalRoutes);
+        var expectedPhysicalRoutes = ExpectedB7PhysicalRoutes.Order(StringComparer.Ordinal).ToArray();
+        Assert.True(
+            expectedPhysicalRoutes.SequenceEqual(physicalRoutes, StringComparer.Ordinal),
+            $"Missing B7 physical routes: {string.Join(", ", expectedPhysicalRoutes.Except(physicalRoutes, StringComparer.Ordinal))}. " +
+            $"Unexpected B7 physical routes: {string.Join(", ", physicalRoutes.Except(expectedPhysicalRoutes, StringComparer.Ordinal))}.");
 
         var primaryReads = ElsaGroundworkQueryRoutes.All
             .Where(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead)
@@ -552,6 +569,8 @@ public sealed class RuntimeBoundedQueryContractTests
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,

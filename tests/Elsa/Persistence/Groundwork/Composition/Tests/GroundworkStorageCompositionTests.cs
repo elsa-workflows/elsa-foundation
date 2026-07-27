@@ -21,6 +21,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
@@ -676,7 +677,7 @@ public class GroundworkStorageCompositionTests
     }
 
     [Fact]
-    public async Task Durable_family_sources_cover_the_exact_ALL32_ledger_denominator_once()
+    public async Task Durable_family_sources_cover_the_exact_ALL33_ledger_denominator_once()
     {
         var sources = new IGroundworkStorageManifestSource[]
         {
@@ -692,9 +693,9 @@ public class GroundworkStorageCompositionTests
             actualRows.AddRange(declaration.CoverageRows);
         }
 
-        Assert.Equal(32, actualRows.Count);
-        Assert.Equal(32, actualRows.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(ExpectedAll32CoverageRows, actualRows.Order(StringComparer.Ordinal));
+        Assert.Equal(33, actualRows.Count);
+        Assert.Equal(33, actualRows.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(ExpectedAll33CoverageRows, actualRows.Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -839,7 +840,7 @@ public class GroundworkStorageCompositionTests
         "atomic-route",
         new HashSet<CapabilityId> { AtomicCommit });
 
-    private static readonly string[] ExpectedAll32CoverageRows =
+    private static readonly string[] ExpectedAll33CoverageRows =
     [
         "distributed-command-transport",
         "distributed-execution-placement",
@@ -869,6 +870,7 @@ public class GroundworkStorageCompositionTests
         "runtime-scheduler-state",
         "runtime-scheduler-work-queue",
         "runtime-trigger-binding",
+        "runtime-workflow-alteration",
         "runtime-workflow-executable",
         "runtime-workflow-execution-state",
         "runtime-workflow-hold-state",
@@ -958,6 +960,8 @@ public class GroundworkStorageCompositionTests
             typeof(IActivityExecutionInspectionStore),
             typeof(IActivityExecutionInspectionWriter),
             typeof(IWorkflowExecutionStateStore),
+            typeof(IWorkflowAlterationStore),
+            typeof(IWorkflowAlterationCheckpointWriter),
             typeof(IWorkflowTestScopeStore),
             typeof(IWorkflowTestScopeAdmissionStore),
             typeof(IWorkflowTestScopeCleanupStore),

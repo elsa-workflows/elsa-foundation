@@ -46,4 +46,19 @@ Assert-Write -Ctx $ctx -Label "diagnostics/settings (PUT same; currently 500, bu
 # --- redrive: an unknown dispatch is a lenient no-op (200), not 404 ---
 Assert-Write -Ctx $ctx -Label "dispatches/{bogus}/redrive (lenient 200)" -Method POST -Path "runtime/workflows/dispatches/dispatch-bogus$tag/redrive" -Body @{ requestId = [guid]::NewGuid().ToString() } -ExpectStatus 200 | Out-Null
 
+# --- durable alteration-plan write/read/control surface ---
+# A deliberately missing target is safe: capture preserves it as a failed target job without revealing whether an
+# inaccessible target would have existed. This keeps the write-endpoint suite independent of background workflow timing.
+$alteration = Assert-Write -Ctx $ctx -Label "alteration-plans (accepted receipt shape)" -Method POST -Path "runtime/workflows/alteration-plans" `
+    -Headers @{ 'Idempotency-Key' = "runtime-writes-alteration-$tag" } `
+    -Body @{ target = @{ executionIds = @("missing-runtime-write-$tag") }; alterations = @( @{ kind = 'CancelWorkflow'; schemaVersion = 1; payload = @{} } ) } `
+    -ExpectStatus 202 -Validate { param($r) $r.Json.planId -and $r.Json.status -and $r.Json.submissionDisposition -and $r.Json.links.self }
+$alterationPlanId = $alteration.Json.planId
+Assert-Write -Ctx $ctx -Label "alteration-plans/{id} (redacted plan shape)" -Method GET -Path "runtime/workflows/alteration-plans/$alterationPlanId" `
+    -ExpectStatus 200 -Validate { param($r) $r.Json.planId -eq $alterationPlanId -and $r.Json.counts -and -not $r.Content.Contains('payload', [StringComparison]::OrdinalIgnoreCase) } | Out-Null
+Assert-Write -Ctx $ctx -Label "alteration-plans/{id}/jobs/page (bounded shape)" -Method GET -Path "runtime/workflows/alteration-plans/$alterationPlanId/jobs/page?take=25" `
+    -ExpectStatus 200 -Validate { param($r) $null -ne $r.Json.items -and $null -ne $r.Json.totalCount -and $null -ne $r.Json.hasNext } | Out-Null
+Assert-Write -Ctx $ctx -Label "alteration-plans/{id}/cancel (cooperative/no-op)" -Method POST -Path "runtime/workflows/alteration-plans/$alterationPlanId/cancel" `
+    -ExpectStatus 200,202 -Validate { param($r) $r.Json.planId -eq $alterationPlanId } | Out-Null
+
 Complete-WriteSuite -Area "runtime API"

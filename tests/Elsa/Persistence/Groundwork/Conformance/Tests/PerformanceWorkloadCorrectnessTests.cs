@@ -72,7 +72,7 @@ public sealed class PerformanceWorkloadCorrectnessTests
             Assert.Equal(actual[id], coveredRows);
         }
 
-        Assert.Equal(34, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(35, actual.SelectMany(pair => pair.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
