@@ -47,11 +47,11 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void WorkflowExecutable_Uses_A_Clean_V8_Baseline()
+    public void WorkflowExecutable_Uses_A_Clean_V9_Baseline()
     {
-        // v8 adds the exact incident strategy pinned by publication (#1015).
-        Assert.Equal(8, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
-        Assert.Equal(8, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        // v9 adds the exact operator-scheduling capability compiled for runtime alterations (#1016).
+        Assert.Equal(9, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(9, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---
