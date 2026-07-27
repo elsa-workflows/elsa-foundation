@@ -22,6 +22,7 @@ import {
   ApiCapabilityUnavailableError,
   capabilityIds,
   clearApiCapabilityCache,
+  hasCapabilityLink,
   resolveCapabilityLink
 } from "./capabilities";
 
@@ -327,7 +328,62 @@ export async function discardDraft(context: StudioEndpointContext, draftId: stri
   await context.http.deleteJson<unknown>(path);
 }
 
-export async function promoteDraft(context: StudioEndpointContext, draftId: string) {
+export interface PromotionPreflightIssue {
+  code: "draft-validation" | "invalid-version" | "not-forward" | "version-conflict";
+  message: string;
+  path?: string | null;
+}
+
+export interface PromotionPreflightAssessment {
+  isReady: boolean;
+  assignmentMode: "automatic" | "exact";
+  requestedVersion?: string | null;
+  resolvedVersion?: string | null;
+  latestVersion?: string | null;
+  issues: PromotionPreflightIssue[];
+}
+
+const promotionVersionRelations = {
+  preflight: "workflow-draft-promote-version-preflight",
+  exact: "workflow-draft-promote-exact-version"
+} as const;
+
+export async function getWorkflowPromotionVersionCapabilities(context: StudioEndpointContext) {
+  const [preflight, exact] = await Promise.all([
+    hasCapabilityLink(context, capabilityIds.workflowDesign, promotionVersionRelations.preflight),
+    hasCapabilityLink(context, capabilityIds.workflowDesign, promotionVersionRelations.exact)
+  ]);
+  return { preflight, exact: preflight && exact };
+}
+
+export async function preflightDraftPromotion(
+  context: StudioEndpointContext,
+  draftId: string,
+  requestedVersion?: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.workflowDesign,
+    promotionVersionRelations.preflight,
+    { draftId });
+  return context.http.postJson<PromotionPreflightAssessment>(
+    path,
+    requestedVersion === undefined ? {} : { requestedVersion });
+}
+
+export async function promoteDraft(
+  context: StudioEndpointContext,
+  draftId: string,
+  requestedVersion?: string
+) {
+  if (requestedVersion !== undefined) {
+    const path = await resolveCapabilityLink(
+      context,
+      capabilityIds.workflowDesign,
+      promotionVersionRelations.exact,
+      { draftId });
+    return context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
+  }
   const draftPath = await resolveCapabilityLink(
     context,
     capabilityIds.workflowDesign,

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ActivityCatalogItem, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
-import { createPublicationReview, publicationChangesFor, publicationIntentFor, summarizePublicationChanges } from "../workflow-editor/publicationReview";
+import {
+  createPublicationReview,
+  publicationBaselineFor,
+  publicationChangesFor,
+  publicationIntentFor,
+  publicationIntentForChannel,
+  summarizePublicationChanges
+} from "../workflow-editor/publicationReview";
 import { flowchartActivity, sequenceActivity } from "./fixtures";
 
 describe("publication review model", () => {
@@ -183,7 +190,7 @@ describe("publication review model", () => {
     expect(review.intent).toEqual({ action: "sideBySide", slotName: "" });
   });
 
-  it("proposes the major version that promotion actually creates", () => {
+  it("describes automatic assignment as policy-owned rather than diff-derived", () => {
     const review = createPublicationReview({
       draft: draft(),
       details: {
@@ -203,7 +210,7 @@ describe("publication review model", () => {
       catalog: []
     });
 
-    expect(review.proposedVersion).toBe("2.0.0");
+    expect(review.proposedVersion).toBe("Assigned automatically by version policy");
   });
 
   it("protects an occupied side-by-side target with its publication id", () => {
@@ -234,6 +241,43 @@ describe("publication review model", () => {
       slotName: "blue",
       expectedPublicationId: "publication-blue"
     });
+  });
+
+  it("derives create or replace intent from the selected Publication channel", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { blue: version("version-blue", {}) },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [{
+        definitionId: "definition-1",
+        slotName: "blue",
+        status: "active",
+        publication: {
+          publicationId: "publication-blue",
+          definitionId: "definition-1",
+          versionId: "version-blue",
+          artifactId: "artifact-blue",
+          artifactVersion: "1.4.0",
+          slotName: "blue",
+          sourceReferenceId: "reference-blue",
+          status: "active"
+        }
+      }],
+      catalog: []
+    });
+
+    expect(publicationIntentForChannel(review, "blue")).toEqual({
+      action: "replace",
+      slotName: "blue",
+      expectedPublicationId: "publication-blue"
+    });
+    expect(publicationIntentForChannel(review, "canary")).toEqual({
+      action: "sideBySide",
+      slotName: "canary"
+    });
+    expect(publicationBaselineFor(review, "blue")).toBe("blue · 1.4.0");
+    expect(publicationBaselineFor(review, "canary")).toBe("New channel · canary · no previous publication");
   });
 
   it("recomputes changes against the selected occupied slot", () => {

@@ -1,9 +1,13 @@
 import type { Publication, PublicationIntent, PublicationPolicy, PublicationPreflight, PublicationSlot } from "../api/publishing";
+import type { PromotionPreflightAssessment } from "../api/workflowDesign";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 import { getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
 
 export type PublicationReviewPhase = "review" | "publishing" | "validationBlocked" | "savedFailure" | "partialFailure" | "success";
 export type PublicationProgressStep = "saving" | "promoting" | "preflight" | "publishing";
+export type PublicationVersionSelection =
+  | { mode: "automatic" }
+  | { mode: "exact"; requestedVersion: string };
 
 export interface PublicationChangeCount {
   added: number;
@@ -35,6 +39,11 @@ export interface PublicationReviewState {
   triggerActivityVersionIds: string[];
   intent: PublicationIntent;
   preflight?: PublicationPreflight;
+  versionPreflight?: PromotionPreflightAssessment;
+  versionSelection: PublicationVersionSelection;
+  versionPreflightSupported: boolean;
+  exactVersionSupported: boolean;
+  reviewPending?: boolean;
   promotedVersionId?: string;
   savedDraft?: WorkflowDraft;
   failureMessage?: string;
@@ -73,7 +82,7 @@ export function createPublicationReview(input: {
     phase: validationErrors.length ? "validationBlocked" : "review",
     draftSnapshot,
     currentVersion,
-    proposedVersion: nextVersionLabel(input.details?.definition.latestVersion ?? currentVersion),
+    proposedVersion: "Assigned automatically by version policy",
     unsavedChangesIncluded: true,
     executableStatus: validationErrors.length ? "blocked" : "ready",
     validationErrors,
@@ -87,10 +96,37 @@ export function createPublicationReview(input: {
     slotVersions: input.slotVersions,
     catalog: input.catalog,
     triggerActivityVersionIds,
+    versionSelection: { mode: "automatic" },
+    versionPreflightSupported: false,
+    exactVersionSupported: false,
     intent: policy.defaultAction === "requireExplicitSlot"
       ? { action: "sideBySide", slotName: "" }
       : { action: "replace", slotName: policy.defaultSlotName }
   };
+}
+
+export function publicationIntentForChannel(
+  review: PublicationReviewState,
+  slotName: string
+): PublicationIntent {
+  const normalizedSlot = slotName.trim();
+  const occupied = review.slots.some(slot =>
+    slot.slotName === normalizedSlot && Boolean(slot.publication || slot.activePublicationId));
+  return publicationIntentFor(
+    review,
+    occupied || normalizedSlot === review.policy.defaultSlotName ? "replace" : "sideBySide",
+    normalizedSlot);
+}
+
+export function publicationBaselineFor(review: PublicationReviewState, slotName: string) {
+  const normalizedSlot = slotName.trim();
+  const slot = review.slots.find(candidate => candidate.slotName === normalizedSlot);
+  const version = slot?.publication?.artifactVersion
+    ?? slot?.publication?.versionId
+    ?? review.slotVersions[normalizedSlot]?.version;
+  return version
+    ? `${normalizedSlot} · ${version}`
+    : `New channel · ${normalizedSlot || "unnamed"} · no previous publication`;
 }
 
 export function summarizePublicationChanges(
@@ -141,11 +177,6 @@ export function publicationChangesFor(review: PublicationReviewState, slotName: 
     review.draftSnapshot.state,
     new Set(review.triggerActivityVersionIds),
     review.catalog);
-}
-
-function nextVersionLabel(value: string) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
-  return match ? `${Number(match[1]) + 1}.0.0` : "Next promoted version";
 }
 
 function collectActivities(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup) {

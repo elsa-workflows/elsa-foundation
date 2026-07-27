@@ -31,6 +31,9 @@ import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/El
 import { ActivityPalettePanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { InspectorPanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
 import { ActivityVersionChangeDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityVersionChangeDialog";
+import { PublicationReviewDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
+import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
+import type { PublicationIntent } from "../../src/Elsa.Studio.Workflows/Client/src/api/publishing";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
@@ -58,6 +61,7 @@ const activityDefinitionsFixture = searchParams.get("mode") === "activity-defini
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
+const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const endpointContext = createEndpointContext(window.location.origin);
 
@@ -792,6 +796,187 @@ function VersionChangeFixture() {
   );
 }
 
+function PublicationReviewFixture() {
+  const [message, setMessage] = useState("");
+  const [review, setReview] = useState<PublicationReviewState>(() => publicationReview());
+  const outcome = searchParams.get("outcome") ?? "success";
+
+  const refreshReview = async (
+    _review: PublicationReviewState,
+    intent: PublicationIntent,
+    versionSelection: PublicationVersionSelection
+  ) => {
+    await new Promise(resolve => window.setTimeout(resolve, 60));
+    setReview(current => ({
+      ...current,
+      intent,
+      versionSelection,
+      reviewPending: false,
+      preflight: {
+        ...current.preflight!,
+        slotName: intent.slotName,
+        resolvedAction: intent.action,
+        policySource: "request",
+        policyRevision: 12
+      },
+      versionPreflight: {
+        isReady: true,
+        assignmentMode: versionSelection.mode,
+        requestedVersion: versionSelection.mode === "exact" ? versionSelection.requestedVersion.trim() : null,
+        resolvedVersion: versionSelection.mode === "exact" ? versionSelection.requestedVersion.trim() : "2.0.0",
+        latestVersion: "1.4.0",
+        issues: []
+      }
+    }));
+  };
+
+  const publish = async (intent: PublicationIntent, versionSelection: PublicationVersionSelection = { mode: "automatic" }) => {
+    if (outcome === "recovery") {
+      setReview(current => ({
+        ...current,
+        phase: "partialFailure",
+        intent,
+        versionSelection,
+        proposedVersion: versionSelection.mode === "exact" ? versionSelection.requestedVersion : "2.0.0",
+        promotedVersionId: "version-2",
+        failureMessage: "The activation request timed out. The promoted version was retained and can be retried without another promotion."
+      }));
+      return;
+    }
+    setReview(current => ({
+      ...current,
+      phase: "success",
+      intent,
+      versionSelection,
+      proposedVersion: versionSelection.mode === "exact" ? versionSelection.requestedVersion : "2.0.0",
+      promotedVersionId: "version-2",
+      published: {
+        publicationId: "publication-2",
+        definitionId: "definition-browser",
+        versionId: "version-2",
+        artifactId: "executable-browser-2",
+        slotName: intent.slotName,
+        sourceReferenceId: "source-reference-browser-2",
+        status: "active"
+      }
+    }));
+  };
+
+  return (
+    <main className="wf-editor browser-publication-workbench">
+      <header><span>Studio / Workflows</span><h1>Orders workflow</h1></header>
+      <section aria-label="Workflow canvas"><p>Designer canvas</p></section>
+      {message ? <p role="status">{message}</p> : null}
+      <PublicationReviewDialog
+        review={review}
+        busy={false}
+        onReview={refreshReview}
+        onPublish={publish}
+        onCancel={() => setMessage("Publication review closed")}
+        onOpenPublishedExecutable={() => setMessage("Published executable opened")}
+      />
+    </main>
+  );
+}
+
+function publicationReview(): PublicationReviewState {
+  const draft: WorkflowDraft = {
+    id: "draft-browser",
+    definitionId: "definition-browser",
+    sourceVersionId: "version-default",
+    state: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "flowchart",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: "Flowchart",
+          schemaVersion: "1",
+          payload: {
+            activities: [
+              { nodeId: "write", activityVersionId: "write-line", inputs: [], outputs: [] },
+              { nodeId: "http", activityVersionId: "http-endpoint", inputs: [], outputs: [] }
+            ]
+          }
+        }
+      },
+      inputs: [{ name: "orderId" }],
+      outputs: [{ name: "result" }]
+    },
+    layout: [],
+    validationErrors: []
+  };
+  const slots = [
+    {
+      definitionId: "definition-browser",
+      slotName: "default",
+      status: "active" as const,
+      publication: {
+        publicationId: "publication-default",
+        definitionId: "definition-browser",
+        versionId: "version-default",
+        artifactId: "artifact-default",
+        artifactVersion: "1.4.0",
+        slotName: "default",
+        sourceReferenceId: "reference-default",
+        status: "active" as const
+      }
+    },
+    {
+      definitionId: "definition-browser",
+      slotName: "blue",
+      status: "active" as const,
+      publication: {
+        publicationId: "publication-blue",
+        definitionId: "definition-browser",
+        versionId: "version-blue",
+        artifactId: "artifact-blue",
+        artifactVersion: "1.3.0",
+        slotName: "blue",
+        sourceReferenceId: "reference-blue",
+        status: "active" as const
+      }
+    }
+  ];
+  const review = createPublicationReview({
+    draft,
+    details: null,
+    slotVersions: {},
+    policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+    slots,
+    catalog: []
+  });
+  return {
+    ...review,
+    exactVersionSupported: searchParams.get("exact") !== "unsupported",
+    versionPreflightSupported: searchParams.get("exact") !== "unsupported",
+    proposedVersion: "2.0.0",
+    preflight: {
+      preflightToken: "browser-preflight",
+      candidateHash: "browser-candidate",
+      definitionId: "definition-browser",
+      versionId: null,
+      slotName: "default",
+      resolvedAction: "replace",
+      policySource: "host",
+      policyRevision: 12,
+      canActivate: true,
+      claims: [{ key: "http:/orders", cardinality: "exclusive" }],
+      triggers: [{ change: "added", key: "http:/orders", cardinality: "exclusive" }],
+      conflicts: []
+    },
+    versionPreflight: {
+      isReady: true,
+      assignmentMode: "automatic",
+      requestedVersion: null,
+      resolvedVersion: "2.0.0",
+      latestVersion: "1.4.0",
+      issues: []
+    }
+  };
+}
+
 function versionChangeDraft(): WorkflowDraft {
   const activity = (nodeId: string, activityVersionId: string): ActivityNode => ({
     nodeId,
@@ -875,7 +1060,9 @@ const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
-  versionChangeFixture
+  publicationReviewFixture
+    ? <PublicationReviewFixture />
+    : versionChangeFixture
     ? <QueryClientProvider client={queryClient}><VersionChangeFixture /></QueryClientProvider>
     : elsa3ReusableImportFixture
       ? <Elsa3ReusableImportPage context={endpointContext} navigate={path => window.history.pushState({}, "", path)} />

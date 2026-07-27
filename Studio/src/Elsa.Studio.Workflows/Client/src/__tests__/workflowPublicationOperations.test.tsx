@@ -270,6 +270,82 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
     expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
   });
+
+  it("preflights and promotes an exact version only when Foundation advertises both relations", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    expect(currentReview).toMatchObject({
+      exactVersionSupported: true,
+      versionPreflight: {
+        assignmentMode: "automatic",
+        resolvedVersion: "2.0.0",
+        isReady: true
+      }
+    });
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: "2.1.0-rc.1" },
+      versionPreflight: {
+        assignmentMode: "exact",
+        resolvedVersion: "2.1.0-rc.1",
+        isReady: true
+      }
+    });
+
+    await fixture.current().confirmPublication(intent, { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+    await flushUpdates();
+
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promote",
+      { requestedVersion: "2.1.0-rc.1" });
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      proposedVersion: "2.1.0-rc.1"
+    });
+  });
+
+  it("keeps only the latest authoritative review when version responses arrive out of order", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true, delayExactVersion: "2.1.0" });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    const older = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    const newer = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.2.0" });
+    await Promise.all([older, newer]);
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: "2.2.0" },
+      versionPreflight: {
+        requestedVersion: "2.2.0",
+        resolvedVersion: "2.2.0"
+      }
+    });
+  });
 });
 
 async function prepare(fixture: ReturnType<typeof renderOperations>) {
@@ -298,6 +374,8 @@ function renderOperations(options: {
   stalePublishAttempts?: number;
   savedValidationErrors?: string[];
   failPolicyLoad?: boolean;
+  exactVersionSupport?: boolean;
+  delayExactVersion?: string;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
   const mutationOrder: string[] = [];
@@ -305,7 +383,7 @@ function renderOperations(options: {
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
   const getJson = vi.fn(async (url: string) => {
-    if (url === "/capabilities") return capabilities;
+    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false);
     if (url === "/publishing/workflows/definition-1/policy") {
       if (options.failPolicyLoad) throw new Error("policy unavailable");
       return { defaultAction: "replace", defaultSlotName: "default", source: "host" };
@@ -315,6 +393,21 @@ function renderOperations(options: {
     throw new Error(`Unexpected GET ${url}`);
   });
   const postJson = vi.fn(async (url: string, body?: Record<string, unknown>) => {
+    if (url === "/design/workflows/drafts/draft-1/promotion-preflight") {
+      mutationOrder.push("version-preflight");
+      const requestedVersion = typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : null;
+      if (requestedVersion === options.delayExactVersion) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return {
+        isReady: true,
+        assignmentMode: requestedVersion ? "exact" : "automatic",
+        requestedVersion,
+        resolvedVersion: requestedVersion ?? "2.0.0",
+        latestVersion: "1.0.0",
+        issues: []
+      };
+    }
     if (url === "/publishing/workflows/preflight") {
       mutationOrder.push("snapshot-preflight");
       snapshotPreflightAttempts += 1;
@@ -338,7 +431,10 @@ function renderOperations(options: {
       mutationOrder.push("promote");
       promoteAttempts += 1;
       if (promoteAttempts <= (options.failPromoteAttempts ?? 0)) throw new Error("promotion unavailable");
-      return { id: "version-2", version: "2.0.0" };
+      return {
+        id: "version-2",
+        version: typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : "2.0.0"
+      };
     }
     if (url === "/publishing/workflows/version-2/preflight") {
       mutationOrder.push("preflight");
@@ -471,14 +567,27 @@ function slot() {
   };
 }
 
-const capabilities = {
-  capabilities: [
+function capabilitiesFor(exactVersionSupport: boolean) {
+  return {
+    capabilities: [
     {
       id: "elsa.api.workflow-design",
       contractVersion: "1",
       links: [
         { rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true },
-        { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true }
+        { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true },
+        ...(exactVersionSupport ? [
+          {
+            rel: "workflow-draft-promote-version-preflight",
+            href: "design/workflows/drafts/{draftId}/promotion-preflight",
+            templated: true
+          },
+          {
+            rel: "workflow-draft-promote-exact-version",
+            href: "design/workflows/drafts/{draftId}/promote",
+            templated: true
+          }
+        ] : [])
       ]
     },
     {
@@ -492,5 +601,6 @@ const capabilities = {
         { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true }
       ]
     }
-  ]
-};
+    ]
+  };
+}

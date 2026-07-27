@@ -32,6 +32,30 @@ body {
   font-family: var(--font-sans);
 }
 
+.browser-publication-workbench {
+  min-height: 100vh;
+  background: var(--studio-app-bg);
+  color: var(--studio-text);
+  padding: 24px;
+}
+
+.browser-publication-workbench > header {
+  border-bottom: 1px solid var(--studio-border);
+  padding-bottom: 16px;
+}
+
+.browser-publication-workbench > header h1 {
+  margin: 6px 0 0;
+}
+
+.browser-publication-workbench > section {
+  min-height: 70vh;
+  border: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+  margin-top: 18px;
+  padding: 18px;
+}
+
 .browser-fixture {
   min-height: 100vh;
   padding: 32px;
