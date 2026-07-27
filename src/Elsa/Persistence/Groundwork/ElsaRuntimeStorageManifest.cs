@@ -656,7 +656,9 @@ public static class ElsaRuntimeStorageManifest
             query.SupportsDisjunction,
             supportsTotalCount: true,
             query.SortFields,
-            query.PredicateFields,
+            query.PredicateBindingMode == BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField
+                ? null
+                : query.PredicateFields,
             resultOperations,
             query.LatestPerKeyPath,
             query.ResidualPredicateFields);
