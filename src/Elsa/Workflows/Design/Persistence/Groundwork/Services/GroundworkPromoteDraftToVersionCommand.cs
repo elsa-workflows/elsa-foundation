@@ -35,9 +35,17 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         DesignOperationKey operationKey,
         string draftId,
         CancellationToken cancellationToken = default)
+        => await Execute(operationKey, draftId, requestedVersion: null, cancellationToken);
+
+    public async Task<string> Execute(
+        DesignOperationKey operationKey,
+        string draftId,
+        string? requestedVersion,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
+        var normalizedRequestedVersion = requestedVersion?.Trim();
 
         var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
@@ -54,7 +62,10 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 atomicWrite,
                 operationKey,
                 OperationKind,
-                new PromoteDraftRequestMaterial(draftId),
+                new PromoteDraftRequestMaterial(
+                    draftId,
+                    normalizedRequestedVersion is null ? "automatic" : "exact",
+                    normalizedRequestedVersion),
                 [
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind
@@ -76,10 +87,26 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     var lastVersion = await versionStore.FindLatestVersionAsync(
                         draft.WorkflowDefinitionId,
                         token);
+                    var initialAssessment = WorkflowVersionNumbering.AssessPromotion(
+                        lastVersion?.Version,
+                        normalizedRequestedVersion,
+                        versionIdentityExists: false);
+                    if (initialAssessment.ResolvedVersion is null)
+                        ThrowIfRejected(initialAssessment, draft.WorkflowDefinitionId);
+
+                    var versionIdentityExists = await versionStore.ExistsAsync(
+                        draft.WorkflowDefinitionId,
+                        Elsa.Primitives.Versioning.SemVer.ToSortKey(initialAssessment.ResolvedVersion!),
+                        token);
+                    var assessment = WorkflowVersionNumbering.AssessPromotion(
+                        lastVersion?.Version,
+                        normalizedRequestedVersion,
+                        versionIdentityExists);
+                    ThrowIfRejected(assessment, draft.WorkflowDefinitionId);
                     var versionId = identityGenerator.Generate();
                     var version = new WorkflowDefinitionVersion(
                         draft.WorkflowDefinitionId,
-                        WorkflowVersionNumbering.NextMajor(lastVersion?.Version))
+                        assessment.ResolvedVersion!)
                     {
                         Id = versionId,
                         TenantId = draft.TenantId,
@@ -137,6 +164,10 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     definitionLock = await lockProvider.AcquireLockAsync(definitionLockKey, null, token);
                 });
         }
+        catch (GroundworkDesignOperationConflictException exception)
+        {
+            throw new WorkflowPromotionOperationConflictException(exception.Message, exception);
+        }
         finally
         {
             try
@@ -154,7 +185,26 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         return outcome.Value.VersionId;
     }
 
-    private sealed record PromoteDraftRequestMaterial(string DraftId);
+    private static void ThrowIfRejected(
+        WorkflowPromotionVersionAssessment assessment,
+        string definitionId)
+    {
+        if (assessment.IsReady)
+            return;
+
+        var issue = assessment.Issues.Single();
+        if (issue.Code == "version-conflict")
+            throw new WorkflowDefinitionVersionConflictException(
+                definitionId,
+                assessment.RequestedVersion ?? assessment.ResolvedVersion ?? "automatic");
+
+        throw new WorkflowVersionSelectionException(issue.Code, issue.Message);
+    }
+
+    private sealed record PromoteDraftRequestMaterial(
+        string DraftId,
+        string AssignmentMode,
+        string? RequestedVersion);
 
     private sealed record PromoteDraftResult(
         string DraftId,

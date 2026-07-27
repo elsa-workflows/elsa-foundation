@@ -545,6 +545,76 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task PromoteDraft_persists_a_requested_forward_release_and_prerelease()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-exact", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+
+        var releaseId = await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var prereleaseId = await promote.Execute(NextKey(), draftId, "2.1.0-rc.1", CancellationToken.None);
+
+        Assert.Equal("2.0.0", (await VersionStore().GetAsync(releaseId)).Version);
+        Assert.Equal("2.1.0-rc.1", (await VersionStore().GetAsync(prereleaseId)).Version);
+    }
+
+    [Theory]
+    [InlineData("not-semver")]
+    [InlineData("1.0.0")]
+    public async Task PromoteDraft_rejects_malformed_or_non_forward_requested_versions_without_creating_a_version(string requestedVersion)
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-invalid", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var versionCount = (await VersionStore().ListByDefinitionAsync("definition-invalid")).Count;
+
+        await Assert.ThrowsAsync<WorkflowVersionSelectionException>(() =>
+            promote.Execute(NextKey(), draftId, requestedVersion, CancellationToken.None));
+
+        Assert.Equal(versionCount, (await VersionStore().ListByDefinitionAsync("definition-invalid")).Count);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_replay_requires_the_same_requested_version_material()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-replay", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        var key = NextKey();
+
+        var versionId = await promote.Execute(key, draftId, "2.0.0", CancellationToken.None);
+        var replayId = await promote.Execute(key, draftId, " 2.0.0 ", CancellationToken.None);
+
+        Assert.Equal(versionId, replayId);
+        await Assert.ThrowsAsync<WorkflowPromotionOperationConflictException>(() =>
+            promote.Execute(key, draftId, "2.1.0", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromoteDraft_rejects_a_build_metadata_equivalent_identity_as_a_conflict_without_creating_a_version()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-build-conflict", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var versionCount = (await VersionStore().ListByDefinitionAsync("definition-build-conflict")).Count;
+
+        await Assert.ThrowsAsync<WorkflowDefinitionVersionConflictException>(() =>
+            promote.Execute(NextKey(), draftId, "2.0.0+build.7", CancellationToken.None));
+
+        Assert.Equal(versionCount, (await VersionStore().ListByDefinitionAsync("definition-build-conflict")).Count);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_replay_rejects_switching_between_exact_and_automatic_assignment()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-replay-mode", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        var key = NextKey();
+        await promote.Execute(key, draftId, "2.0.0", CancellationToken.None);
+
+        await Assert.ThrowsAsync<WorkflowPromotionOperationConflictException>(() =>
+            promote.Execute(key, draftId, requestedVersion: null, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
     public async Task PromoteDraft_preserves_the_scope_identity_on_the_version_and_layout()
     {
         const string scope = GroundworkTestAccess.DefaultScopeValue;

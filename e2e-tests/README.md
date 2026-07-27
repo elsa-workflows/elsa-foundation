@@ -68,6 +68,7 @@ candidates are flagged for future migration so coverage is never dropped before 
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
 | `get-endpoints` | integration-candidate | GET status/shape contract; migrate to `WebApplicationFactory` |
 | `write-endpoints` | integration-candidate | CRUD status/shape contract; migrate to `WebApplicationFactory` |
+| `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 
 The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
 response shapes with little runtime behavior — the natural long-term home is an in-process `WebApplicationFactory`
@@ -99,6 +100,7 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
 | `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against the real SQLite server |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
+| `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`

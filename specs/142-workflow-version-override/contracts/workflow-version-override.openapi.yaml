@@ -1,0 +1,204 @@
+openapi: 3.1.0
+info:
+  title: Elsa Workflow Design - promotion version extension
+  version: 1.0.0
+  description: |
+    Additive contracts for workflow draft version preflight and exact normal promotion. Hosts that
+    support these operations advertise the templated `workflow-draft-promote-version-preflight`
+    and `workflow-draft-promote-exact-version` relations in the existing
+    `elsa.api.workflow-design` capability declaration. Clients that do not see the relations must
+    omit `requestedVersion` and retain automatic promotion without probing unsupported routes.
+paths:
+  /design/workflows/drafts/{draftId}/promotion-preflight:
+    post:
+      operationId: preflightWorkflowDraftPromotionVersion
+      summary: Assess a draft's current promotion readiness and version candidate
+      description: |
+        This operation is authoritative for the state it reads but is non-mutating: it creates no
+        version, operation marker, or reservation. A later promotion repeats every acceptance
+        check under its definition lock and atomic write boundary.
+      x-elsa-capability-relation: workflow-draft-promote-version-preflight
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromotionVersionSelection'
+      responses:
+        '200':
+          description: Current readiness assessment, including expected validation failures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionPreflightAssessment'
+        '404':
+          description: The draft does not exist or is outside the caller's available scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Authentication is required by the host.
+        '403':
+          description: The caller lacks workflow-design.manage permission.
+  /design/workflows/drafts/{draftId}/promote:
+    post:
+      operationId: promoteWorkflowDraft
+      summary: Promote a workflow draft to an immutable version
+      description: |
+        When `requestedVersion` is omitted, the server retains its automatic next-major policy.
+        When supplied, the server trims the label, validates SemVer syntax and forward precedence
+        against the latest immutable version, and enforces semantic identity atomically. Preflight
+        is advisory; this operation repeats all checks under lock before it commits.
+      x-elsa-capability-relation: workflow-draft-promote-exact-version
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteDraftRequest'
+            examples:
+              automatic:
+                summary: Retain automatic next-major assignment
+                value:
+                  operationKey: 5c9b6e24a50a4d7da9d8dcfa837ebda1
+              exactRelease:
+                summary: Request a forward release
+                value:
+                  operationKey: 5c9b6e24a50a4d7da9d8dcfa837ebda1
+                  requestedVersion: 2.1.0
+              exactPrerelease:
+                summary: Request a forward prerelease
+                value:
+                  operationKey: 5c9b6e24a50a4d7da9d8dcfa837ebda1
+                  requestedVersion: 2.1.0-rc.1
+      responses:
+        '201':
+          description: The immutable version was created, or an identical operation replay returned its authoritative result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinitionVersionDetails'
+        '400':
+          description: The requested version is empty after trimming, malformed, equal to, or lower than the latest version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: The draft does not exist or is outside the caller's available scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            The draft failed promotion validation, the requested semantic version identity already
+            exists or raced at persistence, or the operation key was previously bound to different
+            normalized promotion material.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Authentication is required by the host.
+        '403':
+          description: The caller lacks workflow-design.manage permission.
+components:
+  parameters:
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    PromotionVersionSelection:
+      type: object
+      additionalProperties: false
+      properties:
+        requestedVersion:
+          type: string
+          description: |
+            Optional exact SemVer 2.0.0 label. Surrounding whitespace is trimmed. Omit for the
+            existing server-assigned next-major behavior.
+          examples: [2.1.0, 2.1.0-rc.1]
+    PromoteDraftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        operationKey:
+          type: string
+          minLength: 1
+          description: Opaque retry key. Reuse only with identical normalized promotion material.
+        requestedVersion:
+          type: string
+          description: |
+            Optional exact SemVer 2.0.0 label. Surrounding whitespace is trimmed. Omit for the
+            existing server-assigned next-major behavior.
+          examples: [2.1.0, 2.1.0-rc.1]
+    PromotionPreflightAssessment:
+      type: object
+      required: [isReady, assignmentMode, issues]
+      properties:
+        isReady:
+          type: boolean
+        assignmentMode:
+          type: string
+          enum: [automatic, exact]
+        requestedVersion:
+          type: string
+          nullable: true
+          description: The normalized explicit request, or null for automatic assignment.
+        resolvedVersion:
+          type: string
+          nullable: true
+          description: Current automatic candidate or accepted exact candidate; null when no candidate is valid.
+        latestVersion:
+          type: string
+          nullable: true
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionPreflightIssue'
+    PromotionPreflightIssue:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [draft-validation, invalid-version, not-forward, version-conflict]
+        message:
+          type: string
+        path:
+          type: string
+          nullable: true
+    WorkflowDefinitionVersionDetails:
+      type: object
+      required: [id, definitionId, version]
+      properties:
+        id:
+          type: string
+        definitionId:
+          type: string
+        version:
+          type: string
+          description: The immutable version label accepted and persisted by the server.
+        sourceDraftId:
+          type: string
+          nullable: true
+    ProblemDetails:
+      type: object
+      description: Existing Elsa API error envelope; hosts may include field-level validation errors.
+      properties:
+        status:
+          type: integer
+        title:
+          type: string
+        detail:
+          type: string

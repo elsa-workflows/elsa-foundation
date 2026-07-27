@@ -16,7 +16,7 @@ public sealed record ReplaceDraft(
     WorkflowDefinitionStateView State,
     IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null) : ICommand<WorkflowDraftView>;
 
-public sealed record PromoteDraft(string? OperationKey, string DraftId) : ICommand<WorkflowDefinitionVersionDetailsView>;
+public sealed record PromoteDraft(string? OperationKey, string DraftId, string? RequestedVersion = null) : ICommand<WorkflowDefinitionVersionDetailsView>;
 
 public sealed record DiscardDraft(string? OperationKey, string DraftId) : ICommand;
 

@@ -37,4 +37,15 @@ public interface IPromoteDraftToVersionCommand
         DesignOperationKey operationKey,
         string draftId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Promotes the supplied Draft with an optional exact semantic-version request. An omitted
+    /// request retains the automatic next-major policy; a supplied request is checked for semantic
+    /// validity, forward precedence, and identity availability inside the promotion lock.
+    /// </summary>
+    Task<string> Execute(
+        DesignOperationKey operationKey,
+        string draftId,
+        string? requestedVersion,
+        CancellationToken cancellationToken = default);
 }
