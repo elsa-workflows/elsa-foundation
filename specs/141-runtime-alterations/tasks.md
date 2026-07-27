@@ -152,10 +152,10 @@ prove unknown/duplicate/version/host-defect and sensitive-result cases remain de
 - [x] T080 Add architecture tests proving Runtime remains Design-free, public wire state contains no CLR type names, and feature/capability/store registrations are complete under `tests/Elsa/Architecture/`
 - [ ] T081 Run focused unit/API/Groundwork/architecture projects, all relevant existing backend e2e suites from `quickstart.md`, then full `dotnet test Elsa.Server.slnx`; reconcile regressions rather than weakening tests
 - [x] T082 Check `docs/maps/manifest.json`, refresh the narrow domain/dependency/extension-point maps using the selected map-shell preference, and review generated findings before staging
-- [ ] T083 Update `docs/program-goals/runtime-alterations.md` with the PR and verification evidence, and mark objectives/completion state truthfully
+- [x] T083 Update `docs/program-goals/runtime-alterations.md` with the PR and verification evidence, and mark objectives/completion state truthfully
 - [x] T084 Run `git diff --check`, validate OpenAPI YAML, search for payload/value/exception leakage and persisted CLR handler identities, and inspect project-reference drift
 - [x] T085 Perform root-owned bounded self-review for correctness, atomicity/replay, authorization/tenant isolation, migration safety, API compatibility, performance bounds, docs, and tests; remediate every finding and rerun affected checks
-- [ ] T086 Commit coherent implementation slices, push `codex/1016-runtime-alterations` to `origin`, open a draft PR with `Fixes #1016`, and inspect CI/check linkage
+- [x] T086 Commit coherent implementation slices, push `codex/1016-runtime-alterations` to `origin`, open a draft PR with `Fixes #1016`, and inspect CI/check linkage
 
 ## Dependencies and Parallel Opportunities
 

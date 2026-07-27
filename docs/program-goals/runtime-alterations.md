@@ -64,7 +64,25 @@ belong in the glossary.
 - Target capture completes and seals before execution begins; execution then proceeds with bounded
   concurrency and no fixed API target-count limit.
 - Treat the constitutions as draft quality gates where their provisional status affects planning.
-- Link the implementation PR and verification evidence here when they exist.
+- The implementation is under review in
+  [draft PR #1080](https://github.com/elsa-workflows/elsa-foundation/pull/1080) from
+  `codex/1016-runtime-alterations`.
+- The remaining draft gates are the four-provider admission smoke/evidence for the additive 35th
+  Groundwork row and a complete solution test run without the unrelated external SQL Server
+  diagnostics conformance timeout.
+
+## Delivery Evidence
+
+- Full solution build: succeeded with zero errors.
+- Focused alteration tests: Runtime 83/83, Runtime API 21/21, and Groundwork 15/15.
+- Full architecture suite: 316/316.
+- Backend evidence: alteration plans, replay/restart, runtime writes 10/10, instance paging,
+  suspend/resume, typed variables, fault activity, and restart recovery all passed.
+- Static review: diff whitespace, OpenAPI YAML, PowerShell AST, JSON documents, public-payload
+  leakage, persisted handler identity, and project-reference checks passed.
+- Independent bounded re-review confirmed that the seal/cancel race, Groundwork retry signal,
+  read-time payload decryption, page-size bound, and operational migration suspension findings are
+  resolved.
 
 ## Drift / Review Notes
 
