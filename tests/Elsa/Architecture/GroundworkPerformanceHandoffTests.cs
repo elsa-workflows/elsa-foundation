@@ -33,8 +33,11 @@ public sealed class GroundworkPerformanceHandoffTests
                 "iam-user"
             ],
             ["not-hot-path"] =
-            ["iam-provider-configuration-global", "runtime-activity-execution-inspection"],
-            ["operator-control-plane"] = ["runtime-workflow-alteration"],
+            [
+                "iam-provider-configuration-global",
+                "runtime-activity-execution-inspection",
+                "runtime-workflow-alteration"
+            ],
             ["outbox-drain"] = ["runtime-post-commit-outbox"],
             ["placement-takeover"] = ["distributed-execution-placement"],
             ["queue-drain"] = ["runtime-scheduler-poison", "runtime-scheduler-work-queue"],
