@@ -183,6 +183,9 @@
 
 - [X] T044 [P] [US4] Add schema validate/apply, missing-schema, drift, capability-mismatch, and concurrent-start tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsSchemaDeploymentTests.cs`
   - Evidence: Schema validate/apply/drift/capability/concurrency tests passed in the 34-test batch.
+  - Preview.94 follow-up: unified-host coverage now exercises fresh startup stream creation,
+    disabled-mode missing admission, restart idempotency, and pre-mutation drift refusal; the
+    complete suite passed 56/56.
 - [X] T045 [P] [US4] Add enabled/disabled/provider-selection and one-store registration tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceFeatureTests.cs`
   - Evidence: [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) binds exact implementation head `e70995de5` to 148/148 diagnostics persistence cases, 6/6 combined deployment-schema cases, and the full 53/53 unified-host suite. Its SQLite fixture resolves both Groundwork stores and proves no EF diagnostics store is registered or selected.
 - [X] T046 [P] [US4] Add readiness tests proving provider/schema failures never fall back to empty or in-memory durable results in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceReadinessTests.cs`
@@ -196,6 +199,10 @@
   - Evidence: Both concrete features contribute schema to the combined deployment source; schema and feature tests passed.
 - [X] T049 [US4] Implement Groundwork persistence feature composition and readiness in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/`
   - Evidence: [`evidence/us4-composition-results.json`](evidence/us4-composition-results.json) records 53/53 unified-host cases, including the four direct generic provider routes and real SQLite activation, plus a clean `Elsa.Server` Release build with 0 errors. The 29 clean-build warnings are existing preview.81 obsolescence debt in unchanged source and are disclosed in the manifest. Final four-provider promotion remains T057.
+  - Preview.94 follow-up: each unified provider registers Groundwork's public diagnostic deployment
+    applier and the shared Prepare-order-1 initializer, so startup auto-apply includes missing
+    diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
+    adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 - [ ] T050 [P] [US4] Consume the #646-owned diagnostics workload and retained-artifact contract; do not create a lane-local benchmark harness
   - Evidence note: premature lane-local performance tests were removed in `5538d8414`; the program owner ratified `diagnostics-durable-history` as the 13th spec-094 workload on 2026-07-25, but this task remains owned by the #646 handoff and has no retained passing verdict yet.
 - [ ] T051 [US4] Import the ratified #646 performance verdict for the diagnostics workload into `specs/139-groundwork-diagnostics-persistence/evidence/performance-decision.json`

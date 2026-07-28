@@ -17,6 +17,10 @@ public sealed class GroundworkDiagnosticRecordDeploymentInitializer(
 {
     private readonly IDiagnosticRecordDeploymentManifestSource[] deploymentSources =
         deploymentSources?.ToArray() ?? throw new ArgumentNullException(nameof(deploymentSources));
+    private readonly IDiagnosticRecordDeploymentApplier deploymentApplier =
+        deploymentApplier ?? throw new ArgumentNullException(nameof(deploymentApplier));
+    private readonly ILogger<GroundworkDiagnosticRecordDeploymentInitializer> logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
 
