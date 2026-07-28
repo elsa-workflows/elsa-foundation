@@ -84,6 +84,20 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Assert.Equal("node/inputs/text", diagnostic.AuthoredPath);
     }
 
+    [Fact]
+    public async Task Real_JavaScript_provider_rejects_empty_source_for_full_draft_gates()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
+
+        var result = await validator.ValidateAsync(StateWith(string.Empty), "draft", CancellationToken.None);
+
+        Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("JavaScript/Syntax", diagnostic.Code);
+        Assert.Equal("node/inputs/text", diagnostic.AuthoredPath);
+    }
+
     private static WorkflowDefinitionState StateWith(object value) => new(
         [],
         new ActivityNode("node", "activity", [new("text", new(value, "JavaScript"), null, null, null, null)], []),
