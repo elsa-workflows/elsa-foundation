@@ -23,6 +23,12 @@ public interface IWorkflowDefinitionDraftStore
     /// <summary>Finds the complete designer layout records for the draft.</summary>
     Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default);
 
+    /// <summary>Finds authored activity presentation metadata for the draft.</summary>
+    Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(
+        string draftId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<ActivityPresentationRecord>>([]);
+
     /// <summary>
     /// Finds the draft with the given id together with its designer-layout records in a single read,
     /// or <c>null</c> if the draft does not exist. Callers that need both (e.g. the GET-draft path)

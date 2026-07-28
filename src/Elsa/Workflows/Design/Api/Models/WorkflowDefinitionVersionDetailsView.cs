@@ -5,5 +5,6 @@ public sealed record WorkflowDefinitionVersionDetailsView(
     string Version,
     WorkflowDefinitionView Definition,
     WorkflowDefinitionStateView State,
-    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView> Layout
+    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView> Layout,
+    IReadOnlyCollection<ActivityPresentationRecordView> ActivityPresentation
 );

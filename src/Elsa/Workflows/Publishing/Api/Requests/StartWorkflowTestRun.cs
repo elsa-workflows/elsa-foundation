@@ -20,7 +20,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         string SnapshotId,
         WorkflowDefinitionState State,
         string? ArtifactVersion = null,
-        IReadOnlyDictionary<string, JsonElement>? Inputs = null)
+        IReadOnlyDictionary<string, JsonElement>? Inputs = null,
+        IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(SnapshotId);
@@ -31,6 +32,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         this.State = State;
         this.ArtifactVersion = ArtifactVersion;
         this.Inputs = Inputs;
+        this.ActivityPresentation =
+            ActivityPresentationRecord.NormalizeCollection(ActivityPresentation);
     }
 
     public string DefinitionId { get; init; }
@@ -43,4 +46,6 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
     /// expressions resolve to them (#286); null/empty when the caller supplies none.
     /// </summary>
     public IReadOnlyDictionary<string, JsonElement>? Inputs { get; init; }
+
+    public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; init; }
 }

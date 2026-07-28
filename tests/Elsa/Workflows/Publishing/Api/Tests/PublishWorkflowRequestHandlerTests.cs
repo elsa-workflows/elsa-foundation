@@ -24,6 +24,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -400,6 +401,127 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var executable = await _store.FindAsync(view.ArtifactId);
         Assert.Equal(view.ArtifactHash, executable!.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public void ActivityPresentationSidecarMapsAuthoredIdsToExecutableIds()
+    {
+        var firstPlacement = new ExecutableNode(
+            "exec-shared-1",
+            "authored-shared",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        var secondPlacement = new ExecutableNode(
+            "exec-shared-2",
+            "authored-shared",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        var root = new ExecutableNode(
+            "exec-root",
+            "authored-root",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Body", [firstPlacement, secondPlacement])]);
+        var executable = new WorkflowExecutable(
+            new("artifact-1", "definition-1", "version-1", "1.0.0", "hash-1"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>(),
+            new IncidentStrategyReference("Fault", "1"));
+
+        var presentation = WorkflowExecutableActivityPresentationSidecar.CopyFrom(
+            [
+                new ActivityPresentationRecord("authored-root", "Friendly root", "Historical copy."),
+                new ActivityPresentationRecord("authored-shared", "Friendly placement", "Repeated copy.")
+            ],
+            executable);
+
+        Assert.Collection(
+            presentation.OrderBy(record => record.ExecutableNodeId, StringComparer.Ordinal),
+            record =>
+            {
+                Assert.Equal("exec-root", record.ExecutableNodeId);
+                Assert.Equal("Friendly root", record.DisplayName);
+                Assert.Equal("Historical copy.", record.Description);
+            },
+            record =>
+            {
+                Assert.Equal("exec-shared-1", record.ExecutableNodeId);
+                Assert.Equal("Friendly placement", record.DisplayName);
+                Assert.Equal("Repeated copy.", record.Description);
+            },
+            record =>
+            {
+                Assert.Equal("exec-shared-2", record.ExecutableNodeId);
+                Assert.Equal("Friendly placement", record.DisplayName);
+                Assert.Equal("Repeated copy.", record.Description);
+            });
+    }
+
+    [Fact]
+    public async Task ActivityPresentationIsFrozenPerReferenceAndDoesNotChangeArtifactIdentity()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var firstLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = workflowVersion.Id,
+            ActivityPresentation =
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify buyer",
+                    "Send the confirmation after payment.")
+            ]
+        };
+        var secondLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = workflowVersion.Id,
+            ActivityPresentation =
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify warehouse",
+                    "Prepare the parcel.")
+            ]
+        };
+
+        var first = await Handler(workflowVersion, firstLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None);
+        var second = await Handler(workflowVersion, secondLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(
+                workflowVersion.Id,
+                PublicationAction.PublishSideBySide,
+                SlotName: "warehouse"), CancellationToken.None);
+
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.Equal(first.ArtifactHash, second.ArtifactHash);
+        var references = await _referenceStore.ListAllByArtifactAsync(first.ArtifactId);
+        Assert.Equal(2, references.Count);
+        Assert.Contains(
+            references,
+            reference => Assert.Single(reference.ActivityPresentation).DisplayName == "Notify buyer");
+        Assert.Contains(
+            references,
+            reference => Assert.Single(reference.ActivityPresentation).DisplayName == "Notify warehouse");
     }
 
     [Fact]

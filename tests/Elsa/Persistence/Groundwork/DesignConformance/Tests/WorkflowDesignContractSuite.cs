@@ -365,7 +365,11 @@ public abstract class WorkflowDesignContractSuite
 
         Assert.NotNull(definition);
         Assert.NotNull(draft);
-        return CanonicalSnapshot(definition!, draft!.Draft, draft.Layout);
+        return CanonicalSnapshot(
+            definition!,
+            draft!.Draft,
+            draft.Layout,
+            draft.ActivityPresentation);
     }
 
     private static async Task<WorkflowVersionSnapshot> ReadVersionSnapshotAsync(
@@ -387,7 +391,8 @@ public abstract class WorkflowDesignContractSuite
     internal static WorkflowDraftSnapshot CanonicalSnapshot(
         WorkflowDefinition definition,
         WorkflowDefinitionDraft draft,
-        IReadOnlyCollection<DesignMetadataRecord> layout) =>
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        IReadOnlyCollection<ActivityPresentationRecord>? activityPresentation = null) =>
         new(
             new WorkflowDefinitionSnapshot(
                 definition.Id,
@@ -407,14 +412,18 @@ public abstract class WorkflowDesignContractSuite
                 draft.WorkflowDefinitionId,
                 draft.SourceVersionId,
                 draft.State),
-            new WorkflowDefinitionDraftLayoutSnapshot(CanonicalLayout(layout)));
+            new WorkflowDefinitionDraftLayoutSnapshot(
+                CanonicalLayout(layout),
+                CanonicalActivityPresentation(activityPresentation ?? [])));
 
     /// <summary>Produces the deterministic workflow-draft result hash used by provider-oracle evidence.</summary>
     public static string CanonicalDraftResultHash(
         WorkflowDefinition definition,
         WorkflowDefinitionDraft draft,
-        IReadOnlyCollection<DesignMetadataRecord> layout) =>
-        DesignPersistenceFixtureData.ResultHash(CanonicalSnapshot(definition, draft, layout));
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        IReadOnlyCollection<ActivityPresentationRecord>? activityPresentation = null) =>
+        DesignPersistenceFixtureData.ResultHash(
+            CanonicalSnapshot(definition, draft, layout, activityPresentation));
 
     internal static WorkflowVersionSnapshot CanonicalSnapshot(
         WorkflowDefinitionVersion version,
@@ -437,7 +446,8 @@ public abstract class WorkflowDesignContractSuite
                 layout.LastModifiedAt,
                 layout.TenantId,
                 layout.WorkflowDefinitionVersionId,
-                CanonicalLayout(layout.Records)));
+                CanonicalLayout(layout.Records),
+                CanonicalActivityPresentation(layout.ActivityPresentation)));
 
     /// <summary>Produces the deterministic workflow-version result hash used by provider-oracle evidence.</summary>
     public static string CanonicalVersionResultHash(
@@ -456,6 +466,12 @@ public abstract class WorkflowDesignContractSuite
                 record.Width,
                 record.Height,
                 record.AdditionalProperties))
+            .ToArray();
+
+    private static IReadOnlyList<ActivityPresentationRecord> CanonicalActivityPresentation(
+        IEnumerable<ActivityPresentationRecord> activityPresentation) =>
+        activityPresentation
+            .OrderBy(record => record.NodeId, StringComparer.Ordinal)
             .ToArray();
 
     internal sealed record WorkflowDraftSnapshot(
@@ -484,7 +500,8 @@ public abstract class WorkflowDesignContractSuite
         WorkflowDefinitionState State);
 
     internal sealed record WorkflowDefinitionDraftLayoutSnapshot(
-        IReadOnlyList<DesignMetadataSnapshot> Records);
+        IReadOnlyList<DesignMetadataSnapshot> Records,
+        IReadOnlyList<ActivityPresentationRecord> ActivityPresentation);
 
     internal sealed record WorkflowVersionSnapshot(
         WorkflowDefinitionVersionSnapshot Version,
@@ -508,7 +525,8 @@ public abstract class WorkflowDesignContractSuite
         DateTimeOffset LastModifiedAt,
         string? TenantId,
         string WorkflowDefinitionVersionId,
-        IReadOnlyList<DesignMetadataSnapshot> Records);
+        IReadOnlyList<DesignMetadataSnapshot> Records,
+        IReadOnlyList<ActivityPresentationRecord> ActivityPresentation);
 
     internal sealed record DesignMetadataSnapshot(
         string NodeId,

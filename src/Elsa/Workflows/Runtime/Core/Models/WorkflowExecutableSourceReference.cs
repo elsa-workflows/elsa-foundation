@@ -37,7 +37,8 @@ public sealed record WorkflowExecutableSourceReference(
     string? SlotId = null,
     ExecutableLayoutSidecar? LayoutSidecar = null,
     IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? AuthoredInputs = null,
-    string? TenantId = null)
+    string? TenantId = null,
+    IReadOnlyList<WorkflowExecutableActivityPresentationRecord>? ActivityPresentation = null)
 {
     /// <summary>
     /// Preserves the authored-input constructor introduced before tenant scope became part of the reference.
@@ -142,6 +143,13 @@ public sealed record WorkflowExecutableSourceReference(
     /// live on this per-publish reference and never contribute to the content-addressed artifact hash.
     /// </summary>
     public IReadOnlyList<WorkflowExecutableAuthoredInputRecord> AuthoredInputs { get; init; } = AuthoredInputs ?? [];
+
+    /// <summary>
+    /// Frozen author-facing presentation keyed by flattened executable node id. This is source
+    /// provenance and never contributes to the content-addressed artifact hash.
+    /// </summary>
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } =
+        ActivityPresentation ?? [];
 
     /// <summary>Preserves the pre-tenant positional deconstruction shape including the reusable-activity layout sidecar.</summary>
     public void Deconstruct(
@@ -315,3 +323,9 @@ public sealed record WorkflowExecutableAuthoredInputRecord(
     string? ExpressionType,
     JsonElement Value,
     bool IsSensitive = false);
+
+/// <summary>Frozen presentation for one node in a source reference's flattened executable graph.</summary>
+public sealed record WorkflowExecutableActivityPresentationRecord(
+    string ExecutableNodeId,
+    string? DisplayName = null,
+    string? Description = null);

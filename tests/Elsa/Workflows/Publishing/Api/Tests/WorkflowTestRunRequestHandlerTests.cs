@@ -157,6 +157,28 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunFreezesActivityPresentationOntoItsExpiringReference()
+    {
+        var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-presentation",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
+            ActivityPresentation:
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify buyer",
+                    "Send the confirmation after payment.")
+            ]), CancellationToken.None);
+
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        var presentation = Assert.Single(reference.ActivityPresentation);
+        Assert.Equal("write-one", presentation.ExecutableNodeId);
+        Assert.Equal("Notify buyer", presentation.DisplayName);
+        Assert.Equal("Send the confirmation after payment.", presentation.Description);
+    }
+
+    [Fact]
     public async Task TestRunDoesNotWriteSourceReferenceWhileDeletionGuardOwnsArtifact()
     {
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));

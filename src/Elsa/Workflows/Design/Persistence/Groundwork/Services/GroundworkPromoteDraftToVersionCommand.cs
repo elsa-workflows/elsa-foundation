@@ -118,7 +118,8 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         Id = identityGenerator.Generate(),
                         TenantId = draft.TenantId,
                         WorkflowDefinitionVersionId = versionId,
-                        Records = document.Layout.ToList()
+                        Records = document.Layout.ToList(),
+                        ActivityPresentation = document.ActivityPresentation.ToList()
                     };
                     var now = clock.UtcNow;
                     GroundworkEntityTimestamps.StampAdded(version, now);

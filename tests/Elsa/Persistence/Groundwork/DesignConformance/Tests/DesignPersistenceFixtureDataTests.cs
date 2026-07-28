@@ -230,10 +230,18 @@ public class DesignPersistenceFixtureDataTests
         var definition = DesignPersistenceFixtureData.WorkflowDefinition();
         var draft = DesignPersistenceFixtureData.WorkflowDraft();
         var layout = new DraftLayoutSource { Records = DesignPersistenceFixtureData.WorkflowDraftLayout() };
-        var before = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout.Records);
+        var before = WorkflowDesignContractSuite.CanonicalSnapshot(
+            definition,
+            draft,
+            layout.Records,
+            layout.ActivityPresentation);
 
         MutateProperty(layout, propertyName);
-        var after = WorkflowDesignContractSuite.CanonicalSnapshot(definition, draft, layout.Records);
+        var after = WorkflowDesignContractSuite.CanonicalSnapshot(
+            definition,
+            draft,
+            layout.Records,
+            layout.ActivityPresentation);
 
         AssertSnapshotPropertyMapping(layout, before, after, snapshot => snapshot.Layout, propertyName);
     }
@@ -388,6 +396,8 @@ public class DesignPersistenceFixtureDataTests
             return new[] { new ActivityDesignFacet("drift", "1", JsonSerializer.SerializeToElement(new { value = true })) };
         if (typeof(IEnumerable<DesignMetadataRecord>).IsAssignableFrom(propertyType))
             return ChangedLayout(propertyName);
+        if (typeof(IEnumerable<ActivityPresentationRecord>).IsAssignableFrom(propertyType))
+            return ChangedActivityPresentation(propertyName);
 
         throw new InvalidOperationException($"No deterministic mutation is defined for {propertyType} ({propertyName}).");
     }
@@ -397,6 +407,14 @@ public class DesignPersistenceFixtureDataTests
         propertyName == nameof(WorkflowDesignContractSuite.WorkflowDefinitionVersionLayoutSnapshot.Records)
             ? [new DesignMetadataRecord("drift-node", -10, -20, 320, 180, JsonSerializer.SerializeToElement(new { drift = true }))]
             : throw new InvalidOperationException($"No draft-layout mutation is defined for {propertyName}.");
+
+    private static IReadOnlyCollection<ActivityPresentationRecord> ChangedActivityPresentation(
+        string propertyName) =>
+        propertyName == nameof(WorkflowDesignContractSuite.WorkflowDefinitionDraftLayoutSnapshot.ActivityPresentation) ||
+        propertyName == nameof(WorkflowDesignContractSuite.WorkflowDefinitionVersionLayoutSnapshot.ActivityPresentation)
+            ? [new ActivityPresentationRecord("drift-node", "Drift display name", "Drift description")]
+            : throw new InvalidOperationException(
+                $"No activity-presentation mutation is defined for {propertyName}.");
 
     private static DesignMetadataRecord ChangedDesignMetadata(
         DesignMetadataRecord record,
@@ -462,5 +480,6 @@ public class DesignPersistenceFixtureDataTests
     private sealed class DraftLayoutSource
     {
         public IReadOnlyCollection<DesignMetadataRecord> Records { get; set; } = [];
+        public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; set; } = [];
     }
 }

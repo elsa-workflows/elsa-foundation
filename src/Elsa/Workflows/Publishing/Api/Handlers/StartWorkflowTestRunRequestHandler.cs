@@ -148,6 +148,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     SourceKind: WorkflowExecutableSourceKinds.WorkflowDraftSnapshot,
                     SourceId: request.SnapshotId,
                     SourceVersion: artifactVersion)
+                {
+                    ActivityPresentation = request.ActivityPresentation
+                }
             },
             testRunId,
             fallbackDefinitionId: request.DefinitionId,
@@ -338,6 +341,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var authoredInputs = sourceState is not null && authoredInputsSidecar is not null
             ? authoredInputsSidecar.CopyFrom(sourceState)
             : [];
+        var activityPresentation = source?.ActivityPresentation.Count > 0
+            ? source.ActivityPresentation
+            : layout?.ActivityPresentation ?? [];
 
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
@@ -354,7 +360,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
             ExpiresAt: expiresAt,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
-            AuthoredInputs: authoredInputs);
+            AuthoredInputs: authoredInputs,
+            ActivityPresentation:
+                WorkflowExecutableActivityPresentationSidecar.CopyFrom(
+                    activityPresentation,
+                    executable));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

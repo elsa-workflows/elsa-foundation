@@ -92,7 +92,10 @@ public sealed class WorkflowExecutableInspector(
                 : new WorkflowExecutableChosenReferenceView(
                     chosen.SourceReferenceId,
                     requested is null ? chosen.IsLive(now) ? "newest-live" : "newest" : "requested",
-                    chosen.Layout),
+                    chosen.Layout)
+                {
+                    ActivityPresentation = chosen.ActivityPresentation
+                },
             ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray())
         {
             InputContract = InputContract(executable.InputContract),

@@ -68,11 +68,24 @@ public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinition
         return document?.Layout.ToArray() ?? [];
     }
 
+    public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(
+        string draftId,
+        CancellationToken cancellationToken = default)
+    {
+        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
+        return document?.ActivityPresentation.ToArray() ?? [];
+    }
+
     public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         // One document load feeds both the draft entity and its layout — the document already carries
         // both, so this avoids re-loading and re-deserializing the same draft document a second time.
         var document = await _documents.FindByIdAsync(draftId, cancellationToken);
-        return document is null ? null : new DraftWithLayout(document.Entity, document.Layout.ToArray());
+        return document is null
+            ? null
+            : new DraftWithLayout(
+                document.Entity,
+                document.Layout.ToArray(),
+                document.ActivityPresentation.ToArray());
     }
 }

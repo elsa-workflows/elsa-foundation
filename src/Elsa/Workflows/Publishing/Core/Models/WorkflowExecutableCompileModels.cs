@@ -68,4 +68,8 @@ public sealed record WorkflowExecutableCompileSource(
     WorkflowDefinitionState State,
     string SourceKind,
     string SourceId,
-    string? SourceVersion);
+    string? SourceVersion)
+{
+    public IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityPresentationRecord>
+        ActivityPresentation { get; init; } = [];
+}

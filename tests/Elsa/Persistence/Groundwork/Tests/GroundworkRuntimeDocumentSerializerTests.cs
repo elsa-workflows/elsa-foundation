@@ -37,13 +37,18 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal("not-a-real-kind", exception.DocumentKind);
     }
 
-    [Theory]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
-    public void Version_4_Runtime_Kinds_Use_A_Clean_Baseline(string kind)
+    [Fact]
+    public void Workflow_Execution_State_Uses_A_Clean_V4_Baseline()
     {
-        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(kind));
-        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+    }
+
+    [Fact]
+    public void Workflow_Executable_Source_Reference_Uses_V5_With_A_V4_Read_Baseline()
+    {
+        Assert.Equal(5, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
     }
 
     [Fact]

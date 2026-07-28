@@ -25,5 +25,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 public sealed record UpdateDraftRequest(
     string DraftId,
     WorkflowDefinitionState State,
-    IReadOnlyCollection<DesignMetadataRecord> Layout
+    IReadOnlyCollection<DesignMetadataRecord> Layout,
+    IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null
 );
