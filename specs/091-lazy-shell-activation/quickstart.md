@@ -21,7 +21,7 @@ Expected outcomes:
 - liveness remains 200 while controlled default-shell activation is blocked or failed;
 - readiness is immediate 503 until an Active generation exists, then 200;
 - concurrent probes do not create additional activation attempts;
-- exact schema history selects the fast-open path, changed/absent history and the repair knob select full materialization;
+- a matching applied-plan stamp skips inspection only when explicitly enabled; the safe default and missing/mismatched stamps perform the complete admission walk;
 - existing HTTP, lifecycle, isolation, and architecture tests remain green.
 
 ## Build the measured binary
@@ -70,4 +70,4 @@ bash tools/performance/measure-http-workflow.sh \
 ## Rollback
 
 - Set `Elsa:Readiness:WarmDefaultShell` to `false` to restore lazy preparation; readiness remains observational.
-- Set `GroundworkRuntimePersistenceSqlite:RematerializeOnStartup` to `true` to restore full SQLite materialization on every activation.
+- Set `GroundworkRuntimePersistenceSqlite:SkipSchemaInspectionWhenPlanUnchanged` to `false` to restore the full SQLite inspection/validation walk on every activation.

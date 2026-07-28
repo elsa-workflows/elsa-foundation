@@ -106,7 +106,7 @@
 
 **Goal**: Remove repeated unchanged-schema Groundwork materialization and prove the cold/first/warm budgets without changing durable behavior.
 
-**Independent Test**: Against identical pre-materialized data, the first initialization materializes, the second exact-history initialization performs no index backfill, changed/absent history and the repair setting rematerialize, and the 20-boot after lane improves shell-ready p95 by at least 30% while all durability/HTTP suites stay green.
+**Independent Test**: Against identical admitted data, the default path performs the complete inspection/validation walk; an explicitly enabled unchanged-plan path skips that walk only for a matching applied-plan stamp; missing/mismatched stamps fall back to full admission; and the 20-boot after lane improves shell-ready p95 by at least 30% while all durability/HTTP suites stay green.
 
 ### Baseline for User Story 4
 
@@ -114,17 +114,17 @@
 
 ### Tests for User Story 4
 
-- [x] T027 [P] [US4] Add exact-history hit, absent-table, changed-manifest/provider, force-rematerialize, concurrency, and usable-store tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before the fast path
-- [x] T028 [P] [US4] Add shell-feature inheritability plus setting/registration tests for `RematerializeOnStartup` in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkRuntimePersistenceShellFeatureTests.cs`
+- [x] T027 [P] [US4] Add matching/missing/mismatched applied-plan stamp, safe-default, concurrency, and usable-store tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before the fast path
+- [x] T028 [P] [US4] Add shell-feature inheritability plus safe-default and registration tests for `SkipSchemaInspectionWhenPlanUnchanged` in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkRuntimePersistenceShellFeatureTests.cs`
 
 ### Implementation for User Story 4
 
-- [x] T029 [US4] Implement exact schema-history inspection and direct store opening with full-factory fallback in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
-- [x] T030 [US4] Thread the force-rematerialize option through `src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs`
-- [x] T031 [US4] Make the touched feature inheritable and expose/document `RematerializeOnStartup` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
+- [x] T029 [US4] Implement opt-in unchanged-plan stamp inspection with complete schema-admission fallback in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
+- [x] T030 [US4] Thread the unchanged-plan inspection option through `src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs`
+- [x] T031 [US4] Make the touched feature inheritable and expose/document `SkipSchemaInspectionWhenPlanUnchanged` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
 - [x] T032 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
-- [x] T033 [US4] Build a warning-free Release server and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
-- [x] T034 [US4] Record raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
+- [ ] T033 [US4] Build the Release server with no new warnings and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
+- [ ] T034 [US4] Record uncontaminated raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
 
 **Checkpoint**: The measured dominant activation phase is reduced and the client-visible first/warm behavior satisfies the declared budgets.
 

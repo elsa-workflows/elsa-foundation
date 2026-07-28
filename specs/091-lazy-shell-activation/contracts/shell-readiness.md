@@ -56,18 +56,18 @@ Allowed unavailable statuses/codes are bounded: `not_started`, `starting`, `disa
 - `WarmDefaultShell=false`: retain lazy activation; readiness only observes an independently activated shell.
 - `DefaultShellName`: non-empty configured shell name; default `default`.
 
-## SQLite materialization repair knob
+## SQLite unchanged-plan inspection knob
 
 The `GroundworkRuntimePersistenceSqlite` shell feature exposes:
 
 ```json
 {
-  "RematerializeOnStartup": false
+  "SkipSchemaInspectionWhenPlanUnchanged": false
 }
 ```
 
-- `false` (default): an exact committed schema-history tuple opens directly; absent/changed history performs full materialization.
-- `true`: always execute the existing full materialization/backfill path for repair or verification.
+- `false` (default): execute the full schema inspection/validation walk on every activation, preserving out-of-band drift detection.
+- `true`: when the persisted applied-plan fingerprint matches the current composed plan, skip the repeated inspection walk. Use only where the host owns schema changes.
 
 ## Telemetry
 

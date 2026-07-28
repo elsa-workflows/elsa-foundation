@@ -65,7 +65,7 @@ Existing logs show feature discovery and feature configuration finish before the
 4. ordered Elsa startup tasks, including EF migrations and reconciliation;
 5. workflow HTTP route-table refresh.
 
-The current Groundwork SQLite factory creates a materialization plan on every process open. That plan backfills declared document indexes even when the exact manifest/provider tuple is already recorded in `groundwork_schema_history`. Spec 091 adds phase telemetry first, preserves a repeated pre-change lane, then removes this unchanged-schema work behind an explicit full-rematerialization repair knob.
+The current Groundwork SQLite admission path composes a plan and normally performs a complete inspection/validation walk on every process open. Spec 091 adds phase telemetry first and preserves the repeated pre-change lane. Its current optimization records an applied-plan fingerprint after successful admission and, only when `SkipSchemaInspectionWhenPlanUnchanged=true`, skips the repeated walk for an exact match. The setting defaults to `false` because a matching plan cannot detect out-of-band schema drift while the host was down.
 
 ## Budgets
 

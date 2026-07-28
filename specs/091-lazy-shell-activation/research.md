@@ -48,18 +48,18 @@
 - Fork or patch CShells in this work unit: rejected because the acceptance criteria can be met through owned boundaries; upstream fine-grained CShells telemetry can follow separately if the coarse phase dominates.
 - Add high-cardinality identifiers to metrics: rejected because workflow, tenant, and exception-message dimensions are unsafe and unbounded.
 
-## Decision 5: Skip unchanged Groundwork SQLite materialization by exact history
+## Decision 5: Optionally skip unchanged Groundwork SQLite inspection by applied-plan stamp
 
-**Decision**: When the exact manifest identity/version and provider name/version row already exists, open the existing document store directly. Otherwise execute the existing full factory materialization. Add a force-rematerialize operator setting.
+**Decision**: Compose a deterministic applied-plan fingerprint and persist it only after successful schema admission. When `SkipSchemaInspectionWhenPlanUnchanged` is explicitly enabled and that stamp matches, skip the repeated inspection/validation walk. The safe default, a missing stamp, or any mismatch executes complete admission.
 
-**Rationale**: The current factory constructs a fresh materialization plan on every process and backfills every declared portable index even though schema history records the exact applied tuple. On the frozen 58 MB runtime database, default-shell activation took 43.500964 seconds; logs and call-path analysis place the dominant repeated work in persistence initialization. The history row is committed atomically with materialization and is the correct unchanged-schema authority.
+**Rationale**: On the frozen 58 MB runtime database, default-shell activation took 43.500964 seconds; logs and call-path analysis place dominant repeated work in persistence admission. A successfully committed stamp proves that the same composed plan was admitted, but cannot detect out-of-band schema changes while the host was down. Keeping the shortcut opt-in makes that operational tradeoff explicit.
 
 **Alternatives considered**:
 
 - Disable all persistence initialization: rejected because a new or upgraded database would be unusable.
-- Turn off EF migrations first: rejected because the runtime database initialization dominates this measured lane and migrations remain necessary for unmanaged local databases.
+- Turn off EF migrations first: rejected because the runtime database admission dominates this measured lane and migrations remain necessary for unmanaged local databases.
 - Cache the document store across process restarts: rejected because process memory cannot outlive a restart and would not address schema work.
-- Change Groundwork's public factory in this work unit: rejected because Foundation can safely specialize its existing SQLite provider leaf using public provider types; an upstream factory fast path remains a later consolidation opportunity.
+- Treat the applied-plan stamp as unconditional drift proof: rejected because it cannot observe out-of-band database changes made while the host was stopped.
 
 ## Decision 6: Freeze data, not the filesystem cache
 

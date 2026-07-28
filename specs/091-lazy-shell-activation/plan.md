@@ -6,7 +6,7 @@
 
 ## Summary
 
-Move default-shell preparation off the first workflow request and behind an honest, non-blocking readiness contract. Start one background warmup after the process is listening, expose excluded root liveness/readiness paths, instrument the owned activation phases and every startup task, and add an isolated cold-boot harness. The first measured optimization is a Groundwork SQLite exact-schema-history fast path: when the current manifest/provider tuple is already committed, open the existing store without rebuilding all portable indexes; operators retain an explicit rematerialization repair knob.
+Move default-shell preparation off the first workflow request and behind an honest, non-blocking readiness contract. Start one background warmup after the process is listening, expose excluded root liveness/readiness paths, instrument the owned activation phases and every startup task, and add an isolated cold-boot harness. The measured SQLite optimization composes and records an applied-plan fingerprint: operators may explicitly skip the full inspection walk on later boots whose plan is unchanged, while the safe default preserves per-boot out-of-band drift detection.
 
 ## Technical Context
 
@@ -26,7 +26,7 @@ Move default-shell preparation off the first workflow request and behind an hone
 
 **Constraints**: Health probes must not trigger shell resolution; preparation must be stampede-safe and cancellation-aware; active means startup tasks and route refresh completed; shell isolation/reload semantics and database materialization correctness cannot regress; ordinary CI does not enforce wall-clock budgets
 
-**Scale/Scope**: One root-hosted readiness/warmup composition, startup/provider telemetry, one SQLite materialization fast path and repair knob, one cold-boot harness, focused unit/integration/architecture evidence
+**Scale/Scope**: One root-hosted readiness/warmup composition, startup/provider telemetry, one opt-in SQLite unchanged-plan inspection fast path, one cold-boot harness, focused unit/integration/architecture evidence
 
 ## Constitution Check
 
@@ -34,10 +34,10 @@ Move default-shell preparation off the first workflow request and behind an hone
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Framework §2.1 / §2.20 layering and provider decomposition | PASS | Root readiness stays in the application host; task telemetry stays in Elsa.Tasks; the schema-history optimization stays inside the SQLite provider leaf. No provider detail enters a `.Core`. |
+| Framework §2.1 / §2.20 layering and provider decomposition | PASS | Root readiness stays in the application host; task telemetry stays in Elsa.Tasks; the unchanged-plan schema-admission optimization stays inside the SQLite provider leaf. No provider detail enters a `.Core`. |
 | Framework §2.5.1 lifetimes | PASS | Readiness state and telemetry instruments are process-static singletons; the warmup executes host lifecycle logic once; scoped startup tasks remain scoped. |
 | Framework §2.6.2 replacement semantics | PASS | Existing shell registry, route table, and document-store selections remain authoritative. No competing implementation is registered. |
-| Framework §2.12 / Elsa §E4 configuration status | PASS WITH DRAFT NOTE | Warmup and rematerialization settings are explicitly host/provider settings. The plan makes no claim about tenant or workflow scope while classification is deferred. |
+| Framework §2.12 / Elsa §E4 configuration status | PASS WITH DRAFT NOTE | Warmup and unchanged-plan inspection settings are explicitly host/provider settings. The plan makes no claim about tenant or workflow scope while classification is deferred. |
 | Framework §2.15 foundation composition | PASS | Honest readiness and default local-provider startup behavior belong in the reference foundation host. No external service is introduced. |
 | Framework §2.21 / §2.23 test discipline | PASS | Existing lifecycle, isolation, route, persistence, and HTTP tests remain. New logic-bearing classes receive branch-complete unit tests plus real-host integration coverage. |
 | Framework §2.22 documentation | PASS | Operator paths, settings, diagnostics, benchmark use, rollback, and the warmup task are documented in the work unit and performance report. |
@@ -45,7 +45,7 @@ Move default-shell preparation off the first workflow request and behind an hone
 | Elsa §E2.2 Design/Runtime split | PASS | Root readiness observes shell lifecycle; the SQLite provider optimization concerns runtime persistence only and introduces no Runtime → Design dependency. |
 | Elsa §E2.4 foundation composition | PASS | The reference host eagerly prepares only its configured default shell and preserves independently activated tenant shells. |
 | Elsa §E6 naming | PASS | Proposed names (`DefaultShellWarmup`, `ShellReadinessState`, `StartupTaskTelemetry`) fit the component budget and use concrete role nouns. |
-| Durability/materialization invariant | PASS | The fast path is allowed only after an exact manifest identity/version and provider name/version tuple is durably recorded; a force-rematerialize setting provides repair and rollback. |
+| Durability/materialization invariant | PASS | The fast path is allowed only after an applied-plan fingerprint for the current composed target is durably recorded. It is opt-in because that fingerprint cannot detect out-of-band schema drift while the host was down. |
 
 ## Phase 0 Research Decisions
 
@@ -56,7 +56,7 @@ Research conclusions are recorded in [research.md](./research.md). The decisive 
 - Liveness/readiness paths must be excluded from CShells routing; otherwise the probe itself activates the default shell.
 - Background preparation starts after `ApplicationStarted`; readiness observes state and `IShellRegistry.GetActive` without awaiting or triggering activation.
 - Owned activities and bounded task-type metrics provide honest phase attribution; opaque CShells composition remains a coarse named phase rather than invented precision.
-- Groundwork's current SQLite factory replans and backfills declared indexes on every open even when the exact schema-history tuple is already committed. This is the first measured material bottleneck to remove.
+- Groundwork's SQLite admission path performs a full schema inspection/validation walk on every open. An applied-plan fingerprint can remove that repeated work when the composed target is unchanged, but only under an explicit operator tradeoff because the fingerprint does not prove that the database was untouched out of band.
 
 ## Phase 1 Design
 
@@ -79,11 +79,11 @@ Use stable activity/meter names and bounded tags:
 
 Activities carry detailed correlation; histograms carry durations with a bounded task-type dimension; structured completion logs make the local benchmark usable without a telemetry backend. Payloads, connection strings, shell secrets, workflow IDs, and exception messages are not metric dimensions.
 
-### Groundwork SQLite fast open
+### Groundwork SQLite unchanged-plan fast path
 
-Before full materialization, inspect `groundwork_schema_history` using the same SQLite connection. If an exact row exists for manifest identity, manifest version, provider name, and provider version, open `SqliteDocumentStore` directly and retain the connection in a normal `SqliteDocumentStoreHandle`. Missing history/table or `RematerializeOnStartup = true` uses the existing `SqliteDocumentStoreFactory.CreateAsync` path unchanged.
+Compose the target plan and inspect the provider-owned applied-plan admission stamp using the same SQLite connection. When `SkipSchemaInspectionWhenPlanUnchanged = true` and the stored fingerprint exactly matches the current composed plan, skip the full inspection/validation walk and open the admitted store. A missing or changed stamp, or the default `false` setting, preserves the complete admission path.
 
-The feature setting defaults to false because the committed schema-history tuple is the migration authority. Operators can force the current full behavior for repair, validation, or diagnostics. Concurrent processes cannot observe an uncommitted history row, so the fast path never races ahead of materialization commit.
+The setting defaults to `false` because an unchanged plan does not prove that no out-of-band schema drift occurred while the host was stopped. Operators may enable it for controlled databases where the host owns schema changes; disabling it is the rollback and diagnostic path. The admission stamp is persisted only after successful admission, so a failed or incomplete run cannot authorize the shortcut.
 
 ### Cold-boot evidence
 

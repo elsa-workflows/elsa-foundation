@@ -6,13 +6,13 @@ No persistent data model is added.
 
 ### Cache entry
 
-- Artifact ID: immutable string key.
+- Persistence partition plus artifact ID: immutable composite key.
 - Executable: immutable runnable workflow artifact returned by the provider.
 - Recency node: position in the bounded least-recently-used list.
 
 ### In-flight load
 
-- Artifact ID: same immutable key.
+- Persistence partition plus artifact ID: same immutable composite key.
 - Shared task: one provider lookup result for concurrent miss waiters.
 - Terminal state: success with value, not found, failed, or cancelled; the entry is removed for every terminal state.
 
@@ -26,3 +26,4 @@ No persistent data model is added.
 6. The cache never maps a mutable source reference to an artifact ID.
 7. Resident cache entries do not survive service-provider/shell replacement; the replacement provider begins with an empty cache.
 8. Root-write lease and deletion-guard state remains provider-owned and is never retained or synthesized by the cache.
+9. Privileged scoped mutations invalidate the matching partition; global/across-scope mutations invalidate the artifact in every resident partition while privileged reads continue to bypass cache values.

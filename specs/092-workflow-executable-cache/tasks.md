@@ -33,7 +33,7 @@
 
 - [x] T009 [US1] Add validated defaults in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutableCacheOptions.cs`
 - [x] T010 [US1] Add bounded counters/histogram vocabulary in `src/Elsa/Workflows/Runtime/Core/Diagnostics/WorkflowExecutableCacheTelemetry.cs`
-- [x] T011 [US1] Implement positive lookup reuse and same-key in-flight coalescing in `src/Elsa/Workflows/Runtime/Core/Services/CachingWorkflowExecutableStore.cs`
+- [x] T011 [US1] Implement positive lookup reuse and same-key in-flight coalescing in shared `WorkflowExecutableCache` state with scoped `CachingWorkflowExecutableStore` adapters
 
 ## Phase 4: User Story 2 - Bounded and Correct Lifecycle (Priority: P2)
 
@@ -45,12 +45,12 @@
 
 - [x] T012 [US2] Add deterministic LRU promotion/capacity-one eviction tests and confirm they fail before implementation
 - [x] T013 [US2] Add provider-authoritative successful/failed save and delete race tests, retention lease/deletion-guard pass-through coverage, plus list-does-not-populate tests and confirm they fail before implementation
-- [x] T014 [US2] Add Groundwork DI wrapping, disabled-mode, cross-request-scope reuse, persistence-partition isolation, and replacement-cache empty-state tests and confirm they fail before registration changes
+- [x] T014 [US2] Add Groundwork DI wrapping, disabled-mode, cross-request-scope reuse, persistence-partition isolation, privileged-mutation invalidation, and replacement-cache empty-state tests and confirm they fail before registration changes
 
 ### Implementation
 
-- [x] T015 [US2] Complete locked bounded LRU admission/promotion/eviction and mutation semantics in `CachingWorkflowExecutableStore.cs`
-- [x] T016 [US2] Register the concrete Groundwork store and optional cache decorator in the shared Groundwork runtime-store registration
+- [x] T015 [US2] Complete locked bounded LRU admission/promotion/eviction in `WorkflowExecutableCache.cs` and provider-authoritative mutation/invalidation semantics in its store adapters
+- [x] T016 [US2] Register the concrete Groundwork store, optional cache adapter, independently scoped miss loader, and privileged/global invalidation adapter in the shared Groundwork runtime-store registration
 - [x] T017 [US2] Thread enabled/capacity settings through SQLite/PostgreSQL runtime and unified provider features without changing custom or in-memory stores
 
 ## Phase 5: User Story 3 - Observable and Configurable Operation (Priority: P3)

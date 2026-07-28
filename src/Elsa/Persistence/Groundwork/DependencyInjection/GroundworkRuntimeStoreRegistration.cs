@@ -56,6 +56,7 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddScoped<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.RemoveAll<CachingWorkflowExecutableStore>();
+        services.RemoveAll<InvalidatingWorkflowExecutableStore>();
         services.RemoveAll<WorkflowExecutableCacheOptions>();
         services.AddSingleton(cacheOptions);
         services.TryAddKeyedScoped<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>(
@@ -71,12 +72,9 @@ public static class GroundworkRuntimeStoreRegistration
                 var provider = serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
                     WorkflowExecutableProviderKey);
                 var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
-
-                // Privileged and explicit-global operations bypass process-local cache state. The
-                // default HTTP/runtime path is ordinary and scope-bound, which gives the cache a
-                // stable authorization partition and an independently owned provider-load scope.
                 if (context.AccessPolicy != PersistenceAccessPolicy.Ordinary || context.Scope is null)
-                    return new CachingWorkflowExecutableStore(provider, cacheOptions);
+                    throw new InvalidOperationException(
+                        "The workflow executable cache adapter requires an ordinary persistence scope.");
 
                 var persistenceScope = context.Scope;
                 var loader = serviceProvider.GetRequiredService<GroundworkWorkflowExecutableCacheLoader>();
@@ -87,14 +85,22 @@ public static class GroundworkRuntimeStoreRegistration
                     (artifactId, cancellationToken) =>
                         loader.LoadAsync(persistenceScope, artifactId, cancellationToken));
             });
-            services.AddScoped<IWorkflowExecutableStore>(serviceProvider =>
+            services.AddScoped<InvalidatingWorkflowExecutableStore>(serviceProvider =>
             {
                 var provider = serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
                     WorkflowExecutableProviderKey);
                 var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+                return new InvalidatingWorkflowExecutableStore(
+                    provider,
+                    serviceProvider.GetRequiredService<WorkflowExecutableCache>(),
+                    context.Scope?.Value);
+            });
+            services.AddScoped<IWorkflowExecutableStore>(serviceProvider =>
+            {
+                var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
                 return context.AccessPolicy == PersistenceAccessPolicy.Ordinary && context.Scope is not null
                     ? serviceProvider.GetRequiredService<CachingWorkflowExecutableStore>()
-                    : provider;
+                    : serviceProvider.GetRequiredService<InvalidatingWorkflowExecutableStore>();
             });
         }
         else

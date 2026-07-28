@@ -27,8 +27,9 @@ generation or process restart begins empty.
 The cache is local to one shell service provider. Content-addressed IDs cannot be replaced with
 different content, and mutable source references are checked before artifact lookup. A delete
 evicts the node on which it is executed; another opted-in node may retain that immutable artifact
-until local eviction/restart, so PostgreSQL features remain disabled by default. Privileged global
-and cross-scope operations bypass shared cache state.
+until local eviction/restart, so PostgreSQL features remain disabled by default. Privileged/global
+reads bypass shared values. Successful privileged scoped mutations invalidate their partition;
+global and cross-scope mutations invalidate that artifact across every resident local partition.
 
 ## Telemetry
 

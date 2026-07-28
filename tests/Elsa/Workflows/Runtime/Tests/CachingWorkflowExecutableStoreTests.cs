@@ -40,6 +40,13 @@ public sealed class CachingWorkflowExecutableStoreTests
         Assert.Throws<ArgumentException>(() => new CachingWorkflowExecutableStore(
             provider,
             new WorkflowExecutableCacheOptions { Enabled = false, Capacity = 0 }));
+        var sharedState = new WorkflowExecutableCache(enabled);
+        Assert.Throws<ArgumentNullException>(() =>
+            new InvalidatingWorkflowExecutableStore(null!, sharedState, "tenant-a"));
+        Assert.Throws<ArgumentNullException>(() =>
+            new InvalidatingWorkflowExecutableStore(provider, null!, "tenant-a"));
+        Assert.Throws<ArgumentException>(() =>
+            new InvalidatingWorkflowExecutableStore(provider, sharedState, " "));
 
         var cache = NewCache(provider);
         await Assert.ThrowsAsync<ArgumentNullException>(() => cache.SaveAsync(null!).AsTask());
@@ -105,6 +112,34 @@ public sealed class CachingWorkflowExecutableStoreTests
         Assert.Same(expected, await first.FindAsync(expected.Identity.ArtifactId));
         Assert.Same(expected, await second.FindAsync(expected.Identity.ArtifactId));
         Assert.Equal(2, provider.FindCalls(expected.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task SharedState_AllPartitionInvalidation_RemovesEveryArtifactCopy()
+    {
+        var expected = NewExecutable("artifact-a");
+        var provider = new ControllableStore(expected);
+        var state = new WorkflowExecutableCache(new WorkflowExecutableCacheOptions());
+        var first = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-a",
+            provider.FindAsync);
+        var second = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-b",
+            provider.FindAsync);
+
+        Assert.Same(expected, await first.FindAsync(expected.Identity.ArtifactId));
+        Assert.Same(expected, await second.FindAsync(expected.Identity.ArtifactId));
+
+        var invalidatingStore = new InvalidatingWorkflowExecutableStore(provider, state, partition: null);
+        await invalidatingStore.SaveAsync(expected);
+
+        Assert.Same(expected, await first.FindAsync(expected.Identity.ArtifactId));
+        Assert.Same(expected, await second.FindAsync(expected.Identity.ArtifactId));
+        Assert.Equal(4, provider.FindCalls(expected.Identity.ArtifactId));
     }
 
     [Fact]

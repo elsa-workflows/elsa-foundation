@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
@@ -180,6 +181,54 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             var secondAdapter = secondScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
             Assert.NotSame(firstAdapter, secondAdapter);
             Assert.NotNull(await secondAdapter.FindAsync(executable.Identity.ArtifactId));
+        }
+
+        Assert.Equal(1, documents.LoadCount);
+    }
+
+    [Fact]
+    public async Task PrivilegedScopedDelete_InvalidatesOrdinaryCacheForSamePartition()
+    {
+        var documents = new CountingDocumentStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        var services = NewServices(documents);
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
+        var executable = Executable("artifact-privileged-delete");
+
+        await using (var seedScope = provider.CreateAsyncScope())
+        {
+            await seedScope.ServiceProvider
+                .GetRequiredKeyedService<IWorkflowExecutableStore>(
+                    GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey)
+                .SaveAsync(executable);
+        }
+
+        await using (var ordinaryScope = provider.CreateAsyncScope())
+        {
+            var ordinaryStore = ordinaryScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            Assert.NotNull(await ordinaryStore.FindAsync(executable.Identity.ArtifactId));
+        }
+
+        await using (var privilegedScope = provider.CreateAsyncScope())
+        {
+            privilegedScope.ServiceProvider
+                .GetRequiredService<IPersistenceAccessContextBinder>()
+                .Bind(PersistenceAccessContext.PrivilegedScoped(
+                    new PersistenceScope(PersistenceScope.DefaultValue),
+                    new PersistenceAccessPurpose("workflow-executable-maintenance")));
+            var privilegedStore = privilegedScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            Assert.True(await privilegedStore.DeleteAsync(executable.Identity.ArtifactId));
+        }
+
+        documents.ResetLoadCount();
+        await using (var ordinaryScope = provider.CreateAsyncScope())
+        {
+            var ordinaryStore = ordinaryScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            Assert.Null(await ordinaryStore.FindAsync(executable.Identity.ArtifactId));
         }
 
         Assert.Equal(1, documents.LoadCount);

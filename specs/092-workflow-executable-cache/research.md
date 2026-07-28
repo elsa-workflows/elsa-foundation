@@ -4,13 +4,13 @@
 
 `IWorkflowExecutableStore.FindAsync` receives an artifact ID after higher-level resolution. That ID represents immutable runnable content, making it safe to retain without a distributed invalidation protocol. Workflow-definition and source-reference mappings remain mutable authorities and are intentionally outside scope.
 
-## Decision 2: Add a dedicated bounded decorator
+## Decision 2: Add dedicated shared bounded state with scoped adapters
 
-The repository's generic cache abstraction does not provide both a hard capacity and same-key async miss coalescing. A small dedicated LRU decorator makes capacity, promotion, mutation invalidation, and concurrency behavior explicit and independently testable.
+The repository's generic cache abstraction does not provide both a hard capacity and same-key async miss coalescing. A dedicated `WorkflowExecutableCache` owns persistence-partitioned LRU/in-flight state for one shell service provider. Scoped `CachingWorkflowExecutableStore` adapters preserve request lifetimes, and `GroundworkWorkflowExecutableCacheLoader` owns an independent persistence-operation scope for a shared provider miss.
 
 ## Decision 3: Coalesce loads without sharing caller cancellation
 
-One provider task is created per missed artifact ID. Each caller awaits it with its own cancellation token, while the provider operation uses an independent token. The in-flight entry is removed after success, null, cancellation, or failure, preventing permanent poisoning and allowing later retries.
+One provider task is created per missed persistence-partition/artifact key. Each caller awaits it with its own cancellation token, while the provider operation uses an independent token. The in-flight entry is removed after success, null, cancellation, or failure, preventing permanent poisoning and allowing later retries.
 
 ## Decision 4: Wrap durable Groundwork providers only
 

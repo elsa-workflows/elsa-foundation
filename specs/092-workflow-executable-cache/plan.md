@@ -35,7 +35,7 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 | Gate | Status | Evidence |
 |---|---|---|
 | Framework §2.1 / §2.20 layering | PASS | Cache semantics live beside the provider-neutral runtime store contract; Groundwork registration remains in its provider implementation layer. |
-| Framework §2.5.1 lifetimes | PASS | Cache and its durable store share one runtime service-provider/shell lifetime; no process-global mutable state is introduced. |
+| Framework §2.5.1 lifetimes | PASS | Process-local cache state and its scoped provider loader share one shell service-provider lifetime. Entries are partitioned by persistence scope; request scopes receive adapters rather than isolated cache instances. |
 | Framework §2.6.2 replacement semantics | PASS | The decorator wraps the selected Groundwork implementation; it does not register a competing source of truth. Custom/in-memory providers remain unchanged. |
 | Framework §2.12 configuration | PASS WITH DRAFT NOTE | Enabled/capacity are explicit runtime-provider settings. No tenant/workflow classification is asserted while that constitution area is provisional. |
 | Framework §2.21 / §2.23 testing | PASS | Logic-bearing concurrency, lifecycle, eviction, error, and telemetry branches receive deterministic tests plus provider-backed registration evidence. |
@@ -59,13 +59,13 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 
 ### Cache decorator
 
-`CachingWorkflowExecutableStore` implements the existing store contract and receives the selected concrete provider, options, and telemetry. It owns a capacity-bounded LRU and a concurrent in-flight-load map. Fast hits promote the entry under a short lock. Misses publish a shared provider task; its owner records duration/outcome, admits only a positive result, and removes the in-flight entry in a finally path.
+`WorkflowExecutableCache` owns the capacity-bounded, persistence-partitioned LRU and concurrent in-flight-load map for the shell service-provider lifetime. `CachingWorkflowExecutableStore` is the scoped `IWorkflowExecutableStore` adapter: fast hits promote entries in the shared state, while misses publish one shared load per partition/artifact key. `GroundworkWorkflowExecutableCacheLoader` creates an independently owned persistence-operation scope for a provider miss so the shared load never captures a request-scoped durable store. The load owner records duration/outcome, admits only a positive result, and always removes the in-flight entry.
 
 Save and unconditional delete delegate first and then invalidate the key. Save cannot safely admit the caller-supplied value because the provider contract is idempotent by artifact ID: a non-throwing save may be a no-op that retained an existing provider-authoritative object. Root-write lease and deletion-guard acquire/renew/release/cancel operations pass through unchanged. Guarded delete invalidates only when the provider reports success; a rejected or already-absent guarded delete leaves the local positive entry unchanged under the documented process-local immutable-retention policy. A provider mutation failure leaves the prior cache entry intact because the durable authority did not confirm a state transition. List delegates directly.
 
 ### Composition and controls
 
-`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` as a keyed `IWorkflowExecutableStore` backend and selects either it or its cache decorator as the unkeyed runtime store. Original overloads remain binary compatible and preserve direct reads; additive overloads accept `WorkflowExecutableCacheOptions`. Runtime and unified provider features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default 256). SQLite reference features enable caching; PostgreSQL/distributed features default it off until a host explicitly accepts process-local immutable-artifact retention or supplies invalidation. Invalid enabled capacities fail options validation during composition.
+`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` as a keyed scoped backend and selects either it or a scoped cache adapter as the unkeyed runtime store. When enabled, singleton `WorkflowExecutableCache` and `GroundworkWorkflowExecutableCacheLoader` services provide cross-request reuse without extending request-scoped store lifetimes. Privileged/global reads bypass shared values; successful privileged scoped mutations invalidate their partition, while global/across-scope mutations invalidate the artifact in every resident partition. Original overloads remain compatible and direct-read capable; additive overloads accept `WorkflowExecutableCacheOptions`. Runtime and unified provider features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default 256). SQLite reference features enable caching; PostgreSQL/distributed features default it off until a host explicitly accepts process-local immutable-artifact retention or supplies distributed invalidation. Invalid enabled capacities fail options validation during composition.
 
 ### Evidence
 
@@ -86,11 +86,14 @@ specs/092-workflow-executable-cache/
 
 src/Elsa/Workflows/Runtime/Core/
 ├── Models/WorkflowExecutableCacheOptions.cs
+├── Services/WorkflowExecutableCache.cs
 ├── Services/CachingWorkflowExecutableStore.cs
+├── Services/InvalidatingWorkflowExecutableStore.cs
 └── Diagnostics/WorkflowExecutableCacheTelemetry.cs
 
 src/Elsa/Persistence/Groundwork/
 ├── DependencyInjection/GroundworkRuntimeStoreRegistration.cs
+├── Stores/GroundworkWorkflowExecutableCacheLoader.cs
 ├── Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs
 ├── PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs
 ├── Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs

@@ -84,6 +84,48 @@ public sealed class WorkflowExecutableCache
             RecordEviction(reason);
     }
 
+    internal void InvalidateAllPartitions(string artifactId, string reason)
+    {
+        List<CacheKey>? residentKeys = null;
+
+        lock (_gate)
+        {
+            foreach (var pair in _inFlight)
+            {
+                if (!StringComparer.Ordinal.Equals(pair.Key.ArtifactId, artifactId))
+                    continue;
+
+                if (_inFlight.TryRemove(pair))
+                    pair.Value.Invalidate();
+            }
+
+            foreach (var pair in _entries)
+            {
+                if (!StringComparer.Ordinal.Equals(pair.Key.ArtifactId, artifactId))
+                    continue;
+
+                residentKeys ??= [];
+                residentKeys.Add(pair.Key);
+            }
+
+            if (residentKeys is not null)
+            {
+                foreach (var key in residentKeys)
+                {
+                    var node = _entries[key];
+                    _entries.Remove(key);
+                    _recency.Remove(node);
+                }
+            }
+        }
+
+        if (residentKeys is not null)
+        {
+            foreach (var _ in residentKeys)
+                RecordEviction(reason);
+        }
+    }
+
     private async Task LoadProviderAsync(
         CacheKey key,
         LoadOperation operation,
