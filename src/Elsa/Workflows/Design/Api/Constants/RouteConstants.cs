@@ -13,4 +13,11 @@ internal static class RouteConstants
     internal static string ScopedVariableAnalysis => GetRoute("scoped-variables/analyze");
 
     internal static string ActivityInputOptions => GetRoute("activities/{activityVersionId}/inputs/{inputName}/options");
+
+    internal static string ExpressionToolingContext => GetRoute("expression-tooling/context");
+    internal static string ExpressionToolingDescriptors => GetRoute("expression-tooling/descriptors");
+    internal static string ExpressionToolingSymbols => GetRoute("expression-tooling/symbols");
+    internal static string ExpressionToolingCompletions => GetRoute("expression-tooling/completions");
+    internal static string ExpressionToolingHover => GetRoute("expression-tooling/hover");
+    internal static string ExpressionToolingValidate => GetRoute("expression-tooling/validate");
 }

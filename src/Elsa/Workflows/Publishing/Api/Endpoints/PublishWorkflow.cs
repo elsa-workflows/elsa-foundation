@@ -2,11 +2,13 @@ using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using PublishWorkflowCommand = Elsa.Workflows.Publishing.Api.Requests.PublishWorkflow;
 using PublishWorkflowRequest = Elsa.Workflows.Publishing.Api.Requests.PublishWorkflowRequest;
@@ -57,6 +59,13 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
         {
             ThrowError(exception.Message, exception.Code == "expected_publication_mismatch" ? 409 : 400);
         }
+        catch (ExpressionPublicationValidationException exception)
+        {
+            await ExpressionPublicationValidationProblems.WriteAsync(
+                HttpContext.Response,
+                ExpressionPublicationValidationProblems.Create(exception, HttpContext),
+                cancellationToken);
+        }
         catch (Exception exception) when (ValueConversionPublicationProblems.TryFind(exception, out var conversion))
         {
             await ValueConversionPublicationProblems.WriteAsync(
@@ -78,4 +87,50 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
             ThrowError("Unexpected error occurred", 500);
         }
     }
+}
+
+internal sealed record ExpressionPublicationValidationProblemDetails(
+    string Type,
+    string Title,
+    int Status,
+    string Detail,
+    string Instance,
+    string ErrorCode,
+    string TraceId,
+    string ValidationState,
+    IReadOnlyList<ExpressionPublicationValidationDiagnostic> Diagnostics);
+
+internal static class ExpressionPublicationValidationProblems
+{
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    public static ExpressionPublicationValidationProblemDetails Create(
+        ExpressionPublicationValidationException exception,
+        HttpContext context) => new(
+        $"https://elsa.dev/problems/{exception.Code}",
+        "Workflow publication expression validation was rejected",
+        StatusCode(exception.State),
+        exception.Message,
+        context.Request.Path.Value ?? string.Empty,
+        exception.Code,
+        context.TraceIdentifier,
+        exception.State.ToString().ToLowerInvariant(),
+        exception.Diagnostics);
+
+    public static async Task WriteAsync(
+        HttpResponse response,
+        ExpressionPublicationValidationProblemDetails problem,
+        CancellationToken cancellationToken)
+    {
+        response.StatusCode = problem.Status;
+        response.ContentType = "application/problem+json";
+        await System.Text.Json.JsonSerializer.SerializeAsync(response.Body, problem, JsonOptions, cancellationToken);
+    }
+
+    private static int StatusCode(ExpressionDraftValidationState state) => state switch
+    {
+        ExpressionDraftValidationState.Errors => StatusCodes.Status422UnprocessableEntity,
+        ExpressionDraftValidationState.Unavailable => StatusCodes.Status503ServiceUnavailable,
+        _ => StatusCodes.Status409Conflict
+    };
 }

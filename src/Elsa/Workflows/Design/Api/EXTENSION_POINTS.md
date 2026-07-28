@@ -52,6 +52,37 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
 
+### `IExpressionAuthoringContextSource` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Authoritative location-to-metadata contributor.
+- **Registration:** add implementations as `IExpressionAuthoringContextSource`; the scoped
+  `IExpressionAuthoringContextService` selects the first owning source and bounds/paginates its
+  output.
+- **Boundary:** validate the requested draft/node/property against authored Design state, apply
+  authorization and host policy before returning metadata, and never evaluate expressions or
+  disclose runtime values.
+
+### `IExpressionAuthoringContextFilter` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Permission and Host Policy location/metadata filter (add-don't-replace).
+- **Registration:** add filters as `IExpressionAuthoringContextFilter`; the persisted context source
+  invokes them after location authority and before symbol enumeration.
+- **Boundary:** deny the location by returning `null`, never add live values, and **must** stamp an
+  opaque `PolicyFingerprint` whenever the filter depends on Host Policy.
+  The persisted source incorporates that fingerprint into the context/catalog revision, so a policy
+  change makes in-flight requests stale and invalidates client metadata caches.
+
+### `IExpressionAuthoringSymbolFilter` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Streaming Permission and Host Policy symbol filter (add-don't-replace).
+- **Registration:** add filters as `IExpressionAuthoringSymbolFilter`; each candidate is passed
+  through the chain before it enters the bounded context catalog.
+- **Boundary:** return `null` to omit a restricted symbol, never add runtime values, and pair
+  policy-dependent symbol filtering with an `IExpressionAuthoringContextFilter` that stamps the
+  corresponding opaque `PolicyFingerprint`.
+- **Scale:** filtering is applied while candidates are enumerated, so the source retains at most
+  the 5,500 authorized symbols required by the provider boundary and can stop work at that bound.
+
 ### `IActivityInputOptionsProvider` *(Core — `Elsa.Workflows.Design.Core`)*
 
 - **Kind:** Keyed Source (add-don't-replace). Each provider contributes allowable design-time values under one stable, case-sensitive `Key`.

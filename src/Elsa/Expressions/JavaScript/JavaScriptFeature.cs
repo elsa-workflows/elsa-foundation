@@ -19,6 +19,7 @@ public class JavaScriptFeature : IShellFeature
     {
         services
             .AddScoped<IPortableExpressionHandler, PortableJavaScriptExpressionHandler>()
-            .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();
+            .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>()
+            .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>();
     }
 }

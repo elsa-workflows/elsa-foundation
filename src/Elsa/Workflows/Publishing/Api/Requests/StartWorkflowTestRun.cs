@@ -10,7 +10,10 @@ namespace Elsa.Workflows.Publishing.Api.Requests;
 /// inputs (name → JSON value) threaded into the start dispatch so <c>input.*</c> expressions resolve to them
 /// (#286); null/empty when the caller supplies none.
 /// </summary>
-public sealed record StartWorkflowTestRun(string VersionId, IReadOnlyDictionary<string, JsonElement>? Inputs = null)
+public sealed record StartWorkflowTestRun(
+    string VersionId,
+    IReadOnlyDictionary<string, JsonElement>? Inputs = null,
+    bool AcknowledgeUnavailableExpressionValidation = false)
     : IRequest<WorkflowTestRunView>;
 
 public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
@@ -21,7 +24,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         WorkflowDefinitionState State,
         string? ArtifactVersion = null,
         IReadOnlyDictionary<string, JsonElement>? Inputs = null,
-        IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null)
+        IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null,
+        bool AcknowledgeUnavailableExpressionValidation = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(SnapshotId);
@@ -34,6 +38,7 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         this.Inputs = Inputs;
         this.ActivityPresentation =
             ActivityPresentationRecord.NormalizeCollection(ActivityPresentation);
+        this.AcknowledgeUnavailableExpressionValidation = AcknowledgeUnavailableExpressionValidation;
     }
 
     public string DefinitionId { get; init; }
@@ -48,4 +53,5 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
     public IReadOnlyDictionary<string, JsonElement>? Inputs { get; init; }
 
     public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; init; }
+    public bool AcknowledgeUnavailableExpressionValidation { get; init; }
 }

@@ -1,6 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -33,7 +34,8 @@ public sealed class PublishWorkflowRequestHandler(
     PublicationSnapshotReviewService? snapshotReviews = null,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
     WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
-    ILogger<PublishWorkflowRequestHandler>? logger = null)
+    ILogger<PublishWorkflowRequestHandler>? logger = null,
+    IExpressionDraftSemanticValidator? expressionValidator = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -50,6 +52,27 @@ public sealed class PublishWorkflowRequestHandler(
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (expressionValidator is null || workflowVersionStore is null)
+            throw new ExpressionPublicationValidationException(new(
+                ExpressionDraftValidationState.Unavailable,
+                [],
+                "expression-validation-unavailable"));
+        Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion version;
+        try
+        {
+            version = await workflowVersionStore.GetWithDefinitionAsync(request.VersionId, cancellationToken);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new WorkflowExecutableCompilationException(null, request.VersionId, exception.Message, exception);
+        }
+        var expressionValidation = await ExpressionDraftSemanticValidation.ValidateSafelyAsync(
+            expressionValidator,
+            version.State,
+            request.VersionId,
+            cancellationToken);
+        if (expressionValidation.State != ExpressionDraftValidationState.Valid)
+            throw new ExpressionPublicationValidationException(expressionValidation);
         var now = timeProvider.GetUtcNow();
         var executable = await CompileAsync(request.VersionId, request.TenantId, now, cancellationToken);
         var identity = executable.Identity;
@@ -71,11 +94,11 @@ public sealed class PublishWorkflowRequestHandler(
             cancellationToken);
         if (resolvedReview is not null)
         {
-            var version = await (workflowVersionStore
+            var reviewedVersion = await (workflowVersionStore
                 ?? throw new InvalidOperationException("Workflow definition version services are not configured."))
                 .GetWithDefinitionAsync(request.VersionId, cancellationToken);
             var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
-            var candidateHash = snapshotReviews!.ComputeCandidateHash(version.State, layout?.Records ?? []);
+            var candidateHash = snapshotReviews!.ComputeCandidateHash(reviewedVersion.State, layout?.Records ?? []);
             await snapshotReviews.ValidateAndConsumeAsync(
                 request.PreflightToken!, candidateHash, plan, request.TenantId, cancellationToken);
         }
