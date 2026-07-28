@@ -45,11 +45,18 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // measured the primary entry at 120.01 kB. Per-occurrence activity presentation then moved the combined
 // entry to 122.01 kB, Definitions to 376.93 kB, and upgrades to 365.34 kB. Retain a sub-0.5 kB review
 // margin for the entry and the usual ~2 kB landing-path margins around that combined contract.
+// The expression-editor authorization lifecycle (#481) and the dedicated Activity Definition graph
+// designer (#482) each measured under the budget on their own base but land together on main, so the
+// three eager budgets are re-baselined here against the merged tree: entry 124.16 kB (CI reports the
+// same byte count — the workspace packages resolve through their `src` exports, so the historical
+// local/CI dist skew noted above no longer applies to the entry), Definitions 379.12 kB, upgrades
+// 370.61 kB. The heavy surfaces all stay deferred; the growth is the shared code-editor shell's
+// authorization handling plus the designer's shared editor constants.
 const budgets = {
-  entryJavaScript: 122_500,
+  entryJavaScript: 124_700,
   stylesheet: 185_000,
-  definitionsLandingTotal: 379_000,
-  upgradeLandingTotal: 367_500,
+  definitionsLandingTotal: 381_500,
+  upgradeLandingTotal: 373_000,
   individualChunk: 500_000
 };
 
@@ -102,9 +109,13 @@ function formatBytes(bytes) {
   return `${(bytes / 1_000).toFixed(2)} kB`;
 }
 
+// Collected instead of thrown so a single run reports every overage; re-baselining one budget at a
+// time hides the rest and turns a merge-skew regression into several build/measure rounds.
+const overages = [];
+
 function assertBudget(label, actual, budget) {
   if (actual > budget) {
-    throw new Error(`${label} is ${formatBytes(actual)}; budget is ${formatBytes(budget)}.`);
+    overages.push(`${label} is ${formatBytes(actual)}; budget is ${formatBytes(budget)}.`);
   }
 }
 
@@ -187,6 +198,8 @@ console.log(`  Authenticated Definitions total:   ${formatBytes(definitionsLandi
 console.log(`  Activity upgrades total:           ${formatBytes(upgradeLandingTotalSize.bytes)} raw / ${formatBytes(upgradeLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.upgradeLandingTotal)})`);
 console.log(`  Largest JavaScript chunk:          ${formatBytes(largestChunk.bytes)} (${largestChunk.file}; limit ${formatBytes(budgets.individualChunk)})`);
 console.log(`  Deferred heavy surfaces:           ${deferredHeavySurfaces.length}`);
+
+if (overages.length > 0) throw new Error(`Workflows bundle budget exceeded:\n  ${overages.join("\n  ")}`);
 
 function filesWithExtension(files, extension) {
   return new Set([...files].filter(file => file.endsWith(extension)));
