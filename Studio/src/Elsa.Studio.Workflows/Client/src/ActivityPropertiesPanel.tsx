@@ -1,6 +1,12 @@
 import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Maximize2, SlidersHorizontal, X } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
+import {
+  authSessionEndedEvent,
+  authSessionStartedEvent,
+  expressionEditorSessionEndedEvent,
+  expressionToolingAuthorizationRestoredEvent
+} from "@elsa-workflows/studio-sdk";
 import type {
   StudioActivityDescriptor,
   StudioActivityCustomProperties,
@@ -87,6 +93,7 @@ export interface ActivityPropertiesPanelProps {
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
   dictionarySessionScope?: string;
+  expressionEditorSessionScope?: string;
   /** Lets an enclosing Inspector tab provide the section context without a duplicate heading. */
   showHeading?: boolean;
   /** Overrides the standalone empty-state copy when the panel is presented as activity inputs. */
@@ -111,17 +118,28 @@ export function ActivityPropertiesPanel({
   scopeStatus,
   scopeRetry,
   dictionarySessionScope,
+  expressionEditorSessionScope,
   showHeading = true,
   emptyLabel = "This activity does not expose editable properties.",
   onChange
 }: ActivityPropertiesPanelProps) {
   const generatedDictionarySessionScope = useId();
   const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
+  const effectiveExpressionEditorSessionScope = expressionEditorSessionScope ?? effectiveDictionarySessionScope;
   const conversionProfiles = useConversionProfiles(context);
   const [activeToolingProperty, setActiveToolingProperty] = useState<string>();
+  const toolingAuthorization = useExpressionToolingAuthorization(effectiveExpressionEditorSessionScope);
   const activateToolingProperty = useCallback((property: string) => setActiveToolingProperty(property), []);
 
   useEffect(() => () => clearDictionaryEditorSessionScope(effectiveDictionarySessionScope), [effectiveDictionarySessionScope]);
+  useEffect(() => {
+    if (expressionEditorSessionScope) return;
+    return () => {
+      window.dispatchEvent(new CustomEvent(expressionEditorSessionEndedEvent, {
+        detail: { scope: effectiveExpressionEditorSessionScope }
+      }));
+    };
+  }, [effectiveExpressionEditorSessionScope, expressionEditorSessionScope]);
 
   if (descriptorStatus === "loading") {
     return <p className="wf-muted">Loading activity properties...</p>;
@@ -166,6 +184,11 @@ export function ActivityPropertiesPanel({
               expressionTooling={expressionTooling}
               workflowState={workflowState}
               dictionarySessionScope={effectiveDictionarySessionScope}
+              expressionEditorSessionScope={effectiveExpressionEditorSessionScope}
+              toolingAuthorizationAvailable={toolingAuthorization.available}
+              toolingAuthorizationEpoch={toolingAuthorization.epoch}
+              toolingAuthorizationConfirmationRequired={toolingAuthorization.confirmationRequired}
+              onToolingAuthorizationConfirmed={toolingAuthorization.confirm}
               input={input}
               editors={editors}
               expressionEditors={expressionEditors}
@@ -217,15 +240,21 @@ function useExpressionToolingSnapshot(
   tooling: StudioExpressionToolingClient | undefined,
   document: StudioExpressionDocument,
   workflowState: WorkflowDefinitionState,
-  enabled: boolean
+  enabled: boolean,
+  authorizationEpoch: number,
+  authorizationConfirmationRequired: boolean,
+  onAuthorizationConfirmed: () => void
 ) {
   const [authoringContext, setAuthoringContext] =
     useState<StudioExpressionToolingResult<StudioExpressionAuthoringContext>>();
   const [validation, setValidation] =
     useState<StudioExpressionToolingResult<StudioExpressionValidationResult>>();
+  const validateNowRef = useRef<() => void>(() => {});
+  const validateNow = useCallback(() => validateNowRef.current(), []);
 
   useEffect(() => {
     if (!tooling || !enabled) {
+      validateNowRef.current = () => {};
       setAuthoringContext(undefined);
       setValidation(undefined);
       return;
@@ -236,15 +265,21 @@ function useExpressionToolingSnapshot(
     setAuthoringContext(undefined);
     setValidation(undefined);
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+    let started = false;
+    const run = () => {
+      if (started) return;
+      started = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+      void (async () => {
       try {
         const nextContext = await tooling.getAuthoringContext(document, workflowState, controller.signal);
         if (controller.signal.aborted) return;
         setAuthoringContext(nextContext);
-        if (nextContext.state !== "ready" || !nextContext.data) {
+        if ((nextContext.state !== "ready" && nextContext.state !== "supported-empty") || !nextContext.data) {
           setValidation(undefined);
           return;
         }
+        if (authorizationConfirmationRequired) onAuthorizationConfirmed();
         if (nextContext.data.capabilities?.semanticValidation === false) {
           setValidation(undefined);
           return;
@@ -261,15 +296,56 @@ function useExpressionToolingSnapshot(
         setAuthoringContext(unavailable);
         setValidation(undefined);
       }
-    }, 180);
+      })();
+    };
+    const timer = window.setTimeout(run, 180);
+    validateNowRef.current = run;
 
     return () => {
+      if (validateNowRef.current === run) validateNowRef.current = () => {};
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [document, enabled, tooling, workflowState]);
+  }, [
+    authorizationConfirmationRequired,
+    authorizationEpoch,
+    document,
+    enabled,
+    onAuthorizationConfirmed,
+    tooling,
+    workflowState
+  ]);
 
-  return { authoringContext, validation };
+  return { authoringContext, validation, validateNow };
+}
+
+function useExpressionToolingAuthorization(scope: string) {
+  const [state, setState] = useState({ available: true, confirmationRequired: false, epoch: 0 });
+  useEffect(() => {
+    const revoke = () => setState(current => ({
+      available: false,
+      confirmationRequired: true,
+      epoch: current.epoch + 1
+    }));
+    const restore = () => setState(current => ({
+      available: true,
+      confirmationRequired: true,
+      epoch: current.epoch + 1
+    }));
+    window.addEventListener(authSessionEndedEvent, revoke);
+    window.addEventListener(authSessionStartedEvent, restore);
+    return () => {
+      window.removeEventListener(authSessionEndedEvent, revoke);
+      window.removeEventListener(authSessionStartedEvent, restore);
+    };
+  }, []);
+  const confirm = useCallback(() => {
+    setState(current => ({ ...current, confirmationRequired: false }));
+    window.dispatchEvent(new CustomEvent(expressionToolingAuthorizationRestoredEvent, {
+      detail: { scope }
+    }));
+  }, [scope]);
+  return { ...state, confirm };
 }
 
 type PropertyRowProps = {
@@ -280,6 +356,11 @@ type PropertyRowProps = {
   expressionTooling?: StudioExpressionToolingClient;
   workflowState: WorkflowDefinitionState;
   dictionarySessionScope: string;
+  expressionEditorSessionScope: string;
+  toolingAuthorizationAvailable: boolean;
+  toolingAuthorizationEpoch: number;
+  toolingAuthorizationConfirmationRequired: boolean;
+  onToolingAuthorizationConfirmed(): void;
   input: StudioActivityInputDescriptor;
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -298,6 +379,11 @@ function PropertyRow({
   expressionTooling,
   workflowState,
   dictionarySessionScope,
+  expressionEditorSessionScope,
+  toolingAuthorizationAvailable,
+  toolingAuthorizationEpoch,
+  toolingAuthorizationConfirmationRequired,
+  onToolingAuthorizationConfirmed,
   input,
   editors,
   expressionEditors,
@@ -348,7 +434,10 @@ function PropertyRow({
     expressionTooling,
     expressionDocument,
     workflowState,
-    toolingActive && wrapped != null && editingMode === "text"
+    toolingAuthorizationAvailable && toolingActive && wrapped != null && editingMode === "text",
+    toolingAuthorizationEpoch,
+    toolingAuthorizationConfirmationRequired,
+    onToolingAuthorizationConfirmed
   );
   const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
     ? describeDictionaryForInput(effectiveInput)
@@ -375,7 +464,9 @@ function PropertyRow({
       sourceVersion: 0
     }),
     tooling: expressionTooling,
+    editorSessionScope: expressionEditorSessionScope,
     onFocus: activateTooling,
+    onBlur: toolingSnapshot.validateNow,
     authoringContext: targetSyntax === syntax ? toolingSnapshot.authoringContext : undefined,
     validation: targetSyntax === syntax ? toolingSnapshot.validation : undefined
   });
@@ -811,6 +902,11 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     previous.draftId !== next.draftId ||
     previous.expressionTooling !== next.expressionTooling ||
     previous.dictionarySessionScope !== next.dictionarySessionScope ||
+    previous.expressionEditorSessionScope !== next.expressionEditorSessionScope ||
+    previous.toolingAuthorizationAvailable !== next.toolingAuthorizationAvailable ||
+    previous.toolingAuthorizationEpoch !== next.toolingAuthorizationEpoch ||
+    previous.toolingAuthorizationConfirmationRequired !== next.toolingAuthorizationConfirmationRequired ||
+    previous.onToolingAuthorizationConfirmed !== next.onToolingAuthorizationConfirmed ||
     previous.input !== next.input ||
     previous.editors !== next.editors ||
     previous.expressionEditors !== next.expressionEditors ||

@@ -33,6 +33,11 @@ export function FallbackCodeEditor({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.ctrlKey && event.key.toLowerCase() === "m") {
+      event.preventDefault();
+      tabEscapeArmed.current = true;
+      return;
+    }
     if (event.key === "Escape") {
       tabEscapeArmed.current = true;
       return;

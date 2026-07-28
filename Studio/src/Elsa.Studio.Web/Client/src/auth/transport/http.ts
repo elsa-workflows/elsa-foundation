@@ -1,5 +1,5 @@
 import { createHttpClient, type StudioHttpClient } from "../../sdk";
-import type { AuthProviderManager } from "../types";
+import { authSessionEndedEvent, type AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
   /** Default headers applied to every request before per-request RequestInit.headers are merged. */
@@ -50,7 +50,7 @@ function createAuthenticatedFetch(
       return firstResponse;
     }
 
-    const refreshed = await refreshOnce(requestUrl, auth);
+    const refreshed = await refreshOnce(requestUrl, auth, true);
     if (!refreshed) {
       return new Response("Authentication required.", { status: 401 });
     }
@@ -62,13 +62,20 @@ function createAuthenticatedFetch(
   }) as typeof fetch;
 }
 
-async function refreshOnce(requestUrl: string, auth: Pick<AuthProviderManager, "refresh">) {
+async function refreshOnce(
+  requestUrl: string,
+  auth: Pick<AuthProviderManager, "refresh">,
+  announceSessionLoss = false
+) {
   const key = new URL(requestUrl).origin;
   const refreshesByOrigin = refreshInFlight.get(auth) ?? new Map<string, Promise<boolean>>();
   refreshInFlight.set(auth, refreshesByOrigin);
   const existing = refreshesByOrigin.get(key);
   if (existing) {
-    return existing;
+    const refreshed = await existing;
+    if (!refreshed && announceSessionLoss && typeof window !== "undefined")
+      window.dispatchEvent(new Event(authSessionEndedEvent));
+    return refreshed;
   }
 
   const refresh = auth.refresh()
@@ -81,13 +88,16 @@ async function refreshOnce(requestUrl: string, auth: Pick<AuthProviderManager, "
       }
     });
   refreshesByOrigin.set(key, refresh);
-  return refresh;
+  const refreshed = await refresh;
+  if (!refreshed && announceSessionLoss && typeof window !== "undefined")
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+  return refreshed;
 }
 
 async function withBearerToken(
   requestUrl: string,
   auth: Pick<AuthProviderManager, "getAccessToken" | "refresh">,
-  options: Pick<AuthenticatedHttpClientOptions, "refreshOnUnauthorized">,
+  options: Pick<AuthenticatedHttpClientOptions, "refreshOnUnauthorized" | "requireAuthorization">,
   init?: RequestInit,
   refreshIfMissing = true
 ): Promise<{ init: RequestInit; hasAuthorization: boolean }> {
@@ -95,7 +105,7 @@ async function withBearerToken(
   removeBlankAuthorization(headers);
   let token = await auth.getAccessToken();
   if (!token && !hasNonEmptyAuthorization(headers) && refreshIfMissing && options.refreshOnUnauthorized !== false) {
-    await refreshOnce(requestUrl, auth);
+    await refreshOnce(requestUrl, auth, options.requireAuthorization === true);
     token = await auth.getAccessToken();
   }
   if (token) {

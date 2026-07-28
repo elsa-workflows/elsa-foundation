@@ -51,6 +51,7 @@ interface InspectorPanelProps {
   context: StudioEndpointContext;
   draftId?: string;
   expressionTooling?: StudioExpressionToolingClient;
+  expressionEditorSessionScope?: string;
   workflowState?: WorkflowDefinitionState;
   selectedNode: ActivityNode | null;
   selectedNodeLabel: string;
@@ -93,6 +94,7 @@ export function InspectorPanel({
   context,
   draftId,
   expressionTooling,
+  expressionEditorSessionScope,
   workflowState = {},
   selectedNode,
   selectedNodeLabel,
@@ -179,6 +181,7 @@ export function InspectorPanel({
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}
+      expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
       descriptor={selectedDescriptor}
@@ -200,6 +203,7 @@ export function InspectorPanel({
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}
+      expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
       descriptor={selectedDescriptor}

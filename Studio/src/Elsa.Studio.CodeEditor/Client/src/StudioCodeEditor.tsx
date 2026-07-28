@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
 import {
   getStudioCodeEditorSession,
+  isStudioCodeEditorSessionRevoked,
   subscribeToStudioCodeEditorSessionRevocation
 } from "./sessions/studioCodeEditorSessions";
 import type { StudioCodeDiagnostic, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "./types";
@@ -53,12 +54,31 @@ export function StudioCodeEditor({
   onNewline
 }: StudioCodeEditorProps) {
   const [compactActive, setCompactActive] = useState(profile === "expanded");
-  const [authorizationRevoked, setAuthorizationRevoked] = useState(false);
   const compactSession = sessionKey ?? document.uri;
-  useEffect(
-    () => subscribeToStudioCodeEditorSessionRevocation(() => setAuthorizationRevoked(true)),
-    []
+  const [authorizationRevoked, setAuthorizationRevoked] = useState(
+    () => isStudioCodeEditorSessionRevoked(compactSession)
   );
+  const [authorizationGeneration, setAuthorizationGeneration] = useState(0);
+  useEffect(
+    () => subscribeToStudioCodeEditorSessionRevocation(scope => {
+      if (!scope || compactSession.startsWith(`${scope}\u001f`)) setAuthorizationRevoked(true);
+    }),
+    [compactSession]
+  );
+  useEffect(() => {
+    setAuthorizationRevoked(isStudioCodeEditorSessionRevoked(compactSession));
+  }, [compactSession]);
+  useEffect(() => {
+    const restoreAuthorization = (event: Event) => {
+      const scope = (event as CustomEvent<{ scope?: unknown }>).detail?.scope;
+      if (typeof scope !== "string" || compactSession.startsWith(`${scope}\u001f`)) {
+        setAuthorizationRevoked(false);
+        setAuthorizationGeneration(generation => generation + 1);
+      }
+    };
+    window.addEventListener("elsa:expression-tooling-authorization-restored", restoreAuthorization);
+    return () => window.removeEventListener("elsa:expression-tooling-authorization-restored", restoreAuthorization);
+  }, [compactSession]);
   useEffect(() => {
     if (profile !== "compact") return;
     return subscribeToCompactSessions(activeSession => setCompactActive(activeSession === compactSession));
@@ -68,10 +88,8 @@ export function StudioCodeEditor({
   const languageLabel = languageAdapter?.displayName ?? document.language;
   const loadEditor = languageAdapter?.loadEditor;
   const RichCodeEditor = useMemo(() => loadEditor ? lazy(loadEditor) : null, [loadEditor]);
-  const session = useMemo(
-    () => suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri),
-    [suppliedSession, sessionKey, document.uri]
-  );
+  void authorizationGeneration;
+  const session = suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri);
   const isCompactPreview = profile === "compact" && !compactActive;
   const engineProps: StudioCodeEditorEngineProps = {
     document,
@@ -98,6 +116,14 @@ export function StudioCodeEditor({
     },
     onExpand,
     onNewline
+  };
+  const isMultilinePreview = isCompactPreview && document.value.includes("\n");
+  const activatePreview = () => {
+    if (isMultilinePreview && onExpand) {
+      onExpand();
+      return;
+    }
+    activateCompactSession(compactSession);
   };
 
   return (
@@ -134,8 +160,10 @@ export function StudioCodeEditor({
           type="button"
           className="studio-code-editor-preview"
           aria-label={`${ariaLabel}. Activate to edit.`}
-          onClick={() => activateCompactSession(compactSession)}
-          onFocus={() => activateCompactSession(compactSession)}
+          onClick={activatePreview}
+          onFocus={() => {
+            if (!isMultilinePreview) activateCompactSession(compactSession);
+          }}
         >
           <code>{previewValue(document.value)}</code>
           {document.value.includes("\n") ? <span aria-hidden="true">↗</span> : null}
@@ -194,8 +222,8 @@ function severityRank(severity: StudioCodeDiagnostic["severity"]) {
 
 function defaultEscapeDescription(profile: "compact" | "expanded") {
   return profile === "compact"
-    ? "Tab indents. Control Shift H shows hover help. Press Escape, then Tab, or Control M to move focus out. Enter expands when a completion is not selected."
-    : "Tab indents. Control Shift H shows hover help. Press Escape, then Tab, or Control M to move focus out of the editor.";
+    ? "Tab indents. Control Shift H shows hover help. Press Escape or Control M, then Tab, to move focus out. Enter expands when a completion is not selected."
+    : "Tab indents. Control Shift H shows hover help. Press Escape or Control M, then Tab, to move focus out of the editor.";
 }
 
 function formatLocation(diagnostic: StudioCodeDiagnostic) {

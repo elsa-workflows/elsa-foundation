@@ -1,9 +1,13 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
 import type { StudioCodeDocument, StudioCodeEditorProps } from "../types";
+
+beforeEach(() => {
+  window.dispatchEvent(new Event("elsa:auth-session-started"));
+});
 
 describe("StudioCodeEditor", () => {
   it("renders the fallback editor for unsupported languages and emits document changes", () => {
@@ -49,6 +53,30 @@ describe("StudioCodeEditor", () => {
     expect(container.textContent).not.toContain("sensitive expression");
     expect(container.textContent).toContain("authorization session changed");
     unmount();
+  });
+
+  it("keeps source hidden when an editor remounts in a tooling-revoked workflow scope", () => {
+    const sessionKey = "workflow-revoked\u001felsa://expressions/secret";
+    const document = codeDocument({ language: "liquid", value: "sensitive expression" });
+    const first = renderEditor({ document, sessionKey });
+
+    flushSync(() => window.dispatchEvent(new CustomEvent("elsa:expression-tooling-authorization-revoked", {
+      detail: { scope: "workflow-revoked" }
+    })));
+    expect(first.container.textContent).not.toContain("sensitive expression");
+    first.unmount();
+
+    window.dispatchEvent(new Event("elsa:auth-session-started"));
+    const second = renderEditor({ document, sessionKey });
+    expect(second.container.querySelector("textarea")).toBeNull();
+    expect(second.container.textContent).not.toContain("sensitive expression");
+    expect(second.container.textContent).toContain("authorization session changed");
+
+    flushSync(() => window.dispatchEvent(new CustomEvent("elsa:expression-tooling-authorization-restored", {
+      detail: { scope: "workflow-revoked" }
+    })));
+    expect(editorInput(second.container).value).toBe("sensitive expression");
+    second.unmount();
   });
 
   it("destroys active and parked rich source immediately when authorization is revoked", async () => {
@@ -148,7 +176,7 @@ describe("StudioCodeEditor", () => {
     unmount();
   });
 
-  it("uses Enter to expand, Tab to indent, and Escape then Tab to leave a compact fallback editor", () => {
+  it("uses Enter to expand, Tab to indent, and both documented shortcuts to leave a compact fallback editor", () => {
     const onExpand = vi.fn();
     const { container, unmount } = renderEditor({
       document: codeDocument({ language: "liquid" }),
@@ -166,11 +194,17 @@ describe("StudioCodeEditor", () => {
     textarea.dispatchEvent(escape);
     const escapeTab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
     textarea.dispatchEvent(escapeTab);
+    const controlM = new KeyboardEvent("keydown", { key: "m", ctrlKey: true, bubbles: true, cancelable: true });
+    textarea.dispatchEvent(controlM);
+    const controlMTab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    textarea.dispatchEvent(controlMTab);
 
     expect(onExpand).toHaveBeenCalledOnce();
     expect(enter.defaultPrevented).toBe(true);
     expect(tab.defaultPrevented).toBe(true);
     expect(escapeTab.defaultPrevented).toBe(false);
+    expect(controlM.defaultPrevented).toBe(true);
+    expect(controlMTab.defaultPrevented).toBe(false);
     unmount();
   });
 
@@ -394,9 +428,29 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
+  it("opens an existing multiline compact document in the expanded surface", () => {
+    const onExpand = vi.fn();
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "first line\nsecond line" }),
+      languageAdapter: javaScriptLanguageAdapter,
+      profile: "compact",
+      onExpand
+    });
+
+    const preview = container.querySelector<HTMLButtonElement>(".studio-code-editor-preview")!;
+    preview.focus();
+    expect(onExpand).not.toHaveBeenCalled();
+
+    click(preview);
+
+    expect(onExpand).toHaveBeenCalledOnce();
+    expect(container.querySelector(".studio-code-editor-rich")).toBeNull();
+    unmount();
+  });
+
   it.each(["compact", "expanded"] as const)("indents rich %s CodeMirror fields and lets Escape then Tab leave", async profile => {
     const { container, unmount } = renderEditor({
-      document: codeDocument({ value: "if (total) {\nreturn total;\n}" }),
+      document: codeDocument({ value: profile === "compact" ? "return total;" : "if (total) {\nreturn total;\n}" }),
       languageAdapter: javaScriptLanguageAdapter,
       profile
     });

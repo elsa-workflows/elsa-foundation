@@ -1,4 +1,5 @@
 import {
+  expressionToolingAuthorizationRevokedEvent,
   StudioHttpError,
   type StudioEndpointContext,
   type StudioExpressionAuthoringContext,
@@ -52,29 +53,36 @@ export interface ExpressionToolingCacheIdentity {
  */
 export function createExpressionToolingClient(
   context: StudioEndpointContext,
-  cacheIdentity: ExpressionToolingCacheIdentity
+  cacheIdentity: ExpressionToolingCacheIdentity,
+  authorizationScope?: string
 ): StudioExpressionToolingClient {
-  return new ExpressionToolingClient(context, cacheIdentity);
+  return new ExpressionToolingClient(context, cacheIdentity, authorizationScope);
 }
 
 class ExpressionToolingClient implements StudioExpressionToolingClient {
   private readonly metadataCache = new Map<string, StudioExpressionToolingResult<StudioExpressionSymbolCatalogPage>>();
   private readonly contextRevisions = new Map<string, string>();
+  private authorizationRevoked = false;
+  private authorizationPendingRestore = false;
+  private authorizationGeneration = 0;
   private disposed = false;
 
   constructor(
     private readonly context: StudioEndpointContext,
-    private readonly cacheIdentity: ExpressionToolingCacheIdentity
+    private readonly cacheIdentity: ExpressionToolingCacheIdentity,
+    private readonly authorizationScope?: string
   ) {
   }
 
   async describe(signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionToolingDescriptor[]>> {
     this.ensureActive();
-    return mapToolingRequest(
+    if (this.authorizationRevoked) return result("unauthorized", "");
+    const generation = this.authorizationGeneration;
+    return this.observeAuthorization(await mapToolingRequest(
       "",
       () => getExpressionToolingDescriptors(this.context, signal),
       parseDescriptorsOutcome
-    );
+    ), generation);
   }
 
   async getCatalog(
@@ -86,6 +94,8 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
   ): Promise<StudioExpressionToolingResult<StudioExpressionSymbolCatalogPage>> {
     this.ensureActive();
     const expressionType = document.expressionType;
+    if (this.authorizationRevoked || this.authorizationPendingRestore) return result("unauthorized", expressionType);
+    const generation = this.authorizationGeneration;
     const skip = parseCursor(cursor);
     const key = this.cacheKey(
       "symbols",
@@ -120,9 +130,9 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
           }
         }
       : withoutData(response);
-    if (catalog.state === "ready" || catalog.state === "supported-empty") this.metadataCache.set(key, catalog);
-    if (catalog.state === "unauthorized") this.invalidateAuthorization();
-    return catalog;
+    const observed = this.observeAuthorization(catalog, generation);
+    if (observed.state === "ready" || observed.state === "supported-empty") this.metadataCache.set(key, observed);
+    return observed;
   }
 
   async getValueShape(
@@ -132,6 +142,7 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     signal?: AbortSignal
   ): Promise<StudioExpressionToolingResult<StudioExpressionValueShape>> {
     this.ensureActive();
+    if (this.authorizationRevoked || this.authorizationPendingRestore) return result("unauthorized", document.expressionType);
     signal?.throwIfAborted();
     const shape = (authoringContext as AuthoringContextWithShapes)[valueShapesKey]?.get(shapeId);
     return shape
@@ -148,26 +159,26 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     signal?: AbortSignal
   ): Promise<StudioExpressionToolingResult<StudioExpressionAuthoringContext>> {
     this.ensureActive();
+    if (this.authorizationRevoked) return result("unauthorized", document.expressionType);
+    const generation = this.authorizationGeneration;
     const response = await mapToolingRequest(
       document.expressionType,
       () => getExpressionAuthoringContext(this.context, locationRequest(document), signal),
       value => parseContextOutcome(value, document)
     );
-    if (response.data) {
+    const observed = this.observeAuthorization(response, generation, true);
+    if (observed.data) {
       const revisionIdentity = [
-        response.data.version,
-        response.data.catalogVersion ?? "",
-        response.data.permissionRevision ?? "",
-        response.data.hostPolicyRevision ?? ""
+        observed.data.version,
+        observed.data.catalogVersion ?? "",
+        observed.data.permissionRevision ?? "",
+        observed.data.hostPolicyRevision ?? ""
       ].join("\u001f");
       const previous = this.contextRevisions.get(document.id);
       if (previous !== undefined && previous !== revisionIdentity) this.metadataCache.clear();
       this.contextRevisions.set(document.id, revisionIdentity);
     }
-    if (response.state === "unauthorized") {
-      this.invalidateAuthorization();
-    }
-    return response;
+    return observed;
   }
 
   async getCompletions(
@@ -177,14 +188,16 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     signal?: AbortSignal
   ): Promise<StudioExpressionToolingResult<StudioExpressionCompletionResult>> {
     this.ensureActive();
-    return mapToolingRequest(
+    if (this.authorizationRevoked || this.authorizationPendingRestore) return result("unauthorized", document.expressionType);
+    const generation = this.authorizationGeneration;
+    return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
       () => getExpressionCompletions(this.context, {
         ...sourceRequest(document, authoringContext.version),
         cursor: { line: position.line, character: position.column }
       }, signal),
       value => parseItemsOutcome(value, document.expressionType, document, authoringContext.version)
-    );
+    ), generation);
   }
 
   async getHover(
@@ -194,14 +207,16 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     signal?: AbortSignal
   ): Promise<StudioExpressionToolingResult<StudioExpressionHoverResult>> {
     this.ensureActive();
-    return mapToolingRequest(
+    if (this.authorizationRevoked || this.authorizationPendingRestore) return result("unauthorized", document.expressionType);
+    const generation = this.authorizationGeneration;
+    return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
       () => getExpressionHover(this.context, {
         ...sourceRequest(document, authoringContext.version),
         position: { line: position.line, character: position.column }
       }, signal),
       value => parseHoverOutcome(value, document, authoringContext.version)
-    );
+    ), generation);
   }
 
   async validate(
@@ -210,16 +225,36 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
     signal?: AbortSignal
   ): Promise<StudioExpressionToolingResult<StudioExpressionValidationResult>> {
     this.ensureActive();
-    return mapToolingRequest(
+    if (this.authorizationRevoked || this.authorizationPendingRestore) return result("unauthorized", document.expressionType);
+    const generation = this.authorizationGeneration;
+    return this.observeAuthorization(await mapToolingRequest(
       document.expressionType,
       () => validateExpression(this.context, sourceRequest(document, authoringContext.version), signal),
       value => parseValidationOutcome(value, document, authoringContext.version)
-    );
+    ), generation);
   }
 
   invalidateAuthorization(): void {
     this.metadataCache.clear();
     this.contextRevisions.clear();
+  }
+
+  revokeAuthorization(): void {
+    if (this.authorizationRevoked) return;
+    this.authorizationRevoked = true;
+    this.authorizationPendingRestore = false;
+    this.authorizationGeneration++;
+    this.invalidateAuthorization();
+    this.dispatchAuthorizationEvent(expressionToolingAuthorizationRevokedEvent);
+  }
+
+  restoreAuthorization(): void {
+    this.ensureActive();
+    this.authorizationRevoked = false;
+    this.authorizationPendingRestore = true;
+    this.authorizationGeneration++;
+    this.invalidateAuthorization();
+    this.dispatchAuthorizationEvent(expressionToolingAuthorizationRevokedEvent);
   }
 
   dispose(): void {
@@ -239,6 +274,32 @@ class ExpressionToolingClient implements StudioExpressionToolingClient {
 
   private ensureActive() {
     if (this.disposed) throw new Error("Expression tooling client has been disposed.");
+  }
+
+  private observeAuthorization<T>(
+    response: StudioExpressionToolingResult<T>,
+    generation: number,
+    confirmsAuthorization = false
+  ) {
+    if (generation !== this.authorizationGeneration)
+      return result<T>("unauthorized", response.expressionType);
+    if (this.authorizationRevoked) return result<T>("unauthorized", response.expressionType);
+    if (response.state === "unauthorized") {
+      this.revokeAuthorization();
+      return response;
+    }
+    if (confirmsAuthorization && response.data !== undefined && this.authorizationPendingRestore &&
+        (response.state === "ready" || response.state === "supported-empty")) {
+      this.authorizationPendingRestore = false;
+    }
+    return response;
+  }
+
+  private dispatchAuthorizationEvent(type: string) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(type, {
+      detail: { scope: this.authorizationScope }
+    }));
   }
 }
 

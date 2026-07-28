@@ -7,6 +7,7 @@ import {
   AuthProvider,
   RequireAuth,
   authSessionEndedEvent,
+  authSessionStartedEvent,
   useAuthCapabilities,
   useAuthContext,
   useAuthSession,
@@ -35,6 +36,22 @@ describe("auth React SDK", () => {
     expect(manager.logout).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledTimes(1);
     window.removeEventListener(authSessionEndedEvent, listener);
+    await unmount();
+  });
+
+  it("announces an authenticated refresh so authorization-scoped clients can re-establish context", async () => {
+    const manager = stubManager(authenticatedSession());
+    const listener = vi.fn();
+    window.addEventListener(authSessionStartedEvent, listener);
+    const { container, unmount } = renderWithAuth(manager, <RefreshButtonProbe />);
+    await flushPromises();
+
+    flushSync(() => container.querySelector("button")!.click());
+    await flushPromises();
+
+    expect(manager.refresh).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(authSessionStartedEvent, listener);
     await unmount();
   });
 
@@ -245,7 +262,7 @@ describe("auth React SDK", () => {
     manager.getCapabilities = vi.fn()
       .mockResolvedValueOnce(capabilities())
       .mockRejectedValueOnce(new Error("capabilities unavailable"));
-    const { container, unmount } = renderWithAuth(manager, <RefreshProbe />);
+    const { container, unmount } = renderWithAuth(manager, <AuthorizationRefreshProbe />);
 
     await waitFor(
       () => manager.getCapabilities.mock.calls.length === 2 && !container.textContent?.includes("foundation-owned"),
@@ -330,7 +347,7 @@ function SessionProbe() {
   return <span>{session.status}</span>;
 }
 
-function RefreshProbe() {
+function AuthorizationRefreshProbe() {
   const session = useAuthSession();
   const capabilities = useAuthCapabilities();
   const { refresh } = useAuthContext();
@@ -369,6 +386,11 @@ function renderWithAuth(manager: AuthProviderManager, children: React.ReactNode)
 function LogoutProbe() {
   const { logout } = useAuthContext();
   return <button type="button" onClick={() => void logout()}>Log out</button>;
+}
+
+function RefreshButtonProbe() {
+  const { refresh } = useAuthContext();
+  return <button type="button" onClick={() => void refresh()}>Refresh</button>;
 }
 
 function stubManager(session: AuthSession): AuthProviderManager {

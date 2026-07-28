@@ -95,11 +95,14 @@ function LiquidCodeEditor({
         minHeight={profile === "compact" ? "2.25rem" : "240px"}
         profile={profile}
         readOnly={disabled}
-        sessionKey={context.document?.id ?? uri}
+        sessionKey={context.editorSessionScope
+          ? `${context.editorSessionScope}\u001f${context.document?.id ?? uri}`
+          : context.document?.id ?? uri}
         signatureProvider={tooling.signatureProvider}
         status={toolingStatus(context)}
         theme="studio"
         onChange={nextDocument => onChange(nextDocument.value)}
+        onBlur={context.onBlur}
         onFocus={context.onFocus}
         onExpand={onExpand}
       />

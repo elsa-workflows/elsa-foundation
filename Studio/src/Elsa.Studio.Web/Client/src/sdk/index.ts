@@ -675,6 +675,9 @@ export type StudioExpressionToolingState =
   | "incompatible"
   | "stale"
   | "canceled";
+export const expressionEditorSessionEndedEvent = "elsa:expression-editor-session-ended";
+export const expressionToolingAuthorizationRevokedEvent = "elsa:expression-tooling-authorization-revoked";
+export const expressionToolingAuthorizationRestoredEvent = "elsa:expression-tooling-authorization-restored";
 export type StudioExpressionSymbolKind = "value" | "function" | "filter" | "tag" | "namespace" | "member" | "keyword";
 export type StudioExpressionValueShapeKind = "unknown" | "scalar" | "object" | "collection" | "callable";
 
@@ -829,6 +832,10 @@ export interface StudioExpressionToolingClient {
   getHover(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, position: StudioExpressionPosition, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionHoverResult>>;
   validate(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionValidationResult>>;
   invalidateAuthorization(revisions?: { permissionRevision?: string; hostPolicyRevision?: string }): void;
+  /** Permanently stops source-aware requests for this workflow-lifetime client. */
+  revokeAuthorization?(): void;
+  /** Allows a freshly authenticated session to establish new permission-scoped tooling context. */
+  restoreAuthorization?(): void;
   dispose(): void;
 }
 
@@ -847,8 +854,12 @@ export interface StudioExpressionEditorContext {
   validation?: StudioExpressionToolingResult<StudioExpressionValidationResult>;
   /** Optional engine-neutral transport owned by the workflow host. */
   tooling?: StudioExpressionToolingClient;
+  /** Workflow-editor lifetime scope used to isolate and dispose engine history. */
+  editorSessionScope?: string;
   /** Notifies the host that this editor surface became the active tooling target. */
   onFocus?(): void;
+  /** Requests immediate validation when editing focus leaves the surface. */
+  onBlur?(): void;
 }
 
 export interface StudioExpressionEditorProps {

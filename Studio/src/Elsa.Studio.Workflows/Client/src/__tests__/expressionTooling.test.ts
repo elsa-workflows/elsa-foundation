@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import {
+  authSessionEndedEvent,
+  expressionToolingAuthorizationRevokedEvent,
+  expressionToolingAuthorizationRestoredEvent,
+  StudioHttpError,
+  type StudioEndpointContext
+} from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { createExpressionToolingClient } from "../expression-tooling/expressionToolingClient";
 
@@ -133,12 +139,12 @@ function createContext(postJson?: ReturnType<typeof vi.fn>) {
   };
 }
 
-function client(context: StudioEndpointContext) {
+function client(context: StudioEndpointContext, authorizationScope?: string) {
   return createExpressionToolingClient(context, {
     backend: context.baseUrl,
     subject: "author-1",
     tenantId: "tenant-1"
-  });
+  }, authorizationScope);
 }
 
 describe("expression tooling transport", () => {
@@ -290,6 +296,12 @@ describe("expression tooling transport", () => {
   });
 
   it("maps authorization explicitly and purges cached symbols", async () => {
+    const authorizationEnded = vi.fn();
+    const toolingAuthorizationRevoked = vi.fn();
+    const toolingAuthorizationRestored = vi.fn();
+    window.addEventListener(authSessionEndedEvent, authorizationEnded);
+    window.addEventListener(expressionToolingAuthorizationRevokedEvent, toolingAuthorizationRevoked);
+    window.addEventListener(expressionToolingAuthorizationRestoredEvent, toolingAuthorizationRestored);
     let symbolsCalls = 0;
     const api = createContext(vi.fn(async (url: string) => {
       if (url.endsWith("/context")) return outcome(contextPayload);
@@ -300,7 +312,7 @@ describe("expression tooling transport", () => {
       }
       throw new Error(`Unexpected POST ${url}`);
     }));
-    const tooling = client(api.context);
+    const tooling = client(api.context, "workflow-editor-1");
 
     const contextResult = await tooling.getAuthoringContext(document, {});
     expect(contextResult.data).toBeDefined();
@@ -309,6 +321,44 @@ describe("expression tooling transport", () => {
     const refreshedContext = await tooling.getAuthoringContext(document, {});
     await expect(tooling.getCatalog(document, refreshedContext.data!, "cust")).resolves.toMatchObject({ state: "unauthorized" });
     expect(symbolsCalls).toBe(2);
+    expect(authorizationEnded).not.toHaveBeenCalled();
+    expect(toolingAuthorizationRevoked).toHaveBeenCalledOnce();
+    expect((toolingAuthorizationRevoked.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      scope: "workflow-editor-1"
+    });
+
+    const postCallsAfterRevocation = api.postJson.mock.calls.length;
+    await expect(tooling.getAuthoringContext(document, {})).resolves.toMatchObject({ state: "unauthorized" });
+    await expect(tooling.validate(document, refreshedContext.data!)).resolves.toMatchObject({ state: "unauthorized" });
+    expect(api.postJson).toHaveBeenCalledTimes(postCallsAfterRevocation);
+
+    tooling.restoreAuthorization?.();
+    await expect(tooling.validate(document, refreshedContext.data!)).resolves.toMatchObject({ state: "unauthorized" });
+    await expect(tooling.getAuthoringContext(document, {})).resolves.toMatchObject({ state: "ready" });
+    expect(api.postJson).toHaveBeenCalledTimes(postCallsAfterRevocation + 1);
+    expect(toolingAuthorizationRestored).not.toHaveBeenCalled();
+
+    window.removeEventListener(authSessionEndedEvent, authorizationEnded);
+    window.removeEventListener(expressionToolingAuthorizationRevokedEvent, toolingAuthorizationRevoked);
+    window.removeEventListener(expressionToolingAuthorizationRestoredEvent, toolingAuthorizationRestored);
+  });
+
+  it("keeps a restored scope revoked until a fresh authoring context is authorized", async () => {
+    const toolingAuthorizationRestored = vi.fn();
+    window.addEventListener(expressionToolingAuthorizationRestoredEvent, toolingAuthorizationRestored);
+    const api = createContext(vi.fn(async (url: string) => {
+      if (url.endsWith("/context")) throw new StudioHttpError(403, "context remains hidden");
+      throw new Error(`Unexpected POST ${url}`);
+    }));
+    const tooling = client(api.context, "workflow-editor-denied");
+
+    await expect(tooling.getAuthoringContext(document, {})).resolves.toMatchObject({ state: "unauthorized" });
+    tooling.restoreAuthorization?.();
+    await expect(tooling.getAuthoringContext(document, {})).resolves.toMatchObject({ state: "unauthorized" });
+
+    expect(toolingAuthorizationRestored).not.toHaveBeenCalled();
+    expect(api.postJson.mock.calls.filter(([url]) => String(url).endsWith("/context"))).toHaveLength(2);
+    window.removeEventListener(expressionToolingAuthorizationRestoredEvent, toolingAuthorizationRestored);
   });
 
   it("forwards source-aware completion, hover, validation, positions, and cancellation signals", async () => {

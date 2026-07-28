@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -116,22 +116,31 @@ export function WorkflowEditor({
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
 }) {
+  const expressionEditorSessionScope = useId();
   const ownedExpressionTooling = useMemo(
     () => expressionToolingIdentity
-      ? createLazyExpressionToolingClient(context, expressionToolingIdentity)
+      ? createLazyExpressionToolingClient(context, expressionToolingIdentity, expressionEditorSessionScope)
       : undefined,
-    [context, expressionToolingIdentity]
+    [context, expressionEditorSessionScope, expressionToolingIdentity]
   );
   const resolvedExpressionTooling = expressionTooling ?? ownedExpressionTooling;
   useEffect(() => {
-    if (!ownedExpressionTooling) return;
-    const invalidate = () => ownedExpressionTooling.invalidateAuthorization();
-    window.addEventListener(authSessionEndedEvent, invalidate);
+    if (!resolvedExpressionTooling) return;
+    const revoke = () => resolvedExpressionTooling.revokeAuthorization?.();
+    const restore = () => resolvedExpressionTooling.restoreAuthorization?.();
+    window.addEventListener(authSessionEndedEvent, revoke);
+    window.addEventListener(authSessionStartedEvent, restore);
     return () => {
-      window.removeEventListener(authSessionEndedEvent, invalidate);
-      ownedExpressionTooling.dispose();
+      window.removeEventListener(authSessionEndedEvent, revoke);
+      window.removeEventListener(authSessionStartedEvent, restore);
     };
-  }, [ownedExpressionTooling]);
+  }, [resolvedExpressionTooling]);
+  useEffect(() => () => ownedExpressionTooling?.dispose(), [ownedExpressionTooling]);
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent(expressionEditorSessionEndedEvent, {
+      detail: { scope: expressionEditorSessionScope }
+    }));
+  }, [expressionEditorSessionScope]);
 
   // The interdependent draft/scope/selection/test-run/artifact cluster now lives in an explicit reducer,
   // so each mutation (below) declares the transition it makes instead of cascading loose setState calls.
@@ -838,6 +847,7 @@ export function WorkflowEditor({
           context={context}
           draftId={draft.id}
           expressionTooling={resolvedExpressionTooling}
+          expressionEditorSessionScope={expressionEditorSessionScope}
           workflowState={draft.state}
           selectedNode={inspectedNode}
           selectedNodeLabel={inspectedLabel}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAuthenticatedHttpClient, createSignalRAccessTokenFactory, withAuthenticatedSignalROptions, type AuthSession } from "../auth";
+import { authSessionEndedEvent, createAuthenticatedHttpClient, createSignalRAccessTokenFactory, withAuthenticatedSignalROptions, type AuthSession } from "../auth";
 import { describeApiError, tryExtractValidationErrors } from "../sdk";
 
 describe("authenticated HTTP transport", () => {
@@ -87,6 +87,8 @@ describe("authenticated HTTP transport", () => {
   });
 
   it("fails closed without contacting a protected endpoint when preflight refresh does not issue a bearer", async () => {
+    const sessionEnded = vi.fn();
+    window.addEventListener(authSessionEndedEvent, sessionEnded);
     const fetchMock = vi.fn(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
     const auth = {
       getAccessToken: vi.fn(async () => null),
@@ -98,6 +100,8 @@ describe("authenticated HTTP transport", () => {
 
     expect(auth.refresh).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(sessionEnded).toHaveBeenCalledOnce();
+    window.removeEventListener(authSessionEndedEvent, sessionEnded);
   });
 
   it("fails closed without contacting a protected endpoint when preflight refresh rejects", async () => {

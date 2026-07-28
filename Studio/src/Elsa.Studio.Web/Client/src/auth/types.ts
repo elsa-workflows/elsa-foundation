@@ -105,6 +105,7 @@ export interface AuthProviderProps {
 }
 
 export const authSessionEndedEvent = "elsa:auth-session-ended";
+export const authSessionStartedEvent = "elsa:auth-session-started";
 
 export interface PermissionSet {
   has(key: string): boolean;

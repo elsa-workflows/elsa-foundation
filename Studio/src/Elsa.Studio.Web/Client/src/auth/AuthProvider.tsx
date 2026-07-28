@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { anonymousAuthSession, authSessionEndedEvent, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
+import { anonymousAuthSession, authSessionEndedEvent, authSessionStartedEvent, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
 
 export function AuthProvider({ manager, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession>(() => manager.getSession() ?? unknownAuthSession);
@@ -74,6 +74,7 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     const nextSession = manager.getSession();
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
+      window.dispatchEvent(new Event(authSessionStartedEvent));
       await loadCapabilities(operation);
     } else {
       setCapabilities(null);
@@ -94,6 +95,7 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
   const refresh = useCallback(async () => {
     const operation = ++authOperationRef.current;
+    const wasAuthenticated = session.status === "authenticated";
     const nextSession = await manager.refresh();
     if (!shouldCommit(operation)) {
       return nextSession;
@@ -101,12 +103,14 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
+      window.dispatchEvent(new Event(authSessionStartedEvent));
       await loadCapabilities(operation);
     } else {
+      if (wasAuthenticated) window.dispatchEvent(new Event(authSessionEndedEvent));
       setCapabilities(null);
     }
     return nextSession;
-  }, [loadCapabilities, manager, shouldCommit]);
+  }, [loadCapabilities, manager, session.status, shouldCommit]);
 
   const value = useMemo(() => ({
     session,

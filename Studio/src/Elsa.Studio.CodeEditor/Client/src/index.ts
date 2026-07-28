@@ -5,6 +5,8 @@ export { javaScriptLanguageAdapter } from "./languages/javascript";
 export { liquidLanguageAdapter } from "./languages/liquid";
 export {
   clearAllStudioCodeEditorSessions,
+  clearStudioCodeEditorSessionScope,
+  isStudioCodeEditorSessionRevoked,
   subscribeToStudioCodeEditorSessionRevocation,
   clearStudioCodeEditorSession,
   createStudioCodeEditorSession,

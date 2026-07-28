@@ -58,6 +58,8 @@ declare module "@elsa-workflows/studio-sdk" {
     getHover(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, position: StudioExpressionPosition, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionHoverResult>>;
     validate(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionValidationResult>>;
     invalidateAuthorization(revisions?: { permissionRevision?: string; hostPolicyRevision?: string }): void;
+    revokeAuthorization?(): void;
+    restoreAuthorization?(): void;
     dispose(): void;
   }
 
@@ -72,7 +74,9 @@ declare module "@elsa-workflows/studio-sdk" {
     authoringContext?: StudioExpressionToolingResult<StudioExpressionAuthoringContext>;
     validation?: StudioExpressionToolingResult<StudioExpressionValidationResult>;
     tooling?: StudioExpressionToolingClient;
+    editorSessionScope?: string;
     onFocus?(): void;
+    onBlur?(): void;
   }
 
   export interface StudioExpressionEditorProps {

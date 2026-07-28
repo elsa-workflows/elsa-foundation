@@ -46,6 +46,7 @@ describe("JavaScript expression editor module", () => {
     const onExpandedChange = vi.fn();
     const editorContext = {
       ...context("JavaScript"),
+      editorSessionScope: "workflow-editor-1",
       document: {
         id: "document-1",
         uri: "elsa://workflow-expressions/draft/activity/text/JavaScript",
@@ -80,7 +81,7 @@ describe("JavaScript expression editor module", () => {
     expect(inline.props.profile).toBe("compact");
     expect(inline.props.document.value).toBe("return 1;");
     expect(inline.props.document.version).toBe(7);
-    expect(inline.props.sessionKey).toBe("document-1");
+    expect(inline.props.sessionKey).toBe("workflow-editor-1\u001fdocument-1");
     expect(expandedEditor.props.ariaLabel).toBe("JavaScript expanded expression");
     expect(expandedEditor.props.document).toMatchObject({
       uri: "elsa://workflow-expressions/draft/activity/text/JavaScript",
@@ -103,7 +104,17 @@ describe("JavaScript expression editor module", () => {
   it("owns JavaScript globals and resolves getter-call members through the neutral shared traversal", async () => {
     const authoringContext = {
       workflowInputs: [{ id: "input:customer", name: "customer", kind: "value" as const, shapeId: "shape:customer" }],
-      visibleVariables: [],
+      visibleVariables: [
+        { id: "variable:attempts", name: "attempts", kind: "value" as const, shapeId: "shape:number" },
+        {
+          id: "variable:eclair",
+          name: "éclair",
+          kind: "value" as const,
+          shapeId: "shape:string",
+          documentation: "Unicode variable."
+        },
+        { id: "variable:eszett", name: "ßeta", kind: "value" as const, shapeId: "shape:string" }
+      ],
       visibleActivityOutputs: []
     };
     const getValueShape = vi.fn().mockResolvedValue({
@@ -129,11 +140,31 @@ describe("JavaScript expression editor module", () => {
 
     await expect(complete("")).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "args" }),
-      expect.objectContaining({ label: "getCustomer", kind: "function" })
+      expect.objectContaining({ label: "getAttempts", kind: "function" }),
+      expect.objectContaining({ label: "getÉclair", kind: "function" }),
+      expect.objectContaining({ label: "getßeta", kind: "function" }),
+      expect.objectContaining({ label: "variables" })
     ]));
-    await expect(complete("getCustomer().")).resolves.toEqual([
+    await expect(complete("")).resolves.not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "getSSeta" })
+    ]));
+    await expect(complete("")).resolves.not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "getCustomer" })
+    ]));
+    await expect(complete("args.customer.")).resolves.toEqual([
       expect.objectContaining({ label: "email", kind: "property" })
     ]);
+    await expect(complete("variables.éclair.")).resolves.toEqual([
+      expect.objectContaining({ label: "email", kind: "property" })
+    ]);
+    const unicodeVariable = "variables.éclair";
+    await expect(projection.hoverProvider(
+      { uri: "elsa://drafts/a/unicode", language: "javascript", value: unicodeVariable, version: 1 },
+      unicodeVariable.length,
+      signal
+    )).resolves.toEqual(expect.objectContaining({
+      documentation: { markdown: "Unicode variable." }
+    }));
     expect(getValueShape).toHaveBeenCalledWith({ source: "" }, authoringContext, "shape:customer", signal);
   });
 });
