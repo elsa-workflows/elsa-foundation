@@ -30,6 +30,7 @@ public sealed class WorkflowVersionNumberingTests
 
         Assert.False(assessment.IsReady);
         Assert.Equal(expectedIssue, Assert.Single(assessment.Issues).Code);
+        Assert.Null(assessment.ResolvedVersion);
     }
 
     [Fact]
@@ -39,6 +40,17 @@ public sealed class WorkflowVersionNumberingTests
 
         Assert.False(assessment.IsReady);
         Assert.Equal("version-conflict", Assert.Single(assessment.Issues).Code);
+        Assert.Null(assessment.ResolvedVersion);
+    }
+
+    [Fact]
+    public void AssessPromotion_classifies_the_exact_latest_label_as_non_forward_even_when_its_identity_exists()
+    {
+        var assessment = WorkflowVersionNumbering.AssessPromotion("2.0.0", "2.0.0", versionIdentityExists: true);
+
+        Assert.False(assessment.IsReady);
+        Assert.Equal("not-forward", Assert.Single(assessment.Issues).Code);
+        Assert.Null(assessment.ResolvedVersion);
     }
 
     [Fact]

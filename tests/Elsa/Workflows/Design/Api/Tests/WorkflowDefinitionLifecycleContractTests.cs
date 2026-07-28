@@ -177,6 +177,33 @@ public sealed class WorkflowDefinitionLifecycleContractTests
 
         Assert.False(assessment.IsReady);
         Assert.Equal("version-conflict", Assert.Single(assessment.Issues).Code);
+        Assert.Null(assessment.ResolvedVersion);
+        Assert.Equal(0, drafts.WriteCount);
+        Assert.Equal(0, versions.WriteCount);
+    }
+
+    [Fact]
+    public async Task Promotion_preflight_reports_the_exact_latest_label_as_non_forward()
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-preflight-not-forward",
+            WorkflowDefinitionId = "definition-preflight-not-forward",
+            State = new Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState([], null, [], [], null)
+        };
+        var drafts = new PreflightDraftStore(draft);
+        var versions = new PreflightVersionStore(
+            new WorkflowDefinitionVersion(draft.WorkflowDefinitionId, "2.0.0"),
+            identityExists: true);
+        var handler = new PreflightDraftPromotionRequestHandler(drafts, versions, new NoopInlineEventPublisher());
+
+        var assessment = await handler.Handle(
+            new PreflightDraftPromotion(draft.Id, "2.0.0"),
+            CancellationToken.None);
+
+        Assert.False(assessment.IsReady);
+        Assert.Equal("not-forward", Assert.Single(assessment.Issues).Code);
+        Assert.Null(assessment.ResolvedVersion);
         Assert.Equal(0, drafts.WriteCount);
         Assert.Equal(0, versions.WriteCount);
     }

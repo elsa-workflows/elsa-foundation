@@ -86,10 +86,11 @@ public sealed class PreflightDraftPromotionRequestHandler(
             latest?.Version,
             request.RequestedVersion,
             versionIdentityExists: false);
-        var identityExists = initialAssessment.ResolvedVersion is not null &&
+        var candidateIdentitySortKey = WorkflowVersionNumbering.GetCandidateIdentitySortKey(initialAssessment);
+        var identityExists = candidateIdentitySortKey is not null &&
                              await versionStore.ExistsAsync(
                                  draft.WorkflowDefinitionId,
-                                 Elsa.Primitives.Versioning.SemVer.ToSortKey(initialAssessment.ResolvedVersion),
+                                 candidateIdentitySortKey,
                                  cancellationToken);
         var assessment = WorkflowVersionNumbering.AssessPromotion(
             latest?.Version,

@@ -91,13 +91,13 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         lastVersion?.Version,
                         normalizedRequestedVersion,
                         versionIdentityExists: false);
-                    if (initialAssessment.ResolvedVersion is null)
-                        ThrowIfRejected(initialAssessment, draft.WorkflowDefinitionId);
-
-                    var versionIdentityExists = await versionStore.ExistsAsync(
-                        draft.WorkflowDefinitionId,
-                        Elsa.Primitives.Versioning.SemVer.ToSortKey(initialAssessment.ResolvedVersion!),
-                        token);
+                    var candidateIdentitySortKey =
+                        WorkflowVersionNumbering.GetCandidateIdentitySortKey(initialAssessment);
+                    var versionIdentityExists = candidateIdentitySortKey is not null &&
+                                                await versionStore.ExistsAsync(
+                                                    draft.WorkflowDefinitionId,
+                                                    candidateIdentitySortKey,
+                                                    token);
                     var assessment = WorkflowVersionNumbering.AssessPromotion(
                         lastVersion?.Version,
                         normalizedRequestedVersion,
@@ -141,7 +141,13 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         accessContextAccessor.Current,
                         persistenceDomain: DesignPersistenceDomain.Workflow) with
                     { ExpectedVersion = 0 };
-                    await context.SaveAsync(versionSave, token);
+                    var versionSaveResult = await context.SaveAsync(versionSave, token);
+                    if (versionSaveResult.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                    {
+                        throw new WorkflowDefinitionVersionConflictException(
+                            draft.WorkflowDefinitionId,
+                            assessment.ResolvedVersion!);
+                    }
                     await context.SaveAsync(layoutSave, token);
                     return new PromoteDraftResult(
                         draft.Id,

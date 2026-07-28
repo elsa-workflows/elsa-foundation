@@ -43,26 +43,44 @@ public static class WorkflowVersionNumbering
                 "The requested version must be a valid semantic version.");
         }
 
+        if (latestVersion is not null &&
+            SemVer.TryParse(latestVersion, out var latestSemVer) &&
+            candidateSemVer <= latestSemVer)
+        {
+            // Equal precedence is normally a non-forward request. A differently labelled identity
+            // (for example 2.0.0+build.7 versus 2.0.0) is the explicit duplicate case required by
+            // the contract because SemVer deliberately ignores build metadata for identity.
+            if (versionIdentityExists &&
+                candidateSemVer == latestSemVer &&
+                !string.Equals(candidate, latestVersion, StringComparison.Ordinal))
+            {
+                return NotReady(
+                    assignmentMode,
+                    normalizedRequest,
+                    null,
+                    latestVersion,
+                    "version-conflict",
+                    "A workflow version with the same semantic identity already exists.");
+            }
+
+            return NotReady(
+                assignmentMode,
+                normalizedRequest,
+                null,
+                latestVersion,
+                "not-forward",
+                "The requested version must be greater than the latest immutable version.");
+        }
+
         if (versionIdentityExists)
         {
             return NotReady(
                 assignmentMode,
                 normalizedRequest,
-                candidate,
+                null,
                 latestVersion,
                 "version-conflict",
                 "A workflow version with the same semantic identity already exists.");
-        }
-
-        if (latestVersion is not null && SemVer.TryParse(latestVersion, out var latestSemVer) && candidateSemVer <= latestSemVer)
-        {
-            return NotReady(
-                assignmentMode,
-                normalizedRequest,
-                candidate,
-                latestVersion,
-                "not-forward",
-                "The requested version must be greater than the latest immutable version.");
         }
 
         return new WorkflowPromotionVersionAssessment(
@@ -72,6 +90,17 @@ public static class WorkflowVersionNumbering
             candidate,
             latestVersion,
             []);
+    }
+
+    /// <summary>
+    /// Returns the semantic identity key that should be checked after an initial assessment.
+    /// Rejected parseable exact requests still need this lookup so build-metadata-only aliases can
+    /// be distinguished from ordinary equal/lower non-forward requests.
+    /// </summary>
+    public static string? GetCandidateIdentitySortKey(WorkflowPromotionVersionAssessment assessment)
+    {
+        var candidate = assessment.ResolvedVersion ?? assessment.RequestedVersion;
+        return SemVer.TryParse(candidate, out var semVer) ? semVer.ToSortKey() : null;
     }
 
     private static WorkflowPromotionVersionAssessment NotReady(

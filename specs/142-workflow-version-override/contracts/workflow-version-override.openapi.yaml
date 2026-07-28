@@ -152,16 +152,13 @@ components:
           type: string
           enum: [automatic, exact]
         requestedVersion:
-          type: string
-          nullable: true
+          type: [string, 'null']
           description: The normalized explicit request, or null for automatic assignment.
         resolvedVersion:
-          type: string
-          nullable: true
+          type: [string, 'null']
           description: Current automatic candidate or accepted exact candidate; null when no candidate is valid.
         latestVersion:
-          type: string
-          nullable: true
+          type: [string, 'null']
         issues:
           type: array
           items:
@@ -176,22 +173,34 @@ components:
         message:
           type: string
         path:
-          type: string
-          nullable: true
+          type: [string, 'null']
     WorkflowDefinitionVersionDetails:
       type: object
-      required: [id, definitionId, version]
+      required: [id, version, definition, state, layout]
       properties:
         id:
-          type: string
-        definitionId:
           type: string
         version:
           type: string
           description: The immutable version label accepted and persisted by the server.
-        sourceDraftId:
-          type: string
-          nullable: true
+        definition:
+          type: object
+          required: [id, name, createdAt, lastModifiedAt]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            description: { type: [string, 'null'] }
+            createdAt: { type: string, format: date-time }
+            lastModifiedAt: { type: string, format: date-time }
+            deletedAt: { type: [string, 'null'], format: date-time }
+        state:
+          type: object
+          additionalProperties: true
+        layout:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     ProblemDetails:
       type: object
       description: Existing Elsa API error envelope; hosts may include field-level validation errors.

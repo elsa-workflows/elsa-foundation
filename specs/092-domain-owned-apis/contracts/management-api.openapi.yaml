@@ -1077,23 +1077,25 @@ components:
           type: string
           description: Optional exact SemVer label. Surrounding whitespace is trimmed; omit for automatic next-major assignment.
     PromoteWorkflowDraftRequest:
-      allOf:
-        - $ref: '#/components/schemas/PromotionVersionSelection'
-        - type: object
-          properties:
-            operationKey:
-              type: string
-              minLength: 1
-              description: Retry identity. Reuse only with identical normalized version-selection material.
+      type: object
+      additionalProperties: false
+      properties:
+        requestedVersion:
+          type: string
+          description: Optional exact SemVer label. Surrounding whitespace is trimmed; omit for automatic next-major assignment.
+        operationKey:
+          type: string
+          minLength: 1
+          description: Retry identity. Reuse only with identical normalized version-selection material.
     PromotionPreflightAssessment:
       type: object
       required: [isReady, assignmentMode, issues]
       properties:
         isReady: { type: boolean }
         assignmentMode: { type: string, enum: [automatic, exact] }
-        requestedVersion: { type: string, nullable: true }
-        resolvedVersion: { type: string, nullable: true }
-        latestVersion: { type: string, nullable: true }
+        requestedVersion: { type: [string, 'null'] }
+        resolvedVersion: { type: [string, 'null'] }
+        latestVersion: { type: [string, 'null'] }
         issues:
           type: array
           items:
@@ -1102,7 +1104,7 @@ components:
             properties:
               code: { type: string, enum: [draft-validation, invalid-version, not-forward, version-conflict] }
               message: { type: string }
-              path: { type: string, nullable: true }
+              path: { type: [string, 'null'] }
     WorkflowDefinitionVersionSummary:
       type: object
       required: [id, definitionId, version]
@@ -1112,17 +1114,27 @@ components:
         version: { type: string }
         createdAt: { type: string, format: date-time }
     WorkflowDefinitionVersion:
-      allOf:
-        - $ref: '#/components/schemas/WorkflowDefinitionVersionSummary'
-        - type: object
-          required: [state, layout]
+      type: object
+      required: [id, version, definition, state, layout]
+      properties:
+        id: { type: string }
+        version: { type: string }
+        definition:
+          type: object
+          required: [id, name, createdAt, lastModifiedAt]
           properties:
-            state:
-              $ref: '#/components/schemas/WorkflowDefinitionState'
-            layout:
-              type: array
-              items:
-                $ref: '#/components/schemas/DesignMetadata'
+            id: { type: string }
+            name: { type: string }
+            description: { type: [string, 'null'] }
+            createdAt: { type: string, format: date-time }
+            lastModifiedAt: { type: string, format: date-time }
+            deletedAt: { type: [string, 'null'], format: date-time }
+        state:
+          $ref: '#/components/schemas/WorkflowDefinitionState'
+        layout:
+          type: array
+          items:
+            $ref: '#/components/schemas/DesignMetadata'
     WorkflowDefinitionState:
       type: object
       properties:
