@@ -17,6 +17,6 @@ public sealed class GetVersionRequestHandler(
 
         var result = await store.GetWithDefinitionAsync(request.VersionId, cancellationToken);
         var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
-        return result.ToDetailsView(layout?.Records);
+        return result.ToDetailsView(layout?.Records, layout?.ActivityPresentation);
     }
 }

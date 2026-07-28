@@ -22,6 +22,14 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - **Signature:** `IEnumerable<IExpressionDescriptor> GetDescriptors()`.
 - **Consumed by:** `ExpressionDescriptorRegistry`, which creates a startup snapshot.
 
+### `IExpressionToolingProvider` *(Core — `Elsa.Expressions.Core`)*
+
+- **Kind:** Language-specific, metadata-only authoring assistance provider.
+- **Registration:** one provider per exact expression descriptor type.
+- **Boundary:** receives a revisioned, Design-filtered metadata snapshot; it must not evaluate
+  source, access runtime values, or retain source. Duplicate types fail deterministic resolver
+  construction. The optional tooling capability is absent when no language provider is composed.
+
 ### `IVariableTypeDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
 
 - **Kind:** Authoring/schema type source.

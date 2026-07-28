@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -353,7 +354,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
             _publicationStore,
             new PublicationPreflightService(),
             activator,
-            TimeProvider.System);
+            TimeProvider.System,
+            workflowVersionStore: new FakeVersionStore(workflowVersion),
+            expressionValidator: AlwaysValidExpressionValidator.Instance);
     }
 
     private static WorkflowExecutableCompiler Compiler(
@@ -377,6 +380,17 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<WorkflowDefinitionVersionLayout?>(null);
+    }
+
+    private sealed class AlwaysValidExpressionValidator : IExpressionDraftSemanticValidator
+    {
+        public static readonly AlwaysValidExpressionValidator Instance = new();
+
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState workflow,
+            string workflowDefinitionVersionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ExpressionDraftValidationResult(ExpressionDraftValidationState.Valid, []));
     }
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode rootActivity) =>

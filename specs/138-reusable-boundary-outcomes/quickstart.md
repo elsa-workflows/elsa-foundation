@@ -2,7 +2,7 @@
 
 1. Create or edit an activity definition using provider `elsa.activity-graph`, schema `2`.
 2. Add the desired public outcomes to the activity contract and mark them emitted.
-3. Add the direct entry activity and select one emitted entry outcome for each public boundary outcome.
+3. Add the direct entry activity and map at least one emitted entry outcome to each public boundary outcome. Map additional distinct sources to the same boundary when they should converge.
 4. Publish with the semantic version required by the contract diff.
 5. Place the published reusable activity in a parent flowchart and connect each visible outcome port.
 6. Execute and verify only the connection matching the actual reusable-graph result runs.

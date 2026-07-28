@@ -5,6 +5,8 @@ using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -23,7 +25,8 @@ public sealed class GroundworkUpdateDraftCommand(
     IInlineEventPublisher inlineEventPublisher,
     IDeferredEventPublisher deferredEventPublisher,
     ISystemClock clock,
-    IPersistenceAccessContextAccessor accessContextAccessor)
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IActivityStructureService activityStructureService)
     : IUpdateDraftCommand
 {
     private const string OperationKind = "workflow.draft.replace.v1";
@@ -35,6 +38,11 @@ public sealed class GroundworkUpdateDraftCommand(
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentNullException.ThrowIfNull(request);
+        var reachableNodeIds = CollectNodeIds(request.State.RootActivity);
+        var activityPresentation =
+            ActivityPresentationRecord.NormalizeCollection(request.ActivityPresentation)
+                .Where(record => reachableNodeIds.Contains(record.NodeId))
+                .ToArray();
         var requestMaterial = new UpdateDraftRequestMaterial(
             request.DraftId,
             GroundworkDesignSerialization.Execute(
@@ -42,7 +50,8 @@ public sealed class GroundworkUpdateDraftCommand(
                 OperationKind,
                 "workflow definition draft",
                 () => payloadSerializer.Serialize(request.State)),
-            request.Layout.Select(ToMaterial).ToArray());
+            request.Layout.Select(ToMaterial).ToArray(),
+            activityPresentation.Select(ToMaterial).ToArray());
         var documents = DraftDocuments();
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(request.DraftId);
         GroundworkDesignAtomicCommandResult<UpdateDraftResult> outcome;
@@ -67,7 +76,10 @@ public sealed class GroundworkUpdateDraftCommand(
                     var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, token);
                     GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
                     await context.SaveAsync(
-                        documents.ToSaveRequest(draft, request.Layout.ToArray()),
+                        documents.ToSaveRequest(
+                            draft,
+                            request.Layout.ToArray(),
+                            activityPresentation),
                         token);
                     return new UpdateDraftResult(draft, errors.ToArray());
                 },
@@ -86,6 +98,29 @@ public sealed class GroundworkUpdateDraftCommand(
     private GroundworkWorkflowDefinitionDraftDocumentStore DraftDocuments() =>
         new(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer), accessContextAccessor);
 
+    private HashSet<string> CollectNodeIds(ActivityNode? rootActivity)
+    {
+        var nodeIds = new HashSet<string>(StringComparer.Ordinal);
+        if (rootActivity is null)
+            return nodeIds;
+
+        var stack = new Stack<ActivityNode>();
+        stack.Push(rootActivity);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (!nodeIds.Add(node.NodeId))
+                continue;
+
+            foreach (var child in activityStructureService
+                         .ProjectChildren(node)
+                         .SelectMany(slot => slot.Activities))
+                stack.Push(child);
+        }
+
+        return nodeIds;
+    }
+
     private static LayoutMaterial ToMaterial(DesignMetadataRecord record) =>
         new(
             record.NodeId,
@@ -98,7 +133,16 @@ public sealed class GroundworkUpdateDraftCommand(
     private sealed record UpdateDraftRequestMaterial(
         string DraftId,
         string StateJson,
-        IReadOnlyCollection<LayoutMaterial> Layout);
+        IReadOnlyCollection<LayoutMaterial> Layout,
+        IReadOnlyCollection<ActivityPresentationMaterial> ActivityPresentation);
+
+    private static ActivityPresentationMaterial ToMaterial(ActivityPresentationRecord record) =>
+        new(record.NodeId, record.DisplayName, record.Description);
+
+    private sealed record ActivityPresentationMaterial(
+        string NodeId,
+        string? DisplayName,
+        string? Description);
 
     private sealed record LayoutMaterial(
         string NodeId,

@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Api.Requests;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -31,10 +32,18 @@ public sealed class UpdateDefinitionCommandHandler(
         var layout = command.Layout is null
             ? await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken)
             : command.Layout.Select(ToRecord).ToArray();
+        var activityPresentation = command.ActivityPresentation is null
+            ? await draftStore.FindActivityPresentationByDraftIdAsync(draft.Id, cancellationToken)
+            : ActivityPresentationRecord.NormalizeCollection(
+                command.ActivityPresentation.Select(x => x.ToRecord()));
 
         await updateDraftCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
-            new UpdateDraftRequest(draft.Id, command.State.ToState(), layout),
+            new UpdateDraftRequest(
+                draft.Id,
+                command.State.ToState(),
+                layout,
+                activityPresentation),
             cancellationToken);
 
         return await requestSender.Send(new GetDefinition(command.Id), cancellationToken);

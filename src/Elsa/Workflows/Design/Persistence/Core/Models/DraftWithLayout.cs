@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Models;
 
@@ -10,4 +11,13 @@ namespace Elsa.Workflows.Design.Persistence.Core.Models;
 /// </summary>
 public sealed record DraftWithLayout(
     WorkflowDefinitionDraft Draft,
-    IReadOnlyCollection<DesignMetadataRecord> Layout);
+    IReadOnlyCollection<DesignMetadataRecord> Layout,
+    IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation)
+{
+    public DraftWithLayout(
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout)
+        : this(draft, layout, [])
+    {
+    }
+}

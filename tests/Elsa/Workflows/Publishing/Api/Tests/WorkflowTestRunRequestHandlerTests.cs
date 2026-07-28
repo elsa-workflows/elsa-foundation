@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -54,6 +55,128 @@ public sealed class WorkflowTestRunRequestHandlerTests
         // expiry are reference facts, no longer segregated by an artifact-level list filter).
         Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
+    }
+
+    [Fact]
+    public async Task RejectsKnownExpressionErrorsEvenWhenUnavailableValidationWasAcknowledged()
+    {
+        var validator = new StubExpressionValidator(new(
+            ExpressionDraftValidationState.Errors,
+            [new("JavaScript/Syntax", Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Error, "Unclosed delimiter.", "revision")]));
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), expressionValidator: validator);
+
+        var view = await handler.Handle(new StartWorkflowTestRun(
+            "version-1",
+            AcknowledgeUnavailableExpressionValidation: true), CancellationToken.None);
+
+        Assert.Equal("Rejected", view.Status);
+        Assert.Contains("validation rejected", view.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _executableStore.ListAllAsync());
+    }
+
+    [Fact]
+    public async Task RequiresExplicitAcknowledgementOnlyWhenExpressionValidationIsUnavailable()
+    {
+        var validator = new StubExpressionValidator(new(ExpressionDraftValidationState.Unavailable, []));
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), expressionValidator: validator);
+
+        var rejected = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        var accepted = await handler.Handle(new StartWorkflowTestRun(
+            "version-1",
+            AcknowledgeUnavailableExpressionValidation: true), CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("validation is unavailable", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Unavailable", rejected.Metadata["expressionValidation.state"]);
+        Assert.Equal("False", rejected.Metadata["expressionValidation.unavailableAcknowledged"]);
+        Assert.Equal("DispatchAccepted", accepted.Status);
+        Assert.Equal("Unavailable", accepted.Metadata["expressionValidation.state"]);
+        Assert.Equal("True", accepted.Metadata["expressionValidation.unavailableAcknowledged"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnavailableValidationAcknowledgementDoesNotOverrideKnownErrorDiagnostics(bool draft)
+    {
+        var validator = new StubExpressionValidator(new(
+            ExpressionDraftValidationState.Unavailable,
+            [new("JavaScript/Syntax", Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Error, "Unclosed delimiter.", "revision")]));
+
+        var view = draft
+            ? await DraftSnapshotHandler(expressionValidator: validator).Handle(new StartWorkflowDraftTestRun(
+                DefinitionId: "definition-1",
+                SnapshotId: "snapshot-1",
+                State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
+                AcknowledgeUnavailableExpressionValidation: true), CancellationToken.None)
+            : await Handler(
+                    WorkflowVersion(Node("write-one", Text("hello"))),
+                    expressionValidator: validator)
+                .Handle(new StartWorkflowTestRun(
+                    "version-1",
+                    AcknowledgeUnavailableExpressionValidation: true), CancellationToken.None);
+
+        Assert.Equal("Rejected", view.Status);
+        Assert.Empty(await _executableStore.ListAllAsync());
+    }
+
+    [Theory]
+    [InlineData(ExpressionDraftValidationState.Errors)]
+    [InlineData(ExpressionDraftValidationState.Unauthorized)]
+    [InlineData(ExpressionDraftValidationState.Incompatible)]
+    [InlineData(ExpressionDraftValidationState.Stale)]
+    [InlineData(ExpressionDraftValidationState.Canceled)]
+    public async Task AcknowledgementDoesNotOverrideNonUnavailableValidationFailures(ExpressionDraftValidationState state)
+    {
+        var handler = Handler(
+            WorkflowVersion(Node("write-one", Text("hello"))),
+            expressionValidator: new StubExpressionValidator(new(state, [])));
+
+        var view = await handler.Handle(new StartWorkflowTestRun(
+            "version-1",
+            AcknowledgeUnavailableExpressionValidation: true), CancellationToken.None);
+
+        Assert.Equal("Rejected", view.Status);
+        Assert.Empty(await _executableStore.ListAllAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidatorFaultRequiresUnavailableAcknowledgementForVersionAndDraftTestRuns(bool draft)
+    {
+        var validator = new ThrowingExpressionValidator();
+
+        var rejected = draft
+            ? await DraftSnapshotHandler(expressionValidator: validator).Handle(new StartWorkflowDraftTestRun(
+                DefinitionId: "definition-1",
+                SnapshotId: "snapshot-1",
+                State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)), CancellationToken.None)
+            : await Handler(
+                    WorkflowVersion(Node("write-one", Text("hello"))),
+                    expressionValidator: validator)
+                .Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.Contains("validation is unavailable", rejected.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Unavailable", rejected.Metadata["expressionValidation.state"]);
+        Assert.Equal("expression-validation-unavailable", rejected.Metadata["expressionValidation.code"]);
+        Assert.Empty(await _executableStore.ListAllAsync());
+    }
+
+    [Fact]
+    public async Task ValidatorPreservesCallerCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var handler = Handler(
+            WorkflowVersion(Node("write-one", Text("hello"))),
+            expressionValidator: new CancelingExpressionValidator());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            handler.Handle(new StartWorkflowTestRun("version-1"), cancellation.Token));
+
+        Assert.Empty(await _executableStore.ListAllAsync());
     }
 
     [Fact]
@@ -154,6 +277,28 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("Text", authored.InputKey);
         Assert.Equal("JavaScript", authored.ExpressionType);
         Assert.Equal(authoredJson, authored.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task DraftTestRunFreezesActivityPresentationOntoItsExpiringReference()
+    {
+        var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-presentation",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
+            ActivityPresentation:
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify buyer",
+                    "Send the confirmation after payment.")
+            ]), CancellationToken.None);
+
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        var presentation = Assert.Single(reference.ActivityPresentation);
+        Assert.Equal("write-one", presentation.ExecutableNodeId);
+        Assert.Equal("Notify buyer", presentation.DisplayName);
+        Assert.Equal("Send the confirmation after payment.", presentation.Description);
     }
 
     [Fact]
@@ -488,7 +633,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
-        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null)
+        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null,
+        IExpressionDraftSemanticValidator? expressionValidator = null)
     {
         var versionStore = new FakeVersionStore(workflowVersion);
         return new(
@@ -506,10 +652,13 @@ public sealed class WorkflowTestRunRequestHandlerTests
             TimeProvider.System,
             versionStore,
             new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
-            testScopeStore: _testScopeStore);
+            testScopeStore: _testScopeStore,
+            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid);
     }
 
-    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null)
+    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(
+        IWorkflowStartDispatcher? dispatcher = null,
+        IExpressionDraftSemanticValidator? expressionValidator = null)
     {
         return new(
             TestCompiler.Create(
@@ -525,7 +674,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
             TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System,
             authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
-            testScopeStore: _testScopeStore);
+            testScopeStore: _testScopeStore,
+            expressionValidator: expressionValidator ?? StubExpressionValidator.Valid);
     }
 
     private WorkflowStartDispatcher Dispatcher() =>
@@ -586,6 +736,35 @@ public sealed class WorkflowTestRunRequestHandlerTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubExpressionValidator(ExpressionDraftValidationResult result) : IExpressionDraftSemanticValidator
+    {
+        public static readonly StubExpressionValidator Valid = new(new(ExpressionDraftValidationState.Valid, []));
+
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(result);
+    }
+
+    private sealed class ThrowingExpressionValidator : IExpressionDraftSemanticValidator
+    {
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Validation provider failed.");
+    }
+
+    private sealed class CancelingExpressionValidator : IExpressionDraftSemanticValidator
+    {
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromCanceled<ExpressionDraftValidationResult>(cancellationToken);
     }
 
     private sealed class ThrowingVersionStore : IWorkflowDefinitionVersionStore

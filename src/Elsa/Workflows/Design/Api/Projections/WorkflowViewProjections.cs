@@ -35,11 +35,15 @@ public static class WorkflowViewProjections
             view.Outputs ?? [],
             view.StrategyOptions);
 
-    public static WorkflowDefinitionVersionDetailsView ToDetailsView(this IWorkflowDefinitionVersion version, IEnumerable<IDesignMetadataRecord>? layout = null) =>
+    public static WorkflowDefinitionVersionDetailsView ToDetailsView(
+        this IWorkflowDefinitionVersion version,
+        IEnumerable<IDesignMetadataRecord>? layout = null,
+        IEnumerable<IActivityPresentationRecord>? activityPresentation = null) =>
         new(
             version.Id,
             version.Version,
             version.Definition.ToView(),
             version.State.ToStateView(),
-            (layout ?? []).Select(WorkflowDefinitionLayoutRecordView.From).ToArray());
+            (layout ?? []).Select(WorkflowDefinitionLayoutRecordView.From).ToArray(),
+            (activityPresentation ?? []).Select(ActivityPresentationRecordView.From).ToArray());
 }

@@ -67,8 +67,17 @@ public class GroundworkWorkflowDefinitionCommandTests
     private GroundworkCreateDraftCommand CreateCommand() =>
         new(DraftOriginator(), Payloads);
 
-    private GroundworkUpdateDraftCommand UpdateCommand() =>
-        new(_locks, _store, AtomicWrite(), Payloads, _events, _events, _clock, _accessContext);
+    private GroundworkUpdateDraftCommand UpdateCommand(IActivityStructureService? activityStructureService = null) =>
+        new(
+            _locks,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            _events,
+            _events,
+            _clock,
+            _accessContext,
+            activityStructureService ?? new EmptyActivityStructureService());
 
     private GroundworkWorkflowDefinitionVersionStore VersionStore(IDocumentStore? store = null)
     {
@@ -171,7 +180,18 @@ public class GroundworkWorkflowDefinitionCommandTests
             [],
             null);
         var layout = new[] { new DesignMetadataRecord("root", 10, 20, 300, 200) };
+        var activityPresentation = new[]
+        {
+            new ActivityPresentationRecord(
+                "root",
+                "Notify buyer",
+                "Send the confirmation after payment.")
+        };
         var sourceDraftId = await CreateCommand().Execute(NextKey(), "definition-1", state, layout, cancellationToken: CancellationToken.None);
+        await UpdateCommand().Execute(
+            NextKey(),
+            new UpdateDraftRequest(sourceDraftId, state, layout, activityPresentation),
+            CancellationToken.None);
         var sourceVersionId = await PromoteCommand().Execute(NextKey(), sourceDraftId, CancellationToken.None);
         var clone = new GroundworkCloneDraftFromVersionCommand(
             VersionStore(),
@@ -198,6 +218,9 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Empty(cloned.State.Inputs);
         Assert.Empty(cloned.State.Outputs);
         Assert.Equal(layout, await DraftStore().FindLayoutByDraftIdAsync(cloneId));
+        Assert.Equal(
+            activityPresentation,
+            await DraftStore().FindActivityPresentationByDraftIdAsync(cloneId));
     }
 
     [Fact]
@@ -474,7 +497,8 @@ public class GroundworkWorkflowDefinitionCommandTests
             _events,
             deferredEvents,
             _clock,
-            _accessContext);
+            _accessContext,
+            new EmptyActivityStructureService());
         var key = NextKey();
         var request = new UpdateDraftRequest(draftId, EmptyState(), []);
 
@@ -518,14 +542,55 @@ public class GroundworkWorkflowDefinitionCommandTests
         var draftId = await CreateCommand().Execute(NextKey(), "definition-1", EmptyState(), [new DesignMetadataRecord("old", 0, 0, 100, 100)], cancellationToken: CancellationToken.None);
         _events.ContributeError(new ValidationError("root", "Updated/Error", "Still invalid"));
         var nextLayout = new[] { new DesignMetadataRecord("root", 1, 2, 3, 4) };
+        var activityPresentation = new[]
+        {
+            new ActivityPresentationRecord("root", "Notify buyer", "After payment.")
+        };
 
-        await UpdateCommand().Execute(NextKey(), new UpdateDraftRequest(draftId, EmptyState(), nextLayout), CancellationToken.None);
+        await UpdateCommand().Execute(
+            NextKey(),
+            new UpdateDraftRequest(draftId, MinimalState(), nextLayout, activityPresentation),
+            CancellationToken.None);
 
         var readLayout = await DraftStore().FindLayoutByDraftIdAsync(draftId);
+        var readPresentation = await DraftStore().FindActivityPresentationByDraftIdAsync(draftId);
         var errors = await DeriveErrors(draftId);
 
         Assert.Equal(nextLayout.Single(), readLayout.Single());
+        Assert.Equal(activityPresentation, readPresentation);
         Assert.Equal("Updated/Error", errors.Single().Type);
+    }
+
+    [Fact]
+    public async Task UpdateDraft_prunes_presentation_for_nodes_removed_from_the_submitted_activity_tree()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-1",
+            MinimalState(),
+            cancellationToken: CancellationToken.None);
+        var child = new ActivityNode("child", "activity-version-1", [], []);
+        var structure = new MutableActivityStructureService { InvalidChild = child };
+        var command = UpdateCommand(structure);
+        var presentation = new[]
+        {
+            new ActivityPresentationRecord("root", "Root"),
+            new ActivityPresentationRecord("child", "Notify buyer")
+        };
+
+        await command.Execute(
+            NextKey(),
+            new UpdateDraftRequest(draftId, MinimalState(), [], presentation),
+            CancellationToken.None);
+
+        structure.InvalidChild = null;
+        await command.Execute(
+            NextKey(),
+            new UpdateDraftRequest(draftId, MinimalState(), [], presentation),
+            CancellationToken.None);
+
+        var stored = await DraftStore().FindActivityPresentationByDraftIdAsync(draftId);
+        Assert.Equal([new ActivityPresentationRecord("root", "Root")], stored);
     }
 
     [Fact]
@@ -1060,7 +1125,9 @@ public class GroundworkWorkflowDefinitionCommandTests
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
         {
             ProjectionCount++;
-            return InvalidChild is null ? [] : [new ActivityChildProjection("Body", [InvalidChild])];
+            return InvalidChild is null || activity.NodeId != "root"
+                ? []
+                : [new ActivityChildProjection("Body", [InvalidChild])];
         }
 
         public ActivityNode ReplaceChildren(

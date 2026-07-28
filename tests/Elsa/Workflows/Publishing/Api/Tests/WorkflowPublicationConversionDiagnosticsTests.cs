@@ -1,8 +1,11 @@
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -157,6 +160,43 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
         Assert.Equal("partner.json", metadata.GetProperty("profileId").GetString());
         Assert.Equal("8", metadata.GetProperty("profileVersion").GetString());
         Assert.Contains("partner.json@8", diagnostic.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Publish_endpoint_returns_a_safe_machine_readable_expression_validation_problem()
+    {
+        var diagnostic = new ExpressionDiagnostic(
+            "JavaScript/Syntax",
+            ExpressionDiagnosticSeverity.Error,
+            "Unexpected token.",
+            "document-revision",
+            new(new(1, 2), new(1, 3)),
+            "writer/inputs/Text",
+            ["private-symbol-id"]);
+        var rejection = new ExpressionPublicationValidationException(new(
+            ExpressionDraftValidationState.Errors,
+            [diagnostic],
+            "expression-syntax"));
+        var endpoint = PublishEndpoint(new ExceptionSender(rejection));
+
+        await InvokePublishAsync(endpoint);
+
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
+        var body = await BodyAsync(endpoint);
+        using var document = JsonDocument.Parse(body);
+        var problem = document.RootElement;
+        Assert.Equal("errors", problem.GetProperty("validationState").GetString());
+        Assert.Equal("expression-syntax", problem.GetProperty("errorCode").GetString());
+        var safeDiagnostic = Assert.Single(problem.GetProperty("diagnostics").EnumerateArray());
+        Assert.Equal("JavaScript/Syntax", safeDiagnostic.GetProperty("code").GetString());
+        Assert.Equal("Error", safeDiagnostic.GetProperty("severity").GetString());
+        Assert.Equal("Unexpected token.", safeDiagnostic.GetProperty("message").GetString());
+        Assert.Equal("writer/inputs/Text", safeDiagnostic.GetProperty("authoredPath").GetString());
+        Assert.False(safeDiagnostic.TryGetProperty("relatedSymbols", out _));
+        Assert.False(safeDiagnostic.TryGetProperty("relatedSymbolIds", out _));
+        Assert.False(safeDiagnostic.TryGetProperty("metadata", out _));
+        Assert.DoesNotContain("private-symbol-id", body, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -177,5 +177,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/138-reusable-boundary-outcomes/plan.md`.
+`specs/143-expression-code-intelligence/plan.md`.
 <!-- SPECKIT END -->

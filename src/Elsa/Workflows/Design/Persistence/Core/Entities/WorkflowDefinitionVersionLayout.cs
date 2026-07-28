@@ -1,5 +1,6 @@
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
@@ -19,4 +20,9 @@ public sealed class WorkflowDefinitionVersionLayout : TenantEntity, IWorkflowDef
     public IEnumerable<DesignMetadataRecord> Records { get; init; } = [];
 
     IEnumerable<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records;
+
+    public IEnumerable<ActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+
+    IEnumerable<IActivityPresentationRecord> IWorkflowDefinitionLayout.ActivityPresentation =>
+        ActivityPresentation;
 }

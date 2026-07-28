@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Events\Core\Elsa.Events.Core.csproj" />

@@ -22,7 +22,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 9,
         [ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 4,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 5,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 5,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind] = 2,
@@ -70,6 +70,7 @@ public static class ElsaRuntimeDocumentVersions
         return documentKind switch
         {
             ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => 4,
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
             _ => currentVersion
         };

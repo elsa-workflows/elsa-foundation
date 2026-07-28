@@ -13,6 +13,9 @@ public interface IWorkflowDefinitionLayout
 {
     string Id { get; }
     IEnumerable<IDesignMetadataRecord> Records { get; }
+
+    /// <summary>Gets optional author-facing presentation keyed by activity node id.</summary>
+    IEnumerable<IActivityPresentationRecord> ActivityPresentation { get; }
 }
 
 /// <summary>
@@ -32,4 +35,12 @@ public interface IDesignMetadataRecord
     /// (ADR 0035 D3) — read as JSON, never indexed as a CLR dictionary.
     /// </summary>
     JsonElement? AdditionalProperties { get; }
+}
+
+/// <summary>Read-only presentation metadata for one activity occurrence.</summary>
+public interface IActivityPresentationRecord
+{
+    string NodeId { get; }
+    string? DisplayName { get; }
+    string? Description { get; }
 }

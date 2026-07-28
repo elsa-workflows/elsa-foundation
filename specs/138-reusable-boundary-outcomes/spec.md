@@ -57,7 +57,7 @@ As a workflow author using a catalog-driven designer, I can see and connect ever
 ### Edge Cases
 
 - A boundary outcome is declared but not mapped.
-- A boundary outcome is mapped more than once.
+- Several source outcomes converge on one boundary outcome.
 - A mapping references an unknown boundary outcome or an outcome not emitted by the direct entry activity contract.
 - Two mappings could match the same child completion outcome.
 - The graph entry completes with no outcome, multiple outcomes, or an unmapped outcome.
@@ -71,9 +71,9 @@ As a workflow author using a catalog-driven designer, I can see and connect ever
 
 - **FR-001**: The graph activity provider MUST support a new manifest schema that lets the provider own explicit mappings from emitted reusable-boundary outcomes to emitted outcomes of the graph's resolved direct entry activity.
 - **FR-002**: Each mapping MUST identify both sides by stable contract outcome reference during design and compilation.
-- **FR-003**: Every boundary outcome declared as emitted MUST have exactly one mapping, and mappings MUST NOT target boundary outcomes that are absent or not emitted.
+- **FR-003**: Every boundary outcome declared as emitted MUST have at least one mapping, and mappings MUST NOT target boundary outcomes that are absent or not emitted.
 - **FR-004**: Every mapping source MUST resolve to an outcome declared as emitted by the resolved direct entry activity dependency.
-- **FR-005**: Validation MUST reject duplicate, unknown, missing, unreachable, or ambiguous mappings with deterministic provider diagnostics.
+- **FR-005**: Validation MUST reject duplicate source, unknown, missing, unreachable, or ambiguous mappings with deterministic provider diagnostics while permitting distinct sources to converge on one boundary outcome.
 - **FR-006**: Compilation MUST pin the validated source and boundary runtime outcome names into the provider-owned runtime descriptor; execution MUST NOT consult mutable design state.
 - **FR-007**: When the direct entry activity completes with exactly one mapped outcome, the reusable boundary MUST complete with exactly the mapped public outcome.
 - **FR-008**: Execution MUST fail deterministically when the direct entry completion has no uniquely mapped outcome.
