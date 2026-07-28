@@ -11,6 +11,7 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Workflows.Design.Api.Capabilities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -38,7 +39,10 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         // These services back the authoring API and must not depend on the optional validation feature.
         services.AddScopedVariableAuthoring();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
-        services.TryAddScoped<IExpressionAuthoringContextSource, PersistedExpressionAuthoringContextSource>();
+        services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
+            ActivatorUtilities.CreateInstance<PersistedExpressionAuthoringContextSource>(
+                serviceProvider,
+                serviceProvider.GetServices<IWorkflowDefinitionDraftStore>()));
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();

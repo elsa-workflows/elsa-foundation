@@ -13,6 +13,22 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 public sealed class ExpressionDraftSemanticValidatorTests
 {
     [Fact]
+    public async Task Literal_string_values_do_not_require_a_text_tooling_provider()
+    {
+        var provider = new ErrorProvider();
+        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
+        var state = new WorkflowDefinitionState(
+            [],
+            new ActivityNode("node", "activity", [new("text", new("hello", "Literal"), null, null, null, null)], []),
+            [], [], null);
+
+        var result = await validator.ValidateAsync(state, "draft", CancellationToken.None);
+
+        Assert.Equal(ExpressionDraftValidationState.Valid, result.State);
+        Assert.Null(provider.Source);
+    }
+
+    [Fact]
     public async Task Validates_json_string_sources_and_aggregates_provider_errors()
     {
         using var json = JsonDocument.Parse("\"bad source\"");

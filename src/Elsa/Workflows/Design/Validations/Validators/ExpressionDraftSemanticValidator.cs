@@ -22,7 +22,9 @@ public sealed class ExpressionDraftSemanticValidator(
         foreach (var (argumentBag, argument) in node.Inputs.Select(argument => ("inputs", argument))
                      .Concat(node.Outputs.Select(argument => ("outputs", argument))))
         {
-            if (string.IsNullOrWhiteSpace(argument.Value.ExpressionType) || !TryGetSource(argument.Value.Value, out var source))
+            if (string.IsNullOrWhiteSpace(argument.Value.ExpressionType) ||
+                string.Equals(argument.Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase) ||
+                !TryGetSource(argument.Value.Value, out var source))
                 continue;
             var authoredPath = $"{node.NodeId}/{argumentBag}/{argument.ReferenceKey}";
             var provider = providerResolver.Find(argument.Value.ExpressionType);
