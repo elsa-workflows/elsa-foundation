@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
@@ -69,11 +70,26 @@ public class GroundworkWorkflowDefinitionCommandTests
     private GroundworkUpdateDraftCommand UpdateCommand() =>
         new(_locks, _store, AtomicWrite(), Payloads, _events, _events, _clock, _accessContext);
 
-    private GroundworkWorkflowDefinitionVersionStore VersionStore() =>
-        new(_store, new GroundworkWorkflowDefinitionStore(_store), Payloads);
+    private GroundworkWorkflowDefinitionVersionStore VersionStore(IDocumentStore? store = null)
+    {
+        var documents = store ?? _store;
+        return new(documents, new GroundworkWorkflowDefinitionStore(documents), Payloads);
+    }
 
-    private GroundworkPromoteDraftToVersionCommand PromoteCommand() =>
-        new(_locks, _store, AtomicWrite(), Payloads, _events, VersionStore(), _identities, _clock, _accessContext);
+    private GroundworkPromoteDraftToVersionCommand PromoteCommand(IDocumentStore? store = null)
+    {
+        var documents = store ?? _store;
+        return new(
+            _locks,
+            documents,
+            new GroundworkDesignAtomicWrite(documents),
+            Payloads,
+            _events,
+            VersionStore(documents),
+            _identities,
+            _clock,
+            _accessContext);
+    }
 
     private GroundworkMaterializeWorkflowDefinitionVersionCommand MaterializeVersionCommand() =>
         new(AtomicWrite(), Payloads, _clock, _accessContext);
@@ -542,6 +558,97 @@ public class GroundworkWorkflowDefinitionCommandTests
             PromoteCommand().Execute(NextKey(), "draft-missing", CancellationToken.None));
 
         Assert.Contains("draft-missing", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_persists_a_requested_forward_release_and_prerelease()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-exact", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+
+        var releaseId = await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var prereleaseId = await promote.Execute(NextKey(), draftId, "2.1.0-rc.1", CancellationToken.None);
+
+        Assert.Equal("2.0.0", (await VersionStore().GetAsync(releaseId)).Version);
+        Assert.Equal("2.1.0-rc.1", (await VersionStore().GetAsync(prereleaseId)).Version);
+    }
+
+    [Theory]
+    [InlineData("not-semver")]
+    [InlineData("1.0.0")]
+    public async Task PromoteDraft_rejects_malformed_or_non_forward_requested_versions_without_creating_a_version(string requestedVersion)
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-invalid", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var versionCount = (await VersionStore().ListByDefinitionAsync("definition-invalid")).Count;
+
+        await Assert.ThrowsAsync<WorkflowVersionSelectionException>(() =>
+            promote.Execute(NextKey(), draftId, requestedVersion, CancellationToken.None));
+
+        Assert.Equal(versionCount, (await VersionStore().ListByDefinitionAsync("definition-invalid")).Count);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_replay_requires_the_same_requested_version_material()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-replay", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        var key = NextKey();
+
+        var versionId = await promote.Execute(key, draftId, "2.0.0", CancellationToken.None);
+        var replayId = await promote.Execute(key, draftId, " 2.0.0 ", CancellationToken.None);
+
+        Assert.Equal(versionId, replayId);
+        await Assert.ThrowsAsync<WorkflowPromotionOperationConflictException>(() =>
+            promote.Execute(key, draftId, "2.1.0", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromoteDraft_rejects_a_build_metadata_equivalent_identity_as_a_conflict_without_creating_a_version()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-build-conflict", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        await promote.Execute(NextKey(), draftId, "2.0.0", CancellationToken.None);
+        var versionCount = (await VersionStore().ListByDefinitionAsync("definition-build-conflict")).Count;
+
+        await Assert.ThrowsAsync<WorkflowDefinitionVersionConflictException>(() =>
+            promote.Execute(NextKey(), draftId, "2.0.0+build.7", CancellationToken.None));
+
+        Assert.Equal(versionCount, (await VersionStore().ListByDefinitionAsync("definition-build-conflict")).Count);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_maps_a_final_version_identity_save_race_to_a_domain_conflict()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-save-race",
+            EmptyState(),
+            cancellationToken: CancellationToken.None);
+        var conflictingStore = new VersionSaveConflictDocumentStore(_store);
+
+        await Assert.ThrowsAsync<WorkflowDefinitionVersionConflictException>(() =>
+            PromoteCommand(conflictingStore).Execute(
+                NextKey(),
+                draftId,
+                "2.0.0",
+                CancellationToken.None));
+
+        Assert.True(conflictingStore.VersionSaveWasRejected);
+        Assert.Empty(await VersionStore().ListByDefinitionAsync("definition-save-race"));
+    }
+
+    [Fact]
+    public async Task PromoteDraft_replay_rejects_switching_between_exact_and_automatic_assignment()
+    {
+        var draftId = await CreateCommand().Execute(NextKey(), "definition-replay-mode", EmptyState(), cancellationToken: CancellationToken.None);
+        var promote = PromoteCommand();
+        var key = NextKey();
+        await promote.Execute(key, draftId, "2.0.0", CancellationToken.None);
+
+        await Assert.ThrowsAsync<WorkflowPromotionOperationConflictException>(() =>
+            promote.Execute(key, draftId, requestedVersion: null, cancellationToken: CancellationToken.None));
     }
 
     [Fact]
@@ -1015,6 +1122,116 @@ public class GroundworkWorkflowDefinitionCommandTests
             new AcknowledgementLostAfterCommitUnitOfWork(
                 await inner.BeginAsync(scope, cancellationToken),
                 callerCancellation);
+    }
+
+    private sealed class VersionSaveConflictDocumentStore(IDocumentStore inner) : IDocumentStore, IBoundedDocumentStore
+    {
+        public bool VersionSaveWasRejected { get; set; }
+        public global::Groundwork.Documents.Scoping.DocumentStoreAccess Access => inner.Access;
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+#pragma warning disable GW0004
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
+            DocumentStoreQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<global::Groundwork.Documents.Store.DocumentQueryResult> QueryAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            global::Groundwork.Documents.Store.PortableDocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
+
+        public Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IBoundedDocumentStore)inner).QueryAsync(query, cancellationToken);
+
+        public Task<long> CountAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IBoundedDocumentStore)inner).CountAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IBoundedDocumentStore)inner).FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IBoundedDocumentStore)inner).AnyAsync(query, cancellationToken);
+
+        public async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new VersionSaveConflictUnitOfWork(
+                await inner.BeginAsync(scope, cancellationToken),
+                this);
+    }
+
+    private sealed class VersionSaveConflictUnitOfWork(
+        IDocumentUnitOfWork inner,
+        VersionSaveConflictDocumentStore owner) : IDocumentUnitOfWork
+    {
+        public Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (request.DocumentKind ==
+                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            {
+                owner.VersionSaveWasRejected = true;
+                return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
+            }
+
+            return inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            inner.CommitAsync(cancellationToken);
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            inner.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
     private sealed class AcknowledgementLostAfterCommitUnitOfWork(

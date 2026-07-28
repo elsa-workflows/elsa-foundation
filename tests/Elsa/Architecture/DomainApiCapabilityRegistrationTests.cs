@@ -74,6 +74,25 @@ public sealed class DomainApiCapabilityRegistrationTests
     }
 
     [Fact]
+    public void Workflow_design_capabilities_advertise_optional_promotion_version_operations()
+    {
+        var links = WorkflowDesignApiCapabilities.StaticDeclaration.Links;
+
+        Assert.Contains(links, link => link is
+        {
+            Rel: "workflow-draft-promote-version-preflight",
+            Href: "design/workflows/drafts/{draftId}/promotion-preflight",
+            Templated: true
+        });
+        Assert.Contains(links, link => link is
+        {
+            Rel: "workflow-draft-promote-exact-version",
+            Href: "design/workflows/drafts/{draftId}/promote",
+            Templated: true
+        });
+    }
+
+    [Fact]
     public async Task Runtime_operational_source_contributes_diagnostics_only_when_a_store_is_composed()
     {
         Assert.Empty(await new RuntimeOperationalCapabilitySource().GetCapabilitiesAsync());
