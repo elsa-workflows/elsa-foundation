@@ -75,8 +75,20 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.All(LogicBearingRuntimeServiceTypes, serviceType =>
         {
-            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
-            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            var descriptors = services.Where(candidate => candidate.ServiceType == serviceType).ToArray();
+            if (serviceType == typeof(IWorkflowExecutableStore))
+            {
+                Assert.Equal(2, descriptors.Length);
+                var keyed = Assert.Single(descriptors, descriptor => descriptor.IsKeyedService);
+                Assert.Equal(GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey, keyed.ServiceKey);
+                Assert.Single(descriptors, descriptor => !descriptor.IsKeyedService);
+            }
+            else
+            {
+                Assert.Single(descriptors);
+            }
+
+            Assert.All(descriptors, descriptor => Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime));
         });
     }
 
