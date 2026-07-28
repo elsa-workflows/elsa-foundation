@@ -9,7 +9,8 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.93";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.88";
+    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.93";
     private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.86";
     private const string EarlierPublishedGroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
@@ -336,8 +337,8 @@ public sealed class GroundworkCoverageLedgerTests
         var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
         var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
-        Assert.Equal(ExpectedGroundworkVersion, Assert.Single(packageVersions));
-        Assert.Equal(ExpectedGroundworkVersion, toolVersion);
+        Assert.Equal(CurrentPackageGroundworkVersion, Assert.Single(packageVersions));
+        Assert.Equal(CurrentPackageGroundworkVersion, toolVersion);
     }
 
     [Fact]
