@@ -25,6 +25,7 @@ public class ExpressionsFeature : IShellFeature
     {
         services
             .AddSingleton<IExpressionDescriptorRegistry, ExpressionDescriptorRegistry>()
+            .AddSingleton<IExpressionToolingProviderResolver, ExpressionToolingProviderResolver>()
             .AddSingleton<IExpressionDescriptorProvider, DefaultExpressionDescriptorProvider>()
             .Configure<ExpressionEvaluatorOptions>(o =>
             {

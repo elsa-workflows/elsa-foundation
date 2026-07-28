@@ -4,6 +4,7 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Workflows.Design.Core.Extensions;
+using Elsa.Workflows.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Tasks.Core;
@@ -36,6 +37,8 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddRequestHandlersFrom(assembly);
         // These services back the authoring API and must not depend on the optional validation feature.
         services.AddScopedVariableAuthoring();
+        services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
+        services.TryAddScoped<IExpressionAuthoringContextSource, PersistedExpressionAuthoringContextSource>();
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();

@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -10,6 +11,7 @@ using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Internal;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Design.Validations;
 
@@ -62,5 +64,13 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IDraftValidator, VariableExpressionResolverValidator>();
         services.AddScoped<IDraftValidator, IntrinsicVariableTargetValidator>();
         services.AddScoped<IDraftValidator, ValueFlowValidator>();
+        services.TryAddSingleton<IExpressionToolingProviderResolver>(new UnavailableExpressionToolingProviderResolver());
+        services.AddScoped<IExpressionDraftSemanticValidator, ExpressionDraftSemanticValidator>();
+        services.AddScoped<IDraftValidator, ExpressionDraftValidator>();
+    }
+
+    private sealed class UnavailableExpressionToolingProviderResolver : IExpressionToolingProviderResolver
+    {
+        public IExpressionToolingProvider? Find(string expressionType) => null;
     }
 }
