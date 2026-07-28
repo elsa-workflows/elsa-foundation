@@ -147,7 +147,8 @@ describe("input shape construction", () => {
       category: "",
       uiHint: "singleline",
       storageDriverType: null,
-      isRequired: false
+      isRequired: false,
+      isNullable: false
     });
     expect(input.referenceKey).toBeTypeOf("string");
     expect(input.referenceKey.length).toBeGreaterThan(0);

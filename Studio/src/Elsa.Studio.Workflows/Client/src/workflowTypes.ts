@@ -437,7 +437,8 @@ export interface WorkflowManagementCapabilities {
 // Workflow inputs carry the argument-definition field set plus binding metadata. Collection-ness lives
 // on `type.collectionKind` (the legacy `isArray` boolean is gone). `referenceKey` is the stable identity
 // (a required positional on the backend InputDefinition). The backend InputDefinition has no default
-// value member, so no `defaultValue`/`defaultSyntax` is carried; `isRequired` is a first-class flag.
+// value member, so no `defaultValue`/`defaultSyntax` is carried; `isRequired` and `isNullable` are
+// first-class flags.
 export interface WorkflowInput extends StudioWorkflowRunInputDescriptor {
   referenceKey: string;
   name: string;
@@ -448,6 +449,7 @@ export interface WorkflowInput extends StudioWorkflowRunInputDescriptor {
   uiHint: string;
   storageDriverType: string | null;
   isRequired?: boolean;
+  isNullable: boolean;
   [key: string]: unknown;
 }
 

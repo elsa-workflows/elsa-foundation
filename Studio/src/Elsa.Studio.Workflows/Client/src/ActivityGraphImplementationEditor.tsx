@@ -847,6 +847,7 @@ function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["in
     category: typeof input.category === "string" ? input.category : "",
     uiHint: typeof input.uiHint === "string" ? input.uiHint : "",
     storageDriverType: typeof input.storageDriverKey === "string" ? input.storageDriverKey : null,
+    isNullable: input.isNullable === true,
     type: {
       alias: typeof type.alias === "string" ? type.alias : "Object",
       collectionKind: isCollectionKind(type.collectionKind) ? type.collectionKind : "Single"

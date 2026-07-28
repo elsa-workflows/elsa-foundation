@@ -152,7 +152,8 @@ export function createInput(options: { name: string; alias?: string; storageDriv
     category: "",
     uiHint: defaultInputUiHint,
     storageDriverType: options.storageDriver ?? null,
-    isRequired: false
+    isRequired: false,
+    isNullable: false
   };
 }
 

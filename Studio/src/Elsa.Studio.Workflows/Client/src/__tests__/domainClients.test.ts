@@ -469,6 +469,7 @@ function workflowInput(referenceKey: string, name: string, alias: string): Workf
     uiHint: "",
     storageDriverType: null,
     type: { alias, collectionKind: "Single" },
-    isRequired: true
+    isRequired: true,
+    isNullable: false
   };
 }

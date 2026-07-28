@@ -233,6 +233,7 @@ function workflowInput(
     description: "",
     category: "",
     uiHint: "singleline",
-    storageDriverType: null
+    storageDriverType: null,
+    isNullable: false
   };
 }
