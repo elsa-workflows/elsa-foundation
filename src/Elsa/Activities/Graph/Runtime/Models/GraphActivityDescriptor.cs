@@ -112,8 +112,6 @@ public sealed class GraphActivityDescriptor
             throw new ArgumentException("Graph outcome mapping names cannot be blank.", nameof(values));
         if (snapshot.Select(x => x.SourceOutcomeName).Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
             throw new ArgumentException("Graph outcome mapping source names cannot contain duplicates.", nameof(values));
-        if (snapshot.Select(x => x.BoundaryOutcomeName).Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
-            throw new ArgumentException("Graph outcome mapping boundary names cannot contain duplicates.", nameof(values));
         return Array.AsReadOnly(snapshot);
     }
 }
