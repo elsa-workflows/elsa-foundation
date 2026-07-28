@@ -140,6 +140,38 @@ _Avoid_: Managed category, Category entity
 A Workflow Designer Slot for editor Contributions that edit activity property values. Contributions to this Slot match by activity property metadata, value type, expression type, and priority.
 _Avoid_: Generic panel slot, component
 
+**Expression Type**:
+A named evaluation mechanism for an Activity Property Value, such as Literal, JavaScript, Liquid, or Python. An Expression Type owns its syntax and semantics through its expression module, including its available Expression Symbols, editing support, and validation.
+_Avoid_: Expression language when the mechanism is not a programming or template language
+
+**Expression Symbol**:
+A named value or callable available to one Expression Type in a particular authoring and evaluation context. An Expression Symbol carries the type, callable signature, documentation, and member-shape metadata needed for nested code intelligence. Expression Symbols may represent language built-ins, workflow data, or module-provided capabilities, but their syntax and meaning belong to the owning Expression Type.
+_Avoid_: Elsa global, Studio global
+
+**Expression Value Shape**:
+A language-neutral design-time description of a value exposed through an Expression Symbol, including scalar kind, nullability, collection shape, object members, or callable signatures. Each Expression Module maps the shape into the conventions of its Expression Type.
+_Avoid_: CLR type name, language-specific type declaration
+
+**Expression Authoring Context**:
+The language-neutral facts available while editing one expression, including its target property and expected result type plus the workflow inputs, variables, and activity outputs visible at that location. An Expression Module projects these facts into its Expression Type's Expression Symbols.
+_Avoid_: Global symbol table, language-specific completion catalogue
+
+**Expression Symbol Catalog**:
+A versioned, permission-scoped, backend-supplied description of the built-in Expression Symbols available for one Expression Type under the current runtime and host configuration. It contains design-time metadata such as names, types, signatures, and documentation, never evaluated expressions or live runtime values. The backend applies Host Policy before returning the catalog or resolving referenced Expression Value Shapes. An Expression Module combines this catalog with the Expression Authoring Context; the catalog does not contain workflow-specific symbols.
+_Avoid_: Frontend hard-coded symbol list, global symbol catalog
+
+**Expression Diagnostic**:
+A design-time finding about an authored expression. Local syntax diagnostics provide immediate parser feedback, while authoritative semantic diagnostics come asynchronously from the backend Expression Module that owns the Expression Type.
+_Avoid_: Runtime incident, editor-only validation result
+
+**Expression Editor Surface**:
+A presentation of one expression editor, such as inline or expanded. All surfaces for an Expression Type share the same language tooling and diagnostics; a surface changes layout and interaction density, not code-intelligence capability. A compact surface never flattens or mutates a multiline expression and instead directs editing of that value to the expanded surface.
+_Avoid_: Separate inline editor implementation, reduced-intelligence editor
+
+**Expression Document**:
+The design-time document for one Expression Type applied to one activity property in one workflow draft. Its stable identity includes the draft, activity, property, and Expression Type so editor state, diagnostics, and language tooling cannot collide with another expression.
+_Avoid_: Property-name document, source file
+
 **JavaScript Expression Module**:
 A module that owns JavaScript expression support in Studio, including editor Contributions, expression metadata, validation diagnostics, Weaver Tools, and JavaScript-specific help.
 _Avoid_: Workflows module when referring to JavaScript-specific behavior

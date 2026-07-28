@@ -18,21 +18,6 @@ const objectSyntax = "Object";
 const jsonLanguageAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
 const objectDrafts = new WeakMap<object, Map<string, string>>();
 
-export function createObjectExpressionEditorContribution(
-  getPropertyEditors: () => StudioActivityPropertyEditorContribution[]
-): StudioExpressionEditorContribution {
-  return {
-    id: "elsa.object-expression-editor",
-    order: 90,
-    supports: context => context.syntax === objectSyntax,
-    surfaces: {
-      inline: props => <ObjectInlineEditor {...props} propertyEditors={getPropertyEditors()} />,
-      expanded: props => <ObjectExpandedEditor {...props} propertyEditors={getPropertyEditors()} />
-    },
-    createDefaultValue: context => describeCollectionType(context.descriptor.typeName) ? [] : {}
-  };
-}
-
 export function ObjectInlineEditor({
   descriptor,
   value,
@@ -279,4 +264,19 @@ function writeDraft(activity: unknown, propertyName: string, draft: string | nul
   const drafts = objectDrafts.get(activity) ?? new Map<string, string>();
   drafts.set(propertyName, draft);
   objectDrafts.set(activity, drafts);
+}
+
+export function createObjectExpressionEditorContribution(
+  getPropertyEditors: () => StudioActivityPropertyEditorContribution[]
+): StudioExpressionEditorContribution {
+  return {
+    id: "elsa.object-expression-editor",
+    order: 90,
+    supports: context => context.syntax === objectSyntax,
+    surfaces: {
+      inline: props => <ObjectInlineEditor {...props} propertyEditors={getPropertyEditors()} />,
+      expanded: props => <ObjectExpandedEditor {...props} propertyEditors={getPropertyEditors()} />
+    },
+    createDefaultValue: context => describeCollectionType(context.descriptor.typeName) ? [] : {}
+  };
 }

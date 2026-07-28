@@ -535,6 +535,7 @@ export interface StartWorkflowDraftTestRunRequest {
   activityPresentation?: ActivityPresentationRecord[];
   artifactVersion?: string | null;
   inputs?: WorkflowExecutionInputs;
+  acknowledgeUnavailableExpressionValidation?: boolean;
 }
 
 export type WorkflowExecutionInputs = Record<string, unknown>;
@@ -551,6 +552,7 @@ export interface WorkflowTestRunView {
   incidentCount?: number | null;
   reason?: string | null;
   expiresAt?: string | null;
+  metadata?: Record<string, string>;
 }
 
 // An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).

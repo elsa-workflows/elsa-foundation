@@ -18,6 +18,8 @@ packages:
   - "src/Elsa.Studio.Samples.WeatherForecast/Client"
   - "examples/react-host"
   - "examples/vanilla-host"
+overrides:
+  "@codemirror/view": "6.43.6"
 allowBuilds:
   esbuild: true
 onlyBuiltDependencies:

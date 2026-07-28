@@ -21,27 +21,31 @@ const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").t
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
 
-// Re-exported for the test suite (src/__tests__/module.test.tsx), which imports these connect-end
-// helpers directly alongside register().
-export { isConnectEndOverExistingWorkflowNode, resolveConnectEndSource } from "./workflow-editor/editorHelpers";
-export { capabilityIds, clearApiCapabilityCache, resolveCapabilityLink } from "./api/capabilities";
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
-export { createEnumWorkflowRunInputEditorContribution } from "./workflowRunInputEditorContributions";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
-export { activityDefinitionsObservationEvent } from "./activityDefinitionObservability";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
+export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  const expressionToolingIdentity = {
+    backend: api.backend.baseUrl || "same-origin",
+    subject: api.runtime.identity?.subject?.trim() || "anonymous",
+    tenantId: api.runtime.identity?.tenantId?.trim() || "default"
+  };
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
   api.activityEditors.add(activityGraphImplementationEditorContribution);
   api.activityEditors.add(activityGraphSchema2ImplementationEditorContribution);
-  if (api.runtime.identity?.subject && api.runtime.identity.tenantId && typeof window !== "undefined") {
-    window.addEventListener(authSessionEndedEvent, () => clearActivityDefinitionRecoveryForIdentity(api.runtime.identity), { once: true });
+  if (typeof window !== "undefined") {
+    window.addEventListener(authSessionEndedEvent, () => {
+      if (api.runtime.identity?.subject && api.runtime.identity.tenantId) {
+        clearActivityDefinitionRecoveryForIdentity(api.runtime.identity);
+      }
+    });
   }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
@@ -91,7 +95,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} runInputEditors={runInputEditors()} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables",

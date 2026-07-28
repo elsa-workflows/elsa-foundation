@@ -144,6 +144,17 @@ describe("expression mode transitions", () => {
   });
 
   it.each([
+    [""],
+    ["line one\nline two"],
+    ["not valid in the target language ("]
+  ])("carries the exact text value between text syntaxes (%s)", value => {
+    expect(plan("text", "text", value)).toEqual({
+      requiresConfirmation: false,
+      nextValue: value
+    });
+  });
+
+  it.each([
     [false, "false"],
     [0, "0"],
     [42, "42"],

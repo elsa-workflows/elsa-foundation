@@ -6,7 +6,7 @@ import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActi
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
-import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowConnectSource, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 import { resolveActivityLabel } from "../activityPresentation";
 
 export function pageItems<T>(items: T[], page: number, pageSize: number) {
@@ -48,9 +48,7 @@ export function describeWorkflowError(error: unknown, fallbackMessage: string): 
     : undefined;
   if (typeof status === "number") result.status = status;
 
-  const payload = typeof error === "object" && error && "payload" in error
-    ? (error as { payload?: unknown }).payload
-    : null;
+  const payload = readWorkflowErrorPayload(error);
   if (payload && typeof payload === "object") {
     const problem = payload as Record<string, unknown>;
     result.detail = readStringField(problem, "detail");
@@ -61,8 +59,54 @@ export function describeWorkflowError(error: unknown, fallbackMessage: string): 
       if (typeof problemStatus === "number") result.status = problemStatus;
     }
   }
+  const diagnostics = extractExpressionValidationDiagnosticMessages(error);
+  if (diagnostics.length) {
+    result.detail = [result.detail, ...diagnostics]
+      .filter((value): value is string => !!value)
+      .join("\n");
+  }
 
   return result;
+}
+
+export function extractExpressionValidationDiagnosticMessages(error: unknown): string[] {
+  const payload = readWorkflowErrorPayload(error);
+  if (!payload || typeof payload !== "object") return [];
+  const diagnostics = (payload as { diagnostics?: unknown }).diagnostics;
+  if (!Array.isArray(diagnostics)) return [];
+
+  return Array.from(new Set(diagnostics.flatMap(entry => {
+    if (!entry || typeof entry !== "object") return [];
+    const diagnostic = entry as Record<string, unknown>;
+    const message = readStringField(diagnostic, "message");
+    if (!message) return [];
+    const code = readStringField(diagnostic, "code");
+    const path = readStringField(diagnostic, "authoredPath");
+    const range = diagnostic.range && typeof diagnostic.range === "object"
+      ? diagnostic.range as Record<string, unknown>
+      : null;
+    const start = range?.start && typeof range.start === "object"
+      ? range.start as Record<string, unknown>
+      : null;
+    const line = typeof start?.line === "number" ? start.line + 1 : null;
+    const character = typeof start?.character === "number" ? start.character + 1 : null;
+    const location = [
+      path,
+      line !== null && character !== null ? `line ${line}, column ${character}` : null
+    ].filter(Boolean).join(" · ");
+    return [`${code ? `[${code}] ` : ""}${location ? `${location}: ` : ""}${message}`];
+  })));
+}
+
+export function readWorkflowErrorPayload(error: unknown): unknown {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { payload?: unknown; response?: { data?: unknown }; message?: unknown };
+  if (candidate.payload != null) return candidate.payload;
+  if (candidate.response?.data != null) return candidate.response.data;
+  if (typeof candidate.message === "string") {
+    try { return JSON.parse(candidate.message); } catch { return null; }
+  }
+  return null;
 }
 
 // Normalizes the `string | WorkflowEditorError` accepted by `setError` into either a structured banner
@@ -515,32 +559,6 @@ export function midpointBetween(source: Node, target: Node) {
   };
 }
 
-function clientPointFromEvent(event: MouseEvent | TouchEvent) {
-  if ("changedTouches" in event && event.changedTouches.length > 0) {
-    return { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
-  }
-
-  return { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY };
-}
-
-export function isConnectEndOverExistingWorkflowNode(event: MouseEvent | TouchEvent) {
-  const point = clientPointFromEvent(event);
-  const releaseTarget = document.elementFromPoint?.(point.x, point.y) as HTMLElement | null | undefined;
-  const target = releaseTarget ?? (event.target as HTMLElement | null);
-  return !!target?.closest(".react-flow__handle, .react-flow__node");
-}
-
-export function resolveConnectEndSource(
-  currentSource: WorkflowConnectSource | null,
-  connectionState: { fromNode?: { id?: string | null } | null; fromHandle?: { id?: string | null } | null }
-): WorkflowConnectSource | null {
-  if (currentSource) return currentSource;
-  const nodeId = connectionState.fromNode?.id;
-  return nodeId ? { nodeId, handleId: connectionState.fromHandle?.id ?? null } : null;
-}
-
-export { clientPointFromEvent };
-
 export function getDraftSignature(draft: WorkflowDraft) {
   return JSON.stringify({
     state: draft.state,
@@ -652,6 +670,14 @@ function hashString(value: string) {
 
 export function isRejectedTestRun(testRun: WorkflowTestRunView) {
   return testRun.status.toLowerCase() === "rejected";
+}
+
+export function isWorkflowEditorKeyboardTarget(target: HTMLElement | null) {
+  if (!target) return false;
+  return target.isContentEditable
+    || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+    || Boolean(target.closest("[contenteditable='true']"))
+    || Boolean(target.closest("[data-studio-code-editor]"));
 }
 
 export function formatWorkflowVersionLoadError(error: string) {

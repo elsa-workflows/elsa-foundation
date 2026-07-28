@@ -2,7 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
-import { describeWorkflowError, normalizeWorkflowError } from "../workflow-editor/editorHelpers";
+import { describeWorkflowError, isWorkflowEditorKeyboardTarget, normalizeWorkflowError } from "../workflow-editor/editorHelpers";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
 import { formatActivityVersion } from "../workflowFormatting";
@@ -55,6 +55,24 @@ describe("describeWorkflowError", () => {
     expect(describeWorkflowError({}, "Could not save.").message).toBe("Could not save.");
     expect(describeWorkflowError(new Error("boom"), "fallback").message).toBe("boom");
   });
+
+  it("adds safe expression diagnostic code, path, and range to structured error detail", () => {
+    const error = Object.assign(new Error("Publication blocked."), {
+      status: 422,
+      payload: {
+        detail: "Expression validation failed.",
+        diagnostics: [{
+          code: "LQ2001",
+          message: "Unknown filter.",
+          authoredPath: "activities.email.inputs.body",
+          range: { start: { line: 0, character: 8 }, end: { line: 0, character: 14 } }
+        }]
+      }
+    });
+
+    expect(describeWorkflowError(error, "fallback").detail).toBe(
+      "Expression validation failed.\n[LQ2001] activities.email.inputs.body · line 1, column 9: Unknown filter.");
+  });
 });
 
 describe("normalizeWorkflowError", () => {
@@ -68,6 +86,29 @@ describe("normalizeWorkflowError", () => {
     const structured = { message: "Save failed.", traceId: "trace-1" };
     expect(normalizeWorkflowError(structured)).toBe(structured);
     expect(normalizeWorkflowError({ message: "" })).toBeNull();
+  });
+});
+
+describe("isWorkflowEditorKeyboardTarget", () => {
+  it("treats nested code-editor content as editor-owned keyboard input", () => {
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const nestedToken = document.createElement("span");
+    editor.appendChild(nestedToken);
+
+    expect(isWorkflowEditorKeyboardTarget(nestedToken)).toBe(true);
+  });
+
+  it("recognizes native and contenteditable inputs without swallowing canvas shortcuts elsewhere", () => {
+    const input = document.createElement("input");
+    const editable = document.createElement("div");
+    editable.setAttribute("contenteditable", "true");
+    const button = document.createElement("button");
+
+    expect(isWorkflowEditorKeyboardTarget(input)).toBe(true);
+    expect(isWorkflowEditorKeyboardTarget(editable)).toBe(true);
+    expect(isWorkflowEditorKeyboardTarget(button)).toBe(false);
+    expect(isWorkflowEditorKeyboardTarget(null)).toBe(false);
   });
 });
 

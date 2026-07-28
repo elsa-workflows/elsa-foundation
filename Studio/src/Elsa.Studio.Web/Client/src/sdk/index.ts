@@ -654,6 +654,184 @@ export interface StudioWorkflowRunInputEditorContribution {
 
 export type StudioExpressionEditorSurface = "inline" | "expanded";
 
+/** A stable, editor-engine-neutral identity for one authored expression. */
+export interface StudioExpressionDocument {
+  id: string;
+  uri: string;
+  draftId: string;
+  activityId: string;
+  propertyKey: string;
+  expressionType: string;
+  source: string;
+  sourceVersion: number;
+  contextVersion?: string;
+}
+
+export type StudioExpressionToolingState =
+  | "ready"
+  | "supported-empty"
+  | "unavailable"
+  | "unauthorized"
+  | "incompatible"
+  | "stale"
+  | "canceled";
+export type StudioExpressionSymbolKind = "value" | "function" | "filter" | "tag" | "namespace" | "member" | "keyword";
+export type StudioExpressionValueShapeKind = "unknown" | "scalar" | "object" | "collection" | "callable";
+
+export interface StudioExpressionToolingCapabilities {
+  highlighting: boolean;
+  completion: boolean;
+  hover: boolean;
+  signatures: boolean;
+  formatting: boolean;
+  localDiagnostics: boolean;
+  semanticValidation: boolean;
+}
+
+export interface StudioExpressionToolingDescriptor {
+  expressionType: string;
+  moduleId: string;
+  moduleVersion: string;
+  contractMinVersion: number;
+  contractMaxVersion: number;
+  capabilities: StudioExpressionToolingCapabilities;
+  catalogVersion?: string;
+  permissionRevision?: string;
+  hostPolicyRevision?: string;
+}
+
+export interface StudioExpressionPosition {
+  line: number;
+  column: number;
+}
+
+export interface StudioExpressionRange {
+  start: StudioExpressionPosition;
+  end: StudioExpressionPosition;
+}
+
+export interface StudioExpressionSignatureParameter {
+  name: string;
+  documentation?: string;
+  shapeId?: string;
+  optional?: boolean;
+}
+
+export interface StudioExpressionSignature {
+  label: string;
+  documentation?: string;
+  returnShapeId?: string;
+  parameters: StudioExpressionSignatureParameter[];
+}
+
+/** Metadata-only symbol. It intentionally never includes a runtime value or evaluated source. */
+export interface StudioExpressionSymbol {
+  id: string;
+  name: string;
+  kind: StudioExpressionSymbolKind;
+  documentation?: string;
+  shapeId?: string;
+  parentId?: string;
+  sortText?: string;
+  signatures?: StudioExpressionSignature[];
+}
+
+export interface StudioExpressionValueShapeMember {
+  name: string;
+  documentation?: string;
+  shapeId: string;
+}
+
+export interface StudioExpressionValueShape {
+  id: string;
+  kind: StudioExpressionValueShapeKind;
+  displayName?: string;
+  nullable: boolean;
+  scalarType?: string;
+  elementShapeId?: string;
+  additionalMembers?: boolean;
+  members: StudioExpressionValueShapeMember[];
+}
+
+/** Permission-filtered, language-neutral design-time facts for an expression location. */
+export interface StudioExpressionAuthoringContext {
+  version: string;
+  catalogVersion?: string;
+  permissionRevision?: string;
+  hostPolicyRevision?: string;
+  capabilities?: StudioExpressionToolingCapabilities;
+  expectedResultType?: string;
+  expectedResultShape?: StudioExpressionValueShape;
+  target?: StudioExpressionSymbol;
+  rootSymbols?: StudioExpressionSymbol[];
+  workflowInputs: StudioExpressionSymbol[];
+  visibleVariables: StudioExpressionSymbol[];
+  visibleActivityOutputs: StudioExpressionSymbol[];
+  shapeReferences?: string[];
+}
+
+export interface StudioExpressionToolingResult<T> {
+  state: StudioExpressionToolingState;
+  contractVersion: number;
+  expressionType: string;
+  moduleVersion?: string;
+  catalogVersion?: string;
+  contextVersion?: string;
+  data?: T;
+}
+
+export interface StudioExpressionSymbolCatalogPage {
+  symbols: StudioExpressionSymbol[];
+  nextCursor?: string;
+}
+
+export interface StudioExpressionValidationDiagnostic {
+  severity: StudioExpressionEditorDiagnosticSeverity;
+  code?: string;
+  message: string;
+  range?: StudioExpressionRange;
+  documentId: string;
+  sourceVersion: number;
+  contextVersion: string;
+  catalogVersion?: string;
+}
+
+export interface StudioExpressionValidationResult {
+  documentId: string;
+  sourceVersion: number;
+  contextVersion: string;
+  diagnostics: StudioExpressionValidationDiagnostic[];
+}
+
+export interface StudioExpressionCompletionItem {
+  label: string;
+  detail?: string;
+  documentation?: string;
+  insertText?: string;
+  kind?: StudioExpressionSymbolKind;
+}
+
+export interface StudioExpressionCompletionResult {
+  items: StudioExpressionCompletionItem[];
+}
+
+export interface StudioExpressionHoverResult {
+  contents: string;
+  range?: StudioExpressionRange;
+}
+
+export interface StudioExpressionToolingClient {
+  describe(signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionToolingDescriptor[]>>;
+  getCatalog(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, query?: string, cursor?: string, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionSymbolCatalogPage>>;
+  getValueShape(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, shapeId: string, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionValueShape>>;
+  getAuthoringContext(document: StudioExpressionDocument, state: unknown, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionAuthoringContext>>;
+  getCompletions(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, position: StudioExpressionPosition, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionCompletionResult>>;
+  getHover(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, position: StudioExpressionPosition, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionHoverResult>>;
+  validate(document: StudioExpressionDocument, authoringContext: StudioExpressionAuthoringContext, signal?: AbortSignal): Promise<StudioExpressionToolingResult<StudioExpressionValidationResult>>;
+  invalidateAuthorization(revisions?: { permissionRevision?: string; hostPolicyRevision?: string }): void;
+  dispose(): void;
+}
+
 export interface StudioExpressionEditorContext {
   syntax: string;
   surface: StudioExpressionEditorSurface;
@@ -661,6 +839,16 @@ export interface StudioExpressionEditorContext {
   activity: unknown;
   expressionDescriptors: StudioExpressionDescriptor[];
   readOnly?: boolean;
+  /** Optional while older hosts and generic editors remain supported. */
+  document?: StudioExpressionDocument;
+  /** Optional, permission-filtered design-time facts for the active expression. */
+  authoringContext?: StudioExpressionToolingResult<StudioExpressionAuthoringContext>;
+  /** Optional host-owned semantic validation result for the current document version. */
+  validation?: StudioExpressionToolingResult<StudioExpressionValidationResult>;
+  /** Optional engine-neutral transport owned by the workflow host. */
+  tooling?: StudioExpressionToolingClient;
+  /** Notifies the host that this editor surface became the active tooling target. */
+  onFocus?(): void;
 }
 
 export interface StudioExpressionEditorProps {
@@ -671,6 +859,8 @@ export interface StudioExpressionEditorProps {
   initialFocus?: boolean;
   context: StudioExpressionEditorContext;
   onChange(value: unknown): void;
+  /** Requests the host to reveal the same document in its expanded editor surface. */
+  onExpand?(): void;
 }
 
 export type StudioExpressionEditorDiagnosticSeverity = "info" | "warning" | "error";
@@ -679,12 +869,20 @@ export interface StudioExpressionEditorDiagnostic {
   severity?: StudioExpressionEditorDiagnosticSeverity;
   code?: string;
   message: string;
+  origin?: "local" | "semantic";
+  range?: StudioExpressionRange;
+  documentId?: string;
+  sourceVersion?: number;
+  contextVersion?: string;
+  catalogVersion?: string;
 }
 
 export interface StudioExpressionEditorMetadata {
   displayName?: string;
   installHint?: string;
   packageId?: string;
+  /** Editor-owned capabilities composed with, but never attributed to, the server descriptor. */
+  toolingCapabilities?: Partial<StudioExpressionToolingCapabilities>;
 }
 
 export type StudioExpressionSourceRendererSurface = "compact" | "expanded";

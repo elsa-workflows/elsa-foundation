@@ -1,7 +1,14 @@
 import { useEffect, useId, useState } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
-import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDescriptor,
+  StudioActivityPropertyEditorContribution,
+  StudioEndpointContext,
+  StudioExpressionDescriptor,
+  StudioExpressionEditorContribution,
+  StudioExpressionToolingClient
+} from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
@@ -42,6 +49,8 @@ export function resolveActivityInspectorTabId(
 
 interface InspectorPanelProps {
   context: StudioEndpointContext;
+  draftId?: string;
+  expressionTooling?: StudioExpressionToolingClient;
   workflowState?: WorkflowDefinitionState;
   selectedNode: ActivityNode | null;
   selectedNodeLabel: string;
@@ -82,6 +91,8 @@ interface InspectorPanelProps {
 // container-variable editor, and embedded-slot navigation. Pure view driven by the resolved selection.
 export function InspectorPanel({
   context,
+  draftId,
+  expressionTooling,
   workflowState = {},
   selectedNode,
   selectedNodeLabel,
@@ -166,6 +177,8 @@ export function InspectorPanel({
     <IntrinsicInspector
       intrinsic={intrinsicDescriptor}
       context={context}
+      draftId={draftId}
+      expressionTooling={expressionTooling}
       workflowState={workflowState}
       activity={selectedNode}
       descriptor={selectedDescriptor}
@@ -185,6 +198,8 @@ export function InspectorPanel({
   ) : (
     <ActivityPropertiesPanel
       context={context}
+      draftId={draftId}
+      expressionTooling={expressionTooling}
       workflowState={workflowState}
       activity={selectedNode}
       descriptor={selectedDescriptor}

@@ -32,17 +32,24 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // pulled the full conversion-settings module into the eager registration closure through activity-summary
 // formatting. That raised the clean-install entry/landing measurements to 120.52/369.60/356.52 kB. The
 // summary and built-in-profile primitives now live in the small conversionSource module, leaving the full
-// conversionSettings chunk deferred with the Workflow Editor. Clean-install measurements are consequently
+// conversionSettings chunk deferred with the Workflow Editor. Clean-install measurements were consequently
 // 117.60/366.67/353.59 kB. Activity Definition graph authoring then added the small eager registry bridge
 // needed to pass shared property, expression, and graph-panel contributions into the deferred draft editor;
 // the definitions path measures 370.06 kB, so its budget gains 1 kB while the heavy designer stays deferred.
 // Per-occurrence activity presentation then added its normalization and display-label helpers to the shared
 // design adapter; CI measures the definitions path at 371.34 kB, so its budget gains 2 kB.
+// Expression tooling remains deferred from landing paths; the final pre-rebase production build measured
+// 373.16 kB for Definitions and 361.03 kB for the upgrade closure.
+// Safe publication-diagnostic formatting (code + authored path + range) is shared with the retained
+// version review and moved the measured upgrade closure to 362.17 kB. Rebasing both features together
+// measured the primary entry at 120.01 kB. Per-occurrence activity presentation then moved the combined
+// entry to 122.01 kB, Definitions to 376.93 kB, and upgrades to 365.34 kB. Retain a sub-0.5 kB review
+// margin for the entry and the usual ~2 kB landing-path margins around that combined contract.
 const budgets = {
-  entryJavaScript: 120_000,
+  entryJavaScript: 122_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 373_000,
-  upgradeLandingTotal: 358_000,
+  definitionsLandingTotal: 379_000,
+  upgradeLandingTotal: 367_500,
   individualChunk: 500_000
 };
 

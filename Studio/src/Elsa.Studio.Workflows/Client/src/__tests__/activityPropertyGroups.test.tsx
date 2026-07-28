@@ -40,6 +40,7 @@ function renderPanel(
     expressionEditors?: StudioExpressionEditorContribution[];
     expressionDescriptors?: StudioExpressionDescriptor[];
     expressionDescriptorStatus?: "loading" | "ready" | "failed";
+    draftId?: string;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
   } = {}
@@ -64,6 +65,7 @@ function renderPanel(
     };
     return (
       <ActivityPropertiesPanel
+        draftId={options.draftId}
         activity={currentActivity}
         descriptor={descriptor}
         editors={options.editors ?? []}
@@ -317,6 +319,53 @@ describe("activity property organization", () => {
     const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
     expect(expanded?.value).toBe("value and");
     expect(document.activeElement).toBe(expanded);
+  });
+
+  it("keeps one stable expression document across compact and expanded contributed surfaces", () => {
+    const contexts: Array<React.ComponentProps<
+      NonNullable<StudioExpressionEditorContribution["surfaces"]["inline"]>
+    >["context"]> = [];
+    const contribution: StudioExpressionEditorContribution = {
+      id: "javascript.rich",
+      supports: context => context.syntax === "JavaScript",
+      surfaces: {
+        inline: props => {
+          contexts.push(props.context);
+          return <button type="button" aria-label="Expand from editor" onClick={props.onExpand}>Compact editor</button>;
+        },
+        expanded: props => {
+          contexts.push(props.context);
+          return <div aria-label="Expanded rich editor">{String(props.value)}</div>;
+        }
+      }
+    };
+    const container = renderPanel([input("Template", { isWrapped: true })], {
+      draftId: "draft-42",
+      expressionEditors: [contribution],
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "JavaScript", value: "input.name" } }
+      })
+    });
+
+    const inlineContext = contexts.at(-1)!;
+    expect(inlineContext).toMatchObject({ syntax: "JavaScript", surface: "inline" });
+    expect(inlineContext.document).toMatchObject({
+      draftId: "draft-42",
+      activityId: "node-1",
+      propertyKey: "Template",
+      expressionType: "JavaScript",
+      source: "input.name",
+      sourceVersion: 0
+    });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Expand from editor']")!.click());
+
+    expect(container.querySelector("[aria-label='Expanded rich editor']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Expand from editor']")).toBeNull();
+    const expandedContext = contexts.at(-1)!;
+    expect(expandedContext.surface).toBe("expanded");
+    expect(expandedContext.document?.id).toBe(inlineContext.document?.id);
+    expect(expandedContext.document?.source).toBe(inlineContext.document?.source);
   });
 
   it("focuses the replacement textbox when selecting a text expression mode", () => {

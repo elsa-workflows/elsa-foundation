@@ -1,0 +1,124 @@
+.studio-code-editor {
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+}
+
+.studio-code-editor-header,
+.studio-code-editor-status,
+.studio-code-editor-diagnostics,
+.studio-code-editor-escape {
+  font-family: var(--studio-font-ui);
+}
+
+.studio-code-editor-header {
+  align-items: center;
+  border-bottom: 1px solid var(--studio-border);
+  color: var(--studio-text-muted);
+  display: flex;
+  font-size: var(--studio-label-size);
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.5rem;
+}
+
+.studio-code-editor-rich .cm-editor,
+.studio-code-editor-input {
+  background: var(--studio-surface-muted);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  inline-size: 100%;
+}
+
+.studio-code-editor-rich .cm-editor:focus-within,
+.studio-code-editor-input:focus,
+.studio-code-editor-preview:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.studio-code-editor-rich .cm-scroller {
+  font-family: var(--studio-font-mono);
+}
+
+.studio-code-editor-compact .studio-code-editor-rich .cm-editor,
+.studio-code-editor-input-compact,
+.studio-code-editor-preview {
+  min-block-size: 2.25rem;
+}
+
+.studio-code-editor-compact .studio-code-editor-rich .cm-scroller,
+.studio-code-editor-input-compact {
+  max-block-size: 2.25rem;
+  overflow: hidden;
+}
+
+.studio-code-editor-preview {
+  align-items: center;
+  background: var(--studio-surface-muted);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text);
+  cursor: text;
+  display: flex;
+  font-family: var(--studio-font-mono);
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.5rem;
+  text-align: start;
+  inline-size: 100%;
+}
+
+.studio-code-editor-preview code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-code-editor-signature {
+  background: var(--studio-surface-raised);
+  border-top: 1px solid var(--studio-border);
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-mono);
+  font-size: var(--studio-label-size);
+  padding: 0.25rem 0.5rem;
+}
+
+.studio-code-editor-status,
+.studio-code-editor-escape {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  margin-block-start: 0.25rem;
+}
+
+.studio-code-editor-escape {
+  position: absolute;
+  block-size: 1px;
+  inline-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.studio-code-editor-diagnostics {
+  margin-block-start: 0.25rem;
+}
+
+.studio-code-editor-diagnostic {
+  color: var(--studio-text-muted);
+  margin: 0;
+}
+
+.studio-code-editor-diagnostic span,
+.studio-code-editor-diagnostic small {
+  margin-inline-end: 0.25rem;
+}
+
+.studio-code-editor-diagnostic.warning {
+  color: var(--studio-warning-fg);
+}
+
+.studio-code-editor-diagnostic.error {
+  color: var(--studio-danger-fg);
+}

@@ -23,3 +23,9 @@ another module's private namespace. The versioned contract — the stable tokens
 `--studio-material-*` surface-role ladder, the `--studio-glass-*` variant, and the module
 rules — is `docs/design-tokens.md`. It is enforced by `elsa/no-raw-color-literal`
 (`pnpm lint:css`, wired into `pnpm lint`).
+
+<!-- SPECKIT START -->
+For additional context about technologies, project structure, contracts, and
+validation scenarios for the active work unit, read
+`specs/094-expression-code-intelligence/plan.md`.
+<!-- SPECKIT END -->

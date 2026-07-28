@@ -18,7 +18,14 @@ import {
 import { decorateConversionDiagnostic } from "../conversionSettings";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
-import { createDraftSnapshotId, describeWorkflowError, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
+import {
+  createDraftSnapshotId,
+  describeWorkflowError,
+  extractExpressionValidationDiagnosticMessages,
+  getDraftSignature,
+  isRejectedTestRun,
+  readWorkflowErrorPayload
+} from "./editorHelpers";
 import type { WorkflowEditorOperation, WorkflowErrorInput, WorkflowTestRunState } from "./editorTypes";
 import {
   createPublicationReview,
@@ -75,6 +82,10 @@ export function useWorkflowOperations({
   const [runInputPrompt, setRunInputPrompt] = useState<{
     draft: WorkflowDraft;
     inputs: WorkflowInput[];
+  } | null>(null);
+  const [expressionValidationWarning, setExpressionValidationWarning] = useState<{
+    draft: WorkflowDraft;
+    inputs: WorkflowExecutionInputs;
   } | null>(null);
   const exportJson = useCallback(() => {
     if (!draft) return;
@@ -334,6 +345,7 @@ export function useWorkflowOperations({
     } catch (e) {
       setStatus("");
       const failureMessage = decorateConversionDiagnostic(e instanceof Error ? e.message : String(e));
+      const publicationValidationErrors = extractExpressionValidationDiagnosticMessages(e);
       if (promotedVersionId && isStalePreflightError(e)) {
         setPublicationReview(current => current ? {
           ...current,
@@ -351,7 +363,12 @@ export function useWorkflowOperations({
           progressStep: undefined,
           promotedVersionId,
           intent,
-          failureMessage: `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
+          ...(publicationValidationErrors.length
+            ? { validationErrors: publicationValidationErrors, executableStatus: "blocked" as const }
+            : {}),
+          failureMessage: publicationValidationErrors.length
+            ? `Publication was blocked by ${publicationValidationErrors.length} expression validation error${publicationValidationErrors.length === 1 ? "" : "s"} (listed above). The promoted version was retained; correct the expressions, then review and publish again.`
+            : `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
         } : current);
       } else if (savedDraft) {
         const failedSavedDraft = savedDraft;
@@ -401,7 +418,11 @@ export function useWorkflowOperations({
     setInspectorCollapsed(false);
   }, [setActiveRightPanelId, setAutosavePaused, setInspectorCollapsed]);
 
-  const dispatchTestRun = useCallback(async (draftSnapshot: WorkflowDraft, inputs: WorkflowExecutionInputs) => {
+  const dispatchTestRun = useCallback(async (
+    draftSnapshot: WorkflowDraft,
+    inputs: WorkflowExecutionInputs,
+    acknowledgeUnavailableExpressionValidation = false
+  ) => {
     const draftSignature = getDraftSignature(draftSnapshot);
     clearTestRun();
     setStatus("Preparing test run...");
@@ -417,8 +438,14 @@ export function useWorkflowOperations({
         snapshotId,
         state: draftSnapshot.state,
         activityPresentation: draftSnapshot.activityPresentation,
-        inputs
+        inputs,
+        acknowledgeUnavailableExpressionValidation
       });
+      if (isExpressionValidationUnavailable(nextTestRun) && !acknowledgeUnavailableExpressionValidation) {
+        setExpressionValidationWarning({ draft: draftSnapshot, inputs });
+        setStatus("Expression validation is unavailable. Confirmation is required before this Test Run can proceed.");
+        return;
+      }
       startTestRun({ draftSignature, view: nextTestRun });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
@@ -449,6 +476,16 @@ export function useWorkflowOperations({
   }, [dispatchTestRun, runInputPrompt]);
 
   const cancelRunInputs = useCallback(() => setRunInputPrompt(null), []);
+  const confirmUnavailableExpressionValidation = useCallback(async () => {
+    const pending = expressionValidationWarning;
+    if (!pending) return;
+    setExpressionValidationWarning(null);
+    await dispatchTestRun(pending.draft, pending.inputs, true);
+  }, [dispatchTestRun, expressionValidationWarning]);
+  const cancelUnavailableExpressionValidation = useCallback(() => {
+    setExpressionValidationWarning(null);
+    setStatus("Test Run canceled because expression validation was unavailable.");
+  }, [setStatus]);
 
   return {
     exportJson,
@@ -462,8 +499,16 @@ export function useWorkflowOperations({
     runInputPrompt,
     confirmRunInputs,
     cancelRunInputs,
+    expressionValidationWarning,
+    confirmUnavailableExpressionValidation,
+    cancelUnavailableExpressionValidation,
     run
   };
+}
+
+function isExpressionValidationUnavailable(testRun: { status: string; reason?: string | null }) {
+  return testRun.status.toLowerCase() === "rejected" &&
+    /expression validation is unavailable/i.test(testRun.reason ?? "");
 }
 
 async function preflightSnapshot(
@@ -491,7 +536,7 @@ function isStalePreflightError(error: unknown) {
  * dictionary of `path -> string[]`. Returns an empty list when the payload carries no structured errors.
  */
 export function parsePromotionValidationErrors(error: unknown): string[] {
-  const payload = readErrorPayload(error);
+  const payload = readWorkflowErrorPayload(error);
   if (!payload || typeof payload !== "object") return [];
   const errors = (payload as { errors?: unknown }).errors;
   const messages: string[] = [];
@@ -518,15 +563,4 @@ export function parsePromotionValidationErrors(error: unknown): string[] {
   // when we have the itemized entries; keep it only if it's the only thing available.
   const itemized = messages.filter(message => !/^Cannot promote draft .* validation error\(s\) present\.?$/i.test(message));
   return itemized.length ? Array.from(new Set(itemized)) : Array.from(new Set(messages));
-}
-
-function readErrorPayload(error: unknown): unknown {
-  if (!error || typeof error !== "object") return null;
-  const candidate = error as { payload?: unknown; response?: { data?: unknown }; message?: unknown };
-  if (candidate.payload != null) return candidate.payload;
-  if (candidate.response?.data != null) return candidate.response.data;
-  if (typeof candidate.message === "string") {
-    try { return JSON.parse(candidate.message); } catch { return null; }
-  }
-  return null;
 }

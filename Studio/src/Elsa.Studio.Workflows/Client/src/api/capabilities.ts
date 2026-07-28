@@ -4,6 +4,7 @@ export const capabilityIds = {
   workflowDesign: "elsa.api.workflow-design",
   activityDesign: "elsa.api.activity-design",
   expressions: "elsa.api.expressions",
+  expressionTooling: "expressions.tooling.v1",
   publishing: "elsa.api.publishing",
   runtime: "elsa.api.runtime"
 } as const;
@@ -14,6 +15,7 @@ const supportedContractVersions: Record<ApiCapabilityId, string> = {
   [capabilityIds.workflowDesign]: "1",
   [capabilityIds.activityDesign]: "1",
   [capabilityIds.expressions]: "1",
+  [capabilityIds.expressionTooling]: "1",
   [capabilityIds.publishing]: "1",
   [capabilityIds.runtime]: "1"
 };

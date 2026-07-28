@@ -52,14 +52,16 @@ import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
 import { removeActivityPresentation } from "../activityPresentation";
 import { activityDragDataType, pointerDragThreshold } from "./constants";
 import {
-  clientPointFromEvent,
   createNodeId,
-  isConnectEndOverExistingWorkflowNode,
   insertSequenceNodeAfter,
   midpointBetween,
-  resolveConnectEndSource,
   rightOf
 } from "./editorHelpers";
+import {
+  clientPointFromEvent,
+  isConnectEndOverExistingWorkflowNode,
+  resolveConnectEndSource
+} from "./connectEndHelpers";
 import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge, WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowEdgeActions } from "./contexts";
 import type { WorkflowDraftRecipe } from "./workflowDocument";

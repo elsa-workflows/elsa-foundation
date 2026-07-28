@@ -94,12 +94,12 @@ export function planExpressionModeTransition(
   currentValue: unknown,
   targetDefaultValue: unknown
 ): ExpressionModeTransition {
-  if (isEmptyExpressionValue(currentValue)) {
-    return { requiresConfirmation: false, nextValue: targetDefaultValue };
-  }
-
   if (sourceMode === "text" && targetMode === "text") {
     return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (isEmptyExpressionValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: targetDefaultValue };
   }
 
   if (sourceMode === "literal" && targetMode === "text" && isPrimitiveValue(currentValue)) {

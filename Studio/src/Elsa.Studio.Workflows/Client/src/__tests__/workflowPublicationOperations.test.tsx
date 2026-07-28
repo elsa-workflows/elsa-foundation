@@ -228,6 +228,32 @@ describe("workflow publication operations", () => {
     expect(fixture.current().publicationReview?.failureMessage).toContain("retry Publish");
   });
 
+  it("surfaces expression diagnostics when a promoted version is rejected at publication", async () => {
+    const fixture = renderOperations({
+      publishValidationDiagnostics: [{
+        code: "JS1001",
+        severity: "Error",
+        message: "Unexpected token.",
+        documentRevision: "revision-1",
+        authoredPath: "activities.write-line.inputs.text",
+        range: { start: { line: 1, character: 3 }, end: { line: 1, character: 4 } }
+      }]
+    });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure",
+      promotedVersionId: "version-2",
+      executableStatus: "blocked",
+      validationErrors: [
+        "[JS1001] activities.write-line.inputs.text · line 2, column 4: Unexpected token."
+      ],
+      failureMessage: expect.stringContaining("expression validation error")
+    });
+  });
+
   it("retries a retained promoted version without saving or promoting again", async () => {
     const fixture = renderOperations({ failPublishAttempts: 1 });
     await prepare(fixture);
@@ -443,6 +469,7 @@ function renderOperations(options: {
   failPromoteAttempts?: number;
   failSnapshotPreflight?: boolean;
   stalePublishAttempts?: number;
+  publishValidationDiagnostics?: unknown[];
   savedValidationErrors?: string[];
   failPolicyLoad?: boolean;
   exactVersionSupport?: boolean;
@@ -533,6 +560,17 @@ function renderOperations(options: {
       mutationOrder.push("publish");
       publishAttempts += 1;
       if (publishAttempts <= (options.stalePublishAttempts ?? 0)) throw Object.assign(new Error("preflight token stale"), { status: 409 });
+      if (options.publishValidationDiagnostics) {
+        throw Object.assign(new Error("Expression validation rejected publication."), {
+          status: 422,
+          payload: {
+            status: 422,
+            errorCode: "expression-validation-errors",
+            validationState: "errors",
+            diagnostics: options.publishValidationDiagnostics
+          }
+        });
+      }
       if (options.failPublish || publishAttempts <= (options.failPublishAttempts ?? 0)) throw new Error("activation timed out");
       return {
         publicationId: "publication-2",

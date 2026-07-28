@@ -8,6 +8,8 @@
     "check:bundle:workflows": "pnpm --filter @elsa-workflows/studio-workflows build",
     "test": "pnpm -r test",
     "test:browser": "playwright test",
+    "test:browser:expression-matrix": "playwright test --config tests/browser/playwright.expression-matrix.config.ts",
+    "test:browser:performance": "playwright test --config tests/browser/playwright.performance.config.ts",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && pnpm lint:css",
     "lint:css": "stylelint \"src/*/Client/src/**/*.css\" \"!src/Elsa.Studio.Web/**\""
@@ -16,6 +18,7 @@
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.61.1",
     "@vitejs/plugin-react": "^5.0.0",
+    "axe-core": "^4.12.1",
     "eslint": "^9.39.4",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.2.0",

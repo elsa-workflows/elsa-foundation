@@ -4,5 +4,6 @@ export * from "./capabilities";
 export * from "./workflowDesign";
 export * from "./activityDesign";
 export * from "./expressions";
+export * from "./expressionTooling";
 export * from "./publishing";
 export * from "./runtime";

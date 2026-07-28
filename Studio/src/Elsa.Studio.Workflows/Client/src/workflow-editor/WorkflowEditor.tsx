@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -34,6 +34,7 @@ import {
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
+  isWorkflowEditorKeyboardTarget,
   normalizeWorkflowError
 } from "./editorHelpers";
 import { WorkflowAlert } from "./WorkflowAlert";
@@ -82,6 +83,8 @@ import {
   findActivityOccurrence,
   validateActivityVersionChangePrecondition
 } from "./activityVersionChangeModel";
+import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
+import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
@@ -94,6 +97,8 @@ export function WorkflowEditor({
   ai,
   propertyEditors,
   expressionEditors,
+  expressionTooling,
+  expressionToolingIdentity,
   runInputEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
@@ -104,11 +109,30 @@ export function WorkflowEditor({
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  expressionTooling?: StudioExpressionToolingClient;
+  expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
 }) {
+  const ownedExpressionTooling = useMemo(
+    () => expressionToolingIdentity
+      ? createLazyExpressionToolingClient(context, expressionToolingIdentity)
+      : undefined,
+    [context, expressionToolingIdentity]
+  );
+  const resolvedExpressionTooling = expressionTooling ?? ownedExpressionTooling;
+  useEffect(() => {
+    if (!ownedExpressionTooling) return;
+    const invalidate = () => ownedExpressionTooling.invalidateAuthorization();
+    window.addEventListener(authSessionEndedEvent, invalidate);
+    return () => {
+      window.removeEventListener(authSessionEndedEvent, invalidate);
+      ownedExpressionTooling.dispose();
+    };
+  }, [ownedExpressionTooling]);
+
   // The interdependent draft/scope/selection/test-run/artifact cluster now lives in an explicit reducer,
   // so each mutation (below) declares the transition it makes instead of cascading loose setState calls.
   const editorDoc = useWorkflowDocument();
@@ -413,6 +437,9 @@ export function WorkflowEditor({
     runInputPrompt,
     confirmRunInputs,
     cancelRunInputs,
+    expressionValidationWarning,
+    confirmUnavailableExpressionValidation,
+    cancelUnavailableExpressionValidation,
     run
   } = useWorkflowOperations({
     context,
@@ -454,7 +481,7 @@ export function WorkflowEditor({
       if (canvasView !== "designer") return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (isWorkflowEditorKeyboardTarget(target)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
@@ -809,6 +836,8 @@ export function WorkflowEditor({
         <InspectorPanel
           key={inspectedNode?.nodeId ?? "no-activity"}
           context={context}
+          draftId={draft.id}
+          expressionTooling={resolvedExpressionTooling}
           workflowState={draft.state}
           selectedNode={inspectedNode}
           selectedNodeLabel={inspectedLabel}
@@ -1033,6 +1062,30 @@ export function WorkflowEditor({
           onSubmit={values => { void confirmRunInputs(values); }}
           onCancel={cancelRunInputs}
         />
+      ) : null}
+
+      {expressionValidationWarning ? (
+        <div className="wf-dialog-backdrop" role="presentation">
+          <section
+            className="wf-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="expression-validation-warning-title"
+            aria-describedby="expression-validation-warning-description"
+          >
+            <h3 id="expression-validation-warning-title">Expression validation is unavailable</h3>
+            <p id="expression-validation-warning-description">
+              The backend cannot currently verify every expression. No known blocking error was found,
+              but this Test Run may fail. Proceed only if you accept that risk.
+            </p>
+            <div className="wf-dialog-actions">
+              <button type="button" onClick={cancelUnavailableExpressionValidation}>Cancel</button>
+              <button type="button" onClick={() => { void confirmUnavailableExpressionValidation(); }}>
+                Proceed with Test Run
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       <GraphAuthoringWorkspace

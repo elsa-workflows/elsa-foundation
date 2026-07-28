@@ -7,5 +7,10 @@ export async function loadCodeMirrorLanguageExtensions(language: string): Promis
     return module.createJavaScriptCodeMirrorExtensions();
   }
 
+  if (normalized === "liquid") {
+    const module = await import("../languages/liquidCodeMirror");
+    return module.createLiquidCodeMirrorExtensions();
+  }
+
   return [];
 }

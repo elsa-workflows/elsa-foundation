@@ -26,7 +26,9 @@ import {
   type StudioActivityDescriptor,
   type StudioAiContributionApi,
   type StudioEndpointContext,
-  type StudioExpressionDescriptor
+  type StudioExpressionDescriptor,
+  type StudioExpressionEditorContribution,
+  type StudioExpressionToolingClient
 } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityCatalogItem,
@@ -45,6 +47,8 @@ import { ActivityVersionChangeDialog } from "../../src/Elsa.Studio.Workflows/Cli
 import { PublicationReviewDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
 import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
 import type { PublicationIntent } from "../../src/Elsa.Studio.Workflows/Client/src/api/publishing";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../src/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { LiquidExpandedEditor, LiquidInlineEditor } from "../../src/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
@@ -77,6 +81,10 @@ const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
+const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
+const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
+const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
+const referenceJavaScriptExpression = `formatTotal(total)${" + total".repeat(248)}`;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const endpointContext = createEndpointContext(window.location.origin);
 
@@ -314,6 +322,128 @@ const expressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Variable", displayName: "Variable", editingMode: "reference" }
 ];
 
+const expressionCodeEditors: StudioExpressionEditorContribution[] = [
+  {
+    id: "browser.javascript-expression-editor",
+    supports: context => context.syntax === "JavaScript",
+    surfaces: { inline: JavaScriptInlineEditor, expanded: JavaScriptExpandedEditor }
+  },
+  {
+    id: "browser.liquid-expression-editor",
+    supports: context => context.syntax === "Liquid",
+    surfaces: { inline: LiquidInlineEditor, expanded: LiquidExpandedEditor }
+  }
+];
+
+const expressionToolingReadiness = {
+  authoringContextRequests: 0,
+  catalogRequests: 0,
+  completionRequests: 0,
+  validationRequests: 0
+};
+(window as Window & { expressionToolingReadiness?: typeof expressionToolingReadiness })
+  .expressionToolingReadiness = expressionToolingReadiness;
+
+const expressionToolingFixture: StudioExpressionToolingClient = {
+  async describe() {
+    return { state: "supported-empty", contractVersion: 1, expressionType: "", data: [] };
+  },
+  async getCatalog(document, authoringContext) {
+    expressionToolingReadiness.catalogRequests++;
+    return {
+      state: "ready",
+      contractVersion: 1,
+      expressionType: document.expressionType,
+      contextVersion: authoringContext.version,
+      data: { symbols: authoringContext.rootSymbols ?? [] }
+    };
+  },
+  async getValueShape(document) {
+    return { state: "unavailable", contractVersion: 1, expressionType: document.expressionType };
+  },
+  async getAuthoringContext(document) {
+    expressionToolingReadiness.authoringContextRequests++;
+    if (expressionToolingUnavailable) {
+      return {
+        state: "unavailable",
+        contractVersion: 1,
+        expressionType: document.expressionType
+      };
+    }
+    const rootSymbols = [
+      { id: "input:total", name: "total", kind: "value" as const, documentation: "The workflow total." },
+      { id: "function:formatTotal", name: "formatTotal", kind: "function" as const, documentation: "Formats the workflow total.", signatures: [{ label: "formatTotal(value)", parameters: [] }] }
+    ];
+    return {
+      state: "ready",
+      contractVersion: 1,
+      expressionType: document.expressionType,
+      contextVersion: `browser-context-${document.sourceVersion}`,
+      data: {
+        version: `browser-context-${document.sourceVersion}`,
+        capabilities: {
+          highlighting: true,
+          completion: true,
+          hover: true,
+          signatures: true,
+          formatting: false,
+          localDiagnostics: true,
+          semanticValidation: true
+        },
+        rootSymbols,
+        workflowInputs: rootSymbols.slice(0, 1),
+        visibleVariables: [],
+        visibleActivityOutputs: []
+      }
+    };
+  },
+  async getCompletions(document, authoringContext) {
+    expressionToolingReadiness.completionRequests++;
+    return {
+      // Exercise the catalog fallback as well as the direct completion request. The production
+      // benchmark can therefore prove both metadata paths are warm before it records samples.
+      state: "unavailable",
+      contractVersion: 1,
+      expressionType: document.expressionType,
+      contextVersion: authoringContext.version
+    };
+  },
+  async getHover(document, authoringContext) {
+    return {
+      state: "ready",
+      contractVersion: 1,
+      expressionType: document.expressionType,
+      contextVersion: authoringContext.version,
+      data: { contents: "Formats the workflow total." }
+    };
+  },
+  async validate(document, authoringContext) {
+    expressionToolingReadiness.validationRequests++;
+    return {
+      state: "supported-empty",
+      contractVersion: 1,
+      expressionType: document.expressionType,
+      contextVersion: authoringContext.version,
+      data: {
+        documentId: document.id,
+        sourceVersion: document.sourceVersion,
+        contextVersion: authoringContext.version,
+        diagnostics: [{
+          severity: "warning",
+          code: "BROWSER001",
+          message: "Reference browser diagnostic.",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+          documentId: document.id,
+          sourceVersion: document.sourceVersion,
+          contextVersion: authoringContext.version
+        }]
+      }
+    };
+  },
+  invalidateAuthorization() {},
+  dispose() {}
+};
+
 const descriptor: StudioActivityDescriptor = {
   typeName: "Elsa.Activities.Http.Activities.HttpEndpoint",
   displayName: "HTTP Endpoint",
@@ -409,6 +539,73 @@ function Fixture() {
           onChange={setActivity}
         />
         {scrollingFixture ? <div className="browser-inspector-tail" aria-hidden="true" /> : null}
+      </aside>
+    </main>
+  );
+}
+
+function ExpressionCodeIntelligenceFixture() {
+  const manyFields = expressionFieldCount > 1;
+  const expressionDescriptor = useMemo<StudioActivityDescriptor>(() => manyFields ? {
+    ...descriptor,
+    inputs: Array.from({ length: expressionFieldCount }, (_, index) => ({
+      ...descriptor.inputs[0]!,
+      name: `Expression${index + 1}`,
+      displayName: `Expression ${index + 1}`,
+      order: index
+    }))
+  } : descriptor, [manyFields]);
+  const [activity, setActivity] = useState<ActivityNode>(() => ({
+    nodeId: "expression-code-browser-activity",
+    activityVersionId: "expression-code-browser-v1",
+    ...(manyFields
+      ? {
+          ...Object.fromEntries(Array.from({ length: expressionFieldCount }, (_, index) => [
+            `expression${index + 1}`,
+            {
+              typeName: "System.String",
+              expression: {
+                type: index < 10 ? "JavaScript" : "Literal",
+                value: index < 10 ? referenceJavaScriptExpression : `Ordinary value ${index + 1}`
+              }
+            }
+          ])),
+          inputs: []
+        }
+      : {
+          path: { typeName: "System.String", expression: { type: "JavaScript", value: referenceJavaScriptExpression } },
+          inputs: []
+        }),
+    outputs: [],
+    structure: null
+  }));
+  // Draft state is recreated for every authored change in the real editor. The benchmark must retain
+  // that identity churn rather than accidentally measuring a frozen workflow-state object.
+  const expressionWorkflowState = {
+    inputs: [{ name: "total", typeName: "System.Decimal" }],
+    rootActivity: activity
+  };
+
+  return (
+    <main className="wf-editor browser-fixture">
+      <h1>Expression code intelligence</h1>
+      <aside className="wf-inspector browser-inspector" aria-label="Activity inspector">
+        <h2>Expression activity</h2>
+        <ActivityPropertiesPanel
+          activity={activity}
+          descriptor={expressionDescriptor}
+          draftId="browser-expression-draft"
+          expressionTooling={expressionToolingFixture}
+          workflowState={expressionWorkflowState}
+          editors={[]}
+          expressionEditors={expressionCodeEditors}
+          expressionDescriptors={expressionDescriptors}
+          expressionDescriptorStatus="ready"
+          descriptorStatus="ready"
+          visibleVariables={[]}
+          scopeStatus="ready"
+          onChange={setActivity}
+        />
       </aside>
     </main>
   );
@@ -1305,7 +1502,9 @@ createRoot(document.getElementById("root")!).render(
       ? <QueryClientProvider client={queryClient}><ReusableBoundaryFixture /></QueryClientProvider>
       : activityInspectorTabsFixture
         ? <ActivityInspectorTabsFixture />
-      : runDetailFixture
+        : expressionCodeIntelligenceFixture
+          ? <ExpressionCodeIntelligenceFixture />
+          : runDetailFixture
         ? <RunDetailFixture />
         : lazyBoundaryFixture
           ? <LazyBoundaryFixture />
