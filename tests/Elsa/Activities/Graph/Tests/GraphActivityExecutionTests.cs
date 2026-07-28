@@ -100,6 +100,27 @@ public sealed class GraphActivityExecutionTests : IDisposable
             Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
     }
 
+    [Fact]
+    public async Task ChildCompletion_MapsConvergingSourceOutcomesToTheSameBoundaryOutcome()
+    {
+        var descriptor = Descriptor(outcomeMappings:
+        [
+            new("Approved", "Accepted"),
+            new("Rejected", "Accepted")
+        ]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var completion = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Accepted", completion.OutcomeName);
+        Assert.Equal(
+            "Accepted",
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+    }
+
     [Theory]
     [InlineData()]
     [InlineData("Unknown")]

@@ -7,9 +7,9 @@ Stored only in `elsa.activity-graph` manifest schema 2.
 | Field | Type | Rule |
 |---|---|---|
 | `sourceOutcomeReferenceKey` | non-empty string | Identifies an emitted outcome on the resolved direct-entry contract; unique |
-| `boundaryOutcomeReferenceKey` | non-empty string | Identifies an emitted public reusable outcome; unique |
+| `boundaryOutcomeReferenceKey` | non-empty string | Identifies an emitted public reusable outcome; target reuse is allowed |
 
-The set is total over emitted public boundary outcomes.
+The set is total over emitted public boundary outcomes. Each emitted target has at least one mapping, and distinct sources may converge on the same target.
 
 ## Compiled runtime outcome mapping
 

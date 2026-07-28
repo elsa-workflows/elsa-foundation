@@ -18,13 +18,13 @@ Schema-1 drafts can migrate to schema 2 by adding an empty mapping collection. T
 
 **Alternatives considered**: A source node id was rejected because only the direct entry completes the boundary in this work unit. Design references in the runtime descriptor were rejected because runtime must not resolve design contracts.
 
-## Decision 3: Require total, unambiguous mappings
+## Decision 3: Require total, source-unambiguous mappings
 
-**Decision**: For schema 2, every emitted public boundary outcome has exactly one mapping; every source reference is emitted by the resolved entry dependency; source references are unique.
+**Decision**: For schema 2, every emitted public boundary outcome has at least one mapping; every source reference is emitted by the resolved entry dependency and remains unique. Distinct source outcomes may converge on the same public boundary outcome.
 
-**Rationale**: Total mappings make declared boundary results truthful and ensure a child result selects at most one parent result. Dependency-aware validation proves reachability against the exact published dependency contract.
+**Rationale**: Total mappings make declared boundary results truthful, while source uniqueness ensures a child result selects at most one parent result. Target convergence intentionally collapses several internal results into one stable public result. Dependency-aware validation proves reachability against the exact published dependency contract.
 
-**Alternatives considered**: Implicit `done` fallback was rejected because it hides contract errors. Many-to-one source mappings are deferred to avoid aggregation semantics.
+**Alternatives considered**: Implicit `done` fallback was rejected because it hides contract errors. Requiring unique targets was rejected because convergence is deterministic and does not imply aggregation within a single execution.
 
 ## Decision 4: Preserve the selected outcome through checkpointing
 
