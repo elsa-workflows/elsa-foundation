@@ -119,7 +119,15 @@ public sealed class GroundworkPersistenceLifetimeTests
         new(
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
             "IShellInitializer",
-            "This application-lifetime alias exposes the same readiness guard through the shell contract.")
+            "This application-lifetime alias exposes the same readiness guard through the shell contract."),
+        new(
+            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkDiagnosticRecordDeploymentRegistration.cs",
+            "GroundworkDiagnosticRecordDeploymentInitializer",
+            "The shared shell and host initializer owns one idempotent provider-startup deployment lifecycle and retains no request or diagnostic-record session state."),
+        new(
+            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkDiagnosticRecordDeploymentRegistration.cs",
+            "IShellInitializer",
+            "This application-lifetime alias exposes the same diagnostic-record deployment initializer through the shell contract.")
     ];
 
     private static readonly ScopedConsumerRegistration[] ScopedConsumerRegistrations =
