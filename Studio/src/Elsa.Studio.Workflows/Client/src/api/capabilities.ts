@@ -92,6 +92,16 @@ export async function hasApiCapability(context: StudioEndpointContext, capabilit
   return capability?.contractVersion === supportedContractVersions[capabilityId];
 }
 
+export async function hasCapabilityLink(
+  context: StudioEndpointContext,
+  capabilityId: ApiCapabilityId,
+  relation: string
+) {
+  const capability = await getApiCapability(context, capabilityId);
+  if (!capability || capability.contractVersion !== supportedContractVersions[capabilityId]) return false;
+  return capability.links.some(link => link.rel === relation);
+}
+
 export async function resolveCapabilityLink(
   context: StudioEndpointContext,
   capabilityId: ApiCapabilityId,

@@ -62,9 +62,7 @@ import { findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBp
 import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
-import type { PublicationIntent } from "../api/publishing";
-import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
-import { useDialogFocus } from "./useDialogFocus";
+import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
@@ -77,6 +75,8 @@ import {
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
+
+export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
 export function WorkflowEditor({
   context,
@@ -389,8 +389,10 @@ export function WorkflowEditor({
     save,
     preparePublication,
     publicationReview,
+    reviewPublication,
     confirmPublication,
     cancelPublication,
+    openPublishedExecutable,
     runInputPrompt,
     confirmRunInputs,
     cancelRunInputs,
@@ -951,8 +953,10 @@ export function WorkflowEditor({
         <PublicationReviewDialog
           review={publicationReview}
           busy={busy}
+          onReview={reviewPublication}
           onPublish={confirmPublication}
           onCancel={cancelPublication}
+          onOpenPublishedExecutable={openPublishedExecutable}
         />
       ) : null}
 
@@ -1159,194 +1163,4 @@ export function WorkflowEditor({
       </div>
     </section>
   );
-}
-
-export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
-  review: PublicationReviewState;
-  busy: boolean;
-  onPublish(intent: PublicationIntent): Promise<void>;
-  onCancel(): void;
-}) {
-  const dialogRef = useRef<HTMLElement>(null);
-  const [action, setAction] = useState<"replace" | "sideBySide">(review.intent.action ?? "replace");
-  const [slotName, setSlotName] = useState(review.intent.slotName ?? review.policy.defaultSlotName);
-  const canEdit = review.phase === "review" || review.phase === "validationBlocked" || review.phase === "savedFailure" || review.phase === "partialFailure";
-  const reservedSideBySideSlot = action === "sideBySide" && slotName.trim().toLowerCase() === "default";
-  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim()) && !reservedSideBySideSlot;
-  const intent = publicationIntentFor(review, action, slotName);
-  const reviewedPreflight = publicationPreflightMatchesIntent(review.preflight, intent) ? review.preflight : undefined;
-  const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
-  useDialogFocus(dialogRef, closeOnEscape);
-
-  const targetSlotName = intent.slotName || (action === "replace" ? review.policy.defaultSlotName : "the named slot");
-  const activeSlot = review.slots.find(slot => slot.slotName === targetSlotName);
-  const currentTargetVersion = activeSlot?.publication?.artifactVersion ?? activeSlot?.publication?.versionId ?? "None";
-  const targetDescription = activeSlot?.publication
-    ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in occupied slot ${activeSlot.slotName}. Concurrency protection requires publication ${activeSlot.publication.publicationId} to remain current.`
-    : `Create a new executable source reference in slot ${targetSlotName}.`;
-  const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
-  const preflightChanges = reviewedPreflight?.triggers ?? reviewedPreflight?.changes ?? [];
-  const triggerSummary = reviewedPreflight
-    ? preflightChanges.length
-      ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
-      : "No trigger changes."
-    : formatChangeCount(changes.triggers);
-  const statusMessage = publicationStatusMessage(review);
-  const validationStatus = publicationPreflightValidationStatus(review, reviewedPreflight, busy);
-
-  return (
-    <div className="wf-dialog-backdrop" role="presentation">
-      <section
-        ref={dialogRef}
-        className="wf-dialog wf-publication-review"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="publication-review-title"
-        aria-describedby="publication-review-status"
-        tabIndex={-1}
-      >
-        <form onSubmit={event => {
-          event.preventDefault();
-          void onPublish(intent);
-        }}>
-          <header className="wf-dialog-heading">
-            <div>
-              <span>Workflow publication</span>
-              <h3 id="publication-review-title">Review publication</h3>
-            </div>
-          </header>
-
-          <output
-            id="publication-review-status"
-            className="wf-publication-status"
-            data-phase={review.phase}
-            aria-live="polite"
-          >
-            {statusMessage}
-          </output>
-
-          <dl className="wf-publication-facts">
-            <div><dt>Current published version</dt><dd>{currentTargetVersion}</dd></div>
-            <div><dt>Proposed next version</dt><dd>{review.proposedVersion} (confirmed after promotion)</dd></div>
-            <div><dt>Unsaved changes</dt><dd>Included — the captured editor state is saved only after Publish.</dd></div>
-            <div><dt>Validation</dt><dd>{validationStatus}</dd></div>
-            <div><dt>Executable status</dt><dd>{review.executableStatus === "ready" ? "Executable after server preflight" : "Not executable until blocking validation is resolved"}</dd></div>
-            <div><dt>Resolved action</dt><dd>{reviewedPreflight?.resolvedAction ?? "Requires authoritative review"}</dd></div>
-            <div><dt>Target slot</dt><dd>{reviewedPreflight?.slotName ?? targetSlotName}</dd></div>
-            <div><dt>Policy source</dt><dd>{reviewedPreflight ? `${reviewedPreflight.policySource}${reviewedPreflight.policyRevision == null ? "" : ` (revision ${reviewedPreflight.policyRevision})`}` : "Requires authoritative review"}</dd></div>
-          </dl>
-
-          {review.validationErrors.length ? (
-            <div className="wf-publication-risks" role="alert">
-              <strong>Publication blocked before mutation</strong>
-              <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
-            </div>
-          ) : null}
-
-          <section className="wf-publication-changes" aria-labelledby="publication-changes-title">
-            <h4 id="publication-changes-title">Changes in the captured draft</h4>
-            <dl>
-              <ChangeSummary label="Activities" value={changes.activities} />
-              <ChangeSummary label="Inputs" value={changes.inputs} />
-              <ChangeSummary label="Outputs" value={changes.outputs} />
-              <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
-            </dl>
-          </section>
-
-          <section className="wf-publication-changes" aria-labelledby="publication-claims-title">
-            <h4 id="publication-claims-title">Authoritative trigger claims</h4>
-            {reviewedPreflight
-              ? reviewedPreflight.claims.length
-                ? <ul>{reviewedPreflight.claims.map(claim => <li key={`${claim.key}-${claim.cardinality}`}>{claim.key} ({claim.cardinality})</li>)}</ul>
-                : <p>No trigger claims.</p>
-              : <p>Review this target to resolve its claims and conflicts before publishing.</p>}
-          </section>
-
-          <fieldset className="wf-publication-behavior" disabled={!canEdit || busy}>
-            <legend>Publication behavior</legend>
-            <p>The {review.policy.source} policy defaults to {review.policy.defaultAction === "replace" ? "replacement" : "an explicit side-by-side slot"}.</p>
-            <label><input type="radio" name="publication-action" checked={action === "replace"} onChange={() => setAction("replace")} /> Replace authority in this slot</label>
-            <label><input type="radio" name="publication-action" checked={action === "sideBySide"} onChange={() => setAction("sideBySide")} /> Publish side by side</label>
-          </fieldset>
-          <label className="wf-form-field">
-            <span>{action === "sideBySide" ? "Named slot" : "Slot"}</span>
-            <input
-              aria-label="Publication slot"
-              value={slotName}
-              onChange={event => setSlotName(event.target.value)}
-              required={action === "sideBySide"}
-              disabled={!canEdit || busy}
-            />
-            {action === "sideBySide" && !slotName.trim() ? <small role="alert">A meaningful slot name is required for side-by-side publication.</small> : null}
-            {reservedSideBySideSlot ? <small role="alert">The default slot is reserved for replacement publication. Choose another named slot.</small> : null}
-          </label>
-          <p className="wf-dialog-note"><strong>Executable impact:</strong> {targetDescription}</p>
-
-          {reviewedPreflight?.conflicts.length ? (
-            <div className="wf-publication-risks" role="alert">
-              <strong>Server policy conflicts</strong>
-              <ul>{reviewedPreflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
-            </div>
-          ) : null}
-          {review.failureMessage ? <p className="wf-publication-recovery" role="alert">{review.failureMessage}</p> : null}
-          {review.phase === "success" && review.published ? (
-            <p className="wf-publication-success">Published executable {review.published.artifactId} with source reference {review.published.sourceReferenceId} in slot {review.published.slotName}.</p>
-          ) : null}
-
-          <div className="wf-dialog-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>{review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}</button>
-            {review.phase !== "success" ? (
-              <button type="submit" disabled={busy || !slotIsValid || review.validationErrors.length > 0 || reviewedPreflight?.canActivate === false}>
-                {!reviewedPreflight ? "Review target" : review.phase === "partialFailure" || review.phase === "savedFailure" ? "Retry Publish" : "Publish"}
-              </button>
-            ) : null}
-          </div>
-        </form>
-      </section>
-    </div>
-  );
-}
-
-function ChangeSummary({ label, value }: { label: string; value: PublicationChangeCount }) {
-  return <div><dt>{label}</dt><dd>{formatChangeCount(value)}</dd></div>;
-}
-
-function formatChangeCount(value: PublicationChangeCount) {
-  return `${value.added} added, ${value.changed} changed, ${value.removed} removed`;
-}
-
-function publicationPreflightValidationStatus(
-  review: PublicationReviewState,
-  reviewedPreflight: PublicationReviewState["preflight"],
-  busy: boolean
-) {
-  if (review.validationErrors.length) {
-    return `${review.validationErrors.length} blocking issue${review.validationErrors.length === 1 ? "" : "s"}`;
-  }
-  if (reviewedPreflight) {
-    return reviewedPreflight.canActivate
-      ? "Server preflight completed — validation passed."
-      : "Server preflight completed — activation conflicts found.";
-  }
-  if (busy) return "Server preflight in progress.";
-  if (/stale/i.test(review.failureMessage ?? "")) return "Server preflight is stale — review the target again.";
-  if (/preflight failed/i.test(review.failureMessage ?? "")) return "Server preflight failed — review the target again.";
-  return "Server preflight required for this target.";
-}
-
-function publicationStatusMessage(review: PublicationReviewState) {
-  if (review.phase === "success") return "Publication completed successfully.";
-  if (review.phase === "validationBlocked") return "Publication is blocked by validation. No version has been promoted.";
-  if (review.phase === "savedFailure") return "The reviewed draft was saved, but no version was promoted and nothing was published.";
-  if (review.phase === "partialFailure") return `Publication did not complete. Promoted version ${review.promotedVersionId} remains available.`;
-  if (review.phase === "publishing") {
-    const messages = {
-      saving: "Saving the captured workflow state...",
-      promoting: "Promoting the saved workflow version...",
-      preflight: "Reviewing server publication policy and trigger conflicts...",
-      publishing: "Publishing the executable source reference..."
-    };
-    return review.progressStep ? messages[review.progressStep] : "Publishing...";
-  }
-  return "Review the target and captured changes. Nothing is saved, promoted, or published until you choose Publish.";
 }

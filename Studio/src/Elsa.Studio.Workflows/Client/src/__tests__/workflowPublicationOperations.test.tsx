@@ -270,6 +270,153 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
     expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
   });
+
+  it("preflights and promotes an exact version only when Foundation advertises both relations", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    expect(currentReview).toMatchObject({
+      exactVersionSupported: true,
+      versionPreflight: {
+        assignmentMode: "automatic",
+        resolvedVersion: "2.0.0",
+        isReady: true
+      }
+    });
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: " 2.1.0-rc.1 " });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: " 2.1.0-rc.1 " },
+      versionPreflight: {
+        assignmentMode: "exact",
+        resolvedVersion: "2.1.0-rc.1",
+        isReady: true
+      }
+    });
+
+    await fixture.current().confirmPublication(intent, { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+    await flushUpdates();
+
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promotion-preflight",
+      { requestedVersion: "2.1.0-rc.1" });
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promote",
+      { requestedVersion: "2.1.0-rc.1" });
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      proposedVersion: "2.1.0-rc.1"
+    });
+  });
+
+  it("keeps only the latest authoritative review when version responses arrive out of order", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true, delayExactVersion: "2.1.0" });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    const older = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    const newer = fixture.current().reviewPublication(
+      currentReview,
+      intent,
+      { mode: "exact", requestedVersion: "2.2.0" });
+    await Promise.all([older, newer]);
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      versionSelection: { mode: "exact", requestedVersion: "2.2.0" },
+      versionPreflight: {
+        requestedVersion: "2.2.0",
+        resolvedVersion: "2.2.0"
+      }
+    });
+  });
+
+  it("accepts the server-resolved action when a new channel becomes occupied during review", async () => {
+    const fixture = renderOperations({ resolveSideBySideAsReplace: true });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "sideBySide", slotName: "blue" };
+
+    await fixture.current().reviewPublication(
+      fixture.current().publicationReview!,
+      intent,
+      { mode: "automatic" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview?.preflight).toMatchObject({
+      resolvedAction: "replace",
+      slotName: "blue"
+    });
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.postJson.mock.calls.filter(([url]) => url === "/publishing/workflows/preflight")).toHaveLength(2);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({ action: "replace", slotName: "blue" }));
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("records an authoritative review failure without immediately treating it as unreviewed", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    fixture.failNextVersionPreflight();
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      currentReview.intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      reviewFailed: true,
+      reviewPending: false,
+      versionSelection: { mode: "exact", requestedVersion: "2.1.0" },
+      preflight: undefined,
+      versionPreflight: undefined,
+      failureMessage: expect.stringContaining("Authoritative review failed")
+    });
+  });
+
+  it("allows only one publication mutation pipeline at a time", async () => {
+    const fixture = renderOperations({ saveDelayMs: 20 });
+    await prepare(fixture);
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    await Promise.all([
+      fixture.current().confirmPublication(intent),
+      fixture.current().confirmPublication(intent)
+    ]);
+    await flushUpdates();
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(1);
+  });
 });
 
 async function prepare(fixture: ReturnType<typeof renderOperations>) {
@@ -298,14 +445,19 @@ function renderOperations(options: {
   stalePublishAttempts?: number;
   savedValidationErrors?: string[];
   failPolicyLoad?: boolean;
+  exactVersionSupport?: boolean;
+  delayExactVersion?: string;
+  saveDelayMs?: number;
+  resolveSideBySideAsReplace?: boolean;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
   const mutationOrder: string[] = [];
   let publishAttempts = 0;
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
+  let failNextVersionPreflight = false;
   const getJson = vi.fn(async (url: string) => {
-    if (url === "/capabilities") return capabilities;
+    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false);
     if (url === "/publishing/workflows/definition-1/policy") {
       if (options.failPolicyLoad) throw new Error("policy unavailable");
       return { defaultAction: "replace", defaultSlotName: "default", source: "host" };
@@ -315,6 +467,25 @@ function renderOperations(options: {
     throw new Error(`Unexpected GET ${url}`);
   });
   const postJson = vi.fn(async (url: string, body?: Record<string, unknown>) => {
+    if (url === "/design/workflows/drafts/draft-1/promotion-preflight") {
+      mutationOrder.push("version-preflight");
+      if (failNextVersionPreflight) {
+        failNextVersionPreflight = false;
+        throw new Error("version preflight unavailable");
+      }
+      const requestedVersion = typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : null;
+      if (requestedVersion === options.delayExactVersion) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return {
+        isReady: true,
+        assignmentMode: requestedVersion ? "exact" : "automatic",
+        requestedVersion,
+        resolvedVersion: requestedVersion ?? "2.0.0",
+        latestVersion: "1.0.0",
+        issues: []
+      };
+    }
     if (url === "/publishing/workflows/preflight") {
       mutationOrder.push("snapshot-preflight");
       snapshotPreflightAttempts += 1;
@@ -325,7 +496,9 @@ function renderOperations(options: {
         definitionId: "definition-1",
         versionId: null,
         slotName: body?.slotName ?? "default",
-        resolvedAction: body?.action ?? "replace",
+        resolvedAction: options.resolveSideBySideAsReplace && body?.action === "sideBySide"
+          ? "replace"
+          : body?.action ?? "replace",
         policySource: "request",
         policyRevision: 1,
         canActivate: true,
@@ -338,7 +511,10 @@ function renderOperations(options: {
       mutationOrder.push("promote");
       promoteAttempts += 1;
       if (promoteAttempts <= (options.failPromoteAttempts ?? 0)) throw new Error("promotion unavailable");
-      return { id: "version-2", version: "2.0.0" };
+      return {
+        id: "version-2",
+        version: typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : "2.0.0"
+      };
     }
     if (url === "/publishing/workflows/version-2/preflight") {
       mutationOrder.push("preflight");
@@ -376,6 +552,7 @@ function renderOperations(options: {
   } as unknown as StudioEndpointContext;
   const saveDraft = vi.fn(async (snapshot: WorkflowDraft) => {
     mutationOrder.push("save");
+    if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
     const saved = structuredClone(snapshot);
     saved.validationErrors = (options.savedValidationErrors ?? []).map(message => ({ message }));
     return saved;
@@ -415,6 +592,7 @@ function renderOperations(options: {
     getJson,
     postJson,
     mutationOrder,
+    failNextVersionPreflight: () => { failNextVersionPreflight = true; },
     ...callbacks
   };
 }
@@ -471,14 +649,27 @@ function slot() {
   };
 }
 
-const capabilities = {
-  capabilities: [
+function capabilitiesFor(exactVersionSupport: boolean) {
+  return {
+    capabilities: [
     {
       id: "elsa.api.workflow-design",
       contractVersion: "1",
       links: [
         { rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true },
-        { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true }
+        { rel: "workflow-versions", href: "design/workflows/versions/{versionId}", templated: true },
+        ...(exactVersionSupport ? [
+          {
+            rel: "workflow-draft-promote-version-preflight",
+            href: "design/workflows/drafts/{draftId}/promotion-preflight",
+            templated: true
+          },
+          {
+            rel: "workflow-draft-promote-exact-version",
+            href: "design/workflows/drafts/{draftId}/promote",
+            templated: true
+          }
+        ] : [])
       ]
     },
     {
@@ -492,5 +683,6 @@ const capabilities = {
         { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true }
       ]
     }
-  ]
-};
+    ]
+  };
+}
