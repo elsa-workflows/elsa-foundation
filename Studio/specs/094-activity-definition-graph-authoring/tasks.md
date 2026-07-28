@@ -167,8 +167,8 @@
 - [x] T057 Run full Studio `pnpm typecheck`, `pnpm lint`, `pnpm build`, and relevant browser checks
 - [x] T058 Run required Foundation formatting, affected-project build, and Activity Graph test gates
 - [x] T059 Review all changed code for duplication and extract only justified shared helpers/fixtures
-- [ ] T060 Push coordinated `codex/*` branches and create dependency-linked Foundation and Studio PRs
-- [ ] T061 Run the requested 10-pass self-review loop after both PRs exist, fixing every actionable finding and rerunning affected checks
+- [x] T060 Push coordinated `codex/*` branches and create dependency-linked Foundation and Studio PRs
+- [x] T061 Run the requested 10-pass self-review loop after both PRs exist, fixing every actionable finding and rerunning affected checks
 - [ ] T062 Wait for required CI, repair failures, and keep both PRs current with their target branches
 - [ ] T063 Merge Foundation first, verify its commit on `main`, then merge Studio and verify its commit on `main`
 

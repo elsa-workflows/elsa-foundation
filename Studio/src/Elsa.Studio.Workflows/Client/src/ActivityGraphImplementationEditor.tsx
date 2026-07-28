@@ -41,6 +41,7 @@ import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthor
 import { ActivityPropertiesPanel } from "./ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
+import { decorateWorkflowCanvasElements } from "./workflow-editor/workflowAccessibility";
 import { listExpressionDescriptors } from "./api/expressions";
 import { WorkflowReferenceAuthoringProvider } from "./workflowReferenceAuthoring";
 
@@ -202,6 +203,7 @@ export function ActivityGraphImplementationEditor({
   context,
   definitionId,
   draftId,
+  contract,
   value,
   propertyEditors = [],
   expressionEditors = [],
@@ -299,14 +301,34 @@ export function ActivityGraphImplementationEditor({
     selectedActivity: selected,
     readOnly
   };
+  const publicInputs = useMemo(
+    () => (contract?.inputs ?? []).map(toWorkflowInput),
+    [contract?.inputs]
+  );
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: [], variables: toWorkflowVariables(payload.variables) }),
-    [payload.variables]
+    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables) }),
+    [payload.variables, publicInputs]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
     [payload.variables]
   );
+  const accessibleCanvas = useMemo(() => {
+    const decorated = decorateWorkflowCanvasElements(
+      nodes.map(node => ({ ...node, selected: node.id === selectedNodeId })),
+      edges
+    );
+    return {
+      ...decorated,
+      nodes: decorated.nodes.map(node => ({
+        ...node,
+        domAttributes: {
+          ...node.domAttributes,
+          "data-graph-node-id": node.id
+        }
+      }))
+    };
+  }, [edges, nodes, selectedNodeId]);
 
   useEffect(() => {
     if (!selectedNodeId || activities.some(activity => activity.nodeId === selectedNodeId)) return;
@@ -561,8 +583,8 @@ export function ActivityGraphImplementationEditor({
             setSelectedNodeId(null);
           }}
           reactFlowProps={{
-            nodes: nodes.map(node => ({ ...node, selected: node.id === selectedNodeId })),
-            edges,
+            nodes: accessibleCanvas.nodes,
+            edges: accessibleCanvas.edges,
             onNodesChange,
             onEdgesChange,
             onNodesDelete: deleteCanvasNodes,

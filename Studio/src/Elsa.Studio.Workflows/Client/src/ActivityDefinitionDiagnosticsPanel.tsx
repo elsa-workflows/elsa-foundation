@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
   StudioActivityDiagnostic,
@@ -37,15 +38,23 @@ export function ActivityDefinitionDiagnosticsPanel({
   onFocus(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onReturn(): void;
 }) {
+  const defaultOpen = Boolean(failure || !validation?.isValid || localDiagnostics.some(item => item.severity === "error"));
+  const resetKey = [
+    validation?.validatedAt ?? "",
+    failure ?? "",
+    ...localDiagnostics.map(item => `${item.severity}:${item.message}`)
+  ].join("|");
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => setOpen(defaultOpen), [defaultOpen, resetKey]);
+
   if (!validation && !failure && localDiagnostics.length === 0) return null;
 
   const diagnostics = validation?.diagnostics ?? [];
   const counts = countSeverities(diagnostics, localDiagnostics);
   const groups = groupDiagnostics(diagnostics);
-  const defaultOpen = Boolean(failure || !validation?.isValid || localDiagnostics.some(item => item.severity === "error"));
 
   return <section className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
-    <details open={defaultOpen}>
+    <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
         <span>Draft diagnostics</span>
         <span>{counts.error} errors · {counts.warning} warnings · {counts.info} info</span>

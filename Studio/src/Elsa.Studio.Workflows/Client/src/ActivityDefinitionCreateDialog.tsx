@@ -230,6 +230,7 @@ export function ActivityCategoryCombobox({ value, suggestions, onChange }: {
       aria-label="Category"
       aria-autocomplete="list"
       aria-controls={listboxId}
+      aria-haspopup="listbox"
       aria-expanded={open && filteredSuggestions.length > 0}
       aria-activedescendant={activeSuggestion ? `${listboxId}-${activeIndex}` : undefined}
       value={value}
@@ -239,7 +240,7 @@ export function ActivityCategoryCombobox({ value, suggestions, onChange }: {
       onKeyDown={onKeyDown}
       placeholder="e.g. Custom"
     />
-    {open && filteredSuggestions.length ? <ul id={listboxId} role="listbox" aria-label="Existing categories">{filteredSuggestions.map((suggestion, index) => <li key={suggestion} id={`${listboxId}-${index}`} role="option" aria-selected={index === activeIndex}><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>{suggestion}</button></li>)}</ul> : null}
+    {open && filteredSuggestions.length ? <ul id={listboxId} role="listbox" aria-label="Existing categories">{filteredSuggestions.map((suggestion, index) => <li key={suggestion} role="none"><button id={`${listboxId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} type="button" onMouseDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>{suggestion}</button></li>)}</ul> : null}
   </div></label>;
 }
 

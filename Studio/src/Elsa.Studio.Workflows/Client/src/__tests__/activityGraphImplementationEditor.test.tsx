@@ -11,6 +11,8 @@ import {
   ActivityGraphImplementationEditor,
   ActivityGraphPublicInterfaceEditor
 } from "../ActivityGraphImplementationEditor";
+import { inputReferenceContribution } from "../inputReferenceContribution";
+import type { ActivityCatalogItem } from "../workflowTypes";
 
 vi.mock("../api/activityDesign", () => ({
   useWorkflowActivities: () => ({
@@ -25,7 +27,7 @@ vi.mock("../api/expressions", () => ({
   listVariableTypeDescriptors: async () => []
 }));
 
-let catalogItems = [catalogItem()];
+let catalogItems: ActivityCatalogItem[] = [catalogItem()];
 let expressionDescriptors: StudioExpressionDescriptor[] = [];
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
 
@@ -119,6 +121,63 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
 
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
     expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
+  });
+
+  it("places public contract inputs in the graph node expression scope", async () => {
+    expressionDescriptors = [{ type: "Input", displayName: "Input", editingMode: "reference" }];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem()];
+    const rendered = renderDesigner({
+      value: {
+        payload: {
+          rootActivity: {
+            nodeId: "root",
+            activityVersionId: "flowchart-v1",
+            inputs: [],
+            outputs: [],
+            structure: {
+              kind: "Flowchart",
+              schemaVersion: "1.0.0",
+              payload: {
+                activities: [{
+                  nodeId: "write-line-1",
+                  activityVersionId: "write-line-v1",
+                  inputs: [],
+                  outputs: [],
+                  structure: null
+                }],
+                connections: [],
+                startNodeId: null,
+                nodeMetadata: {},
+                connectionMetadata: {}
+              }
+            }
+          },
+          variables: [],
+          outputMappings: [],
+          outcomeMappings: []
+        },
+        layout: []
+      },
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [{
+          referenceKey: "customer-id",
+          name: "CustomerId",
+          displayName: "Customer ID",
+          type: { alias: "String", collectionKind: "Single" }
+        }],
+        outputs: [],
+        outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
+      },
+      expressionEditors: [inputReferenceContribution]
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+
+    await vi.waitFor(() => {
+      const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
+      expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
+    });
   });
 });
 
@@ -325,6 +384,21 @@ function leafCatalogItem() {
     inputs: [],
     outputs: [],
     ports: []
+  };
+}
+
+function inputLeafCatalogItem() {
+  return {
+    ...leafCatalogItem(),
+    inputs: [{
+      name: "Message",
+      typeName: "System.String",
+      displayName: "Message",
+      description: "Message to write.",
+      isBrowsable: true,
+      isWrapped: true,
+      defaultSyntax: "Input"
+    }]
   };
 }
 
