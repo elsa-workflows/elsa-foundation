@@ -19,7 +19,10 @@ internal static class ExpressionDraftSemanticValidation
         {
             throw;
         }
-        catch
+        catch (Exception exception) when (exception is not (
+            OutOfMemoryException or
+            StackOverflowException or
+            AccessViolationException))
         {
             return new(
                 ExpressionDraftValidationState.Unavailable,

@@ -57,7 +57,10 @@ internal static class ExpressionToolingOperationLimits
                 documentRevision: context.Document.DocumentRevision,
                 contextRevision: context.ContextRevision);
         }
-        catch
+        catch (Exception exception) when (exception is not (
+            OutOfMemoryException or
+            StackOverflowException or
+            AccessViolationException))
         {
             return ExpressionToolingOutcome<T>.Failure(
                 ExpressionToolingOutcomeState.Unavailable,

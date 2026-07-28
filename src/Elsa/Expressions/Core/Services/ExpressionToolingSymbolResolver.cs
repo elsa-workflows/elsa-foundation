@@ -81,8 +81,8 @@ public static class ExpressionToolingSymbolResolver
                         symbol.ValueShape ?? new(),
                         symbol.Documentation))
                     .ToArray();
-                if (nested.Length == 0)
-                    return direct! with { ValueShape = NormalizeShape(direct.ValueShape) };
+                if (nested.Length == 0 && direct is not null)
+                    return direct with { ValueShape = NormalizeShape(direct.ValueShape) };
 
                 var members = NormalizeMembers(nested);
                 var shape = MergeMembers(direct?.ValueShape, group.Key, members);
@@ -90,7 +90,6 @@ public static class ExpressionToolingSymbolResolver
                     ? new($"namespace:{group.Key}", group.Key, ExpressionSymbolKind.Namespace, shape)
                     : direct with { ValueShape = shape };
             })
-            .Where(symbol => symbol is not null)
             .ToArray();
 
     private static IReadOnlyList<ExpressionValueMember> NormalizeMembers(
@@ -108,7 +107,9 @@ public static class ExpressionToolingSymbolResolver
                     })
                     .ToArray();
                 if (nested.Length == 0)
-                    return direct! with { Shape = NormalizeShape(direct.Shape)! };
+                    return direct is null
+                        ? null
+                        : direct with { Shape = NormalizeShape(direct.Shape)! };
 
                 return new ExpressionValueMember(
                     group.Key,
@@ -116,6 +117,7 @@ public static class ExpressionToolingSymbolResolver
                     direct?.Documentation);
             })
             .Where(member => member is not null)
+            .Select(member => member!)
             .ToArray();
 
     private static ExpressionValueShape MergeMembers(

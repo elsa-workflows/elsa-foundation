@@ -94,9 +94,7 @@ public sealed class PublishWorkflowRequestHandler(
             cancellationToken);
         if (resolvedReview is not null)
         {
-            var reviewedVersion = await (workflowVersionStore
-                ?? throw new InvalidOperationException("Workflow definition version services are not configured."))
-                .GetWithDefinitionAsync(request.VersionId, cancellationToken);
+            var reviewedVersion = await workflowVersionStore.GetWithDefinitionAsync(request.VersionId, cancellationToken);
             var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
             var candidateHash = snapshotReviews!.ComputeCandidateHash(reviewedVersion.State, layout?.Records ?? []);
             await snapshotReviews.ValidateAndConsumeAsync(

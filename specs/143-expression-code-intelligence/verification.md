@@ -7,7 +7,7 @@ Last reconciled: 2026-07-28
 | Suite | Result |
 |---|---:|
 | `Elsa.Expressions.Tests` | 108 passed |
-| `Elsa.Workflows.Design.Tests` | 340 passed |
+| `Elsa.Workflows.Design.Tests` | 344 passed |
 | `Elsa.Workflows.Design.Api.Tests` | 89 passed |
 | `Elsa.Workflows.Publishing.Api.Tests` | 459 passed |
 | Expression-tooling and custom-host architecture filters | 4 passed |

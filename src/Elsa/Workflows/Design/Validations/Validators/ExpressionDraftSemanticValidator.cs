@@ -44,7 +44,10 @@ public sealed class ExpressionDraftSemanticValidator(
             {
                 throw;
             }
-            catch
+            catch (Exception exception) when (exception is not (
+                OutOfMemoryException or
+                StackOverflowException or
+                AccessViolationException))
             {
                 unavailable = true;
                 continue;
@@ -93,11 +96,10 @@ public sealed class ExpressionDraftSemanticValidator(
 
     private static bool TryGetJsonSource(JsonElement element, out string source)
     {
-        foreach (var property in element.EnumerateObject())
+        foreach (var property in element.EnumerateObject().Where(property =>
+                     string.Equals(property.Name, "source", StringComparison.OrdinalIgnoreCase) &&
+                     property.Value.ValueKind == JsonValueKind.String))
         {
-            if (!string.Equals(property.Name, "source", StringComparison.OrdinalIgnoreCase) ||
-                property.Value.ValueKind != JsonValueKind.String)
-                continue;
             source = property.Value.GetString() ?? string.Empty;
             return true;
         }

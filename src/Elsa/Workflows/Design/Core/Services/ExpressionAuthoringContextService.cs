@@ -52,7 +52,10 @@ public sealed class ExpressionAuthoringContextService(IEnumerable<IExpressionAut
             {
                 throw;
             }
-            catch
+            catch (Exception exception) when (exception is not (
+                OutOfMemoryException or
+                StackOverflowException or
+                AccessViolationException))
             {
                 sourceFailed = true;
                 continue;
