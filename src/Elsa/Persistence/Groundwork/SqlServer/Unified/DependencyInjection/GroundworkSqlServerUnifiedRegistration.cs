@@ -53,8 +53,11 @@ public static class GroundworkSqlServerUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => SqlServerDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => SqlServerDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         return services.AddGroundworkUnifiedStoreFamilies();
     }
 }

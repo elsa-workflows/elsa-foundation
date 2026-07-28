@@ -1,6 +1,7 @@
 using System.Reflection;
 using CShells;
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Diagnostics.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
@@ -14,7 +15,9 @@ using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
+using Elsa.Persistence.Groundwork.Unified;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -194,41 +197,55 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
     }
 
     [Fact]
-    public void All_unified_provider_features_select_diagnostics_and_register_a_diagnostic_record_session_factory()
+    public async Task All_unified_provider_features_register_diagnostic_runtime_and_deployment_boundaries()
     {
         var context = Context(
             [DiagnosticsFeatureId],
             [SchemaFeature(DiagnosticsFeatureId, GroundworkSchemaFeatureMetadata.Diagnostics)]);
-        var providers = new Action<IServiceCollection>[]
+        var providers = new (string Provider, Action<IServiceCollection> Register)[]
         {
-            services => new SqliteGroundworkUnifiedPersistenceShellFeature(context)
+            ("sqlite", services => new SqliteGroundworkUnifiedPersistenceShellFeature(context)
             {
                 ConnectionString = "Data Source=:memory:"
-            }.ConfigureServices(services),
-            services => new PostgreSqlGroundworkUnifiedPersistenceShellFeature(context)
+            }.ConfigureServices(services)),
+            ("postgresql", services => new PostgreSqlGroundworkUnifiedPersistenceShellFeature(context)
             {
                 ConnectionString = "Host=localhost;Database=elsa;Username=elsa;Password=secret"
-            }.ConfigureServices(services),
-            services => new SqlServerGroundworkUnifiedPersistenceShellFeature(context)
+            }.ConfigureServices(services)),
+            ("sqlserver", services => new SqlServerGroundworkUnifiedPersistenceShellFeature(context)
             {
                 ConnectionString = "Server=localhost;Database=elsa;User Id=sa;Password=secret;TrustServerCertificate=True"
-            }.ConfigureServices(services),
-            services => new MongoDbGroundworkUnifiedPersistenceShellFeature(context)
+            }.ConfigureServices(services)),
+            ("mongodb", services => new MongoDbGroundworkUnifiedPersistenceShellFeature(context)
             {
                 ConnectionString = "mongodb://localhost:27017/?replicaSet=rs0",
                 DatabaseName = "elsa"
-            }.ConfigureServices(services)
+            }.ConfigureServices(services))
         };
 
-        foreach (var register in providers)
+        foreach (var (expectedProvider, register) in providers)
         {
             var services = new ServiceCollection();
             register(services);
-            using var provider = services.BuildServiceProvider();
+            await using var provider = services.BuildServiceProvider();
 
             Assert.IsType<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
                 provider.GetRequiredService<IPhysicalSchemaManifestSource>());
-            Assert.NotNull(provider.GetRequiredService<global::Groundwork.DiagnosticRecords.IDiagnosticRecordStoreSessionFactory>());
+            Assert.NotNull(provider.GetRequiredService<IDiagnosticRecordStoreSessionFactory>());
+            Assert.Equal(
+                expectedProvider,
+                provider.GetRequiredService<IDiagnosticRecordDeploymentApplier>().Provider);
+            var initializer = provider.GetRequiredService<GroundworkDiagnosticRecordDeploymentInitializer>();
+            Assert.Same(
+                initializer,
+                Assert.Single(provider.GetServices<IShellInitializer>()
+                    .OfType<GroundworkDiagnosticRecordDeploymentInitializer>()));
+            var lifecycle = Assert.Single(
+                provider.GetServices<ShellInitializerRegistration>(),
+                registration =>
+                    registration.InitializerType == typeof(GroundworkDiagnosticRecordDeploymentInitializer));
+            Assert.Equal(LifecyclePhase.Prepare, lifecycle.Phase);
+            Assert.Equal(1, lifecycle.Order);
         }
     }
 

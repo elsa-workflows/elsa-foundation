@@ -59,7 +59,7 @@ public sealed class SendHttpRequest(
     public Uri Url { get; set; } = null!;
 
     /// <summary>The HTTP method (verb). Defaults to <c>GET</c> when not set.</summary>
-    [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal")]
+    [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal", Options = ["GET", "POST", "PUT", "DELETE", "HEAD"])]
     public string Method { get; set; } = "GET";
 
     /// <summary>Optional request body content, serialized as a UTF-8 string.</summary>
@@ -67,7 +67,7 @@ public sealed class SendHttpRequest(
     public string? Content { get; set; }
 
     /// <summary>Content type (media type) for the request body. Defaults to <c>text/plain</c> when content is present.</summary>
-    [ActivityInput(Key = nameof(ContentType), DefaultValue = "text/plain", DefaultSyntax = "Literal")]
+    [ActivityInput(Key = nameof(ContentType), DefaultValue = "text/plain", DefaultSyntax = "Literal", Options = ["text/plain", "application/json"])]
     public string? ContentType { get; set; }
 
     /// <summary>Optional request headers to add to the outbound request.</summary>

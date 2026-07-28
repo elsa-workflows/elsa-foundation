@@ -15,11 +15,13 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using System.Collections.Concurrent;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.DiagnosticRecords;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,11 +67,14 @@ public sealed class GroundworkShellSchemaActivationTests
     }
 
     [Fact]
-    public async Task Diagnostics_feature_is_cataloged_and_activates_both_Groundwork_stores_without_an_EF_store()
+    public async Task Diagnostics_feature_auto_applies_fresh_streams_and_activates_both_Groundwork_stores_without_an_EF_store()
     {
         await using var database = new TemporarySqliteDatabase();
-        await ApplyDiagnosticsSchemaAsync(database.ConnectionString);
-        await using var root = BuildRoot(database.ConnectionString, includeIdentity: false, includeDiagnostics: true);
+        await using var root = BuildRoot(
+            database.ConnectionString,
+            includeIdentity: false,
+            includeDiagnostics: true,
+            autoApply: true);
 
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         await using var scope = shell.BeginScope();
@@ -86,6 +91,69 @@ public sealed class GroundworkShellSchemaActivationTests
         Assert.DoesNotContain(
             scope.ServiceProvider.GetServices<IStructuredLogStore>(),
             store => store.GetType().Namespace?.Contains(".EFCore", StringComparison.Ordinal) == true);
+
+        var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
+        var inspection = await new SqliteDiagnosticRecordDeploymentInspector(database.ConnectionString)
+            .InspectAsync(deployment);
+        Assert.Equal(DiagnosticRecordDeploymentAdmissionStatus.Ready, inspection.Status);
+    }
+
+    [Fact]
+    public async Task Diagnostics_feature_with_auto_apply_disabled_fails_when_streams_are_missing()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await ApplySchemaAsync<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(database.ConnectionString);
+        await using var root = BuildRoot(
+            database.ConnectionString,
+            includeIdentity: false,
+            includeDiagnostics: true,
+            autoApply: false);
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
+            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
+
+        Assert.Contains("GW-DIAG-DEPLOY-001", Flatten(exception), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Diagnostics_feature_auto_apply_is_idempotent_across_shell_restarts()
+    {
+        await using var database = new TemporarySqliteDatabase();
+
+        await ActivateDiagnosticsAsync(database.ConnectionString);
+        await ActivateDiagnosticsAsync(database.ConnectionString);
+
+        var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
+        var inspection = await new SqliteDiagnosticRecordDeploymentInspector(database.ConnectionString)
+            .InspectAsync(deployment);
+        Assert.Equal(DiagnosticRecordDeploymentAdmissionStatus.Ready, inspection.Status);
+    }
+
+    [Fact]
+    public async Task Diagnostics_feature_auto_apply_rejects_drift_before_creating_missing_streams()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
+        var expected = deployment.Streams[0];
+        var drifted = expected with { SchemaVersion = expected.SchemaVersion + 1 };
+        _ = await SqliteDiagnosticRecordStoreFactory.CreateAsync(database.ConnectionString, drifted);
+
+        await using var root = BuildRoot(
+            database.ConnectionString,
+            includeIdentity: false,
+            includeDiagnostics: true,
+            autoApply: true);
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
+            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
+
+        Assert.Contains("GW-DIAG-DEPLOY-002", Flatten(exception), StringComparison.Ordinal);
+        var inspector = new SqliteDiagnosticRecordDeploymentInspector(database.ConnectionString);
+        var driftInspection = await inspector.InspectAsync(
+            new DiagnosticRecordDeploymentManifest(deployment.Storage, [expected]));
+        Assert.Equal(DiagnosticRecordDeploymentAdmissionStatus.Drifted, driftInspection.Status);
+        var missingInspection = await inspector.InspectAsync(
+            new DiagnosticRecordDeploymentManifest(deployment.Storage, [deployment.Streams[1]]));
+        Assert.Equal(DiagnosticRecordDeploymentAdmissionStatus.Missing, missingInspection.Status);
     }
 
     [Fact]
@@ -196,12 +264,19 @@ public sealed class GroundworkShellSchemaActivationTests
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
     }
 
-    private static async Task ApplyDiagnosticsSchemaAsync(string connectionString)
+    private static async Task ActivateDiagnosticsAsync(string connectionString)
     {
-        await ApplySchemaAsync<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(connectionString);
-        var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
-        foreach (var stream in deployment.Streams)
-            _ = await SqliteDiagnosticRecordStoreFactory.CreateAsync(connectionString, stream);
+        await using var root = BuildRoot(
+            connectionString,
+            includeIdentity: false,
+            includeDiagnostics: true,
+            autoApply: true);
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.BeginScope();
+        Assert.IsType<GroundworkOpenTelemetryStore>(
+            scope.ServiceProvider.GetRequiredService<IOpenTelemetryStore>());
+        Assert.IsType<GroundworkStructuredLogStore>(
+            scope.ServiceProvider.GetRequiredService<IStructuredLogStore>());
     }
 
     private static string Flatten(Exception exception)

@@ -17,7 +17,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlite",
     DisplayName = "Groundwork SQLite Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQLite target; Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQLite target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
@@ -37,7 +37,7 @@ public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeatu
 
     [ManifestSetting(
         DisplayName = "Auto-apply schema on startup",
-        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Description = "When enabled, safe pending document-schema operations and missing diagnostic-record streams are applied automatically at startup instead of requiring Groundwork.Tool. Drift and destructive operations are never auto-applied.",
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 
