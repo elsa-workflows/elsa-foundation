@@ -507,7 +507,14 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         DeletedReason: null,
         Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))],
         PublicationId: "publication-1",
-        SlotId: "slot-default");
+        SlotId: "slot-default",
+        ActivityPresentation:
+        [
+            new WorkflowExecutableActivityPresentationRecord(
+                "root",
+                "Notify buyer",
+                "Send the order confirmation after payment.")
+        ]);
 
     private static ActivityExecutionState ActivityState() => new(
         Execution: new ActivityExecution("ae-1", Wf, "node-ae-1", "authored", "Elsa.Log", "1.0.0"),

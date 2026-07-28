@@ -286,7 +286,10 @@ public sealed record WorkflowExecutableDetailsView(
 public sealed record WorkflowExecutableChosenReferenceView(
     string SourceReferenceId,
     string Selection,
-    IReadOnlyCollection<WorkflowExecutableLayoutRecord> Layout);
+    IReadOnlyCollection<WorkflowExecutableLayoutRecord> Layout)
+{
+    public IReadOnlyCollection<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public sealed record ExecutableProvenanceView(
     string ArtifactId,

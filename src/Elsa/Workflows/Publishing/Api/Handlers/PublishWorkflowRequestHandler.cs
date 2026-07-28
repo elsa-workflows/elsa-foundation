@@ -212,7 +212,11 @@ public sealed class PublishWorkflowRequestHandler(
             SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs,
-            TenantId: tenantId);
+            TenantId: tenantId,
+            ActivityPresentation:
+                WorkflowExecutableActivityPresentationSidecar.CopyFrom(
+                    layout?.ActivityPresentation,
+                    executable));
     }
 
     private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)

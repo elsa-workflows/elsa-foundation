@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
@@ -23,7 +24,10 @@ public sealed class GetDraftRequestHandler(IWorkflowDefinitionDraftStore draftSt
     {
         var result = await draftStore.FindWithLayoutByIdAsync(request.DraftId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
-        return WorkflowDraftView.From(result.Draft, result.Layout);
+        return WorkflowDraftView.From(
+            result.Draft,
+            result.Layout,
+            result.ActivityPresentation);
     }
 }
 
@@ -39,13 +43,24 @@ public sealed class ReplaceDraftCommandHandler(
         var layout = command.Layout is null
             ? current.Layout
             : command.Layout.Select(ToRecord).ToArray();
+        var activityPresentation = command.ActivityPresentation is null
+            ? current.ActivityPresentation
+            : ActivityPresentationRecord.NormalizeCollection(
+                command.ActivityPresentation.Select(x => x.ToRecord()));
         await updateDraftCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
-            new UpdateDraftRequest(command.DraftId, command.State.ToState(), layout),
+            new UpdateDraftRequest(
+                command.DraftId,
+                command.State.ToState(),
+                layout,
+                activityPresentation),
             cancellationToken);
         var updated = await draftStore.FindWithLayoutByIdAsync(command.DraftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow draft '{command.DraftId}' disappeared after replacement.");
-        return WorkflowDraftView.From(updated.Draft, updated.Layout);
+        return WorkflowDraftView.From(
+            updated.Draft,
+            updated.Layout,
+            updated.ActivityPresentation);
     }
 
     private static DesignMetadataRecord ToRecord(WorkflowDefinitionLayoutRecordView view) =>
