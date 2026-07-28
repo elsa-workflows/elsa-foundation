@@ -60,6 +60,7 @@ A Studio user can click Apply to persist staged feature changes for the backend-
 - A setting value cannot be converted to the declared JSON type.
 - A package manifest is missing or invalid while the runtime feature is still discoverable.
 - A feature exists in shell configuration but no runtime descriptor or manifest exists.
+- A direct API client sends a delta-style apply request that omits currently-enabled features (rejected per FR-003a; omission must never disable features implicitly).
 
 ## Requirements
 
@@ -68,6 +69,7 @@ A Studio user can click Apply to persist staged feature changes for the backend-
 - **FR-001**: The backend MUST expose a shell-scoped feature catalog endpoint for the request-inferred shell.
 - **FR-002**: The feature catalog MUST include feature ID, display name, description, source, package metadata, enabled state, configuration, categories, manifest warnings, and setting metadata.
 - **FR-003**: The backend MUST expose an apply endpoint that accepts the catalog revision and full desired feature state for the inferred shell.
+- **FR-003a**: The backend MUST reject an apply request that omits any currently-enabled feature, identifying the omitted features in the error. Disabling a feature requires an explicit `enabled: false` entry; omission is never interpreted as disable. Omitting currently-disabled features is allowed. *(Amended 2026-07-21: the original implementation silently treated a partial request as the full desired state, so a delta-style apply from a direct API client erased every feature it did not mention.)*
 - **FR-004**: The backend MUST reject stale apply requests with a conflict result.
 - **FR-005**: The backend MUST persist enabled features as configuration objects and disabled features as absent from the shell feature map.
 - **FR-006**: The backend MUST refresh runtime feature descriptors before reloading the shell.

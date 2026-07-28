@@ -58,6 +58,7 @@ public sealed class TransportWireFixtureTests
         Assert.Equal(expected.LeaseExpiresAt, deserialized.LeaseExpiresAt);
         Assert.Equal(expected.Envelope.EnvelopeId, deserialized.Envelope.EnvelopeId);
         Assert.Equal(expected.Envelope.IdempotencyKey, deserialized.Envelope.IdempotencyKey);
+        Assert.Equal(expected.Envelope.Partition, deserialized.Envelope.Partition);
         Assert.Equal(expected.Envelope.Command.Kind, deserialized.Envelope.Command.Kind);
         Assert.Equal(expected.Envelope.Command.CommandId, deserialized.Envelope.Command.CommandId);
     }

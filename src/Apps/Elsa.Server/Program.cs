@@ -1,19 +1,22 @@
+using System.Diagnostics;
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
+using CShells.Lifecycle;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
+using Elsa.Server.Boot;
 using Elsa.Server.Readiness;
-using Elsa.Activities.Composition.Design;
-using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
+using Elsa.Activities.Graph.Design;
+using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
@@ -26,8 +29,8 @@ using Elsa.Agent.Workflows;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs;
-using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
@@ -50,19 +53,34 @@ using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
+using Elsa.Attention.Api;
+using Elsa.Modularity.Attention;
+using Elsa.Secrets.Attention;
+using Elsa.Studio.Preferences.Api;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.Runtime.Tracing;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
 using Elsa.Modularity.ExtensionBuilder;
 using Elsa.Modularity.ExtensionBuilder.Extensions;
+
+// Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
+// attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
+// unless the Elsa:Boot:PhaseTiming:Enabled switch turns the timeline on below.
+var bootStopwatch = Stopwatch.StartNew();
 
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
@@ -73,7 +91,23 @@ builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange:
 // keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
 // (secret), and a configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+// WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
+// command-line providers after the shell layers so container environment variables override shells.json, while
+// explicit command-line arguments retain the highest precedence.
+builder.Configuration
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 var configuration = builder.Configuration;
+
+// Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
+// registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
+// consumed by the first-request middleware, the shell-activation observer, and the ApplicationStarted hook.
+var bootTimeline = BootPhaseTimeline.CreateIfEnabled(configuration, bootStopwatch);
+if (bootTimeline is not null)
+{
+    bootTimeline.Mark("config-ready");
+    builder.Services.AddSingleton(bootTimeline);
+}
 
 // Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
 // Console.Out and the live stream is a long-lived SignalR connection, so it is composed once on the application root
@@ -178,7 +212,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
-            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
@@ -186,33 +219,32 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
-            typeof(Elsa.Workflows.Publishing.Persistence.Groundwork.Sqlite.SqliteGroundworkPublishingPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
-            // Construction seam (Runtime side): the dispatch factory + registry, the CLR kind, and the
-            // Workflow kind. These populate the constructor registry the bridge dispatches through.
+            // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
+            // Design-side graph provider. Kept separate from Graph Runtime so authoring-only and runtime-only
+            // custom hosts can compose exactly the plane they need.
+            typeof(GraphActivitiesDesignFeature).Assembly,
+            typeof(GraphActivitiesRuntimeFeature).Assembly,
             // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
             // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
             // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
             // absent from a clean host deployment discoverable.
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly,
-            typeof(ActivitiesCompositionRuntimeFeature).Assembly,
-
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
-            // populate the catalog with WriteLine + WorkflowDefinitionActivity as CLR rows at startup.
+            // publish source-owned CLR activity definitions through the stable provider/runtime seam.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
-            // Workflow kind (Design side): catalogs usable-as-activity workflow versions as WorkflowIdentity rows.
-            typeof(ActivitiesCompositionDesignFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
+            typeof(PublishingGroundworkFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
@@ -259,11 +291,28 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
+            typeof(AttentionApiFeature).Assembly,
+            typeof(StudioPreferencesFeature).Assembly,
+            typeof(StudioPreferencesApiFeature).Assembly,
+            typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
+            typeof(WorkflowsDashboardFeature).Assembly,
+            // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
+            // dependency resolver fails shell activation with FeatureNotFoundException.
+            typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
 
             typeof(ModularityApiFeature).Assembly,
+            typeof(ModularityAttentionFeature).Assembly,
+            typeof(SecretsAttentionFeature).Assembly,
+            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
-            typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
-            typeof(OpenTelemetryFeature).Assembly
+            typeof(DiagnosticsGroundworkPersistenceFeature).Assembly,
+            typeof(OpenTelemetryFeature).Assembly,
+
+            // Engine self-instrumentation (MS-9): puts the WorkflowsRuntimeTracing feature in the catalog so it can be
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
+            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
+            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            typeof(WorkflowsRuntimeTracingFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
@@ -280,6 +329,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
                 configuration.GetSection(RuntimeFaultCaptureOptions.SectionName).Bind(feature)));
 });
 
+// Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When
+// Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
+// at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
+// state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
+// first user request instead of during it. The trigger lives at the host level because CShells does not run
+// shell-scoped hosted services and the eager trigger must sit outside any shell (it activates the shells).
+// Registered only when the switch is on, so an unset host constructs nothing and pays nothing.
+if (EagerShellActivationOptions.IsEnabled(configuration))
+    builder.Services.AddHostedService<EagerShellActivationHostedService>();
+
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
 // delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both
 // AddAuthentication and AddAuthorization use TryAdd semantics for those services.
@@ -287,6 +346,28 @@ builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (bootTimeline is not null)
+{
+    // Phase A: everything from process entry to a built host — feature catalog discovery, Nuplane package-ALC
+    // loads and DI container construction.
+    bootTimeline.Measure("host-build", 0d, "CreateBuilder → Build (feature catalog + package ALC + DI)");
+    var hostBuiltMs = bootTimeline.ElapsedMs;
+
+    // Phase B: Kestrel accepting connections. Shell activation is still lazy at this point.
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        bootTimeline.Measure("kestrel-startup", hostBuiltMs, "Build → listening");
+        bootTimeline.Mark("kestrel-ready");
+    });
+
+    // Phase B/C: observe the lazy shell-activation cliff (Initializing→Active wall) via the one host-observable
+    // CShells seam. Per-initializer attribution is not host-observable — see BootShellActivationObserver.
+    app.Services.GetService<IShellRegistry>()?.Subscribe(new BootShellActivationObserver(bootTimeline));
+
+    // Time the first request end-to-end (it triggers activation) and print the phase table when it completes.
+    app.UseMiddleware<BootFirstRequestMiddleware>();
+}
 
 app.UseCors(studioCorsPolicy);
 

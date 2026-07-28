@@ -1,0 +1,24 @@
+{
+  "configuration": {
+    "capabilities": {
+      "permissionPropagation": "TokenRefreshBoundary",
+      "supportsApplicationManagement": false,
+      "supportsGroupSync": true,
+      "supportsLocalRoleManagement": false,
+      "supportsLocalUserManagement": false,
+      "supportsRefresh": true,
+      "supportsRevocation": false,
+      "supportsTokenIssuance": false
+    },
+    "enabled": true,
+    "isDefault": true,
+    "kind": "external-oidc",
+    "provider": "google",
+    "settings": {
+      "authority": "https://issuer.example"
+    },
+    "tenantId": "tenant-1"
+  },
+  "provider": "google",
+  "tenantId": "tenant-1"
+}

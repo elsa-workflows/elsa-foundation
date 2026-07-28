@@ -18,9 +18,29 @@ public interface IWorkflowExecutionStateStore
     ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all workflow execution states currently held by the store.
+    /// Returns all workflow execution states currently held by the store. Implementations must obtain this
+    /// compatibility projection through finite history pages; new callers should use <see cref="QueryPageAsync"/>
+    /// or the explicitly named <see cref="WorkflowExecutionStateStorePagingExtensions.ListAllAsync"/> traversal.
     /// </summary>
     ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Queries a bounded, stably ordered page of retained workflow execution state without requiring callers to
+    /// materialize the complete history.
+    /// </summary>
+    ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Scans alteration targets in immutable tenant-partition/execution-ID order. This is intentionally separate from
+    /// history paging: capture membership must not move when updated timestamps change between batches.
+    /// </summary>
+    ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(
+        WorkflowExecutionAlterationCaptureQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<WorkflowExecutionAlterationCapturePage>(new NotSupportedException(
+            $"{GetType().Name} does not implement immutable alteration target capture."));
 
     /// <summary>
     /// Returns the distinct executable artifact IDs pinned by retained workflow executions.

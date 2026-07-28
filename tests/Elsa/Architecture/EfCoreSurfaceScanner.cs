@@ -43,7 +43,51 @@ internal sealed record EfCoreSurfaceSnapshot(
 
 internal sealed record EfCoreSurfaceBaselineDocument(
     int SchemaVersion,
-    EfCoreSurfaceSnapshot Surface);
+    EfCoreSurfaceSnapshot Surface,
+    IReadOnlyList<string>? ProtectedProviderNeutralProjects = null);
+
+internal static class PersistenceProviderNeutralityBoundary
+{
+    public static IReadOnlyList<string> ProjectNames { get; } =
+    [
+        "Elsa.Workflows.Runtime.Core",
+        "Elsa.Foundation.Identity.Abstractions",
+        "Elsa.Secrets.Core",
+        "Elsa.Workflows.Runtime.Distributed"
+    ];
+
+    public static bool IsProtectedProject(string projectName) =>
+        ProjectNames.Contains(projectName, StringComparer.Ordinal);
+
+    public static bool IsConcreteProviderPackage(string packageName) =>
+        IsPackageFamily(packageName, "Groundwork") ||
+        packageName.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        IsPackageFamily(packageName, "Microsoft.Data.Sqlite") ||
+        IsPackageFamily(packageName, "SQLitePCLRaw") ||
+        IsPackageFamily(packageName, "Microsoft.Data.SqlClient") ||
+        IsPackageFamily(packageName, "System.Data.SqlClient") ||
+        IsPackageFamily(packageName, "Npgsql") ||
+        IsPackageFamily(packageName, "MongoDB");
+
+    public static bool IsConcreteProviderProject(string projectName, string relativePath) =>
+        HasProviderMarker(projectName) || HasProviderMarker(relativePath);
+
+    private static bool IsPackageFamily(string packageName, string family) =>
+        packageName.Equals(family, StringComparison.OrdinalIgnoreCase) ||
+        packageName.StartsWith(family + ".", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasProviderMarker(string value) =>
+        value.Contains(".Groundwork", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/Sqlite/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/SqlServer/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/PostgreSql/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/MongoDb/", StringComparison.OrdinalIgnoreCase);
+}
 
 internal static class EfCoreSurfaceBaseline
 {
@@ -55,21 +99,26 @@ internal static class EfCoreSurfaceBaseline
 
     public static EfCoreSurfaceSnapshot Load(string path)
     {
+        var document = LoadDocument(path);
+        return document.Surface;
+    }
+
+    public static EfCoreSurfaceBaselineDocument LoadDocument(string path)
+    {
         var document = JsonSerializer.Deserialize<EfCoreSurfaceBaselineDocument>(File.ReadAllText(path), JsonOptions)
                        ?? throw new InvalidOperationException($"EF Core surface baseline '{path}' is empty.");
         if (document.SchemaVersion != 1)
             throw new InvalidOperationException($"Unsupported EF Core surface baseline schema {document.SchemaVersion}.");
-        return document.Surface;
+        return document;
     }
 
     public static void Save(string path, EfCoreSurfaceSnapshot surface)
     {
         if (surface.ProjectsMissingAssets.Count != 0)
         {
-            var missingProjects = string.Join(", ", surface.ProjectsMissingAssets);
-            throw new InvalidOperationException(
-                $"Cannot update the EF Core surface baseline from an incomplete repository restore. " +
-                $"Run 'dotnet restore Elsa.Server.slnx' first. Missing assets: {missingProjects}");
+            throw IncompleteRestoreError(
+                "Cannot update the EF Core surface baseline from an incomplete repository restore.",
+                surface.ProjectsMissingAssets);
         }
 
         if (!File.Exists(path))
@@ -88,11 +137,28 @@ internal static class EfCoreSurfaceBaseline
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(
             path,
-            JsonSerializer.Serialize(new EfCoreSurfaceBaselineDocument(1, surface), JsonOptions) + Environment.NewLine);
+            JsonSerializer.Serialize(
+                new EfCoreSurfaceBaselineDocument(
+                    1,
+                    surface,
+                    PersistenceProviderNeutralityBoundary.ProjectNames),
+                JsonOptions) + Environment.NewLine);
     }
 
     public static IReadOnlyList<string> Compare(EfCoreSurfaceSnapshot baseline, EfCoreSurfaceSnapshot actual)
     {
+        var unrestoredProjects = actual.ProjectsMissingAssets
+            .Except(baseline.ProjectsMissingAssets, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (unrestoredProjects.Length != 0)
+        {
+            throw IncompleteRestoreError(
+                "Cannot compare the EF Core surface against an incomplete repository restore; " +
+                "unrestored projects drop out of the resolved package scan and would report phantom surface changes.",
+                unrestoredProjects);
+        }
+
         var differences = new List<string>();
         var actualCategories = actual.Categories();
         foreach (var (category, expectedEntries) in baseline.Categories())
@@ -106,6 +172,9 @@ internal static class EfCoreSurfaceBaseline
         }
         return differences;
     }
+
+    private static InvalidOperationException IncompleteRestoreError(string reason, IEnumerable<string> missingProjects) =>
+        new($"{reason} Run 'dotnet restore Elsa.Server.slnx' first. Missing assets: {string.Join(", ", missingProjects)}");
 }
 
 internal sealed class EfCoreSurfaceScanner
@@ -147,30 +216,31 @@ internal sealed class EfCoreSurfaceScanner
     public EfCoreSurfaceSnapshot Scan()
     {
         var projects = LoadProjects();
+        var inventoryProjects = projects;
         var projectsByPath = projects.ToDictionary(x => x.FullPath, PathComparer);
-        var efProjects = projects.Where(IsEfProject).ToArray();
-        var efProjectPaths = efProjects.Select(x => x.FullPath).ToHashSet(PathComparer);
+        var efProjects = inventoryProjects.Where(IsEfProject).ToArray();
+        var efProjectPaths = projects.Where(IsEfProject).Select(x => x.FullPath).ToHashSet(PathComparer);
         var reachable = projects.ToDictionary(
             project => project.FullPath,
             project => ReachableProjects(project, projectsByPath),
             PathComparer);
 
-        var directPackages = projects
+        var directPackages = inventoryProjects
             .SelectMany(project => project.PackageReferences
                 .Where(IsEfPackage)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var directEfReferences = projects
+        var directEfReferences = inventoryProjects
             .SelectMany(project => project.ProjectReferences
                 .Where(efProjectPaths.Contains)
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
-        var transitiveEfProjects = projects
+        var transitiveEfProjects = inventoryProjects
             .SelectMany(project => reachable[project.FullPath]
                 .Where(efProjectPaths.Contains)
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
-        var transitiveEfPackages = projects
+        var transitiveEfPackages = inventoryProjects
             .SelectMany(project => reachable[project.FullPath]
                 .Append(project.FullPath)
                 .SelectMany(reference => projectsByPath[reference].PackageReferences)
@@ -178,19 +248,19 @@ internal sealed class EfCoreSurfaceScanner
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var resolvedEfPackages = projects
+        var resolvedEfPackages = inventoryProjects
             .SelectMany(project => project.ResolvedPackages
                 .Where(IsEfPackage)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
-        var projectsMissingAssets = projects
+        var projectsMissingAssets = inventoryProjects
             .Where(project => !project.HasAssets)
             .Select(project => project.RelativePath)
             .Sorted();
         var sharedBuildPackages = SharedBuildEfPackageReferences();
 
-        var boundaryProjects = projects.Where(IsEfFreeBoundary).ToArray();
-        var boundaryViolations = boundaryProjects.SelectMany(project =>
+        var boundaryProjects = inventoryProjects.Where(IsEfFreeBoundary).ToArray();
+        var efBoundaryViolations = boundaryProjects.SelectMany(project =>
         {
             var violations = new List<string>();
             violations.AddRange(reachable[project.FullPath]
@@ -205,10 +275,11 @@ internal sealed class EfCoreSurfaceScanner
             violations.AddRange(project.ResolvedPackages
                 .Where(IsEfPackage)
                 .Select(package => $"{project.RelativePath} resolves EF package {package}"));
-            violations.AddRange(sharedBuildPackages
-                .Select(reference => $"{project.RelativePath} inherits shared EF package {reference}"));
             return violations;
-        }).Sorted();
+        });
+        var boundaryViolations = efBoundaryViolations
+            .Concat(FindProtectedProviderNeutralityViolations(projects, projectsByPath, reachable))
+            .Sorted();
 
         return new(
             efProjects.Select(x => x.RelativePath).Sorted(),
@@ -227,6 +298,25 @@ internal sealed class EfCoreSurfaceScanner
             boundaryViolations);
     }
 
+    public IReadOnlyList<string> EfFreeBoundaryProjectNames() =>
+        LoadProjects()
+            .Where(IsEfFreeBoundary)
+            .Select(project => project.Name)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public IReadOnlyList<string> FindProtectedProviderNeutralityViolations()
+    {
+        var projects = LoadProjects();
+        var projectsByPath = projects.ToDictionary(project => project.FullPath, PathComparer);
+        var reachable = projects.ToDictionary(
+            project => project.FullPath,
+            project => ReachableProjects(project, projectsByPath),
+            PathComparer);
+        return FindProtectedProviderNeutralityViolations(projects, projectsByPath, reachable).Sorted();
+    }
+
     private ProjectInfo[] LoadProjects()
     {
         var paths = Directory.EnumerateFiles(_repoRoot, "*.csproj", SearchOption.AllDirectories)
@@ -240,10 +330,7 @@ internal sealed class EfCoreSurfaceScanner
             var document = XDocument.Load(path);
             var name = document.Descendants("AssemblyName").Select(x => x.Value).FirstOrDefault()
                        ?? Path.GetFileNameWithoutExtension(path);
-            var declaredPackages = document.Descendants("PackageReference")
-                .Select(x => x.Attribute("Include")?.Value ?? x.Attribute("Update")?.Value)
-                .OfType<string>()
-                .ToArray();
+            var declaredPackages = EvaluatedBuildPackageReferences(path);
             var declaredReferences = document.Descendants("ProjectReference")
                 .Select(x => x.Attribute("Include")?.Value)
                 .OfType<string>()
@@ -267,6 +354,215 @@ internal sealed class EfCoreSurfaceScanner
             return new ProjectInfo(path, Relative(path), name, packages, references, assets.ResolvedPackages, hasAssets);
         }).ToArray();
     }
+
+    private IEnumerable<string> FindProtectedProviderNeutralityViolations(
+        IReadOnlyList<ProjectInfo> projects,
+        IReadOnlyDictionary<string, ProjectInfo> projectsByPath,
+        IReadOnlyDictionary<string, HashSet<string>> reachable)
+    {
+        foreach (var project in projects.Where(project =>
+                     PersistenceProviderNeutralityBoundary.IsProtectedProject(project.Name)))
+        {
+            var reachableProjectPaths = reachable[project.FullPath];
+            foreach (var providerProjectPath in reachableProjectPaths.Where(path =>
+                         PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(
+                             projectsByPath[path].Name,
+                             projectsByPath[path].RelativePath)))
+            {
+                yield return $"{project.RelativePath} reaches concrete provider project {projectsByPath[providerProjectPath].RelativePath}";
+            }
+
+            foreach (var package in reachableProjectPaths
+                         .Append(project.FullPath)
+                         .SelectMany(path => projectsByPath[path].PackageReferences)
+                         .Where(PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                yield return $"{project.RelativePath} reaches concrete provider package {package}";
+            }
+
+            foreach (var package in project.ResolvedPackages
+                         .Where(PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                yield return $"{project.RelativePath} resolves concrete provider package {package}";
+            }
+        }
+    }
+
+    private IReadOnlyList<string> EvaluatedBuildPackageReferences(string projectPath)
+    {
+        var projectName = Path.GetFileNameWithoutExtension(projectPath);
+        var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["MSBuildProjectName"] = projectName,
+            ["MSBuildProjectFullPath"] = projectPath,
+            ["MSBuildProjectDirectory"] = Path.GetDirectoryName(projectPath)!,
+            ["AssemblyName"] = projectName
+        };
+        var packages = new List<string>();
+        var visited = new HashSet<string>(PathComparer);
+
+        var directoryBuildProps = FindNearestBuildFile(projectPath, "Directory.Build.props");
+        if (directoryBuildProps is not null)
+            EvaluateBuildFile(directoryBuildProps, properties, packages, visited);
+
+        EvaluateBuildFile(projectPath, properties, packages, visited);
+
+        var directoryBuildTargets = FindNearestBuildFile(projectPath, "Directory.Build.targets");
+        if (directoryBuildTargets is not null)
+            EvaluateBuildFile(directoryBuildTargets, properties, packages, visited);
+
+        return packages.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private void EvaluateBuildFile(
+        string path,
+        Dictionary<string, string> properties,
+        ICollection<string> packages,
+        ISet<string> visited)
+    {
+        path = Path.GetFullPath(path);
+        if (!File.Exists(path) || !visited.Add(path))
+            return;
+
+        properties.TryGetValue("MSBuildThisFileDirectory", out var previousThisFileDirectory);
+        properties["MSBuildThisFileDirectory"] = Path.GetDirectoryName(path)! + Path.DirectorySeparatorChar;
+        var document = XDocument.Load(path);
+        foreach (var element in document.Root?.Elements() ?? [])
+        {
+            if (!ConditionMatches(element.Attribute("Condition")?.Value, path, properties))
+                continue;
+
+            switch (element.Name.LocalName)
+            {
+                case "PropertyGroup":
+                    foreach (var property in element.Elements().Where(property =>
+                                 ConditionMatches(property.Attribute("Condition")?.Value, path, properties)))
+                    {
+                        properties[property.Name.LocalName] = ExpandProperties(property.Value, properties);
+                    }
+                    break;
+                case "ItemGroup":
+                    foreach (var reference in element.Elements().Where(reference =>
+                                 reference.Name.LocalName == "PackageReference" &&
+                                 ConditionMatches(reference.Attribute("Condition")?.Value, path, properties)))
+                    {
+                        var package = reference.Attribute("Include")?.Value;
+                        if (!string.IsNullOrWhiteSpace(package))
+                            packages.Add(ExpandProperties(package, properties));
+                    }
+                    break;
+                case "Import":
+                    EvaluateImport(element, path, properties, packages, visited);
+                    break;
+                case "ImportGroup":
+                    foreach (var import in element.Elements().Where(import =>
+                                 import.Name.LocalName == "Import" &&
+                                 ConditionMatches(import.Attribute("Condition")?.Value, path, properties)))
+                    {
+                        EvaluateImport(import, path, properties, packages, visited);
+                    }
+                    break;
+            }
+        }
+
+        if (previousThisFileDirectory is null)
+            properties.Remove("MSBuildThisFileDirectory");
+        else
+            properties["MSBuildThisFileDirectory"] = previousThisFileDirectory;
+    }
+
+    private void EvaluateImport(
+        XElement import,
+        string importingPath,
+        Dictionary<string, string> properties,
+        ICollection<string> packages,
+        ISet<string> visited)
+    {
+        var project = import.Attribute("Project")?.Value;
+        if (string.IsNullOrWhiteSpace(project))
+            return;
+
+        foreach (var importPath in ExpandProperties(project, properties).Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var normalized = importPath
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.IsPathRooted(normalized)
+                ? normalized
+                : Path.Combine(Path.GetDirectoryName(importingPath)!, normalized);
+            EvaluateBuildFile(fullPath, properties, packages, visited);
+        }
+    }
+
+    private string? FindNearestBuildFile(string projectPath, string fileName)
+    {
+        var directory = new DirectoryInfo(Path.GetDirectoryName(projectPath)!);
+        while (directory is not null && IsWithinRepository(directory.FullName))
+        {
+            var candidate = Path.Combine(directory.FullName, fileName);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+        return null;
+    }
+
+    private bool IsWithinRepository(string path)
+    {
+        var relative = Path.GetRelativePath(_repoRoot, path);
+        return relative == "." ||
+               (!relative.Equals("..", StringComparison.Ordinal) &&
+                !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+    }
+
+    private static bool ConditionMatches(
+        string? condition,
+        string sourcePath,
+        IReadOnlyDictionary<string, string> properties)
+    {
+        if (string.IsNullOrWhiteSpace(condition))
+            return true;
+
+        var expanded = ExpandProperties(condition, properties).Trim();
+        if (bool.TryParse(expanded, out var boolean))
+            return boolean;
+
+        var comparison = Regex.Match(
+            expanded,
+            "^\\s*(?<quote>['\"])(?<left>.*?)\\k<quote>\\s*(?<operator>==|!=)\\s*(?<rightQuote>['\"])(?<right>.*?)\\k<rightQuote>\\s*$",
+            RegexOptions.CultureInvariant);
+        if (comparison.Success)
+        {
+            var equal = string.Equals(
+                comparison.Groups["left"].Value,
+                comparison.Groups["right"].Value,
+                StringComparison.OrdinalIgnoreCase);
+            return comparison.Groups["operator"].Value == "==" ? equal : !equal;
+        }
+
+        var exists = Regex.Match(expanded, "^Exists\\((?<quote>['\"])(?<path>.*?)\\k<quote>\\)$", RegexOptions.IgnoreCase);
+        if (exists.Success)
+        {
+            var candidate = exists.Groups["path"].Value
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.IsPathRooted(candidate)
+                ? candidate
+                : Path.Combine(Path.GetDirectoryName(sourcePath)!, candidate);
+            return File.Exists(fullPath) || Directory.Exists(fullPath);
+        }
+
+        // An unevaluated condition must not create a blind spot in a provider-neutrality gate.
+        return true;
+    }
+
+    private static string ExpandProperties(string value, IReadOnlyDictionary<string, string> properties) =>
+        Regex.Replace(
+            value,
+            @"\$\((?<name>[^)]+)\)",
+            match => properties.GetValueOrDefault(match.Groups["name"].Value) ?? string.Empty);
 
     private static AssetsInfo ReadAssets(string assetsPath)
     {
@@ -478,6 +774,7 @@ internal sealed class EfCoreSurfaceScanner
         project.Name.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsEfFreeBoundary(ProjectInfo project) =>
+        PersistenceProviderNeutralityBoundary.ProjectNames.Contains(project.Name, StringComparer.Ordinal) ||
         project.Name.EndsWith(".Core", StringComparison.Ordinal) ||
         project.Name.EndsWith(".Abstractions", StringComparison.Ordinal) ||
         project.Name.EndsWith(".Contracts", StringComparison.Ordinal) ||
@@ -486,7 +783,20 @@ internal sealed class EfCoreSurfaceScanner
         project.RelativePath.Contains("/Abstractions/", StringComparison.OrdinalIgnoreCase) ||
         project.RelativePath.Contains("/Contracts/", StringComparison.OrdinalIgnoreCase) ||
         project.RelativePath.Contains("/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
-        project.RelativePath.Contains("/Persistence/Groundwork/", StringComparison.OrdinalIgnoreCase);
+        project.RelativePath.Contains("/Persistence/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
+        IsDesignLaneSourceProject(project);
+
+    /// <summary>
+    /// Spec 093 T075: the workflow and activity design lanes ship only Groundwork persistence, so every
+    /// design source project (including the provider-neutral <c>.Api</c>, <c>.Validations</c>,
+    /// <c>.JavaScript</c> and reconciliation projects, not just <c>.Core</c>/<c>.Groundwork</c>) must stay
+    /// EF-free, direct and transitive. Scoped to <c>src/</c> so design test projects that keep the
+    /// preserved base-EF lane are not swept in.
+    /// </summary>
+    private static bool IsDesignLaneSourceProject(ProjectInfo project) =>
+        project.RelativePath.StartsWith("src/", StringComparison.OrdinalIgnoreCase) &&
+        (project.RelativePath.Contains("/Workflows/Design/", StringComparison.OrdinalIgnoreCase) ||
+         project.RelativePath.Contains("/Activities/Design/", StringComparison.OrdinalIgnoreCase));
 
     private static string ExecutableCSharp(string source)
     {

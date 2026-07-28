@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:process-restart-same-database",
+  "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "39e063fdf87fc1ceae63d804adf1fbfa0a4b32fb70e8569e3680d8d5021d3a70",
+  "executionPath": "provider-driver/sqlite/runtime-checkpoint-commit/8630b67155036d92",
+  "clients": 2,
+  "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
+  "outcome": "pass",
+  "restartScenario": "process-restart-same-database",
+  "evidence": "evidence/sqlite/runtime-checkpoint-commit/8630b67155036d92.json"
+}

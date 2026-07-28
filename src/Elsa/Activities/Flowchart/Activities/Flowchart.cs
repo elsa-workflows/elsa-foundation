@@ -4,7 +4,10 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Flowchart.Activities;
 
@@ -14,7 +17,7 @@ namespace Elsa.Activities.Flowchart.Activities;
 /// </summary>
 /// <remarks>
 /// <b>Fault-aware joins (#308).</b> Branch faults are propagated to the Flowchart via
-/// <see cref="IActivityChildFaultHandler"/> (the engine rides a child-fault parent-evaluation work item on the
+/// <see cref="IRuntimeActivityChildFaultHandler"/> (the engine rides a child-fault parent-evaluation work item on the
 /// faulted child's incident). A faulted inbound branch can never produce the completion a join is waiting for,
 /// and a Flowchart join requires <em>every</em> inbound branch, so the join can never fire. Rather than leave
 /// the Flowchart Running forever, <see cref="OnChildFaultedAsync"/> faults the Flowchart deterministically
@@ -23,32 +26,31 @@ namespace Elsa.Activities.Flowchart.Activities;
 /// </remarks>
 [ActivityStructure("elsa.flowchart.structure", "1.0.0", Mode = "flowchart", SupportsScopedVariables = true)]
 [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
-public sealed class Flowchart : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
+[ActivityOutcome(ActivityOutcomes.Done)]
+[ActivityOutcome(ActivityOutcomes.Break)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class Flowchart(FlowchartExecutionEngine executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
     public const string StructureKind = "elsa.flowchart.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
-    {
-        var runtimeContext = RequireRuntimeContext(context);
-        await runtimeContext.GetRequiredService<FlowchartExecutionEngine>().StartAsync(runtimeContext);
-    }
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) => executionEngine.StartAsync(context);
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return runtimeContext.GetRequiredService<FlowchartExecutionEngine>().OnChildCompletedAsync(runtimeContext, context);
+        return executionEngine.OnChildCompletedAsync(runtimeContext, context);
     }
 
-    public ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        return runtimeContext.GetRequiredService<FlowchartExecutionEngine>().OnChildFaultedAsync(runtimeContext, context);
+        return executionEngine.OnChildFaultedAsync(runtimeContext, context);
     }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)

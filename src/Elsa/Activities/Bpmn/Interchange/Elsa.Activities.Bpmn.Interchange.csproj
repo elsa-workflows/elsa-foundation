@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+  </ItemGroup>
+
+</Project>

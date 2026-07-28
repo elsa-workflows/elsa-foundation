@@ -1,0 +1,13 @@
+provider=sqlite
+document-kind=executionCommandTransport
+route=count-pending-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=index-search
+index=execution_command_transport_command_by_execution_sequence_c17f39774026
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=none
+materialized-candidate-count=0
+command-count=1
+command-0=Count|count|sqlite-query-plan|index-search|execution_command_transport_command_by_execution_sequence_c17f39774026|document_kind,storage_scope,workflowExecutionIdKey|1||fd7dd4206061ac74b728b44ff0231ad8593cb12af986e3303b23080e453d9b16

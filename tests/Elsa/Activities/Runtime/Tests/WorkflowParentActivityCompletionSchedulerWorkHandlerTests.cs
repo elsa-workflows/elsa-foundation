@@ -1,11 +1,12 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -13,365 +14,195 @@ namespace Elsa.Activities.Runtime.Tests;
 
 public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
 {
-    private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
-    private readonly InMemoryWorkflowExecutableStore _executableStore = new();
-    private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
-    private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
-    private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
-    private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
-    private readonly InMemoryIncidentStateStore _incidentStateStore = new();
-    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
-
-    public WorkflowParentActivityCompletionSchedulerWorkHandlerTests()
+    [Fact]
+    public async Task ChildCompletionCallback_ReturningUndeclaredOutcome_FaultsParentAndEndsAttempt()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
-            workflowExecutionStateStore: null,
-            activityExecutionStateStore: _activityStateStore,
-            bookmarkStateStore: null,
-            durableValueStateStore: _durableValueStateStore,
-            incidentStateStore: _incidentStateStore,
-            operationalStateStore: null,
-            schedulerStateStore: null,
-            activityExecutionInspectionWriter: _inspectionStore);
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .Build("actexec-parent", "actexec-child");
+
+        var run = await harness.RunAsync(NewExecutable());
+
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.NotEmpty(parent.IncidentIds);
+        Assert.Contains("VF-ACT-006", parent.Fault!.Message, StringComparison.Ordinal);
+        Assert.Collection(
+            parent.Attempts!.OrderBy(attempt => attempt.Ordinal),
+            initialAttempt =>
+            {
+                Assert.Equal(ActivityAttemptReason.Initial, initialAttempt.Reason);
+                Assert.NotNull(initialAttempt.EndedAt);
+                Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, initialAttempt.TransitionKind);
+            },
+            callbackAttempt =>
+            {
+                Assert.Equal(ActivityAttemptReason.Resume, callbackAttempt.Reason);
+                Assert.NotNull(callbackAttempt.EndedAt);
+                Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, callbackAttempt.TransitionKind);
+                Assert.Equal(Assert.Single(parent.IncidentIds), callbackAttempt.IncidentId);
+            });
     }
 
     [Fact]
-    public async Task HandleAsync_CheckpointsCompletedParentInspectionAndPostCommitCompletionWork()
+    public async Task ChildCompletionCallback_CompletingParent_DiscardsPrivateState()
     {
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running));
-        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
-        await using var provider = NewProvider(new RecordingActivityFactory(new CompletingCompositeActivity(["Approved"])));
-        var handler = NewHandler(provider);
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .Build("actexec-parent", "actexec-child");
 
-        await handler.HandleAsync(NewParentCompletionWorkItem());
+        var run = await harness.RunAsync(NewExecutable(typeof(StateUpdatingStructuralActivity)));
 
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
-        Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutions);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
-        Assert.Single(write.Commit.PostCommitIntents);
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-parent");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
-        Assert.Equal(["Approved"], projection.OutcomeNames);
-
-        var completionWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
-        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
-        Assert.Equal("parent-work:complete:actexec-parent", completionWork.WorkItemId);
-        Assert.Equal("command-parent:complete:actexec-parent", completionWork.CommandId);
-        Assert.NotNull(completionWork.Payload);
-        var completionPayload = completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
-        Assert.Equal("actexec-parent", completionPayload.ActivityExecutionId);
-        Assert.Equal(["Approved"], completionPayload.OutcomeNames);
-        Assert.Equal(RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason, completionPayload.Reason);
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Completed, parent.Status);
+        Assert.Null(parent.PrivateState);
     }
 
     [Fact]
-    public async Task HandleAsync_CheckpointsParentInspectionBeforePostCommitChildScheduling()
+    public async Task ChildCompletionWithoutCallback_DisposalFailureFaultsBeforeDeferredCheckpoint()
     {
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running));
-        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
-        await using var provider = NewProvider(new RecordingActivityFactory(new SchedulingCompositeActivity()));
-        var handler = NewHandler(provider);
+        var probe = new CallbackDisposalProbe();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .ConfigureServices(services => services.AddSingleton(probe))
+            .Build("actexec-parent", "actexec-child");
 
-        await handler.HandleAsync(NewParentCompletionWorkItem());
+        var run = await harness.RunAsync(NewExecutable(typeof(DisposalFailingNonCallbackStructuralActivity)));
 
-        var write = Assert.Single(_checkpointWriter.ListCommits());
-        Assert.Equal(RuntimeCheckpointNames.ActivityInspectionCaptured, write.Commit.Checkpoint.Name);
-        Assert.Empty(write.Commit.StateChanges.ActivityExecutions);
-        Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
-        Assert.Single(write.Commit.PostCommitIntents);
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-parent");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Running, projection.Status);
-
-        var scheduleWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.ScheduleActivity);
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduleWork.CommandKind);
+        var parent = run.State("node-parent");
+        var child = run.State("node-child");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("ActivityDisposalFailed", parent.SubStatus);
+        Assert.Contains("callback disposal failed", parent.Fault!.Message, StringComparison.Ordinal);
+        Assert.False(child.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+        Assert.Equal(2, probe.Activations);
+        Assert.Equal(2, probe.Disposals);
     }
 
     [Fact]
-    public async Task HandleAsync_RecordsFaultedParentInspectionWhenChildCompletionHandlerThrows()
+    public async Task ChildCompletionCallbackAndDisposalFailures_AreAggregatedIntoOneFault()
     {
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running));
-        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
-        await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingCompositeActivity(new InvalidOperationException("parent failed"))));
-        var handler = NewHandler(provider);
+        var probe = new CallbackDisposalProbe();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .ConfigureServices(services => services.AddSingleton(probe))
+            .Build("actexec-parent", "actexec-child");
 
-        await handler.HandleAsync(NewParentCompletionWorkItem());
+        var run = await harness.RunAsync(NewExecutable(typeof(CallbackAndDisposalFailingStructuralActivity)));
 
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-parent");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ParentCompletionFaulted", state.SubStatus);
-        Assert.Equal("parent failed", state.Metadata["runtime.faultMessage"]);
-
-        var incident = Assert.Single(await _incidentStateStore.ListAsync("wfexec-1"));
-        Assert.Equal("actexec-parent", incident.ActivityExecutionId);
-        Assert.Equal("ParentCompletionFaulted", incident.FailureType);
-
-        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-parent");
-        Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
-        Assert.Single(projection.Incidents);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("ActivityDisposalFailed", parent.SubStatus);
+        Assert.Contains("Activity execution and activation disposal both failed", parent.Fault!.Message, StringComparison.Ordinal);
+        Assert.Single(parent.IncidentIds);
+        Assert.Equal(2, probe.Activations);
+        Assert.Equal(2, probe.Disposals);
     }
 
-    [Fact]
-    public async Task HandleAsync_PropagatesChildFaultToGrandparentWhenParentCompletionHandlerThrows()
+    private static WorkflowExecutable NewExecutable() =>
+        NewExecutable(typeof(UndeclaredOutcomeStructuralActivity));
+
+    private static WorkflowExecutable NewExecutable(Type activityType)
     {
-        await _executableStore.SaveAsync(NewExecutable());
-        await _activityStateStore.SaveAsync(NewState("actexec-grandparent", "node-grandparent", ActivityExecutionStatus.Running));
-        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running, parentActivityExecutionId: "actexec-grandparent"));
-        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
-        await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingCompositeActivity(new InvalidOperationException("parent failed"))));
-        var handler = NewHandler(provider);
-
-        await handler.HandleAsync(NewParentCompletionWorkItem(parentActivityExecutionId: "actexec-grandparent"));
-
-        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-parent");
-        Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Equal("ParentCompletionFaulted", state.SubStatus);
-
-        // The parent's own completion handler threw, so the fault must ride a child-fault parent-evaluation
-        // work item to the grandparent — otherwise the grandparent join waits forever (#379). It rides as a
-        // post-commit intent on the incident checkpoint, atomically with the recorded incident.
-        var propagated = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
-        Assert.True(propagated.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildFaulted, out var childFaulted));
-        Assert.Equal(bool.TrueString, childFaulted);
-        Assert.Equal("actexec-grandparent", propagated.CommandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId]);
-        Assert.Equal("actexec-parent", propagated.CommandMetadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId]);
-
-        var propagatedPayload = propagated.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
-        Assert.Equal("actexec-grandparent", propagatedPayload.ActivityExecutionId);
-        Assert.Equal("actexec-parent", propagatedPayload.CompletedChildActivityExecutionId);
-        Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, propagatedPayload.CompletionKind);
-    }
-
-    private WorkflowParentActivityCompletionSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
-        new(
-            new RuntimeActivityInputMaterializer(),
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedTimeProvider(_now));
-
-    private RuntimeSchedulerWorkItem AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind commandKind)
-    {
-        var intent = Assert.Single(_checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents));
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
-        Assert.NotNull(intent.Payload);
-        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        Assert.Equal(commandKind, workItem.CommandKind);
-        return workItem;
-    }
-
-    private ServiceProvider NewProvider(IActivityFactory factory)
-    {
-        var services = new ServiceCollection();
-        services.AddScoped(_ => factory);
-        services.AddSingleton(_executableStore);
-        services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
-        services.AddSingleton(_activityStateStore);
-        services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
-        services.AddSingleton(_schedulerWorkQueue);
-        services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
-        services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
-        services.AddSingleton(_durableValueStateStore);
-        services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
-        services.AddSingleton(_incidentStateStore);
-        services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
-        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
-        services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
-        services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
-        services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
-        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
-        services.AddSingleton<RuntimeCheckpointCommitter>();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
-        services.AddSingleton<ActivityFaultIncidentRecorder>();
-        return services.BuildServiceProvider();
-    }
-
-    private RuntimeSchedulerWorkItem NewParentCompletionWorkItem(string? parentActivityExecutionId = null)
-    {
-        var payload = new RuntimeCompleteActivityCommandPayload(
-            NewIdentity(),
-            "node-parent",
-            "actexec-parent",
-            parentActivityExecutionId: parentActivityExecutionId,
-            branchId: null,
-            outcomeNames: [ActivityOutcomes.Done],
-            reason: RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
-            completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
-            completedChildActivityExecutionId: "actexec-child");
-
-        return new RuntimeSchedulerWorkItem(
-            workItemId: "parent-work",
-            workflowExecutionId: "wfexec-1",
-            commandId: "command-parent",
-            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            envelopeId: "envelope-1",
-            idempotencyKey: "wfexec-1:complete-parent:actexec-parent",
-            enqueuedAt: _now,
-            recordedAt: _now,
-            sequence: 30,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
-            envelopeMetadata: new Dictionary<string, string>());
-    }
-
-    private static ActivityExecutionState NewState(
-        string activityExecutionId,
-        string executableNodeId,
-        ActivityExecutionStatus status,
-        string? parentActivityExecutionId = null) =>
-        new(
-            Execution: new ActivityExecution(
-                ActivityExecutionId: activityExecutionId,
-                WorkflowExecutionId: "wfexec-1",
-                ExecutableNodeId: executableNodeId,
-                AuthoredActivityId: $"authored-{executableNodeId}",
-                ActivityType: "test/activity",
-                ActivityTypeVersion: "1.0.0"),
-            Status: status,
-            SubStatus: null,
-            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-2),
-            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-1),
-            CompletedAt: status == ActivityExecutionStatus.Completed ? DateTimeOffset.UtcNow : null,
-            SchedulingActivityExecutionId: null,
-            ParentActivityExecutionId: parentActivityExecutionId,
-            BranchId: null,
-            IterationId: null,
-            CallStackDepth: null,
-            BookmarkIds: [],
-            IncidentIds: [],
-            FaultCount: 0,
-            AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string>());
-
-    private static WorkflowExecutable NewExecutable()
-    {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var child = NewNode("node-child", document.RootElement);
-        var parent = WithChildren(NewNode("node-parent", document.RootElement), [child]);
-
-        return new(
-            identity: NewIdentity(),
-            rootActivity: parent,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
-    }
-
-    private static ExecutableNode WithChildren(ExecutableNode root, IReadOnlyCollection<ExecutableNode> children) =>
-        new(
-            executableNodeId: root.ExecutableNodeId,
-            authoredActivityId: root.AuthoredActivityId,
-            activityType: root.ActivityType,
-            activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
-            inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
-            metadata: root.Metadata,
-            childSlots:
-            [
-                new ExecutableChildSlot("children", children)
-            ]);
-
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: "test/activity",
+        var child = WorkflowExecutionHarness.NewProbeNode("node-child");
+        var root = new ExecutableNode(
+            executableNodeId: "node-parent",
+            authoredActivityId: "authored-parent",
+            activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: descriptorPayload.Clone(),
+            descriptorType: "test/structural",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "structural" }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(UndeclaredOutcomeStructuralActivity.ChildSlotName, [child])]);
 
-    private static WorkflowExecutableIdentity NewIdentity() =>
-        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-
-    private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
-    {
-        public ValueTask<IActivity> Create(
-            string descriptorType,
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(activity);
+        return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    private sealed class CompletingCompositeActivity(IReadOnlyCollection<string> outcomeNames) : IActivity, IActivityChildCompletionHandler
+    public sealed class UndeclaredOutcomeStructuralActivity : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler
     {
-        public string Id { get; set; } = string.Empty;
-        public string NodeId { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public string Type { get; set; } = "test/activity";
-        public string Version { get; set; } = "1.0.0";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
+        public const string ChildSlotName = "Test.Child";
 
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-
-        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
-            var runtimeContext = Assert.IsAssignableFrom<IRuntimeActivityExecutionContext>(context.ParentContext);
-            runtimeContext.CompleteCompositeActivity(outcomeNames);
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete("Undeclared"));
+    }
+
+    public sealed class StateUpdatingStructuralActivity : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer.WithState(StateValue(1)));
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete().WithState(StateValue(2)));
+
+        private static ValueEnvelope StateValue(int step) =>
+            ValueEnvelope.Inline(
+                new ValueTypeDescriptor("test/structural-state"),
+                JsonSerializer.SerializeToElement(new { step }),
+                ValueProtectionPolicy.InstanceInline);
+    }
+
+    public sealed class DisposalFailingNonCallbackStructuralActivity(CallbackDisposalProbe probe) :
+        CallbackDisposalFailingStructuralActivity(probe);
+
+    public sealed class CallbackAndDisposalFailingStructuralActivity(CallbackDisposalProbe probe) :
+        CallbackDisposalFailingStructuralActivity(probe),
+        IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            throw new InvalidOperationException("callback execution failed");
+    }
+
+    public abstract class CallbackDisposalFailingStructuralActivity : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IAsyncDisposable
+    {
+        private readonly CallbackDisposalProbe _probe;
+        private readonly int _activationOrdinal;
+
+        protected CallbackDisposalFailingStructuralActivity(CallbackDisposalProbe probe)
+        {
+            _probe = probe;
+            _activationOrdinal = probe.RecordActivation();
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _probe.RecordDisposal();
+            if (_activationOrdinal == 2)
+                throw new InvalidOperationException("callback disposal failed");
             return ValueTask.CompletedTask;
         }
     }
 
-    private sealed class SchedulingCompositeActivity : IActivity, IActivityChildCompletionHandler
+    public sealed class CallbackDisposalProbe
     {
-        public string Id { get; set; } = string.Empty;
-        public string NodeId { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public string Type { get; set; } = "test/activity";
-        public string Version { get; set; } = "1.0.0";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
+        public int Activations { get; private set; }
+        public int Disposals { get; private set; }
 
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-
-        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
-        {
-            var runtimeContext = Assert.IsAssignableFrom<IRuntimeActivityExecutionContext>(context.ParentContext);
-            runtimeContext.ScheduleChildActivity("node-child");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class ThrowingCompositeActivity(Exception exception) : IActivity, IActivityChildCompletionHandler
-    {
-        public string Id { get; set; } = string.Empty;
-        public string NodeId { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public string Type { get; set; } = "test/activity";
-        public string Version { get; set; } = "1.0.0";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
-
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
-        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context) => throw exception;
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
+        public int RecordActivation() => ++Activations;
+        public void RecordDisposal() => ++Disposals;
     }
 }

@@ -1,20 +1,39 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider
+public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
     // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
     // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
     public const string ProviderName = nameof(InProcessWorkflowExecutionActorProvider);
     public const int DefaultMaxProcessedIdempotencyKeysPerAgent = 4096;
 
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _lifecycleLocks = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, InProcessWorkflowExecutionActor> _agents = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Dispatch-result metadata key set to <c>"true"</c> when a command's drain committed a terminal workflow status.
+    /// Kept low-blast-radius (a metadata entry, like the existing fault metadata) rather than a new result field, and
+    /// read by the self-passivating handle to trigger terminal eviction (#542).
+    /// </summary>
+    public const string WorkflowTerminatedMetadataKey = "runtime.dispatch.workflowTerminated";
+
+    /// <summary>Runtime self-instrumentation meter name (the runtime's first meter; see spec 128).</summary>
+    public const string MeterName = "Elsa.Workflows.Runtime";
+
+    /// <summary>Observable gauge reporting the number of live in-process mailboxes currently registered.</summary>
+    public const string LiveMailboxGaugeName = "elsa.runtime.actor.live_mailboxes";
+
+    private const string TerminalEvictionReason = "runtime.actor.terminal-eviction";
+
+    private readonly ConcurrentDictionary<ActorKey, SemaphoreSlim> _lifecycleLocks = new();
+    private readonly ConcurrentDictionary<ActorKey, SelfPassivatingActorHandle> _agents = new();
     private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
     private readonly int _maxProcessedIdempotencyKeysPerAgent;
+    private readonly RuntimeActorEvictionOptions _evictionOptions;
+    private readonly Meter _meter;
+    private readonly bool _ownsMeter;
     private long _activationCounter;
 
     public InProcessWorkflowExecutionActorProvider()
@@ -28,14 +47,40 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     }
 
     public InProcessWorkflowExecutionActorProvider(IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeysPerAgent)
+        : this(commandProcessor, maxProcessedIdempotencyKeysPerAgent, new RuntimeActorEvictionOptions())
+    {
+    }
+
+    public InProcessWorkflowExecutionActorProvider(IWorkflowExecutionCommandExecutor commandProcessor, RuntimeActorEvictionOptions evictionOptions)
+        : this(commandProcessor, DefaultMaxProcessedIdempotencyKeysPerAgent, evictionOptions)
+    {
+    }
+
+    public InProcessWorkflowExecutionActorProvider(
+        IWorkflowExecutionCommandExecutor commandProcessor,
+        int maxProcessedIdempotencyKeysPerAgent,
+        RuntimeActorEvictionOptions evictionOptions,
+        Meter? meter = null)
     {
         ArgumentNullException.ThrowIfNull(commandProcessor);
+        ArgumentNullException.ThrowIfNull(evictionOptions);
 
         if (maxProcessedIdempotencyKeysPerAgent <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxProcessedIdempotencyKeysPerAgent), "The idempotency key cache size must be greater than zero.");
 
         _commandProcessor = commandProcessor;
         _maxProcessedIdempotencyKeysPerAgent = maxProcessedIdempotencyKeysPerAgent;
+        _evictionOptions = evictionOptions;
+
+        // Accept a caller-supplied meter (tests pass a uniquely-named one for isolation); otherwise own one named after
+        // the runtime. The live-mailbox gauge observes the registry size on demand — zero cost until a listener attaches.
+        _ownsMeter = meter is null;
+        _meter = meter ?? new Meter(MeterName);
+        _meter.CreateObservableGauge(
+            LiveMailboxGaugeName,
+            () => _agents.Count,
+            unit: "{mailbox}",
+            description: "Live in-process workflow execution actor mailboxes currently registered.");
     }
 
     public WorkflowExecutionActorCapabilities Capabilities =>
@@ -50,13 +95,23 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         if (unsupportedCapabilities != WorkflowExecutionActorCapabilities.None)
             throw new NotSupportedException($"The in-process workflow execution agent provider does not support required capabilities: {unsupportedCapabilities}.");
 
-        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
+        var actorKey = ActorKey.From(request);
+        var lifecycleLock = await AcquireLifecycleLockAsync(actorKey, cancellationToken);
         try
         {
-            var agent = _agents.GetOrAdd(request.WorkflowExecutionId, workflowExecutionId =>
+            // The handle is cached per key (one per live mailbox), so repeated activations for the same execution return
+            // the same instance — the single-mailbox-per-execution contract is unchanged. The handle delegates dispatch
+            // to the inner actor and, gated by RuntimeActorEvictionOptions, self-passivates after a terminal drain.
+            var agent = _agents.GetOrAdd(actorKey, key =>
             {
                 var activationId = Interlocked.Increment(ref _activationCounter);
-                return new InProcessWorkflowExecutionActor(workflowExecutionId, activationId, _commandProcessor, _maxProcessedIdempotencyKeysPerAgent);
+                var actor = new InProcessWorkflowExecutionActor(
+                    key.WorkflowExecutionId,
+                    request.Partition,
+                    activationId,
+                    _commandProcessor,
+                    _maxProcessedIdempotencyKeysPerAgent);
+                return new SelfPassivatingActorHandle(actor, this, _evictionOptions);
             });
 
             return agent;
@@ -71,13 +126,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
+        var actorKey = ActorKey.From(request);
+        var lifecycleLock = await AcquireLifecycleLockAsync(actorKey, cancellationToken);
         try
         {
-            if (_agents.TryGetValue(request.WorkflowExecutionId, out var agent))
+            if (_agents.TryGetValue(actorKey, out var agent))
             {
-                await agent.PassivateAsync(request, cancellationToken);
-                _agents.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, agent));
+                await agent.PassivateInnerAsync(request, cancellationToken);
+                _agents.TryRemove(KeyValuePair.Create(actorKey, agent));
             }
 
             // Drop the per-execution lifecycle lock so the dictionary does not grow with every distinct workflow
@@ -91,7 +147,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // ObjectDisposedException for any activation still parked on this instance (the classic
             // dispose-out-from-under-a-waiter race), so we rely on the release-and-retry chain in
             // AcquireLifecycleLockAsync rather than explicit disposal.
-            _lifecycleLocks.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, lifecycleLock));
+            _lifecycleLocks.TryRemove(KeyValuePair.Create(actorKey, lifecycleLock));
         }
         finally
         {
@@ -99,6 +155,12 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // disposing) lets it wake, observe that the instance is no longer canonical, and retry onto the fresh lock.
             lifecycleLock.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        if (_ownsMeter)
+            _meter.Dispose();
     }
 
     // Acquires the lifecycle lock for an execution id and returns it already held (WaitAsync completed).
@@ -110,20 +172,77 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     // acquiring: only the instance that is still the registered (canonical) lock for the id is accepted; a stale
     // instance is released and the acquisition retried so every caller rendezvous on the single current lock. The
     // holder of the canonical lock is the only party that can remove it, so it cannot be pulled out mid-critical-section.
-    private async ValueTask<SemaphoreSlim> AcquireLifecycleLockAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    private async ValueTask<SemaphoreSlim> AcquireLifecycleLockAsync(ActorKey actorKey, CancellationToken cancellationToken)
     {
         while (true)
         {
-            var lifecycleLock = _lifecycleLocks.GetOrAdd(workflowExecutionId, _ => new SemaphoreSlim(1, 1));
+            var lifecycleLock = _lifecycleLocks.GetOrAdd(actorKey, _ => new SemaphoreSlim(1, 1));
             await lifecycleLock.WaitAsync(cancellationToken);
 
-            if (_lifecycleLocks.TryGetValue(workflowExecutionId, out var current) && ReferenceEquals(current, lifecycleLock))
+            if (_lifecycleLocks.TryGetValue(actorKey, out var current) && ReferenceEquals(current, lifecycleLock))
                 return lifecycleLock;
 
             // The instance we acquired was removed by a concurrent passivation (and possibly replaced). Release it —
             // which also wakes any other waiters parked on the same stale instance so they retry too — and loop.
             lifecycleLock.Release();
         }
+    }
+
+    // Wraps the inner mailbox and centralizes terminal-eviction policy so all six GetAgentAsync call sites stay
+    // unchanged. Dispatch delegates to the inner actor; when a completed drain reports a terminal workflow status
+    // (surfaced as WorkflowTerminatedMetadataKey on the dispatch result) and PassivateOnTerminal is set, the handle
+    // passivates the execution AFTER the inner EnqueueAsync has released the mailbox — never inside the critical
+    // section — riding AcquireLifecycleLockAsync's canonical recheck. That keeps single-writer-per-execution intact:
+    // a concurrent redelivery either serializes behind the still-open mailbox and then blocks the passivation until it
+    // releases, or arrives after eviction and re-activates a fresh mailbox (bounded activate/passivate churn, which the
+    // resumption sweep's terminal purge stops from recurring).
+    private sealed class SelfPassivatingActorHandle(
+        InProcessWorkflowExecutionActor inner,
+        InProcessWorkflowExecutionActorProvider provider,
+        RuntimeActorEvictionOptions evictionOptions) : IWorkflowExecutionActor
+    {
+        public WorkflowExecutionActorDescriptor Descriptor => inner.Descriptor;
+
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+            DispatchThenMaybeEvictAsync(envelope, inner.EnqueueAsync(envelope, cancellationToken));
+
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            WorkflowExecutionCommandDispatchOptions options,
+            CancellationToken cancellationToken = default) =>
+            DispatchThenMaybeEvictAsync(envelope, inner.EnqueueAsync(envelope, options, cancellationToken));
+
+        internal ValueTask PassivateInnerAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken) =>
+            inner.PassivateAsync(request, cancellationToken);
+
+        private async ValueTask<WorkflowExecutionCommandDispatchResult> DispatchThenMaybeEvictAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            ValueTask<WorkflowExecutionCommandDispatchResult> dispatch)
+        {
+            var result = await dispatch;
+
+            if (evictionOptions.PassivateOnTerminal && IsTerminal(result))
+            {
+                // Passivate outside the mailbox critical section (the inner EnqueueAsync's finally already released it).
+                // Use CancellationToken.None: terminal eviction is pure registry cleanup — if the caller's token were
+                // cancelled here the mailbox would linger until the resumption sweep reaper collects it, so we complete
+                // it unconditionally instead.
+                await provider.PassivateAsync(
+                    new WorkflowExecutionActorPassivationRequest(
+                        workflowExecutionId: envelope.WorkflowExecutionId,
+                        boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
+                        requestedAt: DateTimeOffset.UtcNow,
+                        reason: TerminalEvictionReason,
+                        partition: envelope.Partition),
+                    CancellationToken.None);
+            }
+
+            return result;
+        }
+
+        private static bool IsTerminal(WorkflowExecutionCommandDispatchResult result) =>
+            result.Metadata.TryGetValue(WorkflowTerminatedMetadataKey, out var value) &&
+            string.Equals(value, "true", StringComparison.Ordinal);
     }
 
     private sealed class InProcessWorkflowExecutionActor : IWorkflowExecutionActor
@@ -133,15 +252,22 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         private readonly Queue<string> _processedIdempotencyKeyOrder = new();
         private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
         private readonly string _workflowExecutionId;
+        private readonly WorkflowExecutionPartition _partition;
         private readonly string _agentId;
         private readonly DateTimeOffset _activatedAt;
         private readonly object _statusLock = new();
         private readonly int _maxProcessedIdempotencyKeys;
         private WorkflowExecutionActorStatus _status = WorkflowExecutionActorStatus.Active;
 
-        public InProcessWorkflowExecutionActor(string workflowExecutionId, long activationId, IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeys)
+        public InProcessWorkflowExecutionActor(
+            string workflowExecutionId,
+            WorkflowExecutionPartition partition,
+            long activationId,
+            IWorkflowExecutionCommandExecutor commandProcessor,
+            int maxProcessedIdempotencyKeys)
         {
             _workflowExecutionId = workflowExecutionId;
+            _partition = partition;
             _agentId = $"inprocess:{workflowExecutionId}:{activationId}";
             _activatedAt = DateTimeOffset.UtcNow;
             _commandProcessor = commandProcessor;
@@ -184,6 +310,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope workflow execution ID does not match this agent.");
 
+                if (envelope.Partition != _partition)
+                    return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope persistence scope does not match this agent.");
+
                 if (Status != WorkflowExecutionActorStatus.Active)
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Deferred, "In-process workflow execution agent is passivated.");
 
@@ -200,6 +329,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                         faultMetadata["runtime.dispatch.drainStopReason"] = stopReason.ToString();
                     if (processResult.OutboxDeliveryFailed)
                         faultMetadata["runtime.dispatch.outboxDeliveryFailed"] = "true";
+                    if (processResult.WorkflowTerminated)
+                        faultMetadata[WorkflowTerminatedMetadataKey] = "true";
 
                     return DispatchResult(
                         envelope,
@@ -208,7 +339,13 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                         faultMetadata);
                 }
 
-                return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Accepted);
+                // Surface the terminal fact on the accepted result so the self-passivating handle can evict the mailbox
+                // after the critical section releases. Accepted results carry no reason but may carry metadata.
+                var terminalMetadata = processResult.WorkflowTerminated
+                    ? new Dictionary<string, string>(StringComparer.Ordinal) { [WorkflowTerminatedMetadataKey] = "true" }
+                    : null;
+
+                return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Accepted, metadata: terminalMetadata);
             }
             finally
             {
@@ -270,5 +407,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 recordedAt: DateTimeOffset.UtcNow,
                 reason: reason,
                 metadata: metadata);
+    }
+
+    private readonly record struct ActorKey(string Partition, string WorkflowExecutionId)
+    {
+        public static ActorKey From(WorkflowExecutionActorActivationRequest request) =>
+            new(request.Partition.Value, request.WorkflowExecutionId);
+
+        public static ActorKey From(WorkflowExecutionActorPassivationRequest request) =>
+            new(request.Partition.Value, request.WorkflowExecutionId);
     }
 }

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:lease-visible-by-execution-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
+  "executionPath": "provider-driver/mongodb/distributed-command-transport/c5b6defeb8de81a5",
+  "clients": 1,
+  "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
+  "outcome": "pass",
+  "queryShape": "lease-visible-by-execution-bounded",
+  "nativeQueryIdentity": "lease-visible-commands-by-execution",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
+  "evidence": "evidence/mongodb/distributed-command-transport/c5b6defeb8de81a5.json"
+}

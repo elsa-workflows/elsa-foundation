@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-by-tenant-and-provider-bounded",
+  "sourceScenarioId": "iam-bounded-query-equivalence",
+  "coverageEntryId": "iam-claim-mapping",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "ec0b55aac9c8b5dbf9c25dbe86e8d1512ee2a0615935c4dc0bc5aaa999fffa07",
+  "executionPath": "provider-driver/sqlite/iam-claim-mapping/a2d06a866ee4e37f",
+  "clients": 1,
+  "resultHash": "66540d93f9b0d8c0d7f5cf19777989c0d48f083dbb6555cedd0e96054ce4ccc2",
+  "outcome": "pass",
+  "queryShape": "list-by-tenant-and-provider-bounded",
+  "nativeQueryIdentity": "list-claim-mappings-by-provider",
+  "documentKind": "identityClaimMapping",
+  "nativeEvidence": "evidence/sqlite/iam-claim-mapping/a2d06a866ee4e37f.plan.txt",
+  "evidence": "evidence/sqlite/iam-claim-mapping/a2d06a866ee4e37f.json"
+}

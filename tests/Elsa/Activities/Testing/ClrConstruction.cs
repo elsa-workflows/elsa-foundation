@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Primitives.Binding;
-using Elsa.Activities.Primitives.Constructors;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -9,9 +7,8 @@ namespace Elsa.Activities.Testing;
 
 /// <summary>
 /// Test helper for the CLR activity construction path: builds the stable-alias descriptor
-/// (<see cref="ClrActivityDescriptor"/>) and a <see cref="ClrActivityConstructor"/> whose well-known type
-/// registry resolves the activity types under test by their canonical alias — the same wiring the real host
-/// gets from <c>RegisterActivityTypesStartupTask</c>.
+/// (<see cref="ClrActivityDescriptor"/>) and a well-known type registry whose entries use the same stable
+/// aliases as the runtime activation path.
 /// </summary>
 public static class ClrConstruction
 {
@@ -30,8 +27,4 @@ public static class ClrConstruction
             registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
         return registry;
     }
-
-    /// <summary>A CLR activity constructor whose registry resolves <paramref name="activityTypes"/>.</summary>
-    public static ClrActivityConstructor Constructor(IServiceProvider serviceProvider, IPayloadSerializer serializer, params Type[] activityTypes)
-        => new(serviceProvider, new ActivityArgumentBinder(), serializer, RegistryFor(activityTypes));
 }

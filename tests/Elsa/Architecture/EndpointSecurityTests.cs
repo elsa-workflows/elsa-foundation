@@ -5,6 +5,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -24,7 +25,9 @@ public sealed partial class EndpointSecurityTests
         ("Expressions", "src/Elsa/Expressions/Api/Endpoints", [nameof(PermissionNames.ExpressionsRead)]),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints", [nameof(PermissionNames.WorkflowPublishingRead), nameof(PermissionNames.WorkflowPublishingManage)]),
         ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints", [nameof(PermissionNames.WorkflowRuntimeRead), nameof(PermissionNames.WorkflowRuntimeExecute), nameof(PermissionNames.WorkflowRuntimeManage)]),
-        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints", [nameof(PermissionNames.ApiCapabilitiesRead)])
+        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints", [nameof(PermissionNames.ApiCapabilitiesRead)]),
+        ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints", [nameof(PermissionNames.Elsa3ImportRead), nameof(PermissionNames.Elsa3ImportManage)]),
+        ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints", [nameof(PermissionNames.BpmnInterchangeRead), nameof(PermissionNames.BpmnInterchangeManage)])
     ];
 
     [Fact]
@@ -42,7 +45,11 @@ public sealed partial class EndpointSecurityTests
             [nameof(PermissionNames.WorkflowRuntimeRead)] = "workflow-runtime.read",
             [nameof(PermissionNames.WorkflowRuntimeExecute)] = "workflow-runtime.execute",
             [nameof(PermissionNames.WorkflowRuntimeManage)] = "workflow-runtime.manage",
-            [nameof(PermissionNames.ApiCapabilitiesRead)] = "api-capabilities.read"
+            [nameof(PermissionNames.ApiCapabilitiesRead)] = "api-capabilities.read",
+            [nameof(PermissionNames.Elsa3ImportRead)] = "elsa3-import.read",
+            [nameof(PermissionNames.Elsa3ImportManage)] = "elsa3-import.manage",
+            [nameof(PermissionNames.BpmnInterchangeRead)] = "bpmn-interchange.read",
+            [nameof(PermissionNames.BpmnInterchangeManage)] = "bpmn-interchange.manage"
         };
         var actual = typeof(PermissionNames)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
@@ -98,10 +105,16 @@ public sealed partial class EndpointSecurityTests
         var create = typeof(Factory).GetMethods()
             .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
                               method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) &&
+                              first.ParameterType == typeof(DefaultHttpContext) &&
                               rest.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
+
+        // Factory.Create otherwise falls back to FastEndpoints' process-global service resolver. The
+        // representative management host in this assembly can replace and dispose that resolver concurrently.
+        // Supplying request services keeps this configuration-only assertion isolated from the host lifecycle.
+        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
+        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
         endpoint.Configure();
 
         Assert.Contains(PermissionNames.ApiCapabilitiesRead, endpoint.Definition.AllowedPermissions!);

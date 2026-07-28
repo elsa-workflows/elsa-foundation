@@ -3,23 +3,14 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Activities.Http.Services;
 
 /// <summary>
-/// The request-scoped seam that lets a <see cref="Activities.WriteHttpResponse"/> running inside a synchronous
-/// (spec 089 sub-unit E) endpoint dispatch write the live HTTP response in the same exchange (E-D2). The
-/// middleware populates the request scope's instance with the live <see cref="HttpContext"/> ONLY for a sync-mode
-/// dispatch, and passes <c>HttpContext.RequestServices</c> as the dispatch's ambient services so the inline drain
-/// resolves this same instance. <see cref="WriteHttpResponse"/> resolves it null-safely: a populated sink ⇒ live
-/// write; an empty sink (async mode, durable resume, non-HTTP start, or absent registration) ⇒ artifact-only.
+/// Request-scoped compatibility marker for a synchronous endpoint response started directly during dispatch.
+/// Canonical <see cref="Activities.WriteHttpResponse"/> does not consume this service; it returns a typed result
+/// that <see cref="HttpResponseInstructionDelivery"/> delivers after the isolated activity attempt commits.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why a scoped sink and not <c>IHttpContextAccessor</c> (the load-bearing design guard).</b> The inline drain
-/// runs on the <em>caller's</em> async flow, so the <c>AsyncLocal</c>-backed <c>IHttpContextAccessor</c> would
-/// resolve the live <see cref="HttpContext"/> even for an ASYNC-mode dispatch — and even from a fresh internal
-/// scope — leaking the live context into async-mode runs and turning every async endpoint into an accidental live
-/// write. The discriminator must therefore be an <em>ambient-scope-only</em> holder that the middleware populates
-/// deliberately for sync mode alone, never an AsyncLocal accessor. A <see cref="WriteHttpResponse"/> resolving
-/// this sink from a fresh internal scope (async mode) gets a distinct, unpopulated instance — so it stays
-/// artifact-only even when an <see cref="HttpContext"/> technically exists on the flow.
+/// <b>Why not <c>IHttpContextAccessor</c>.</b> Activities must never observe the live request. The middleware owns
+/// both this marker and the post-drain delivery adapter, so request-affine state cannot cross the activity scope.
 /// </para>
 /// <para>
 /// Scoped (per request/scope): registered <c>AddScoped</c> in <c>ActivitiesHttpFeature</c>. It holds only live,

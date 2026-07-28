@@ -4,48 +4,35 @@ using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Persistence.Core;
-using Elsa.Primitives.Versioning;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
-/// <summary>
-/// The Activities <see cref="AddVersionCommandHandler"/> accepts an author-supplied
-/// <c>command.Version</c>. Unlike the reconciler path — which guards an existing
-/// <c>(DefinitionId, sortKey)</c> before adding — the API path historically called
-/// <c>addCommand.Add</c> with no collision check, so a caller could silently duplicate/collide a
-/// version. This covers the added pre-write guard: an add whose <c>(DefinitionId, SemVer sort key)</c>
-/// already exists must be rejected with <see cref="ActivityDefinitionVersionConflictException"/> and
-/// never reach the store, matching the Workflows sibling's conflict-exception discipline.
-/// </summary>
 public sealed class AddVersionCommandHandlerTests
 {
     private readonly StubDefinitionStore _definitionStore = new();
     private readonly RecordingAddCommand _addCommand = new();
 
     private static AddVersion Command(string version) =>
-        new("def-1", version, "Descriptor", default, null, null, null, null);
+        new("operation-key", "def-1", version, "test.provider", "1", "test.consumer", "1", default, null, null, null, null);
 
     private AddVersionCommandHandler CreateHandler(StubVersionStore versionStore) =>
         new(new StubVersionFactory(), _addCommand, versionStore, _definitionStore);
 
     [Fact]
-    public async Task Adding_a_version_whose_definition_and_sortkey_already_exist_is_rejected()
+    public async Task The_handler_delegates_collision_and_replay_semantics_to_the_literal_command()
     {
-        var versionStore = new StubVersionStore
-        {
-            ExistingSortKeys = { SemVer.ToSortKey("1.0.0") },
-        };
+        var versionStore = new StubVersionStore();
         var handler = CreateHandler(versionStore);
 
-        await Assert.ThrowsAsync<ActivityDefinitionVersionConflictException>(
-            () => handler.Handle(Command("1.0.0"), CancellationToken.None));
+        await handler.Handle(Command("1.0.0"), CancellationToken.None);
 
-        Assert.Empty(_addCommand.Added);
+        var added = Assert.Single(_addCommand.Added);
+        Assert.Equal("operation-key", added.OperationKey.Value);
     }
 
     [Fact]
@@ -56,7 +43,7 @@ public sealed class AddVersionCommandHandlerTests
 
         var result = await handler.Handle(Command("1.0.0"), CancellationToken.None);
 
-        Assert.Equal("1.0.0", Assert.Single(_addCommand.Added).Version);
+        Assert.Equal("1.0.0", Assert.Single(_addCommand.Added).Version.Version);
         Assert.Equal("1.0.0", result.Version);
     }
 
@@ -93,7 +80,10 @@ public sealed class AddVersionCommandHandlerTests
             var entity = new ActivityDefinitionVersion(version, "def-1")
             {
                 Id = versionId,
-                DescriptorType = "Descriptor",
+                ProviderKey = "test.provider",
+                ProviderSchemaVersion = "1",
+                ConsumerKey = "test.consumer",
+                ConsumerSchemaVersion = "1",
                 Definition = new ActivityDefinition { Id = "def-1", ActivityTypeKey = "type-def-1", Category = "General" },
             };
             return Task.FromResult(entity);
@@ -118,14 +108,21 @@ public sealed class AddVersionCommandHandlerTests
             throw new NotSupportedException();
     }
 
-    private sealed class RecordingAddCommand : IAddCommand<ActivityDefinitionVersion>
+    private sealed class RecordingAddCommand : IAddActivityDefinitionVersionCommand
     {
-        public List<ActivityDefinitionVersion> Added { get; } = [];
+        public List<(DesignOperationKey OperationKey, ActivityDefinitionVersion Version)> Added { get; } = [];
 
-        public Task Add(ActivityDefinitionVersion entity, CancellationToken cancellationToken = default)
+        public Task<ActivityDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey,
+            ActivityDefinitionVersion version,
+            CancellationToken cancellationToken = default)
         {
-            Added.Add(entity);
-            return Task.CompletedTask;
+            Added.Add((operationKey, version));
+            return Task.FromResult(new ActivityDefinitionVersionAdded(
+                version.DefinitionId,
+                version.Id,
+                version.Version,
+                version.Hash));
         }
     }
 
@@ -134,7 +131,10 @@ public sealed class AddVersionCommandHandlerTests
         public IActivityDefinitionVersion Create(
             IActivityDefinition definition,
             string version,
-            string descriptorType,
+            string providerKey,
+            string providerSchemaVersion,
+            string consumerKey,
+            string consumerSchemaVersion,
             JsonElement descriptorPayload,
             string sourceKind,
             string sourceId,
@@ -143,14 +143,17 @@ public sealed class AddVersionCommandHandlerTests
             IEnumerable<ActivityDesignFacet> designFacets,
             ActivityExecutionType executionType = ActivityExecutionType.Action,
             string? id = null) =>
-            new FakeVersion(id ?? $"v-{version}", version, definition, descriptorType, descriptorPayload, sourceKind, sourceId, executionType);
+            new FakeVersion(id ?? $"v-{version}", version, definition, providerKey, providerSchemaVersion, consumerKey, consumerSchemaVersion, descriptorPayload, sourceKind, sourceId, executionType);
     }
 
     private sealed class FakeVersion(
         string id,
         string version,
         IActivityDefinition definition,
-        string descriptorType,
+        string providerKey,
+        string providerSchemaVersion,
+        string consumerKey,
+        string consumerSchemaVersion,
         JsonElement descriptorPayload,
         string sourceKind,
         string sourceId,
@@ -159,7 +162,10 @@ public sealed class AddVersionCommandHandlerTests
         public string Id => id;
         public string Version => version;
         public string DefinitionId => definition.Id;
-        public string DescriptorType => descriptorType;
+        public string ProviderKey => providerKey;
+        public string ProviderSchemaVersion => providerSchemaVersion;
+        public string ConsumerKey => consumerKey;
+        public string ConsumerSchemaVersion => consumerSchemaVersion;
         public JsonElement DescriptorPayload => descriptorPayload;
         public string SourceKind => sourceKind;
         public string SourceId => sourceId;

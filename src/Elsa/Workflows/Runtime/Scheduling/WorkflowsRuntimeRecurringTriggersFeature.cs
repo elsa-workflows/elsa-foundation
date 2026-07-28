@@ -1,5 +1,7 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -7,6 +9,7 @@ using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Scheduling;
 
@@ -48,6 +51,7 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.Configure<RecurringTriggerPumpOptions>(options =>
         {
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
@@ -60,16 +64,17 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
         // registration when composed together.
         services.TryAddSingleton(TimeProvider.System);
 
-        // In-memory defaults; a durable persistence provider swaps IRecurringTriggerScheduleStore for a
-        // restart-surviving bridge via RemoveAll + AddSingleton.
+        // In-memory defaults; a durable persistence provider swaps IRecurringTriggerScheduleStore for a scoped,
+        // restart-surviving adapter.
         services.TryAddSingleton<IRecurringTriggerScheduleStore, InMemoryRecurringTriggerScheduleStore>();
         services.TryAddSingleton<IRecurringScheduleCalculator, RecurringScheduleCalculator>();
 
         // Decorate the publish-time trigger indexer so publishing a Timer/Cron trigger also writes its schedule.
         // The inner WorkflowTriggerIndexer is registered by the WorkflowsRuntimeTriggers dependency; construct it
-        // explicitly and wrap it, so the trigger core stays unaware of scheduling. This AddSingleton lands after
-        // the dependency's TryAddSingleton, so it wins as the resolved IWorkflowTriggerIndexer.
-        services.AddSingleton<IWorkflowTriggerIndexer>(sp => new RecurringTriggerScheduleIndexer(
+        // explicitly and wrap it, so the trigger core stays unaware of scheduling. This scoped registration lands
+        // after the dependency's scoped default, so it wins as the resolved IWorkflowTriggerIndexer without
+        // capturing the scoped trigger and recurring-schedule stores.
+        services.AddScoped<IWorkflowTriggerIndexer>(sp => new RecurringTriggerScheduleIndexer(
             ActivatorUtilities.CreateInstance<WorkflowTriggerIndexer>(sp),
             sp.GetServices<IRecurringTriggerScheduleProvider>(),
             sp.GetRequiredService<IRecurringTriggerScheduleStore>(),
@@ -77,6 +82,10 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<RecurringTriggerScheduleIndexer>>()));
 
-        services.AddSingleton<IRecurringTask, RecurringTriggerPumpTask>();
+        services.AddSingleton<IRecurringTask>(sp => new RecurringTriggerPumpTask(
+            sp.GetRequiredService<IPersistenceScopeRunner>(),
+            sp.GetRequiredService<IOptions<RecurringTriggerPumpOptions>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<RecurringTriggerPumpTask>>()));
     }
 }

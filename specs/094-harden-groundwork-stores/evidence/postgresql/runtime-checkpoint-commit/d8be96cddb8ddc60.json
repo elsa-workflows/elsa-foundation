@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "a5d8d996026a54d1d67bbaf4948d3a2182658002ce2b216842b4ea8f2cac2503",
+  "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/d8be96cddb8ddc60",
+  "clients": 2,
+  "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
+  "outcome": "pass",
+  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+  "evidence": "evidence/postgresql/runtime-checkpoint-commit/d8be96cddb8ddc60.json"
+}

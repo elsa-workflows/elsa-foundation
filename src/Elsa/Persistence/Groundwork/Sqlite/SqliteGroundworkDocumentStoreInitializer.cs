@@ -1,92 +1,206 @@
 using System.Diagnostics;
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Diagnostics;
-using Groundwork.Core.Capabilities;
-using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Transactions;
+using ElsaAdmissionException = Elsa.Persistence.Groundwork.Unified.Composition.GroundworkRuntimeSchemaAdmissionException;
 using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Relational.Documents;
+using Groundwork.Sqlite;
 using Groundwork.Sqlite.Documents;
+using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
 
 /// <summary>
-/// Materializes the one SQLite-backed Groundwork document store at host startup and populates the shared
-/// <see cref="GroundworkDocumentStoreHolder"/>, so <see cref="Groundwork.Documents.Store.IDocumentStore"/> can be
-/// resolved as a fully-initialized singleton without a synchronous block on the resolving thread.
+/// Admits the exact host-selected SQLite schema and then exposes one physical document store.
+/// By default, runtime startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply
+/// safe pending operations automatically.
 /// </summary>
-/// <remarks>
-/// Implemented as both an <see cref="IHostedService"/> (plain hosts / tests) and a CShells
-/// <see cref="IShellInitializer"/> (the shell-composed Elsa.Server host, where shell-scoped hosted services do
-/// not run) — the same dual-hook pattern the identity module uses. The provider registration schedules it in the
-/// <see cref="LifecyclePhase.Prepare"/> phase so the store is ready before any other shell initializer that reads
-/// it. Population is idempotent, so running under either hook is safe.
-/// </remarks>
+/// <exception cref="SqliteGroundworkPersistenceException">
+/// Thrown when SQLite provider infrastructure fails during initialization or while opening an access-bound
+/// store session. The originating provider exception is preserved as the inner exception.
+/// </exception>
 public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
-    StorageManifest manifest,
-    ProviderIdentity provider,
-    GroundworkDocumentStoreHolder holder,
-    bool rematerializeOnStartup = false) : IHostedService, IShellInitializer
+    bool autoApplyOnStartup,
+    IServiceScopeFactory scopeFactory,
+    GroundworkStoreSessionSource sessionSource,
+    ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null,
+    bool skipInspectionWhenPlanUnchanged = false) : IHostedService, IShellInitializer
 {
-    private readonly SemaphoreSlim _initializationGate = new(1, 1);
+    private readonly SemaphoreSlim initializationLock = new(1, 1);
+    private readonly SqliteGroundworkAdmissionStampStore stampStore = new();
+    private bool initialized;
 
-    /// <summary>Initializes the configured manifest/provider store once.</summary>
-    /// <exception cref="SqliteGroundworkInitializationException">The configured manifest/provider store could not be opened or materialized.</exception>
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
-
-    /// <summary>Initializes the configured manifest/provider store for the hosted-service lifecycle.</summary>
-    /// <exception cref="SqliteGroundworkInitializationException">The configured manifest/provider store could not be opened or materialized.</exception>
     public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
-
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
         var started = Stopwatch.GetTimestamp();
-        var outcome = holder.IsInitialized
+        var outcome = initialized
             ? SqliteGroundworkTelemetry.HistoryHitOutcome
             : SqliteGroundworkTelemetry.MaterializedOutcome;
         using var activity = ObservationalTelemetryScope.Start(
             SqliteGroundworkTelemetry.GetActivitySource,
             SqliteGroundworkTelemetry.ActivityName);
+        var lockTaken = false;
 
         try
         {
-            await _initializationGate.WaitAsync(cancellationToken);
-            try
+            if (initialized)
             {
-                if (holder.IsInitialized)
-                {
-                    outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
-                    return;
-                }
-
-                SqliteDocumentStore? store = null;
-                if (!rematerializeOnStartup)
-                    store = await TryOpenFromExactHistoryAsync(cancellationToken);
-
-                if (store is not null)
-                {
-                    outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
-                }
-                else
-                {
-                    store = await SqliteDocumentStoreFactory.CreateAsync(
-                        connectionString,
-                        manifest,
-                        provider,
-                        DocumentStoreAccess.Global,
-                        cancellationToken: cancellationToken);
-                    outcome = SqliteGroundworkTelemetry.MaterializedOutcome;
-                }
-
-                holder.Set(store);
+                outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
+                return;
             }
-            finally
+
+            await initializationLock.WaitAsync(cancellationToken);
+            lockTaken = true;
+            if (initialized)
             {
-                _initializationGate.Release();
+                outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
+                return;
             }
+
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var capabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
+                SqliteGroundworkCapabilities.Runtime(),
+                new GroundworkProviderTopologySnapshot(
+                    SqliteGroundworkCapabilities.Provider.Name,
+                    "sqlite-file",
+                    new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                    }),
+                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                cancellationToken);
+            var source = await scope.ServiceProvider
+                .GetRequiredService<GroundworkStorageCompositionFactory>()
+                .CreateSourceAsync(
+                    capabilities,
+                    SqliteGroundworkCapabilities.PhysicalNames,
+                    cancellationToken);
+
+            // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply.
+            // A bare SqliteConnection here would create (and forever admit) the database in rollback-journal
+            // mode: journal_mode is a persistent per-database property, and this initializer's connections are
+            // the first to touch the file.
+            await using var inspectionConnection = SqliteConnectionFactory.Create(connectionString);
+
+            // Skip-if-current fast path (spec 133): a matching applied-plan stamp proves the composed plan
+            // is byte-for-byte the last successfully admitted plan, so the full inspection/validation walk
+            // (a re-read plus per-route PRAGMA re-validation of every storage unit) can be skipped for a
+            // single indexed scalar read. Opt-in, because the stamp covers the plan but not live provider
+            // state, so it cannot detect drift introduced out-of-band while the host was down.
+            var currentStamp = GroundworkAdmissionSkipStamp.ForSource(source);
+            var manifestId = source.PhysicalTarget.ManifestIdentity.Value;
+            var providerName = source.PhysicalTarget.Provider.Name;
+
+            var skipped = false;
+            if (skipInspectionWhenPlanUnchanged)
+            {
+                var persistedStamp = await stampStore.TryReadAsync(
+                    inspectionConnection, manifestId, providerName, cancellationToken);
+                if (persistedStamp is not null && persistedStamp.Covers(currentStamp))
+                {
+                    skipped = true;
+                    outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
+                    logger.LogInformation(
+                        "Groundwork runtime schema admission skipped the inspection walk for target '{TargetFingerprint}' on provider '{Provider}': the persisted applied-plan stamp is current.",
+                        currentStamp.TargetFingerprint,
+                        providerName);
+                }
+            }
+
+            if (!skipped)
+            {
+                var admission = await source.InspectRuntimeAdmissionAsync(
+                    new SqlitePhysicalSchemaExecutor(inspectionConnection),
+                    new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = autoApplyOnStartup },
+                    entry => logger.Log(
+                        entry.Level == GroundworkRuntimeSchemaAdmissionLogLevel.Information
+                            ? LogLevel.Information
+                            : LogLevel.Warning,
+                        "{AdmissionMessage}",
+                        entry.Message),
+                    cancellationToken);
+                if (!admission.IsReady)
+                    throw new ElsaAdmissionException(admission);
+
+                // Record the stamp only after the walk (and any apply) has durably committed and reported
+                // ready. A crash before this line leaves no stamp, so the next boot re-walks and re-admits
+                // idempotently — the stamp is an optimization, never a correctness gate. Only stamp when the
+                // fast path is enabled; there is nothing to skip otherwise.
+                if (skipInspectionWhenPlanUnchanged)
+                    await stampStore.WriteAsync(
+                        inspectionConnection, manifestId, providerName, currentStamp, cancellationToken);
+            }
+
+            if (!sessionSource.IsInitialized)
+            {
+                var manifest = source.CreateManifest();
+                var routes = source.PhysicalTarget.Routes;
+                var provider = source.PhysicalTarget.Provider;
+                // Compile each route's connection-independent plan set at most once for the whole process.
+                // The Lazy is captured by the admitted session factory, so it is shared across every session
+                // open: unused routes never compile, and used routes compile exactly once. Each session then
+                // only pays a cheap Bind against its own connection-bound store.
+                var planSets = routes.ToDictionary(
+                    route => route.StorageUnit.Value,
+                    route => new Lazy<RelationalPhysicalQueryPlanSet>(
+                        () => SqlitePhysicalQueryRuntime.CompilePlanSet(manifest, route, provider)),
+                    StringComparer.Ordinal);
+                if (sessionSource.TrySetAdmitted(async (access, ct) =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    SqliteConnection? connection = null;
+                    try
+                    {
+                        // Every store session must open through the pragma factory: journal_mode=WAL persists
+                        // per-database, but synchronous=NORMAL and busy_timeout are per-connection.
+                        connection = SqliteConnectionFactory.Create(connectionString);
+                        await connection.OpenAsync(ct);
+                        var store = new SqlitePhysicalDocumentStore(
+                            connection,
+                            manifest,
+                            routes,
+                            access);
+                        var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
+                            routes.Select(route =>
+                                KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
+                                    route.StorageUnit.Value,
+                                    () => planSets[route.StorageUnit.Value].Value.Bind(store))));
+                        return new GroundworkStoreSessionResources(store, boundedStore, connection);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        await DisposeAfterCancellationAsync(connection);
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        throw new SqliteGroundworkPersistenceException(
+                            SqliteGroundworkPersistenceOperation.OpenSession,
+                            await DisposeAfterFailureAsync(connection, exception));
+                    }
+                }, TransactionBoundary.CrossUnitAtomic))
+                {
+                    capabilityAdmission?.TrySet(capabilities);
+                }
+            }
+
+            initialized = true;
         }
         catch (OperationCanceledException)
         {
@@ -94,16 +208,31 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
+        catch (ElsaAdmissionException)
+        {
+            outcome = SqliteGroundworkTelemetry.FailedOutcome;
+            activity.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (GroundworkStorageCompositionException)
+        {
+            outcome = SqliteGroundworkTelemetry.FailedOutcome;
+            activity.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
         catch (Exception exception)
         {
             outcome = SqliteGroundworkTelemetry.FailedOutcome;
             activity.SetStatus(ActivityStatusCode.Error);
-            throw new SqliteGroundworkInitializationException(
-                $"The SQLite Groundwork document store for manifest '{manifest.Identity.Value}' and provider '{provider.Name}' could not be initialized.",
+            throw new SqliteGroundworkPersistenceException(
+                SqliteGroundworkPersistenceOperation.Initialize,
                 exception);
         }
         finally
         {
+            if (lockTaken)
+                initializationLock.Release();
+
             activity.SetTag(SqliteGroundworkTelemetry.OutcomeTag, outcome);
             activity.Observe(
                 SqliteGroundworkTelemetry.GetDuration,
@@ -113,44 +242,39 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         }
     }
 
-    private async Task<SqliteDocumentStore?> TryOpenFromExactHistoryAsync(CancellationToken cancellationToken)
+    private static async ValueTask<Exception> DisposeAfterFailureAsync(
+        SqliteConnection? connection,
+        Exception failure)
     {
-        await using var connection = new SqliteConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
+        if (connection is null)
+            return failure;
 
-        await using var tableCommand = connection.CreateCommand();
-        tableCommand.CommandText = """
-            SELECT 1
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'groundwork_schema_history'
-            LIMIT 1;
-            """;
-        if (await tableCommand.ExecuteScalarAsync(cancellationToken) is null)
-            return null;
+        try
+        {
+            await connection.DisposeAsync();
+            return failure;
+        }
+        catch (Exception cleanupFailure)
+        {
+            return new AggregateException(
+                "SQLite Groundwork session creation and cleanup both failed.",
+                failure,
+                cleanupFailure);
+        }
+    }
 
-        await using var historyCommand = connection.CreateCommand();
-        historyCommand.CommandText = """
-            SELECT CASE
-                WHEN manifest_id = $manifestId
-                 AND manifest_version = $manifestVersion
-                 AND provider_name = $providerName
-                 AND provider_version = $providerVersion
-                THEN 1 ELSE 0 END
-            FROM groundwork_schema_history
-            ORDER BY applied_utc DESC, rowid DESC
-            LIMIT 1;
-            """;
-        historyCommand.Parameters.AddWithValue("$manifestId", manifest.Identity.Value);
-        historyCommand.Parameters.AddWithValue("$manifestVersion", manifest.Version.Value);
-        historyCommand.Parameters.AddWithValue("$providerName", provider.Name);
-        historyCommand.Parameters.AddWithValue("$providerVersion", provider.Version);
+    private static async ValueTask DisposeAfterCancellationAsync(SqliteConnection? connection)
+    {
+        if (connection is null)
+            return;
 
-        if (Convert.ToInt64(await historyCommand.ExecuteScalarAsync(cancellationToken)) != 1)
-            return null;
-
-        return new SqliteDocumentStore(
-            connectionString,
-            manifest,
-            DocumentStoreAccess.Global);
+        try
+        {
+            await connection.DisposeAsync();
+        }
+        catch
+        {
+            // Preserve the operation's cancellation contract; cleanup cannot replace the requested cancellation.
+        }
     }
 }

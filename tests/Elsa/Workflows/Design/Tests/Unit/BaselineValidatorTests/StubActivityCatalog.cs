@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 /// In-memory <see cref="IActivityDefinitionLookup"/> for the catalog-consulting baseline
 /// validators. <see cref="GetVersion"/> resolves only ids registered via <see cref="Add"/>;
 /// everything else throws <see cref="EntityNotFoundException"/>, matching the production
-/// version-store Get contract (both EFCore and Groundwork stores throw on a missing id —
+/// version-store Get contract (the Groundwork store throws on a missing id —
 /// they never return null). <see cref="ValidatorTestHelpers.RootActivityVersionId"/> is
 /// pre-seeded (as an empty version) so tests exercise their real nodes, not the synthetic
 /// root the test helpers fabricate for multi-activity graphs.
@@ -19,9 +19,9 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
 
     public StubActivityCatalog() => Add(ValidatorTestHelpers.RootActivityVersionId);
 
-    public StubActivityCatalog Add(string versionId, IEnumerable<InputDefinition>? inputs = null, IEnumerable<OutputDefinition>? outputs = null)
+    public StubActivityCatalog Add(string versionId, IEnumerable<InputDefinition>? inputs = null, IEnumerable<OutputDefinition>? outputs = null, IEnumerable<ActivityDesignFacet>? designFacets = null)
     {
-        _versions[versionId] = new StubVersion(versionId, inputs ?? [], outputs ?? []);
+        _versions[versionId] = new StubVersion(versionId, inputs ?? [], outputs ?? [], designFacets ?? []);
         return this;
     }
 
@@ -42,20 +42,22 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
     public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
         => throw new NotImplementedException();
 
-    private sealed class StubVersion(string id, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs) : IActivityDefinitionVersion
+    private sealed class StubVersion(string id, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs, IEnumerable<ActivityDesignFacet> designFacets) : IActivityDefinitionVersion
     {
         public string Id { get; } = id;
         public string Version => "1.0.0";
         public string DefinitionId => "def-1";
-        public string ActivityTypeKey => "TestActivity";
-        public string DescriptorType => "Test";
+        public string ProviderKey => "test.provider";
+        public string ProviderSchemaVersion => "1";
+        public string ConsumerKey => "test.consumer";
+        public string ConsumerSchemaVersion => "1";
         public System.Text.Json.JsonElement DescriptorPayload => default;
         public string SourceKind => "Test";
         public string SourceId => "Test";
         public IActivityDefinition Definition => null!;
         public IEnumerable<InputDefinition> Inputs { get; } = inputs;
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;
-        public IEnumerable<ActivityDesignFacet> DesignFacets => [];
+        public IEnumerable<ActivityDesignFacet> DesignFacets { get; } = designFacets;
         public ActivityExecutionType ExecutionType => default;
         public string Hash => "";
     }

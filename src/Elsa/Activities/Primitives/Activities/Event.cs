@@ -1,49 +1,109 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// A minimal named-event start trigger (W7, E3-1). Authored with <see cref="ActivityExecutionType.Trigger"/>,
-/// it lets an external event start a workflow with no explicit execution id: the publish-time trigger extractor
-/// reads its <see cref="EventName"/> and records a durable trigger binding keyed by the event's stimulus, and
-/// the stimulus router starts a new instance when a matching event arrives.
+/// A named-event trigger with a dual role (W7 start half; spec 116 adds the mid-flow wait form):
+/// as a start trigger, the publish-time trigger extractor reads its <see cref="EventName"/> and records a
+/// durable trigger binding keyed by the event's stimulus so the stimulus router starts a new instance when a
+/// matching event arrives; scheduled mid-flow, it suspends with a typed trigger registration on the same
+/// stimulus identity and completes when the named event is raised (the message/signal catch child for BPMN
+/// intermediate catch events).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional passive
-/// correlation value, with no payload schema or filters. When a workflow is started by the event, the activity
-/// surfaces the event name as its result so the run is observable.
+/// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional authored
+/// correlation value, with no payload schema or filters. On a mid-flow wait, a nonblank correlation is retained
+/// as bookmark metadata so correlated delivery narrows resume fan-in; null or blank preserves broadcast behavior.
+/// When a workflow is started by the event, the activity returns the event name in one atomic result so the run
+/// is observable.
 /// </para>
 /// <para>
-/// Scope note: this ships the START half of an event trigger (E3-1's acceptance: "an event-driven workflow
-/// starts from a stimulus"), which is W7's approved scope. A mid-flow WAIT form (suspend until a named event
-/// arrives) is a straightforward follow-up now that the publisher compiles resume targets (W8): add a
-/// <c>[ResumeTarget]</c> resume path to this activity. It is intentionally out of W7's start-only scope. The
-/// cross-execution fan-in resume path (E3-5) is exercised through the stimulus router against waiting bookmarks.
+/// Role selection mirrors <c>HttpEndpoint</c>: the activity completes when the run's start trigger delivery
+/// targeted this node, or on direct invocation while <see cref="CanStartWorkflow"/> is <c>true</c> (the
+/// default, preserving the activity's start-first identity). In every other case it suspends until the named
+/// event stimulus resumes it. The cross-execution fan-in resume path (E3-5) is exercised through the stimulus
+/// router against waiting bookmarks.
 /// </para>
 /// </remarks>
 [TriggerActivity]
-public sealed class Event : CodeActivity<string>
+public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState, EventReceived>
 {
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>
     public const string ActivityType = "Elsa.Event";
 
-    public Event() : base(ActivityType)
+    /// <summary>The activity-local resume-target id of the mid-flow wait path.</summary>
+    public const string ResumeTargetId = "resume-target:event";
+
+    /// <summary>The name of the event that starts (or resumes) the workflow. Drives the stimulus hash.</summary>
+    [ActivityInput(Key = nameof(EventName))]
+    [Required]
+    public string EventName { get; set; } = null!;
+
+    /// <summary>
+    /// An optional correlation value retained by mid-flow waits for exact resume matching. Null or blank keeps
+    /// the wait unscoped; this does not filter start-trigger fan-out or introduce a separate correlation subsystem.
+    /// </summary>
+    [ActivityInput(Key = nameof(CorrelationId))]
+    public string? CorrelationId { get; set; }
+
+    /// <summary>
+    /// Whether this node may start a workflow. Defaults to <c>true</c> (start-first identity); a mid-flow
+    /// catch node sets it to <c>false</c> so a direct invocation waits instead of completing and the
+    /// publish-time trigger extractor skips it.
+    /// </summary>
+    [ActivityInput(Key = nameof(CanStartWorkflow), DefaultValue = "true")]
+    public bool CanStartWorkflow { get; set; } = true;
+
+    protected override ValueTask<ActivityTransition<EventResult, EventWaitState>> ExecuteAsync(
+        ActivityStartContext<EventReceived> context)
     {
+        if (ShouldComplete(context))
+            return ValueTask.FromResult(Complete(new EventResult(EventName)));
+
+        var correlationId = string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId.Trim();
+        var metadata = correlationId is null
+            ? null
+            : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.CorrelationId] = correlationId
+            };
+        var registration = new ActivityTriggerRegistration<EventReceived>(
+            ResumeTargetId,
+            EventStimulus.StimulusType,
+            EventStimulus.Hash(EventName),
+            metadata: metadata);
+        return ValueTask.FromResult(Suspend(new EventWaitState(EventName), [registration]));
     }
 
-    /// <summary>The name of the event that starts (or targets) the workflow. Drives the stimulus hash.</summary>
-    public InputArgument<string> EventName { get; set; } = null!;
+    [ResumeTarget(ResumeTargetId)]
+    protected override ValueTask<ActivityTransition<EventResult, EventWaitState>> ResumeAsync(
+        ActivityResumeContext<EventWaitState, EventReceived> context) =>
+        ValueTask.FromResult(Complete(new EventResult(context.State.EventName)));
 
-    /// <summary>An optional passive correlation value threaded through routing; it does not own a correlation subsystem.</summary>
-    public InputArgument<string>? CorrelationId { get; set; }
-
-    protected override void Execute(IActivityExecutionContext context)
+    private bool ShouldComplete(ActivityStartContext<EventReceived> context)
     {
-        var eventName = context.Get(EventName);
-        context.Set(Result, eventName);
+        if (!context.IsDirectInvocation)
+            return context.IsTriggerDelivery;
+
+        return CanStartWorkflow;
     }
 }
+
+/// <summary>The atomic result produced when a named event starts or resumes a workflow.</summary>
+public sealed record EventResult
+{
+    public EventResult(string eventName) => EventName = eventName;
+
+    /// <summary>The routed event name.</summary>
+    [Output(Key = "Result", Path = "eventName")]
+    public string EventName { get; }
+}
+
+/// <summary>The complete private state of a mid-flow event wait.</summary>
+public sealed record EventWaitState(string EventName);
+
+/// <summary>The typed payload delivered when a matching named event resumes a waiting <see cref="Event"/>.</summary>
+public sealed record EventReceived(string? EventName = null);

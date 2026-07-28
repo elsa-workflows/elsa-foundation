@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-claim-mapping",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
+  "executionPath": "provider-driver/postgresql/iam-claim-mapping/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
+  "outcome": "pass",
+  "evidence": "evidence/postgresql/iam-claim-mapping/0e7ae6dd54aaea28.json"
+}

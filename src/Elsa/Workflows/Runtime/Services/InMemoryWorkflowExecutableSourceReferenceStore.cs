@@ -27,28 +27,32 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
             return ValueTask.FromResult(_references.GetValueOrDefault(sourceReferenceId));
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-
-        lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(
-                _references.Values.Where(reference => string.Equals(reference.ArtifactId, artifactId, StringComparison.Ordinal)).ToArray());
-    }
-
-    public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(
-        WorkflowExecutableReferenceScope? scope = null,
-        bool liveOnly = false,
-        DateTimeOffset? now = null,
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+        WorkflowExecutableSourceReferenceArtifactPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        var asOf = now ?? DateTimeOffset.UtcNow;
+        ArgumentNullException.ThrowIfNull(query);
 
         lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutableSourceReference>>(_references.Values
-                .Where(reference => scope is null || reference.Scope == scope)
-                .Where(reference => !liveOnly || reference.IsLive(asOf))
-                .ToArray());
+            return ValueTask.FromResult(Page(
+                query,
+                $"source-reference:artifact:{query.ArtifactId}",
+                _references.Values.Where(reference => string.Equals(reference.ArtifactId, query.ArtifactId, StringComparison.Ordinal))));
+    }
+
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+        WorkflowExecutableSourceReferencePageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        lock (_gate)
+            return ValueTask.FromResult(Page(
+                query,
+                $"source-reference:scope:{query.Scope?.ToString() ?? "*"}:live:{query.LiveOnly}:asof:{query.Now?.ToUniversalTime():O}",
+                _references.Values
+                    .Where(reference => query.Scope is null || reference.Scope == query.Scope)
+                    .Where(reference => !query.LiveOnly || reference.IsLive(query.Now!.Value))));
     }
 
     public ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
@@ -65,14 +69,35 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         }
     }
 
-    public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
+    public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+
+        lock (_gate)
+            return ValueTask.FromResult(_references.Remove(sourceReferenceId));
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+        WorkflowExecutableSourceReferenceCleanupBatch batch,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
         lock (_gate)
         {
-            var doomed = _references.Values
-                .Where(reference => reference.DeletedAt is not null || reference.IsExpired(now))
+            var expired = _references.Values
+                .Where(reference => reference.IsExpired(now))
                 .Select(reference => reference.SourceReferenceId)
+                .Order(StringComparer.Ordinal)
+                .Take(batch.Limit)
                 .ToArray();
+            var retired = _references.Values
+                .Where(reference => reference.DeletedAt is not null && !reference.IsExpired(now))
+                .Select(reference => reference.SourceReferenceId)
+                .Order(StringComparer.Ordinal)
+                .Take(batch.Limit - expired.Length)
+                .ToArray();
+            var doomed = expired.Concat(retired).ToArray();
 
             foreach (var id in doomed)
                 _references.Remove(id);
@@ -82,12 +107,11 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
     }
 
     public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
-        IEnumerable<string> artifactIds,
+        WorkflowExecutableArtifactCandidateBatch candidates,
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(artifactIds);
-        var candidates = artifactIds.Distinct(StringComparer.Ordinal).ToArray();
+        ArgumentNullException.ThrowIfNull(candidates);
 
         lock (_gate)
         {
@@ -97,7 +121,25 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
                 .ToHashSet(StringComparer.Ordinal);
 
             return ValueTask.FromResult<IReadOnlyCollection<string>>(
-                candidates.Where(artifactId => !liveArtifactIds.Contains(artifactId)).ToArray());
+                candidates.ArtifactIds.Where(artifactId => !liveArtifactIds.Contains(artifactId)).ToArray());
         }
+    }
+
+    private static RuntimeStorePage<WorkflowExecutableSourceReference> Page(
+        RuntimeStorePageRequest query,
+        string queryBinding,
+        IEnumerable<WorkflowExecutableSourceReference> references)
+    {
+        var lastId = InMemoryRuntimeStoreContinuation.Decode(query.ContinuationToken, queryBinding, nameof(query.ContinuationToken));
+        var ordered = references
+            .OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
+            .Where(reference => lastId is null || StringComparer.Ordinal.Compare(reference.SourceReferenceId, lastId) > 0)
+            .Take(query.Limit + 1)
+            .ToArray();
+        var items = ordered.Take(query.Limit).ToArray();
+        var nextContinuation = ordered.Length > query.Limit
+            ? InMemoryRuntimeStoreContinuation.Encode(queryBinding, items[^1].SourceReferenceId)
+            : null;
+        return new RuntimeStorePage<WorkflowExecutableSourceReference>(query, items, nextContinuation);
     }
 }

@@ -29,5 +29,9 @@ public enum WorkflowExecutionCommandKind
     Checkpoint = 11,
     StartActivity = 12,
     InvokeActivity = 13,
-    GeneratedEvent = 14
+    GeneratedEvent = 14,
+    CancelActivityScope = 15,
+    RetryActivityBoundary = 16,
+    NotifyParentActivity = 17,
+    AlterWorkflow = 18
 }

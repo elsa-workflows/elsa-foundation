@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-tenant-membership",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
+  "executionPath": "provider-driver/sqlite/iam-tenant-membership/1bb827c7c0312cbb",
+  "clients": 2,
+  "resultHash": "a629a200c2169432f3c80820fc49becbc38f6bcb02588068269d91179bf2b9f9",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/sqlite/iam-tenant-membership/1bb827c7c0312cbb.json"
+}

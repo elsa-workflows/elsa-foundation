@@ -1,0 +1,40 @@
+{
+  "claimableAt": "1970-01-01T00:00:00\u002B00:00",
+  "collection": "postCommitOutbox",
+  "deliverableAt": "1970-01-01T00:00:00\u002B00:00",
+  "item": {
+    "availableAt": "1970-01-01T00:00:00\u002B00:00",
+    "deliveredAt": null,
+    "deliveringOwnerId": null,
+    "deliveryAttemptCount": 0,
+    "deliveryFencingToken": 0,
+    "deliveryStartedAt": null,
+    "deliveryVisibleAfter": null,
+    "intent": {
+      "activityExecutionId": "activity-1",
+      "dependsOnWaitRegistrationId": null,
+      "idempotencyKey": "dispatch-resume:v1:fixture",
+      "intentId": "intent:dispatch-resume:v1:fixture",
+      "isWaitDependent": false,
+      "kind": "Elsa.Activities.DispatchWorkflow.ResumeParent",
+      "metadata": {},
+      "payload": null,
+      "recordedAt": "1970-01-01T00:00:00\u002B00:00",
+      "waitFailurePolicy": null,
+      "workflowExecutionId": "wf-1"
+    },
+    "isTerminal": false,
+    "lastFailureMessage": null,
+    "metadata": {},
+    "outboxItemId": "item-1",
+    "recordedAt": "1970-01-01T00:00:00\u002B00:00",
+    "retryPolicy": {
+      "delay": "00:00:05",
+      "maxAttempts": 0,
+      "metadata": {},
+      "retryUntilAcknowledged": true
+    },
+    "status": 0
+  },
+  "workflowExecutionId": "wf-1"
+}

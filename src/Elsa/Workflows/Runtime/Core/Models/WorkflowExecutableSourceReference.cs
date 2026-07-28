@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -15,6 +16,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// copy of the definition version's graph geometry (ADR 0035 discipline: opaque, never canonicalized) and
 /// NEVER contributes to the artifact hash — visual arrangement is not behavior (ADR 0039).
 /// </remarks>
+[method: JsonConstructor]
 public sealed record WorkflowExecutableSourceReference(
     string SourceReferenceId,
     string ArtifactId,
@@ -32,10 +34,237 @@ public sealed record WorkflowExecutableSourceReference(
     string? DeletedReason = null,
     IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
     string? PublicationId = null,
-    string? SlotId = null)
+    string? SlotId = null,
+    ExecutableLayoutSidecar? LayoutSidecar = null,
+    IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? AuthoredInputs = null,
+    string? TenantId = null)
 {
+    /// <summary>
+    /// Preserves the authored-input constructor introduced before tenant scope became part of the reference.
+    /// </summary>
+    public WorkflowExecutableSourceReference(
+        string sourceReferenceId,
+        string artifactId,
+        string sourceKind,
+        string sourceId,
+        string? sourceVersion,
+        string definitionId,
+        string definitionVersionId,
+        string artifactVersion,
+        DateTimeOffset createdAt,
+        DateTimeOffset? publishedAt,
+        WorkflowExecutableReferenceScope scope,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? deletedAt,
+        string? deletedReason,
+        IReadOnlyList<WorkflowExecutableLayoutRecord>? layout,
+        string? publicationId,
+        string? slotId,
+        IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? authoredInputs)
+        : this(
+            sourceReferenceId,
+            artifactId,
+            sourceKind,
+            sourceId,
+            sourceVersion,
+            definitionId,
+            definitionVersionId,
+            artifactVersion,
+            createdAt,
+            publishedAt,
+            scope,
+            expiresAt,
+            deletedAt,
+            deletedReason,
+            layout,
+            publicationId,
+            slotId,
+            LayoutSidecar: null,
+            authoredInputs,
+            TenantId: null)
+    {
+    }
+
+    /// <summary>
+    /// Preserves the pre-tenant constructor for already-compiled callers while the primary constructor provides
+    /// the additive tenant member.
+    /// </summary>
+    public WorkflowExecutableSourceReference(
+        string sourceReferenceId,
+        string artifactId,
+        string sourceKind,
+        string sourceId,
+        string? sourceVersion,
+        string definitionId,
+        string definitionVersionId,
+        string artifactVersion,
+        DateTimeOffset createdAt,
+        DateTimeOffset? publishedAt,
+        WorkflowExecutableReferenceScope scope,
+        DateTimeOffset? expiresAt,
+        DateTimeOffset? deletedAt,
+        string? deletedReason,
+        IReadOnlyList<WorkflowExecutableLayoutRecord>? layout,
+        string? publicationId,
+        string? slotId)
+        : this(
+            sourceReferenceId,
+            artifactId,
+            sourceKind,
+            sourceId,
+            sourceVersion,
+            definitionId,
+            definitionVersionId,
+            artifactVersion,
+            createdAt,
+            publishedAt,
+            scope,
+            expiresAt,
+            deletedAt,
+            deletedReason,
+            layout,
+            publicationId,
+            slotId,
+            LayoutSidecar: null,
+            AuthoredInputs: null,
+            TenantId: null)
+    {
+    }
+
     /// <summary>The publish-time layout sidecar copied from the definition version's layout store; may be empty.</summary>
     public IReadOnlyList<WorkflowExecutableLayoutRecord> Layout { get; init; } = Layout ?? [];
+
+    /// <summary>Boundary-scoped historical layout used for reusable-activity click-through inspection.</summary>
+    public ExecutableLayoutSidecar LayoutSidecar { get; init; } = LayoutSidecar ?? ExecutableLayoutSidecar.Empty;
+
+    /// <summary>
+    /// Publish-time authored input sources. These are source provenance, not execution material, and therefore
+    /// live on this per-publish reference and never contribute to the content-addressed artifact hash.
+    /// </summary>
+    public IReadOnlyList<WorkflowExecutableAuthoredInputRecord> AuthoredInputs { get; init; } = AuthoredInputs ?? [];
+
+    /// <summary>Preserves the pre-tenant positional deconstruction shape including the reusable-activity layout sidecar.</summary>
+    public void Deconstruct(
+        out string sourceReferenceId,
+        out string artifactId,
+        out string sourceKind,
+        out string sourceId,
+        out string? sourceVersion,
+        out string definitionId,
+        out string definitionVersionId,
+        out string artifactVersion,
+        out DateTimeOffset createdAt,
+        out DateTimeOffset? publishedAt,
+        out WorkflowExecutableReferenceScope scope,
+        out DateTimeOffset? expiresAt,
+        out DateTimeOffset? deletedAt,
+        out string? deletedReason,
+        out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
+        out string? publicationId,
+        out string? slotId,
+        out ExecutableLayoutSidecar layoutSidecar,
+        out IReadOnlyList<WorkflowExecutableAuthoredInputRecord> authoredInputs)
+    {
+        sourceReferenceId = SourceReferenceId;
+        artifactId = ArtifactId;
+        sourceKind = SourceKind;
+        sourceId = SourceId;
+        sourceVersion = SourceVersion;
+        definitionId = DefinitionId;
+        definitionVersionId = DefinitionVersionId;
+        artifactVersion = ArtifactVersion;
+        createdAt = CreatedAt;
+        publishedAt = PublishedAt;
+        scope = Scope;
+        expiresAt = ExpiresAt;
+        deletedAt = DeletedAt;
+        deletedReason = DeletedReason;
+        layout = Layout;
+        publicationId = PublicationId;
+        slotId = SlotId;
+        layoutSidecar = LayoutSidecar;
+        authoredInputs = AuthoredInputs;
+    }
+
+    /// <summary>Preserves the authored-input positional deconstruction shape for source compatibility.</summary>
+    public void Deconstruct(
+        out string sourceReferenceId,
+        out string artifactId,
+        out string sourceKind,
+        out string sourceId,
+        out string? sourceVersion,
+        out string definitionId,
+        out string definitionVersionId,
+        out string artifactVersion,
+        out DateTimeOffset createdAt,
+        out DateTimeOffset? publishedAt,
+        out WorkflowExecutableReferenceScope scope,
+        out DateTimeOffset? expiresAt,
+        out DateTimeOffset? deletedAt,
+        out string? deletedReason,
+        out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
+        out string? publicationId,
+        out string? slotId,
+        out IReadOnlyList<WorkflowExecutableAuthoredInputRecord> authoredInputs)
+    {
+        sourceReferenceId = SourceReferenceId;
+        artifactId = ArtifactId;
+        sourceKind = SourceKind;
+        sourceId = SourceId;
+        sourceVersion = SourceVersion;
+        definitionId = DefinitionId;
+        definitionVersionId = DefinitionVersionId;
+        artifactVersion = ArtifactVersion;
+        createdAt = CreatedAt;
+        publishedAt = PublishedAt;
+        scope = Scope;
+        expiresAt = ExpiresAt;
+        deletedAt = DeletedAt;
+        deletedReason = DeletedReason;
+        layout = Layout;
+        publicationId = PublicationId;
+        slotId = SlotId;
+        authoredInputs = AuthoredInputs;
+    }
+
+    /// <summary>Preserves the pre-tenant positional deconstruction shape for source compatibility.</summary>
+    public void Deconstruct(
+        out string sourceReferenceId,
+        out string artifactId,
+        out string sourceKind,
+        out string sourceId,
+        out string? sourceVersion,
+        out string definitionId,
+        out string definitionVersionId,
+        out string artifactVersion,
+        out DateTimeOffset createdAt,
+        out DateTimeOffset? publishedAt,
+        out WorkflowExecutableReferenceScope scope,
+        out DateTimeOffset? expiresAt,
+        out DateTimeOffset? deletedAt,
+        out string? deletedReason,
+        out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
+        out string? publicationId,
+        out string? slotId)
+    {
+        sourceReferenceId = SourceReferenceId;
+        artifactId = ArtifactId;
+        sourceKind = SourceKind;
+        sourceId = SourceId;
+        sourceVersion = SourceVersion;
+        definitionId = DefinitionId;
+        definitionVersionId = DefinitionVersionId;
+        artifactVersion = ArtifactVersion;
+        createdAt = CreatedAt;
+        publishedAt = PublishedAt;
+        scope = Scope;
+        expiresAt = ExpiresAt;
+        deletedAt = DeletedAt;
+        deletedReason = DeletedReason;
+        layout = Layout;
+        publicationId = PublicationId;
+        slotId = SlotId;
+    }
 
     /// <summary>True while the reference is neither retired nor past its expiry at <paramref name="now"/>.</summary>
     public bool IsLive(DateTimeOffset now) => DeletedAt is null && !IsExpired(now);
@@ -75,3 +304,14 @@ public sealed record WorkflowExecutableLayoutRecord(
     double? Width = null,
     double? Height = null,
     JsonElement? AdditionalProperties = null);
+
+/// <summary>
+/// One opaque authored input source captured for a source reference. <see cref="Value"/> is copied as JSON so
+/// future expression kinds can round-trip without the runtime model interpreting or normalizing their payload.
+/// </summary>
+public sealed record WorkflowExecutableAuthoredInputRecord(
+    string ExecutableNodeId,
+    string InputKey,
+    string? ExpressionType,
+    JsonElement Value,
+    bool IsSensitive = false);

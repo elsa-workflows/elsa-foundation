@@ -1,11 +1,16 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Resumption.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Resumption;
 
@@ -59,6 +64,7 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddPersistenceCore();
         services.Configure<RuntimeResumptionOptions>(options =>
         {
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
@@ -71,7 +77,18 @@ public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
             options.HeartbeatTimeout = TimeSpan.FromMinutes(HeartbeatTimeoutMinutes);
         });
 
-        services.TryAddSingleton<IRuntimeResumptionService, RuntimeResumptionService>();
-        services.AddSingleton<IRecurringTask, RuntimeResumptionPumpTask>();
+        services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, DurableResumptionEvidence>());
+        services.AddSingleton<IRecurringTask>(sp => new RuntimeResumptionPumpTask(
+            sp.GetRequiredService<IPersistenceScopeRunner>(),
+            sp.GetRequiredService<IOptions<RuntimeResumptionOptions>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<RuntimeResumptionPumpTask>>()));
+    }
+
+    private sealed class DurableResumptionEvidence : IWorkflowDispatchDurabilityEvidence
+    {
+        public string Component => WorkflowDispatchDurabilityComponents.Resumption;
+        public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
     }
 }

@@ -1,3 +1,4 @@
+using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -9,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>
 /// Groundwork (document) implementation of <see cref="IWorkflowDefinitionDraftStore"/>, the document-store
-/// counterpart of <c>EFCoreWorkflowDefinitionDraftStore</c>. Like the version store, the draft is a rich
+/// implementation of the draft-store contract. Like the version store, the draft is a rich
 /// aggregate: its authored <c>WorkflowDefinitionState</c> is serialized via <see cref="IPayloadSerializer"/>
 /// and the EF shadow / navigation members are excluded from the document.
 /// </summary>
@@ -17,9 +18,30 @@ public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinition
 {
     private readonly GroundworkWorkflowDefinitionDraftDocumentStore _documents;
 
-    public GroundworkWorkflowDefinitionDraftStore(IDocumentStore store, IPayloadSerializer payloadSerializer)
+    public GroundworkWorkflowDefinitionDraftStore(
+        IDocumentStore store,
+        IBoundedDocumentStore boundedStore,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
     {
-        _documents = new GroundworkWorkflowDefinitionDraftDocumentStore(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        _documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
+            store,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+            accessContextAccessor,
+            boundedStore);
+    }
+
+    public GroundworkWorkflowDefinitionDraftStore(
+        IDocumentStore store,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(
+            store,
+            store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+                "Workflow-definition draft queries require an admitted bounded document-store runtime."),
+            payloadSerializer,
+            accessContextAccessor)
+    {
     }
 
     public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)

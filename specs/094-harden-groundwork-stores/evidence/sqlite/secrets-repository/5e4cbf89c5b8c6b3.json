@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-by-scope-bounded",
+  "sourceScenarioId": "secret-bounded-list-equivalence",
+  "coverageEntryId": "secrets-repository",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "cad8c6cac2b615316455c3ab729cfe04867d0cbf35bbdb31d0a50c9be27e9933",
+  "executionPath": "provider-driver/sqlite/secrets-repository/5e4cbf89c5b8c6b3",
+  "clients": 1,
+  "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
+  "outcome": "pass",
+  "queryShape": "list-by-scope-bounded",
+  "nativeQueryIdentity": "list-filtered",
+  "documentKind": "secret",
+  "nativeEvidence": "evidence/sqlite/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
+  "evidence": "evidence/sqlite/secrets-repository/5e4cbf89c5b8c6b3.json"
+}

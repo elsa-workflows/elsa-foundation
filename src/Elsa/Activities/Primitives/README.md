@@ -1,39 +1,42 @@
 # Elsa.Activities.Primitives
 
-The **CLR activity kind**: primitive hand-written activities plus the constructor that builds any CLR
-`IActivity` from its descriptor. A runtime feature — references **no** `Elsa.*.Design.*` project
-(Elsa §E2.2) and **no** other feature project (G4 / SC-006).
+Primitive hand-written activities and the transient CLR activation implementation. This runtime feature
+references no Design project.
 
-## What this feature provides
+`ActivitiesPrimitivesFeature` registers `ClrActivityActivator` as `IActivityActivator`. For each invocation
+attempt the activator resolves the canonical type alias from `ClrActivityDescriptor`, creates an owned DI
+scope, uses `ActivatorUtilities` so activity authors can use constructor injection, constructs a fresh CLR
+instance, and hydrates its plain `[ActivityInput]` properties from the committed input snapshot. The
+activation lease disposes both the activity and its scope.
 
-`ActivitiesPrimitivesFeature.ConfigureServices` registers:
+`WriteLine` is the minimal shipped example: a plain annotated `string Text` property and one atomic
+`ActivityUnit` result. It contains no argument wrapper or activity-owned value address.
 
-- **`ClrActivityConstructor`** → contributed as `IActivityConstructor` — owns descriptor type
-  `Elsa.Primitives.Models.ClrActivityDescriptor`. It deserializes the descriptor, resolves the activity's
-  stable alias (`ClrActivityDescriptor.TypeAlias`) to a live `Type` via the well-known-type registry,
-  activates it with `ActivatorUtilities`, and binds the author-supplied arguments with the
-  `ActivityArgumentBinder`. The runtime feature's `ActivityConstructorsStartupTask` aggregates it into the
-  registry — this feature registers nothing else to wire it in.
-- **`ActivityArgumentBinder`** (feature-internal, singleton) — matches author `InputArgument`/`OutputArgument`
-  values to activity properties by name (case-insensitive) and assignable type, rewrapping widened argument
-  generics where needed (e.g. `InputArgument<int>` → a property typed `InputArgument<object>`). Missing
-  property, incompatible type, and no-public-setter each throw.
+## Named-event surface: `Event` and `PublishEvent`
 
-## Shipped activities
+`Event` (`Elsa.Event`) is the named-event **receive** side: as a start trigger it registers a durable
+`EventStimulus` binding at publish time; scheduled mid-flow (`CanStartWorkflow = false`) it suspends on the
+same stimulus identity and completes when the event is raised. `EventStimulus` maps an event name to the
+opaque `(StimulusType = "Event", StimulusHash = SHA-256 of the name)` routing pair — deliberately
+cross-workflow (the collaboration key). A nonblank `Event.CorrelationId` is retained on a mid-flow Event wait;
+a same-name delivery carrying that value resumes only matching opted-in waits. Null, empty, and whitespace-only
+correlation leave the wait unscoped, preserving broadcast delivery.
 
-- **`WriteLine`** — a leaf `IActivity` with an `InputArgument<string> Text`; writes to the console. The
-  concrete activity the CLR construction round-trip binds against.
+`PublishEvent` (`Elsa.PublishEvent`, spec 135) is its **send** sibling. Its inputs are `EventName` (required),
+`CorrelationId` (optional; narrows resume fan-in to waits retaining the same nonblank value, while null/blank
+remains broadcast), and `Payload` (optional `JsonElement`). Correlation never filters the published message-start
+fan-out, and BPMN-specific correlation authoring remains a separate concern. Execution is **durable-first**: it
+never calls the stimulus router in-line. It validates the name and stages a typed `PublishStimulusRequest` on the
+activity's own commit through `IPublishStimulusStager`, then completes `Done` immediately (fire-and-continue). The invocation-keyed
+`PublishStimulusStagingBuffer` (registered as both the activity-facing stager and the engine-facing
+`IPublishStimulusStagingAccessor` the invoke handler drains) builds a `PublishStimulusIntentKind` post-commit
+intent carrying the shared `Event` stimulus identity. After the checkpoint commits, `PublishStimulusExecutor`
+routes it via `IStimulusRouter.RouteAsync(StartAndResume)` — so one send both starts every published
+message-start workflow listening on the name and resumes every parked same-name catch — with the outbox's
+retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's layering exactly but is
+publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
+post-commit intent kind through it.
 
-## Registration & tests
-
-`ClrActivityConstructor` is registered against the `IActivityConstructor` contract (the binder is
-feature-internal — registered as its concrete `ActivityArgumentBinder` type, no interface), so the CLR
-round-trip is provable end-to-end through `IActivityFactory`. Coverage lives in
-`tests/Elsa/Activities/Runtime/Tests` (`ClrActivityConstructorTests`, `ActivityArgumentBinderTests`,
-`ActivitiesPrimitivesFeatureTests`) — the Primitives tests colocate there rather than in a separate project.
-
-## Cross-references
-
-- The construction seam this plugs into: [`../Runtime/README.md`](../Runtime/README.md).
-- The sibling Workflow kind: [`../Composition/Runtime/README.md`](../Composition/Runtime/README.md).
-- Constitutional basis: §2.6.1 (contribution contract); Elsa §E2.2; G4 (no feature → feature).
+Coverage lives in `tests/Elsa/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
+pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
+intent shape, and the `StartAndResume` handler pin).

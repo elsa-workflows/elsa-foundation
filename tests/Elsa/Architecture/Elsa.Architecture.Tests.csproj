@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
@@ -24,9 +26,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Mediator\Elsa.Mediator.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
@@ -34,13 +39,18 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />
+    <ProjectReference Include="..\..\..\tools\groundwork\Elsa.Groundwork.ProviderEvidenceImporter\Elsa.Groundwork.ProviderEvidenceImporter.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\..\specs\092-domain-owned-apis\contracts\management-api.openapi.yaml"
           Link="Contracts\management-api.openapi.yaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\specs\141-runtime-alterations\contracts\runtime-alterations.openapi.yaml"
+          Link="Contracts\runtime-alterations.openapi.yaml"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

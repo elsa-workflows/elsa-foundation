@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Reflection;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -75,16 +76,16 @@ public sealed class RuntimeContractTests
             authoredActivityId: "activity-authored-1",
             activityType: "Elsa.SendEmail",
             activityTypeVersion: "1.0.0",
-            descriptorType: "Elsa.Activities.SendEmailDescriptor",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("Elsa.Activities.SendEmailDescriptor", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
-                    inputName: "to",
-                    source: RuntimeInputBindingSource.DurableValue,
-                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+                    inputKey: "to",
+                    targetType: new ValueTypeDescriptor("String"),
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.WorkflowRequest,
+                    workflowRequest: new RuntimeWorkflowRequestReference("customerEmail"))
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
         Assert.Equal("node-runtime-1", node.ExecutableNodeId);

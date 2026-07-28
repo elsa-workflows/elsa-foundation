@@ -12,6 +12,13 @@ public interface IUserStore
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareUserStore
+{
+    ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(UserRecord user, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface IRoleStore
 {
     ValueTask<RoleRecord?> FindAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
@@ -21,6 +28,22 @@ public interface IRoleStore
     ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareRoleStore
+{
+    ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(RoleRecord role, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Provider-neutral bounded paging contract for tenant-local role enumeration.</summary>
+public interface IPagedRoleStore
+{
+    ValueTask<IamPage<RoleRecord>> ListPageAsync(
+        string tenantId,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IApplicationStore
 {
     ValueTask<ApplicationRecord?> FindAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
@@ -28,11 +51,25 @@ public interface IApplicationStore
     ValueTask SaveAsync(ApplicationRecord application, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareApplicationStore
+{
+    ValueTask<IamRevisionedRecord<ApplicationRecord>?> FindWithRevisionAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ApplicationRecord application, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface ICredentialStore
 {
     ValueTask<CredentialRecord?> FindAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default);
+}
+
+public interface IRevisionAwareCredentialStore
+{
+    ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(CredentialRecord credential, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface IExternalIdentityStore
@@ -44,6 +81,23 @@ public interface IExternalIdentityStore
     ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareExternalIdentityStore
+{
+    ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ExternalIdentityRecord externalIdentity, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Provider-neutral bounded paging contract for external identities belonging to one tenant user.</summary>
+public interface IPagedExternalIdentityStore
+{
+    ValueTask<IamPage<ExternalIdentityRecord>> ListForUserPageAsync(
+        string tenantId,
+        string userId,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IClaimMappingStore
 {
     ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
@@ -51,11 +105,30 @@ public interface IClaimMappingStore
     ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default);
 }
 
+public interface IRevisionAwareClaimMappingStore
+{
+    ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(string tenantId, string provider, string ruleId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ClaimMappingRule rule, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Provider-neutral bounded paging contract for one tenant/provider claim-mapping collection.</summary>
+public interface IPagedClaimMappingStore
+{
+    ValueTask<IamPage<ClaimMappingRule>> ListForProviderPageAsync(
+        string tenantId,
+        string provider,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IProviderConfigurationStore
 {
     ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(string provider, CancellationToken cancellationToken = default);
 
     ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+
+    ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default);
 
     async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default)
     {
@@ -67,11 +140,27 @@ public interface IProviderConfigurationStore
     }
 }
 
+public interface IRevisionAwareProviderConfigurationStore
+{
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ProviderConfigurationRecord configuration, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
 public interface ITenantMembershipStore
 {
     ValueTask<TenantMembershipRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default);
+}
+
+public interface IRevisionAwareTenantMembershipStore
+{
+    ValueTask<IamRevisionedRecord<TenantMembershipRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+
+    ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(TenantMembershipRecord membership, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
 public interface IUserManager
@@ -126,6 +215,54 @@ public sealed record UserRecord(
     ResourceOwnership Ownership,
     IReadOnlySet<string> RoleIds,
     IReadOnlySet<string> DirectPermissions);
+
+public sealed record IamRevisionedRecord<TRecord>(TRecord Record, string Revision);
+
+public sealed record IamRevisionSaveResult(IamRevisionSaveStatus Status, string? Revision = null);
+
+public enum IamRevisionSaveStatus
+{
+    Saved,
+    Conflict,
+    NotFound
+}
+
+/// <summary>Finite, deterministic page request shared by IAM contracts without a persistence-provider dependency.</summary>
+public sealed record IamPageRequest
+{
+    public const int MaximumTake = 250;
+
+    public IamPageRequest(int skip = 0, int take = 50)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
+        if (take is <= 0 or > MaximumTake)
+            throw new ArgumentOutOfRangeException(nameof(take), take, $"IAM page size must be between 1 and {MaximumTake}.");
+
+        Skip = skip;
+        Take = take;
+    }
+
+    public int Skip { get; }
+    public int Take { get; }
+}
+
+/// <summary>Bounded result with the provider-observed total count for the same query evaluation.</summary>
+public sealed record IamPage<TRecord>
+{
+    public IamPage(IReadOnlyList<TRecord> items, long totalCount)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentOutOfRangeException.ThrowIfNegative(totalCount);
+        if (totalCount < items.Count)
+            throw new ArgumentOutOfRangeException(nameof(totalCount), totalCount, "Total count cannot be smaller than the returned IAM page.");
+
+        Items = items;
+        TotalCount = totalCount;
+    }
+
+    public IReadOnlyList<TRecord> Items { get; }
+    public long TotalCount { get; }
+}
 
 public sealed record RoleRecord(
     string Id,

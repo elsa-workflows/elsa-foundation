@@ -14,72 +14,115 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     ExecutableNode ExecutableNode { get; }
     ActivityExecutionState ActivityExecutionState { get; }
 
+    /// <summary>
+    /// The executable node id of the matched trigger binding that started this run (spec 089 D / 117 D4),
+    /// populated from the committed workflow-started seed (spoof-proof, not user input). Null for direct
+    /// (non-stimulus) starts. A structural trigger activity (e.g. <c>BpmnProcess</c>) compares it to
+    /// <c>ExecutableNodeId</c> to tell whether it was the node that started this run.
+    /// </summary>
+    string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// <c>WorkflowTriggerBinding.Metadata</c> and seeded on its own reserved durable channel. Null for direct
+    /// starts and for stimulus starts whose binding carried no metadata. A structural trigger activity reads
+    /// per-descriptor routing facets from it (e.g. the BPMN start element id under <c>"bpmn.startElementId"</c>).
+    /// </summary>
+    IReadOnlyDictionary<string, string>? TriggerMetadata { get; }
+
     void ScheduleChildActivity(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
-        ActivitySchedulingProvenance? schedulingProvenance = null);
+        ActivitySchedulingProvenance? schedulingProvenance = null,
+        LoopIterationScopeRequest? iterationFrame = null);
 
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 
-    void CompleteCompositeActivity(IEnumerable<string>? outcomeNames = null);
-
-    bool CompositeCompletionRequested { get; }
-    IReadOnlyCollection<string> CompositeCompletionOutcomeNames { get; }
-
-    void DeferCompositeCompletion();
-
-    bool CompositeCompletionDeferred { get; }
+    /// <summary>
+    /// The parent's direct, non-terminal child activity executions (spec 119 D4), populated by the runtime
+    /// only during a child-completion/child-fault evaluation and only when the parent activity implements
+    /// <c>IRuntimeLiveChildActivityConsumer</c>; empty otherwise. Read-only and spoof-proof (projected from
+    /// committed activity-execution state). A structural activity that races sibling children (the BPMN
+    /// event-based gateway) resolves a losing sibling's activity-execution id from it — keyed by executable
+    /// node id — to stage the sibling's subtree cancellation via <see cref="RequestChildSubtreeCancellation"/>.
+    /// </summary>
+    IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities();
 
     /// <summary>
-    /// Requests that the whole workflow run end now with a successful outcome, regardless of any remaining
-    /// scheduled work. Used by the <c>Finish</c>/<c>Complete</c> leaf control activity. The engine drains this
-    /// on the leaf execution path and commits a terminal <c>WorkflowCompleted</c> checkpoint in place of the
-    /// usual activity-completed propagation.
+    /// Reads the committed value of a container-scoped variable visible to this activity (spec 123 D1),
+    /// populated by the runtime only for an activity implementing <c>IRuntimeScopedVariableReader</c> and only
+    /// during an invoke, child-completion/child-fault, or bookmark-resume evaluation.
     /// </summary>
-    void FinishWorkflow(IEnumerable<string>? outcomeNames = null);
-
-    bool FinishWorkflowRequested { get; }
-
-    IReadOnlyCollection<string> FinishWorkflowOutcomeNames { get; }
+    /// <remarks>
+    /// Resolution is by variable <paramref name="variableName"/> across this activity's own visible lexical
+    /// frame chain only — own iteration frame → own container frame → ancestors' container/iteration frames →
+    /// the workflow root frame — with the innermost scope winning for a shadowed name (the
+    /// <c>VariableScope.TryGetValueByName</c> precedent). It is read-only and spoof-proof: the chain is
+    /// projected from this activity's own committed <c>ActivityExecutionState</c> ancestry, so out-of-chain
+    /// scopes are unreachable by construction. It exposes <b>committed</b> values only — a value staged by an
+    /// intrinsic in this or a concurrent evaluation becomes visible only once committed, on a later
+    /// evaluation's basis. Returns <see langword="false"/> with <paramref name="envelope"/> <see langword="null"/>
+    /// when the name resolves to no visible declared variable, and <b>always</b> when the seam was not populated
+    /// (a non-marker activity, or a handler path that did not populate it) — it never throws on an unpopulated
+    /// seam, parallel to <see cref="GetLiveChildActivities"/> returning empty.
+    /// </remarks>
+    bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope);
 
     /// <summary>
-    /// Requests that the workflow instance correlation id be set to <paramref name="correlationId"/>. Used by
-    /// the <c>Correlate</c> leaf control activity. The engine drains this on the leaf execution path and folds
-    /// the new correlation id into the activity-completed checkpoint's workflow-execution state change. A null
-    /// or blank value clears the correlation id.
+    /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
+    /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
+    /// continuation; applied atomically in the same checkpoint commit as the continuation.
     /// </summary>
-    void SetCorrelationId(string? correlationId);
+    void RequestChildSubtreeCancellation(
+        string childActivityExecutionId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
 
-    bool CorrelationIdAssignmentRequested { get; }
-
-    string? RequestedCorrelationId { get; }
+    IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests();
 
     /// <summary>
-    /// Requests that the workflow instance name be set to <paramref name="instanceName"/>. Used by the
-    /// <c>SetName</c> leaf control activity. The engine drains this on the leaf execution path and folds the
-    /// new name into the activity-completed checkpoint's workflow-execution state change (under the
-    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.InstanceName"/> system-metadata
-    /// key), mirroring how <see cref="SetCorrelationId"/> persists the correlation id. A null or blank value
-    /// clears the instance name.
+    /// Stages absorption of the child fault this evaluation is processing (spec 115). Only valid
+    /// during a child-fault evaluation with a <c>Defer</c> or <c>Complete</c> continuation;
+    /// <paramref name="incidentId"/> must name the evaluation's incident. Applied atomically in the
+    /// same checkpoint commit as the continuation.
     /// </summary>
-    void SetInstanceName(string? instanceName);
+    void RequestChildFaultAbsorption(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
 
-    bool InstanceNameAssignmentRequested { get; }
-
-    string? RequestedInstanceName { get; }
+    IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
 
     /// <summary>
-    /// Requests that the workflow output named <paramref name="outputName"/> be set to
-    /// <paramref name="value"/>. Used by the <c>SetOutput</c> leaf control activity. The engine drains this on
-    /// the leaf execution path and folds the value into the activity-completed checkpoint as an
-    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName"/>-tagged durable value
-    /// — the same durable/output channel activity outputs use — so the workflow output is durably persisted.
-    /// A blank name is ignored. A later assignment of the same name overwrites the earlier one.
+    /// Stages a non-terminal, coded notification from this still-running structural child to its own
+    /// committed parent (spec 126, seam C). The notification always and only reaches the notifying child's
+    /// committed parent — there is no target parameter (spoof-proofing). Valid during any of the child's own
+    /// evaluations that end in a <c>Defer</c> or <c>Complete</c> continuation; it commits atomically with that
+    /// state as a durable post-commit work item. Staging from a root activity (no committed parent) or
+    /// alongside a <c>Fault</c>/<c>Cancel</c> continuation faults the evaluation. Multiple notifications per
+    /// evaluation are allowed and preserve staging order.
     /// </summary>
-    void SetWorkflowOutput(string outputName, object? value);
+    void RequestParentNotification(string code, System.Text.Json.JsonElement? payload = null);
 
-    bool WorkflowOutputAssignmentRequested { get; }
+    IReadOnlyCollection<RuntimeParentNotificationRequest> GetParentNotificationRequests();
+}
 
-    IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs { get; }
+/// <summary>
+/// Narrow activity-facing capability for staging one cross-execution workflow dispatch.
+/// This is a specialized orchestration command, not a workflow-value or service-location channel.
+/// </summary>
+public interface IWorkflowDispatchStager
+{
+    void StageWorkflowDispatch(WorkflowDispatchCheckpointRequest request);
+}
+
+/// <summary>
+/// Engine-facing side of the workflow-dispatch staging seam.
+/// Requests are isolated by runtime invocation identity because transient activities can be activated in child scopes.
+/// </summary>
+public interface IWorkflowDispatchStagingAccessor
+{
+    void Reset(string workflowExecutionId, string activityExecutionId);
+    WorkflowDispatchCheckpointRequest? TakeWorkflowDispatch(string workflowExecutionId, string activityExecutionId);
 }

@@ -6,6 +6,18 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityInputAttribute : Attribute
 {
+    /// <summary>The stable contract key. Defaults to the CLR property name when omitted.</summary>
+    public string? Key { get; init; }
+
+    /// <summary>
+    /// The human-readable label shown for this input in the designer. When omitted, reconciliation derives a
+    /// humanized label from the CLR property name (e.g. <c>ExpectedStatusCodes</c> → <c>Expected Status Codes</c>).
+    /// </summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>Optional help text shown alongside the input in the designer.</summary>
+    public string? Description { get; init; }
+
     /// <summary>The input's relative presentation order within the activity property list.</summary>
     public float Order { get; init; }
 

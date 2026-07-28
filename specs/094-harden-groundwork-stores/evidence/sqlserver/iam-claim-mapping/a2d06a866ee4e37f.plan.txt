@@ -1,0 +1,14 @@
+provider=sqlserver
+document-kind=identityClaimMapping
+route=list-claim-mappings-by-provider
+physical-name=identity_claim_mappings
+physical-cardinality=100000
+plan-classification=index-seek
+index=identity-claim-mapping-by-provider
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=512
+materialized-candidate-count=512
+command-count=2
+command-0=Count|count|sqlserver-statistics-xml|index-seek|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|1||f8ce7e6d445799f019b6634e4226246c34045c89b803fafca1f20d38d551dad1
+command-1=Page|page|sqlserver-statistics-xml|index-seek|identity-claim-mapping-by-provider|document_kind,providerLookupKey,storage_scope|512|storage_scope:Ascending:true,id_comparison_key:Ascending:true|ae0f4a4b35e5e03964f96fb41149f104a200e6ab4ab23251b46a83b483ebb621

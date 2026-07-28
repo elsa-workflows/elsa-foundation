@@ -14,7 +14,7 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   and round-trips both through publishing so the runtime resolves the body without re-reading the design
   document. `For` is not a container scope, so it declares no container-scoped variables
   (`SupportsScopedVariables` defaults to `false`); the per-iteration `index` is supplied at runtime by the
-  loop owner via `RuntimeLoopIterationScopeFactory`, not declared as a container-scoped variable.
+  loop owner via `RuntimeLoopIterationFrameFactory`, not declared as a container-scoped variable.
 
 ## Runtime extensions consumed
 
@@ -23,13 +23,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   the just-completed index across the runtime's stateless re-construction of the composite. This is a
   shared hook the remaining loop activities (`ForEach`/`While`/`Do`, #264/#266/#267) also build on.
 
-- `RuntimeMetadataKeys.LoopIteration*` + `RuntimeContainerScopeService` (`Elsa.Workflows.Runtime.Core`)
-  wire #259's `RuntimeLoopIterationScopeFactory` into the real execution path. A loop owner writes the
-  per-pass iteration variable (owner node id, item/index name, JSON value) into the body child's
-  scheduling-provenance metadata; `RuntimeContainerScopeService.BuildScopeAsync` reads it and layers the
-  innermost per-iteration scope onto the body's container chain, so the body resolves the current index
-  through the registered `IExpressionEvaluator`. This is the generic loop-variable threading the other
-  loop activities reuse. (The iteration scope is loop-owned, read-only per pass: it carries the engine
-  `IterationId` as its execution id, has no backing container execution, and so is skipped by
-  `PersistScopeMutationsAsync` — body assignments still flow to enclosing container/workflow scopes via
-  the unchanged ADR 0027 chain.)
+- `LoopIterationScopeRequest` + `RuntimeContainerScopeService` (`Elsa.Workflows.Runtime.Core`) wire #259's
+  `RuntimeLoopIterationFrameFactory` into the real execution path. A loop owner sends protected item/index
+  envelopes on the typed child schedule request while provenance metadata carries identity only. The
+  runtime validates lexical ownership and iteration identity, then activates the request as the innermost
+  durable frame before input materialization. Iteration frames are read-only; graph-visible Set intrinsics
+  may mutate enclosing declared variable frames, but cannot target derived iteration values.

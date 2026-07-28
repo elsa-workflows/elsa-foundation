@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "secret-revision-aware-mutation",
+  "coverageEntryId": "secrets-repository",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "82bd2e11bb1da14b2a331cad53a4a5b69a0b811c21892e4c2b759bb3cec36af5",
+  "executionPath": "provider-driver/mongodb/secrets-repository/1bb827c7c0312cbb",
+  "clients": 3,
+  "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/mongodb/secrets-repository/1bb827c7c0312cbb.json"
+}

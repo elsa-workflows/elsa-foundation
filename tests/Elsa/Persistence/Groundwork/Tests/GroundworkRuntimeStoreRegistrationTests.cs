@@ -147,6 +147,45 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
     }
 
     [Fact]
+    public async Task EnabledRegistration_ReusesSharedCacheAcrossValidatedRequestScopes()
+    {
+        var documents = new CountingDocumentStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        var services = NewServices(documents);
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
+        var executable = Executable("artifact-cross-scope");
+
+        await using (var seedScope = provider.CreateAsyncScope())
+        {
+            await seedScope.ServiceProvider
+                .GetRequiredKeyedService<IWorkflowExecutableStore>(
+                    GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey)
+                .SaveAsync(executable);
+        }
+
+        documents.ResetLoadCount();
+        IWorkflowExecutableStore firstAdapter;
+        await using (var firstScope = provider.CreateAsyncScope())
+        {
+            firstAdapter = firstScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            Assert.NotNull(await firstAdapter.FindAsync(executable.Identity.ArtifactId));
+        }
+
+        await using (var secondScope = provider.CreateAsyncScope())
+        {
+            var secondAdapter = secondScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            Assert.NotSame(firstAdapter, secondAdapter);
+            Assert.NotNull(await secondAdapter.FindAsync(executable.Identity.ArtifactId));
+        }
+
+        Assert.Equal(1, documents.LoadCount);
+    }
+
+    [Fact]
     public async Task ProviderBackedCache_CoversSaveFindDeleteConcurrencyAndEviction()
     {
         var documents = new CountingDocumentStore(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
@@ -219,7 +258,8 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private sealed class CountingDocumentStore(IDocumentStore inner) : IDocumentStore
@@ -311,7 +351,9 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<WorkflowExecutable?>(null);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>([]);
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+            RuntimeStorePageRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeStorePage<WorkflowExecutable>(request, [], null));
     }
 }

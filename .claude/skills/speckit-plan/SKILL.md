@@ -142,9 +142,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Skip if project is purely internal (build scripts, one-off tools, etc.)
 
 3. **Agent context update**:
-   - Update the plan reference between the `<!-- SPECKIT START -->` and `<!-- SPECKIT END -->` markers in `CLAUDE.md` to point to the plan file created in step 1 (the IMPL_PLAN path)
+   - Do not add a feature-specific plan pointer to `AGENTS.md` or another repository-wide instruction file. The repository's agent-context extension is disabled to keep shared instructions feature-neutral.
 
-**Output**: data-model.md, /contracts/*, quickstart.md, updated agent context file
+**Output**: data-model.md, /contracts/*, quickstart.md
 
 ## Key rules
 

@@ -47,22 +47,59 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (ReadLiteralBool(node, CanStartWorkflowInput) is not true)
             return ActivityTriggerStimulusResult.Recognized([]);
 
-        var path = ReadLiteralString(node, PathInput)
-            ?? throw new ArgumentException(
+        // Read every routing literal and endpoint option in a single pass, collecting all problems rather than
+        // throwing on the first. Absent optional inputs fall back to the activity's declared defaults
+        // (SupportedMethods → ["GET"], Authorize → false, ResponseMode → Async, Policy → null,
+        // RequestTimeout/RequestSizeLimit → null), so a UI that authors none of them still publishes; only genuinely
+        // required-but-missing or invalid values are reported — and all of them together, in one preflight pass (#925).
+        var problems = new List<string>();
+
+        var path = TryReadOption(problems, () => ReadLiteralString(node, PathInput));
+        if (path is null)
+            problems.Add(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has no literal '{PathInput}'. A start " +
                 "trigger's path must be an authored literal so its stimulus is fixed at publish time.");
 
-        var methods = ReadLiteralStringCollection(node, MethodsInput);
+        var methods = TryReadOption(problems, () => ReadLiteralStringCollection(node, MethodsInput));
         var effectiveMethods = methods is { Count: > 0 } ? methods : DefaultMethods;
 
-        var options = new HttpEndpointStimulusOptions(
-            Authorize: ReadLiteralBool(node, AuthorizeInput) ?? false,
-            Policy: ReadLiteralStringOption(node, PolicyInput),
-            RequestTimeout: ReadLiteralTimeSpan(node, RequestTimeoutInput),
-            RequestSizeLimit: ReadLiteralLong(node, RequestSizeLimitInput),
-            ResponseMode: ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async);
+        var authorize = TryReadOption(problems, () => (bool?)(ReadLiteralBool(node, AuthorizeInput) ?? false));
+        var policy = TryReadOption(problems, () => ReadLiteralStringOption(node, PolicyInput));
+        var requestTimeout = TryReadOption(problems, () => ReadLiteralTimeSpan(node, RequestTimeoutInput));
+        var requestSizeLimit = TryReadOption(problems, () => ReadLiteralLong(node, RequestSizeLimitInput));
+        var responseMode = TryReadOption(problems, () => (ResponseMode?)(ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async));
 
-        return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path, effectiveMethods, options));
+        if (problems.Count > 0)
+            throw new ArgumentException(
+                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' cannot be published:{Environment.NewLine}" +
+                string.Join(Environment.NewLine, problems.Select(problem => $" - {problem}")));
+
+        var options = new HttpEndpointStimulusOptions(
+            Authorize: authorize ?? false,
+            Policy: policy,
+            RequestTimeout: requestTimeout,
+            RequestSizeLimit: requestSizeLimit,
+            ResponseMode: responseMode ?? ResponseMode.Async);
+
+        return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path!, effectiveMethods, options));
+    }
+
+    /// <summary>
+    /// Runs a single option reader, recording any publish-time <see cref="ArgumentException"/>/<see cref="FormatException"/>
+    /// into <paramref name="problems"/> and returning the type default so the remaining options are still evaluated. This
+    /// turns the per-option throws into one aggregated diagnostic so preflight reports every problem in one pass (#925).
+    /// </summary>
+    private static T? TryReadOption<T>(List<string> problems, Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            problems.Add(exception.Message);
+            return default;
+        }
     }
 
     /// <summary>
@@ -109,10 +146,18 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (binding is null)
             return null;
 
-        if (binding.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
+        // A non-literal source (expression/variable/activity-result/workflow-request) has no value to fix at
+        // publish time, so it genuinely cannot back an endpoint option.
+        if (binding.Source != RuntimeInputBindingSource.Literal)
             throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-literal '{inputName}'. Endpoint " +
                 "options must be authored literals so they are fixed at publish time.");
+
+        // A literal source with no value is an unauthored optional input (it compiles to an omitted/absent literal)
+        // or an explicit null: treat both as unauthored so the caller applies the documented default and the shell
+        // still publishes when the option was left blank.
+        if (binding.LiteralValue is not { } literal)
+            return null;
 
         return literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : literal;
     }
@@ -221,12 +266,13 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (binding is null)
             return null;
 
-        if (binding.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
+        if (binding.Source != RuntimeInputBindingSource.Literal)
             throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-literal '{inputName}'. Supported " +
                 "methods must be an authored literal so the endpoint's per-method stimuli are fixed at publish time.");
 
-        if (literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        // Unauthored (omitted/absent literal) or explicitly null: apply the default (["GET"]) rather than fail.
+        if (binding.LiteralValue is not { } literal || literal.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
 
         if (literal.ValueKind != JsonValueKind.Array)

@@ -14,7 +14,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 
 **The single-aggregating-handler convention** (framework §2.24.2): by convention, for every contributor-interface fan-in event (e.g. `OnDraftValidating`, `OnJsonPayloadConvertersInitializing`), exactly ONE `IEventHandler<OnXxx>` is registered — the aggregator that loops the typed contributor implementations. Feature code never registers its own `IEventHandler` for these events; it registers a typed contributor (e.g. `IDraftValidator`, `IJsonConverterSource`). This makes the contributor count visible at a glance.
 
-**Known implementations (shipped):** every aggregating handler in the repo — `ExecuteValidations`, `RegisterJsonConverters`, `PreProcessScript`, `PostProcessScript`, `BuildDeclarationsDocument`, `RegisterActivityConstructors`, `ApplyEntitySavingHandlers`, `ApplyEntityLoadingHandlers`, `CollectActivityVersions`, `WorkflowVersionsReconcilingHandler`, and others. See each domain's feature catalog for detail.
+**Known implementations (shipped):** aggregating handlers such as `ExecuteValidations`, `RegisterJsonConverters`, `PreProcessScript`, `PostProcessScript`, `BuildDeclarationsDocument`, `ApplyEntitySavingHandlers`, `ApplyEntityLoadingHandlers`, `CollectActivityVersions`, and `WorkflowVersionsReconcilingHandler`. See each domain's feature catalog for detail.
 
 ### `IEvent` *(Core — `Elsa.Events.Core`)*
 - **Kind:** Marker interface — implement to define an event type. Typically a `sealed record`.

@@ -22,9 +22,10 @@ public sealed class WorkflowTriggerIndexerTests
         await indexer.PreparePublicationAsync(executable, "publication-default-v1", "slot-default");
         await indexer.PreparePublicationAsync(executable, "publication-blue", "slot-blue");
 
-        Assert.Empty(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
-        var defaultBinding = Assert.Single(await store.ListByPublicationAsync("publication-default-v1"));
-        var blueBinding = Assert.Single(await store.ListByPublicationAsync("publication-blue"));
+        Assert.Empty((await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items);
+        var defaultBinding = Assert.Single(await store.ListAllByPublicationAsync("publication-default-v1"));
+        var blueBinding = Assert.Single(await store.ListAllByPublicationAsync("publication-blue"));
         Assert.Equal("publication-default-v1", defaultBinding.PublicationId);
         Assert.Equal("slot-default", defaultBinding.SlotId);
         Assert.Equal("publication-blue", blueBinding.PublicationId);
@@ -36,7 +37,8 @@ public sealed class WorkflowTriggerIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
-            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+            (await store.ListByStimulusAsync(
+                    new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items
                 .Select(binding => binding.PublicationId)
                 .Order(StringComparer.Ordinal));
 
@@ -45,14 +47,16 @@ public sealed class WorkflowTriggerIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],
-            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+            (await store.ListByStimulusAsync(
+                    new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items
                 .Select(binding => binding.PublicationId)
                 .Order(StringComparer.Ordinal));
 
         await store.DeleteByPublicationAsync("publication-default-v1");
         await store.DeleteByPublicationAsync("publication-default-v2");
 
-        var survivingBinding = Assert.Single(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
+        var survivingBinding = Assert.Single((await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items);
         Assert.Equal("publication-blue", survivingBinding.PublicationId);
         Assert.Equal("slot-blue", survivingBinding.SlotId);
     }
@@ -68,7 +72,7 @@ public sealed class WorkflowTriggerIndexerTests
         var bindings = await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
 
         Assert.Single(bindings);
-        var stored = Assert.Single(await store.ListByArtifactAsync("artifact-1"));
+        var stored = Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal("Event", stored.StimulusType);
     }
 
@@ -84,7 +88,7 @@ public sealed class WorkflowTriggerIndexerTests
 
         await indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event")));
 
-        var bindings = await store.ListByArtifactAsync("artifact-1");
+        var bindings = await store.ListAllByArtifactAsync("artifact-1");
         var binding = Assert.Single(bindings);
         Assert.Equal("node-event", binding.ExecutableNodeId);
     }
@@ -100,7 +104,7 @@ public sealed class WorkflowTriggerIndexerTests
 
         await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
 
-        Assert.Single(await store.ListByArtifactAsync("artifact-2"));
+        Assert.Single(await store.ListAllByArtifactAsync("artifact-2"));
     }
 
     [Fact]
@@ -120,7 +124,7 @@ public sealed class WorkflowTriggerIndexerTests
         var binding = Assert.Single(snapshot.Bindings);
         Assert.Equal("node-event", binding.ExecutableNodeId);
         // Observer runs after the write: the binding it was handed is already durable in the store.
-        Assert.Single(await store.ListByArtifactAsync("artifact-1"));
+        Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
     }
 
     [Fact]
@@ -171,7 +175,7 @@ public sealed class WorkflowTriggerIndexerTests
             indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event"))).AsTask());
 
         // The prior generation is still durable, not deleted; the new binding was never written.
-        var binding = Assert.Single(await store.ListByArtifactAsync("artifact-1"));
+        var binding = Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal("node-old", binding.ExecutableNodeId);
     }
 
@@ -196,7 +200,7 @@ public sealed class WorkflowTriggerIndexerTests
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() => indexer.IndexAsync(executable).AsTask());
 
         Assert.Equal("node-invalid", exception.ExecutableNodeId);
-        var bindings = await store.ListByArtifactAsync("artifact-1");
+        var bindings = await store.ListAllByArtifactAsync("artifact-1");
         Assert.Equal(["node-old-1", "node-old-2"], bindings.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
     }
 
@@ -219,7 +223,7 @@ public sealed class WorkflowTriggerIndexerTests
         Assert.Equal("validator boom", exception.Message);
         var validated = Assert.Single(validator.Snapshots);
         Assert.Equal(["node-new-1", "node-new-2"], validated.Bindings.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
-        var stored = await store.ListByArtifactAsync("artifact-1");
+        var stored = await store.ListAllByArtifactAsync("artifact-1");
         Assert.Equal(["node-old-1", "node-old-2"], stored.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
         Assert.Equal(1, extractor.EvaluateCallCount);
         Assert.Equal(0, extractor.ExtractCallCount);
@@ -231,7 +235,8 @@ public sealed class WorkflowTriggerIndexerTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowTriggerBinding StaleBinding(string artifactId, string nodeId) =>
         new(
@@ -293,10 +298,8 @@ public sealed class WorkflowTriggerIndexerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = executionType },
             childSlots: childSlots);
     }
@@ -335,7 +338,7 @@ public sealed class WorkflowTriggerIndexerTests
         public async ValueTask ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
             Snapshots.Add(snapshot);
-            BindingsInStoreAtValidation = await store.ListByArtifactAsync(snapshot.ArtifactId, cancellationToken);
+            BindingsInStoreAtValidation = await store.ListAllByArtifactAsync(snapshot.ArtifactId, cancellationToken);
         }
     }
 

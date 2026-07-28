@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "11b70dcf2404e209c76d1bdf1076dbeb597f7f29961aa296b0e8337373cee077",
+  "executionPath": "provider-driver/mongodb/runtime-post-commit-outbox/6d576dc01c828264",
+  "clients": 2,
+  "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+  "outcome": "pass",
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "evidence/mongodb/runtime-post-commit-outbox/6d576dc01c828264.json"
+}

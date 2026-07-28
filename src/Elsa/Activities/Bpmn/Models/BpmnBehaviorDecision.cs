@@ -1,0 +1,105 @@
+using System.Text.Json.Serialization;
+
+namespace Elsa.Activities.Bpmn.Models;
+
+/// <summary>
+/// The immutable decision returned by an <c>IBpmnElementBehavior</c>. The engine's behavior applier
+/// validates and applies the commands; behaviors never mutate state or schedule children themselves.
+/// </summary>
+public sealed record BpmnBehaviorDecision
+{
+    [JsonConstructor]
+    public BpmnBehaviorDecision(IReadOnlyCollection<BpmnBehaviorCommand>? commands = null)
+    {
+        Commands = commands ?? [];
+    }
+
+    public IReadOnlyCollection<BpmnBehaviorCommand> Commands { get; init; }
+
+    public static BpmnBehaviorDecision Of(params BpmnBehaviorCommand[] commands) => new(commands);
+}
+
+public sealed record BpmnBehaviorCommand
+{
+    [JsonConstructor]
+    public BpmnBehaviorCommand(
+        BpmnBehaviorCommandKind kind,
+        IReadOnlyCollection<string>? flowIds = null,
+        string? faultCode = null,
+        string? message = null)
+    {
+        Kind = kind;
+        FlowIds = flowIds ?? [];
+        FaultCode = faultCode;
+        Message = message;
+    }
+
+    public BpmnBehaviorCommandKind Kind { get; init; }
+
+    /// <summary>The sequence flows to take (for <see cref="BpmnBehaviorCommandKind.EmitTokens"/>).</summary>
+    public IReadOnlyCollection<string> FlowIds { get; init; }
+
+    public string? FaultCode { get; init; }
+    public string? Message { get; init; }
+
+    public static BpmnBehaviorCommand EmitTokens(IReadOnlyCollection<string> flowIds) =>
+        new(BpmnBehaviorCommandKind.EmitTokens, flowIds);
+
+    public static BpmnBehaviorCommand ScheduleChild() => new(BpmnBehaviorCommandKind.ScheduleChild);
+
+    public static BpmnBehaviorCommand ConsumeToken() => new(BpmnBehaviorCommandKind.ConsumeToken);
+
+    public static BpmnBehaviorCommand TerminateProcess(string? message = null) =>
+        new(BpmnBehaviorCommandKind.TerminateProcess, message: message);
+
+    public static BpmnBehaviorCommand Fault(string faultCode, string message) =>
+        new(BpmnBehaviorCommandKind.Fault, faultCode: faultCode, message: message);
+
+    public static BpmnBehaviorCommand TriggerCompensation() => new(BpmnBehaviorCommandKind.TriggerCompensation);
+
+    public static BpmnBehaviorCommand CancelTransaction() => new(BpmnBehaviorCommandKind.CancelTransaction);
+
+    public static BpmnBehaviorCommand RaiseEscalation() => new(BpmnBehaviorCommandKind.RaiseEscalation);
+}
+
+public enum BpmnBehaviorCommandKind
+{
+    /// <summary>Consume the current token and emit one token per listed outbound sequence flow.</summary>
+    EmitTokens,
+
+    /// <summary>Park the current token and schedule the element's bound Elsa child activity.</summary>
+    ScheduleChild,
+
+    /// <summary>Consume the current token without emitting successors (none end event).</summary>
+    ConsumeToken,
+
+    /// <summary>Consume every live token and complete the process (terminate end event).</summary>
+    TerminateProcess,
+
+    /// <summary>Fault the composite deterministically.</summary>
+    Fault,
+
+    /// <summary>
+    /// Replay the compensation log (spec 124): a compensate throw/end token requests the engine to claim and
+    /// run the registered compensation handlers (reverse registration order), then route/consume when done.
+    /// The behavior stays decision-only — registration, ordering, claiming, and replay are engine-owned.
+    /// </summary>
+    TriggerCompensation,
+
+    /// <summary>
+    /// Cancel the enclosing transaction (spec 125): a cancel end event requests the engine to stop all other
+    /// live work in the scope, replay every registered compensable (reverse registration order), and then
+    /// complete the process with the <c>Cancelled</c> outcome. The behavior stays decision-only — stopping,
+    /// claiming, replay, and completion are engine-owned.
+    /// </summary>
+    CancelTransaction,
+
+    /// <summary>
+    /// Raise an escalation (spec 127): an escalation throw/end event requests the engine to signal its parent
+    /// scope through seam C (<c>RequestParentNotification</c>) — or, at a root process, to record a no-op
+    /// diagnostic. Companion to the throw's routing command (<c>EmitTokens</c> on an intermediate throw,
+    /// <c>ConsumeToken</c> on an end event), which routes/consumes as usual. The behavior stays decision-only —
+    /// the escalation code is read from the element, and matching/firing/bubbling are engine-owned.
+    /// </summary>
+    RaiseEscalation
+}

@@ -31,3 +31,8 @@ Required p95 budgets:
 - warm workflow response: ≤50 ms.
 
 Preserve raw reports and exact repository/binary/data provenance in `docs/reports/shell-activation-performance-2026-07.md`.
+
+The reference SQLite server compositions enable executable caching by default with capacity `256`.
+For a causal comparison, change only
+`CShells:Shells:default:Features:GroundworkUnifiedPersistenceSqlite:CacheWorkflowExecutables`
+to `false`, restart from the same frozen database, and rerun the identical command.

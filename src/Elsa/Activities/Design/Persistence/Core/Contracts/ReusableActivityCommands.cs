@@ -1,0 +1,266 @@
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Entities;
+
+namespace Elsa.Activities.Design.Persistence.Core.Contracts;
+
+public sealed record CreateActivityDefinitionRequest(
+    ActivityDefinition Definition,
+    ActivityDefinitionAuthoringState AuthoringState,
+    ActivityDefinitionDraft InitialDraft,
+    ActivityDefinitionDraftLayout InitialLayout);
+
+public interface ICreateActivityDefinitionCommand
+{
+    Task ExecuteAsync(
+        CreateActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record SaveActivityForkCandidateRequest(ActivityForkCandidate Candidate);
+
+public interface ISaveActivityForkCandidateCommand
+{
+    Task<ActivityForkCandidate> ExecuteAsync(
+        SaveActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPruneActivityForkCandidatesCommand
+{
+    Task<int> ExecuteAsync(
+        DateTimeOffset retainBefore,
+        int maximumCount = 100,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ApplyActivityForkCandidateRequest(
+    string CandidateId,
+    string RequestFingerprint,
+    string AccessBindingFingerprint,
+    string ActorId,
+    string AuthorizationProfile,
+    string IdempotencyKey,
+    string ReceiptId,
+    DateTimeOffset AppliedAt);
+
+public sealed record ActivityForkApplyResult(
+    ActivityForkReceipt Receipt,
+    bool AlreadyApplied);
+
+public interface IApplyActivityForkCandidateCommand
+{
+    Task<ActivityForkApplyResult> ExecuteAsync(
+        ApplyActivityForkCandidateRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class ActivityForkCandidateStaleException(string message) : Exception(message);
+
+public sealed class ActivityForkIdempotencyConflictException(string message) : Exception(message);
+
+public sealed class ActivityForkCollisionException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewIdempotencyConflictException(string message) : Exception(message);
+
+public sealed class ActivityForkPreviewExpiredException(string message) : Exception(message);
+
+public sealed record UpdateActivityDefinitionPresentationRequest(
+    string DefinitionId,
+    string? TenantId,
+    string Category,
+    string DisplayName,
+    string? Description,
+    DateTimeOffset LastModifiedAt);
+
+/// <summary>
+/// Updates only mutable catalog presentation metadata. Implementations must preserve the activity
+/// type key, tenant, content authority, fork provenance, and head identity.
+/// </summary>
+public interface IUpdateActivityDefinitionPresentationCommand
+{
+    Task<ActivityDefinition> ExecuteAsync(
+        UpdateActivityDefinitionPresentationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record CreateActivityDraftRequest(
+    ActivityDefinitionDraft Draft,
+    ActivityDefinitionDraftLayout Layout,
+    string? ExpectedDefinitionHeadVersionId);
+
+public interface ICreateActivityDraftCommand
+{
+    Task ExecuteAsync(
+        CreateActivityDraftRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record UpdateActivityDraftPresentationRequest(
+    string DraftId,
+    long ExpectedRevision,
+    string? PresentationLabel,
+    DateTimeOffset ChangedAt);
+
+public interface IUpdateActivityDraftPresentationCommand
+{
+    Task<ActivityDefinitionDraft> ExecuteAsync(
+        UpdateActivityDraftPresentationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record CreateActivityDraftConflictCopyRequest(
+    string SourceDraftId,
+    long ExpectedSourceRevision,
+    ActivityDefinitionDraft ConflictCopy,
+    ActivityDefinitionDraftLayout Layout);
+
+public interface ICreateActivityDraftConflictCopyCommand
+{
+    Task ExecuteAsync(
+        CreateActivityDraftConflictCopyRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ReplaceActivityDraftRequest(
+    string DraftId,
+    long ExpectedRevision,
+    ActivityDefinitionDraftState State,
+    IReadOnlyList<ActivityLayoutRecord> Layout,
+    string? PresentationLabel = null);
+
+public interface IReplaceActivityDraftCommand
+{
+    Task<ActivityDefinitionDraft> ExecuteAsync(
+        ReplaceActivityDraftRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ApplyActivityContractProposalRequest(
+    string DraftId,
+    string? TenantId,
+    long ExpectedRevision,
+    string ExpectedProviderKey,
+    string ExpectedProviderSchemaVersion,
+    string ExpectedManifestFingerprint,
+    ActivityContract Contract);
+
+public interface IApplyActivityContractProposalCommand
+{
+    Task<ActivityDefinitionDraft> ExecuteAsync(
+        ApplyActivityContractProposalRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record DiscardActivityDraftRequest(string DraftId, long ExpectedRevision);
+
+public interface IDiscardActivityDraftCommand
+{
+    Task ExecuteAsync(
+        DiscardActivityDraftRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IStoreActivityDraftValidationCommand
+{
+    Task ExecuteAsync(
+        ActivityDraftValidationState validation,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ChangeActivityVersionLifecycleRequest(
+    string DefinitionVersionId,
+    ActivityDefinitionVersionLifecycle ExpectedLifecycle,
+    ActivityDefinitionVersionLifecycle Lifecycle,
+    string Reason,
+    string? TenantId = null,
+    ActivityRecommendationDecision? RecommendationDecision = null);
+
+public interface IChangeActivityVersionLifecycleCommand
+{
+    Task<ActivityDefinitionVersionPublication> ExecuteAsync(
+        ChangeActivityVersionLifecycleRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record SetActivityDefinitionRecommendationRequest(
+    string DefinitionId,
+    string? TenantId,
+    string? ExpectedDefinitionHeadVersionId,
+    string? ExpectedRecommendedVersionId,
+    string? RecommendedVersionId,
+    ActivityDefinitionVersionLifecycle? ExpectedRecommendedVersionLifecycle,
+    DateTimeOffset ChangedAt);
+
+public interface ISetActivityDefinitionRecommendationCommand
+{
+    Task<ActivityDefinitionAuthoringState> ExecuteAsync(
+        SetActivityDefinitionRecommendationRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ActivityPublicationDesignMutation(
+    string DraftId,
+    long ExpectedDraftRevision,
+    string DefinitionId,
+    string? ExpectedDefinitionHeadVersionId,
+    ActivityDefinitionVersion CatalogVersion,
+    ActivityDefinitionVersionPublication Publication,
+    ActivityDefinitionVersionLayout Layout,
+    IReadOnlyList<ActivityDependencyEdge> DirectDependencies);
+
+/// <summary>
+/// Complete atomic publication input. Generic artifact and receipt types keep this Design
+/// persistence contract independent of Runtime and Publishing while allowing their Groundwork
+/// bridge to commit every authoritative document and the durable outcome in one transaction.
+/// </summary>
+public sealed record ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt>(
+    string? OperationTenantId,
+    ActivityPublicationDesignMutation Design,
+    TExecutableTemplate ExecutableTemplate,
+    TSourceReference SourceReference,
+    TReceipt Receipt)
+    where TExecutableTemplate : class
+    where TSourceReference : class
+    where TReceipt : class;
+
+public sealed record ActivityPublicationResult(
+    string DefinitionId,
+    string DefinitionVersionId,
+    string DraftId,
+    string TemplateId,
+    string SourceReferenceId,
+    DateTimeOffset PublishedAt);
+
+public interface ICommitActivityPublicationCommand<TExecutableTemplate, TSourceReference, TReceipt>
+    where TExecutableTemplate : class
+    where TSourceReference : class
+    where TReceipt : class
+{
+    Task<ActivityPublicationResult> ExecuteAsync(
+        ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt> commit,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference>(
+    ActivityDefinition Definition,
+    ActivityDefinitionAuthoringState AuthoringState,
+    ActivityDefinitionVersion CatalogVersion,
+    ActivityDefinitionVersionPublication Publication,
+    ActivityDefinitionVersionLayout Layout,
+    TExecutableTemplate ExecutableTemplate,
+    TSourceReference SourceReference)
+    where TExecutableTemplate : class
+    where TSourceReference : class;
+
+/// <summary>
+/// Atomic source-authority counterpart of draft publication. There is no mutable draft or head CAS:
+/// the source owns content and reconciliation supplies deterministic definition/version identities.
+/// </summary>
+public interface ICommitSourceActivityPublicationCommand<TExecutableTemplate, TSourceReference>
+    where TExecutableTemplate : class
+    where TSourceReference : class
+{
+    Task ExecuteAsync(
+        SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        CancellationToken cancellationToken = default);
+}

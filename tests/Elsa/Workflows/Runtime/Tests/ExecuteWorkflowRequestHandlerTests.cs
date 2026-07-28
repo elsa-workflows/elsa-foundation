@@ -152,7 +152,8 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutableSourceReference PublishedReference(
         string sourceReferenceId,
@@ -169,10 +170,8 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider

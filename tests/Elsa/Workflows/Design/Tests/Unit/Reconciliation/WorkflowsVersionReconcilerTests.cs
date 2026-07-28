@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Entities;
 using Elsa.Primitives.Enums;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -36,14 +35,16 @@ public sealed class WorkflowsVersionReconcilerTests
         var sender = new CapturingSender { ToContribute = [incoming] };
         var defs = new StubDefinitionStore();
         var versions = new StubVersionStore();
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
 
         var reconciler = NewReconciler(sender, defs, versions, addDef, addVer, DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
 
         Assert.Single(addDef.Added);
         Assert.Equal("wf-new", addDef.Added[0].Id);
+        // Materialized from a source ⇒ the source owns lifecycle metadata (DeletedAt reconciliation).
+        Assert.True(addDef.Added[0].IsSourceOwned);
         Assert.Single(addVer.Added);
         Assert.Equal("wf-new", addVer.Added[0].DefinitionId);
         Assert.Equal("1.0.0", addVer.Added[0].Version);
@@ -58,8 +59,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore(); // No existing versions.
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -82,8 +83,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
@@ -104,8 +105,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -132,8 +133,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -158,8 +159,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -185,8 +186,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(newerVersion);
-        var addDef = new SpyAddCommand<WorkflowDefinition>();
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
@@ -203,19 +204,19 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_deleted_soft_deletes_definition_without_deleting_versions()
     {
-        // R10/FR-008: definition.json marks the definition deleted → DeletedAt set; no version row removed.
+        // R10/FR-008: definition.json marks a source-owned definition deleted → DeletedAt set; no version row removed.
         var incoming = BuildIncomingVersion(definitionId: "wf-del", version: "1.0.0", name: "Same", deleted: true);
-        var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same" }; // live
+        var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same", IsSourceOwned = true }; // live
         var existingVersion = new WorkflowDefinitionVersion("wf-del", "1.0.0");
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var addVer = new SpyMaterializeVersionCommand();
         var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), addVer, DuplicateHandling.Skip, saveDef);
+            defs, versions, new SpyMaterializeDefinitionCommand(), addVer, DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
         var saved = Assert.Single(saveDef.Saved);
@@ -226,9 +227,9 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_live_undeletes_soft_deleted_definition()
     {
-        // R10: definition.json latest-wins — a source reporting the definition live clears DeletedAt.
+        // R10: definition.json latest-wins — a source reporting a source-owned definition live clears DeletedAt.
         var incoming = BuildIncomingVersion(definitionId: "wf-undel", version: "1.0.0", name: "Same", deleted: false);
-        var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1) };
+        var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1), IsSourceOwned = true };
         var existingVersion = new WorkflowDefinitionVersion("wf-undel", "1.0.0");
 
         var defs = new StubDefinitionStore().With(existingDef);
@@ -237,10 +238,82 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(), DuplicateHandling.Skip, saveDef);
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
         var saved = Assert.Single(saveDef.Saved);
+        Assert.Null(saved.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Incoming_deleted_does_not_soft_delete_non_source_owned_definition()
+    {
+        // Guard: a source reporting a catalog-authored (non-source-owned) definition as deleted must NOT
+        // flip DeletedAt — latest-wins soft-delete is scoped to definitions the source materialized itself.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio", version: "1.0.0", name: "Same", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio", Name = "Same" }; // Studio-authored, live
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+        var logger = new CapturingLogger<WorkflowsVersionReconciler>();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef, logger);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Nothing else changed, so the ignored delete intent results in no write at all.
+        Assert.Empty(saveDef.Saved);
+        Assert.Null(existingDef.DeletedAt);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("not source-owned"));
+    }
+
+    [Fact]
+    public async Task Incoming_live_does_not_undelete_non_source_owned_definition()
+    {
+        // Guard, other direction: a source may not resurrect a catalog-authored soft-deleted definition.
+        var deletedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-del", version: "1.0.0", name: "Same", deleted: false);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-del", Name = "Same", DeletedAt = deletedAt };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-del", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(saveDef.Saved);
+        Assert.Equal(deletedAt, existingDef.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Rename_still_applies_when_delete_intent_is_ignored_on_non_source_owned_definition()
+    {
+        // The ownership guard scopes only DeletedAt: name/description stay latest-wins for every source.
+        var incoming = BuildIncomingVersion(definitionId: "wf-studio-ren", version: "1.0.0", name: "New Name", deleted: true);
+        var existingDef = new WorkflowDefinition { Id = "wf-studio-ren", Name = "Old Name" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-studio-ren", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
+            DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("New Name", saved.Name);
         Assert.Null(saved.DeletedAt);
     }
 
@@ -249,8 +322,8 @@ public sealed class WorkflowsVersionReconcilerTests
     {
         // R13/FR-006: same (id, version) with different canonical state is a broken source — surfaced as
         // a warning now (a throw arrives once FR-016a persists a hash). Under Skip, no throw, no add.
-        var incomingState = new WorkflowDefinitionState([], null, [], [], null, null);
-        var storedState = new WorkflowDefinitionState([], null, [], [], null, null);
+        var incomingState = new WorkflowDefinitionState([], null, [], [], null);
+        var storedState = new WorkflowDefinitionState([], null, [], [], null);
         var incoming = BuildIncomingVersion(definitionId: "wf-diff", version: "1.0.0", name: "Same", state: incomingState);
         var existingDef = new WorkflowDefinition { Id = "wf-diff", Name = "Same" };
         var existingVersion = new WorkflowDefinitionVersion("wf-diff", "1.0.0") { State = storedState };
@@ -262,7 +335,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, logger: logger, serializer: serializer);
         await reconciler.Reconcile(CancellationToken.None);
 
@@ -282,7 +355,7 @@ public sealed class WorkflowsVersionReconcilerTests
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
             defs, versions,
-            new SpyAddCommand<WorkflowDefinition>(), new SpyAddCommand<WorkflowDefinitionVersion>(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Throw);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
@@ -292,8 +365,8 @@ public sealed class WorkflowsVersionReconcilerTests
         IInlineEventPublisher sender,
         IWorkflowDefinitionStore defs,
         IWorkflowDefinitionVersionStore versions,
-        IAddCommand<WorkflowDefinition> addDef,
-        IAddCommand<WorkflowDefinitionVersion> addVer,
+        IMaterializeWorkflowDefinitionCommand addDef,
+        IMaterializeWorkflowDefinitionVersionCommand addVer,
         DuplicateHandling duplicateHandling,
         ISaveWorkflowDefinitionCommand? saveDef = null,
         ILogger<WorkflowsVersionReconciler>? logger = null,
@@ -320,7 +393,7 @@ public sealed class WorkflowsVersionReconcilerTests
         Version = version,
         DefinitionId = definitionId,
         DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = name, Description = description, DeletedAt = deleted ? DateTimeOffset.UtcNow : null },
-        State = state ?? new WorkflowDefinitionState([], null, [], [], null, null),
+        State = state ?? new WorkflowDefinitionState([], null, [], [], null),
     };
 
     private sealed class StubIncomingDefinition : IWorkflowDefinition
@@ -426,16 +499,49 @@ public sealed class WorkflowsVersionReconcilerTests
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
-    private sealed class SpyAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity
+    private sealed class SpyMaterializeDefinitionCommand : IMaterializeWorkflowDefinitionCommand
     {
-        public List<TEntity> Added { get; } = new();
-        public Task Add(TEntity entity, CancellationToken cancellationToken = default) { Added.Add(entity); return Task.CompletedTask; }
+        public List<WorkflowDefinition> Added { get; } = new();
+
+        public Task<string> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(definition);
+            return Task.FromResult(definition.Id);
+        }
+    }
+
+    private sealed class SpyMaterializeVersionCommand : IMaterializeWorkflowDefinitionVersionCommand
+    {
+        public List<WorkflowDefinitionVersion> Added { get; } = new();
+
+        public Task<WorkflowDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinitionVersion version,
+            CancellationToken cancellationToken = default)
+        {
+            Added.Add(version);
+            return Task.FromResult(
+                new WorkflowDefinitionVersionAdded(
+                    version.DefinitionId,
+                    version.Id,
+                    version.Version));
+        }
     }
 
     private sealed class SpySaveDefinitionCommand : ISaveWorkflowDefinitionCommand
     {
         public List<WorkflowDefinition> Saved { get; } = new();
-        public Task Execute(WorkflowDefinition definition, CancellationToken cancellationToken = default) { Saved.Add(definition); return Task.CompletedTask; }
+        public Task Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition definition,
+            CancellationToken cancellationToken = default)
+        {
+            Saved.Add(definition);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class SequentialIdGenerator : IIdentityGenerator

@@ -23,7 +23,9 @@ public interface IBookmarkStateStore
     ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all bookmark states for the given workflow execution ID.
+    /// Returns one finite, deterministic live-view page of bookmark states for the given workflow execution ID.
     /// </summary>
-    ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+    ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(
+        BookmarkStatePageQuery query,
+        CancellationToken cancellationToken = default);
 }

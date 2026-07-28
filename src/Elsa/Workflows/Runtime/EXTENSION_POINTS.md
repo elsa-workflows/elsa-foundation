@@ -38,6 +38,25 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 
 ## Overridable replacement contracts
 
+### `IWorkflowDispatchStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns first-class workflow-dispatch lifecycle records).
+- **Signature:** save/find plus list by parent workflow execution ID.
+- **Usage:** `RuntimeCheckpointStateChangeSet.WorkflowDispatches` is applied atomically with activity state and post-commit outbox work. Built-in in-memory and Groundwork providers project it through their workflow-dispatch stores.
+- **Safety:** operational records contain safe input descriptors, never raw child input values. Raw values exist only in the protected child-start intent payload required for delivery.
+
+### `IWorkflowDispatchAdmissionStore` / `IWorkflowDispatchCancellationStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Additive provider capabilities over the configured `IWorkflowDispatchStore`.
+- **Signature:** `TryAdmitAsync(dispatchId, admittedAt, ...)` conditionally advances Pending to Started; `ApplyCancellationAsync(request, ...)` resolves a replay-stable parent cancellation request against current admission state.
+- **Usage:** DispatchWorkflow linearizes external child start against parent cancellation. Cancellation requests are carried in `RuntimeCheckpointStateChangeSet.WorkflowDispatchCancellations` and resolved in the same provider transaction as the parent Cancelled state and child-cancel outbox item.
+- **Safety:** cancellation wins by producing a Cancelled-before-admission marker that suppresses later start; admission wins by preserving Started and adding cancellation-requested responsibility. Terminal state never regresses. DispatchWorkflow readiness fails when either capability is absent.
+- **Default implementations:** `InMemoryWorkflowDispatchStore` and Groundwork's scoped `GroundworkWorkflowDispatchStore`.
+
+### `IWorkflowTestScopeStore` / `IWorkflowTestScopeAdmissionStore` / `IWorkflowTestScopeCleanupStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Single-provider replacement family for finite test-run scope lifecycle, admission fencing, and detached cleanup.
+- **Usage:** a test-run root carries one immutable scope snapshot through checkpoints and DispatchWorkflow descendants. Root/new-child checkpoint admission validates Open state; direct cleanup applies only to fire-and-forget dispatches, while waited children retain the production parent-cancellation contract.
+- **Safety:** the guarded provider claim rejects conflicting durable providers in either composition order. Provider transactions serialize scope close against detached child admission and commit a Started child's cancellation marker with its deterministic cancel outbox responsibility.
+- **Defaults:** `InMemoryWorkflowTestScopeStore`; Groundwork replaces the complete family.
+
 ### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
 - **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution under the host's retention policy.
@@ -47,14 +66,30 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
 - **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
-- **Usage:** an artifact is eligible only when it is outside creation/staging grace and absent from both root sets: live source references and retained workflow executions. Root writers acquire a provider-backed executable lease before committing either root. The collector first acquires a conditional deletion guard, then checks both root sets, and only that matching guard may delete; leases and guards use provider CAS so the check/delete boundary is safe across hosts. Root-query or guard failures retain the artifact for a later sweep.
+- **Usage:** an artifact is eligible only when it is outside creation/staging grace and absent from the transitive dependency closure of both root sets: live source references and retained workflow executions. Root writers acquire provider-backed leases for the full validated closure before committing either root. The collector first acquires a conditional deletion guard, then recomputes closure reachability, and only that matching guard may delete; leases and guards use provider CAS so the check/delete boundary is safe across hosts. Root-query, graph-integrity, or guard failures retain the artifact for a later sweep.
 - **Default implementation:** `WorkflowExecutableReferenceGarbageCollector`; registered by the Runtime composition root. The opt-in `WorkflowsRuntimeReferenceGarbageCollection` feature schedules it and exposes cadence/grace policy.
 
 ### `IWorkflowExecutableRootWriteLeaseManager` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one coordinator scopes the provider-backed lease required to establish an executable-retention root).
-- **Signature:** `ExecuteAsync(artifactId, leaseId, write, ...)` runs the durable write while acquiring, renewing, and finally releasing its lease.
-- **Usage:** canonical publication, test-run, and workflow-execution checkpoint writers execute their durable root write through this coordinator. Persistence providers implement the underlying lease/guard transitions on `IWorkflowExecutableStore`; custom root writers must use the same coordinator. Lease loss cancels the write and is surfaced rather than silently reporting an unprotected root.
+- **Signature:** `ExecuteAsync(rootIdentity, leaseId, write, ...)` runs the durable write while acquiring, renewing, and finally releasing sorted leases for the exact root and dependency closure. The original artifact-ID overload remains for source compatibility and single-artifact writes.
+- **Usage:** canonical publication, test-run, and workflow-execution checkpoint writers execute their durable root write through this coordinator. Persistence providers implement the underlying lease/guard transitions on `IWorkflowExecutableStore`; custom root writers must use the identity overload and provide closure-wide behavior. Lease loss cancels the write and is surfaced rather than silently reporting an unprotected root. Third-party implementations that rely on the default identity-overload fallback remain compatible but fence only the root until they override it.
 - **Default implementation:** `WorkflowExecutableRootWriteLeaseManager`.
+
+### `IWorkflowExecutableInputValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one validator owns declared workflow-input contract enforcement).
+- **Signature:** validates complete realized input bags or only statically known publication inputs and returns safe findings plus normalized inputs.
+- **Usage:** DispatchWorkflow Design validates knowable literal bindings before publication; Runtime validates the realized bag against the exact pinned child before staging responsibility. Supported literal defaults are materialized during normalization, unknown type aliases fail closed, and findings never retain rejected raw values.
+- **Default implementation:** `WorkflowExecutableInputValidator`.
+
+### `IWorkflowExecutableStartPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (exactly one policy decides whether an otherwise-authorized future executable start may materialize).
+- **Signature:** evaluates immutable executable, authority, and typed runtime context and returns an allow or classifiable deny decision.
+- **Usage:** evaluated after retained/live authority, input, and dispatch-depth validation and before actor lookup. A denial creates no workflow execution state and does not mutate the executable. Multiple policy registrations fail composition deterministically.
+- **Default implementation:** `AllowWorkflowExecutableStartPolicy`.
+
+### `WorkflowExecutableDependencyGraph` *(Runtime implementation service)*
+- **Kind:** Shared integrity service used by publication validation, closure leasing, and garbage collection.
+- **Usage:** resolves deterministic de-duplicated closures by full artifact ID/hash identity. Missing artifacts, hash mismatches, conflicting identities, and exact-identity cycles are classified failures; same-definition different-artifact edges remain legal.
 
 ### `IRuntimeCheckpointPersistencePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides how checkpoints flush in a runtime composition).
@@ -69,17 +104,55 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Usage:** implemented by runtime persistence providers to commit the checkpoint boundary and its atomic state-change envelope.
 - **Default implementation:** `InMemoryRuntimeCheckpointWriter` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
 
+### `IRuntimeCheckpointCommitEnricher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (zero or more deterministic enrichment phases run before checkpoint fingerprinting and persistence).
+- **Signature:** `Order` plus `EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)`.
+- **Registration and ordering:** register contributors as `IEnumerable<IRuntimeCheckpointCommitEnricher>`. Lower `Order` values run first; equal values retain registration order. Existing contributors that do not override `Order` remain in the default phase (`0`). Later phases may depend only on state established by documented earlier phases.
+- **Default implementations and dependents:** `WorkflowDispatchCheckpointEnricher` projects generic child terminal lifecycle in phase `0`; DispatchWorkflow parent cancellation runs in phase `50`; terminal result/resume enrichment runs in phase `100`. Replacements must be replay-deterministic and must fail closed on conflicting state.
+
 ### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).
 - **Signature:** `DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
-- **Default implementation:** `RuntimeSchedulerPostCommitIntentDispatcher` *(dispatches scheduler-work intents after checkpoint commit; durable outbox providers replace this for distributed delivery)*.
-- **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
+- **Default implementation:** `RuntimePostCommitIntentDispatcher`, an ordinal keyed aggregate over contributed `IRuntimePostCommitIntentHandler` registrations.
+- **Usage:** the outbox processor invokes this replacement contract after checkpoint commit. The default aggregate selects exactly one contributed handler by the persisted intent kind; hosts may still replace the aggregate as a unit.
+
+### `IRuntimePostCommitIntentHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (one handler owns one stable post-commit intent kind).
+- **Signature:** `HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
+- **Registration:** call `services.AddRuntimePostCommitIntentHandler<THandler>(intentKind)`. The registration argument is the sole kind authority; handlers expose no second kind property that could disagree. The built-in scheduler delivery registers `RuntimeSchedulerPostCommitIntentDispatcher` for `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` through this same surface.
+- **Composition rules:** kinds use ordinal comparison. Repeating the same `(intent kind, handler type)` is idempotent. Different handler types claiming one kind fail deterministically with the kind and sorted handler identities; the aggregate defensively repeats that validation when composed.
+- **Lifetime and boundary:** the extension registers handlers as scoped defaults, and the aggregate resolves the selected handler from the active outbox-delivery scope. The global resumption sweep processes every deliverable intent kind outside workflow execution actor mailboxes. The per-execution `WorkflowDrainOrchestrator` remains intentionally filtered to scheduler work only.
+- **Failure behavior:** handler exceptions and unsupported kinds flow through `RuntimePostCommitOutboxProcessor`; the existing outbox retry policy selects the persisted failed/final state. Neither case is silently acknowledged as delivered.
 
 ### `IRuntimePostCommitOutboxStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns durable post-commit outbox state for a runtime composition).
 - **Signature:** `SavePendingAsync(RuntimePostCommitOutboxItem item, ...)`, `GetDeliverableAsync(RuntimePostCommitOutboxQuery query, ...)`, `RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, ...)`.
 - **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
 - **Default implementation:** `InMemoryRuntimePostCommitOutboxStore` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
+
+### `IPostCommitFailureProjector` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional replacement contract. Exactly one active owning feature may recognize and safely project its own effective-final intent failures; feature registration rejects an existing replacement with a clear diagnostic.
+- **Signature:** `ProjectAsync(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxDeliveryResult finalResult, ...)` returns an optional dispatch/follow-up aggregate.
+- **Usage and safety:** the outbox processor invokes it only at effective final failure, then passes its result to the fenced claim-completion store. The projection must validate the canonical intent/dispatch identity and may expose only fixed diagnostics and stable identifiers; it cannot persist independently of the claimed outbox completion.
+- **Known cross-domain replacement:** `Elsa.Activities.DispatchWorkflow.Runtime.WorkflowDispatchDeliveryFailureProjector`, selected by `ActivitiesDispatchWorkflowRuntime`; registration rejects a second replacement instead of silently choosing one.
+
+### `IWorkflowDispatchRedriveStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Additive atomic provider capability for separately authorized delivery recovery.
+- **Signature:** `RedriveAsync(WorkflowDispatchRedriveRequest request, ...)` returns a safe disposition and lifecycle summary.
+- **Usage and safety:** only a fire-and-forget, delivery-caused `DispatchFailed` record linked to its exact `FailedFinal` start item can be reopened. The provider advances generation and fencing while reusing the original dispatch, child, intent, payload, retry policy, and idempotency identities. Wait dispatches and ordinary terminal states remain closed, and ordinary `IWorkflowDispatchStore.SaveAsync` still rejects `DispatchFailed -> Pending`.
+- **Default and replacements:** `InMemoryRuntimeCheckpointCommitStore` supplies the process-local atomic implementation. Durable providers must bind this capability to the same physical dispatch/outbox transaction owner they use for fenced completion.
+
+### `IPostCommitOutboxLookupStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement read capability (one provider resolves an exact already-committed post-commit outbox item without widening the base outbox store).
+- **Signature:** `FindAsync(string outboxItemId, CancellationToken cancellationToken = default)`.
+- **Usage and dependents:** successful DispatchWorkflow terminal enrichment uses the exact committed item to preserve replay identity after uncertain acknowledgement. The in-memory checkpoint store, coalescing overlay, and Groundwork outbox provider implement the capability alongside their write store.
+- **Default implementation and override guidance:** `InMemoryRuntimeCheckpointCommitStore` supplies the process-local default. Durable providers that replace `IRuntimePostCommitOutboxStore` must also register a matching lookup implementation when a feature depends on committed-intent replay; the lookup must share the same physical records and access scope as the writer.
+
+### `IWorkflowOutputSource` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement projection (one source exposes policy-safe terminal workflow outputs to runtime features).
+- **Signature:** `ReadAsync(string workflowExecutionId, IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? pendingDurableValueChanges = null, CancellationToken cancellationToken = default)`.
+- **Usage and dependents:** DispatchWorkflow successful completion reads the child execution's durable workflow-output channel and overlays the current terminal checkpoint changes before recording a parent result. Redacted entries retain name/type metadata but never expose their value.
+- **Default implementation and override guidance:** `WorkflowOutputSource` projects `IDurableValueStateStore` through `IRuntimePayloadCapturePolicy`. Replacements must preserve execution scoping, terminal-change overlay semantics, ordinal output ordering, declared types, and explicit value-free redaction.
 
 ### `IRuntimeRecoveryScanner` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one scanner identifies interrupted workflow executions for a runtime composition).
@@ -90,7 +163,7 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IRuntimeResumptionService` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one service owns a single system-wide resumption sweep pass for a runtime composition).
 - **Signature:** `SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)`.
-- **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: EnqueueSchedulerWork)`), unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the actor mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
+- **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across all contributed kinds, unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the actor mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
 - **Default implementation:** `RuntimeResumptionService` *(registered by the feature-gated `Elsa.Workflows.Runtime.Resumption` package)*.
 
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -163,8 +236,8 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 
 ### `IBookmarkStimulusIndex` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (narrow cross-execution read surface over bookmark state; segregated from `IBookmarkStateStore` so it can be widened/replaced independently).
-- **Signature:** `ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)`; `ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)` *(spec 089 D)*.
-- **Usage:** returns raw `BookmarkState` records matching a stimulus **across every workflow execution** (E3-5 fan-in), unlike `IBookmarkStimulusLookup` which is scoped to one `workflowExecutionId`. `ListByStimulusAsync` matches (type, hash); `ListByStimulusTypeAsync` (spec 089 D) is a hash-agnostic type-scoped scan that enumerates every waiting bookmark of a stimulus family (e.g. all `HttpEndpoint` bookmarks) so the route-table resolver can union their templates. Both are raw scans — neither filters expiry or correlation (that stays in `IGlobalBookmarkStimulusLookup`). Implemented by the bookmark state store itself (in-memory and Groundwork). `ListByStimulusAsync` uses the additive `bookmarkState` `by-stimulus` (hash) index; `ListByStimulusTypeAsync` — like the sibling `GroundworkWorkflowTriggerBindingStore.ListByStimulusTypeAsync` (spec 089 B) — does a clause-free full scan narrowed by type in code (the hash index cannot serve a type-only query), so NO new index is added and `SchemaVersion` is unchanged; it feeds the route-table refresh, not a hot per-request path. Note the Condition 7 gap (see [`docs/serialization.md`](../../../../docs/serialization.md)): bookmarks written before the `by-stimulus` index existed are not backfilled until re-saved.
+- **Signature:** `ListByStimulusPageAsync(BookmarkStimulusPageQuery, ...)`; `ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery, ...)` *(spec 089 D)*.
+- **Usage:** returns finite, continuation-bearing pages of raw `BookmarkState` records matching a stimulus **across every workflow execution** (E3-5 fan-in), unlike `IBookmarkStimulusLookup` which is scoped to one `workflowExecutionId`. Exact-stimulus and type-only lookups are provider-filtered and ordered by `(workflowExecutionId, bookmarkId)` over dedicated composite physical indexes. Neither filters expiry or correlation; that stays in `IGlobalBookmarkStimulusLookup`. Callers that truly require the complete fan-in opt into `ListAllByStimulusAsync` or `ListAllByStimulusTypeAsync`, which explicitly traverse bounded pages.
 - **Default implementation:** `InMemoryBookmarkStateStore` / `GroundworkBookmarkStateStore` *(each also implements this interface)*.
 
 ### `IGlobalBookmarkStimulusLookup` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -175,8 +248,8 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 
 ### `IWorkflowTriggerBindingStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns the durable trigger-binding index for a runtime composition).
-- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(stimulusType, stimulusHash, ...)`, `ListByStimulusTypeAsync(stimulusType, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
-- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulus` is the cross-artifact fan-out the router uses to start every workflow waiting on a stimulus; `ListByStimulusType` is a type-scoped full scan (no hash) used to rebuild a per-shell projection over one stimulus family (e.g. the HTTP route table); `by-artifact` scoping supports republish replacement.
+- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(WorkflowTriggerBindingPageQuery, ...)`, `ListByStimulusTypeAsync(stimulusType, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
+- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulusAsync` is the finite, continuation-bearing cross-artifact lookup over active bindings with an exact stimulus type/hash; `ListAllByStimulusAsync` traverses those bounded pages for business operations that must fan out to every match. `ListByStimulusTypeAsync` is a type-scoped full scan (no hash) used to rebuild a per-shell projection over one stimulus family (e.g. the HTTP route table); `by-artifact` scoping supports republish replacement.
 - **Default implementation:** `InMemoryWorkflowTriggerBindingStore` *(single-node in-memory default; `GroundworkWorkflowTriggerBindingStore` replaces it for durable storage over the `workflowTriggerBinding` document kind)*.
 
 ### `IWorkflowTriggerBindingExtractor` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -192,7 +265,7 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 - **Default implementation:** `WorkflowTriggerIndexer`.
 
 ### `IWorkflowTriggerIndexValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Contribution (fan-in; enumerable). Register with `services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, MyValidator>())`; the indexer resolves `IEnumerable<IWorkflowTriggerIndexValidator>`.
+- **Kind:** Contribution (fan-in; enumerable). Register with `services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, MyValidator>())`; the scoped indexer resolves `IEnumerable<IWorkflowTriggerIndexValidator>` without capturing an access-bound trigger store.
 - **Signature:** `ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken ct = default)` — the snapshot carries `ArtifactId` + the artifact's extracted, about-to-be-written `IReadOnlyCollection<WorkflowTriggerBinding>`.
 - **Usage:** PRE-write validation (the pre-write counterpart of `IWorkflowTriggerIndexObserver`, issue #592 item 2) so a stimulus family can enforce publish-time constraints over the index without the indexer knowing any stimulus type. Called after extraction, before delete-and-resave. **Failure policy:** a throw fails the publish with the durable index untouched — no rollback needed, and a bad publish can never poison the store for later publishes or startup. Keep family-specific constraints in the owning module: do NOT enforce cross-definition stimulus uniqueness generically — for most stimulus types (e.g. two definitions on one Timer cron) shared identity is legitimate fan-out.
 - **Default implementation:** none (an unvalidated index is valid). `HttpEndpointRoutingUniquenessValidator` (in `Elsa.Workflows.Runtime.Http`) is the shipped consumer — HTTP `(template, method)` cross-definition uniqueness.
@@ -218,50 +291,20 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IStimulusRouter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one routing spine turns an external stimulus into starts and/or resumes).
 - **Signature:** `RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)`.
-- **Usage:** the E3-1/E3-5 spine. Snapshots the cross-execution resume set (via `IGlobalBookmarkStimulusLookup`) **before** starting new instances, starts matching published triggers (via `IWorkflowStartDispatcher`, deduped by `IStimulusStartDeduplicator` when an idempotency key is present), and resumes each waiting instance (via `IBookmarkResumeDispatcher`). All dispatch routes through the actor mailbox — the single-writer invariant is preserved. Correlation scope is a passive threaded metadata value. **Stimulus-input delivery (spec 089 A):** `StimulusDispatchRequest.Input` reaches BOTH sides — resumes receive it as the resume input (as before), and starts receive it on the first-class `WorkflowExecutionStartDispatchRequest.StimulusInput` field, seeded onto a reserved durable channel (`RuntimeMetadataKeys.StimulusInputName`, value-id prefix `stimulus:`) and surfaced to activities via `IExecutionExpressionState.StimulusInput`. Deliberately NOT the workflow-inputs bag: the payload can neither collide with an author-declared input nor be forged through the execute API's inputs map. **Trigger-node identity (spec 089 D):** the matched binding's `ExecutableNodeId` rides an analogous reserved channel — `StimulusRouter` forwards it on the first-class `WorkflowExecutionStartDispatchRequest.TriggerNodeId` field, seeded onto a reserved durable channel (`RuntimeMetadataKeys.TriggerNodeId`, value-id prefix `trigger:`) and surfaced via `IExecutionExpressionState.TriggerNodeId`, so a mid-flow-capable activity (e.g. `HttpEndpoint`) can tell whether it is the node that triggered this run. Null on direct (non-trigger) starts and resume-only paths; same collision/spoof-proofing. **Single claimant lookup (#592 item 7):** `StimulusDispatchRequest.MatchedTriggerBindings` lets a caller that already fetched the (type, hash) match set — e.g. the HTTP endpoint middleware, for its ambiguity guard + per-endpoint options — hand it to the router, which reuses it on the start path instead of issuing its own identical `ListByStimulusAsync`. Null (the default) means the router fetches the set itself. The supplied set must be the complete match for the (type, hash); a partial set under-starts. **Dispatch-options passthrough (spec 089 E-D4):** `StimulusDispatchRequest.DispatchOptions` (optional `WorkflowExecutionCommandDispatchOptions?`, a live reference excluded from `BuildDispatchMetadata` so it never enters the durable envelope) is forwarded to BOTH fan-out sites — starts (`IWorkflowStartDispatcher`) and resumes (`IBookmarkResumeDispatcher`) — so one request scope's ambient services serve every outcome of one HTTP request (a start, a resume, or both). Null for non-sync callers (unchanged).
+- **Usage:** the E3-1/E3-5 spine. Snapshots the cross-execution resume set before starting new instances, starts matching published triggers, and resumes each waiting instance through the actor mailbox. Stimulus payload and trigger-node identity travel on reserved durable channels and are delivered through typed invocation/trigger contracts; they never enter the author workflow-input bag or an ambient expression context. Optional matched bindings and dispatch options are forwarded across both fan-out paths.
 - **Default implementation:** `StimulusRouter`.
-
-### `IRuntimeActivityOutputReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Query surface (read-only active-scope output lookup used by resolvers and resolution contexts).
-- **Signature:** `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`.
-- **Usage:** exposes active execution outputs without granting mutation rights to consumers that only materialize runtime input bindings.
-- **Default implementation:** `InMemoryRuntimeActivityOutputRegister` *(through `IRuntimeActivityOutputRegister`)*.
-
-### `IRuntimeActivityOutputRegister` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Replacement (one active-scope output register owns execution-local activity output lookup for a runtime composition).
-- **Signature:** inherits `IRuntimeActivityOutputReader`; adds `Set(ActiveActivityOutput output)`, `ClearActivityOutputs(...)`.
-- **Usage:** stores activity outputs by `WorkflowExecutionId`, `ActivityExecutionId`, and output name while they remain in active execution scope. This is not durable continuation state.
-- **Default implementation:** `InMemoryRuntimeActivityOutputRegister` *(intra-domain default, contract/default for current slice)*.
 
 ### `IRuntimeInputBindingResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one resolver owns runtime input binding materialization rules for a runtime composition).
 - **Signature:** `Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)`.
-- **Usage:** resolves literal, reference, durable-value, and active activity-output bindings without loading authored data links or history snapshots. Expression bindings remain declarations for expression middleware.
+- **Usage:** resolves only the canonical role-owned sources: literal, workflow request, variable read, causal activity result, and portable expression. Results are selected from committed records by structural and causal identity; there is no latest/active output register.
 - **Default implementation:** `RuntimeInputBindingResolver` *(intra-domain default)*.
 
-### `IRuntimeInputBindingValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Replacement (one validator owns executable binding diagnostics for a runtime composition).
-- **Signature:** `Validate(RuntimeInputBinding binding, RuntimeInputBindingValidationContext context)`.
-- **Usage:** reports artifact/build diagnostics for output references that cross suspension boundaries or are ambiguous in loop/parallel scopes.
-- **Default implementation:** `RuntimeInputBindingValidator` *(intra-domain default)*.
-
 ### `IRuntimeActivityInputMaterializer` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Replacement (one materializer owns conversion from executable input bindings to activity runtime arguments for a composition).
-- **Signature:** `MaterializeInputsAsync(ExecutableNode node, IServiceProvider? serviceProvider = null, CancellationToken cancellationToken = default)` and `MaterializeInputsAsync(ExecutableNode node, RuntimeInputBindingResolutionContext resolutionContext, CancellationToken cancellationToken = default)`.
-- **Usage:** constructs activity input arguments and memory values from runtime-owned executable node bindings. Supports literal, durable-value, active-output, and reference bindings (all requiring `typeName` metadata), plus `Expression` bindings — evaluated through the registered `IExpressionEvaluator` (e.g. JavaScript/Liquid) using the resolution context's `ServiceProvider`. Expression evaluation requires a service provider; the literal-only convenience overload passes one through for resume paths. Expressions resolve workflow variables, workflow inputs, and prior activity outputs supplied on `RuntimeInputBindingResolutionContext` (`WorkflowVariables`, `WorkflowInputs`, `ActivityOutputValues`): the materialization-time `IExpressionExecutionContext` implements `IMaterializationExpressionState`, which language pre-processors (e.g. `MaterializationAccessorsPreProcessor`) read to surface `variables`/`input`/`output` accessors without a live workflow execution context.
+- **Kind:** Replacement (one materializer owns immutable invocation-input snapshots).
+- **Signature:** `MaterializeSnapshotAsync(ActivityContract contract, string invocationId, RuntimeInputBindingResolutionContext resolutionContext, CancellationToken cancellationToken)`.
+- **Usage:** resolves canonical bindings, evaluates portable expressions from their explicit immutable parameter map, validates persistability, and produces one typed `ActivityInputSnapshot` suitable for checkpointing before user code. It never creates argument wrappers, memory blocks, or an ambient expression context.
 - **Default implementation:** `RuntimeActivityInputMaterializer`.
-
-### `IMaterializationExpressionState` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Bridge (carries workflow-scoped values from `RuntimeInputBindingResolutionContext` to language pre-processors during activity-input materialization).
-- **Signature:** `WorkflowVariables`, `WorkflowInputs`, `ActivityOutputValues` (name → value).
-- **Usage:** implemented by the materialization-time `IExpressionExecutionContext` so expression-language pre-processors can resolve variable/input/output references before the activity's real execution context exists. Populate the snapshots on the resolution context from the durable values captured for the execution: `RuntimeInputBindingStateProjection.ProjectWorkflowVariables` / `ProjectWorkflowInputs` / `ProjectActivityOutputValues` rebuild the `variables.*` / `input.*` / `output.*` snapshots. Workflow variables and inputs become durable values via `RuntimeWorkflowStateSeed`, seeded at the `WorkflowStarted` checkpoint and tagged with the `runtime.variableName` / `runtime.inputName` metadata keys. The start entry points (`ExecuteWorkflowRequestHandler`, `StartWorkflowTestRunRequestHandler`) populate the seed's `Variables` with authored workflow variable defaults projected off the compiled executable's root structure (`RuntimeVariableScopeFactory.ProjectDeclaredVariableDefaultsByName`); caller-supplied `Inputs` are a deferred API-surface change (#286).
-- **Default implementation:** private materialization context in `RuntimeActivityInputMaterializer`; consumed by `MaterializationAccessorsPreProcessor` *(Elsa.Workflows.Runtime.JavaScript)*.
-
-### `IExecutionExpressionState` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Bridge (carries live execution-time workflow state — identity, inputs, variables, prior outputs — to language pre/post-processors during activity execution). Execution-time counterpart to `IMaterializationExpressionState` (ADR 0030).
-- **Signature:** `WorkflowInstanceId`, `CorrelationId`, `WorkflowName`, `WorkflowDefinitionId`, `WorkflowDefinitionVersionId`, `WorkflowDefinitionVersion`, `WorkflowInputs`, `StimulusInput`, `TriggerNodeId`, `ResumeInput`, `WorkflowVariables`, `ActivityOutputValues`.
-- **Usage:** implemented by the execution-time `IExpressionExecutionContext` (`SimpleActivityExecutionContext`) so expression-language pre/post-processors resolve execution-time identity functions, named pascalized accessors, execution-time output accessors, and JavaScript variable write-back **without a DI-registered live workflow execution context** (ADR 0030 D1; retires `IWorkflowExecutionContext`). Populated by `WorkflowInvokeActivitySchedulerWorkHandler`: identity from `WorkflowExecutionState` + the pinned `WorkflowExecutableIdentity`; `WorkflowVariables`/`WorkflowInputs`/`ActivityOutputValues` from the durable-value projections (`RuntimeInputBindingStateProjection`). Variable writes route through the visible `VariableScope` (`IScopedVariableProvider`) and fold into the checkpoint-commit durable-value write-back (`BuildWorkflowScopeWriteBackChanges`) — no second persistence route. `StimulusInput`/`TriggerNodeId` come from the same durable-value projection set; `ResumeInput` is populated only on the resume path (`WorkflowResumeBookmarkSchedulerWorkHandler` stashes the resume dispatch's input onto the carrier, spec 089 D) as a live per-invocation value — never durable state — so a context-shaped `[ResumeTarget]` reads the resuming request payload while keeping full `Set`/output access; null on start/invoke/parent-completion. A narrow marker, not a general transient-properties bag (ADR 0030 Q3); Design-free (§E2.2/§E2.6).
-- **Default implementation:** `SimpleActivityExecutionContext`; consumed by the re-pointed JavaScript pre/post-processors (`WorkflowFunctionsPreProcessor`, `WorkflowInputFunctionsPreProcessor`, `VariableFunctionsPreProcessor`, `ActivityOutputFunctionsPreProcessor`, `CopyVariablesToWorkflowContext`) in *Elsa.Workflows.Runtime.JavaScript*. The `JavaScriptWorkflowsRuntimeFeature` registration is covered by a resolve-and-evaluate guardrail test (ADR 0030 D4).
 
 ### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides which runtime observability payloads may be captured for a runtime composition).
@@ -272,9 +315,15 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 ### `IWorkflowExecutionActorProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns workflow-execution mailbox activation, routing, and passivation for a runtime composition).
 - **Signature:** `Capabilities`, `GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)`, `PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)`.
-- **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Actor frameworks are provider choices; checkpoint state remains the source of truth.
+- **Usage:** provider implementations enforce one active mailbox/agent per `(WorkflowExecutionPartition, WorkflowExecutionId)`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries the typed provider-neutral partition alongside command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Equal execution IDs and idempotency keys in different partitions remain independent. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Default implementation:** `InProcessWorkflowExecutionActorProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*.
 - **Alternative implementation:** `DistributedWorkflowExecutionActorProvider` *(opt-in leaf `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)* — clustered placement/routing over the in-process provider: claims per-execution placement, returns the local in-process actor when this node owns the execution, or a `ForwardingWorkflowExecutionActor` (durable-transport routing stub, `Deferred` result) when another node owns it. Placement is best-effort routing; W5 fencing at checkpoint commit is the authoritative double-execution guard. Enable with the `WorkflowsRuntimeDistributed` shell feature. See the Distributed placement and transport section below.
+
+### `IWorkflowExecutionPartitionAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement bridge from the host's provider-neutral operation context to runtime command construction.
+- **Signature:** `WorkflowExecutionPartition Current { get; }`.
+- **Usage:** start and bookmark/resumption dispatchers snapshot the current partition into every envelope and activation/passivation request. The default engine implementation maps `PersistenceScope` without exposing a persistence-provider type from Runtime.Core. A host replacement must return one immutable nonblank partition for the current operation.
+- **Default implementation:** `PersistenceWorkflowExecutionPartitionAccessor` *(engine — scoped)*.
 
 ### Distributed placement and transport *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
 
@@ -284,7 +333,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
   - **Kind:** Replacement (one store owns per-execution placement lease records for a distributed composition).
   - **Signature:** `TryClaimAsync`, `FindAsync`, `ReleaseAsync`, `ListAsync` (compare-and-swap on placement token; claim doubles as renew).
   - **Usage:** the CAS claim/renew primitive under placement ownership. Claiming an unowned or expired placement issues a strictly greater placement token; a claim against a live foreign lease fails without mutation.
-  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default)*. `GroundworkExecutionPlacementStore` *(durable `IDocumentStore`-backed bridge, W27 — opt-in leaf `Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork`, swapped in by the `WorkflowsRuntimeDistributedGroundworkPersistence` feature; exact cross-node CAS via the provider's ExpectedVersion contract, including create-only first claims)*.
+  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default; a scoped adapter over shared state keyed by partition + execution ID)*. `GroundworkExecutionPlacementStore` *(durable `IDocumentStore`-backed bridge, W27 — opt-in leaf `Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork`, swapped in by the `WorkflowsRuntimeDistributedGroundworkPersistence` feature; exact cross-node CAS via the provider's ExpectedVersion contract, including create-only first claims)*.
 - ### `IExecutionPlacementService` *(leaf)*
   - **Kind:** Replacement (one service owns this node's placement acquisition/renewal/release policy).
   - **Signature:** `NodeId`, `TryClaimAsync`, `FindOwnerAsync`, `ListOwnedAsync`, `ReleaseAsync`.
@@ -294,11 +343,11 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
   - **Kind:** Replacement (one transport owns the durable cross-node command inbox for a distributed composition).
   - **Signature:** `SendAsync`, `LeaseAsync`, `AckAsync`, `ListPendingExecutionIdsAsync`, `CountPendingAsync` (ack-based lease/visibility, at-least-once).
   - **Usage:** commands for an execution owned by another node are durably enqueued, then leased/acked by the owning node's pump. A lease hides an item from other nodes until acked or expired; only the live lease holder may ack, so a superseded node's ack is refused and the item is re-driven on failover. Wire shape is frozen by the committed v1 golden fixture (§E6 kind `executionCommandTransport`).
-  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default)*. `GroundworkExecutionCommandTransport` *(durable `IDocumentStore`-backed bridge, W27 — same leaf/feature as the placement store; persists the frozen v1 `executionCommandTransport` item shape, store-enforced unique per-execution sequences, version-guarded lease/ack CAS)*.
+  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default; a scoped adapter over shared partitioned inbox state and rejects envelope/operation partition mismatch)*. `GroundworkExecutionCommandTransport` *(durable `IDocumentStore`-backed bridge, W27 — same leaf/feature as the placement store; persists the frozen v1 `executionCommandTransport` item shape, store-enforced unique per-execution sequences, version-guarded lease/ack CAS)*.
 
 ### `ExecutionPlacementPumpTask` *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
 - **Kind:** Registered recurring task (`IRecurringTask`; one per node, DependsOn Tasks).
-- **Usage:** each bounded sweep renews the placements this node holds, then discovers executions with visible transport backlog, claims any it can own, leases their commands, dispatches each to the local actor, and acks on a delivered outcome. Deferred/Rejected dispatches stay leased so lease expiry re-drives them (the failover loop). All cadence/bounds come from `ExecutionPlacementPumpOptions` evaluated against `TimeProvider`; a failing sweep is logged, never rethrown, and widens the interval geometrically.
+- **Usage:** each tick obtains the finite partition snapshot through `IPersistenceScopeRunner` and opens one fresh ordinary scope per partition. Within each bounded partition sweep it renews placements this node holds, discovers visible transport backlog, claims any it can own, leases commands, verifies each stored envelope still matches the current partition, dispatches it with that partition, and acks on a delivered outcome. Deferred/Rejected dispatches stay leased so lease expiry re-drives them (the failover loop). The runner visits the remaining partitions before surfacing failures; the task's aggregate consecutive-failure count controls its node-wide backoff interval. All cadence/bounds come from `ExecutionPlacementPumpOptions` evaluated against `TimeProvider`.
 
 
 - **Kind:** Replacement (one generator owns runtime command-dispatch IDs for a runtime composition).
@@ -315,19 +364,19 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 ### `IWorkflowExecutionCommandExecutor` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active actor mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
-- **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the actor mailbox's single-writer boundary.
-- **Default implementation:** `WorkflowSchedulerCommandRouter` *(records accepted commands as scheduler work, applies the scheduler drain policy, then delegates command-triggered draining to `IWorkflowDrainOrchestrator`; activity execution remains handler/provider behavior, not command acceptance behavior)*.
+- **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the partition-qualified idempotency key is marked processed. The host-lifetime mailbox calls the default scope-crossing executor, which opens a fresh DI operation scope bound to the envelope partition before resolving any persistence-consuming command graph.
+- **Default implementation:** `ScopedWorkflowExecutionCommandExecutor` *(host-lifetime bridge over `IPersistenceOperationScopeFactory`; resolves scoped `WorkflowSchedulerCommandRouter`, which records accepted commands as scheduler work, applies the scheduler drain policy, then delegates command-triggered draining to `IWorkflowDrainOrchestrator`)*.
 
 ### `IWorkflowDrainOrchestrator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one coordinator owns command-triggered workflow execution drain orchestration for a runtime composition).
 - **Signature:** `DrainAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.
-- **Usage:** bridges the accepted command boundary to scheduler draining after scheduler work is recorded and the drain policy requests immediate advancement. The default coordinator drains scheduler work, processes deliverable `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` outbox items for the same workflow execution, and repeats scheduler draining until scheduler-intent delivery quiesces, a pause/fault stops scheduler draining, or the bounded cycle guard is reached. Checkpoint commit remains the durability boundary: commits record post-commit work, and the coordinator only delivers it after the commit path succeeds. `WorkflowDrainOrchestratorOptions` names the cycle and outbox batch limits; cycle-cap exhaustion throws `DrainCycleLimitExceededException`.
+- **Usage:** bridges the accepted command boundary to scheduler draining after scheduler work is recorded and the drain policy requests immediate advancement. The default coordinator drains scheduler work, processes deliverable `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` outbox items for the same workflow execution, and repeats scheduler draining until scheduler-intent delivery quiesces, a pause/fault stops scheduler draining, or the bounded cycle guard is reached. While ownership is active it renews the lease at one-third of the acquired lease duration; a rejected or failed heartbeat cancels the drain and surfaces `RuntimeExecutionOwnershipLostException`. Cleanup stops renewal before releasing with a non-cancelable token, so caller cancellation cannot strand a false recovery candidate. Checkpoint commit remains the durability boundary: commits record post-commit work, and the coordinator only delivers it after the commit path succeeds. `WorkflowDrainOrchestratorOptions` names the cycle and outbox batch limits; cycle-cap exhaustion throws `DrainCycleLimitExceededException`.
 - **Default implementation:** `WorkflowDrainOrchestrator`.
 
 ### `IRuntimeExecutionOwnershipService` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one service owns single-writer fencing — lease acquisition, heartbeat, release, and stale-writer rejection — for a runtime composition).
 - **Signature:** `AcquireAsync(string workflowExecutionId, ...)`, `HeartbeatAsync(RuntimeExecutionLease lease, ...)`, `ReleaseAsync(RuntimeExecutionLease lease, ...)`, `EnsureCurrentAsync(string workflowExecutionId, long fencingToken, ...)`.
-- **Usage:** enforces RT-2 single-writer ownership. `WorkflowDrainOrchestrator` acquires a lease at the start of a drain, pushes it onto `IRuntimeExecutionOwnershipContextAccessor`, and releases it in a `finally` (so a crash leaves the lease persisted for the recovery scanner to detect — closing W2's post-dequeue/pre-commit window). `RuntimeCheckpointCommitter` calls `EnsureCurrentAsync` at the single checkpoint-commit funnel and throws `RuntimeStaleFencingTokenException` when the presented fencing token is not the current one (equality is the only pass; tokens are strictly monotonic and never reused across release). Ownership state is backed by `IExecutionLivenessStateStore`; the lease `ExpiresAt` reuses the recovery scanner's existing lease-timeout honoring rather than a parallel knob.
+- **Usage:** enforces RT-2 single-writer ownership. `WorkflowDrainOrchestrator` acquires a lease at the start of a drain, pushes it onto `IRuntimeExecutionOwnershipContextAccessor`, renews it while the drain is active, and conditionally releases it after renewal stops (so a crash leaves the lease persisted for the recovery scanner to detect — closing W2's post-dequeue/pre-commit window). Allocation, heartbeat, and release are revision-CAS transitions; stale operations never overwrite a successor, and tokens are strictly monotonic and never reused. `RuntimeCheckpointCommitter` stamps the ambient lease fence onto the provider-facing commit. `EnsureCurrentAsync` is only an early convenience check: the checkpoint store atomically fence-touches ownership in the same unit of work as checkpoint state, outbox state, and the idempotency marker, and that durable decision is authoritative. Ownership state is backed by `IExecutionLivenessStateStore`; the lease `ExpiresAt` reuses the recovery scanner's existing lease-timeout honoring rather than a parallel knob.
 - **Default implementation:** `RuntimeExecutionOwnershipService` *(operational-state-backed, monotonic fencing token preserved across release)*.
 
 ### `IRuntimeExecutionOwnershipContextAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -361,13 +410,13 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 ### `IRecurringTriggerScheduleStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns recurring-start schedules for a runtime composition).
 - **Signature:** `SaveAsync(RecurringTriggerSchedule schedule, ...)`, `ListDueAsync(DateTimeOffset asOf, int limit, ...)`, `FindAsync(string scheduleId, ...)`, `TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, ...)`, `DeleteByArtifactAsync(string artifactId, ...)`, `DeleteAsync(string scheduleId, ...)`.
-- **Usage:** persists `RecurringTriggerSchedule` records (a next-occurrence-indexed document kind, `recurringTriggerSchedule`) for Timer/Cron **start** triggers — the recurring-start counterpart to `IDurableTimerStore` (which is resume-only). `SaveAsync` is an idempotent upsert keyed by `ScheduleId`; republishing an artifact replaces its schedules via `DeleteByArtifactAsync` + re-save, mirroring the trigger index. The recurring-trigger pump (`RecurringTriggerPumpTask`, `WorkflowsRuntimeRecurringTriggers` feature) drains `ListDueAsync` and, for each due schedule, **claims the occurrence with `TryAdvanceAsync` (compare-and-swap on `NextOccurrence`) before firing** the trigger stimulus through `IStimulusRouter`. **Missed-occurrence policy:** on pump wake after downtime a schedule fires **at most once** and advances straight to the next future occurrence — the backlog is never replayed. **Cluster-safety hook (W20):** `TryAdvanceAsync` is the compare-and-swap a future clustered store keeps so at most one node fires an occurrence, without changing the pump.
+- **Usage:** persists `RecurringTriggerSchedule` records (a next-occurrence-indexed document kind, `recurringTriggerSchedule`) for Timer/Cron **start** triggers — the recurring-start counterpart to `IDurableTimerStore` (which is resume-only). `SaveAsync` is an idempotent upsert keyed by `ScheduleId`; republishing an artifact replaces its schedules via `DeleteByArtifactAsync` + re-save, mirroring the trigger index. The recurring-trigger pump (`RecurringTriggerPumpTask`, `WorkflowsRuntimeRecurringTriggers` feature) drains `ListDueAsync` and, for each due schedule, **claims the occurrence with `TryAdvanceAsync` (compare-and-swap on `NextOccurrence`) before firing** the trigger stimulus through `IStimulusRouter`. **Missed-occurrence policy:** on pump wake after downtime a schedule fires **at most once** and advances straight to the next future occurrence — the backlog is never replayed. Durable stores must implement `TryAdvanceAsync` with provider CAS so at most one node fires an occurrence; the Groundwork bridge uses the loaded document version as the expected version.
 - **Default implementation:** `InMemoryRecurringTriggerScheduleStore` *(single-node in-memory default; start triggers work but are **not** restart-durable without a durable store)*. `GroundworkRecurringTriggerScheduleStore` *(durable `IDocumentStore`-backed bridge; swapped in by `AddGroundworkRuntimeStores`)*.
 
 ### `IRecurringTriggerScheduleProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Strategy set (context-selected, exact-one owner per recurring-trigger node; not a contributor fan-in).
-- **Signature:** additive stable nonblank `ProviderId`; `RecurringScheduleDescriptor? Describe(ExecutableNode node);`
-- **Usage:** the recurring-schedule sibling of `IActivityTriggerStimulusProvider`. At **publish time** the schedule indexer asks every provider to describe a node; a provider returns the node's recurrence spec (interval / cron expression → next occurrence) when it recognizes the activity type, or `null` ("not mine"). Multiple claims fail with contextual provider ids rather than selecting by registration order. `RecurringTriggerScheduleIndexer` materializes the complete Timer/Cron schedule candidate set before it invokes the inner trigger indexer. Invalid expressions, calculator failures, and exhausted Cron schedules are wrapped in contextual `WorkflowTriggerPreflightException` failures before either schedule or binding replacement begins. A recurring-trigger activity contributes both seams: one trigger binding and one materialized schedule. Providers read only the pinned published `ExecutableNode`.
+- **Signature:** additive stable nonblank `ProviderId`; `IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node);`
+- **Usage:** the recurring-schedule sibling of `IActivityTriggerStimulusProvider`. At **publish time** the schedule indexer asks every provider to describe a node; a provider returns the node's recurrence descriptors (interval / cron expression → next occurrence) when it recognizes the activity type, or an **empty collection** ("no contribution": not-my-type or recognized-with-no-schedules). A single-schedule trigger (`Timer`/`Cron`) returns one descriptor; a composite start-trigger activity may **fan out** one descriptor per authored recurring start element (spec 117 — a BPMN process with several timer start events). Multiple *providers* claiming one node fail with contextual provider ids rather than selecting by registration order. `RecurringTriggerScheduleIndexer` materializes the complete schedule candidate set before it invokes the inner trigger indexer, keying single-descriptor nodes by `RecurringTriggerSchedule.BuildId(artifactId, nodeId)` (unchanged) and fan-out nodes by `BuildFanOutId(artifactId, nodeId, stimulusHash)` so their rows do not collapse. Invalid expressions, calculator failures, and exhausted Cron schedules are wrapped in contextual `WorkflowTriggerPreflightException` failures before either schedule or binding replacement begins. A recurring-trigger activity contributes both seams: a trigger binding and a materialized schedule per element, sharing the same `(StimulusType, StimulusHash)`. Providers read only the pinned published `ExecutableNode`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, MyProvider>())`.
 
 **Known implementations (shipped):**
@@ -417,10 +466,40 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
 - **Default implementation:** `InMemoryIncidentStateStore` *(single-node in-memory default for the current runtime slice)*.
 
+### `IIncidentStrategy` / `IIncidentResolutionAction` *(Core contracts; Runtime defaults)*
+
+- **Kind:** Additive, versioned strategy extension. A published executable pins one exact
+  `IncidentStrategyReference` (`Alias`, `Version`); Runtime never re-reads Design options or the host's current
+  default while executing it.
+- **Register:** call `services.AddIncidentStrategy<TStrategy>(descriptor)`, or annotate the concrete strategy with
+  `[IncidentStrategy(alias, version, ...)]` and call `AddIncidentStrategy<TStrategy>()`. Strategy implementations
+  are scoped. Alias comparison is ordinal case-insensitive, version comparison is exact, duplicate identities
+  fail, and custom aliases must be dotted. Discovery reads descriptors without constructing strategies.
+- **Decision model:** `ResolveAsync(IncidentStrategyContext, CancellationToken)` receives immutable, policy-safe
+  snapshots and returns one executable `IIncidentResolutionAction`. Actions execute against a guarded
+  `IncidentResolutionActionContext`; they may transition only the target incident, request workflow faulting,
+  add bounded outcome metadata, and request separately registered strategy-safe post-commit intents. They cannot
+  mutate activities, retry/suspend/complete workflows, absorb/suppress structural faults, or access checkpoints.
+  Incident metadata is projected through an explicit correlation/classification allowlist; exception messages,
+  stack traces, payloads, variables, and private runtime state are excluded. Strategy-owned outcome and intent
+  metadata is limited to 32 nonblank, control-character-free string pairs (128-character keys and 1024-character
+  values).
+- **Built-ins:** Runtime always registers `Fault/1` and `ContinueWithIncidents/1`. `Fault` keeps the incident
+  blocking and faults the workflow. `ContinueWithIncidents` opens the incident while preserving the faulted
+  activity and lets independent scheduled work finish.
+- **Failure/replay:** null decisions, strategy failures, action failures, and invalid custom action kinds discard
+  that action's staging and apply a fresh runtime-owned `FaultWorkflow` decision. All outcomes and permitted
+  intents commit in one ordered end-of-drain checkpoint; a durable outcome prevents reevaluation. A missing pinned
+  implementation before start records `WaitForIntervention` with `MissingStrategyImplementation`, leaves the run
+  pending, and schedules no retry.
+- **Safe intents:** register a third-party kind with `AddIncidentStrategySafeIntent(...)`. Runtime-control,
+  scheduler, dispatch, stimulus, and retry kinds are rejected. Runtime derives intent identity, idempotency,
+  timestamp, and workflow/activity correlation.
+
 ### `IExecutionLivenessStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for runtime operational coordination in a runtime composition).
-- **Signature:** `SaveAsync(ExecutionLivenessState state, ...)`, `FindAsync(string workflowExecutionId, string operationalStateId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListAllAsync(...)`.
-- **Usage:** stores `ExecutionLivenessState` keyed by `WorkflowExecutionId` and `OperationalStateId`. The in-memory checkpoint writer projects operational state upserts from accepted checkpoint commits into this store. Recovery scanning, outbox delivery processing, domain retry, and actor-provider lease enforcement remain separate runtime surfaces.
+- **Signature:** `SaveAsync(ExecutionLivenessState state, ...)`, `TrySaveAsync(ExecutionLivenessState state, long expectedRevision, ...)`, `FindAsync(...)`, `FindVersionedAsync(...)`, `ListAsync(...)`, `ListAllAsync(...)`.
+- **Usage:** stores `ExecutionLivenessState` keyed by `WorkflowExecutionId` and `OperationalStateId`. Revision `0` means create-only and a positive revision means compare-and-swap, allowing ownership allocation, heartbeat, and release to converge across independent clients without an adapter-instance lock. The in-memory checkpoint writer projects operational state upserts from accepted checkpoint commits into this store. Recovery scanning, outbox delivery processing, domain retry, and actor-provider lease enforcement remain separate runtime surfaces.
 - **Default implementation:** `InMemoryExecutionLivenessStateStore` *(single-node in-memory default for the current runtime slice)*.
 
 ### `ISchedulerStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -452,7 +531,10 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Signature:** `OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)`.
 - **Usage:** modules can project one command-triggered coordinated drain outcome into diagnostics or future checkpoint/outbox behavior without making history continuation state. Coordinated results aggregate scheduler work item results across scheduler drain passes, include post-commit outbox delivery counts/results, and expose a stop reason such as quiesced, paused, faulted, or outbox delivery failed.
 - **Default implementation:** `NoopWorkflowSchedulerDrainObserver`.
-- **Known implementations (shipped):** `BlockingIncidentWorkflowFaultObserver` *(RT-1a/RT-5 — after a drain turn, if the workflow has one or more blocking incidents and is still non-terminal, commits a `WorkflowFaulted` checkpoint that transitions the workflow to `Faulted`; registered additively via `TryAddEnumerable`)*.
+- **Known implementations (shipped):** `PoisonedSchedulerWorkIncidentObserver`, then
+  `IncidentStrategyResolutionDrainObserver`, then `BlockingIncidentWorkflowFaultObserver`. This order projects
+  system incidents, resolves eligible ordinary activity-fault incidents once causal work is quiescent, and only
+  applies terminal safety to legacy/emergency blocking incidents that still have no outcome.
 
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (handlers consume drained scheduler work items).
@@ -472,6 +554,28 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** stores and retrieves runtime-owned immutable `WorkflowExecutable` artifacts by content-addressed artifact ID. Publishing writes artifacts through this contract; runtime start, resume, and scheduler paths read them without loading Design-owned workflow state. Mutable source-reference publication, retirement, scope, and expiry checks remain outside this store and authoritative.
 - **Default implementation:** `InMemoryWorkflowExecutableStore` *(single-process default)*. Groundwork supplies `GroundworkWorkflowExecutableStore` as a keyed backend; SQLite reference features select a bounded `CachingWorkflowExecutableStore`, while PostgreSQL/distributed and legacy direct registrations preserve direct reads by default. The cache coalesces same-ID misses, retains only positive provider results, invalidates on save/unconditional delete and successful guarded delete, and never populates from `ListAsync`. Root-write lease and deletion-guard transitions pass through to the provider unchanged; custom providers can replace the keyed backend without a concrete dependency.
 - **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true` for SQLite and `false` for PostgreSQL/distributed features; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs. Cache state and mutation invalidation are process-local; PostgreSQL hosts must explicitly opt in with an accepted immutable-retention/invalidation policy.
+
+### `IExecutableActivityTemplateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns immutable, content-addressed executable templates for reusable activity versions).
+- **Signature:** find by template id or behavior hash, list, save, and delete unreferenced templates.
+- **Usage:** Publishing compiles provider-neutral activity versions into `ExecutableActivityTemplate` artifacts. Workflow artifacts pin exact template identities and closed dependency sets; Runtime loads only these artifacts and never falls back to Design state. Equal canonical behavior can share a template even when source version labels differ.
+- **Default implementation:** `InMemoryExecutableActivityTemplateStore`; Groundwork replaces it for durable hosts.
+
+### `IWorkflowExecutableSourceReferenceStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns source/version/publication references to content-addressed workflow and activity artifacts).
+- **Signature:** find/list by source reference or artifact, save, retire/delete, and discover unreferenced artifacts.
+- **Usage:** keeps mutable lifecycle, retention, expiry, and layout sidecars outside immutable behavior artifacts. Source-owned CLR reconciliation creates a distinct source reference per definition version even when versions share one template hash. Runtime start pins the exact referenced artifact; garbage collection follows live references.
+- **Default implementation:** `InMemoryWorkflowExecutableSourceReferenceStore`; Groundwork replaces it for durable hosts.
+
+### `IActivityExecutionHierarchyStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement read/write surface for checkpoint-committed activity execution hierarchy and composite-boundary layout.
+- **Signature:** write `ActivityExecutionHierarchyRecord`; read cursor-paged descendants, boundary metadata, pinned execution layout, and previous/next attempt navigation by workflow/activity execution identity.
+- **Usage:** preserves one workflow execution while making reusable composite boundaries navigable. Inspection clients can click through a graph activity into its full descendant execution graph and complete pinned structural layout, including authored nodes that did not execute, without loading authored Design documents. Boundary lifecycle remains separate from descendant aggregate state. Records are checkpoint-gated and use ordinary activity execution identities/scopes; there is no special “custom activity” scope and no child workflow identity.
+- **Default implementation:** `RuntimeInMemoryActivityExecutionHierarchyStore`; Groundwork replaces it for durable hosts. Opaque page cursors are encoded by `IActivityExecutionHierarchyCursorCodec`.
+
+Cursor failures carry the cursor class, boundary/query/access binding results, and a recoverable restart action. Authorization-profile changes invalidate issued cursors but do not alter committed hierarchy history.
+
+`ExecuteWorkflow` remains a separate explicit operation for starting another workflow. It does not use the reusable activity template/hierarchy boundary to disguise a child workflow as an activity.
 
 ## Implementable contributor interfaces
 
@@ -498,7 +602,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `AddWorkflowRuntime(IServiceCollection)` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Composition root (host-agnostic runtime registration).
-- **Usage:** RT-4; renamed from `AddWorkflowRuntimeCore` when the composition root moved to the engine package (ADR 0033). Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store; the reference stores/handlers are process-global **singletons** by design (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
+- **Usage:** RT-4; renamed from `AddWorkflowRuntimeCore` when the composition root moved to the engine package (ADR 0033). Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store. Reference in-memory state is process-global; persistence-consuming operation graphs are scoped. Host-lifetime actor mailboxes and recurring tasks open and dispose a fresh scope per command or tick (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
 
 ### `WorkflowsRuntimeCheckpointPersistenceFeature` *(Runtime.Api — `Elsa.Workflows.Runtime.Api`)*
 - **Kind:** Shell-scoped policy selector and post-provider decorator.
@@ -509,27 +613,20 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
 - **Usage:** declares the stable resume target ID that compile/publish can place into `WorkflowExecutable.ResumeTargets`. Durable bookmarks store the ID, not the C# method name.
 - **Not a runtime callback store** — handler method names and delegates are implementation details and are not persisted in `BookmarkState`.
-- **Compiler indexing (W8):** `WorkflowExecutableCompiler` now reflects `[ResumeTarget]` methods off each node's resolved activity type and indexes them into `WorkflowExecutable.ResumeTargets` (previously always empty). `Delay` is the first suspending activity to exercise this. The map is keyed by the attribute's resume-target ID, so duplicate IDs across nodes fail compilation loudly.
-- **Follow-up (W8) — node-scoped resume targets.** Because the key is the attribute ID (matching how the resume resolver and the create-bookmark handler already match), only **one instance** of a given resume-target activity is supported per workflow this wave (two `Delay`s in one workflow fail compilation). Node-scoped resume-target IDs (keyed by `ExecutableNodeId` + attribute ID) are the follow-up to lift this, and require a matching change in the resume resolver.
+- **Compiler indexing (W8, node-scoped since the BPMN Phase-2 catch-events prerequisite):** `WorkflowExecutableCompiler` reflects `[ResumeTarget]` methods off each node's resolved activity type and indexes them into `WorkflowExecutable.ResumeTargets`. The map key is **node-scoped** (`{executableNodeId}:{attributeId}`, with the attribute id preserved as `LocalResumeTargetId`) — the same rescoped shape the activity-template placer emits — so multiple instances of the same resume-target activity coexist in one workflow (two `Delay`s, or several synthesized BPMN timer catch events). Activities keep registering trigger registrations by their local attribute id; the resume resolver's `(ExecutableNodeId, LocalResumeTargetId)` fallback binds them, and durable bookmarks store the node-scoped id.
 
-### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Contributor (receives a signal and acts — push pattern).
-- **Signature:** `ValueTask ReceiveSignalAsync(object signal, SignalContext context);`
-- **Usage:** implement on activity classes to receive signals sent to the workflow. `ActivityBase` exposes `ReceiveSignalAsync` which dispatches to the activity's `ISignalHandler` implementation.
-- **Not a fan-in aggregator** — each activity implements this directly; there is no aggregating event handler. Signals are dispatched to activities in the workflow graph, not via the DI container.
-- **Sub-interface:** `IBehavior : ISignalHandler` — for behaviour objects composable onto activities.
-
-**Known implementations (shipped):**
-- Activity classes that override `ReceiveSignalAsync` in the codebase.
-
-### `IActivityCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Overridable single-impl (one handler expected at a time, injected by DI).
-- **Signature:** `CompleteActivityAsync(IActivityExecutionContext context)`, `CompleteActivityAsync(IActivityExecutionContext context, object result)`, `CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes)`, `CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes, object result)`.
-- **Register:** `services.Replace(ServiceDescriptor.Scoped<IActivityCompletionHandler, MyHandler>())` — single-impl; a replacement steps aside the previous one.
-- **Consumed by:** `ActivityBase.CompleteAsync` — resolves `IActivityCompletionHandler` from the execution context's service provider.
-
-**Known implementations (shipped):**
-- `Elsa.Workflows.Runtime.JavaScript` — `ActivityCompletionHandler` *(cross-domain — test implementation for JS-context activity completion)*
+### `IRuntimeStructuralActivity` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Engine-only structural activity protocol; not a DI contributor or ordinary activity-author callback surface.
+- **Signature:** `ExecuteStructureAsync(IRuntimeActivityExecutionContext context)` returns `ValueTask<RuntimeStructuralContinuation>`.
+- **Usage:** lets a composite schedule and coordinate executable children without placing child scheduling or continuation methods on the minimal `IActivity` contract. The initial runtime invocation uses this method instead of `IActivity.ExecuteAsync`. `IRuntimeActivityChildCompletionHandler` and `IRuntimeActivityChildFaultHandler` provide the corresponding parent re-evaluation callbacks.
+- **Decision model:** every structural entry point returns one immutable `RuntimeStructuralContinuation`: `Complete(outcome)`, `Defer`, `Faulted(ActivityFault)`, or `Cancel(reason)`. A terminal decision cannot schedule children in the same evaluation. Initial execution may defer only after scheduling at least one child; a child callback may defer while awaiting existing children or after scheduling the next child.
+- **Child-subtree cancellation (spec 112):** a child callback may stage `RequestChildSubtreeCancellation(childActivityExecutionId, reason)` against a live direct child. `ActivitySubtreeCancellationPlanner` traverses the subtree, terminalizes cancellable members to `Cancelled`/`ParentCancelled`, captures an `ActivityScopeCleanupRequest` (bookmarks, durable timers, queued scheduler work), and suppresses the subtree's non-terminal incidents; the parent-evaluation handler folds it all into the same checkpoint commit as the continuation (honored with `Defer`/`Complete`; terminal targets skip as a legal race; structural misuse faults the evaluation). The same planner backs the `CancelActivityScope` scheduler command.
+- **Child-fault absorption (spec 115):** a child-fault callback may stage `RequestChildFaultAbsorption(incidentId, reason)` naming the evaluation's incident. The incident resolves with an `AbsorbFault` outcome sourced from `StructuralFaultAbsorption`, and the faulted child's leftover subtree is reclaimed via the same planner (`Cancelled`/`FaultAbsorbed` descendants, cleanup capture, other incidents suppressed) in the continuation's commit. Absorption is a runtime-internal structural operation; public strategy actions cannot request it.
+- **Trigger identity (spec 089 D / 117 D4):** `IRuntimeActivityExecutionContext` exposes the committed, spoof-proof start identity — `TriggerNodeId` (the matched binding's executable node id) and `TriggerMetadata` (the binding's free-form `string→string` map, carried verbatim from `WorkflowTriggerBinding.Metadata`). Both are seeded onto reserved durable channels at the workflow-started checkpoint (never the `input:*` namespace) and projected back by `RuntimeInputBindingStateProjection`. A structural trigger activity (e.g. `BpmnProcess`) compares `TriggerNodeId` to its own node id to detect a trigger delivery and reads per-descriptor routing facets from `TriggerMetadata` (e.g. the BPMN start element id under `"bpmn.startElementId"`). The stimulus router forwards `binding.Metadata` through the start dispatch; the recurring-trigger pump's `StartOnly` path rides the same router code, so timer-start metadata flows for free.
+- **Live child activities (spec 119 D4; spec 121):** a structural activity that also implements the opt-in marker `IRuntimeLiveChildActivityConsumer` receives its parent's direct, non-terminal child executions on `IRuntimeActivityExecutionContext.GetLiveChildActivities()` (each `RuntimeLiveChildActivity` = activity-execution id + executable node id + status + **iteration id**), populated **only** during a child-completion/child-fault evaluation and loaded from committed state via `IActivityExecutionStateStore.ListAllByParentAsync` (read-only, spoof-proof). Non-consumer parents pay nothing; the collection is empty for initial/resume evaluations. This is the lookup that lets a first-catch-wins racer (the BPMN event-based gateway) resolve a losing sibling's node id to its live child activity-execution id before staging that subtree's `RequestChildSubtreeCancellation`. `IterationId` (spec 121, populated from the child's `ActivityExecutionState.IterationId`) disambiguates N concurrent same-node children of a multi-instance host, so a consumer keys the lookup by `(executable node id, iteration id)` rather than node id alone; it is `null` for ordinary single-run children.
+- **Scoped-variable read (spec 123 D1):** a structural activity that implements the opt-in marker `IRuntimeScopedVariableReader` may read its enclosing container-scoped variable values through `IRuntimeActivityExecutionContext.TryReadScopedVariableValue(name, out ValueEnvelope? envelope)`, populated by the runtime on the invoke, child-completion/child-fault, and bookmark-resume paths (all three handlers, marker-gated). The projection is built from committed frame state via `RuntimeContainerScopeService.ProjectScopedVariablesForReaderAsync` (which reuses `BuildVisibleFramesAsync` with `includeOwnContainer: true` + `ProjectVisibleVariableEnvelopes`, the same name→key resolution the leaf input-binding path uses), so there is one variable-value truth and no re-implemented envelope-unwrap. Resolution is by name across the activity's own visible chain only — own iteration → own container → ancestors → the workflow root frame — innermost scope winning for a shadowed name; it is read-only, spoof-proof (the ancestor walk is the ownership guard), and exposes committed values only (a concurrent-branch write becomes visible only once committed, on a later evaluation's basis). A non-marker activity, or a name that resolves to no visible declared variable, reads `false` with a `null` envelope — it never throws on an unpopulated seam. `BpmnProcess` uses it to read a collection-mode multi-instance host's collection variable once at loop start (spec 123 D2). The `VariableScope` type and the `variableScope: null` handler arguments are untouched (still unwired).
+- **Input re-materialization (issue #977):** a structural activity that implements the opt-in marker `IRuntimeRematerializeInputsOnChildCompletion` has its input snapshot re-materialized from live committed variable frames before every child-completion/child-fault evaluation (`RuntimeActivityInputSnapshotMaterializer`, the same materialization the start handler pins the entry snapshot with, so frame visibility is identical to entry — ancestors + root, not the own container). The fresh snapshot is **transient**: the pinned `ActivityExecutionState.InputSnapshot` committed at activation stays immutable (ADR 0045 §3's invocation record is unchanged), and the re-read is a pure function of committed frame state, so redelivery converges. Non-marker composites reuse the pinned snapshot byte-for-byte; the notification and bookmark-resume evaluations never re-materialize. `While` is the sole implementer — its loop condition must observe a body's committed `Set` of the condition variable to terminate.
+- **Known implementations (shipped):** `Sequence`, `Flowchart`, `Parallel`, `If`, `Switch`, `For`, `ForEach`, `While` (also an `IRuntimeRematerializeInputsOnChildCompletion`, issue #977), `Do`, and `BpmnProcess` (also a `[TriggerActivity]`, spec 117, an `IRuntimeLiveChildActivityConsumer`, spec 119, and an `IRuntimeScopedVariableReader`, spec 123).
 
 ### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Strategy set (context-selected, exact-one owner per executable trigger node; not a contributor fan-in).
@@ -541,6 +638,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - `Elsa.Activities.Primitives` — `EventTriggerStimulusProvider` *(cross-domain — describes the named-event `Event` start trigger; stimulus type `Event`, hash over the event name)*.
 - `Elsa.Activities.Http` — `HttpEndpointTriggerStimulusProvider` *(cross-domain — describes the `HttpEndpoint` start trigger; stimulus type `HttpEndpoint`, hash over the normalized request path so an inbound request routes to the matching published endpoint)*.
 - `Elsa.Activities.Scheduling` — `TimerTriggerStimulusProvider` / `CronTriggerStimulusProvider` *(cross-domain — describe the `Timer` and `Cron` recurring start triggers; stimulus types `Timer` / `Cron`, hash over the interval / cron expression. These pair with the recurring-trigger schedule store + pump below: the stimulus identity is what the pump fires through `IStimulusRouter`, and the same providers also implement `IRecurringTriggerScheduleProvider` to register the schedule at publish time)*.
+- `Elsa.Activities.Bpmn` — `BpmnProcessTriggerStimulusProvider` *(cross-domain, spec 117 — describes a `BpmnProcess`'s event-defined start events: one descriptor per message/signal start (named-event stimulus, same `(type, hash)` as `Event`) and per timer start (BPMN-owned `Bpmn.TimerStart` stimulus, element id folded into the hash), each carrying the start element id in `Metadata`. Pairs with `BpmnProcessRecurringScheduleProvider` for timer starts. `Recognized([])` for a none-start-only or nested (`CanStartWorkflow = false`) process)*.
 
 ---
 
@@ -551,7 +649,8 @@ The burst-coalescing persistence policy is an **opt-in** durability/throughput t
 **not** registered by default: the default runtime keeps `ImmediateRuntimeCheckpointPersistencePolicy` and
 the contracts/decorators below are absent, so the default path is byte-identical. When enabled, it swaps the
 policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session decorators over the
-checkpoint commit store, scheduler queue, post-commit outbox, and state stores. See
+checkpoint commit store, scheduler queue, post-commit outbox, and state stores (including a durable-baseline
+read memo over the inspection store — spec 131). See
 [`docs/runtime-durable-resumption.md`](../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
 and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
 
@@ -570,12 +669,40 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 
 ### `IRuntimeCoalescingDrainScopeFactory` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
-- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`.
-- **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.
+- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`. The optional cap overrides the host-configured `MaxSegmentCheckpoints` for that run (ADR 0032 R5 per-workflow authored cadence).
+- **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Per execution, the orchestrator first consults `IRuntimeCheckpointCadenceResolver` (per-run stamp > authored-on-executable cadence > host default) and skips the scope entirely for an authored-Immediate run. Only registered by the opt-in extension.
 - **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
+
+### `IRuntimeLiveDrainDeliveryAccessor` *(engine — `Elsa.Workflows.Runtime`)*
+- **Kind:** Replacement (one ambient accessor marks the live drain that owns an execution's post-commit intent delivery — WU-2, spec 105-runtime-live-drain-delivery).
+- **Signature:** `RuntimeLiveDrainDeliveryScope? Current { get; }`, `IDisposable Push(RuntimeLiveDrainDeliveryScope? scope)`.
+- **Usage:** an `AsyncLocal` push/pop stack, mirroring `IRuntimeCoalescingSessionAccessor`. `WorkflowDrainOrchestrator.DrainCoreAsync` pushes a scope on the Immediate (no coalescing scope factory) branch, bounded by the RT-2 single-writer lease. While the scope is ambient, `RuntimePostCommitOutboxProcessor` delivers `EnqueueSchedulerWork` intents for the owning execution in-memory — idempotent `EnqueueAsync` plus a direct `Pending -> Delivered` mark via the existing non-claim recording contract — skipping the durable claim round-trip. It never engages while a coalescing session is active (the overlay is authoritative) and leaves other intent kinds, other executions, and unmarked callers (recovery sweep, v1 stores) on the durable claim path. Registered by default because Immediate is the default cost model.
+- **Default implementation:** `AsyncLocalRuntimeLiveDrainDeliveryAccessor`.
 
 ## Cross-references
 
 - HTTP endpoint behaviour overrides: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.
+
+## Runtime alteration contracts
+
+| Contract | Ownership and use |
+|---|---|
+| `IWorkflowAlterationStore` | Single-owner durable plan/target/job storage. Its claim, seal, terminal, and paging operations preserve fenced at-least-once execution. |
+| `IWorkflowAlterationPayloadProtector` | Protects deferred envelope JSON with plan/tenant/request associated data. Durable hosts replace the development-only key material with a restart-stable retained key ring. |
+| `IWorkflowAlterationRegistry` | Singleton descriptor-only catalog. It returns stable kind/version/display metadata and never resolves handler instances. |
+| `IWorkflowAlterationPreflightHandler` | Scoped, trusted custom contribution registered through `AddWorkflowAlterationHandler<T>`. It validates its own payload and may only update projection/staging state. |
+| `IWorkflowAlterationProjectedState` | Per-job mutable in-memory view shared in envelope order. A handler can expose its staged logical state to later handlers without persistence. |
+| `IWorkflowAlterationStagingWorkspace` | Per-job collector for deterministic checkpoint-bound changes. Duplicate change keys fail preflight. |
+| `IWorkflowAlterationRuntimeCheckpointStagedChange` | Handler-owned change that applies through the Runtime alteration checkpoint builder after all preflights pass. |
+| `IWorkflowAlterationCheckpointWriter` | Single-owner atomic checkpoint collaborator. It persists terminal job evidence with workflow/activity/bookmark/value/scheduler/outbox changes and supports acknowledgement reconciliation. |
+| `IWorkflowAlterationHandlerResolver` | Scoped exact `(kind, schemaVersion)` resolver. Hosts do not replace it to choose a handler dynamically or infer a latest version. |
+
+Custom handlers are trusted code. They must use only stable envelope identity, must not serialize or log payloads,
+must return bounded safe failures, and must make their changes replay-safe under the deterministic job checkpoint.
+They must not use the alteration path to bypass activity ownership, authorization sealed at submission, workflow actor
+serialization, or Runtime's persistence/checkpoint boundary.
+
+The public envelope and persisted plan use only `kind`, `schemaVersion`, and protected JSON. Do not persist a CLR
+type name, assembly-qualified type, service key, or executable payload schema type as an alteration identity.

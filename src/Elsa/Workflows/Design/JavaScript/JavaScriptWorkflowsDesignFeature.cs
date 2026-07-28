@@ -20,12 +20,7 @@ public class JavaScriptWorkflowsDesignFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services
-            .AddScoped<IJavaScriptDeclarationContributor, ActivityOutputFunctionDeclarationContributor>()
-            .AddScoped<IJavaScriptDeclarationContributor, WorkflowFunctionDeclarationContributor>()
-            .AddScoped<IJavaScriptDeclarationContributor, WorkflowInputFunctionDeclarationContributor>()
-            .AddScoped<IJavaScriptDeclarationContributor, WorkflowVariableFunctionDeclarationContributor>()
-            .AddScoped<IJavaScriptDeclarationContributor, WorkflowVariablesDeclarationContributor>()
-            .AddScoped<IJavaScriptDeclarationContributor, OutcomeFunctionDeclarationContributor>()
+            .AddScoped<IJavaScriptDeclarationContributor, BindingPureArgsDeclarationContributor>()
             ;
     }
 }

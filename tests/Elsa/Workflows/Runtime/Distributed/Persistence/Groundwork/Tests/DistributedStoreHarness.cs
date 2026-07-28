@@ -1,12 +1,17 @@
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
 using Groundwork.Sqlite.Documents;
+using Groundwork.Sqlite.PhysicalStorage;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 
@@ -18,7 +23,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 internal sealed class DistributedStoreHarness(
     IExecutionPlacementStore placementStore,
     IExecutionCommandTransport transport,
-    IAsyncDisposable? owner = null) : IAsyncDisposable
+    IAsyncDisposable? owner = null,
+    Func<Task<IExecutionCommandTransport>>? reopenTransport = null) : IAsyncDisposable
 {
     public const string InMemory = "in-memory";
     public const string GroundworkMemory = "groundwork-memory";
@@ -28,6 +34,15 @@ internal sealed class DistributedStoreHarness(
 
     public IExecutionPlacementStore PlacementStore { get; } = placementStore;
     public IExecutionCommandTransport Transport { get; } = transport;
+
+    /// <summary>
+    /// Opens a fresh durable transport adapter over the same persisted documents. The SQLite path creates a fresh
+    /// provider client; the in-memory Groundwork path recreates only the adapter over its shared document store.
+    /// This models a node restart without making test-only lifecycle concerns part of the provider-neutral contract.
+    /// </summary>
+    public Task<IExecutionCommandTransport> ReopenTransportAsync() => reopenTransport is not null
+        ? reopenTransport()
+        : throw new NotSupportedException("The process-local in-memory transport has no durable restart boundary.");
 
     public static async Task<DistributedStoreHarness> CreateAsync(string provider)
     {
@@ -39,21 +54,62 @@ internal sealed class DistributedStoreHarness(
                 return FromDocumentStore(new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create()));
             case GroundworkSqlite:
                 var database = new TemporarySqliteDatabase();
-                var store = await SqliteDocumentStoreFactory.CreateAsync(
-                    database.ConnectionString,
-                    DistributedGroundworkStorageManifest.Create(),
+                var manifest = DistributedGroundworkStorageManifest.Create();
+                var target = PhysicalSchemaTargetCompiler.Compile(
+                    manifest,
                     SqliteProvider,
-                    DocumentStoreAccess.Global);
-                return FromDocumentStore(store, database);
+                    SqliteGroundworkCapabilities.PhysicalNames);
+                var store = await SqliteDocumentStoreFactory.OpenPhysicalAsync(
+                    database.ConnectionString,
+                    manifest,
+                    SqliteProvider,
+                    GroundworkTestAccess.DefaultScoped,
+                    options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
+                var queries = new GroundworkBoundedDocumentStoreRouter(
+                    target.Routes.Select(route =>
+                        KeyValuePair.Create<string, IBoundedDocumentStore>(
+                            route.StorageUnit.Value,
+                            SqlitePhysicalQueryRuntime.Create(
+                                store,
+                                manifest,
+                                route,
+                                target.Provider))));
+                return new DistributedStoreHarness(
+                    new GroundworkExecutionPlacementStore(store, queries),
+                    new GroundworkExecutionCommandTransport(
+                        store,
+                        GroundworkDistributedTestAccess.Scoped(),
+                        queries),
+                    database,
+                    () => OpenSqliteTransportAsync(database.ConnectionString, manifest));
             default:
                 throw new ArgumentOutOfRangeException(nameof(provider), provider, null);
         }
     }
 
-    public static DistributedStoreHarness FromDocumentStore(IDocumentStore documentStore, IAsyncDisposable? owner = null) =>
-        new(new GroundworkExecutionPlacementStore(documentStore), new GroundworkExecutionCommandTransport(documentStore), owner);
+    public static DistributedStoreHarness FromDocumentStore(IDocumentStore documentStore, IAsyncDisposable? owner = null)
+    {
+        var queries = documentStore as IBoundedDocumentStore ?? throw new ArgumentException(
+            "The distributed Groundwork harness requires a document store that executes bounded routes.",
+            nameof(documentStore));
+        return new DistributedStoreHarness(
+            new GroundworkExecutionPlacementStore(documentStore, queries),
+            new GroundworkExecutionCommandTransport(
+                documentStore,
+                GroundworkDistributedTestAccess.Scoped(),
+                queries),
+            owner,
+            () => Task.FromResult<IExecutionCommandTransport>(new GroundworkExecutionCommandTransport(
+                documentStore,
+                GroundworkDistributedTestAccess.Scoped(),
+                queries)));
+    }
 
-    public static WorkflowExecutionCommandEnvelope Envelope(string executionId, string envelopeId, DateTimeOffset now)
+    public static WorkflowExecutionCommandEnvelope Envelope(
+        string executionId,
+        string envelopeId,
+        DateTimeOffset now,
+        string partition = PersistenceScope.DefaultValue)
     {
         var command = new WorkflowExecutionCommand(
             CommandId: $"cmd-{envelopeId}",
@@ -69,13 +125,43 @@ internal sealed class DistributedStoreHarness(
             command: command,
             idempotencyKey: $"idem-{envelopeId}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: now);
+            enqueuedAt: now,
+            partition: new WorkflowExecutionPartition(partition));
     }
 
     public async ValueTask DisposeAsync()
     {
         if (owner is not null)
             await owner.DisposeAsync();
+    }
+
+    private static async Task<IExecutionCommandTransport> OpenSqliteTransportAsync(
+        string connectionString,
+        global::Groundwork.Core.Manifests.StorageManifest manifest)
+    {
+        var target = PhysicalSchemaTargetCompiler.Compile(
+            manifest,
+            SqliteProvider,
+            SqliteGroundworkCapabilities.PhysicalNames);
+        var store = await SqliteDocumentStoreFactory.OpenPhysicalAsync(
+            connectionString,
+            manifest,
+            SqliteProvider,
+            GroundworkTestAccess.DefaultScoped,
+            options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
+        var queries = new GroundworkBoundedDocumentStoreRouter(
+            target.Routes.Select(route =>
+                KeyValuePair.Create<string, IBoundedDocumentStore>(
+                    route.StorageUnit.Value,
+                    SqlitePhysicalQueryRuntime.Create(
+                        store,
+                        manifest,
+                        route,
+                        target.Provider))));
+        return new GroundworkExecutionCommandTransport(
+            store,
+            GroundworkDistributedTestAccess.Scoped(),
+            queries);
     }
 
     private sealed class TemporarySqliteDatabase : IAsyncDisposable

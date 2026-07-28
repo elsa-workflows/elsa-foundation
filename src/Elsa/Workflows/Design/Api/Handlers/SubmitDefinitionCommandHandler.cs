@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
@@ -17,6 +18,7 @@ public sealed class SubmitDefinitionCommandHandler(
         ArgumentNullException.ThrowIfNull(command.State);
 
         var submitted = await submitCommand.Execute(
+            DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.Name,
             command.Description,
             command.State.ToState(),

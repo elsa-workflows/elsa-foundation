@@ -77,7 +77,7 @@ public sealed class GeneratedEvent
         long sequence,
         DateTimeOffset occurredAt,
         GeneratedEventDurability durability,
-        RuntimeDurableValueReference? payloadValue = null,
+        GeneratedEventPayloadReference? payloadValue = null,
         IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(generatedEventId);
@@ -111,8 +111,20 @@ public sealed class GeneratedEvent
     public long Sequence { get; }
     public DateTimeOffset OccurredAt { get; }
     public GeneratedEventDurability Durability { get; }
-    public RuntimeDurableValueReference? PayloadValue { get; }
+    public GeneratedEventPayloadReference? PayloadValue { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+}
+
+/// <summary>Role-owned reference to the persisted payload of one generated event.</summary>
+public sealed record GeneratedEventPayloadReference
+{
+    public GeneratedEventPayloadReference(string valueId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(valueId);
+        ValueId = valueId;
+    }
+
+    public string ValueId { get; }
 }
 
 /// <summary>

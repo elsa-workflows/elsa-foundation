@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -17,7 +19,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentException.ThrowIfNullOrWhiteSpace(binding.TriggerBindingId);
+        WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -51,19 +53,20 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByPublicationAsync(
-        string publicationId,
+    public ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+        WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
+                .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, query.PublicationId))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(CreatePage(query, matches));
         }
     }
 
@@ -123,10 +126,11 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(
+        WorkflowTriggerBindingPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -134,41 +138,48 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
             var matches = _bindings.Values
                 .Where(binding =>
                     binding.IsActive &&
-                    StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType) &&
-                    StringComparer.Ordinal.Equals(binding.StimulusHash, stimulusHash))
+                    StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType) &&
+                    StringComparer.Ordinal.Equals(binding.StimulusHash, query.StimulusHash))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
-
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(CreatePage(query, matches));
         }
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(
+        WorkflowTriggerBindingArtifactPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => StringComparer.Ordinal.Equals(binding.ArtifactId, artifactId))
+                .Where(binding => StringComparer.Ordinal.Equals(binding.ArtifactId, query.ArtifactId))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
 
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(CreatePage(query, matches));
         }
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+        WorkflowTriggerBindingTypePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+                .Where(binding =>
+                    binding.IsActive &&
+                    StringComparer.Ordinal.Equals(binding.StimulusType, query.StimulusType))
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
-
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+            return ValueTask.FromResult(CreatePage(query, matches));
         }
     }
 
@@ -179,10 +190,28 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         foreach (var binding in bindings)
         {
             ArgumentNullException.ThrowIfNull(binding);
+            WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
             if (!StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
                 throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
         }
+    }
+
+    private static WorkflowTriggerBindingPage CreatePage(
+        WorkflowTriggerBindingPageRequest query,
+        IReadOnlyList<WorkflowTriggerBinding> matches)
+    {
+        var continuationId = DecodeContinuation(query);
+        var remaining = continuationId is null
+            ? matches
+            : matches
+                .Where(binding => StringComparer.Ordinal.Compare(binding.TriggerBindingId, continuationId) > 0)
+                .ToArray();
+        var page = remaining.Take(query.Limit).ToArray();
+        var nextContinuation = remaining.Count > page.Length
+            ? EncodeContinuation(query, page[^1].TriggerBindingId)
+            : null;
+        return new WorkflowTriggerBindingPage(query, page, matches.Count, nextContinuation);
     }
 
     private void SetPublicationActivity(string publicationId, bool isActive)
@@ -200,5 +229,79 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
                      .Select(binding => binding.TriggerBindingId)
                      .ToArray())
             _bindings.Remove(bindingId);
+    }
+
+    private static string EncodeContinuation(WorkflowTriggerBindingPageRequest query, string lastBindingId)
+    {
+        var payload = Encoding.UTF8.GetBytes($"{QueryBinding(query)}\0{lastBindingId}");
+        var checksum = SHA256.HashData(payload);
+        return $"imq1.{Base64UrlEncode(payload)}.{Base64UrlEncode(checksum)}";
+    }
+
+    private static string? DecodeContinuation(WorkflowTriggerBindingPageRequest query)
+    {
+        if (query.ContinuationToken is null)
+            return null;
+
+        try
+        {
+            var parts = query.ContinuationToken.Split('.');
+            if (parts is not ["imq1", var encodedPayload, var encodedChecksum])
+                throw new FormatException();
+
+            var payload = Base64UrlDecode(encodedPayload);
+            var suppliedChecksum = Base64UrlDecode(encodedChecksum);
+            var expectedChecksum = SHA256.HashData(payload);
+            if (suppliedChecksum.Length != expectedChecksum.Length ||
+                !CryptographicOperations.FixedTimeEquals(suppliedChecksum, expectedChecksum))
+            {
+                throw new FormatException();
+            }
+
+            var decoded = Encoding.UTF8.GetString(payload);
+            var separator = decoded.IndexOf('\0');
+            if (separator <= 0 ||
+                separator == decoded.Length - 1 ||
+                !StringComparer.Ordinal.Equals(decoded[..separator], QueryBinding(query)))
+            {
+                throw new FormatException();
+            }
+
+            return decoded[(separator + 1)..];
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new ArgumentException(
+                "The trigger-binding continuation token is invalid or belongs to another trigger-binding query.",
+                nameof(query),
+                exception);
+        }
+    }
+
+    private static string QueryBinding(WorkflowTriggerBindingPageRequest query)
+    {
+        var value = query switch
+        {
+            WorkflowTriggerBindingPageQuery exact =>
+                $"exact\0{exact.StimulusType}\0{exact.StimulusHash}",
+            WorkflowTriggerBindingTypePageQuery byType =>
+                $"type\0{byType.StimulusType}",
+            WorkflowTriggerBindingPublicationPageQuery byPublication =>
+                $"publication\0{byPublication.PublicationId}",
+            WorkflowTriggerBindingArtifactPageQuery byArtifact =>
+                $"artifact\0{byArtifact.ArtifactId}",
+            _ => throw new ArgumentOutOfRangeException(nameof(query), query, "Unsupported trigger-binding page request.")
+        };
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    }
+
+    private static string Base64UrlEncode(ReadOnlySpan<byte> bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static byte[] Base64UrlDecode(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + ((4 - padded.Length % 4) % 4), '=');
+        return Convert.FromBase64String(padded);
     }
 }

@@ -1,0 +1,26 @@
+{
+  "activityExecutionId": null,
+  "createdAt": "1970-01-01T00:00:00\u002B00:00",
+  "executableNodeId": null,
+  "failureType": "System.Exception",
+  "incidentId": "inc-1",
+  "isBlocking": false,
+  "message": "boom",
+  "metadata": {},
+  "resolutionOutcome": {
+    "actionKind": "ContinueWithIncidents",
+    "appliedAt": "1970-01-01T00:00:00\u002B00:00",
+    "metadata": {
+      "fixture": "v2"
+    },
+    "strategy": {
+      "alias": "ContinueWithIncidents",
+      "version": "1"
+    },
+    "systemSource": null
+  },
+  "resolvedAt": null,
+  "severity": 2,
+  "status": 0,
+  "workflowExecutionId": "wf-1"
+}

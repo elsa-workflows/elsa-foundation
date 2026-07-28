@@ -27,6 +27,11 @@ public static class RuntimeCheckpointFold
         var durableValues = new MergeBuffer<DurableValueState>();
         var incidents = new MergeBuffer<IncidentState>();
         var operational = new MergeBuffer<ExecutionLivenessState>();
+        var workflowDispatches = new MergeBuffer<WorkflowDispatchRecord>();
+        var workflowDispatchCancellations = new List<WorkflowDispatchCancellationRequest>();
+        var activityScopeCleanups = new List<ActivityScopeCleanupRequest>();
+        var consumedSchedulerWorkItems = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
+        WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null;
 
         foreach (var changeSet in changeSets)
         {
@@ -42,6 +47,19 @@ public static class RuntimeCheckpointFold
             durableValues.AddRange(changeSet.DurableValues);
             incidents.AddRange(changeSet.Incidents);
             operational.AddRange(changeSet.Operational);
+            workflowDispatches.AddRange(changeSet.WorkflowDispatches);
+            workflowDispatchCancellations.AddRange(changeSet.WorkflowDispatchCancellations);
+            activityScopeCleanups.AddRange(changeSet.ActivityScopeCleanups);
+            // Union consumed work items across the segment (last writer per work-item id) so no per-hop consumption is
+            // lost or duplicated in the fold.
+            foreach (var consumed in changeSet.ConsumedSchedulerWorkItems)
+                consumedSchedulerWorkItems[consumed.WorkItemId] = consumed;
+            if (changeSet.AlterationJobTerminalChange is { } terminal)
+            {
+                if (alterationJobTerminalChange is not null)
+                    throw new InvalidOperationException("Alteration job terminal evidence is a mandatory checkpoint boundary and cannot be folded.");
+                alterationJobTerminalChange = terminal;
+            }
         }
 
         return new RuntimeCheckpointStateChangeSet(
@@ -52,7 +70,13 @@ public static class RuntimeCheckpointFold
             durableValues.ToArray(),
             incidents.ToArray(),
             operational.ToArray(),
-            inspections.ToArray());
+            workflowDispatches: workflowDispatches.ToArray(),
+            activityExecutionInspections: inspections.ToArray(),
+            postCommitOutbox: null,
+            activityScopeCleanups: activityScopeCleanups,
+            workflowDispatchCancellations: workflowDispatchCancellations,
+            consumedSchedulerWorkItems: consumedSchedulerWorkItems.Values.ToArray(),
+            alterationJobTerminalChange: alterationJobTerminalChange);
     }
 
     private sealed class MergeBuffer<TState>

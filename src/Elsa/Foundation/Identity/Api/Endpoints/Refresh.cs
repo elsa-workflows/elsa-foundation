@@ -7,9 +7,8 @@ namespace Elsa.Foundation.Identity.Api.Endpoints;
 
 /// <summary>
 /// <c>POST /_elsa/identity/refresh</c> — redeems a rotating refresh token for a fresh access/refresh pair.
-/// An invalid, expired, revoked, or replayed refresh token yields a clean 401 (matching <c>Token.cs</c>'s
-/// "no valid credential" contract), never a 500: <see cref="ITokenService.RefreshAsync"/> signals those cases
-/// by throwing <see cref="InvalidOperationException"/>, which this endpoint maps to Unauthorized.
+/// A missing, blank, invalid, expired, revoked, or replayed refresh token yields a clean 401 (matching
+/// <c>Token.cs</c>'s "no valid credential" contract), never a 500.
 /// </summary>
 internal sealed class Refresh(ITokenService tokenService) : ElsaEndpoint<RefreshTokenRequest, TokenRefreshResult>
 {
@@ -21,6 +20,12 @@ internal sealed class Refresh(ITokenService tokenService) : ElsaEndpoint<Refresh
 
     public override async Task HandleAsync(RefreshTokenRequest req, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(req.RefreshToken))
+        {
+            await Send.UnauthorizedAsync(ct);
+            return;
+        }
+
         TokenRefreshResult result;
         try
         {

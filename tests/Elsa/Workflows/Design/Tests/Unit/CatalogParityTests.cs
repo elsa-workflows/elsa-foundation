@@ -1,7 +1,5 @@
 using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Runtime.Core.Events;
 using Elsa.Events.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
@@ -59,12 +57,8 @@ public sealed class CatalogParityTests
         yield return [typeof(OnDraftValidating), "Elsa.Workflows.Design.Validations"];
         // Serialization converter-initializing event
         yield return [typeof(OnJsonPayloadConvertersInitializing), "Elsa.Serialization.SystemText"];
-        // JavaScript expression evaluation events
-        yield return [typeof(OnEvaluatingScript), "Elsa.Expressions.JavaScript"];
         // JavaScript rendering (declarations) event
         yield return [typeof(OnDeclarationsDocumentGenerating), "Elsa.Expressions.JavaScript.Rendering"];
-        // Activity constructor registration event (Elsa.Activities.Runtime.Core → Elsa.Activities.Runtime catalog)
-        yield return [typeof(OnActivityConstructorsInitializing), "Elsa.Activities.Runtime"];
         // Activity reconciliation event
         yield return [typeof(OnActivityVersionsReconciling), "Elsa.Activities.Design.Reconciliation"];
         // Workflow reconciliation event

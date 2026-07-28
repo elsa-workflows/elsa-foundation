@@ -13,7 +13,12 @@ namespace Elsa.Activities.ForEach.Internal;
 /// </summary>
 internal sealed class ForEachStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => ForEachActivity.StructureKind;
 
@@ -49,6 +54,16 @@ internal sealed class ForEachStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<ForEachExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("ForEach executable structure payload is invalid.");
+        var remapped = new ForEachExecutableStructure(Remap(executable.Body, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBody(ActivityNode? body) =>
         body is null ? [] : [body];
 
@@ -66,4 +81,7 @@ internal sealed class ForEachStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<ForEachAuthoredStructure>(SerializerOptions)
                ?? new ForEachAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

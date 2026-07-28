@@ -35,10 +35,15 @@ public sealed class GroundworkDistributedCasTests
         // Node A goes through the interceptor; node B's competing writes go straight to the shared store.
         var sharedStore = new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create());
         _interceptedStore = new InterceptingDocumentStore(sharedStore);
-        _placementA = new GroundworkExecutionPlacementStore(_interceptedStore);
+        _placementA = new GroundworkExecutionPlacementStore(_interceptedStore, sharedStore);
         _placementB = new GroundworkExecutionPlacementStore(sharedStore);
-        _transportA = new GroundworkExecutionCommandTransport(_interceptedStore);
-        _transportB = new GroundworkExecutionCommandTransport(sharedStore);
+        _transportA = new GroundworkExecutionCommandTransport(
+            _interceptedStore,
+            GroundworkDistributedTestAccess.Scoped(),
+            sharedStore);
+        _transportB = new GroundworkExecutionCommandTransport(
+            sharedStore,
+            GroundworkDistributedTestAccess.Scoped());
     }
 
     [Fact]
@@ -81,10 +86,15 @@ public sealed class GroundworkDistributedCasTests
     [Fact]
     public async Task SendRace_OnTheSameSequence_LosesNoCommand()
     {
-        // Node B sends a command in the window between node A's max-sequence read and node A's create, so both
-        // nodes allocate sequence 1. The store must refuse the duplicate id; node A retries with sequence 2.
-        _interceptedStore.OnBeforeSave = async _ =>
+        // Node B sends a command in the window between node A's stream-head read and node A's stream-head CAS create.
+        // The store must refuse node A's stale head create; node A retries with sequence 2 without scanning the inbox.
+        _interceptedStore.OnAfterLoad = async (kind, _) =>
+        {
+            if (!string.Equals(kind, DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind, StringComparison.Ordinal))
+                return;
+
             await _transportB.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-b", Now), Now);
+        };
 
         var itemA = await _transportA.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-a", Now), Now);
 
@@ -94,6 +104,7 @@ public sealed class GroundworkDistributedCasTests
         var drained = await _transportB.LeaseAsync(ExecutionId, NodeB, Now, LeaseDuration, maxItems: 10);
         Assert.Equal(new[] { "env-b", "env-a" }, drained.Select(item => item.Envelope.EnvelopeId).ToArray());
         Assert.Equal(new long[] { 1, 2 }, drained.Select(item => item.Sequence).ToArray());
+        Assert.Equal(0, _interceptedStore.RollbackAttempts);
     }
 
     [Fact]
@@ -110,8 +121,8 @@ public sealed class GroundworkDistributedCasTests
 
         Assert.Single(leasedByB!);
         Assert.Empty(leasedByA);
-        Assert.False(await _transportA.AckAsync(ExecutionId, leasedByB![0].TransportItemId, NodeA, Now.AddSeconds(1)));
-        Assert.True(await _transportB.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, Now.AddSeconds(1)));
+        Assert.False(await _transportA.AckAsync(ExecutionId, leasedByB![0].TransportItemId, NodeA, leasedByB[0].LeaseToken!.Value, Now.AddSeconds(1)));
+        Assert.True(await _transportB.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, leasedByB[0].LeaseToken!.Value, Now.AddSeconds(1)));
     }
 
     private static ExecutionPlacementClaim Claim(string ownerId, DateTimeOffset? requestedAt = null)
@@ -127,6 +138,8 @@ public sealed class GroundworkDistributedCasTests
     private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
         public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public Func<string, string, Task>? OnAfterLoad { get; set; }
+        public int RollbackAttempts { get; private set; }
         public DocumentStoreAccess Access => inner.Access;
 
         public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
@@ -140,8 +153,17 @@ public sealed class GroundworkDistributedCasTests
             return await inner.SaveAsync(request, cancellationToken);
         }
 
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
+        public async Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
+        {
+            var envelope = await inner.LoadAsync(documentKind, id, cancellationToken);
+            if (OnAfterLoad is { } hook)
+            {
+                OnAfterLoad = null;
+                await hook(documentKind, id);
+            }
+
+            return envelope;
+        }
 
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
@@ -160,7 +182,44 @@ public sealed class GroundworkDistributedCasTests
 
         public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
 
-        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
-            inner.BeginAsync(scope, cancellationToken);
+        public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            new InterceptingDocumentUnitOfWork(await inner.BeginAsync(scope, cancellationToken), this);
+
+        public void RecordRollbackAttempt() =>
+            RollbackAttempts++;
+    }
+
+    private sealed class InterceptingDocumentUnitOfWork(
+        IDocumentUnitOfWork inner,
+        InterceptingDocumentStore interceptor) : IDocumentUnitOfWork
+    {
+        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        {
+            if (interceptor.OnBeforeSave is { } hook)
+            {
+                interceptor.OnBeforeSave = null;
+                await hook(request);
+            }
+
+            return await inner.SaveAsync(request, cancellationToken);
+        }
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            inner.CommitAsync(cancellationToken);
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            interceptor.RecordRollbackAttempt();
+            return inner.RollbackAsync(cancellationToken);
+        }
+
+        public ValueTask DisposeAsync() =>
+            inner.DisposeAsync();
     }
 }

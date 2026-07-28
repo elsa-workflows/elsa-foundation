@@ -21,11 +21,32 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 {
     private readonly IWorkflowExecutableStore _executableStore;
     private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
+    private readonly IExecutableActivityTemplateStore _activityTemplateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _artifactCreationGracePeriod;
     private readonly TimeSpan _deletionGuardTimeout;
     private readonly ILogger<WorkflowExecutableReferenceGarbageCollector> _logger;
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(executableStore, sourceReferenceStore, new InMemoryExecutableActivityTemplateStore(), new InMemoryWorkflowExecutionStateStore(), timeProvider, logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, new InMemoryWorkflowExecutionStateStore(), timeProvider, logger)
+    {
+    }
 
     public WorkflowExecutableReferenceGarbageCollector(
         IWorkflowExecutableStore executableStore,
@@ -36,7 +57,28 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         : this(
             executableStore,
             sourceReferenceStore,
+            new InMemoryExecutableActivityTemplateStore(),
             workflowExecutionStateStore,
+            null,
+            Microsoft.Extensions.Options.Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            activityTemplateStore,
+            workflowExecutionStateStore,
+            null,
             Microsoft.Extensions.Options.Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
             timeProvider,
             logger)
@@ -50,9 +92,71 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         IOptions<WorkflowExecutableGarbageCollectionOptions> options,
         TimeProvider timeProvider,
         ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            new InMemoryExecutableActivityTemplateStore(),
+            workflowExecutionStateStore,
+            null,
+            options,
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            activityTemplateStore,
+            workflowExecutionStateStore,
+            null,
+            options,
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
+        : this(
+            executableStore,
+            sourceReferenceStore,
+            new InMemoryExecutableActivityTemplateStore(),
+            workflowExecutionStateStore,
+            workflowDispatchRootStore,
+            options,
+            timeProvider,
+            logger)
+    {
+    }
+
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore,
+        IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<WorkflowExecutableReferenceGarbageCollector> logger)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
+        ArgumentNullException.ThrowIfNull(activityTemplateStore);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -67,7 +171,9 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
         _executableStore = executableStore;
         _sourceReferenceStore = sourceReferenceStore;
+        _activityTemplateStore = activityTemplateStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _workflowDispatchRootStore = workflowDispatchRootStore;
         _timeProvider = timeProvider;
         _artifactCreationGracePeriod = artifactCreationGracePeriod;
         _deletionGuardTimeout = deletionGuardTimeout;
@@ -79,20 +185,61 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
     public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        // Query 1 — drop expired/retired references. Their artifacts become GC candidates once the references are gone.
-        var deletedReferenceIds = await _sourceReferenceStore.DeleteExpiredOrRetiredAsync(now, cancellationToken);
+        var executables = (await _executableStore.ListAllAsync(cancellationToken)).ToArray();
+        var templates = (await _activityTemplateStore.ListAllAsync(cancellationToken)).ToArray();
+        HashSet<string> protectedArtifactIds;
+        HashSet<string> executionProtectedArtifactIds;
+        try
+        {
+            protectedArtifactIds = await LoadProtectedClosureAsync(executables, templates, now, cancellationToken);
+            var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
+            executionProtectedArtifactIds = ResolveProtectedClosure(executables, runtimeRootIds);
+        }
+        catch (Exception exception)
+        {
+            if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
 
-        // Query 2 — form candidates outside the staging grace that no retained execution pins. The grace closes
-        // the expected gap between saving an immutable artifact and committing its first durable source root.
-        var creationCutoff = now - _artifactCreationGracePeriod;
-        var executionRoots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken))
+            _logger.LogWarning(exception, "Reference GC retained all executable material because protected dependency reachability could not be established");
+            return new WorkflowExecutableReferenceSweepResult(0, 0, 0);
+        }
+
+        var retainedTemplateHashes = executables
+            .Where(executable => executionProtectedArtifactIds.Contains(executable.Identity.ArtifactId))
+            .Select(executable => executable.CompatibilityMetadata.GetValueOrDefault("activity.templateHash"))
+            .Where(hash => !string.IsNullOrWhiteSpace(hash))
             .ToHashSet(StringComparer.Ordinal);
-        var artifactIds = (await _executableStore.ListAsync(cancellationToken))
+        var retainedTemplateIds = templates
+            .Where(template => retainedTemplateHashes.Contains(template.TemplateHash))
+            .Select(template => template.TemplateId)
+            .ToHashSet(StringComparer.Ordinal);
+        var retainedMaterialIds = executionProtectedArtifactIds
+            .Concat(retainedTemplateIds)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Query 1 — drop expired/retired references unless a retained execution still pins their inspectable
+        // executable/template graph. Terminal executions remain roots until their execution state is removed.
+        var deletedReferenceIds = new List<string>();
+        var doomedReferences = (await _sourceReferenceStore.ListAllAsync(cancellationToken: cancellationToken))
+            .Where(reference => reference.DeletedAt is not null || reference.IsExpired(now))
+            .Where(reference => !retainedMaterialIds.Contains(reference.ArtifactId))
+            .ToArray();
+        foreach (var reference in doomedReferences)
+        {
+            if (await _sourceReferenceStore.DeleteAsync(reference.SourceReferenceId, cancellationToken))
+                deletedReferenceIds.Add(reference.SourceReferenceId);
+        }
+
+        // Query 2 — form candidates outside the staging grace that no live root's complete dependency closure
+        // protects. The grace closes the expected gap between saving an immutable artifact and committing its first
+        // durable source root. Any graph/query uncertainty retains every artifact for this sweep.
+        var creationCutoff = now - _artifactCreationGracePeriod;
+        var artifactIds = executables
             .Where(executable => executable.CreatedAt <= creationCutoff)
             .Select(executable => executable.Identity.ArtifactId)
-            .Where(artifactId => !executionRoots.Contains(artifactId))
+            .Where(artifactId => !protectedArtifactIds.Contains(artifactId))
             .ToArray();
-        var unreferencedArtifactIds = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
+        var unreferencedArtifactIds = await ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
 
         var deletedArtifactCount = 0;
         foreach (var artifactId in unreferencedArtifactIds)
@@ -112,15 +259,17 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
             try
             {
-                var stillUnreferenced = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync([artifactId], now, cancellationToken);
+                var stillUnreferenced = await ListUnreferencedArtifactIdsAsync([artifactId], now, cancellationToken);
                 if (!stillUnreferenced.Contains(artifactId, StringComparer.Ordinal))
                 {
                     await CancelDeletionConservativelyAsync(deletionGuard);
                     continue;
                 }
 
-                var currentExecutionRoots = await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
-                if (currentExecutionRoots.Contains(artifactId, StringComparer.Ordinal))
+                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentTemplates = await _activityTemplateStore.ListAllAsync(cancellationToken);
+                var currentProtectedArtifactIds = await LoadProtectedClosureAsync(currentExecutables, currentTemplates, now, cancellationToken);
+                if (currentProtectedArtifactIds.Contains(artifactId))
                 {
                     await CancelDeletionConservativelyAsync(deletionGuard);
                     continue;
@@ -142,16 +291,35 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             }
 
             if (await _executableStore.DeleteAsync(deletionGuard, _timeProvider.GetUtcNow(), cancellationToken))
+            {
                 deletedArtifactCount++;
+                _logger.LogInformation(
+                    "Reference GC permanently deleted unreferenced workflow executable artifact {ArtifactId}",
+                    artifactId);
+            }
         }
 
-        if ((deletedReferenceIds.Count > 0 || deletedArtifactCount > 0) && _logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug(
-                "Reference GC sweep removed {ReferenceCount} expired/retired reference(s) and {ArtifactCount} unreferenced artifact(s)",
-                deletedReferenceIds.Count,
-                deletedArtifactCount);
+        var templateIds = templates
+            .Where(template => template.CreatedAt <= creationCutoff)
+            .Select(template => template.TemplateId)
+            .Where(templateId => !retainedTemplateIds.Contains(templateId))
+            .ToArray();
+        var unreferencedTemplateIds = await ListUnreferencedArtifactIdsAsync(templateIds, now, cancellationToken);
+        var deletedActivityTemplateCount = 0;
+        foreach (var templateId in unreferencedTemplateIds)
+        {
+            if (await _activityTemplateStore.DeleteAsync(templateId, cancellationToken))
+                deletedActivityTemplateCount++;
+        }
 
-        return new WorkflowExecutableReferenceSweepResult(deletedReferenceIds.Count, deletedArtifactCount);
+        if ((deletedReferenceIds.Count > 0 || deletedArtifactCount > 0 || deletedActivityTemplateCount > 0) && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug(
+                "Reference GC sweep removed {ReferenceCount} expired/retired reference(s), {ArtifactCount} unreferenced workflow artifact(s), and {ActivityTemplateCount} unreferenced activity template(s)",
+                deletedReferenceIds.Count,
+                deletedArtifactCount,
+                deletedActivityTemplateCount);
+
+        return new WorkflowExecutableReferenceSweepResult(deletedReferenceIds.Count, deletedArtifactCount, deletedActivityTemplateCount);
     }
 
     private async ValueTask CancelDeletionConservativelyAsync(WorkflowExecutableDeletionGuard guard)
@@ -170,5 +338,97 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                 guard.OperationId,
                 guard.ArtifactId);
         }
+    }
+
+    private async ValueTask<HashSet<string>> LoadProtectedClosureAsync(
+        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<ExecutableActivityTemplate> templates,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var sourceRoots = await _sourceReferenceStore.ListAllAsync(
+            liveOnly: true,
+            now: now,
+            cancellationToken: cancellationToken);
+        var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
+        var executableIds = executables.Select(executable => executable.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
+        var templateIds = templates.Select(template => template.TemplateId).ToHashSet(StringComparer.Ordinal);
+        var sourceRootIds = sourceRoots
+            .Select(reference => reference.ArtifactId)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var sourceRootId in sourceRootIds)
+        {
+            if (!executableIds.Contains(sourceRootId) && !templateIds.Contains(sourceRootId))
+            {
+                throw new WorkflowExecutableDependencyGraphException(
+                    WorkflowExecutableDependencyGraphFailureKind.MissingArtifact,
+                    $"Retention root '{sourceRootId}' points to missing executable material.");
+            }
+        }
+
+        var rootIds = sourceRootIds
+            .Where(executableIds.Contains)
+            .Concat(runtimeRootIds)
+            .ToArray();
+        return ResolveProtectedClosure(executables, rootIds);
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> ListRuntimeRootIdsAsync(CancellationToken cancellationToken)
+    {
+        var roots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken)).ToList();
+        if (_workflowDispatchRootStore is not null)
+            roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        return roots;
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
+        IEnumerable<string> artifactIds,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var candidates = artifactIds.Distinct(StringComparer.Ordinal).ToArray();
+        var result = new List<string>(candidates.Length);
+        foreach (var batch in candidates.Chunk(RuntimeStorePageRequest.MaximumLimit))
+        {
+            var unreferenced = await _sourceReferenceStore.ListUnreferencedArtifactIdsAsync(
+                new WorkflowExecutableArtifactCandidateBatch(batch),
+                now,
+                cancellationToken);
+            result.AddRange(unreferenced);
+        }
+
+        return result;
+    }
+
+    private static HashSet<string> ResolveProtectedClosure(
+        IReadOnlyCollection<WorkflowExecutable> executables,
+        IEnumerable<string> rootArtifactIds)
+    {
+        var identitiesById = executables.ToDictionary(executable => executable.Identity.ArtifactId, StringComparer.Ordinal);
+        var rootIds = rootArtifactIds
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (rootIds.Length == 0)
+            return new HashSet<string>(StringComparer.Ordinal);
+
+        var roots = new List<WorkflowExecutableIdentity>(rootIds.Length);
+        foreach (var rootId in rootIds)
+        {
+            if (!identitiesById.TryGetValue(rootId, out var executable))
+            {
+                throw new WorkflowExecutableDependencyGraphException(
+                    WorkflowExecutableDependencyGraphFailureKind.MissingArtifact,
+                    $"Retention root '{rootId}' points to a missing executable artifact.");
+            }
+
+            roots.Add(executable.Identity);
+        }
+
+        return WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables)
+            .Select(executable => executable.Identity.ArtifactId)
+            .ToHashSet(StringComparer.Ordinal);
     }
 }

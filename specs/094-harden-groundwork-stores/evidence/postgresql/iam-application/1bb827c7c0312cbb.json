@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-application",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
+  "executionPath": "provider-driver/postgresql/iam-application/1bb827c7c0312cbb",
+  "clients": 2,
+  "resultHash": "ef9862768d4fa503e756713c546f0eddb51f320aa1c8a4c08472bf073fdf4977",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/postgresql/iam-application/1bb827c7c0312cbb.json"
+}

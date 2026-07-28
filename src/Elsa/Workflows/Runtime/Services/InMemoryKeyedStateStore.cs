@@ -53,6 +53,52 @@ public abstract class InMemoryKeyedStateStore<TKey, TState>
         }
     }
 
+    /// <summary>Reads one value and projects it while holding the same lock used by all mutations.</summary>
+    protected TResult Read<TResult>(TKey key, Func<TState?, TResult> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        lock (_syncRoot)
+        {
+            _states.TryGetValue(key, out var state);
+            return read(state);
+        }
+    }
+
+    /// <summary>
+    /// Atomically derives a replacement and result from the current value. The replacement is committed before the
+    /// result is returned, allowing specialized in-memory stores to model provider compare-and-swap semantics.
+    /// </summary>
+    protected TResult Mutate<TResult>(TKey key, Func<TState?, (TState State, TResult Result)> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        lock (_syncRoot)
+        {
+            _states.TryGetValue(key, out var current);
+            var (state, result) = mutation(current);
+            _states[key] = state;
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Atomically inspects the current value and optionally commits a replacement. This models a rejected conditional
+    /// provider write without forcing callers to re-enter the store lock or rewrite the unchanged value.
+    /// </summary>
+    protected TResult ConditionalMutate<TResult>(
+        TKey key,
+        Func<TState?, (bool ShouldSave, TState? State, TResult Result)> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        lock (_syncRoot)
+        {
+            _states.TryGetValue(key, out var current);
+            var (shouldSave, state, result) = mutation(current);
+            if (shouldSave)
+                _states[key] = state ?? throw new InvalidOperationException("A conditional mutation cannot save a null state.");
+            return result;
+        }
+    }
+
     /// <summary>Removes the entry under <paramref name="key"/>; returns whether it existed.</summary>
     protected bool Remove(TKey key)
     {
@@ -88,5 +134,13 @@ public abstract class InMemoryKeyedStateStore<TKey, TState>
                 .Where(valuePredicate)
                 .ToArray();
         }
+    }
+
+    /// <summary>Reads the live value collection under the store lock without first duplicating the whole store.</summary>
+    protected TResult ReadValues<TResult>(Func<IEnumerable<TState>, TResult> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        lock (_syncRoot)
+            return read(_states.Values);
     }
 }

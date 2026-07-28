@@ -7,6 +7,8 @@ public static class RuntimeCheckpointNames
     public const string WorkflowStarted = nameof(WorkflowStarted);
     public const string ActivityScheduled = nameof(ActivityScheduled);
     public const string ActivityStarted = nameof(ActivityStarted);
+    public const string ActivityAttemptClaimed = nameof(ActivityAttemptClaimed);
+    public const string IntrinsicCompleted = nameof(IntrinsicCompleted);
     public const string ActivityCompleted = nameof(ActivityCompleted);
     public const string ActivitySuspended = nameof(ActivitySuspended);
     public const string ActivityCancelled = nameof(ActivityCancelled);
@@ -16,11 +18,13 @@ public static class RuntimeCheckpointNames
     public const string BookmarkConsumed = nameof(BookmarkConsumed);
     public const string DurableValueCaptured = nameof(DurableValueCaptured);
     public const string IncidentRecorded = nameof(IncidentRecorded);
+    public const string IncidentResolutionBatchApplied = nameof(IncidentResolutionBatchApplied);
     public const string WorkflowSuspended = nameof(WorkflowSuspended);
     public const string WorkflowCompleted = nameof(WorkflowCompleted);
     public const string WorkflowFaulted = nameof(WorkflowFaulted);
     public const string WorkflowCancelled = nameof(WorkflowCancelled);
     public const string PostCommitIntentRecorded = nameof(PostCommitIntentRecorded);
+    public const string RuntimeAlterationJob = nameof(RuntimeAlterationJob);
 
     public static readonly IReadOnlyCollection<string> All = typeof(RuntimeCheckpointNames)
         .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)

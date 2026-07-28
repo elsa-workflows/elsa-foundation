@@ -4,8 +4,15 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkPublicationRecordStore(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(store, serializer, PublishingGroundworkStorageManifest.PublicationRecordDocumentKind), IPublicationRecordStore
+public sealed class GroundworkPublicationRecordStore(
+    IDocumentStore store,
+    PublishingGroundworkDocumentSerializer serializer,
+    IBoundedDocumentStore queries)
+    : GroundworkPublishingStore(
+        store,
+        serializer,
+        PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
+        queries ?? throw new ArgumentNullException(nameof(queries))), IPublicationRecordStore
 {
     public async ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
@@ -27,7 +34,11 @@ public sealed class GroundworkPublicationRecordStore(IDocumentStore store, Publi
 
     public async ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default)
     {
-        var docs = await QueryAsync<RecordDocument>(PublishingGroundworkStorageManifest.BySlotIndex, slotId, cancellationToken);
+        var docs = await QueryAsync<RecordDocument>(
+            PublishingGroundworkStorageManifest.ListBySlotQuery,
+            PublishingGroundworkStorageManifest.SlotIdField,
+            slotId,
+            cancellationToken);
         return docs.Select(x => x.Publication).OrderBy(x => x.CreatedAt).ThenBy(x => x.PublicationId, StringComparer.Ordinal).ToArray();
     }
 

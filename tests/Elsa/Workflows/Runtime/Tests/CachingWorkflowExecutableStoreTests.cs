@@ -64,6 +64,50 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task SharedState_ReusesEntriesAcrossAdaptersInTheSamePartition()
+    {
+        var expected = NewExecutable("artifact-a");
+        var provider = new ControllableStore(expected);
+        var state = new WorkflowExecutableCache(new WorkflowExecutableCacheOptions());
+        var first = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-a",
+            provider.FindAsync);
+        var second = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-a",
+            provider.FindAsync);
+
+        Assert.Same(expected, await first.FindAsync(expected.Identity.ArtifactId));
+        Assert.Same(expected, await second.FindAsync(expected.Identity.ArtifactId));
+        Assert.Equal(1, provider.FindCalls(expected.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task SharedState_DoesNotReuseEntriesAcrossPersistencePartitions()
+    {
+        var expected = NewExecutable("artifact-a");
+        var provider = new ControllableStore(expected);
+        var state = new WorkflowExecutableCache(new WorkflowExecutableCacheOptions());
+        var first = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-a",
+            provider.FindAsync);
+        var second = new CachingWorkflowExecutableStore(
+            provider,
+            state,
+            "tenant-b",
+            provider.FindAsync);
+
+        Assert.Same(expected, await first.FindAsync(expected.Identity.ArtifactId));
+        Assert.Same(expected, await second.FindAsync(expected.Identity.ArtifactId));
+        Assert.Equal(2, provider.FindCalls(expected.Identity.ArtifactId));
+    }
+
+    [Fact]
     public async Task ConcurrentSameKeyMisses_CoalesceOneProviderLoad()
     {
         var expected = NewExecutable("artifact-a");
@@ -404,19 +448,20 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
-    public async Task List_DelegatesWithoutPopulatingOrChangingResidentRecency()
+    public async Task ListPage_DelegatesWithoutPopulatingOrChangingResidentRecency()
     {
         var a = NewExecutable("artifact-a");
         var b = NewExecutable("artifact-b");
         var c = NewExecutable("artifact-c");
         var provider = new ControllableStore(a, b, c)
         {
-            ListHandler = _ => ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>([a, b, c])
+            ListHandler = (request, _) => ValueTask.FromResult(
+                new RuntimeStorePage<WorkflowExecutable>(request, [a, b, c]))
         };
         var cache = NewCache(provider, capacity: 2);
         await cache.FindAsync(a.Identity.ArtifactId);
 
-        Assert.Equal(3, (await cache.ListAsync()).Count);
+        Assert.Equal(3, (await cache.ListPageAsync(new RuntimeStorePageRequest())).Items.Count);
         await cache.FindAsync(b.Identity.ArtifactId);
         await cache.FindAsync(c.Identity.ArtifactId);
         await cache.FindAsync(a.Identity.ArtifactId);
@@ -569,11 +614,12 @@ public sealed class CachingWorkflowExecutableStoreTests
                 "test",
                 document.RootElement,
                 new Dictionary<string, RuntimeInputBinding>(),
-                new Dictionary<string, RuntimeOutputCapture>(),
-                new Dictionary<string, string>()),
+                new Dictionary<string, string>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static TaskCompletionSource<T> NewCompletionSource<T>() =>
@@ -601,7 +647,8 @@ public sealed class CachingWorkflowExecutableStoreTests
         public Func<WorkflowExecutable, CancellationToken, ValueTask>? SaveHandler { get; set; }
         public Func<string, CancellationToken, ValueTask<bool>>? DeleteHandler { get; set; }
         public Func<WorkflowExecutableDeletionGuard, DateTimeOffset, CancellationToken, ValueTask<bool>>? GuardedDeleteHandler { get; set; }
-        public Func<CancellationToken, ValueTask<IReadOnlyCollection<WorkflowExecutable>>>? ListHandler { get; set; }
+        public Func<RuntimeStorePageRequest, CancellationToken, ValueTask<RuntimeStorePage<WorkflowExecutable>>>?
+            ListHandler { get; set; }
 
         public int TotalFindCalls => _findCalls.Values.Sum();
         public int SaveCalls => Volatile.Read(ref _saveCalls);
@@ -674,11 +721,15 @@ public sealed class CachingWorkflowExecutableStoreTests
                    ?? ValueTask.FromResult(_executables.GetValueOrDefault(artifactId));
         }
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+            RuntimeStorePageRequest request,
+            CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _listCalls);
-            return ListHandler?.Invoke(cancellationToken)
-                   ?? ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values.ToArray());
+            return ListHandler?.Invoke(request, cancellationToken)
+                   ?? ValueTask.FromResult(new RuntimeStorePage<WorkflowExecutable>(
+                       request,
+                       _executables.Values.Take(request.Limit).ToArray()));
         }
     }
 

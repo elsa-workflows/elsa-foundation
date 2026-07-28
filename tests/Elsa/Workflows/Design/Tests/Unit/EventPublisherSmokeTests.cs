@@ -197,7 +197,6 @@ public sealed class EventPublisherSmokeTests
             RootActivity: null,
             Inputs: [],
             Outputs: [],
-            WorkflowActivityOptions: null,
             StrategyOptions: null);
         public DateTimeOffset CreatedAt => DateTimeOffset.UtcNow;
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;

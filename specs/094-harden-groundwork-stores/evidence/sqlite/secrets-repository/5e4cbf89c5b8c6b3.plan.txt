@@ -1,0 +1,14 @@
+provider=sqlite
+document-kind=secret
+route=list-filtered
+physical-name=secrets
+physical-cardinality=100000
+plan-classification=index-search
+index=secret_secret_filtered_list_bf8e70100178
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|sqlite-query-plan|index-search|secret_secret_filtered_list_bf8e70100178|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|1||7d1a32eacf340190ffcb3be576bf274f0f665de52cdcf3c18cde4f2853919624
+command-1=Page|page|sqlite-query-plan|index-search|secret_secret_filtered_list_bf8e70100178|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|16|normalizedName:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|75523d0321ba8ddd0b73a5c58eadc46e2ee0587a2b9aecca7364a1fd34f22188

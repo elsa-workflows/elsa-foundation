@@ -39,13 +39,27 @@ public sealed class WorkflowExecutionRun(IReadOnlyCollection<ActivityExecutionSt
     public ActivityExecutionState AssertCompleted(string executableNodeId)
     {
         var state = State(executableNodeId);
-        Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
+        Assert.True(
+            state.Status == ActivityExecutionStatus.Completed,
+            $"Activity '{executableNodeId}' ended as {state.Status}/{state.SubStatus}: {state.Fault?.Message}");
         return state;
     }
 
     /// <summary>Asserts the node ran and the workflow completed; convenience for terminal-node coverage.</summary>
-    public void AssertWorkflowCompleted() =>
-        Assert.Equal(WorkflowExecutionStatus.Completed, WorkflowState?.Status);
+    public void AssertWorkflowCompleted()
+    {
+        var faults = ActivityStates
+            .Where(state => state.Status == ActivityExecutionStatus.Faulted)
+            .Select(state => $"{state.Execution.ExecutableNodeId}={state.SubStatus}: {state.Fault?.Message}")
+            .ToArray();
+        var states = ActivityStates
+            .Select(state => $"{state.Execution.ExecutableNodeId}={state.Status}/{state.SubStatus}")
+            .ToArray();
+        Assert.True(
+            WorkflowState?.Status == WorkflowExecutionStatus.Completed,
+            $"Workflow ended as {WorkflowState?.Status}/{WorkflowState?.SubStatus}. " +
+            $"Activities: {string.Join(" | ", states)}. Faults: {string.Join(" | ", faults)}");
+    }
 
     /// <summary>Asserts the listed nodes ran and the rest of the listed-as-absent nodes did not.</summary>
     public void AssertRan(params string[] executableNodeIds)
@@ -71,7 +85,9 @@ public sealed class WorkflowExecutionRun(IReadOnlyCollection<ActivityExecutionSt
 
     /// <summary>Reads the completion outcome names recorded on an execution state (empty when none).</summary>
     public static IReadOnlyCollection<string> CompletionOutcomes(ActivityExecutionState state) =>
-        state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serialized)
+        state.Completion is { } completion
+            ? [completion.OutcomeKey]
+            : state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serialized)
             ? JsonSerializer.Deserialize<string[]>(serialized) ?? []
             : [];
 }

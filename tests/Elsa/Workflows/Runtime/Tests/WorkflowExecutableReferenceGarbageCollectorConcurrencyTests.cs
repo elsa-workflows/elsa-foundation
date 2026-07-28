@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -43,6 +44,27 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
         Assert.NotNull(await sourceReferenceStore.FindAsync("ref-concurrent"));
         Assert.Equal(0, result.DeletedArtifactCount);
         Assert.NotNull(await executableStore.FindAsync("artifact-racing"));
+    }
+
+    [Fact]
+    public async Task Sweep_FinalRecheckProtectsAChildWhenAConcurrentParentRootAppears()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var sourceReferenceStore = new HookedSourceReferenceStore();
+        var child = Executable("artifact-child", _now.AddDays(-30));
+        var parent = Executable("artifact-parent", _now.AddDays(-30), child);
+        await executableStore.SaveAsync(child);
+        await executableStore.SaveAsync(parent);
+        sourceReferenceStore.AfterQuery = queryNumber =>
+            queryNumber == 2
+                ? sourceReferenceStore.SaveAsync(Reference("ref-concurrent-parent", parent.Identity.ArtifactId))
+                : ValueTask.CompletedTask;
+
+        var result = await NewCollector(executableStore, sourceReferenceStore).SweepAsync();
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await executableStore.FindAsync(child.Identity.ArtifactId));
+        Assert.NotNull(await executableStore.FindAsync(parent.Identity.ArtifactId));
     }
 
     [Fact]
@@ -227,22 +249,31 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             timeProvider ?? new FixedTimeProvider(_now),
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
 
-    private WorkflowExecutable Executable(string artifactId, DateTimeOffset createdAt) =>
+    private WorkflowExecutable Executable(string artifactId, DateTimeOffset createdAt, params WorkflowExecutable[] dependencies) =>
         new(
-            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", Hash(artifactId)),
             rootActivity: new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "authored-root",
                 activityType: "test/activity",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: JsonSerializer.SerializeToElement(new { type = "test" }),
+                descriptor: new RuntimeActivityDescriptor(
+                    "test",
+                    RuntimeActivityDescriptor.InitialSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { type = "test" })),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: createdAt,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: dependencies.Select(dependency => new WorkflowExecutableDependency(
+                dependency.Identity.ArtifactId,
+                dependency.Identity.ArtifactHash,
+                ["node-root"])).ToArray(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+
+    private static string Hash(string artifactId) => $"sha256:{artifactId}";
 
     private WorkflowExecutableSourceReference Reference(string sourceReferenceId, string artifactId) =>
         new(
@@ -288,17 +319,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
             _inner.FindAsync(sourceReferenceId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(
-            string artifactId,
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+            WorkflowExecutableSourceReferenceArtifactPageQuery query,
             CancellationToken cancellationToken = default) =>
-            _inner.ListByArtifactAsync(artifactId, cancellationToken);
+            _inner.ListByArtifactPageAsync(query, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(
-            WorkflowExecutableReferenceScope? scope = null,
-            bool liveOnly = false,
-            DateTimeOffset? now = null,
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+            WorkflowExecutableSourceReferencePageQuery query,
             CancellationToken cancellationToken = default) =>
-            _inner.ListAsync(scope, liveOnly, now, cancellationToken);
+            _inner.ListPageAsync(query, cancellationToken);
 
         public ValueTask<bool> RetireAsync(
             string sourceReferenceId,
@@ -308,20 +337,21 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             _inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
 
         public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+            WorkflowExecutableSourceReferenceCleanupBatch batch,
             DateTimeOffset now,
             CancellationToken cancellationToken = default) =>
-            _inner.DeleteExpiredOrRetiredAsync(now, cancellationToken);
+            _inner.DeleteExpiredOrRetiredAsync(batch, now, cancellationToken);
 
         public async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
-            IEnumerable<string> artifactIds,
+            WorkflowExecutableArtifactCandidateBatch candidates,
             DateTimeOffset now,
             CancellationToken cancellationToken = default)
         {
-            var candidates = await _inner.ListUnreferencedArtifactIdsAsync(artifactIds, now, cancellationToken);
+            var unreferenced = await _inner.ListUnreferencedArtifactIdsAsync(candidates, now, cancellationToken);
             var queryNumber = Interlocked.Increment(ref _queryCount);
             if (AfterQuery is not null)
                 await AfterQuery(queryNumber);
-            return candidates;
+            return unreferenced;
         }
     }
 }

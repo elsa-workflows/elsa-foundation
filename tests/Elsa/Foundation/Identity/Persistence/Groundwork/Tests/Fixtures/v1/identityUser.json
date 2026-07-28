@@ -1,5 +1,9 @@
 {
-  "emailKey": "tenant-1:alice@example.com",
+  "normalizedEmail": "alice@example.com",
+  "normalizedEmailKey": "identity:8d9215eb00cf7ee0487e48381c523b4eb885682f1dfa9e8ea35fd30d581e224e",
+  "normalizedUserName": "alice",
+  "normalizedUserNameKey": "identity:33d7b9ce014acec16f5acd3651ac356708fcf66c0127afb6ae3b8d048dd57c94",
+  "tenantId": "tenant-1",
   "user": {
     "directPermissions": [
       "secrets:read"
@@ -14,5 +18,6 @@
     "status": "Active",
     "tenantId": "tenant-1",
     "userName": "alice"
-  }
+  },
+  "userId": "user-1"
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,21 +16,21 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Scan cost.</b> Groundwork's portable query contract is equality-only, so <see cref="ListDueAsync"/>
-/// queries the whole schedule partition through the constant <c>by-collection</c> keyword index, then filters
-/// <c>NextOccurrence &lt;= asOf</c>, orders, and caps in memory — mirroring the durable-timer bridge. The pump's
-/// per-tick limit bounds fires, not this load.
+/// <b>Due selection.</b> <see cref="ListDueAsync"/> uses the declared <c>list-due</c> date route to bound the
+/// result set to schedules whose persisted <c>NextOccurrence</c> is at or before the requested instant, then
+/// preserves the contract's active-only filtering, deterministic ordering, and cap in process.
 /// </para>
 /// <para>
-/// <b>Compare-and-swap (W20 hook).</b> <see cref="TryAdvanceAsync"/> reads the current schedule, checks the
-/// cursor still equals the caller's expected value, then writes the advanced schedule. On a single node this is
-/// the at-most-once claim the pump relies on; a future clustered store (W20) keeps the same contract but makes
-/// the read-check-write atomic through the provider's optimistic-concurrency token so concurrent nodes cannot
-/// both claim the same occurrence.
+/// <b>Compare-and-swap.</b> <see cref="TryAdvanceAsync"/> reads the current schedule envelope, checks the cursor
+/// still equals the caller's expected value, then writes the advanced schedule with the loaded Groundwork document
+/// version as the expected version. Concurrent nodes therefore cannot both claim the same occurrence.
 /// </para>
 /// </remarks>
-public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind), IRecurringTriggerScheduleStore
+public sealed class GroundworkRecurringTriggerScheduleStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, boundedStore), IRecurringTriggerScheduleStore
 {
     private const string ProjectionKind = "recurringSchedules";
 
@@ -39,10 +40,31 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule.ScheduleId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Upsert: republish rewrites the schedule (including a re-anchored NextOccurrence). Unlike the
-        // durable-timer store's existing-wins rule, a recurring schedule has no one-shot deadline to protect.
-        await SaveDocumentAsync(schedule.ScheduleId, ToEnvelope(schedule), cancellationToken);
-        return schedule;
+        // Republish may rewrite the schedule, but it must not silently overwrite a concurrent publication or
+        // occurrence advance. Creation is expected-version zero; replacement uses the version actually read.
+        var existing = await Store.LoadAsync(DocumentKind, schedule.ScheduleId, cancellationToken);
+        var result = await SaveDocumentAsync(
+            schedule.ScheduleId,
+            ToEnvelope(schedule),
+            cancellationToken,
+            existing?.Version ?? 0);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return schedule;
+        if (result.Status != DocumentStoreWriteStatus.ConcurrencyConflict)
+        {
+            throw new InvalidOperationException(
+                $"Groundwork rejected recurring trigger schedule '{schedule.ScheduleId}' with status '{result.Status}'.");
+        }
+
+        var winnerEnvelope = await Store.LoadAsync(DocumentKind, schedule.ScheduleId, cancellationToken);
+        if (winnerEnvelope is not null &&
+            Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(winnerEnvelope).Schedule == schedule)
+        {
+            return schedule;
+        }
+
+        throw new InvalidOperationException(
+            $"Recurring trigger schedule '{schedule.ScheduleId}' changed concurrently and was not overwritten.");
     }
 
     public async ValueTask PreparePublicationAsync(
@@ -54,29 +76,78 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         ArgumentNullException.ThrowIfNull(schedules);
         ValidatePublicationSchedules(publicationId, schedules);
 
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
+        var existing = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        var prepared = schedules.Select(schedule => schedule with { IsActive = false }).ToArray();
+        if (projectionStateEnvelope is not null)
+        {
+            var projectionState = Serializer.Deserialize<GroundworkPublicationProjectionState>(projectionStateEnvelope);
+            if (!projectionState.IsActive && ProjectionsEqual(existing, prepared))
+                return;
+
+            throw new InvalidOperationException(
+                $"Recurring-schedule publication projection '{publicationId}' is already prepared with different state.");
+        }
+
         await CommitAtomicallyAsync(
             existing.Select(schedule => schedule.ScheduleId),
-            schedules.Select(schedule => schedule with { IsActive = false }),
-            new PublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
+            prepared,
+            new GroundworkPublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
             deleteProjectionStateId: null,
+            cancellationToken,
+            projectionStateExpectedVersion: 0);
+    }
+
+    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
+        RecurringTriggerSchedulePublicationPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery,
+                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField, query.PublicationId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+
+        return new RuntimeStorePage<RecurringTriggerSchedule>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
+                .ToArray(),
+            result.NextContinuation);
+    }
+
+    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(
+        RecurringTriggerScheduleArtifactPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByArtifactQuery,
+                [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, query.ArtifactId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
+            cancellationToken);
+
+        return new RuntimeStorePage<RecurringTriggerSchedule>(
+            query,
+            result.Documents
+                .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
+                .ToArray(),
+            result.NextContinuation);
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
         string publicationId,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
-            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
-            envelope => envelope.Schedule,
-            cancellationToken);
-        return schedules
-            .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
-            .ToArray();
-    }
+        CancellationToken cancellationToken = default) =>
+        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
 
     public async ValueTask ActivatePublicationAsync(
         string publicationId,
@@ -87,34 +158,54 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         if (replacedPublicationId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
 
-        var candidateState = await LoadProjectionStateAsync(publicationId, cancellationToken);
-        if (candidateState is null)
+        var candidateStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
+        if (candidateStateEnvelope is null)
             throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
 
-        var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
-        var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+        var candidateState = Serializer.Deserialize<GroundworkPublicationProjectionState>(candidateStateEnvelope);
+        var hasDistinctReplacement = replacedPublicationId is not null &&
+            !StringComparer.Ordinal.Equals(publicationId, replacedPublicationId);
+        var replacedStateEnvelope = !hasDistinctReplacement
+            ? null
+            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId!, cancellationToken);
+        var replacedState = replacedStateEnvelope is null
+            ? null
+            : Serializer.Deserialize<GroundworkPublicationProjectionState>(replacedStateEnvelope);
+        if (GroundworkPublicationProjectionTransition.IsAlreadyActivated(
+                candidateState,
+                replacedState,
+                hasDistinctReplacement))
+        {
+            return;
+        }
+
+        GroundworkPublicationProjectionTransition.EnsureCanActivate(
+            candidateState,
+            replacedState,
+            hasDistinctReplacement);
+
+        var candidate = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        var replaced = !hasDistinctReplacement
             ? []
-            : await ListByPublicationAsync(replacedPublicationId, cancellationToken);
+            : await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, replacedPublicationId!, cancellationToken);
         var updates = candidate.Select(schedule => schedule with { IsActive = true })
             .Concat(replaced.Select(schedule => schedule with { IsActive = false }))
             .ToArray();
-        var replacedState = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
-            ? null
-            : await LoadProjectionStateAsync(replacedPublicationId, cancellationToken);
-
         await CommitAtomicallyAsync(
             [],
             updates,
             candidateState with { IsActive = true },
             deleteProjectionStateId: null,
             cancellationToken,
-            replacedState is null ? null : replacedState with { IsActive = false });
+            secondaryProjectionState: replacedState is null ? null : replacedState with { IsActive = false },
+            projectionStateExpectedVersion: candidateStateEnvelope.Version,
+            secondaryProjectionStateExpectedVersion: replacedStateEnvelope?.Version);
     }
 
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        var existing = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
         await CommitAtomicallyAsync(
             existing.Select(schedule => schedule.ScheduleId),
             [],
@@ -125,21 +216,31 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Due-schedule listing limit must be greater than zero.");
+        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-schedule listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByCollectionIndex,
-            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
-            envelope => envelope.Schedule,
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery,
+                [
+                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField,
+                        bool.TrueString.ToLowerInvariant())),
+                    DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                        asOf.ToString("O", CultureInfo.InvariantCulture)))
+                ],
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIsActiveField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)
+                ],
+                take: limit),
             cancellationToken);
-
-        return schedules
-            .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)
-            .OrderBy(schedule => schedule.NextOccurrence)
-            .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
-            .Take(limit)
+        return result.Documents
+            .Select(envelope => Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule)
             .ToArray();
     }
 
@@ -156,15 +257,17 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Read-check-write compare-and-swap. Single-node hosts get an at-most-once claim from this; the W20
-        // clustered store makes the same check atomic via the provider's concurrency token.
-        var current = await LoadScheduleAsync(scheduleId, cancellationToken);
+        var envelope = await Store.LoadAsync(DocumentKind, scheduleId, cancellationToken);
+        if (envelope is null)
+            return false;
+
+        var current = Serializer.Deserialize<RecurringTriggerScheduleEnvelope>(envelope).Schedule;
         if (current is null || !current.IsActive || current.NextOccurrence != expectedNextOccurrence)
             return false;
 
         var advanced = current with { NextOccurrence = newNextOccurrence };
-        await SaveDocumentAsync(scheduleId, ToEnvelope(advanced), cancellationToken);
-        return true;
+        var result = await SaveDocumentAsync(scheduleId, ToEnvelope(advanced), cancellationToken, envelope.Version);
+        return result.Status == DocumentStoreWriteStatus.Saved;
     }
 
     public async ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -172,11 +275,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var owned = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
-            ElsaRuntimeStorageManifest.ByArtifactIndex,
-            artifactId,
-            envelope => envelope.Schedule,
-            cancellationToken);
+        var owned = await RuntimeOperationalStorePagingExtensions.ListAllByArtifactAsync(this, artifactId, cancellationToken);
 
         foreach (var schedule in owned)
             await DeleteDocumentAsync(schedule.ScheduleId, cancellationToken);
@@ -199,6 +298,9 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         schedule.ArtifactId,
         schedule);
 
+    private static DocumentQueryClause Equal(string path, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
+
     // The constant collection partition lets the due-schedule sweep use a keyword equality index instead of a
     // provider-wide scan; ArtifactId is lifted to the top level so the by-artifact replace path can query it
     // without a nested index path, mirroring the other list-capable bridges.
@@ -217,24 +319,23 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         }
     }
 
-    private async ValueTask<PublicationProjectionState?> LoadProjectionStateAsync(
+    private async ValueTask<DocumentEnvelope?> LoadProjectionStateEnvelopeAsync(
         string publicationId,
-        CancellationToken cancellationToken)
-    {
-        var envelope = await Store.LoadAsync(
+        CancellationToken cancellationToken) =>
+        await Store.LoadAsync(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             ProjectionStateId(publicationId),
             cancellationToken);
-        return envelope is null ? null : Serializer.Deserialize<PublicationProjectionState>(envelope);
-    }
 
     private async ValueTask CommitAtomicallyAsync(
         IEnumerable<string> deleteIds,
         IEnumerable<RecurringTriggerSchedule> upserts,
-        PublicationProjectionState? projectionState,
+        GroundworkPublicationProjectionState? projectionState,
         string? deleteProjectionStateId,
         CancellationToken cancellationToken,
-        PublicationProjectionState? secondaryProjectionState = null)
+        GroundworkPublicationProjectionState? secondaryProjectionState = null,
+        long? projectionStateExpectedVersion = null,
+        long? secondaryProjectionStateExpectedVersion = null)
     {
         await using var unitOfWork = await Store.BeginAsync(
             DocumentCommitScope.Of(DocumentKind, ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind),
@@ -253,32 +354,58 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
                 cancellationToken);
         }
         if (projectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, projectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, projectionState, projectionStateExpectedVersion, cancellationToken);
         if (secondaryProjectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, cancellationToken);
+            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, secondaryProjectionStateExpectedVersion, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
     private async ValueTask SaveProjectionStateAsync(
         IDocumentUnitOfWork unitOfWork,
-        PublicationProjectionState state,
+        GroundworkPublicationProjectionState state,
+        long? expectedVersion,
         CancellationToken cancellationToken)
     {
         var (schemaVersion, content) = Serializer.Serialize(
             ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
             state);
-        await unitOfWork.SaveAsync(
+        var result = await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
                 ProjectionStateId(state.PublicationId),
                 schemaVersion,
-                content),
+                content,
+                ExpectedVersion: expectedVersion),
             cancellationToken);
+        if (result.Status != DocumentStoreWriteStatus.Saved)
+            throw new InvalidOperationException(
+                $"Recurring-schedule publication projection '{state.PublicationId}' could not be saved because the stored projection version changed.");
     }
 
     private static string ProjectionStateId(string publicationId) =>
         $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
 
-    private sealed record PublicationProjectionState(string ProjectionKind, string PublicationId, bool IsActive);
+    private bool ProjectionsEqual(
+        IEnumerable<RecurringTriggerSchedule> existing,
+        IEnumerable<RecurringTriggerSchedule> prepared)
+    {
+        var existingById = existing.ToDictionary(schedule => schedule.ScheduleId, StringComparer.Ordinal);
+        var preparedById = prepared.ToDictionary(schedule => schedule.ScheduleId, StringComparer.Ordinal);
+        if (existingById.Count != preparedById.Count)
+            return false;
+
+        foreach (var (id, expected) in preparedById)
+        {
+            if (!existingById.TryGetValue(id, out var actual))
+                return false;
+
+            var (_, actualJson) = Serializer.Serialize(DocumentKind, ToEnvelope(actual with { IsActive = false }));
+            var (_, expectedJson) = Serializer.Serialize(DocumentKind, ToEnvelope(expected));
+            if (!StringComparer.Ordinal.Equals(actualJson, expectedJson))
+                return false;
+        }
+
+        return true;
+    }
 }

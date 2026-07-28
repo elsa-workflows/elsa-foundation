@@ -47,6 +47,7 @@ internal sealed class NodeHarness
             Provider,
             PlacementService,
             transport,
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
             Microsoft.Extensions.Options.Options.Create(placementOptions),
             Microsoft.Extensions.Options.Options.Create(pumpOptions),
             clock,

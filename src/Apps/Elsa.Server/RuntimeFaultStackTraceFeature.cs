@@ -8,7 +8,11 @@ namespace Elsa.Server;
 /// behavior); operators can turn it off — stack traces may leak internals in production — via the
 /// <see cref="RuntimeFaultCaptureOptions.SectionName"/> configuration section (bound in Program.cs).
 /// </summary>
-internal sealed class RuntimeFaultStackTraceFeature : IShellFeature
+/// <remarks>
+/// Must be public: CShells feature discovery scans exported types only, so an internal feature class never
+/// enters the runtime feature catalog and is silently dropped from every shell that requests it.
+/// </remarks>
+public sealed class RuntimeFaultStackTraceFeature : IShellFeature
 {
     public bool CaptureStackTrace { get; set; } = true;
 

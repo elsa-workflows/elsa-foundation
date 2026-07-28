@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "secret-revision-aware-mutation",
+  "coverageEntryId": "secrets-repository",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "48198431770deeda479f17b412b09430d1df43ecdf2886bd10d0ee7e2841676d",
+  "executionPath": "provider-driver/postgresql/secrets-repository/0e7ae6dd54aaea28",
+  "clients": 3,
+  "resultHash": "53e5d8c14eb589bdc5caddc8c120d2d63cf1745d427e1af9e35cf4f7f10f68e3",
+  "outcome": "pass",
+  "evidence": "evidence/postgresql/secrets-repository/0e7ae6dd54aaea28.json"
+}

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
@@ -19,6 +20,12 @@ public sealed class ExecutionCommandTransportContractTests
     public static TheoryData<string> Providers => new()
     {
         DistributedStoreHarness.InMemory,
+        DistributedStoreHarness.GroundworkMemory,
+        DistributedStoreHarness.GroundworkSqlite
+    };
+
+    public static TheoryData<string> DurableProviders => new()
+    {
         DistributedStoreHarness.GroundworkMemory,
         DistributedStoreHarness.GroundworkSqlite
     };
@@ -51,11 +58,11 @@ public sealed class ExecutionCommandTransportContractTests
 
         // Hidden while node A's visibility lease is live.
         Assert.Empty(await harness.Transport.LeaseAsync(ExecutionId, NodeB, Now.AddSeconds(1), LeaseDuration, maxItems: 10));
-        Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now.AddSeconds(1)));
+        Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now.AddSeconds(1), 10));
 
         // Visible again after expiry: the survivor re-leases and the delivery attempt count grows.
         var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
-        Assert.Equal(new[] { ExecutionId }, await harness.Transport.ListPendingExecutionIdsAsync(afterExpiry));
+        Assert.Equal(new[] { ExecutionId }, await harness.Transport.ListPendingExecutionIdsAsync(afterExpiry, 10));
 
         var releasedToB = await harness.Transport.LeaseAsync(ExecutionId, NodeB, afterExpiry, LeaseDuration, maxItems: 10);
         Assert.Single(releasedToB);
@@ -71,9 +78,9 @@ public sealed class ExecutionCommandTransportContractTests
         await harness.Transport.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-1", Now), Now);
         var leased = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, maxItems: 10);
 
-        Assert.True(await harness.Transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, Now.AddSeconds(1)));
+        Assert.True(await harness.Transport.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, leased[0].LeaseToken!.Value, Now.AddSeconds(1)));
         Assert.Equal(0, await harness.Transport.CountPendingAsync(ExecutionId));
-        Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now.AddSeconds(1)));
+        Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now.AddSeconds(1), 10));
     }
 
     [Theory]
@@ -86,11 +93,11 @@ public sealed class ExecutionCommandTransportContractTests
         var itemId = leased[0].TransportItemId;
 
         // A node that never held the lease cannot ack.
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeB, Now.AddSeconds(1)));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeB, leased[0].LeaseToken!.Value, Now.AddSeconds(1)));
 
         // The holder itself cannot ack after its lease expired — the survivor is now responsible.
         var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeA, afterExpiry));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, itemId, NodeA, leased[0].LeaseToken!.Value, afterExpiry));
         Assert.Equal(1, await harness.Transport.CountPendingAsync(ExecutionId));
     }
 
@@ -107,9 +114,42 @@ public sealed class ExecutionCommandTransportContractTests
         Assert.Single(leasedByB);
 
         // The dead node "wakes up" and tries to ack away the command the survivor now owns.
-        Assert.False(await harness.Transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, afterExpiry.AddSeconds(1)));
-        Assert.True(await harness.Transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, afterExpiry.AddSeconds(1)));
+        Assert.False(await harness.Transport.AckAsync(ExecutionId, leasedByA[0].TransportItemId, NodeA, leasedByA[0].LeaseToken!.Value, afterExpiry.AddSeconds(1)));
+        Assert.True(await harness.Transport.AckAsync(ExecutionId, leasedByB[0].TransportItemId, NodeB, leasedByB[0].LeaseToken!.Value, afterExpiry.AddSeconds(1)));
         Assert.Equal(0, await harness.Transport.CountPendingAsync(ExecutionId));
+    }
+
+    [Theory]
+    [MemberData(nameof(DurableProviders))]
+    public async Task RestartAfterVisibilityExpiry_ReleasesTheItem_AndRejectsTheStaleToken(string provider)
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(provider);
+        await harness.Transport.SendAsync(ExecutionId, DistributedStoreHarness.Envelope(ExecutionId, "env-1", Now), Now);
+        var leasedBeforeRestart = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, maxItems: 10);
+
+        // A fresh adapter simulates the former node being disposed and a process reopening the same durable inbox.
+        var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
+        var reopened = await harness.ReopenTransportAsync();
+        var leasedAfterRestart = await reopened.LeaseAsync(ExecutionId, NodeA, afterExpiry, LeaseDuration, maxItems: 10);
+
+        Assert.Single(leasedBeforeRestart);
+        Assert.Single(leasedAfterRestart);
+        Assert.NotEqual(leasedBeforeRestart[0].LeaseToken, leasedAfterRestart[0].LeaseToken);
+
+        // Owner identity alone is insufficient: a delayed acknowledgement from its first lease must not remove the
+        // command after that same node has recovered and acquired the later lease.
+        Assert.False(await reopened.AckAsync(
+            ExecutionId,
+            leasedBeforeRestart[0].TransportItemId,
+            NodeA,
+            leasedBeforeRestart[0].LeaseToken!.Value,
+            afterExpiry.AddSeconds(1)));
+        Assert.True(await reopened.AckAsync(
+            ExecutionId,
+            leasedAfterRestart[0].TransportItemId,
+            NodeA,
+            leasedAfterRestart[0].LeaseToken!.Value,
+            afterExpiry.AddSeconds(1)));
     }
 
     [Theory]
@@ -117,15 +157,41 @@ public sealed class ExecutionCommandTransportContractTests
     public async Task Lease_RespectsMaxItems_AndListPendingSpansExecutions(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
-        await harness.Transport.SendAsync("wf-b", DistributedStoreHarness.Envelope("wf-b", "env-1", Now), Now);
-        await harness.Transport.SendAsync("wf-b", DistributedStoreHarness.Envelope("wf-b", "env-2", Now), Now);
-        await harness.Transport.SendAsync("wf-a", DistributedStoreHarness.Envelope("wf-a", "env-3", Now), Now);
+        await harness.Transport.SendAsync("wf-a", DistributedStoreHarness.Envelope("wf-a", "env-1", Now), Now);
+        await harness.Transport.SendAsync("wf-a", DistributedStoreHarness.Envelope("wf-a", "env-2", Now), Now);
+        await harness.Transport.SendAsync("wf-b", DistributedStoreHarness.Envelope("wf-b", "env-3", Now), Now);
 
-        Assert.Equal(new[] { "wf-a", "wf-b" }, await harness.Transport.ListPendingExecutionIdsAsync(Now));
+        Assert.Equal(new[] { "wf-a" }, await harness.Transport.ListPendingExecutionIdsAsync(Now, 1));
+        Assert.Equal(new[] { "wf-a", "wf-b" }, await harness.Transport.ListPendingExecutionIdsAsync(Now, 2));
 
-        var leased = await harness.Transport.LeaseAsync("wf-b", NodeA, Now, LeaseDuration, maxItems: 1);
+        var leased = await harness.Transport.LeaseAsync("wf-a", NodeA, Now, LeaseDuration, maxItems: 1);
         Assert.Single(leased);
         Assert.Equal("env-1", leased[0].Envelope.EnvelopeId);
-        Assert.Equal(2, await harness.Transport.CountPendingAsync("wf-b"));
+        Assert.Equal(2, await harness.Transport.CountPendingAsync("wf-a"));
+    }
+
+    [Fact]
+    public async Task Sqlite_PendingRoute_PreservesMaximumIdentityAndOrdinalUnicodeOrdering()
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);
+        var supplementary = "wf-\U00010000";
+        var privateUse = "wf-\uE000";
+        var maximumLength = new string('x', DistributedRuntimeIdentityConstraints.MaximumLength - 3) + "\U0001F600:";
+
+        Assert.Equal(DistributedRuntimeIdentityConstraints.MaximumLength, maximumLength.Length);
+
+        foreach (var executionId in new[] { privateUse, maximumLength, supplementary })
+        {
+            await harness.Transport.SendAsync(
+                executionId,
+                DistributedStoreHarness.Envelope(executionId, $"env-{executionId.Length}", Now),
+                Now);
+        }
+
+        var expected = new[] { privateUse, maximumLength, supplementary }
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(expected, await harness.Transport.ListPendingExecutionIdsAsync(Now, 10));
     }
 }

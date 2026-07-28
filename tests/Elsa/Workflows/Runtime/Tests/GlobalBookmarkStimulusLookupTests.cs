@@ -108,7 +108,7 @@ public sealed class GlobalBookmarkStimulusLookupTests
         await store.SaveAsync(Bookmark("bk-expired", executionId: "wfexec-2", stimulusType: "HttpEndpoint", stimulusHash: "h2", expiresAt: _now.AddSeconds(-1)));
         await store.SaveAsync(Bookmark("bk-other", executionId: "wfexec-3", stimulusType: "Event", stimulusHash: "h3"));
 
-        var matches = await store.ListByStimulusTypeAsync("HttpEndpoint");
+        var matches = await store.ListAllByStimulusTypeAsync("HttpEndpoint");
 
         Assert.Equal(["bk-a", "bk-expired"], matches.Select(match => match.BookmarkId).OrderBy(id => id, StringComparer.Ordinal));
     }

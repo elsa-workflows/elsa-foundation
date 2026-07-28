@@ -1,195 +1,172 @@
+using CShells.Lifecycle;
+using Elsa.Activities.Design.Reconciliation;
+using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
-using Elsa.Persistence.EFCore.Contracts;
-using Elsa.Persistence.EFCore.Events;
-using Elsa.Persistence.EFCore.Extensions;
-using Elsa.Persistence.EFCore.Handlers;
-using Elsa.Persistence.EFCore.Sqlite;
+using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Persistence.EFCore.Commands;
-using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
-using Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers;
-using Elsa.Workflows.Design.Persistence.EFCore.Services;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
-/// SQLite-in-memory test host for the Workflows.Design.Persistence.EFCore commands. Builds
-/// a real <see cref="WorkflowsDesignDbContext"/> + the real Draft commands
-/// composed against an <see cref="InMemoryDistributedLockProvider"/> and a single
-/// <see cref="CapturingEventPublisher"/> (for the synchronous <c>OnDraftValidating</c> gate
-/// AND the FR-018/FR-018a lifecycle events + <c>OnDraftValidated</c>) so command behaviour can
-/// be asserted end-to-end.
+/// SQLite Groundwork test host for the workflows-design commands and stores. Composes the same
+/// production SQLite Groundwork unified persistence the design-conformance SQLite fixture uses
+/// (schema applied in-process to a temp file database, then production store/command registrations),
+/// wired to an <see cref="InMemoryDistributedLockProvider"/> and a single
+/// <see cref="CapturingEventPublisher"/> (for the synchronous <c>OnDraftValidating</c> gate AND the
+/// FR-018/FR-018a lifecycle events + <c>OnDraftValidated</c>) so command behaviour can be asserted
+/// end-to-end without Entity Framework.
 /// </summary>
+/// <remarks>
+/// Spec 093 T072 rehost: this host previously composed the workflows-design Entity Framework context
+/// over an in-memory SQLite connection. It now composes the real Groundwork document store so the
+/// surviving provider-neutral behavioural tests exercise the shipping persistence path. Raw context
+/// reads are replaced by <see cref="GetDraftAsync"/>/<see cref="GetVersionAsync"/> over the public read
+/// stores, which hydrate the authored <c>State</c> exactly as an application consumer sees it.
+/// </remarks>
 internal sealed class WorkflowsDesignTestHost : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly string _directory;
     private readonly ServiceProvider _services;
 
     public IServiceProvider Services => _services;
+    public static DesignOperationKey TestOperationKey { get; } = new("workflow-design-test");
     public CapturingEventPublisher EventPublisher { get; }
     public InMemoryDistributedLockProvider LockProvider { get; }
 
     private WorkflowsDesignTestHost(
-        SqliteConnection connection,
+        string directory,
         ServiceProvider services,
         CapturingEventPublisher eventPublisher,
-        InMemoryDistributedLockProvider lockProvider
-    )
+        InMemoryDistributedLockProvider lockProvider)
     {
-        _connection = connection;
+        _directory = directory;
         _services = services;
         EventPublisher = eventPublisher;
         LockProvider = lockProvider;
     }
 
-    public WorkflowsDesignDbContext CreateContext()
+    public static async Task<WorkflowsDesignTestHost> CreateAsync(CancellationToken cancellationToken = default)
     {
-        var options = new DbContextOptionsBuilder<WorkflowsDesignDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new WorkflowsDesignDbContext(options, _services);
-    }
-
-    /// <summary>
-    /// Idempotently seeds a <see cref="Persistence.Core.Entities.WorkflowDefinition"/> with the
-    /// supplied id. Required before any test that calls <c>ICreateDraftCommand</c> —
-    /// <c>WorkflowDefinitionDraft.WorkflowDefinitionId</c> is a non-null FK to this row.
-    /// </summary>
-    public async Task EnsureDefinition(string workflowDefinitionId, string? name = null)
-    {
-        await using var ctx = CreateContext();
-        if (await ctx.WorkflowDefinitions.AnyAsync(d => d.Id == workflowDefinitionId))
-            return;
-
-        ctx.WorkflowDefinitions.Add(new Persistence.Core.Entities.WorkflowDefinition
-        {
-            Id = workflowDefinitionId,
-            Name = name ?? workflowDefinitionId,
-        });
-        await ctx.SaveChangesAsync();
-    }
-
-    public static WorkflowsDesignTestHost Create()
-    {
-        var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        var directory = Path.Join(Path.GetTempPath(), $"elsa-workflows-design-groundwork-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var connectionString = $"Data Source={Path.Join(directory, "design.db")}";
 
         var lockProvider = new InMemoryDistributedLockProvider();
         var eventPublisher = new CapturingEventPublisher();
 
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<ISystemClock, SystemClock>();
         services.AddSingleton<IIdentityGenerator, GuidIdentityGenerator>();
-        services.AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
-        services.AddSingleton<IActivityStructureHandler, TestActivityStructureHandler>();
-        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
 
-        // Serializer + entity handlers — the Draft saving handler re-serializes
-        // State → StateSource on every SaveChanges (and the loading handler hydrates on read).
+        // Real activity structure projection (flattening) — the command-driven tests depend on it.
+        services.AddSingleton<IActivityStructureHandler, TestActivityStructureHandler>();
+
+        // Serializer used by the Groundwork stores to (de)serialize the authored WorkflowDefinitionState.
         services.AddSingleton<JsonPayloadConverterRegistry>();
         services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
-        services.AddScoped<IEntitySavingHandler<WorkflowsDesignDbContext, Persistence.Core.Entities.WorkflowDefinitionDraft>, WorkflowDefinitionDraftSavingHandler>();
-        services.AddScoped<IEntityLoadingHandler<WorkflowsDesignDbContext, Persistence.Core.Entities.WorkflowDefinitionDraft>, WorkflowDefinitionDraftLoadingHandler>();
-        services.AddScoped<IEntitySavingHandler<WorkflowsDesignDbContext, Persistence.Core.Entities.WorkflowDefinitionVersion>, WorkflowDefinitionVersionSavingHandler>();
-        services.AddScoped<IEntityLoadingHandler<WorkflowsDesignDbContext, Persistence.Core.Entities.WorkflowDefinitionVersion>, WorkflowDefinitionVersionLoadingHandler>();
 
-        // Logging (entity handlers need ILogger<>)
-        services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
+        // The design store families compose their capability declarations against the events + design
+        // feature services, so mirror the design-conformance fixture's feature set.
+        new EventsFeature().ConfigureServices(services);
 
-        // Lock + event publisher stubs (capturing variant — see CapturingEventPublisher for
-        // the bypass-the-pipeline rationale).
+        // Production SQLite Groundwork unified persistence: registers the workflows-design (and
+        // activities-design) stores + commands over one physical document store. autoApplyOnStartup
+        // applies the pending schema in-process during IShellInitializer, so no external CLI is needed.
+        services.AddGroundworkSqliteUnifiedPersistence(connectionString, autoApplyOnStartup: true);
+        new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+
+        // Lock + event publisher + real structure service — registered AFTER the unified/feature
+        // composition so the capturing publisher wins as the single IInlineEventPublisher/
+        // IDeferredEventPublisher the commands resolve, and the real flattening structure service is used.
         services.AddSingleton<IDistributedLockProvider>(lockProvider);
-        // One capturing instance registered under both delivery faces — the commands depend on
-        // IInlineEventPublisher (gate + hydration) and IDeferredEventPublisher (notifications).
         services.AddSingleton<IInlineEventPublisher>(eventPublisher);
         services.AddSingleton<IDeferredEventPublisher>(eventPublisher);
+        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
 
-        // The DbContext factory bridges to the in-memory connection.
-        services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
-            new TestDbContextFactory(sp.GetRequiredService<IServiceProvider>(), connection));
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
-        // Named read ports over the closed query spec. CloneDraftFromVersionCommand reads the source
-        // Version + layout through these; production registers them under UseQueries.
-        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionStore>();
-        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionVersionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionVersionStore>();
-        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionDraftStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionDraftStore>();
-        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionListProjectionStore>();
-        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionVersionLayoutStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionVersionLayoutStore>();
-
-        // All command implementations.
-        RegisterCommands(services);
-
-        var provider = services.BuildServiceProvider();
-
-        // Wire the single saving/loading aggregators onto the capturing publisher. Production
-        // resolves these as IEventHandler<OnEntitySaving>/<OnEntityLoading> through the event
-        // pipeline; the stub publisher bypasses that pipeline, so we subscribe the aggregators
-        // explicitly. Each runs in its own scope (the typed IEntity*Handler<,> contributors are
-        // scoped) and reflects over the registered handlers exactly as the real aggregator does —
-        // this is what re-serialises State → StateSource on save and hydrates it back on load.
-        eventPublisher.Subscribe<OnEntitySaving>(async e =>
+        // The Groundwork storage-composition factory publishes OnGroundworkStorageComposing through the
+        // registered IInlineEventPublisher to gather each manifest source's schema declaration. The
+        // capturing publisher only records events, so route this one composition event to the real
+        // GroundworkStorageCompositionHandler (the production pipeline would dispatch it the same way).
+        eventPublisher.Subscribe<OnGroundworkStorageComposing>(async composing =>
         {
             using var scope = provider.CreateScope();
-            await new ApplyEntitySavingHandlers(scope.ServiceProvider).Handle(e, CancellationToken.None);
-        });
-        eventPublisher.Subscribe<OnEntityLoading>(async e =>
-        {
-            using var scope = provider.CreateScope();
-            await new ApplyEntityLoadingHandlers(scope.ServiceProvider).Handle(e, CancellationToken.None);
+            await scope.ServiceProvider
+                .GetRequiredService<GroundworkStorageCompositionHandler>()
+                .Handle(composing, CancellationToken.None);
         });
 
-        // Initialise schema.
-        var optionsBuilder = new DbContextOptionsBuilder<WorkflowsDesignDbContext>().UseSqlite(connection);
-        using (var ctx = new WorkflowsDesignDbContext(optionsBuilder.Options, provider))
-            ctx.Database.EnsureCreated();
+        foreach (var initializer in provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync(cancellationToken);
 
-        return new WorkflowsDesignTestHost(connection, provider, eventPublisher, lockProvider);
+        return new WorkflowsDesignTestHost(directory, provider, eventPublisher, lockProvider);
     }
 
-    private static void RegisterCommands(IServiceCollection services)
+    /// <summary>
+    /// Idempotently materialises a <see cref="WorkflowDefinition"/> with the supplied id. Required
+    /// before any test that calls <c>ICreateDraftCommand</c>.
+    /// </summary>
+    public async Task EnsureDefinition(string workflowDefinitionId, string? name = null)
     {
-        services
-            .AddScoped<Persistence.Core.Contracts.IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
-            .AddScoped<Persistence.Core.Contracts.ISaveWorkflowDefinitionCommand, SaveWorkflowDefinition>()
-            .AddScoped<Persistence.Core.Contracts.IDeleteWorkflowDefinitionPermanentlyCommand, DeleteWorkflowDefinitionPermanently>()
-            .AddScoped<Persistence.Core.Contracts.ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()
-            // Lifecycle commands (NOT mutations — kept distinct, FR-003).
-            .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraft>()
-            .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
-            .AddScoped<Persistence.Core.Contracts.IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
-            .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraft>()
-            // The single coarse Draft-mutation command (Unit 2). IDraftStateDiffEngine is deliberately
-            // NOT registered here — mirroring production, per-diff mutation-event publication is retired
-            // until an event-sourcing consumer exists, so the command no longer depends on the engine.
-            .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraft>();
+        using var scope = _services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
+        if (await store.FindByIdAsync(workflowDefinitionId) is not null)
+            return;
+
+        var materialize = scope.ServiceProvider.GetRequiredService<IMaterializeWorkflowDefinitionCommand>();
+        await materialize.Execute(
+            TestOperationKey,
+            new WorkflowDefinition { Id = workflowDefinitionId, Name = name ?? workflowDefinitionId });
+    }
+
+    /// <summary>Loads a persisted draft (with hydrated <c>State</c>) through the public read store.</summary>
+    public async Task<WorkflowDefinitionDraft?> GetDraftAsync(string draftId)
+    {
+        using var scope = _services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>()
+            .FindByIdAsync(draftId);
+    }
+
+    /// <summary>Loads a persisted version (with hydrated <c>State</c>) through the public read store.</summary>
+    public async Task<WorkflowDefinitionVersion?> GetVersionAsync(string versionId)
+    {
+        using var scope = _services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionVersionStore>()
+            .FindByIdAsync(versionId);
     }
 
     public void Dispose()
     {
-        _services.Dispose();
-        _connection.Dispose();
-    }
-
-    private sealed class TestDbContextFactory(IServiceProvider services, SqliteConnection connection) : IDbContextFactory<WorkflowsDesignDbContext>
-    {
-        public WorkflowsDesignDbContext CreateDbContext()
+        // The Groundwork store session source is IAsyncDisposable-only, so drain the provider through
+        // the async path (tests keep a synchronous `using var host`).
+        _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        try
         {
-            var options = new DbContextOptionsBuilder<WorkflowsDesignDbContext>().UseSqlite(connection).Options;
-            return new WorkflowsDesignDbContext(options, services);
+            Directory.Delete(_directory, recursive: true);
         }
-
-        public Task<WorkflowsDesignDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(CreateDbContext());
+        catch (IOException)
+        {
+            // A uniquely named temp directory is harmless if SQLite releases a sidecar late.
+        }
     }
 
     private sealed class GuidIdentityGenerator : IIdentityGenerator

@@ -1,49 +1,149 @@
-using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using CShells.Features;
+using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
-using Elsa.Persistence.Groundwork.Unified;
-using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
+using Groundwork.DiagnosticRecords;
+using Groundwork.Sqlite.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 
 /// <summary>
-/// Registers a single SQLite-backed Groundwork <see cref="IDocumentStore"/> — materialized from the unioned
-/// runtime + workflows-design + activities-design + workflows-publishing manifest (<see cref="GroundworkUnifiedManifest"/>) — and points
-/// every Elsa persistence lane's read/write ports at it. This is the concrete realization of the host-selects-
-/// the-provider goal: domain and runtime code reference only the neutral ports, and one host choice (SQLite here)
-/// backs every module from one database.
+/// Selects the provider-level Elsa Groundwork families (runtime, secrets, distributed runtime,
+/// workflows design, activities design and publishing) and exposes one SQLite physical store for
+/// their validated host-selected composition. Runtime startup admits the exact applied target; schema
+/// application remains an operator/CLI responsibility. Identity is selected explicitly by its own feature.
 /// </summary>
 public static class GroundworkSqliteUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The SQLite connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString) =>
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString, new WorkflowExecutableCacheOptions { Enabled = false });
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString) =>
+        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            new WorkflowExecutableCacheOptions { Enabled = false });
+
+    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false) =>
+        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            new WorkflowExecutableCacheOptions { Enabled = false },
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
 
     /// <summary>Registers unified SQLite persistence with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-
-        // One store, one database, one materialized union manifest — shared by every lane.
-        services.AddSqliteGroundworkDocumentStore(
+        return services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
-            GroundworkUnifiedManifest.Create(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"));
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
+    }
 
-        services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions);
-        services.AddGroundworkWorkflowsDesignStores();
-        services.AddGroundworkActivitiesDesignStores();
-        services.AddGroundworkPublishingStores();
+    /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        ShellFeatureContext context,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false) =>
+        services.AddGroundworkSqliteUnifiedPersistence(
+            connectionString,
+            context,
+            new WorkflowExecutableCacheOptions { Enabled = false },
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
 
+    /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        ShellFeatureContext context,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        services.AddGroundworkReferenceDeploymentSchema(context);
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
+    }
+
+    /// <summary>
+    /// Registers the unified SQLite substrate against an explicitly selected deployment schema.
+    /// Feature services, including Identity, remain independently selected by the host.
+    /// </summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
+        services.AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
+            connectionString,
+            new WorkflowExecutableCacheOptions { Enabled = false },
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
+
+    /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false,
+        bool skipInspectionWhenPlanUnchanged = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
+        return services.AddGroundworkSqliteUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged);
+    }
+
+    private static IServiceCollection AddGroundworkSqliteUnifiedPersistenceCore(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup,
+        bool skipInspectionWhenPlanUnchanged)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        services.AddSqliteGroundworkDocumentStore(
+            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
+        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
+            _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
+        services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
+        services.AddGroundworkWorkflowRunHealth(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
+        services.AddGroundworkWorkflowPortfolio(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
         return services;
     }
 }

@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -18,15 +20,6 @@ public static class RuntimeInputBindingStateProjection
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.OutputName);
 
     /// <summary>
-    /// Builds the workflow-variable snapshot (variable name → value) from the durable values captured for a
-    /// workflow execution, mirroring <see cref="ProjectActivityOutputValues"/>. Variables are tagged with the
-    /// <see cref="RuntimeMetadataKeys.VariableName"/> metadata key when seeded. When several captures share a
-    /// variable name the most recently captured value wins. Feeds <c>variables.*</c> at materialization time.
-    /// </summary>
-    public static IReadOnlyDictionary<string, object?> ProjectWorkflowVariables(IEnumerable<DurableValueState> durableValues) =>
-        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.VariableName);
-
-    /// <summary>
     /// Builds the workflow-input snapshot (input name → value) from the durable values captured for a workflow
     /// execution, mirroring <see cref="ProjectActivityOutputValues"/>. Inputs are tagged with the
     /// <see cref="RuntimeMetadataKeys.InputName"/> metadata key when seeded. When several captures share an
@@ -34,6 +27,11 @@ public static class RuntimeInputBindingStateProjection
     /// </summary>
     public static IReadOnlyDictionary<string, object?> ProjectWorkflowInputs(IEnumerable<DurableValueState> durableValues) =>
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
+
+    /// <summary>Canonical workflow-request projection retaining payload location and protection policy.</summary>
+    public static IReadOnlyDictionary<string, ValueEnvelope> ProjectWorkflowInputEnvelopes(
+        IEnumerable<DurableValueState> durableValues) =>
+        ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
     /// <summary>
     /// Projects the start stimulus payload (spec 089 A) from its reserved single-slot channel
@@ -57,11 +55,25 @@ public static class RuntimeInputBindingStateProjection
             : null;
 
     /// <summary>
-    /// Projects the workflow identity (correlation id / instance name), workflow-input, workflow-variable, and
+    /// Projects the matched trigger binding's metadata map (spec 117 D4) from its reserved single-slot channel
+    /// (<see cref="RuntimeMetadataKeys.TriggerMetadataName"/>). Null when the execution was not started by a
+    /// trigger carrying metadata. Deserialized from the JSON object the seed persisted; deliberately not part of
+    /// the workflow-input namespace.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? ProjectTriggerMetadata(IEnumerable<DurableValueState> durableValues) =>
+        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.TriggerMetadataName)
+            .GetValueOrDefault(RuntimeWorkflowStateSeed.TriggerMetadataSlotName) is JsonElement { ValueKind: JsonValueKind.Object } inline
+            ? inline.Deserialize<Dictionary<string, string>>()
+            : null;
+
+    /// <summary>
+    /// Projects the workflow identity (correlation id / instance name), workflow-input, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
     /// collapses the repeated projection block. Identity (spec 083 review) is projected from the same list, so a
     /// <c>Correlate</c>/<c>SetName</c> is visible to a concurrent sibling branch without a workflow-execution-state read.
+    /// Workflow variables are NOT projected here (#972): the canonical root variable frame is their single
+    /// runtime read surface.
     /// </summary>
     public static RuntimeInputBindingStateProjectionSet ProjectAll(IEnumerable<DurableValueState> durableValues)
     {
@@ -71,12 +83,61 @@ public static class RuntimeInputBindingStateProjection
         var identity = RuntimeIdentityStateProjection.Project(materialized);
         return new RuntimeInputBindingStateProjectionSet(
             WorkflowInputs: ProjectWorkflowInputs(materialized),
-            WorkflowVariables: ProjectWorkflowVariables(materialized),
             ActivityOutputValues: ProjectActivityOutputValues(materialized),
+            WorkflowInputEnvelopes: ProjectWorkflowInputEnvelopes(materialized),
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
             StimulusInput: ProjectStimulusInput(materialized),
-            TriggerNodeId: ProjectTriggerNodeId(materialized));
+            TriggerNodeId: ProjectTriggerNodeId(materialized),
+            TriggerMetadata: ProjectTriggerMetadata(materialized));
+    }
+
+    /// <summary>
+    /// Driver-aware projection used by execution handlers. Durable values carrying an explicit stable storage
+    /// driver are decoded through that driver before entering workflow-variable/input/output expression state;
+    /// legacy inline states without a driver marker retain the existing JSON-element projection.
+    /// </summary>
+    public static async ValueTask<RuntimeInputBindingStateProjectionSet> ProjectAllAsync(
+        IEnumerable<DurableValueState> durableValues,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+        ArgumentNullException.ThrowIfNull(storageDrivers);
+        var materialized = durableValues as IReadOnlyCollection<DurableValueState> ?? durableValues.ToArray();
+        var identity = RuntimeIdentityStateProjection.Project(materialized);
+        return new RuntimeInputBindingStateProjectionSet(
+            WorkflowInputs: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.InputName, storageDrivers, cancellationToken),
+            ActivityOutputValues: await ProjectByMetadataKeyAsync(materialized, RuntimeMetadataKeys.OutputName, storageDrivers, cancellationToken),
+            CorrelationId: identity.CorrelationId,
+            InstanceName: identity.InstanceName,
+            StimulusInput: ProjectStimulusInput(materialized),
+            TriggerNodeId: ProjectTriggerNodeId(materialized),
+            TriggerMetadata: ProjectTriggerMetadata(materialized));
+    }
+
+    private static async ValueTask<IReadOnlyDictionary<string, object?>> ProjectByMetadataKeyAsync(
+        IEnumerable<DurableValueState> durableValues,
+        string nameMetadataKey,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var durableValue in durableValues
+                     .Where(value => value.Metadata.ContainsKey(nameMetadataKey))
+                     .OrderBy(value => value.CapturedAt))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            object? value;
+            if (durableValue.Metadata.TryGetValue(RuntimeMetadataKeys.StorageDriverKey, out var driverKey))
+                value = await storageDrivers.GetRequired(driverKey).DecodeAsync(durableValue, cancellationToken);
+            else if (durableValue.InlineValue.HasValue)
+                value = durableValue.InlineValue.Value;
+            else
+                continue;
+            result[durableValue.Metadata[nameMetadataKey]] = value;
+        }
+        return result;
     }
 
     /// <summary>
@@ -101,20 +162,84 @@ public static class RuntimeInputBindingStateProjection
 
         return result;
     }
+
+    internal static IReadOnlyDictionary<string, ValueEnvelope> ProjectEnvelopesByMetadataKey(
+        IEnumerable<DurableValueState> durableValues,
+        string nameMetadataKey)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+
+        var result = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        foreach (var durableValue in durableValues
+                     .Where(value => value.Metadata.ContainsKey(nameMetadataKey))
+                     .OrderBy(value => value.CapturedAt))
+        {
+            result[durableValue.Metadata[nameMetadataKey]] = ToEnvelope(durableValue);
+        }
+
+        return result;
+    }
+
+    private static ValueEnvelope ToEnvelope(DurableValueState value)
+    {
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("Elsa.Any");
+        var policy = new ValueProtectionPolicy(
+            value.Lifecycle,
+            value.Storage,
+            IsTrue(value.Metadata, RuntimeMetadataKeys.IsSensitive),
+            IsTrue(value.Metadata, RuntimeMetadataKeys.RequiresEncryption),
+            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RedactionMode),
+            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RetentionPolicy));
+
+        if (value.ExternalReference is not null)
+            return ValueEnvelope.External(type, value.ExternalReference, policy);
+        if (value.InlineValue.HasValue && value.InlineValue.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return ValueEnvelope.Null(type, policy);
+        if (value.InlineValue.HasValue)
+            return ValueEnvelope.Inline(type, value.InlineValue.Value, policy);
+        throw new InvalidOperationException($"Durable value '{value.ValueId}' has no materialized inline or external payload.");
+    }
+
+    private static bool IsTrue(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed) && parsed;
 }
 
 /// <summary>
-/// The workflow identity plus the workflow-input, workflow-variable, and prior-activity-output snapshots projected
-/// together from a single durable-value list (see <see cref="RuntimeInputBindingStateProjection.ProjectAll"/>).
+/// The workflow identity plus the workflow-input and prior-activity-output snapshots projected together
+/// from a single durable-value list (see <see cref="RuntimeInputBindingStateProjection.ProjectAll"/>).
+/// Workflow variables live in the canonical root variable frame, not this projection (#972).
 /// </summary>
 public readonly record struct RuntimeInputBindingStateProjectionSet(
     IReadOnlyDictionary<string, object?> WorkflowInputs,
-    IReadOnlyDictionary<string, object?> WorkflowVariables,
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
+    IReadOnlyDictionary<string, ValueEnvelope> WorkflowInputEnvelopes,
     string? CorrelationId,
     string? InstanceName,
     object? StimulusInput,
-    string? TriggerNodeId);
+    string? TriggerNodeId,
+    IReadOnlyDictionary<string, string>? TriggerMetadata = null)
+{
+    /// <summary>Compatibility constructor for execution-time carriers that consume only object projections.</summary>
+    public RuntimeInputBindingStateProjectionSet(
+        IReadOnlyDictionary<string, object?> WorkflowInputs,
+        IReadOnlyDictionary<string, object?> ActivityOutputValues,
+        string? CorrelationId,
+        string? InstanceName,
+        object? StimulusInput,
+        string? TriggerNodeId,
+        IReadOnlyDictionary<string, string>? TriggerMetadata = null)
+        : this(
+            WorkflowInputs,
+            ActivityOutputValues,
+            new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal),
+            CorrelationId,
+            InstanceName,
+            StimulusInput,
+            TriggerNodeId,
+            TriggerMetadata)
+    {
+    }
+}
 
 /// <summary>
 /// Projects the workflow identity (correlation id / instance name) out of the durable values captured for a workflow

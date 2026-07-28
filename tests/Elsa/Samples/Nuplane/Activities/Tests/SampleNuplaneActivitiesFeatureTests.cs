@@ -1,9 +1,8 @@
 using global::Elsa.Activities.Design.Reconciliation.Core;
-using global::Elsa.Activities.Runtime.Core.Contracts;
+using global::Elsa.Activities.Runtime.Core.Models;
+using global::Elsa.Primitives.Models;
 using global::Elsa.Samples.Nuplane.Activities;
 using global::Elsa.Samples.Nuplane.Activities.Activities;
-using global::Elsa.Samples.Nuplane.Activities.Constructors;
-using global::Elsa.Samples.Nuplane.Activities.Descriptors;
 using global::Elsa.Samples.Nuplane.Activities.Reconciliation;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,14 +12,16 @@ namespace Elsa.Samples.Nuplane.Activities.Tests;
 public sealed class SampleNuplaneActivitiesFeatureTests
 {
     [Fact]
-    public void ConfigureServices_RegistersActivitySourceAndConstructor()
+    public void ConfigureServices_RegistersActivitySourceAndOptions()
     {
         var services = new ServiceCollection();
 
         new SampleNuplaneActivitiesFeature().ConfigureServices(services);
 
         Assert.Contains(services, x => x.ServiceType == typeof(IActivityReconciliationSource) && x.ImplementationType == typeof(SampleNuplaneActivityReconciliationSource));
-        Assert.Contains(services, x => x.ServiceType == typeof(IActivityConstructor) && x.ImplementationInstance is SampleNuplaneActivityConstructor);
+        var options = Assert.IsType<SampleNuplaneActivityOptions>(
+            Assert.Single(services, x => x.ServiceType == typeof(SampleNuplaneActivityOptions)).ImplementationInstance);
+        Assert.Equal("Hello {recipient} from a Nuplane-loaded activity.", options.MessageTemplate);
     }
 
     [Fact]
@@ -31,20 +32,15 @@ public sealed class SampleNuplaneActivitiesFeatureTests
         var activity = Assert.Single(await source.Read(CancellationToken.None));
 
         Assert.Equal(typeof(SayHelloFromNuplane).FullName, activity.ActivityTypeKey);
-        Assert.Equal(typeof(SampleNuplaneActivityDescriptor).FullName, activity.DescriptorType);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, activity.ConsumerKey);
         Assert.Equal("Say Hello From Nuplane", activity.DisplayName);
         Assert.Contains(activity.Inputs, x => x.Name == nameof(SayHelloFromNuplane.Recipient));
     }
 
     [Fact]
-    public async Task Constructor_CreatesSampleActivity()
+    public void Activity_ReceivesConfigurationThroughConstructorInjection()
     {
-        var constructor = new SampleNuplaneActivityConstructor("Hello {recipient}.", true);
-
-        var activity = await constructor.Construct(SampleNuplaneActivityDescriptor.Default, null, null, CancellationToken.None);
-
-        var sampleActivity = Assert.IsType<SayHelloFromNuplane>(activity);
-        Assert.Equal("Hello {recipient}.", sampleActivity.MessageTemplate);
-        Assert.True(sampleActivity.IncludeTimestamp);
+        var activity = new SayHelloFromNuplane(new SampleNuplaneActivityOptions("Hello {recipient}.", true));
+        Assert.NotNull(activity);
     }
 }

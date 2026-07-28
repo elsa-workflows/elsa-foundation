@@ -9,6 +9,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class SecretManagerTests : IDisposable
 {
+    private const string TenantId = "tenant-1";
     private readonly ServiceProvider _provider;
     private readonly ISecretManager _manager;
     private readonly ISecretValueResolver _resolver;
@@ -39,7 +40,7 @@ public sealed class SecretManagerTests : IDisposable
         Assert.Equal(" Payments.Api ".Trim(), created.DisplayName);
         Assert.Null(created.ExpiresAt);
 
-        var listed = Assert.Single((await _manager.ListAsync(new SecretQuery())).Items);
+        var listed = Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery())).Items);
         Assert.Equal("payments.api", listed.Name);
         Assert.DoesNotContain("secret-value", listed.Description ?? "");
     }
@@ -49,7 +50,7 @@ public sealed class SecretManagerTests : IDisposable
     {
         await CreateEncryptedAsync("payments.api", value: "secret-value");
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api", SecretTypeNames.Text));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api", SecretTypeNames.Text));
 
         Assert.True(resolved.Succeeded);
         Assert.Equal("secret-value", resolved.Value);
@@ -61,8 +62,8 @@ public sealed class SecretManagerTests : IDisposable
     {
         await CreateEncryptedAsync("payments.api", value: "old-value");
 
-        var rotated = await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" });
-        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+        var rotated = await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "new-value" });
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"));
 
         Assert.Equal(2, rotated.CurrentVersion);
         Assert.Equal("new-value", resolved.Value);
@@ -73,12 +74,12 @@ public sealed class SecretManagerTests : IDisposable
     {
         await CreateEncryptedAsync("payments.api");
 
-        var revoked = await _manager.RevokeAsync("payments.api");
-        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+        var revoked = await _manager.RevokeAsync(TenantId, "payments.api");
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"));
 
         Assert.NotNull(revoked);
-        Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("payments.api"))!.Status);
-        Assert.Equal(SecretStatus.Revoked, Assert.Single((await _manager.ListAsync(new SecretQuery { Status = SecretStatus.Revoked })).Items).Status);
+        Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync(TenantId, "payments.api"))!.Status);
+        Assert.Equal(SecretStatus.Revoked, Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery { Status = SecretStatus.Revoked })).Items).Status);
         Assert.False(resolved.Succeeded);
         Assert.Equal(SecretResolutionFailureCode.Revoked, resolved.FailureCode);
     }
@@ -88,14 +89,14 @@ public sealed class SecretManagerTests : IDisposable
     {
         await CreateEncryptedAsync("payments.api");
 
-        Assert.True(await _manager.DeleteAsync("payments.api"));
-        Assert.Empty((await _manager.ListAsync(new SecretQuery())).Items);
-        Assert.Empty((await _manager.ListAsync(new SecretQuery { Status = SecretStatus.Deleted })).Items);
-        Assert.Null(await _manager.FindAsync("payments.api"));
-        Assert.False(await _manager.DeleteAsync("payments.api"));
-        Assert.Equal("not-found", (await _manager.TestAsync("payments.api")).Code);
+        Assert.True(await _manager.DeleteAsync(TenantId, "payments.api"));
+        Assert.Empty((await _manager.ListAsync(TenantId, new SecretQuery())).Items);
+        Assert.Empty((await _manager.ListAsync(TenantId, new SecretQuery { Status = SecretStatus.Deleted })).Items);
+        Assert.Null(await _manager.FindAsync(TenantId, "payments.api"));
+        Assert.False(await _manager.DeleteAsync(TenantId, "payments.api"));
+        Assert.Equal("not-found", (await _manager.TestAsync(TenantId, "payments.api")).Code);
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"));
 
         Assert.Equal(SecretResolutionFailureCode.NotFound, resolved.FailureCode);
     }
@@ -104,38 +105,38 @@ public sealed class SecretManagerTests : IDisposable
     public async Task Update_Deleted_Tombstone_Behaves_As_Not_Found()
     {
         await CreateEncryptedAsync("payments.api");
-        await _manager.DeleteAsync("payments.api");
+        await _manager.DeleteAsync(TenantId, "payments.api");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _manager.UpdateAsync("payments.api", new UpdateSecretMetadataRequest { DisplayName = "Updated" }));
+            await _manager.UpdateAsync(TenantId, "payments.api", new UpdateSecretMetadataRequest { DisplayName = "Updated" }));
 
-        var tombstone = (await _repository.FindAsync("payments.api"))!;
+        var tombstone = (await _repository.FindAsync(TenantId, "payments.api"))!;
 
         Assert.Equal(SecretStatus.Deleted, tombstone.Status);
         Assert.NotEqual("Updated", tombstone.DisplayName);
-        Assert.Null(await _manager.FindAsync("payments.api"));
+        Assert.Null(await _manager.FindAsync(TenantId, "payments.api"));
     }
 
     [Fact]
     public async Task Rotate_Deleted_Tombstone_Behaves_As_Not_Found()
     {
         await CreateEncryptedAsync("payments.api");
-        await _manager.DeleteAsync("payments.api");
+        await _manager.DeleteAsync(TenantId, "payments.api");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" }));
+            await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "new-value" }));
 
-        var tombstone = (await _repository.FindAsync("payments.api"))!;
+        var tombstone = (await _repository.FindAsync(TenantId, "payments.api"))!;
 
         Assert.Equal(SecretStatus.Deleted, tombstone.Status);
         Assert.Single(tombstone.Versions);
-        Assert.Null(await _manager.FindAsync("payments.api"));
+        Assert.Null(await _manager.FindAsync(TenantId, "payments.api"));
     }
 
     [Fact]
     public async Task Configuration_Store_Resolves_Host_Configuration_Value()
     {
-        await _manager.CreateAsync(new CreateSecretRequest
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest
         {
             Name = "external.api-key",
             StoreName = SecretStoreNames.Configuration,
@@ -143,7 +144,7 @@ public sealed class SecretManagerTests : IDisposable
             ConfigurationKey = "External:ApiKey"
         });
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("external.api-key"));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("external.api-key"));
 
         Assert.True(resolved.Succeeded);
         Assert.Equal("from-configuration", resolved.Value);
@@ -152,7 +153,7 @@ public sealed class SecretManagerTests : IDisposable
     [Fact]
     public async Task Resolve_Deleted_Tombstone_Does_Not_Disclose_Type_Or_Scope()
     {
-        await _manager.CreateAsync(new CreateSecretRequest
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest
         {
             Name = "payments.api",
             TypeName = SecretTypeNames.Text,
@@ -161,9 +162,9 @@ public sealed class SecretManagerTests : IDisposable
             Value = "secret-value"
         });
 
-        await _manager.DeleteAsync("payments.api");
+        await _manager.DeleteAsync(TenantId, "payments.api");
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api", SecretTypeNames.RsaKey, "other"));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api", SecretTypeNames.RsaKey, "other"));
 
         Assert.False(resolved.Succeeded);
         Assert.Equal(SecretResolutionFailureCode.NotFound, resolved.FailureCode);
@@ -174,13 +175,14 @@ public sealed class SecretManagerTests : IDisposable
     {
         await _repository.SaveAsync(new Secret
         {
+            TenantId = TenantId,
             Name = "empty.secret",
             DisplayName = "empty.secret",
             TypeName = SecretTypeNames.Text,
             StoreName = SecretStoreNames.Encrypted
         });
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("empty.secret"));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("empty.secret"));
 
         Assert.False(resolved.Succeeded);
         Assert.Equal(SecretResolutionFailureCode.Inactive, resolved.FailureCode);
@@ -191,6 +193,7 @@ public sealed class SecretManagerTests : IDisposable
     {
         await _repository.SaveAsync(new Secret
         {
+            TenantId = TenantId,
             Name = "expiring.secret",
             DisplayName = "expiring.secret",
             TypeName = SecretTypeNames.Text,
@@ -211,14 +214,41 @@ public sealed class SecretManagerTests : IDisposable
             ]
         });
 
-        var resolved = await _resolver.ResolveAsync(new SecretReference("expiring.secret"));
+        var resolved = await _resolver.ResolveAsync(TenantId, new SecretReference("expiring.secret"));
 
         Assert.False(resolved.Succeeded);
         Assert.Equal(SecretResolutionFailureCode.Expired, resolved.FailureCode);
     }
 
-    private ValueTask<SecretMetadata> CreateEncryptedAsync(string name, string value = "secret-value") =>
-        _manager.CreateAsync(new CreateSecretRequest
+    [Fact]
+    public async Task Every_lifecycle_operation_remains_tenant_isolated()
+    {
+        await CreateEncryptedAsync("shared.name", "alpha-value", "tenant-alpha");
+        await CreateEncryptedAsync("shared.name", "beta-value", "tenant-beta");
+
+        await _manager.UpdateAsync("tenant-alpha", "shared.name", new UpdateSecretMetadataRequest { DisplayName = "Alpha" });
+        await _manager.RotateAsync("tenant-alpha", "shared.name", new RotateSecretRequest { Value = "alpha-rotated" });
+        await _manager.RevokeAsync("tenant-beta", "shared.name");
+
+        Assert.Equal("Alpha", (await _manager.FindAsync("tenant-alpha", "shared.name"))!.DisplayName);
+        Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("tenant-beta", "shared.name"))!.Status);
+        Assert.Equal("alpha-rotated", (await _resolver.ResolveAsync("tenant-alpha", new SecretReference("shared.name"))).Value);
+        Assert.Equal(SecretResolutionFailureCode.Revoked, (await _resolver.ResolveAsync("tenant-beta", new SecretReference("shared.name"))).FailureCode);
+        Assert.True((await _manager.TestAsync("tenant-alpha", "shared.name")).Succeeded);
+        Assert.Equal("inactive", (await _manager.TestAsync("tenant-beta", "shared.name")).Code);
+        Assert.Single((await _manager.ListAsync("tenant-alpha", new SecretQuery())).Items);
+        Assert.Single((await _manager.ListAsync("tenant-beta", new SecretQuery())).Items);
+
+        Assert.True(await _manager.DeleteAsync("tenant-alpha", "shared.name"));
+        Assert.Null(await _manager.FindAsync("tenant-alpha", "shared.name"));
+        Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("tenant-beta", "shared.name"))!.Status);
+    }
+
+    private ValueTask<SecretMetadata> CreateEncryptedAsync(
+        string name,
+        string value = "secret-value",
+        string tenantId = TenantId) =>
+        _manager.CreateAsync(tenantId, new CreateSecretRequest
         {
             Name = name,
             TypeName = SecretTypeNames.Text,
@@ -231,6 +261,7 @@ public sealed class SecretManagerTests : IDisposable
 
 public sealed class SecretManagerDeterministicClockTests : IDisposable
 {
+    private const string TenantId = "tenant-1";
     private static readonly DateTimeOffset CreatedNow = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset RotatedNow = new(2026, 1, 2, 0, 0, 0, TimeSpan.Zero);
 
@@ -257,7 +288,7 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
     [Fact]
     public async Task CreateAsync_Sets_CreatedAt_From_TimeProvider_Not_UnixEpoch()
     {
-        var created = await _manager.CreateAsync(new CreateSecretRequest
+        var created = await _manager.CreateAsync(TenantId, new CreateSecretRequest
         {
             Name = "payments.api",
             TypeName = SecretTypeNames.Text,
@@ -268,7 +299,7 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
         Assert.Equal(CreatedNow, created.CreatedAt);
         Assert.NotEqual(DateTimeOffset.UnixEpoch, created.CreatedAt);
 
-        var stored = (await _repository.FindAsync("payments.api"))!;
+        var stored = (await _repository.FindAsync(TenantId, "payments.api"))!;
         Assert.Equal(CreatedNow, stored.CreatedAt);
         var version = Assert.Single(stored.Versions);
         Assert.Equal(CreatedNow, version.CreatedAt);
@@ -278,7 +309,7 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
     [Fact]
     public async Task RotateAsync_Sets_New_Version_CreatedAt_From_TimeProvider_Not_UnixEpoch()
     {
-        await _manager.CreateAsync(new CreateSecretRequest
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest
         {
             Name = "payments.api",
             TypeName = SecretTypeNames.Text,
@@ -287,15 +318,34 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
         });
 
         _timeProvider.Set(RotatedNow);
-        await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" });
+        await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "new-value" });
 
-        var stored = (await _repository.FindAsync("payments.api"))!;
+        var stored = (await _repository.FindAsync(TenantId, "payments.api"))!;
         var newVersion = Assert.Single(stored.Versions, x => x.Version == 2);
         Assert.Equal(RotatedNow, newVersion.CreatedAt);
         Assert.NotEqual(DateTimeOffset.UnixEpoch, newVersion.CreatedAt);
 
         var originalVersion = Assert.Single(stored.Versions, x => x.Version == 1);
         Assert.Equal(CreatedNow, originalVersion.CreatedAt);
+    }
+
+    [Fact]
+    public async Task ListAsync_ActiveOnlyCapturesTheInjectedClockOnce()
+    {
+        await _manager.CreateAsync(TenantId, new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            ExpiresAt = CreatedNow.AddHours(1),
+            Value = "value"
+        });
+
+        Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
+
+        _timeProvider.Set(CreatedNow.AddHours(1));
+
+        Assert.Empty((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
     }
 
     public void Dispose() => _provider.Dispose();

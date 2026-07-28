@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "distributed-command-send-sequence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "88662b9a14325d4b52ab2d75d208f99f5db03d7a98d8492092bc691b2fdf5cdf",
+  "executionPath": "provider-driver/sqlserver/distributed-command-transport/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "1eee15be163ac8d6f42679d6c6d62d16e89e950f328ea200afae7cb4c5997484",
+  "outcome": "pass",
+  "evidence": "evidence/sqlserver/distributed-command-transport/0e7ae6dd54aaea28.json"
+}

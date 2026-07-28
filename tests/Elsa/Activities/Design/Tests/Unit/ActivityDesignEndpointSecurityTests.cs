@@ -27,19 +27,54 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Availability.GetSettings")]
     [InlineData("Availability.ListDiagnostics")]
     [InlineData("Availability.SaveSettings")]
+    [InlineData("AuthoringCapabilities.Get")]
     [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
+    [InlineData("Definitions.AddDraft")]
+    [InlineData("Definitions.PreviewFork")]
+    [InlineData("Forks.Apply")]
+    [InlineData("Forks.GetStatus")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
+    [InlineData("Definitions.ListDrafts")]
     [InlineData("Definitions.ListVersions")]
-    [InlineData("Versions.Add")]
+    [InlineData("Definitions.Recommendation")]
+    [InlineData("Definitions.Picker")]
+    [InlineData("Definitions.Update")]
+    [InlineData("Drafts.Diff")]
+    [InlineData("Drafts.ApplyContractProposal")]
+    [InlineData("Drafts.ConflictCopy")]
+    [InlineData("Drafts.Discard")]
+    [InlineData("Drafts.Get")]
+    [InlineData("Drafts.MigrateProvider")]
+    [InlineData("Drafts.ProposeContract")]
+    [InlineData("Drafts.Replace")]
+    [InlineData("Drafts.UpdatePresentation")]
+    [InlineData("Drafts.Validate")]
+    [InlineData("Versions.Diff")]
+    [InlineData("Versions.Dependencies")]
     [InlineData("Versions.Get")]
+    [InlineData("Versions.Restore")]
+    [InlineData("Versions.Retire")]
+    [InlineData("Versions.Revoke")]
     public void Endpoint_requires_a_permission_and_is_not_anonymous(string relativeTypeName)
     {
         var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
 
         Assert.NotNull(definition.AllowedPermissions);
         Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        Assert.Null(definition.AnonymousVerbs);
+    }
+
+    [Theory]
+    [InlineData("Drafts.ProposeContract")]
+    [InlineData("Drafts.ApplyContractProposal")]
+    public void Contract_proposal_endpoints_require_activity_design_manage(string relativeTypeName)
+    {
+        var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
+
+        Assert.Contains(PermissionNames.ActivityDesignManage, definition.AllowedPermissions!);
+        Assert.Equal("POST", Assert.Single(definition.Verbs));
         Assert.Null(definition.AnonymousVerbs);
     }
 
@@ -60,13 +95,41 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Availability.GetSettings",
             "Availability.ListDiagnostics",
             "Availability.SaveSettings",
+            "AuthoringCapabilities.Get",
             "Catalog.List",
             "Definitions.Add",
+            "Definitions.AddDraft",
+            "Definitions.PreviewFork",
             "Definitions.Get",
             "Definitions.List",
+            "Definitions.ListDrafts",
             "Definitions.ListVersions",
-            "Versions.Add",
-            "Versions.Get"
+            "Definitions.Recommendation",
+            "Definitions.Picker",
+            "Definitions.Update",
+            "Drafts.Diff",
+            "Drafts.ApplyContractProposal",
+            "Drafts.ConflictCopy",
+            "Drafts.Discard",
+            "Drafts.Get",
+            "Drafts.MigrateProvider",
+            "Drafts.ProposeContract",
+            "Drafts.Replace",
+            "Drafts.UpdatePresentation",
+            "Drafts.Validate",
+            "Forks.Apply",
+            "Forks.GetStatus",
+            "UpgradePlans.Apply",
+            "UpgradePlans.Create",
+            "UpgradePlans.Get",
+            "UpgradePlans.GetReceipt",
+            "UpgradePlans.Refresh",
+            "Versions.Diff",
+            "Versions.Dependencies",
+            "Versions.Get",
+            "Versions.Restore",
+            "Versions.Retire",
+            "Versions.Revoke"
         ];
 
         Assert.Equal(covered.OrderBy(n => n, StringComparer.Ordinal), endpointTypes);

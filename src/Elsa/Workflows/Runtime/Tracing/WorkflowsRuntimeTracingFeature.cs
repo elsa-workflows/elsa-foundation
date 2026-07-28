@@ -37,6 +37,11 @@ public sealed class WorkflowsRuntimeTracingFeature : IShellFeature
         // wins regardless of whether the runtime core's TryAdd default ran before or after this feature: if the
         // no-op was already registered it is removed first; if the core registers afterwards its TryAdd no-ops
         // against our descriptor. The tracer is IDisposable and owns its ActivitySource — the container disposes it.
-        services.Replace(ServiceDescriptor.Singleton<IWorkflowEngineTracer, ActivitySourceWorkflowEngineTracer>());
+        //
+        // The explicit factory (not a Type-based descriptor) is load-bearing: the tracer also has an
+        // ActivitySource-accepting constructor, and ASP.NET Core hosts register an ActivitySource singleton
+        // (named "Microsoft.AspNetCore"), so type activation would greedily inject that source and the engine
+        // spans would be emitted on the wrong source name — invisible to any "Elsa.Workflows.Runtime" listener.
+        services.Replace(ServiceDescriptor.Singleton<IWorkflowEngineTracer>(_ => new ActivitySourceWorkflowEngineTracer()));
     }
 }

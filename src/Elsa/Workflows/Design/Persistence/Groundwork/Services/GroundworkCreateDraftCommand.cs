@@ -1,78 +1,80 @@
-using Elsa.Events.Core.Contracts;
-using Elsa.Locking.Core;
-using Elsa.Primitives.Contracts;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
-using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Validations.Core;
-using Elsa.Workflows.Design.Validations.Core.Events;
-using Elsa.Workflows.Design.Validations.Core.Models;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkCreateDraftCommand(
-    IIdentityGenerator identityGenerator,
-    IDistributedLockProvider lockProvider,
-    IDocumentStore store,
-    IPayloadSerializer payloadSerializer,
-    IInlineEventPublisher inlineEventPublisher,
-    IDeferredEventPublisher deferredEventPublisher,
-    ISystemClock clock)
+    IDraftOriginator draftOriginator,
+    IPayloadSerializer payloadSerializer)
     : ICreateDraftCommand
 {
+    private const string OperationKind = "workflow.draft.create.v1";
+
     public async Task<string> Execute(
+        DesignOperationKey operationKey,
         string workflowDefinitionId,
         WorkflowDefinitionState? initialState = null,
         IReadOnlyCollection<DesignMetadataRecord>? initialLayout = null,
         string? sourceVersionId = null,
         CancellationToken cancellationToken = default)
     {
-        var draftId = identityGenerator.Generate();
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         var state = initialState ?? EmptyState();
         var layout = initialLayout?.ToArray() ?? [];
-        var draft = new WorkflowDefinitionDraft
-        {
-            Id = draftId,
-            WorkflowDefinitionId = workflowDefinitionId,
-            SourceVersionId = sourceVersionId,
-            State = state
-        };
-
-        IReadOnlyList<ValidationError> errors;
-        var documents = DraftDocuments();
-        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
-
-        await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
-        {
-            // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
-            GroundworkEntityTimestamps.StampAdded(draft, clock.UtcNow);
-
-            await store.SaveAllAsync(
-                DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),
-                [documents.ToSaveRequest(draft, layout)],
-                cancellationToken);
-        }
-
-        await deferredEventPublisher.Publish(new OnDraftCreated(draftId, workflowDefinitionId, sourceVersionId), cancellationToken);
-        await deferredEventPublisher.Publish(new OnDraftValidated(draft, errors), cancellationToken);
-
-        return draftId;
+        var requestMaterial = new CreateDraftRequestMaterial(
+            workflowDefinitionId,
+            GroundworkDesignSerialization.Execute(
+                DesignPersistenceDomain.Workflow,
+                OperationKind,
+                "workflow definition draft",
+                () => payloadSerializer.Serialize(state)),
+            layout.Select(ToMaterial).ToArray(),
+            sourceVersionId);
+        return await draftOriginator.ExecuteAsync(
+            operationKey,
+            OperationKind,
+            requestMaterial,
+            _ => Task.FromResult(new DraftOriginationInput(
+                workflowDefinitionId,
+                state,
+                layout,
+                sourceVersionId)),
+            cancellationToken);
     }
-
-    private GroundworkWorkflowDefinitionDraftDocumentStore DraftDocuments() =>
-        new(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
 
     private static WorkflowDefinitionState EmptyState() => new(
         Variables: [],
         RootActivity: null,
         Inputs: [],
         Outputs: [],
-        WorkflowActivityOptions: null,
         StrategyOptions: null);
+
+    private static LayoutMaterial ToMaterial(DesignMetadataRecord record) =>
+        new(
+            record.NodeId,
+            record.X,
+            record.Y,
+            record.Width,
+            record.Height,
+            record.AdditionalProperties?.GetRawText());
+
+    private sealed record CreateDraftRequestMaterial(
+        string WorkflowDefinitionId,
+        string StateJson,
+        IReadOnlyCollection<LayoutMaterial> Layout,
+        string? SourceVersionId);
+
+    private sealed record LayoutMaterial(
+        string NodeId,
+        double X,
+        double Y,
+        double? Width,
+        double? Height,
+        string? AdditionalPropertiesJson);
 }

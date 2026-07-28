@@ -1,0 +1,14 @@
+provider=sqlserver
+document-kind=executionCommandTransport
+route=lease-visible-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=index-seek
+index=command-by-execution-sequence
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|sqlserver-statistics-xml|index-seek|command-by-execution-sequence|document_kind,storage_scope,visibleAt,workflowExecutionIdKey|1||f7a38b899c64dd726648ea3f867c1dc84f2e37bca31024c316c90454b0011cc6
+command-1=Page|page|sqlserver-statistics-xml|index-seek|command-by-execution-sequence|document_kind,storage_scope,visibleAt,workflowExecutionIdKey|16|sequence:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|ac026318106e547d69797b0a15661635932407627d6a9333a78a42bb2581486a

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "e13cb8b925685513bb63f420cc28879b05b4a5fa92901e21ceee1f00457575bc",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/d45b0461943784e6",
+  "clients": 2,
+  "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
+  "outcome": "pass",
+  "failureWindow": "during-provider-decision",
+  "evidence": "evidence/sqlserver/runtime-checkpoint-commit/d45b0461943784e6.json"
+}

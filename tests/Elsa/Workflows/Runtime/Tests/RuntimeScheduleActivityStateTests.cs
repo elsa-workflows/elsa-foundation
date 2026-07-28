@@ -24,7 +24,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
 
-        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
         Assert.Equal("actexec-1", state.Execution.ActivityExecutionId);
         Assert.Equal("wfexec-1", state.Execution.WorkflowExecutionId);
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
@@ -39,8 +39,16 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Equal(RuntimeScheduleActivityCommandPayload.WorkflowStartReason, state.Metadata["runtime.scheduleReason"]);
         Assert.Equal("schedule-work", state.Metadata["runtime.schedulerWorkItemId"]);
         Assert.Equal("artifact-1", state.Metadata["runtime.pinnedArtifactId"]);
+        Assert.Equal("actexec-1", state.InvocationId);
+        Assert.Equal(ActivityExecutionValueFlowDocumentVersions.Current, state.DocumentVersion);
+        Assert.Equal("test/activity", state.ContractIdentity!.ActivityTypeKey);
+        Assert.Equal("1.0.0", state.ContractIdentity.ContractVersion);
+        Assert.Equal(executable.Identity.ArtifactHash, state.ContractIdentity.SchemaFingerprint);
+        Assert.Empty(state.Attempts!);
+        Assert.Null(state.InputSnapshot);
+        Assert.True(state.ValueFlowCompatibility!.IsCompatible);
 
-        var startWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var startWork = Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);
         var startPayload = startWork.Payload!.Value.Deserialize<RuntimeStartActivityCommandPayload>()!;
         Assert.Equal("actexec-1", startPayload.ActivityExecutionId);
@@ -71,10 +79,36 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Equal(10, projection.ExecutionSequence);
         Assert.Equal("actexec-parent", projection.Provenance.SchedulingActivityExecutionId);
 
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         var startWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NormalizesPlacedActivityDefinitionProvenanceToItsNewExecutionScope()
+    {
+        var executable = NewExecutable(opensExecutionScope: true);
+        await _executableStore.SaveAsync(executable);
+        var handler = NewHandler();
+        var inheritedProvenance = ActivitySchedulingProvenance.From(
+            "wfexec-1",
+            parentActivityExecutionId: "actexec-parent",
+            schedulingActivityExecutionId: "actexec-parent",
+            branchId: null,
+            iterationId: null,
+            executionPathId: null,
+            executionScopeId: "parent-scope",
+            schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason);
+
+        await handler.HandleAsync(NewScheduleWorkItem(
+            executable.Identity,
+            schedulingProvenance: inheritedProvenance));
+
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Equal("actexec-1", state.ExecutionScopeId);
+        Assert.Equal(state.ExecutionScopeId, state.Provenance.ExecutionScopeId);
+        Assert.Equal("actexec-parent", state.Provenance.ParentActivityExecutionId);
     }
 
     [Fact]
@@ -109,7 +143,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Empty(context.Workspace.PendingCheckpointCommits);
         Assert.Empty(checkpointWriter.ListCommits());
-        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -121,13 +155,13 @@ public sealed class RuntimeScheduleActivityStateTests
         var workItem = NewScheduleWorkItem(executable.Identity);
 
         await handler.HandleAsync(workItem);
-        var scheduled = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var scheduled = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
         await _activityStateStore.SaveAsync(scheduled with { Status = ActivityExecutionStatus.Running });
         await handler.HandleAsync(workItem);
 
-        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -140,9 +174,9 @@ public sealed class RuntimeScheduleActivityStateTests
 
         await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
 
-        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
         Assert.Equal(ActivityExecutionStatus.Scheduled, state.Status);
-        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -156,7 +190,7 @@ public sealed class RuntimeScheduleActivityStateTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(executable.Identity, executableNodeId: "node-other")).AsTask());
 
         Assert.Contains("belongs to executable node 'node-start'", exception.Message);
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -166,7 +200,7 @@ public sealed class RuntimeScheduleActivityStateTests
         await _executableStore.SaveAsync(executable);
         var handler = NewHandler();
         await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
-        var scheduled = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var scheduled = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
 
         var saved = await _activityStateStore.SaveAsync(scheduled with { Status = ActivityExecutionStatus.Running });
 
@@ -186,7 +220,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         await handler.HandleAsync(NewScheduleWorkItem(pinned));
 
-        Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
     }
 
     [Fact]
@@ -197,8 +231,8 @@ public sealed class RuntimeScheduleActivityStateTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(includePayload: false)).AsTask());
 
         Assert.Contains("requires a schedule activity payload", exception.Message);
-        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -210,8 +244,8 @@ public sealed class RuntimeScheduleActivityStateTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(payload: document.RootElement.Clone())).AsTask());
 
         Assert.Contains("not a valid schedule activity payload", exception.Message);
-        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -230,8 +264,8 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Contains("not a valid schedule activity payload", exception.Message);
         Assert.IsType<ArgumentException>(exception.InnerException);
-        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -246,8 +280,8 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Contains("pinned executable artifact", exception.Message);
         Assert.Contains("definition-1/version-1", exception.Message);
-        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -260,8 +294,8 @@ public sealed class RuntimeScheduleActivityStateTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(executable.Identity, executableNodeId: "node-missing")).AsTask());
 
         Assert.Contains("node-missing", exception.Message);
-        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
-        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -317,7 +351,8 @@ public sealed class RuntimeScheduleActivityStateTests
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.ScheduleActivity,
         string executableNodeId = "node-start",
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        ActivitySchedulingProvenance? schedulingProvenance = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new RuntimeScheduleActivityCommandPayload(
@@ -325,7 +360,8 @@ public sealed class RuntimeScheduleActivityStateTests
                 executableNodeId,
                 "actexec-1",
                 RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
-                "actexec-parent"))
+                "actexec-parent",
+                schedulingProvenance: schedulingProvenance))
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(
@@ -343,10 +379,13 @@ public sealed class RuntimeScheduleActivityStateTests
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static WorkflowExecutable NewExecutable() =>
-        NewExecutable(["node-start"]);
+    private static WorkflowExecutable NewExecutable(bool opensExecutionScope = false) =>
+        NewExecutable(["node-start"], opensExecutionScope: opensExecutionScope);
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string>? startNodeIds = null)
+    private static WorkflowExecutable NewExecutable(
+        IReadOnlyCollection<string> nodeIds,
+        IReadOnlyCollection<string>? startNodeIds = null,
+        bool opensExecutionScope = false)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var nodes = nodeIds.Select(nodeId => new ExecutableNode(
@@ -354,18 +393,19 @@ public sealed class RuntimeScheduleActivityStateTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>())).ToArray();
+            metadata: opensExecutionScope
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version-1" }
+                : new Dictionary<string, string>())).ToArray();
 
         return new(
             identity: NewIdentity(),
             rootActivity: ToRootActivity(nodes),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
@@ -380,10 +420,8 @@ public sealed class RuntimeScheduleActivityStateTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
             childSlots:
             [

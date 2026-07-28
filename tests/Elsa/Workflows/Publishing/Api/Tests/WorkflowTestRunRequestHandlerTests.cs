@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
@@ -32,7 +33,11 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
-    private readonly InMemoryWorkflowTestRunStore _testRunStore = new();
+    private readonly InMemoryWorkflowTestScopeStore _testScopeStore = new();
+    private readonly InMemoryWorkflowTestRunStore _testRunStore;
+
+    public WorkflowTestRunRequestHandlerTests() =>
+        _testRunStore = CreateTestRunStore(_testScopeStore);
 
     [Fact]
     public async Task StartsTransientWorkflowTestRunWithoutListingPublishedExecutable()
@@ -47,7 +52,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
         // Under ADR 0040 there is a single content-addressed store; the test-run artifact now lives in it (scope/
         // expiry are reference facts, no longer segregated by an artifact-level list filter).
-        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
     }
 
@@ -62,7 +67,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         await DraftSnapshotHandler(draftDispatcher).Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)), CancellationToken.None);
 
         var versionRequest = Assert.Single(versionDispatcher.Requests);
         var draftRequest = Assert.Single(draftDispatcher.Requests);
@@ -70,6 +75,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal(WorkflowRunKind.TestRun, draftRequest.RunKind);
         await AssertExactTestRunReferenceAsync(versionRequest);
         await AssertExactTestRunReferenceAsync(draftRequest);
+        await AssertRuntimeTestScopeAsync(versionRequest);
+        await AssertRuntimeTestScopeAsync(draftRequest);
     }
 
     private async Task AssertExactTestRunReferenceAsync(WorkflowExecutionStartDispatchRequest request)
@@ -81,6 +88,17 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal(WorkflowExecutableReferenceScope.TestRun, reference.Scope);
     }
 
+    private async Task AssertRuntimeTestScopeAsync(WorkflowExecutionStartDispatchRequest request)
+    {
+        var scope = Assert.IsType<WorkflowTestScope>(request.TestScope);
+        Assert.Equal(WorkflowExecutionPartition.DefaultValue, scope.Partition.Value);
+        Assert.Null(scope.TenantId);
+        var record = await _testScopeStore.FindAsync(scope.ScopeId);
+        Assert.NotNull(record);
+        Assert.Equal(WorkflowTestScopeState.Open, record.State);
+        Assert.True(WorkflowTestScope.ContextEquals(scope, record.Scope));
+    }
+
     [Fact]
     public async Task StartsDraftSnapshotTransientWorkflowTestRunWithoutDurableDefinitionVersion()
     {
@@ -90,7 +108,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)), CancellationToken.None);
 
         Assert.Equal("DispatchAccepted", view.Status);
         Assert.Equal("Accepted", view.CommandDispatchStatus);
@@ -101,10 +119,41 @@ public sealed class WorkflowTestRunRequestHandlerTests
         // Single content-addressed store (ADR 0040): the draft test-run artifact is present. Reference-driven
         // scope gating for dispatch (rejecting a test-run artifact from a normal runtime dispatch) is worker W3's
         // slice; the artifact-level dispatcher no longer rejects by scope.
-        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         var snapshot = await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId);
         Assert.NotNull(snapshot);
         Assert.Equal("write-one", snapshot.State.RootActivity!.NodeId);
+    }
+
+    [Fact]
+    public async Task DraftTestRunCopiesAuthoredInputSourceOntoItsExpiringReference()
+    {
+        const string authoredJson = "{\"script\":\"return input.customerId;\"}";
+        using var document = JsonDocument.Parse(authoredJson);
+        var state = new WorkflowDefinitionState(
+            [],
+            Node("write-one", new WorkflowArgumentState(
+                "Text",
+                new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+                null,
+                null,
+                null,
+                false)),
+            [],
+            [],
+            null);
+
+        var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-authored-input",
+            State: state), CancellationToken.None);
+
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        var authored = Assert.Single(reference.AuthoredInputs);
+        Assert.Equal("write-one", authored.ExecutableNodeId);
+        Assert.Equal("Text", authored.InputKey);
+        Assert.Equal("JavaScript", authored.ExpressionType);
+        Assert.Equal(authoredJson, authored.Value.GetRawText());
     }
 
     [Fact]
@@ -112,7 +161,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     {
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
         var first = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
-        var existingReference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
+        var existingReference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(first.ArtifactId!));
         await _sourceReferenceStore.RetireAsync(existingReference.SourceReferenceId, DateTimeOffset.UtcNow, "test-setup");
         var now = DateTimeOffset.UtcNow;
         var deletionGuard = await _executableStore.TryBeginDeletionAsync(first.ArtifactId!, "gc-test", now.AddMinutes(1), now);
@@ -122,8 +171,11 @@ public sealed class WorkflowTestRunRequestHandlerTests
 
         Assert.NotNull(deletionGuard);
         Assert.Equal(first.ArtifactId, exception.ArtifactId);
-        Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
-        Assert.Empty(await _sourceReferenceStore.ListAsync(WorkflowExecutableReferenceScope.TestRun, liveOnly: true));
+        Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(first.ArtifactId!));
+        Assert.Empty(await _sourceReferenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.TestRun,
+            liveOnly: true,
+            now: now));
     }
 
     [Fact]
@@ -134,7 +186,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: "snapshot-1",
-            State: new WorkflowDefinitionState([], RootActivity: null, [], [], null, null)), CancellationToken.None);
+            State: new WorkflowDefinitionState([], RootActivity: null, [], [], null)), CancellationToken.None);
 
         Assert.Equal("Rejected", view.Status);
         Assert.Equal("definition-1", view.DefinitionId);
@@ -142,7 +194,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Null(view.ArtifactId);
         Assert.Null(view.WorkflowExecutionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.Empty(await _executableStore.ListAllAsync());
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
         Assert.Null(await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId));
     }
@@ -153,7 +205,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var exception = Assert.Throws<ArgumentException>(() => new StartWorkflowDraftTestRun(
             DefinitionId: "definition-1",
             SnapshotId: " ",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)));
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null)));
 
         Assert.Equal("SnapshotId", exception.ParamName);
     }
@@ -171,7 +223,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("definition-1", view.DefinitionId);
         Assert.Equal("version-1", view.DefinitionVersionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.Empty(await _executableStore.ListAllAsync());
     }
 
     [Fact]
@@ -236,7 +288,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
         Assert.NotNull(await _executableStore.FindAsync(view.ArtifactId!));
-        var reference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(view.ArtifactId!));
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
         Assert.Equal(WorkflowExecutableReferenceScope.TestRun, reference.Scope);
         Assert.Equal(view.ExpiresAt, reference.ExpiresAt);
         Assert.Null(reference.PublishedAt);
@@ -274,13 +326,13 @@ public sealed class WorkflowTestRunRequestHandlerTests
             .Handle(new StartWorkflowDraftTestRun(
                 DefinitionId: "definition-1",
                 SnapshotId: "snapshot-1",
-                State: new WorkflowDefinitionState([], identicalRoot, [], [], null, null)), CancellationToken.None);
+                State: new WorkflowDefinitionState([], identicalRoot, [], [], null)), CancellationToken.None);
 
         Assert.NotNull(versionView.ArtifactId);
         Assert.Equal(versionView.ArtifactId, draftView.ArtifactId);
         // Both references point at the single shared artifact.
-        Assert.Single(await _executableStore.ListAsync());
-        Assert.Equal(2, (await _sourceReferenceStore.ListByArtifactAsync(versionView.ArtifactId!)).Count);
+        Assert.Single(await _executableStore.ListAllAsync());
+        Assert.Equal(2, (await _sourceReferenceStore.ListAllByArtifactAsync(versionView.ArtifactId!)).Count);
     }
 
     [Fact]
@@ -311,7 +363,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     public async Task TestRunStoreDropsExpiredRunOnRead()
     {
         // #398: a test run past its ExpiresAt must never be observed, even before the periodic sweep runs.
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         var now = DateTimeOffset.UtcNow;
         await store.SaveAsync(TestRun("testrun-expired", expiresAt: now.AddMinutes(-1)));
 
@@ -321,7 +373,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task TestRunStoreKeepsUnexpiredAndNeverExpiringRuns()
     {
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         var now = DateTimeOffset.UtcNow;
         await store.SaveAsync(TestRun("testrun-live", expiresAt: now.AddMinutes(30)));
         await store.SaveAsync(TestRun("testrun-eternal", expiresAt: null));
@@ -333,7 +385,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task TestRunStoreKeepsUnexpiredDraftSnapshot()
     {
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         var snapshot = DraftSnapshot("draft:snapshot-live", expiresAt: DateTimeOffset.UtcNow.AddMinutes(30));
         await store.SaveDraftSnapshotAsync(snapshot);
 
@@ -346,7 +398,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task TestRunStoreDropsExpiredDraftSnapshotOnRead()
     {
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-expired", expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1)));
 
         Assert.Null(await store.FindDraftSnapshotAsync("draft:snapshot-expired"));
@@ -357,7 +409,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     {
         // #398: the store used to grow without bound; CleanupExpiredAsync now evicts every run whose retention
         // window has elapsed while leaving live and never-expiring runs in place.
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         var now = DateTimeOffset.UtcNow;
         await store.SaveAsync(TestRun("testrun-old", expiresAt: now.AddMinutes(-5)));
         await store.SaveAsync(TestRun("testrun-live", expiresAt: now.AddMinutes(30)));
@@ -372,9 +424,25 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task CleanupExpiredTestRuns_ClosesRuntimeScopeBeforeDeletingProjection()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowTestScopeStore, RejectingWorkflowTestScopeStore>();
+        await using var provider = services.BuildServiceProvider();
+        var store = new InMemoryWorkflowTestRunStore(provider.GetRequiredService<IServiceScopeFactory>());
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        await store.SaveAsync(TestRun("testrun-close-first", expiresAt));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.CleanupExpiredAsync(expiresAt.AddTicks(1)).AsTask());
+
+        Assert.NotNull(await store.FindAsync("testrun-close-first"));
+    }
+
+    [Fact]
     public async Task CleanupExpiredTestRunsRemovesExpiredDraftSnapshots()
     {
-        var store = new InMemoryWorkflowTestRunStore();
+        var store = CreateTestRunStore();
         var now = DateTimeOffset.UtcNow;
         await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-old", expiresAt: now.AddMinutes(-5)));
         await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-live", expiresAt: now.AddMinutes(30)));
@@ -400,22 +468,32 @@ public sealed class WorkflowTestRunRequestHandlerTests
             Reason: null,
             Metadata: new Dictionary<string, string>());
 
+    private static InMemoryWorkflowTestRunStore CreateTestRunStore(IWorkflowTestScopeStore? scopeStore = null)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowTestScopeStore>(scopeStore ?? new InMemoryWorkflowTestScopeStore());
+        var provider = services.BuildServiceProvider();
+        return new InMemoryWorkflowTestRunStore(provider.GetRequiredService<IServiceScopeFactory>());
+    }
+
     private static WorkflowTestRunDraftSnapshot DraftSnapshot(string definitionVersionId, DateTimeOffset? expiresAt) =>
         new(
             DefinitionId: "definition-1",
             DefinitionVersionId: definitionVersionId,
             ArtifactVersion: "draft",
-            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null),
             RequestedAt: expiresAt?.AddMinutes(-30) ?? DateTimeOffset.UtcNow,
             ExpiresAt: expiresAt);
 
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
-        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null) =>
-        new(
+        IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null)
+    {
+        var versionStore = new FakeVersionStore(workflowVersion);
+        return new(
             TestCompiler.Create(
-                new FakeVersionStore(workflowVersion),
+                versionStore,
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
@@ -425,10 +503,15 @@ public sealed class WorkflowTestRunRequestHandlerTests
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
-            TimeProvider.System);
+            TimeProvider.System,
+            versionStore,
+            new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
+            testScopeStore: _testScopeStore);
+    }
 
-    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null) =>
-        new(
+    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null)
+    {
+        return new(
             TestCompiler.Create(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
@@ -440,7 +523,10 @@ public sealed class WorkflowTestRunRequestHandlerTests
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
-            TimeProvider.System);
+            TimeProvider.System,
+            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
+            testScopeStore: _testScopeStore);
+    }
 
     private WorkflowStartDispatcher Dispatcher() =>
         new(
@@ -454,7 +540,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
@@ -473,9 +559,12 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 ActivityTypeKey = "Test.WriteLine",
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
-            Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TestActivityAliases.ForActivityVersionId(id))),
+            Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]
         };
 
     private static IActivityStructureService ActivityStructureService()
@@ -529,5 +618,35 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class RejectingWorkflowTestScopeStore : IWorkflowTestScopeStore
+    {
+        public ValueTask<WorkflowTestScopeRecord> CreateAsync(
+            WorkflowTestScope scope,
+            DateTimeOffset createdAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopeRecord?> FindAsync(
+            string scopeId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopeCloseResult> CloseAsync(
+            WorkflowTestScopeCloseRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Injected runtime scope-close failure.");
+
+        public ValueTask<WorkflowTestScopeRecord> CompleteAsync(
+            string scopeId,
+            DateTimeOffset completedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowTestScopePage> QueryAsync(
+            WorkflowTestScopePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

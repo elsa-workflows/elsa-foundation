@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -63,6 +65,19 @@ public sealed class ActivityAuthoringCatalogTests
             "Ports",
             "ContainerStructure",
             "AuthoringTemplate");
+
+        var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable");
+        Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
+        var inputConstructor = inputDescriptor.GetConstructors().Single();
+        Assert.Equal(15, inputConstructor.GetParameters().Length);
+        var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
+            StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
+        Assert.False(nullability.HasDefaultValue);
+        Assert.Contains(inputDescriptor.GetMethods(), method =>
+            method.Name == "Deconstruct" && method.GetParameters().Length == 15);
+        var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);
+        AssertProperties(portDescriptor, "Name", "ReferenceKey", "Type", "IsBrowsable");
     }
 
     [Fact]
@@ -73,6 +88,26 @@ public sealed class ActivityAuthoringCatalogTests
 
         Assert.Equal(typeof(bool), descriptor.GetProperty("Available")!.PropertyType);
         Assert.Equal(typeof(string), Nullable.GetUnderlyingType(descriptor.GetProperty("AvailabilityReason")!.PropertyType) ?? descriptor.GetProperty("AvailabilityReason")!.PropertyType);
+    }
+
+    [Fact]
+    public void Outcome_ports_expose_explicit_or_name_based_stable_references()
+    {
+        var handler = typeof(ActivitiesDesignApiFeature).Assembly.GetType(
+            "Elsa.Activities.Design.Api.Handlers.ListActivityAuthoringCatalogRequestHandler")!;
+        var toPorts = handler.GetMethod("ToPorts", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var facet = new ActivityDesignFacet("elsa.outcomes", "1", System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            ports = new object[]
+            {
+                new { referenceKey = "approved", name = "Approved", type = "outcome" },
+                new { name = "Rejected", type = "outcome" }
+            }
+        }));
+
+        var ports = Assert.IsAssignableFrom<IEnumerable<ActivityPortDescriptorView>>(toPorts.Invoke(null, [facet])).ToArray();
+
+        Assert.Equal([("approved", "Approved"), ("Rejected", "Rejected")], ports.Select(x => (x.ReferenceKey, x.Name)));
     }
 
     [Fact]

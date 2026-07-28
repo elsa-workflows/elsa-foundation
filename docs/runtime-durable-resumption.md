@@ -16,9 +16,11 @@ A workflow makes progress through a repeating cycle:
 
 1. An execution agent accepts a command and **commits a checkpoint** — the durability boundary. The
    checkpoint records new state *and* the follow-up work the commit implies as **post-commit outbox**
-   items (intent kind `EnqueueSchedulerWork`).
-2. The post-commit outbox is **delivered**: each `EnqueueSchedulerWork` item enqueues a
-   `RuntimeSchedulerWorkItem` into the **scheduler work queue**.
+   items. Scheduler continuation uses `EnqueueSchedulerWork`; modules may contribute other stable kinds.
+2. The post-commit outbox is **delivered**: the ordinal keyed runtime dispatcher selects the
+   contributed handler for each item. The built-in `EnqueueSchedulerWork` handler enqueues a
+   `RuntimeSchedulerWorkItem` into the **scheduler work queue**; other cross-execution handlers run
+   through the same global delivery path outside workflow execution actor mailboxes.
 3. The scheduler **drains** the queued work — running activities, scheduling children, and producing
    the next checkpoint — and the cycle repeats.
 
@@ -46,8 +48,10 @@ unrelated command to arrive (**RT-3**).
 - **A resumption sweep service** — `IRuntimeResumptionService` (`RuntimeResumptionService`). One
   `SweepAsync` pass:
   1. **Re-delivers** stranded post-commit outbox items **system-wide**
-     (`ProcessAsync(workflowExecutionId: null, intentKind: EnqueueSchedulerWork)`), including due
-     `FailedRetryable` retries — this closes RT-3.
+     (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across every contributed intent
+     kind, including due `FailedRetryable` retries — this closes RT-3. Normal per-execution draining
+     remains intentionally filtered to `EnqueueSchedulerWork`, so non-local cross-execution work is
+     never executed inside that workflow's actor mailbox.
   2. **Discovers** the interrupted executions: the union of the durable queue backlog
      (`ListPendingWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
   3. **Re-drives** each execution by enqueueing a `RunSchedulerWork` command envelope **through the
@@ -192,6 +196,12 @@ store as today, and the single folded flush still goes through `RuntimeCheckpoin
 ownership fencing gates the coalesced flush exactly as it gates an immediate commit — a stale writer is rejected
 before anything persists.
 
+**Inspection reads are memoized, not overlaid** (spec 131). The per-hop inspection-projection build reads
+`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch; under coalescing the overlay serves a
+per-drain memo of the **durable baseline** (never the buffered state, which would change the flushed projection
+bytes), invalidated at every durable flush. `CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads`
+(default on) disables it back to per-hop durable reads.
+
 **Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
 every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
 `WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A
@@ -203,9 +213,15 @@ checkpoint itself + any remaining unconsumed in-memory queue items (durably re-e
 intents. Nothing buffered is lost at a boundary.
 
 **Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) bounds a
-segment: once the buffered checkpoint count reaches the cap, an intermediate flush is forced. This bounds both
-replay cost (a crash re-runs at most one segment) and memory (the working set holds at most one segment). See
-the benchmark results doc for the replay-cost trade.
+segment: once the buffered checkpoint count reaches the cap, an intermediate fold-and-flush is forced and a
+**fresh segment starts** (like a durable attempt boundary), so a replayable hot loop longer than the cap keeps
+coalescing at one durable commit per cap-sized window instead of degrading to per-checkpoint persistence for the
+remainder of the drain (ADR 0032's segment-cap follow-up). The cap's purpose is unchanged: it bounds both replay
+cost (a crash re-runs at most one cap-sized segment past the last folded flush) and memory (the working set
+buffers at most one segment). Continuation outbox items persisted durably by a cap flush keep delivering from
+the overlay for the next segment; the session writes their overlay outcome back to the durable outbox store at
+the next flush, so no durable `Pending` residue survives the drain to be redelivered by a later sweep. See the
+benchmark results doc for the replay-cost trade.
 
 **The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
 checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
@@ -238,21 +254,22 @@ API feature. The host-agnostic guard is `RuntimeCoreCompositionRootTests`: it co
 `AddWorkflowRuntime` into a bare `ServiceCollection` and drives a real Cancel drain end-to-end with
 no API feature present.
 
-**Lifetime story — deliberate, not incidental.** The reference in-memory stores, handlers, pipelines and
-the drainer are registered **singleton** (process-global). That matches the reference implementation:
-the in-memory stores *are* the durable state for the reference host, so a single shared instance is the
-correct model. Two consequences are deliberately in scope, and one is deliberately out:
+**Lifetime story — deliberate, not incidental.** Reference in-memory state remains **singleton**
+(process-global), while the operation graph over persistence ports — handlers, pipelines, dispatchers,
+drainers, checkpoint collaborators, and lookups — is **scoped**. This preserves application-wide in-memory
+state while allowing a durable provider to bind storage scope and access policy to one execution scope.
+Two host-lifetime components cross that seam explicitly: in-process actor mailboxes open a fresh async
+scope per command, and recurring pumps open a fresh async scope per tick.
 
 - **Overridability is preserved.** Every Core registration uses `TryAdd*`, so a durable provider package
-  (EF Core, Mongo, etc.) can register its own store *before or after* `AddWorkflowRuntime` and win,
-  including choosing its own lifetime for that store. Composition order does not matter for correctness.
+  can register its own store *before or after* `AddWorkflowRuntime` and win. Scoped durable stores no longer
+  become captive dependencies of process-global runtime services.
 - **W9 coalescing decorators still wrap.** The opt-in `AddCoalescingRuntimeCheckpointPersistence`
   decorates the commit store / queue / outbox / state stores registered here; the Core root does not
-  change their registration *shape*, so those decorators keep composing unchanged.
-- **Scoped/per-request lifetimes are out of scope.** Moving stores to scoped would ripple
-  captive-dependency semantics through the singleton drainer and pipelines and is not required to make
-  the runtime host-agnostic. If a durable provider needs per-request scoping it overrides the specific
-  store via `TryAdd` and owns that lifetime decision locally.
+  bypass the scope boundary, so those decorators keep composing within the active operation scope.
+- **Host-wide coordination state remains host-wide.** In-memory stores, actor mailboxes and their
+  idempotency caches, clocks, options, and pure policies remain singletons. Only access-bound operation
+  collaborators are recreated; each mailbox command or background tick awaits and disposes its scope.
 
 ## Drain-path ambient service location removed (RT-7)
 

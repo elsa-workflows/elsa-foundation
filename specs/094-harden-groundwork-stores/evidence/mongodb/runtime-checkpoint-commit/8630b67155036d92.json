@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:process-restart-same-database",
+  "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "14fc9794edd9d368a706230a028bb506abc4181b61e1169d8729448f3a6cc7f2",
+  "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/8630b67155036d92",
+  "clients": 2,
+  "resultHash": "60447b0a01e2d250ac39026114376c097f95b3fb4844d882d2d13e631d00168e",
+  "outcome": "pass",
+  "restartScenario": "process-restart-same-database",
+  "evidence": "evidence/mongodb/runtime-checkpoint-commit/8630b67155036d92.json"
+}

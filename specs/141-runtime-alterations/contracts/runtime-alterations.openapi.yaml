@@ -1,0 +1,572 @@
+openapi: 3.1.0
+info:
+  title: Elsa Runtime Alteration Plans
+  version: 1.0.0
+paths:
+  /runtime/workflows/alteration-plans:
+    post:
+      operationId: submitWorkflowAlterationPlan
+      summary: Submit one durable workflow alteration plan
+      security:
+        - elsaPermissions: [workflow-runtime.manage]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ".*\\S.*"
+            maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitAlterationPlan"
+      responses:
+        "202":
+          description: Plan accepted or idempotently replayed
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationPlanSubmission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          description: Admission backpressure before plan creation
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /runtime/workflows/alteration-plans/{planId}:
+    get:
+      operationId: getWorkflowAlterationPlan
+      security:
+        - elsaPermissions: [workflow-runtime.read]
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "200":
+          description: Redacted durable plan view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /runtime/workflows/alteration-plans/{planId}/jobs/page:
+    get:
+      operationId: pageWorkflowAlterationJobs
+      security:
+        - elsaPermissions: [workflow-runtime.read]
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+        - name: take
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          schema:
+            type: [string, "null"]
+      responses:
+        "200":
+          description: Stable page of target jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationJobPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}:
+    get:
+      operationId: getWorkflowAlterationJob
+      security:
+        - elsaPermissions: [workflow-runtime.read]
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Redacted durable job view with ordered outcomes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /runtime/workflows/alteration-plans/{planId}/cancel:
+    post:
+      operationId: cancelWorkflowAlterationPlan
+      security:
+        - elsaPermissions: [workflow-runtime.manage]
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "200":
+          description: Plan was already terminal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationPlan"
+        "202":
+          description: Cancellation is cooperatively progressing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlterationPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    elsaPermissions:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /_elsa/identity/connect/token
+          scopes:
+            workflow-runtime.read: Read workflow runtime state
+            workflow-runtime.manage: Manage workflow runtime state
+  parameters:
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Authentication required
+    Forbidden:
+      description: Required permission missing
+    NotFound:
+      description: Resource missing or outside caller scope
+    Conflict:
+      description: Idempotency content conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unprocessable:
+      description: Syntactically valid request rejected before capture
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    InternalError:
+      description: Unexpected safe server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+  schemas:
+    SubmitAlterationPlan:
+      type: object
+      additionalProperties: false
+      required: [target, alterations]
+      properties:
+        target:
+          $ref: "#/components/schemas/AlterationTargetSelector"
+        alterations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AlterationEnvelope"
+    AlterationTargetSelector:
+      oneOf:
+        - $ref: "#/components/schemas/ExplicitTargetSelector"
+        - $ref: "#/components/schemas/QueryTargetSelector"
+    ExplicitTargetSelector:
+      type: object
+      additionalProperties: false
+      required: [executionIds]
+      properties:
+        executionIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
+    QueryTargetSelector:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query:
+          $ref: "#/components/schemas/WorkflowExecutionTargetQuery"
+    WorkflowExecutionTargetQuery:
+      type: object
+      additionalProperties: false
+      properties:
+        definitionId:
+          type: [string, "null"]
+        status:
+          type: [string, "null"]
+        runKind:
+          type: [string, "null"]
+        from:
+          type: [string, "null"]
+          format: date-time
+        to:
+          type: [string, "null"]
+          format: date-time
+        correlationId:
+          type: [string, "null"]
+        workflowExecutionId:
+          type: [string, "null"]
+        artifactId:
+          type: [string, "null"]
+        matchAllAuthorized:
+          type: boolean
+          default: false
+    AlterationEnvelope:
+      type: object
+      additionalProperties: false
+      required: [kind, schemaVersion, payload]
+      properties:
+        kind:
+          type: string
+          minLength: 1
+        schemaVersion:
+          type: integer
+          minimum: 1
+        payload: {}
+    AlterationPlanSubmission:
+      type: object
+      additionalProperties: false
+      required: [planId, status, submissionDisposition, createdAt, links]
+      properties:
+        planId:
+          type: string
+        status:
+          $ref: "#/components/schemas/AlterationPlanStatus"
+        submissionDisposition:
+          type: string
+          enum: [Accepted, Replayed]
+        createdAt:
+          type: string
+          format: date-time
+        links:
+          $ref: "#/components/schemas/AlterationLinks"
+    AlterationPlan:
+      type: object
+      additionalProperties: false
+      required: [planId, status, createdAt, target, alterations, counts, submittedBy, links]
+      properties:
+        planId:
+          type: string
+        status:
+          $ref: "#/components/schemas/AlterationPlanStatus"
+        createdAt:
+          type: string
+          format: date-time
+        sealedAt:
+          type: [string, "null"]
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        cancellationRequestedAt:
+          type: [string, "null"]
+          format: date-time
+        target:
+          $ref: "#/components/schemas/RedactedTarget"
+        alterations:
+          type: array
+          items:
+            $ref: "#/components/schemas/RedactedAlteration"
+        counts:
+          $ref: "#/components/schemas/AlterationPlanCounts"
+        failure:
+          anyOf:
+            - $ref: "#/components/schemas/SafeFailure"
+            - type: "null"
+        submittedBy:
+          $ref: "#/components/schemas/OperatorProvenance"
+        links:
+          $ref: "#/components/schemas/AlterationLinks"
+    AlterationPlanStatus:
+      type: string
+      enum:
+        - CapturingTargets
+        - Queued
+        - Running
+        - Cancelling
+        - Completed
+        - CompletedWithFailures
+        - Failed
+        - Cancelled
+    RedactedTarget:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [Explicit, Query]
+        explicitCount:
+          type: [integer, "null"]
+        filterNames:
+          type: array
+          items:
+            type: string
+    RedactedAlteration:
+      type: object
+      additionalProperties: false
+      required: [ordinal, kind, schemaVersion]
+      properties:
+        ordinal:
+          type: integer
+          minimum: 0
+        kind:
+          type: string
+        schemaVersion:
+          type: integer
+    AlterationPlanCounts:
+      type: object
+      additionalProperties: false
+      required: [capturedSoFar, targetCount, pending, running, succeeded, failed, cancelled]
+      properties:
+        capturedSoFar:
+          type: integer
+          format: int64
+        targetCount:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+        running:
+          type: integer
+          format: int64
+        succeeded:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+        cancelled:
+          type: integer
+          format: int64
+    AlterationLinks:
+      type: object
+      additionalProperties: false
+      required: [self, jobsPage, cancel]
+      properties:
+        self:
+          type: string
+        jobsPage:
+          type: string
+        cancel:
+          type: string
+    AlterationJobPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor, hasNext, count, totalCount]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlterationJobSummary"
+        nextCursor:
+          type: [string, "null"]
+        hasNext:
+          type: boolean
+        count:
+          type: integer
+        totalCount:
+          type: integer
+          format: int64
+    AlterationJobSummary:
+      type: object
+      additionalProperties: false
+      required: [jobId, planId, workflowExecutionId, status, createdAt]
+      properties:
+        jobId:
+          type: string
+        planId:
+          type: string
+        workflowExecutionId:
+          type: string
+        status:
+          $ref: "#/components/schemas/AlterationJobStatus"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        failure:
+          anyOf:
+            - $ref: "#/components/schemas/SafeFailure"
+            - type: "null"
+    AlterationJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, planId, workflowExecutionId, status, createdAt, submittedBy, outcomes]
+      properties:
+        jobId:
+          type: string
+        planId:
+          type: string
+        workflowExecutionId:
+          type: string
+        status:
+          $ref: "#/components/schemas/AlterationJobStatus"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        failure:
+          anyOf:
+            - $ref: "#/components/schemas/SafeFailure"
+            - type: "null"
+        submittedBy:
+          $ref: "#/components/schemas/OperatorProvenance"
+        outcomes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlterationOutcome"
+    AlterationJobStatus:
+      type: string
+      enum: [Pending, Running, Succeeded, Failed, Cancelled]
+    AlterationOutcome:
+      type: object
+      additionalProperties: false
+      required: [ordinal, kind, schemaVersion, status, code, recordedAt, structuralMetadata]
+      properties:
+        ordinal:
+          type: integer
+          minimum: 0
+        kind:
+          type: string
+        schemaVersion:
+          type: integer
+        status:
+          type: string
+          enum: [Succeeded, Failed, Skipped]
+        code:
+          type: string
+        message:
+          type: [string, "null"]
+        recordedAt:
+          type: string
+          format: date-time
+        structuralMetadata:
+          type: object
+          additionalProperties:
+            type: string
+    SafeFailure:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: [string, "null"]
+    OperatorProvenance:
+      type: object
+      additionalProperties: false
+      required: [subject, correlationId, displayName]
+      properties:
+        subject:
+          type: string
+        correlationId:
+          type: [string, "null"]
+        displayName:
+          type: [string, "null"]
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string

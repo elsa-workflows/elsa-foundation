@@ -1,6 +1,8 @@
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Distributed.Services;
 
@@ -20,27 +22,46 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
 {
     private readonly string _workflowExecutionId;
+    private readonly WorkflowExecutionPartition _partition;
     private readonly string _localNodeId;
     private readonly string _owningNodeId;
-    private readonly IExecutionCommandTransport _transport;
+    private readonly IPersistenceOperationScopeFactory? _operationScopeFactory;
+    private readonly IExecutionCommandTransport? _transport;
     private readonly TimeProvider _timeProvider;
 
     public ForwardingWorkflowExecutionActor(
         string workflowExecutionId,
+        WorkflowExecutionPartition partition,
         string localNodeId,
         string owningNodeId,
         IExecutionCommandTransport transport,
         TimeProvider timeProvider)
+        : this(workflowExecutionId, partition, localNodeId, owningNodeId, null, transport, timeProvider)
+    {
+    }
+
+    internal ForwardingWorkflowExecutionActor(
+        string workflowExecutionId,
+        WorkflowExecutionPartition partition,
+        string localNodeId,
+        string owningNodeId,
+        IPersistenceOperationScopeFactory? operationScopeFactory,
+        IExecutionCommandTransport? transport,
+        TimeProvider timeProvider)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(partition);
         ArgumentException.ThrowIfNullOrWhiteSpace(localNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(owningNodeId);
-        ArgumentNullException.ThrowIfNull(transport);
+        if (operationScopeFactory is null)
+            ArgumentNullException.ThrowIfNull(transport);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _workflowExecutionId = workflowExecutionId;
+        _partition = partition;
         _localNodeId = localNodeId;
         _owningNodeId = owningNodeId;
+        _operationScopeFactory = operationScopeFactory;
         _transport = transport;
         _timeProvider = timeProvider;
     }
@@ -68,8 +89,22 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
                 reason: "Envelope workflow execution ID does not match this forwarding actor.");
         }
 
+        if (envelope.Partition != _partition)
+        {
+            return new WorkflowExecutionCommandDispatchResult(
+                envelopeId: envelope.EnvelopeId,
+                workflowExecutionId: envelope.WorkflowExecutionId,
+                status: WorkflowExecutionCommandDispatchStatus.Rejected,
+                recordedAt: _timeProvider.GetUtcNow(),
+                reason: "Envelope partition does not match this forwarding actor.");
+        }
+
         var now = _timeProvider.GetUtcNow();
-        var item = await _transport.SendAsync(_workflowExecutionId, envelope, now, cancellationToken);
+        await using var scope = _operationScopeFactory is null
+            ? null
+            : await _operationScopeFactory.CreateAsync(new PersistenceScope(envelope.Partition.Value), cancellationToken);
+        var transport = scope?.ServiceProvider.GetRequiredService<IExecutionCommandTransport>() ?? _transport!;
+        var item = await transport.SendAsync(_workflowExecutionId, envelope, now, cancellationToken);
 
         return new WorkflowExecutionCommandDispatchResult(
             envelopeId: envelope.EnvelopeId,

@@ -10,8 +10,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -23,23 +21,21 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\EFCore\Elsa.Activities.Design.Persistence.EFCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\EFCore\Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Json\Elsa.Activities.Design.Reconciliation.Json.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="ClrFixture\Elsa.Activities.Design.Tests.ClrFixture.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\EFCore\Elsa.Persistence.EFCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\EFCore\Sqlite\Elsa.Persistence.EFCore.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EFCore\Elsa.Workflows.Design.Persistence.EFCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
 
 

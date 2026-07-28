@@ -8,7 +8,8 @@ namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
 /// Unit tests for <see cref="ActivityTypeCategoryResolver"/>. The category is the last dot-separated
-/// segment of the declaring assembly's simple name, so activities shipped together share one bucket.
+/// segment of the declaring assembly's simple name, humanized for display (issue #928), so activities
+/// shipped together share one bucket.
 /// </summary>
 public sealed class ActivityTypeCategoryResolverTests
 {
@@ -17,12 +18,13 @@ public sealed class ActivityTypeCategoryResolverTests
     [Fact]
     public void Category_IsLastSegment_OfAssemblyName()
     {
-        // The fixture assembly is named "Elsa.Activities.Design.Tests.ClrFixture".
+        // The fixture assembly is named "Elsa.Activities.Design.Tests.ClrFixture"; the last segment
+        // "ClrFixture" humanizes to "Clr Fixture".
         var assembly = typeof(UnannotatedFixtureActivity).Assembly;
 
         var result = _resolver.Resolve(typeof(UnannotatedFixtureActivity), assembly);
 
-        Assert.Equal("ClrFixture", result);
+        Assert.Equal("Clr Fixture", result);
     }
 
     [Fact]
@@ -38,13 +40,13 @@ public sealed class ActivityTypeCategoryResolverTests
     }
 
     [Fact]
-    public void SingleSegmentAssemblyName_IsUsedVerbatim()
+    public void SingleSegmentAssemblyName_IsHumanized()
     {
         var assembly = EmitAssemblyNamed("MyActivities", out var type);
 
         var result = _resolver.Resolve(type, assembly);
 
-        Assert.Equal("MyActivities", result);
+        Assert.Equal("My Activities", result);
     }
 
     private static Assembly EmitAssemblyNamed(string simpleName, out Type type)

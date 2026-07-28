@@ -6,10 +6,14 @@ using Elsa.Mediator.Core.Contracts;
 namespace Elsa.Activities.Design.Api.Commands;
 
 public sealed record AddDefinition(
+    string OperationKey,
     string ActivityTypeKey,
     string SourceKind,
     string SourceId,
-    string DescriptorType,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ConsumerKey,
+    string ConsumerSchemaVersion,
     JsonElement DescriptorPayload,
     string Category,
     string DisplayName,

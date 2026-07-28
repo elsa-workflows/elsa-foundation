@@ -1,3 +1,5 @@
+using Elsa.Persistence.Core.Design;
+
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
@@ -26,5 +28,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// </remarks>
 public interface IUpdateDraftCommand
 {
-    Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default);
+    Task Execute(
+        DesignOperationKey operationKey,
+        UpdateDraftRequest request,
+        CancellationToken cancellationToken = default);
 }

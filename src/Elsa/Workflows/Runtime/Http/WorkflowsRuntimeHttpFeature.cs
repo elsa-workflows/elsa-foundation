@@ -63,7 +63,7 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // the indexer's PRE-write seam so a cross-definition conflict fails the second publish with the durable
         // index untouched. HTTP-specific by design — shared stimulus identity is legitimate fan-out for other
         // stimulus types. Contribution seam (fan-in), so TryAddEnumerable.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
     }
 
     private void RegisterFaultHandler(IServiceCollection services)

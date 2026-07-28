@@ -5,6 +5,9 @@ using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -50,7 +53,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var view = await Handler(new StubTriggerProvider("Event", "hash-order")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var byStimulus = await _bindingStore.ListByStimulusAsync("Event", "hash-order");
+        var byStimulus = (await _bindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-order"))).Items;
         var binding = Assert.Single(byStimulus);
         Assert.Equal(view.ArtifactId, binding.ArtifactId);
         Assert.Equal("trigger-node", binding.ExecutableNodeId);
@@ -63,8 +67,12 @@ public sealed class PublishWorkflowTriggerIndexingTests
         await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        Assert.Empty(await _bindingStore.ListByStimulusAsync("Event", "hash-old"));
-        Assert.Equal(view.ArtifactId, Assert.Single(await _bindingStore.ListByStimulusAsync("Event", "hash-new")).ArtifactId);
+        Assert.Empty((await _bindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "hash-old"))).Items);
+        Assert.Equal(
+            view.ArtifactId,
+            Assert.Single((await _bindingStore.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery("Event", "hash-new"))).Items).ArtifactId);
     }
 
     [Fact]
@@ -76,7 +84,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
             handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Empty(await _bindingStore.ListByArtifactAsync((await _executableStore.ListAsync()).SingleOrDefault()?.Identity.ArtifactId ?? "none"));
+        Assert.Empty(await _bindingStore.ListAllByArtifactAsync((await _executableStore.ListAllAsync()).SingleOrDefault()?.Identity.ArtifactId ?? "none"));
     }
 
     [Theory]
@@ -87,7 +95,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var view = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        var bindings = await _bindingStore.ListByArtifactAsync(view.ArtifactId);
+        var bindings = await _bindingStore.ListAllByArtifactAsync(view.ArtifactId);
         Assert.Equal(scenario.ExpectedBindingCount, bindings.Count);
         Assert.All(bindings, binding =>
         {
@@ -116,7 +124,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var seededBindings = await _bindingStore.ListByArtifactAsync(seededView.ArtifactId);
+        var seededBindings = await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId);
         var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.PublicationId).Distinct())!;
         var seededSchedule = (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault();
 
@@ -126,7 +134,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
 
         Assert.Equal(
             seededBindings.OrderBy(x => x.TriggerBindingId),
-            (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
+            (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
         Assert.Equal(
             seededSchedule,
             (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault());
@@ -139,7 +147,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs, legacyActionCatalog: true)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        Assert.Equal(scenario.ExpectedBindingCount, (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).Count);
+        Assert.Equal(scenario.ExpectedBindingCount, (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).Count);
 
         var invalidExecutable = await FirstPartyCompiler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
             .CompileAsync(new WorkflowExecutableCompileRequest(
@@ -168,6 +176,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             seededSchedule = new RecurringTriggerSchedule(
                 RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node"),
                 invalidExecutable.Identity.ArtifactId,
+                "trigger-node",
                 scenario.StimulusType,
                 "seeded-stimulus",
                 RecurringScheduleKind.Interval,
@@ -181,7 +190,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             FirstPartyHandler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
                 .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Equal(seededBinding, Assert.Single(await _bindingStore.ListByArtifactAsync(invalidExecutable.Identity.ArtifactId)));
+        Assert.Equal(seededBinding, Assert.Single(await _bindingStore.ListAllByArtifactAsync(invalidExecutable.Identity.ArtifactId)));
         Assert.Equal(
             seededSchedule,
             await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node")));
@@ -313,7 +322,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             scenario.ActivityType,
             scenario.InputDefinitions,
             legacyActionCatalog ? ActivityExecutionType.Action : ActivityExecutionType.Trigger,
-            legacyActionCatalog ? scenario.ClrType : null);
+            scenario.ClrType);
 
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
@@ -353,6 +362,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         Type? clrType)
     {
         var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(TestTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(TestTriggerActivity)));
         if (clrType is not null)
             registry.RegisterType(clrType, TypeAliasConvention.CanonicalAlias(clrType));
 
@@ -374,7 +384,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null)
         };
 
     private static ActivityNode TriggerNode(string nodeId) =>
@@ -398,9 +408,12 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 ActivityTypeKey = activityType,
                 Category = "Test"
             },
-            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            ProviderKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             DescriptorPayload = JsonSerializer.SerializeToElement(
-                new ClrActivityDescriptor(clrType is null ? "Object" : TypeAliasConvention.CanonicalAlias(clrType)),
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(clrType ?? typeof(TestTriggerActivity))),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             Inputs = inputs ?? [Definition("EventName", "String")]
         };
@@ -412,7 +425,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         new(name, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Object"), null, null, null, null);
 
     private static InputDefinition Definition(string name, string type) =>
-        new(name, name, new TypeReference(type), null, name, null);
+        new(name, name, new TypeReference(type), null, name, null, false);
 
     private sealed class StubTriggerProvider(string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {
@@ -443,6 +456,14 @@ public sealed class PublishWorkflowTriggerIndexingTests
         Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<IActivityStructureService, DefaultActivityStructureService>(services);
         return Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IActivityStructureService>(
             Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services));
+    }
+
+    // Minimal registered trigger CLR type: an EventName input plus the typed-result marker, so compiled
+    // generic trigger nodes pin an activity contract at publish time (VF-ACT-001 gate).
+    private sealed class TestTriggerActivity : IActivityResult<ActivityUnit>
+    {
+        [ActivityInput(Key = "EventName")]
+        public string? EventName { get; set; }
     }
 
     private sealed class FakeVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore

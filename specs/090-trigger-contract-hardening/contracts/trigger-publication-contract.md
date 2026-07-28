@@ -65,7 +65,18 @@ The failure is typed in Runtime vocabulary. Public preflight/index entry points 
 ## Compatibility contract
 
 - Existing extractor and indexer entry-point signatures remain available.
-- Existing executable and durable state shapes remain readable.
+- Spec 090 itself introduced no persisted-shape drift; the executable and durable shapes supported at its
+  delivery remained readable in that baseline.
+- The current persistence contract supersedes that historical executable/source-reference/workflow-execution
+  statement. Before GA, every Runtime Groundwork kind uses its current version as minimum-readable, retains
+  only its current fixture, and registers no Elsa compatibility upcaster. `workflowExecutable`,
+  `workflowExecutableSourceReference`, and `workflowExecutionState` use version 4 and reject versions 1
+  through 3. Executable v4 includes the reusable-activity input contract and direct dependency snapshot;
+  source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth.
+- After a released shape exists, compatible in-place or rolling evolution may add Groundwork
+  `IDocumentJsonUpcaster` contributions and retain every supported historical fixture.
+- Upgrading earlier persistence requires atomically resetting the complete Runtime and Publishing Groundwork
+  persistence sets while preserving Design and Activities data, then republishing workflows before traffic.
 - Same-version activity catalog content is never rewritten to correct classification.
 - Corrected classification takes effect on republish.
 - `Recognized([])` remains behaviorally unchanged.

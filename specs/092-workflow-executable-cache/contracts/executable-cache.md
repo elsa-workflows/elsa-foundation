@@ -20,9 +20,15 @@ Mutable workflow-definition and source-reference lookup remains outside this com
 | `CacheWorkflowExecutables` | `true` for SQLite reference features; `false` for PostgreSQL/distributed and legacy direct registrations | When false, use the provider directly. PostgreSQL hosts opt in only with an accepted immutable-retention/invalidation policy. |
 | `WorkflowExecutableCacheCapacity` | `256` | Must be positive when caching is enabled; maximum resident entry count. |
 
-Disabling caching is the rollback path. A new service-provider/shell begins with an empty cache.
+Disabling caching is the rollback path. Cache state is shared by scoped store adapters within one
+shell service provider and partitioned by the authorized `PersistenceScope`; a replacement shell
+generation or process restart begins empty.
 
-The cache is process-local. Content-addressed IDs cannot be replaced with different content, and mutable source references are checked before artifact lookup. A delete evicts the node on which it is executed; another opted-in node may retain that immutable artifact until local eviction/restart, so PostgreSQL features remain disabled by default.
+The cache is local to one shell service provider. Content-addressed IDs cannot be replaced with
+different content, and mutable source references are checked before artifact lookup. A delete
+evicts the node on which it is executed; another opted-in node may retain that immutable artifact
+until local eviction/restart, so PostgreSQL features remain disabled by default. Privileged global
+and cross-scope operations bypass shared cache state.
 
 ## Telemetry
 

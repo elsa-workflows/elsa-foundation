@@ -24,7 +24,11 @@ public sealed record ActivityExecutionInspectionProjection(
     IReadOnlyCollection<ActivityExecutionBookmarkSummary> Bookmarks,
     IReadOnlyCollection<ActivityExecutionIncidentSummary> Incidents,
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null,
+    string? SupersededByActivityExecutionId = null,
+    DateTimeOffset? SupersededAt = null)
 {
     public static ActivityExecutionInspectionProjection FromState(
         ActivityExecutionState state,
@@ -60,10 +64,14 @@ public sealed record ActivityExecutionInspectionProjection(
             LastCheckpointId: checkpointId,
             LastCommittedAt: committedAt,
             Provenance: state.Provenance,
+            ExecutionScopeId: state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt: state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId: state.SupersededByActivityExecutionId,
+            SupersededAt: state.SupersededAt,
             OutcomeNames: outcomeNames ?? [],
             Bookmarks: bookmarks ?? [],
             Incidents: incidents ?? [],
-            ValueSnapshots: valueSnapshots ?? [],
+            ValueSnapshots: MergeValueSnapshots(state.Execution.ActivityExecutionId, [], valueSnapshots),
             Metadata: RuntimeModelMetadata.Snapshot(mergedMetadata));
     }
 
@@ -94,10 +102,14 @@ public sealed record ActivityExecutionInspectionProjection(
             LastCheckpointId = checkpointId,
             LastCommittedAt = committedAt,
             Provenance = state.Provenance,
+            ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
+            Attempt = state.Attempt ?? state.Provenance.Attempt,
+            SupersededByActivityExecutionId = state.SupersededByActivityExecutionId,
+            SupersededAt = state.SupersededAt,
             OutcomeNames = outcomeNames ?? OutcomeNames,
-            Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.BookmarkId),
+            Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.Identity.BookmarkId),
             Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),
-            ValueSnapshots = valueSnapshots is null ? ValueSnapshots : ValueSnapshots.Concat(valueSnapshots).ToArray(),
+            ValueSnapshots = MergeValueSnapshots(ActivityExecutionId, ValueSnapshots, valueSnapshots),
             Metadata = RuntimeModelMetadata.Snapshot(mergedMetadata)
         };
     }
@@ -114,6 +126,81 @@ public sealed record ActivityExecutionInspectionProjection(
         foreach (var item in additions)
             result[keySelector(item)] = item;
         return result.Values.ToArray();
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> MergeValueSnapshots(
+        string activityExecutionId,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> existing,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? additions)
+    {
+        if (additions is null || additions.Count == 0)
+            return AssignEvidenceIds(activityExecutionId, existing);
+
+        var result = existing.ToList();
+        var evaluationIds = existing
+            .Where(snapshot => !string.IsNullOrWhiteSpace(snapshot.EvaluationId))
+            .Select(snapshot => snapshot.EvaluationId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var addition in additions)
+        {
+            if (string.IsNullOrWhiteSpace(addition.EvaluationId))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            if (!evaluationIds.Add(addition.EvaluationId))
+                continue;
+
+            if (addition.Subject != ActivityExecutionInspectionValueSubject.ActivityInput || string.IsNullOrWhiteSpace(addition.InputKey))
+            {
+                result.Add(addition);
+                continue;
+            }
+
+            var nextSequence = result
+                .Where(snapshot =>
+                    snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput &&
+                    StringComparer.Ordinal.Equals(snapshot.InputKey, addition.InputKey))
+                .Select(snapshot => snapshot.Sequence ?? 0)
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+            result.Add(addition with { Sequence = nextSequence });
+        }
+
+        return AssignEvidenceIds(activityExecutionId, result);
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> AssignEvidenceIds(
+        string activityExecutionId,
+        IEnumerable<ActivityExecutionInspectionValueSnapshot> snapshots) =>
+        snapshots
+            .Select((snapshot, index) => string.IsNullOrWhiteSpace(snapshot.EvidenceId)
+                ? snapshot with { EvidenceId = ActivityExecutionValueEvidenceIdentity.Create(activityExecutionId, snapshot, index) }
+                : snapshot)
+            .ToArray();
+}
+
+public static class ActivityExecutionValueEvidenceIdentity
+{
+    public static string Create(
+        string activityExecutionId,
+        ActivityExecutionInspectionValueSnapshot snapshot,
+        int ordinal)
+    {
+        var material = string.Join(
+            '\u001f',
+            activityExecutionId,
+            ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            snapshot.Subject.ToString(),
+            snapshot.InputKey ?? string.Empty,
+            snapshot.Name,
+            snapshot.EvaluationId ?? string.Empty,
+            snapshot.Phase ?? string.Empty,
+            snapshot.Sequence?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            snapshot.CapturedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        return $"value-{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material)))}";
     }
 }
 
@@ -141,7 +228,9 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
     int BookmarkCount,
     int IncidentCount,
     int ValueSnapshotCount,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null)
 {
     public static ActivityExecutionInspectionSummaryProjection FromProjection(ActivityExecutionInspectionProjection projection)
     {
@@ -168,6 +257,8 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
             projection.Bookmarks.Count,
             projection.Incidents.Count,
             projection.ValueSnapshots.Count,
-            projection.Metadata);
+            projection.Metadata,
+            projection.ExecutionScopeId,
+            projection.Attempt);
     }
 }

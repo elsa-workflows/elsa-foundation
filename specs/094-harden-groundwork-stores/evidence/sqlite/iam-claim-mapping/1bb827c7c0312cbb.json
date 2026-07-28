@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:expected-version-save",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-claim-mapping",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
+  "executionPath": "provider-driver/sqlite/iam-claim-mapping/1bb827c7c0312cbb",
+  "clients": 2,
+  "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
+  "outcome": "pass",
+  "concurrencySemantic": "expected-version-save",
+  "evidence": "evidence/sqlite/iam-claim-mapping/1bb827c7c0312cbb.json"
+}

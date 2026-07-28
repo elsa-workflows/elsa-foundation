@@ -13,14 +13,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Sibling runtime projects live under the same domain root; keep SDK globs scoped to this project. -->
-    <Compile Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
-    <EmbeddedResource Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
-    <None Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <Compile Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <None Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
   </ItemGroup>
 
 </Project>

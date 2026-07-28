@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
@@ -46,19 +48,20 @@ public sealed class SendHttpRequestExecutionTests
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
             NewSendNode(expectedStatusCodes: new[] { 201, 202 })));
 
+        // Issue #926: a matching status branches on the outcome port named after its numeric code.
         run.AssertOutcomes(NodeId, "201");
         run.AssertWorkflowCompleted();
     }
 
     [Fact]
-    public async Task Response_NotMatchingExpectedCode_BranchesOnUnmatchedOutcome()
+    public async Task Response_NotMatchingExpectedCode_BranchesOnUnmatchedStatusCodeOutcome()
     {
         await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "ok"));
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
             NewSendNode(expectedStatusCodes: new[] { 201 })));
 
-        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Unmatched);
+        run.AssertOutcomes(NodeId, HttpActivityOutcomes.UnmatchedStatusCode);
         run.AssertWorkflowCompleted();
     }
 
@@ -104,34 +107,93 @@ public sealed class SendHttpRequestExecutionTests
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
-            ["Url"] = LiteralBinding("Url", new Uri("https://example.test/resource"), "System.Uri"),
-            ["Method"] = LiteralBinding("Method", "GET", "System.String")
+            ["Url"] = LiteralBinding("Url", new Uri("https://example.test/resource"), typeof(Uri)),
+            ["Method"] = LiteralBinding("Method", "GET", typeof(string))
         };
 
         if (expectedStatusCodes is not null)
             inputBindings["ExpectedStatusCodes"] = LiteralBinding(
                 "ExpectedStatusCodes",
                 expectedStatusCodes,
-                "System.Collections.Generic.ICollection`1[[System.Int32]]");
+                typeof(ICollection<int>));
+
+        var activityType = TypeAliasConvention.CanonicalAlias(typeof(SendHttpRequest));
+        var resultType = TypeAliasConvention.CanonicalAlias(typeof(SendHttpRequestResult));
+        var descriptorPayload = ClrConstruction.Payload(Serializer, typeof(SendHttpRequest));
+        var inputContracts = inputBindings.Keys.Select(key => new ActivityInputContract(
+            key,
+            key,
+            key switch
+            {
+                "Url" => ValueType(typeof(Uri)),
+                "Method" => ValueType(typeof(string)),
+                "ExpectedStatusCodes" => ValueType(typeof(ICollection<int>)),
+                _ => throw new InvalidOperationException($"Unknown test input '{key}'.")
+            },
+            isRequired: key == "Url",
+            isNullable: key != "Url",
+            hasDefault: false,
+            defaultValue: null,
+            ActivityValuePolicy.Default));
+        var contract = new ActivityContract(
+            activityType,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            descriptorPayload,
+            inputContracts,
+            new ActivityResultContract(
+                new ValueTypeDescriptor(resultType),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            OutcomesFor(expectedStatusCodes),
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, activityType));
 
         return new ExecutableNode(
             executableNodeId: NodeId,
             authoredActivityId: "authored-send-http",
-            activityType: typeof(SendHttpRequest).FullName!,
+            activityType: activityType,
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, typeof(SendHttpRequest)),
+            descriptorPayload: descriptorPayload,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
     }
 
-    private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
+    // Mirrors ExecutableNodeCompiler.ResolveOutcomes: the static base outcomes plus, when expected codes are
+    // authored, one outcome per code and the unmatched-status-code catch-all (issue #926).
+    private static string[] OutcomesFor(int[]? expectedStatusCodes)
+    {
+        var outcomes = new List<string> { ActivityOutcomes.Done, HttpActivityOutcomes.Failed, HttpActivityOutcomes.Timeout };
+        if (expectedStatusCodes is { Length: > 0 })
+        {
+            outcomes.AddRange(expectedStatusCodes.Select(code => code.ToString()));
+            outcomes.Add(HttpActivityOutcomes.UnmatchedStatusCode);
+        }
+
+        return outcomes.ToArray();
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string inputName, object value, Type type)
+    {
+        var valueType = ValueType(type);
+        return
         new(
-            inputName: inputName,
+            inputKey: inputName,
+            targetType: valueType,
+            effectivePolicy: ValueProtectionPolicy.InstanceInline,
             source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+            literal: ValueEnvelope.Inline(
+                valueType,
+                JsonSerializer.SerializeToElement(value, type),
+                ValueProtectionPolicy.InstanceInline));
+    }
+
+    private static ValueTypeDescriptor ValueType(Type type) =>
+        TypeReferenceFactory.FromClrType(type, TypeAliasConvention.CanonicalAlias) is { } reference
+            ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
+            : throw new InvalidOperationException($"Could not describe '{type}'.");
 
     private static Elsa.Serialization.Core.IPayloadSerializer Serializer =>
         TestPayloadSerializers.NewPayloadSerializer();

@@ -1,39 +1,172 @@
+using System.Text.Json.Nodes;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using CShells.Lifecycle;
+using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
+using Groundwork.Core.Transactions;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkRuntimePersistenceRegistrationTests
 {
+    private static readonly Type[] LogicBearingRuntimeServiceTypes =
+    [
+        typeof(IGroundworkStorageManifestSource),
+        typeof(IBookmarkStateStore),
+        typeof(IWorkflowExecutableStore),
+        typeof(IExecutableActivityTemplateStore),
+        typeof(IWorkflowExecutableSourceReferenceStore),
+        typeof(IActivityExecutionStateStore),
+        typeof(GroundworkActivityExecutionInspectionStore),
+        typeof(IActivityExecutionInspectionStore),
+        typeof(IActivityExecutionInspectionWriter),
+        typeof(IActivityExecutionHierarchyStore),
+        typeof(IActivityExecutionHierarchyReader),
+        typeof(IActivityExecutionHierarchyWriter),
+        typeof(IWorkflowExecutionStateStore),
+        typeof(IDurableValueStateStore),
+        typeof(ISchedulerStateStore),
+        typeof(IExecutionLivenessStateStore),
+        typeof(IRuntimeRecoveryScanner),
+        typeof(IWorkflowHoldStateStore),
+        typeof(IIncidentStateStore),
+        typeof(IRuntimeCheckpointCommitStore),
+        typeof(IRuntimePostCommitOutboxStore),
+        typeof(GroundworkRuntimePostCommitOutboxStore),
+        typeof(IRuntimePostCommitOutboxClaimStore),
+        typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+        typeof(GroundworkWorkflowDispatchStore),
+        typeof(IWorkflowDispatchStore),
+        typeof(IWorkflowDispatchQueryStore),
+        typeof(IWorkflowDispatchDeleteStore),
+        typeof(IWorkflowDispatchRetentionRootStore),
+        typeof(IWorkflowSchedulerWorkQueue),
+        typeof(IWorkflowSchedulerPoisonStore),
+        typeof(IDurableTimerStore),
+        typeof(IWorkflowTriggerBindingStore),
+        typeof(IRecurringTriggerScheduleStore)
+    ];
+
+    [Fact]
+    public void AddGroundworkRuntimeStores_Registers_Logic_Bearing_Services_As_Scoped()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+
+        services.AddGroundworkRuntimeStores();
+
+        Assert.All(LogicBearingRuntimeServiceTypes, serviceType =>
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        });
+    }
+
+    [Fact]
+    public void AddGroundworkRuntimeStores_Contributes_Durable_Dispatch_Readiness_Evidence()
+    {
+        var services = new ServiceCollection();
+        var sessionSource = new GroundworkStoreSessionSource();
+        Assert.True(sessionSource.TrySetAdmitted(
+            (_, _) => throw new InvalidOperationException("Readiness must not open a provider session."),
+            TransactionBoundary.CrossUnitAtomic));
+        services.AddSingleton(sessionSource);
+
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var evidence = provider.GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .ToDictionary(item => item.Component, item => item.Level, StringComparer.Ordinal);
+
+        Assert.Equal(4, evidence.Count);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Checkpoint]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.DispatchStore]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Outbox]);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.Scheduler]);
+    }
+
+    [Fact]
+    public void AddGroundworkRuntimeStores_DoesNotClaimDurableCheckpointWithoutAdmittedAtomicBoundary()
+    {
+        var services = new ServiceCollection();
+        var sessionSource = new GroundworkStoreSessionSource();
+        Assert.True(sessionSource.TrySetAdmitted(
+            (_, _) => throw new InvalidOperationException("Readiness must not open a provider session."),
+            TransactionBoundary.PerOperation));
+        services.AddSingleton(sessionSource);
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var evidence = provider.GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .ToDictionary(item => item.Component, item => item.Level, StringComparer.Ordinal);
+
+        Assert.Equal(
+            WorkflowDispatchDurabilityLevel.ProcessLocal,
+            evidence[WorkflowDispatchDurabilityComponents.Checkpoint]);
+    }
+
+    [Fact]
+    public void Independent_Request_Scopes_Do_Not_Share_Runtime_Adapter_Instances()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        services.AddSingleton<IDocumentStore>(documentStore);
+        services.AddSingleton<IBoundedDocumentStore>(documentStore);
+        services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughRootWriteLeaseManager.Instance);
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var firstRequest = provider.CreateScope();
+        using var secondRequest = provider.CreateScope();
+
+        AssertScopedWithinRequestButIsolatedAcrossRequests<IBookmarkStateStore>(firstRequest, secondRequest);
+        AssertScopedWithinRequestButIsolatedAcrossRequests<IRuntimeCheckpointCommitStore>(firstRequest, secondRequest);
+    }
+
     [Fact]
     public void Default_Runtime_Composition_Keeps_InMemory_Store()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<InMemoryExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
     }
 
     [Fact]
     public void AddGroundworkRuntimeStores_Replaces_InMemory_Store()
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
@@ -47,7 +180,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
+        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()));
         services.AddWorkflowRuntime();
 
         services.AddGroundworkRuntimeStores();
@@ -59,24 +193,65 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkWorkflowExecutableStore>(selectedExecutableStore);
         Assert.Same(selectedExecutableStore, provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
             GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
+        Assert.IsType<GroundworkExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<GroundworkSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<GroundworkExecutionLivenessStateStore>(provider.GetRequiredService<IExecutionLivenessStateStore>());
+        Assert.IsType<GroundworkRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
         Assert.IsType<GroundworkWorkflowHoldStateStore>(provider.GetRequiredService<IWorkflowHoldStateStore>());
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>());
+        Assert.Same(
+            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
+            provider.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>());
+        Assert.IsType<GroundworkWorkflowDispatchStore>(provider.GetRequiredService<IWorkflowDispatchStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchQueryStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchDeleteStore>());
+        Assert.Same(provider.GetRequiredService<IWorkflowDispatchStore>(), provider.GetRequiredService<IWorkflowDispatchRetentionRootStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+        Assert.IsType<GroundworkWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
     }
 
-    // Constitution §2.23.1: the versioned-document serialization services must be registered as their
-    // sealed defaults, and the complete production upcaster chain must be contributed.
-    [Fact]
-    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Upcaster_Registry()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GroundworkTestScopeProvider_ReplacesTheInMemoryDefaultInEitherCompositionOrder(bool runtimeFirst)
     {
         var services = new ServiceCollection();
+        if (runtimeFirst)
+        {
+            services.AddWorkflowRuntime();
+            services.AddGroundworkRuntimeStores();
+        }
+        else
+        {
+            services.AddGroundworkRuntimeStores();
+            services.AddWorkflowRuntime();
+        }
+
+        var registration = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(WorkflowTestScopeProviderRegistration));
+        var claim = Assert.IsType<WorkflowTestScopeProviderRegistration>(registration.ImplementationInstance);
+        Assert.Equal(typeof(GroundworkWorkflowTestScopeStore), claim.ProviderType);
+        Assert.False(claim.IsInMemoryDefault);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+    }
+
+    // Constitution §2.23.1: the versioned-document serializer must be registered as the sealed default.
+    [Fact]
+    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_Without_Consuming_Foreign_Upcasters()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
@@ -89,27 +264,23 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()));
+        services.AddSingleton<IDocumentJsonUpcaster>(new ForeignDocumentJsonUpcaster());
 
         services.AddGroundworkRuntimeStores();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
-        Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
+        Assert.IsType<ForeignDocumentJsonUpcaster>(Assert.Single(provider.GetServices<IDocumentJsonUpcaster>()));
 
-        var upcasterTypes = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>()
-            .Select(x => x.GetType())
-            .ToHashSet();
-        Assert.True(upcasterTypes.SetEquals(
-            [
-                typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
-                typeof(WorkflowExecutionStateDocumentV1ToV2Upcaster),
-                typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
-                typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
-                typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)
-            ]));
-        Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
+    }
+
+    private sealed class ForeignDocumentJsonUpcaster : IDocumentJsonUpcaster
+    {
+        public string DocumentKind => "foreign-document";
+        public int FromVersion => 1;
+        public JsonObject Upcast(JsonObject content) => content;
     }
 
     [Fact]
@@ -117,6 +288,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddWorkflowRuntime();
@@ -125,13 +297,14 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         await using var provider = services.BuildServiceProvider();
 
-        // The store is now materialized at startup via a hosted service / shell initializer that populates the
-        // holder (the handle is owned by the holder, not registered in DI). Drive that startup step explicitly,
-        // as a real host would, before resolving IDocumentStore.
-        Assert.NotNull(provider.GetRequiredService<GroundworkDocumentStoreHolder>());
+        // Startup admits the target and publishes a static provider session factory. Scoped adapters acquire
+        // immutable access-bound stores from that source for each operation.
+        Assert.NotNull(provider.GetRequiredService<GroundworkStoreSessionSource>());
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<GroundworkScopedDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<GroundworkScopedDocumentStore>(provider.GetRequiredService<IBoundedDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<CachingWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
@@ -139,47 +312,189 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+        Assert.IsType<GroundworkWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
+
+        var dispatchStore = provider.GetRequiredService<IWorkflowDispatchStore>();
+        var dispatchQueryStore = provider.GetRequiredService<IWorkflowDispatchQueryStore>();
+        var first = GroundworkWorkflowDispatchStoreTests.Pending("parent-physical", "activity-1");
+        var second = GroundworkWorkflowDispatchStoreTests.Pending("parent-physical", "activity-2");
+        await dispatchStore.SaveAsync(first);
+        await dispatchStore.SaveAsync(second);
+        await dispatchStore.SaveAsync(second.TransitionTo(WorkflowDispatchStatus.Started, DateTimeOffset.UnixEpoch.AddSeconds(1)));
+
+        Assert.Equal(
+            second.DispatchId,
+            Assert.Single(await dispatchQueryStore.QueryAsync(new WorkflowDispatchQuery(
+                parentWorkflowExecutionId: "parent-physical",
+                status: WorkflowDispatchStatus.Started))).DispatchId);
     }
 
-    [Fact] // The bite: resolving IDocumentStore before startup throws (no synchronous block resurrects it on the
-           // resolving thread), and the store is fully usable only after the startup initializer has run.
-    public async Task Sqlite_Store_Throws_Before_Init_Then_Is_Usable_After()
+    [Fact] // Resolution is side-effect free before startup; the first provider operation is rejected until
+           // startup admits the target, after which the same scoped adapter is usable.
+    public async Task Sqlite_Store_Resolves_Before_Init_But_Rejects_IO_Until_Usable_After()
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
-        // Before the startup initializer runs, the holder is empty and resolving the store throws — it does not
-        // silently block the resolving thread the way the old sync-over-async factory did.
-        Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
-        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IDocumentStore>());
+        // Before startup the scoped adapter resolves, but provider I/O is rejected because no admitted
+        // session source has been published. Resolution never performs sync-over-async work.
+        Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
+        var uninitializedStore = provider.GetRequiredService<IDocumentStore>();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => uninitializedStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+            "not-open"));
 
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
 
-        // After startup the singleton is fully initialized and the store round-trips a document.
+        // After startup the scoped adapter acquires an initialized session and round-trips a document.
         var store = provider.GetRequiredService<IDocumentStore>();
         await store.SaveAsync(new SaveDocumentRequest(
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init", "1.0.0", "{\"ok\":true}"));
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init"));
     }
 
-    [Fact] // Running the startup step twice is a no-op: the store is materialized once and the singleton is stable.
+    [Fact]
+    public async Task Sqlite_Runtime_Admission_Fails_Pending_Without_Creating_Schema()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString, AutoApplySchemaOnStartup = false }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeSchemaAdmissionException>(
+            () => provider.InitializeGroundworkStoreAsync());
+
+        Assert.NotEmpty(exception.Result.PendingOperations);
+        Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
+        Assert.False(File.Exists(database.FilePath));
+    }
+
+    [Fact]
+    public async Task Sqlite_Runtime_Initialization_Suppresses_Connection_Details()
+    {
+        const string secret = "sqlite-admission-secret";
+        var connectionString = $"Data Source=:memory:;Unsupported={secret}";
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var exception = await Assert.ThrowsAsync<SqliteGroundworkPersistenceException>(
+            () => provider.InitializeGroundworkStoreAsync());
+
+        Assert.Equal(SqliteGroundworkPersistenceOperation.Initialize, exception.Operation);
+        Assert.NotNull(exception.InnerException);
+        Assert.Contains("connection details were suppressed", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(connectionString, exception.ToString(), StringComparison.Ordinal);
+        Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
+    }
+
+    [Fact]
+    public async Task Sqlite_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-session-open-{Guid.NewGuid():N}");
+        var databasePath = Path.Combine(directory, "groundwork.db");
+        Directory.CreateDirectory(directory);
+        var connectionString = $"Data Source={databasePath};Pooling=False";
+        try
+        {
+            var services = new ServiceCollection();
+            new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+            await using var provider = services.BuildServiceProvider();
+
+            await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
+            await provider.InitializeGroundworkStoreAsync();
+
+            Directory.Delete(directory, recursive: true);
+            await File.WriteAllTextAsync(directory, "blocks the database directory");
+
+            var exception = await Assert.ThrowsAsync<SqliteGroundworkPersistenceException>(
+                () => provider.GetRequiredService<GroundworkStoreSessionSource>()
+                    .OpenAsync(GroundworkTestAccess.DefaultScoped)
+                    .AsTask());
+
+            Assert.Equal(SqliteGroundworkPersistenceOperation.OpenSession, exception.Operation);
+            Assert.NotNull(exception.InnerException);
+            Assert.DoesNotContain(connectionString, exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(databasePath))
+                File.Delete(databasePath);
+            if (File.Exists(directory))
+                File.Delete(directory);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact] // Running startup twice is a no-op: the admitted provider factory is published exactly once.
     public async Task Sqlite_Store_Initialization_Is_Idempotent()
     {
         await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
+        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
-        var first = provider.GetRequiredService<IDocumentStore>();
+        var first = provider.GetRequiredService<GroundworkStoreSessionSource>();
         await provider.InitializeGroundworkStoreAsync();
-        var second = provider.GetRequiredService<IDocumentStore>();
+        var second = provider.GetRequiredService<GroundworkStoreSessionSource>();
 
         Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void Sqlite_Provider_Registration_Is_Idempotent()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=registration.db" };
+
+        feature.ConfigureServices(services);
+        feature.ConfigureServices(services);
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+        // Exactly two shell initializers: the provider admission initializer and, registered after
+        // it, the provider-neutral schema readiness guard.
+        Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkSchemaReadinessTask));
+    }
+
+    [Fact]
+    public void Sqlite_Provider_Prepare_Metadata_Matches_By_Type_After_Earlier_Initializers()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton<IShellInitializer, EarlierInitializer>();
+
+        new SqliteGroundworkRuntimePersistenceShellFeature
+        {
+            ConnectionString = "Data Source=registration.db"
+        }.ConfigureServices(services);
+
+        var registration = Assert.Single(
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(ShellInitializerRegistration))
+                .Select(descriptor => descriptor.ImplementationInstance)
+                .OfType<ShellInitializerRegistration>(),
+            candidate => candidate.InitializerType == typeof(SqliteGroundworkDocumentStoreInitializer));
+
+        Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
+        Assert.Equal(-1, registration.RegistrationIndex);
     }
 
     [Fact]
@@ -213,8 +528,10 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
+        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -232,16 +549,32 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
 
+    private static void AssertScopedWithinRequestButIsolatedAcrossRequests<TService>(
+        IServiceScope firstRequest,
+        IServiceScope secondRequest)
+        where TService : class
+    {
+        var first = firstRequest.ServiceProvider.GetRequiredService<TService>();
+        Assert.Same(first, firstRequest.ServiceProvider.GetRequiredService<TService>());
+        Assert.NotSame(first, secondRequest.ServiceProvider.GetRequiredService<TService>());
+    }
+
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-registration-{Guid.NewGuid():N}.db");
 
         public string ConnectionString => $"Data Source={_path}";
+        public string FilePath => _path;
 
         public ValueTask DisposeAsync()
         {
             File.Delete(_path);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class EarlierInitializer : IShellInitializer
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

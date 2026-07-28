@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scheduling.Activities;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -38,13 +40,14 @@ public sealed class RecurringTriggerSampleWorkflowTests
         await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT5M")));
 
         // Before the first occurrence nothing is due.
+        var bindingStore = await BindingStoreAsync("artifact-timer", TimerStimulus.StimulusType, TimerStimulus.Hash("PT5M"));
         var router = new RecordingRouter();
-        var pump = Pump(store, router, calculator, new FixedClock(Now.AddMinutes(1)));
+        var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
         Assert.Empty(router.Requests);
 
         // After the first occurrence a single start-only stimulus fires with the Timer identity.
-        pump = Pump(store, router, calculator, new FixedClock(Now.AddMinutes(6)));
+        pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddMinutes(6)));
         await pump.ExecuteAsync(CancellationToken.None);
 
         var request = Assert.Single(router.Requests);
@@ -66,8 +69,9 @@ public sealed class RecurringTriggerSampleWorkflowTests
         // Every hour on the hour; published at 12:00 the first occurrence is 13:00.
         await indexer.IndexAsync(Workflow("artifact-cron", CronNode("0 * * * *")));
 
+        var bindingStore = await BindingStoreAsync("artifact-cron", CronStimulus.StimulusType, CronStimulus.Hash("0 * * * *"));
         var router = new RecordingRouter();
-        var pump = Pump(store, router, calculator, new FixedClock(Now.AddHours(1).AddMinutes(1)));
+        var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddHours(1).AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
 
         var request = Assert.Single(router.Requests);
@@ -96,12 +100,33 @@ public sealed class RecurringTriggerSampleWorkflowTests
 
     private static RecurringTriggerPumpTask Pump(
         IRecurringTriggerScheduleStore store,
+        IWorkflowTriggerBindingStore bindingStore,
         RecordingRouter router,
         IRecurringScheduleCalculator calculator,
         TimeProvider clock) =>
-        new(store, router, calculator,
+        new(store, bindingStore, router, calculator,
             Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions()),
             clock, NullLogger<RecurringTriggerPumpTask>.Instance);
+
+    // The trigger binding the publish would have indexed for the same node — the pump only dispatches a fire
+    // through the binding its schedule owns.
+    private static async Task<InMemoryWorkflowTriggerBindingStore> BindingStoreAsync(string artifactId, string stimulusType, string stimulusHash)
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(new WorkflowTriggerBinding(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, "node-trigger", stimulusHash),
+            ArtifactId: artifactId,
+            DefinitionId: "definition-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:v1",
+            ExecutableNodeId: "node-trigger",
+            StimulusType: stimulusType,
+            StimulusHash: stimulusHash,
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now));
+        return bindingStore;
+    }
 
     private static WorkflowExecutable Workflow(string artifactId, ExecutableNode trigger) =>
         new(
@@ -109,7 +134,8 @@ public sealed class RecurringTriggerSampleWorkflowTests
             rootActivity: trigger,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode TimerNode(string interval) =>
         TriggerNode(Timer.ActivityType, nameof(Timer.Interval), interval);
@@ -123,7 +149,7 @@ public sealed class RecurringTriggerSampleWorkflowTests
         using var value = JsonDocument.Parse(JsonSerializer.Serialize(literal));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
-            [inputName] = new RuntimeInputBinding(inputName, RuntimeInputBindingSource.Literal, literalValue: value.RootElement.Clone())
+            [inputName] = LiteralBinding(inputName, value.RootElement)
         };
 
         return new ExecutableNode(
@@ -131,11 +157,20 @@ public sealed class RecurringTriggerSampleWorkflowTests
             authoredActivityId: "authored-node-trigger",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: bindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType });
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string name, JsonElement value)
+    {
+        var type = new ValueTypeDescriptor("String");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
     }
 
     private sealed class NoopInner : IWorkflowTriggerIndexer

@@ -13,7 +13,12 @@ namespace Elsa.Activities.Parallel.Internal;
 /// </summary>
 internal sealed class ParallelStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => ParallelActivity.StructureKind;
 
@@ -59,6 +64,20 @@ internal sealed class ParallelStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<ParallelExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("Parallel executable structure payload is invalid.");
+        var remapped = new ParallelExecutableStructure(
+            executable.Branches
+                .Select(branch => new ParallelExecutableBranch(branch.Name, Remap(branch.Activity, authoredToExecutableNodeIds)))
+                .ToArray(),
+            executable.Threshold);
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBranch(ActivityNode? branch) =>
         branch is null ? [] : [branch];
 
@@ -76,4 +95,7 @@ internal sealed class ParallelStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<ParallelAuthoredStructure>(SerializerOptions)
                ?? new ParallelAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

@@ -62,18 +62,26 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
         if (workflowState is null || workflowState.Status.IsTerminal())
             return;
 
-        var blockingIncidents = await _incidentStateStore.ListBlockingAsync(workflowExecutionId, cancellationToken);
-        if (blockingIncidents.Count == 0)
+        var blockingIncidents = (await _incidentStateStore.ListBlockingAsync(workflowExecutionId, cancellationToken))
+            .Where(incident => incident.ResolutionOutcome is null)
+            .ToArray();
+        if (blockingIncidents.Length == 0)
+            return;
+        // A missing stable consumer/schema is a deployment compatibility incident. Keep the run recoverable
+        // while it waits for deployment correction; ordinary activity faults still terminalize the workflow.
+        if (blockingIncidents.All(x => StringComparer.Ordinal.Equals(
+                x.FailureType,
+                ActivityActivationFailureHandler.IncidentFailureType)))
             return;
 
         var occurredAt = _timeProvider.GetUtcNow();
         var faultedAncestorStates = await FindFaultedAncestorStatesAsync(workflowExecutionId, blockingIncidents, occurredAt, cancellationToken);
-        var faultedState = workflowState with
+        var faultedState = RuntimeContainerScopeService.CloseRootFrame(workflowState with
         {
             Status = WorkflowExecutionStatus.Faulted,
             UpdatedAt = occurredAt,
             CompletedAt = occurredAt
-        };
+        });
 
         var checkpointId = $"checkpoint:{workflowExecutionId}:workflow-faulted";
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -173,13 +181,13 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
         }
 
         return activeAncestors.Values
-            .Select(state => state with
+            .Select(state => RuntimeContainerScopeService.CloseOwnedFrames(state with
             {
                 Status = ActivityExecutionStatus.Faulted,
                 SubStatus = FaultReason,
                 CompletedAt = completedAt,
                 AggregateFaultCount = state.AggregateFaultCount + incidentsByAncestor[state.Execution.ActivityExecutionId].Count
-            })
+            }))
             .OrderBy(state => state.ExecutionSequence)
             .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
             .ToArray();

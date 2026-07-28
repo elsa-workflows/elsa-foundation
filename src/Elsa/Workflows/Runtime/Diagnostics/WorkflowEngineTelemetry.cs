@@ -40,6 +40,14 @@ public static class WorkflowEngineTelemetry
     /// <summary>The drain cycle's requested work-item cap (absent when unbounded).</summary>
     public const string DrainMaxWorkItemsTag = "elsa.drain.max_work_items";
 
+    /// <summary>
+    /// Present (value <c>true</c>) on a drain span that is not nested inside another engine drain span. The engine sets
+    /// this at drain start — it knows nesting (a child workflow's drain runs inside the parent's dispatch) — so
+    /// listeners never have to re-derive "outermost" from parent ids, which is unreliable when a host span (e.g. the
+    /// ASP.NET Core request activity on the synchronous execute path) is the drain span's direct parent.
+    /// </summary>
+    public const string DrainOutermostTag = "elsa.drain.outermost";
+
     /// <summary>The number of work items the drain cycle processed.</summary>
     public const string DrainItemsProcessedTag = "elsa.drain.items_processed";
 

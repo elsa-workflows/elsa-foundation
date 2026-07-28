@@ -116,7 +116,10 @@ public sealed class StimulusRouter : IStimulusRouter
         // Reuse the caller's already-fetched match set when supplied (e.g. the HTTP endpoint middleware fetched it
         // for its ambiguity guard + per-endpoint options), so a request costs one durable trigger read, not two.
         var bindings = request.MatchedTriggerBindings
-            ?? await _triggerBindingStore.ListByStimulusAsync(request.StimulusType, request.StimulusHash, cancellationToken);
+            ?? await _triggerBindingStore.ListAllByStimulusAsync(
+                request.StimulusType,
+                request.StimulusHash,
+                cancellationToken);
 
         // Deterministic order so fan-out of starts is stable across providers.
         var ordered = bindings
@@ -156,7 +159,11 @@ public sealed class StimulusRouter : IStimulusRouter
                 runKind: WorkflowRunKind.PublishedRun,
                 sourceSelection: binding.PublicationId is null && binding.SlotId is null
                     ? null
-                    : new WorkflowExecutableSourceSelection(publicationId: binding.PublicationId, slotId: binding.SlotId));
+                    : new WorkflowExecutableSourceSelection(publicationId: binding.PublicationId, slotId: binding.SlotId),
+                // Spec 117 D4: forward the matched binding's metadata (e.g. a BPMN start element id) on its own
+                // reserved channel so a structural trigger activity can read per-descriptor routing facets. Never
+                // the workflow-inputs bag (collision/spoof-proof), mirroring the trigger-node identity above.
+                triggerMetadata: binding.Metadata);
 
             // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —
@@ -186,7 +193,9 @@ public sealed class StimulusRouter : IStimulusRouter
                 input: request.Input,
                 idempotencyKey: request.IdempotencyKey is null ? null : $"{request.IdempotencyKey}:resume:{workflowExecutionId}",
                 requestedBy: request.RequestedBy,
-                metadata: dispatchMetadata);
+                metadata: dispatchMetadata,
+                payloadType: request.PayloadType,
+                providerId: request.ProviderId);
 
             // Same request scope serves every outcome of one HTTP request (spec 089 FR-019 / scenario 5.5): a resume
             // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write

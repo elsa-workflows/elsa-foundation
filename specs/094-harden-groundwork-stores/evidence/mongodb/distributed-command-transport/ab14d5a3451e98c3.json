@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-pending-execution-ids-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "8428ffbb867d1049b92861967f05d3c1a190cc5edfc724aea2072e4948d9542f",
+  "executionPath": "provider-driver/mongodb/distributed-command-transport/ab14d5a3451e98c3",
+  "clients": 1,
+  "resultHash": "c10492fef6630062ca664f570e11844504e95a02d7e95429f1501ff9349b4213",
+  "outcome": "pass",
+  "queryShape": "list-pending-execution-ids-bounded",
+  "nativeQueryIdentity": "list-visible-command-executions",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.plan.txt",
+  "evidence": "evidence/mongodb/distributed-command-transport/ab14d5a3451e98c3.json"
+}

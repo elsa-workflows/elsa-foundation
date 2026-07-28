@@ -36,9 +36,11 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         RuntimeCheckpointNames.WorkflowFaulted,
         RuntimeCheckpointNames.WorkflowCancelled,
         RuntimeCheckpointNames.IncidentRecorded,
+        RuntimeCheckpointNames.IncidentResolutionBatchApplied,
         RuntimeCheckpointNames.ActivitySuspended,
         RuntimeCheckpointNames.ActivityCancelled,
         RuntimeCheckpointNames.BookmarkCreated,
+        RuntimeCheckpointNames.RuntimeAlterationJob,
     };
 
     public ValueTask<RuntimeCheckpointPersistenceDecision> DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)
@@ -49,7 +51,22 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         if (checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
             return ValueTask.FromResult(Immediate);
 
-        return ValueTask.FromResult(
-            MandatoryFlushCheckpointNames.Contains(checkpoint.Name) ? Immediate : Deferred);
+        if (MandatoryFlushCheckpointNames.Contains(checkpoint.Name))
+            return ValueTask.FromResult(Immediate);
+
+        // ADR 0032 R2 / spec 107: the pre-activation attempt-claim boundary is no longer unconditionally
+        // mandatory. It protects at-most-once attempt VISIBILITY (crash attribution, poison/retry accounting) —
+        // diagnostic fidelity for a replay-safe activity, not correctness. An author-declared ReplaySafe profile
+        // lets the claim defer (its state still enters the coalesced working set and folds forward atomically at
+        // the next flush; Deferred is not Skip). External or an absent profile keeps the immediate flush exactly
+        // as before, so an activity with an external effect always has its claim durable before its body runs.
+        if (StringComparer.Ordinal.Equals(checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed))
+            return ValueTask.FromResult(IsReplaySafe(checkpoint) ? Deferred : Immediate);
+
+        return ValueTask.FromResult(Deferred);
     }
+
+    private static bool IsReplaySafe(RuntimeCheckpoint checkpoint) =>
+        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointSideEffectProfile, out var profile) &&
+        StringComparer.Ordinal.Equals(profile, RuntimeMetadataKeys.CheckpointSideEffectProfileReplaySafe);
 }

@@ -35,8 +35,65 @@ public sealed record ActivityExecutionState(
     IReadOnlyCollection<string> IncidentIds,
     int FaultCount,
     int AggregateFaultCount,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    int DocumentVersion = ActivityExecutionValueFlowDocumentVersions.Current,
+    ActivityInvocationContractIdentity? ContractIdentity = null,
+    ActivityInputSnapshot? InputSnapshot = null,
+    IReadOnlyCollection<ActivityAttempt>? Attempts = null,
+    ActivityPrivateState? PrivateState = null,
+    ActivityCompletion? Completion = null,
+    NormalizedActivityFault? Fault = null,
+    IReadOnlyCollection<ActivityTriggerRegistration>? TriggerRegistrations = null,
+    IReadOnlyCollection<ActivityTriggerDelivery>? TriggerDeliveries = null,
+    ActivityExecutionValueFlowDocumentVersionGuard? ValueFlowCompatibility = null,
+    string? ExecutionScopeId = null,
+    ActivityExecutionAttemptLineage? Attempt = null,
+    string? SupersededByActivityExecutionId = null,
+    DateTimeOffset? SupersededAt = null)
 {
+    public string InvocationId => Execution.ActivityExecutionId;
+
+    /// <summary>
+    /// The container or iteration frame owned by this structural activity activation, when any.
+    /// </summary>
+    public VariableFrameState? VariableFrame { get; init; }
+
+    /// <summary>
+    /// The loop-iteration frame introduced around this activation by its scheduling parent, when any.
+    /// It is separate from <see cref="VariableFrame"/> because a loop body can itself be a container:
+    /// the iteration frame is then the lexical parent of the body's container frame.
+    /// </summary>
+    public VariableFrameState? IterationVariableFrame { get; init; }
+
+    /// <summary>Typed scheduler-carried values used to activate <see cref="IterationVariableFrame"/>.</summary>
+    public LoopIterationScopeRequest? IterationFrameRequest { get; init; }
+
+    public void EnsureValueFlowCompatible()
+    {
+        if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)
+            throw new InvalidOperationException($"Activity invocation '{InvocationId}' carries value-flow document version {DocumentVersion}; this runtime requires version {ActivityExecutionValueFlowDocumentVersions.Current}.");
+
+        ValueFlowCompatibility?.EnsureCompatible();
+    }
+
+    /// <summary>Rejects impossible supersession lineage before it can become durable runtime history.</summary>
+    public void EnsureSupersessionCompatible()
+    {
+        var hasSuccessor = !string.IsNullOrWhiteSpace(SupersededByActivityExecutionId);
+        var hasTime = SupersededAt is not null;
+        if (Status == ActivityExecutionStatus.Superseded)
+        {
+            if (!hasSuccessor || !hasTime)
+                throw new InvalidOperationException("A superseded activity execution must record both its successor ID and supersession time.");
+            if (StringComparer.Ordinal.Equals(Execution.ActivityExecutionId, SupersededByActivityExecutionId))
+                throw new InvalidOperationException("A superseded activity execution cannot name itself as its successor.");
+        }
+        else if (hasSuccessor || hasTime)
+        {
+            throw new InvalidOperationException("Only a superseded activity execution may carry supersession lineage.");
+        }
+    }
+
     public ActivityExecutionState(
         ActivityExecution Execution,
         ActivityExecutionStatus Status,
@@ -94,5 +151,7 @@ public enum ActivityExecutionStatus
     Completed,
     Faulted,
     Cancelled,
-    Recovered
+    Recovered,
+    /// <summary>A terminal historical source replaced by a distinct activity execution.</summary>
+    Superseded
 }

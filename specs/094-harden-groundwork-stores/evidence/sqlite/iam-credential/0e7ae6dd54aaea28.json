@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-credential",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
+  "executionPath": "provider-driver/sqlite/iam-credential/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
+  "outcome": "pass",
+  "evidence": "evidence/sqlite/iam-credential/0e7ae6dd54aaea28.json"
+}

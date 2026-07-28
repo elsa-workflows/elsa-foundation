@@ -3,7 +3,10 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -26,7 +29,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// (#299). The realistic shapes from the issue follow-up: a <c>Break</c> nested inside a <c>Sequence</c> or
 /// an <c>If</c> branch must bubble out of that composite and end the enclosing loop. Every activity here —
 /// the loops, the intermediate composites, and the <c>Break</c> leaf — is constructed by the production
-/// <see cref="Primitives.Constructors.ClrActivityConstructor"/> from its <see cref="ClrActivityDescriptor"/>
+/// transient CLR activation from its <see cref="ClrActivityDescriptor"/>
 /// (stable-alias) descriptor, so the test exercises the real construct → bind → execute → propagate path rather than test
 /// stubs. Marker steps are probe leaves so the test can assert which steps ran.
 /// </summary>
@@ -138,13 +141,13 @@ public sealed class BreakPropagationExecutionTests
 
     private static WorkflowExecutionHarness NewHarness(int conditionPasses, params string[] activityExecutionIds) =>
         BaseHarness()
-            .ConfigureServices(services => services.AddSingleton<Elsa.Expressions.Core.Contracts.IExpressionEvaluator>(
+            .ConfigureServices(services => services.AddSingleton<Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator>(
                 new CountingConditionEvaluator(conditionPasses)))
             .Build(activityExecutionIds);
 
     private static WorkflowExecutionHarness.Builder BaseHarness() =>
         WorkflowExecutionHarness.Create()
-            // ClrActivityConstructor (registered by ActivitiesPrimitivesFeature) constructs every CLR
+            // The transient CLR activator constructs every CLR
             // activity below from its ClrActivityDescriptor (stable-alias) descriptor; it depends on IPayloadSerializer from the
             // SerializationFeature. The probe leaf supplies the marker steps.
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
@@ -176,10 +179,15 @@ public sealed class BreakPropagationExecutionTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Condition"] = new RuntimeInputBinding(
-                    inputName: "Condition",
-                    source: RuntimeInputBindingSource.Expression,
-                    expression: new RuntimeExpressionBinding(CountingConditionEvaluator.Language, "while-condition"),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Boolean" })
+                    "Condition",
+                    new ValueTypeDescriptor("Boolean"),
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Expression,
+                    expression: new RuntimeExpressionBinding(
+                        CountingConditionEvaluator.Language,
+                        "while-condition",
+                        new RuntimeValueTypeDescriptor("alias", "Boolean", null),
+                        capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1))
             },
             childSlots: [new ExecutableChildSlot(WhileActivity.BodySlotName, [body])],
             structure: new ExecutableActivityStructure(
@@ -241,10 +249,8 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
+            descriptor: new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, activityType)),
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: structure);
@@ -255,18 +261,39 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: ClrConstruction.DescriptorType,
-            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
+            descriptor: new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, RuntimeActivityDescriptor.InitialSchemaVersion, ClrConstruction.Payload(Serializer, activityType)),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: activityType == typeof(Break) ? BreakContract() : null);
+
+    private static ActivityContract BreakContract() =>
+        new(
+            typeof(Break).FullName!,
+            "1.0.0",
+            ClrConstruction.DescriptorType,
+            ClrConstruction.Payload(Serializer, typeof(Break)),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))),
+                true,
+                ActivityValuePolicy.Default,
+                []),
+            [ActivityOutcomes.Break],
+            new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(Break))));
 
     private static RuntimeInputBinding LiteralBinding(string inputName, object value, string typeName) =>
-        new(
-            inputName: inputName,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: JsonSerializer.SerializeToElement(value),
-            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+        CanonicalLiteral(inputName, typeName == "System.Int32" ? "Int32" : typeName == "System.Boolean" ? "Boolean" : "String", value);
+
+    private static RuntimeInputBinding CanonicalLiteral(string inputName, string alias, object value)
+    {
+        var type = new ValueTypeDescriptor(alias);
+        return new RuntimeInputBinding(
+            inputName,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+    }
 
     private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
@@ -276,19 +303,16 @@ public sealed class BreakPropagationExecutionTests
     /// broke out. Lets the Break test prove the loop ended early (one pass) despite the condition still
     /// holding.
     /// </summary>
-    private sealed class CountingConditionEvaluator(int passes) : Elsa.Expressions.Core.Contracts.IExpressionEvaluator
+    private sealed class CountingConditionEvaluator(int passes) : Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator
     {
         public const string Language = "test/counting-condition";
 
         private int _evaluations;
 
-        public ValueTask<T?> EvaluateAsync<T>(Elsa.Expressions.Core.Contracts.IExpression expression, Elsa.Expressions.Core.Contracts.IExpressionExecutionContext context, Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions? options = default) =>
-            new((T?)Evaluate());
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(Evaluate()));
 
-        public ValueTask<object?> EvaluateAsync(Elsa.Expressions.Core.Contracts.IExpression expression, Type returnType, Elsa.Expressions.Core.Contracts.IExpressionExecutionContext context, Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions? options = default) =>
-            new(Evaluate());
-
-        private object Evaluate()
+        private bool Evaluate()
         {
             var hold = _evaluations < passes;
             _evaluations++;

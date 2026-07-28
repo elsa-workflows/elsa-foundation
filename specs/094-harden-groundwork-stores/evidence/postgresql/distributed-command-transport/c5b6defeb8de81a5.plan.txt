@@ -1,0 +1,14 @@
+provider=postgresql
+document-kind=executionCommandTransport
+route=lease-visible-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=indexed
+index=execution_command_transport_u001fcommand_by_execut_b205695700bc
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|postgresql-json|index-scan|execution_command_transport_u001fcommand_by_execut_b205695700bc|document_kind,storage_scope,visibleAt,workflowExecutionIdKey|1||ec074c141b818871aed8012cc3665adc0077f2641ea33c57e3e708298f0675ee
+command-1=Page|page|postgresql-json|index-scan|execution_command_transport_u001fcommand_by_execut_b205695700bc|document_kind,storage_scope,visibleAt,workflowExecutionIdKey|16|sequence:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|8100e9e7f8758e8454286fd9fe42660ad5a45a009e749537c0ec97fc75cc3794

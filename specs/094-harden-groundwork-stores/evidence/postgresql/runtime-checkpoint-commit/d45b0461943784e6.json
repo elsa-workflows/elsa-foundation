@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "a5d8d996026a54d1d67bbaf4948d3a2182658002ce2b216842b4ea8f2cac2503",
+  "executionPath": "provider-driver/postgresql/runtime-checkpoint-commit/d45b0461943784e6",
+  "clients": 2,
+  "resultHash": "9f3dd8b6cd1a0b9b1e4770284f0ba1711cf47c1b34171c09685cd76e3973d030",
+  "outcome": "pass",
+  "failureWindow": "during-provider-decision",
+  "evidence": "evidence/postgresql/runtime-checkpoint-commit/d45b0461943784e6.json"
+}

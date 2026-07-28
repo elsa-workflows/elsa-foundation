@@ -10,9 +10,50 @@ public sealed record WorkflowExecutableCompileRequest(
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ExpiresAt,
     string ArtifactIdPrefix,
-    IReadOnlyDictionary<string, string>? CompatibilityMetadata = null)
+    IReadOnlyDictionary<string, string>? CompatibilityMetadata = null,
+    string? TenantId = null)
 {
+    /// <summary>Preserves the pre-tenant constructor shape for existing compiled callers.</summary>
+    public WorkflowExecutableCompileRequest(
+        string versionId,
+        WorkflowExecutableReferenceScope scope,
+        DateTimeOffset createdAt,
+        DateTimeOffset? publishedAt,
+        DateTimeOffset? expiresAt,
+        string artifactIdPrefix,
+        IReadOnlyDictionary<string, string>? compatibilityMetadata)
+        : this(
+            versionId,
+            scope,
+            createdAt,
+            publishedAt,
+            expiresAt,
+            artifactIdPrefix,
+            compatibilityMetadata,
+            TenantId: null)
+    {
+    }
+
     public WorkflowExecutableCompileSource? Source { get; init; }
+
+    /// <summary>Preserves the pre-tenant positional deconstruction shape for source compatibility.</summary>
+    public void Deconstruct(
+        out string versionId,
+        out WorkflowExecutableReferenceScope scope,
+        out DateTimeOffset createdAt,
+        out DateTimeOffset? publishedAt,
+        out DateTimeOffset? expiresAt,
+        out string artifactIdPrefix,
+        out IReadOnlyDictionary<string, string>? compatibilityMetadata)
+    {
+        versionId = VersionId;
+        scope = Scope;
+        createdAt = CreatedAt;
+        publishedAt = PublishedAt;
+        expiresAt = ExpiresAt;
+        artifactIdPrefix = ArtifactIdPrefix;
+        compatibilityMetadata = CompatibilityMetadata;
+    }
 }
 
 /// <summary>

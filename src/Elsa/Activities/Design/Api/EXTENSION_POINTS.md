@@ -14,11 +14,21 @@
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 
+## Provider contributors
+
+| Contract | Kind and registration | Consumer | Known implementation |
+|---|---|---|---|
+| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)* |
+| `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
+| `IBuiltInAuthoringDescriptorProvider` | Enumerable. Contributes code-owned authoring-catalog descriptors that have no persisted CLR/JSON catalog row. The catalog handler always appends them and never gates them by availability policy. | `ListActivityAuthoringCatalog` merges the contributed descriptors into the available-activity list. | `IntrinsicAuthoringDescriptorProvider` — surfaces the Set Variable and Set Output engine intrinsics (ADR 0045) so the palette can author variable and output assignment. |
+
+Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
+documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
+
 ## Sources and reconciliation
 
-Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). EF Core and Groundwork persistence-specific seams are documented in their own catalogs:
+Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). Groundwork persistence-specific seams are documented in their own catalog:
 
-- [`Persistence/EFCore/EXTENSION_POINTS.md`](../Persistence/EFCore/EXTENSION_POINTS.md)
 - [`Persistence/Groundwork/EXTENSION_POINTS.md`](../Persistence/Groundwork/EXTENSION_POINTS.md)
 
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.

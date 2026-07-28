@@ -1,3 +1,5 @@
+using CShells;
+using CShells.Features;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -37,14 +39,16 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
         var services = new ServiceCollection();
 
         Assert.Throws<ArgumentNullException>(() =>
-            services.AddGroundworkPostgreSqlUnifiedPersistence("Host=localhost;Database=elsa", null!));
+            services.AddGroundworkPostgreSqlUnifiedPersistence(
+                "Host=localhost;Database=elsa",
+                (WorkflowExecutableCacheOptions)null!));
         Assert.Empty(services);
     }
 
     [Fact]
     public void SettingsArePublicManifestSettingsWithDurableDefaults()
     {
-        var feature = new PostgreSqlGroundworkUnifiedPersistenceShellFeature();
+        var feature = NewFeature();
 
         AssertSetting(feature, EnabledProperty, false);
         AssertSetting(feature, CapacityProperty, 256);
@@ -53,7 +57,7 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
     [Fact]
     public void ConfiguredCapacityIsThreadedToUnifiedRuntimeRegistration()
     {
-        var feature = new PostgreSqlGroundworkUnifiedPersistenceShellFeature();
+        var feature = NewFeature();
         SetSetting(feature, EnabledProperty, true);
         SetSetting(feature, CapacityProperty, 29);
         var services = new ServiceCollection();
@@ -62,6 +66,11 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
 
         Assert.Equal(29, provider.GetRequiredService<WorkflowExecutableCacheOptions>().Capacity);
     }
+
+    private static PostgreSqlGroundworkUnifiedPersistenceShellFeature NewFeature() =>
+        new(new ShellFeatureContext(
+            new ShellSettings { Id = new ShellId("postgresql-cache-settings") },
+            []));
 
     private static void AssertSetting(object feature, string name, object expected)
     {

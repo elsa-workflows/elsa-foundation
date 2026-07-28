@@ -16,6 +16,12 @@ public sealed partial class DefaultSecretNameValidator : ISecretNameValidator
 
         var normalizedName = Normalize(name);
 
+        if (normalizedName.Length > SecretNameConstraints.MaximumLength)
+        {
+            error = $"Secret name cannot exceed {SecretNameConstraints.MaximumLength} characters.";
+            return false;
+        }
+
         if (!SecretNameRegex().IsMatch(normalizedName))
         {
             error = "Secret name may contain only letters, numbers, dot, dash, underscore, and colon.";

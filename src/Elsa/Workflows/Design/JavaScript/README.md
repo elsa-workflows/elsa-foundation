@@ -1,11 +1,11 @@
 # Elsa.Workflows.Design.JavaScript
 
-Bridges the workflow design surface and the JavaScript expression engine. Contributes workflow-design-specific type and function declarations to the JavaScript type-declaration pipeline so that activities, outcomes, variables, and workflow inputs/outputs are fully typed in the script editor.
+Bridges the workflow design surface and the JavaScript expression engine. Canonical input-binding expressions use the closed `binding-pure-v1` capability profile, so the editor exposes only the immutable `args` parameter map available to the isolated runtime evaluator.
 
 ## Cross-domain contributions
 
 This feature implements contributor interfaces from other domains:
 
-- **`IJavaScriptDeclarationContributor`** *(Core — `Elsa.Expressions.JavaScript.Rendering.Core`)* — multiple contributors push workflow-design declarations onto the context: outcome functions, workflow-level functions, workflow-input functions, workflow-variable declarations, and activity-output function declarations. Aggregated by `BuildDeclarationsDocument` in `Elsa.Expressions.JavaScript.Rendering`.
-  - Known impls: `OutcomeFunctionDeclarationContributor`, `WorkflowFunctionDeclarationContributor`, `WorkflowInputFunctionDeclarationContributor`, `WorkflowVariablesDeclarationContributor`, and others.
+- **`IJavaScriptDeclarationContributor`** *(Core — `Elsa.Expressions.JavaScript.Rendering.Core`)* — `BindingPureArgsDeclarationContributor` contributes the single read-only `args` global. Ambient workflow functions, configuration helpers, variable mutation, and output lookup are intentionally absent because they do not exist in the runtime capability profile. Aggregated by `BuildDeclarationsDocument` in `Elsa.Expressions.JavaScript.Rendering`.
+  - Known impl: `BindingPureArgsDeclarationContributor`.
   - Catalog: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md)

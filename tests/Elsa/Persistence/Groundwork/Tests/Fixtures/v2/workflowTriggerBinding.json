@@ -14,6 +14,8 @@
   "publicationId": "publication-1",
   "slotId": "slot-default",
   "stimulusHash": "hash-order-approved",
+  "stimulusLookupKey": "b928a46d3edbe79e77526cdd1737c4301ca3a527f402d2f56470169e6b5103a5",
   "stimulusType": "Event",
-  "triggerBindingId": "publication-1:artifact-1:node-trigger:hash-order-approved"
+  "stimulusTypeLookupKey": "4e1f49a9c8ae8a158434e647c0c410352d718984a4fcd144d26cca3c394caa02",
+  "triggerBindingId": "tb1-F1A4501309C62562C062C714EE9EBCD7078E009BE833171585CDA681B7214443"
 }

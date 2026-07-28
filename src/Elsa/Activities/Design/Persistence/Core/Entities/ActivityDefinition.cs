@@ -9,8 +9,8 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities;
 /// description) the picker shows. Source provenance lives on
 /// <c>ActivityDefinitionVersion</c>; if you want to know where a Definition came from,
 /// look at the first version's <c>SourceKind</c>/<c>SourceId</c>. Implementation details
-/// (CLR type info, workflow id, …) live on the version's opaque
-/// <c>(DescriptorType, DescriptorPayload)</c> pair — the Definition itself is implementation-agnostic.
+/// (CLR alias, graph descriptor, provider data, …) live on the version's stable provider/consumer
+/// identities plus opaque <c>DescriptorPayload</c> — the Definition itself is implementation-agnostic.
 /// </summary>
 public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
 {

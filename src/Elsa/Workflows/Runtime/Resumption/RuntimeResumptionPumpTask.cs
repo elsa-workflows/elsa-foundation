@@ -1,8 +1,11 @@
 using System.Collections.Concurrent;
+using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -29,25 +32,50 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
 {
     private static readonly IReadOnlySet<string> EmptyExcluded = new HashSet<string>(StringComparer.Ordinal);
 
-    private readonly IRuntimeResumptionService _resumptionService;
+    private static readonly PersistenceScope DirectConstructionScope = new(PersistenceScope.DefaultValue);
+
+    private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly IRuntimeResumptionService? _resumptionService;
     private readonly IOptions<RuntimeResumptionOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<RuntimeResumptionPumpTask> _logger;
-    private readonly ConcurrentDictionary<string, ExecutionBackoff> _executionBackoff = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<ExecutionBackoffKey, ExecutionBackoff> _executionBackoff = new();
     private int _consecutiveSweepFailures;
 
+    [ActivatorUtilitiesConstructor]
+    public RuntimeResumptionPumpTask(
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<RuntimeResumptionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<RuntimeResumptionPumpTask> logger)
+        : this(options, timeProvider, logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeRunner);
+        _scopeRunner = scopeRunner;
+    }
+
+    /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public RuntimeResumptionPumpTask(
         IRuntimeResumptionService resumptionService,
         IOptions<RuntimeResumptionOptions> options,
         TimeProvider timeProvider,
         ILogger<RuntimeResumptionPumpTask> logger)
+        : this(options, timeProvider, logger)
     {
         ArgumentNullException.ThrowIfNull(resumptionService);
+
+        _resumptionService = resumptionService;
+    }
+
+    private RuntimeResumptionPumpTask(
+        IOptions<RuntimeResumptionOptions> options,
+        TimeProvider timeProvider,
+        ILogger<RuntimeResumptionPumpTask> logger)
+    {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _resumptionService = resumptionService;
         _options = options;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -67,30 +95,40 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
 
         try
         {
-            var request = new RuntimeResumptionSweepRequest(
-                outboxBatchSize: options.OutboxBatchSize,
-                backlogBatchSize: options.BacklogBatchSize,
-                recoveryScanBatchSize: options.RecoveryScanBatchSize,
-                leaseTimeout: options.LeaseTimeout,
-                heartbeatTimeout: options.HeartbeatTimeout,
-                maxExecutionsPerSweep: options.MaxExecutionsPerSweep,
-                excludedWorkflowExecutionIds: SnapshotExcluded(options, now));
-
-            var result = await _resumptionService.SweepAsync(request, cancellationToken);
-
-            ApplyPerExecutionBackoff(result, options, now);
+            if (_scopeRunner is null)
+            {
+                await SweepAsync(DirectConstructionScope, _resumptionService!, options, now, cancellationToken);
+            }
+            else
+            {
+                await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
+                {
+                    if (operationScope.ServiceProvider.GetService<IWorkflowTestScopeCleaner>() is { } scopeCleaner)
+                        await scopeCleaner.SweepAsync(now, operationCancellationToken);
+                    await SweepAsync(
+                        persistenceScope,
+                        operationScope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>(),
+                        options,
+                        now,
+                        operationCancellationToken);
+                }, cancellationToken);
+            }
             _consecutiveSweepFailures = 0;
-
-            if (result.DidWork && _logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug(
-                    "Resumption sweep delivered {Delivered}/{Attempted} outbox items and re-drove {Dispatches} execution(s)",
-                    result.OutboxDeliveredCount,
-                    result.OutboxAttemptedCount,
-                    result.Dispatches.Count);
         }
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (OutboxProcessingException exception)
+        {
+            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
+            _logger.LogError(
+                new EventId(68107, "RuntimePostCommitResultRecordingFailed"),
+                "Runtime resumption sweep could not record a post-commit delivery result. OutboxItemId={OutboxItemId} IntentId={IntentId} ConsecutiveFailures={ConsecutiveFailures} BackoffInterval={BackoffInterval}",
+                exception.OutboxItemId,
+                exception.IntentId,
+                failures,
+                ComputeInterval());
         }
         catch (Exception exception)
         {
@@ -109,15 +147,46 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
 
     public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
 
-    private IReadOnlySet<string> SnapshotExcluded(RuntimeResumptionOptions options, DateTimeOffset now)
+    private async ValueTask SweepAsync(
+        PersistenceScope persistenceScope,
+        IRuntimeResumptionService resumptionService,
+        RuntimeResumptionOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var request = new RuntimeResumptionSweepRequest(
+            outboxBatchSize: options.OutboxBatchSize,
+            backlogBatchSize: options.BacklogBatchSize,
+            recoveryScanBatchSize: options.RecoveryScanBatchSize,
+            leaseTimeout: options.LeaseTimeout,
+            heartbeatTimeout: options.HeartbeatTimeout,
+            maxExecutionsPerSweep: options.MaxExecutionsPerSweep,
+            excludedWorkflowExecutionIds: SnapshotExcluded(persistenceScope, options, now));
+        var result = await resumptionService.SweepAsync(request, cancellationToken);
+
+        ApplyPerExecutionBackoff(persistenceScope, result, options, now);
+        if (result.DidWork && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug(
+                "Resumption sweep delivered {Delivered}/{Attempted} outbox items, re-drove {Dispatches} execution(s), and purged {PurgedItems} residual work item(s) from {PurgedExecutions} terminal execution(s)",
+                result.OutboxDeliveredCount,
+                result.OutboxAttemptedCount,
+                result.Dispatches.Count,
+                result.PurgedWorkItemCount,
+                result.TerminalExecutionsPurged);
+    }
+
+    private IReadOnlySet<string> SnapshotExcluded(
+        PersistenceScope persistenceScope,
+        RuntimeResumptionOptions options,
+        DateTimeOffset now)
     {
         HashSet<string>? excluded = null;
         var pruneBefore = now - options.MaxBackoffInterval;
 
         foreach (var pair in _executionBackoff)
         {
-            if (pair.Value.NextEligibleAt > now)
-                (excluded ??= new HashSet<string>(StringComparer.Ordinal)).Add(pair.Key);
+            if (pair.Key.PersistenceScope == persistenceScope && pair.Value.NextEligibleAt > now)
+                (excluded ??= new HashSet<string>(StringComparer.Ordinal)).Add(pair.Key.WorkflowExecutionId);
             else if (pair.Value.NextEligibleAt <= pruneBefore)
                 // Eligible for a full max-backoff window without reappearing: the execution is gone, drop it so the map stays bounded.
                 _executionBackoff.TryRemove(pair.Key, out _);
@@ -126,19 +195,24 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
         return excluded ?? EmptyExcluded;
     }
 
-    private void ApplyPerExecutionBackoff(RuntimeResumptionSweepResult result, RuntimeResumptionOptions options, DateTimeOffset now)
+    private void ApplyPerExecutionBackoff(
+        PersistenceScope persistenceScope,
+        RuntimeResumptionSweepResult result,
+        RuntimeResumptionOptions options,
+        DateTimeOffset now)
     {
         foreach (var dispatch in result.Dispatches)
         {
+            var key = new ExecutionBackoffKey(persistenceScope, dispatch.WorkflowExecutionId);
             if (dispatch.Outcome is RuntimeResumptionDispatchOutcome.Faulted or RuntimeResumptionDispatchOutcome.Rejected)
             {
-                var failures = _executionBackoff.TryGetValue(dispatch.WorkflowExecutionId, out var current) ? current.Failures + 1 : 1;
+                var failures = _executionBackoff.TryGetValue(key, out var current) ? current.Failures + 1 : 1;
                 var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
-                _executionBackoff[dispatch.WorkflowExecutionId] = new ExecutionBackoff(now + delay, failures);
+                _executionBackoff[key] = new ExecutionBackoff(now + delay, failures);
             }
             else
             {
-                _executionBackoff.TryRemove(dispatch.WorkflowExecutionId, out _);
+                _executionBackoff.TryRemove(key, out _);
             }
         }
     }
@@ -172,6 +246,8 @@ public sealed class RuntimeResumptionPumpTask : IRecurringTask
         var scaledTicks = baseTicks * multiplier;
         return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
     }
+
+    private readonly record struct ExecutionBackoffKey(PersistenceScope PersistenceScope, string WorkflowExecutionId);
 
     private readonly record struct ExecutionBackoff(DateTimeOffset NextEligibleAt, int Failures);
 }

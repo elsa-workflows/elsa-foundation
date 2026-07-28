@@ -1,5 +1,7 @@
 # Feature Specification: Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice)
 
+> **Current status (2026-07-16): the pipeline/checkpoint decomposition remains valid; value payloads and activity transitions within it are governed by [spec 095](../095-value-flow-redesign/spec.md).** Pipeline workspaces must not carry the removed memory, argument, active-output, or ambient-expression model.
+
 **Feature Branch**: `claude/move2-checkpoint-slot-cancel`
 
 **Created**: 2026-07-02

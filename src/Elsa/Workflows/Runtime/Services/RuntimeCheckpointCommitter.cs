@@ -11,13 +11,18 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
-    private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IWorkflowEngineTracer _tracer;
+    private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
+    private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
+    private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
+    private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
+    private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
+    private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null, ownershipService: null)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null)
     {
     }
 
@@ -25,17 +30,53 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeExecutionOwnershipService? ownershipService,
         IWorkflowEngineTracer? tracer = null)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, [])
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IWorkflowEngineTracer? tracer,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, enrichers, [])
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IWorkflowEngineTracer? tracer,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        RuntimeInProcessHopFastPathOptions? inProcessHopFastPathOptions = null)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
+        ArgumentNullException.ThrowIfNull(enrichers);
+        ArgumentNullException.ThrowIfNull(intentHandlerContributions);
 
         _persistencePolicy = persistencePolicy;
         _checkpointCommitStore = checkpointCommitStore;
         _ownershipContextAccessor = ownershipContextAccessor;
-        _ownershipService = ownershipService;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
+        _enrichers = enrichers
+            .Select((enricher, index) => new { Enricher = enricher, Index = index })
+            .OrderBy(item => item.Enricher.Order)
+            .ThenBy(item => item.Index)
+            .Select(item => item.Enricher)
+            .ToArray();
+        _intentHandlerContributions = intentHandlerContributions.ToArray();
+        _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
+        _coalescingSessionAccessor = coalescingSessionAccessor;
+        _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
+        _inProcessHopFastPathOptions = inProcessHopFastPathOptions ?? new RuntimeInProcessHopFastPathOptions();
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -44,16 +85,18 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(commit);
 
+        foreach (var enricher in _enrichers)
+            commit = await enricher.EnrichAsync(commit, cancellationToken);
+
         // MS-9: the checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
         // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
         // are synchronous and happen after their source values are already computed.
         using var activity = _tracer.StartCheckpointCommit(commit);
 
-        // Single-writer fencing (RT-2): if an ownership scope is active for this workflow execution, reject a commit
-        // whose fencing token is not the current owner's before any state is persisted. Unwired (both null) or no
-        // active scope leaves the commit path byte-for-byte unchanged.
-        await EnsureOwnershipAsync(commit, cancellationToken);
+        // Carry the ambient ownership identity into the provider-facing envelope. Durable stores decide replay first,
+        // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
+        commit = AttachExpectedFence(commit);
 
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
 
@@ -82,10 +125,21 @@ public sealed class RuntimeCheckpointCommitter
 
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
-        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit);
-        var commitToPersist = postCommitOutbox.Count == 0
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
+
+        // WU-1 / spec 105: fold the claimed scheduler work item's fence-checked delete into this same commit so the
+        // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
+        // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
+        var consumedWorkItems = ResolveConsumedWorkItems(commit);
+
+        var stateChanges = commit.StateChanges;
+        if (postCommitOutbox.Count > 0)
+            stateChanges = stateChanges.WithPostCommitOutbox(postCommitOutbox);
+        if (consumedWorkItems.Count > 0)
+            stateChanges = stateChanges.WithConsumedSchedulerWorkItems(consumedWorkItems);
+        var commitToPersist = ReferenceEquals(stateChanges, commit.StateChanges)
             ? commit
-            : commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
+            : commit with { StateChanges = stateChanges };
 
         var storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
@@ -96,21 +150,80 @@ public sealed class RuntimeCheckpointCommitter
                 $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
                 "post-commit outbox item it is handed.");
 
+        if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
+            throw new InvalidOperationException(
+                $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
+                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
+                "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
+
+        // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
+        foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
+            _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+
+        // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
+        // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
+        // drain-scoped carrier so the scheduler intent dispatcher can enqueue them without re-deserializing the payload
+        // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
+        PublishInProcessHopWorkItems(commit);
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
+    }
+
+    // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
+    // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
+    // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
+    // (the coalescing overlay is authoritative on continuation delivery, mirroring spec 106 FR-003). When any guard
+    // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
+    private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
+    {
+        if (!_inProcessHopFastPathOptions.Enabled)
+            return;
+        if (commit.PostCommitIntents.Count == 0)
+            return;
+        if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
+            return;
+        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
+            return;
+
+        foreach (var intent in commit.PostCommitIntents)
+        {
+            if (intent.MaterializedSchedulerWorkItem is { } workItem &&
+                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+                scope.PublishHopWorkItem(intent.IntentId, workItem);
+        }
     }
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 
-    private async ValueTask EnsureOwnershipAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private IReadOnlyCollection<ConsumedSchedulerWorkItem> ResolveConsumedWorkItems(RuntimeCheckpointCommit commit)
     {
-        if (_ownershipContextAccessor?.Current is not { } lease || _ownershipService is null)
-            return;
+        if (_consumedWorkClaimAccessor is not { PendingConsume: { } pending, WasConsumedDurably: false })
+            return [];
+
+        // Consume-once per dispatch: WasConsumedDurably guards against a multi-commit handler (e.g. InvokeActivity)
+        // re-attaching an already-deleted item, which would fail the fence as claim-lost.
+        if (!StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId))
+            return [];
+
+        // Coalesced mode owns durable queue advance through the overlay; do not fold a durable delete that would
+        // double-delete against RuntimeCoalescingSession.AdvanceInnerQueueAsync.
+        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
+            return [];
+
+        return [pending];
+    }
+
+    private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
+    {
+        if (_ownershipContextAccessor?.Current is not { } lease)
+            return commit;
 
         if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
-            return;
+            return commit;
 
-        await _ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+        return commit with { ExpectedFence = lease.ToFence() };
     }
 }

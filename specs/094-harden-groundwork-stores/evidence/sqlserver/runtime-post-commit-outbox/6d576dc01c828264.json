@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:checkpoint-bundle-write",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-post-commit-outbox",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "7fcf202c2bbf25c81bb9257c86e6a2baf118ecb4bc7507c5569e9fd90dba2dfe",
+  "executionPath": "provider-driver/sqlserver/runtime-post-commit-outbox/6d576dc01c828264",
+  "clients": 2,
+  "resultHash": "02e4a85fa9d8ae9b62d8ad064f7169022d6a014c9721f86aacafe1bc8fde43aa",
+  "outcome": "pass",
+  "concurrencySemantic": "checkpoint-bundle-write",
+  "evidence": "evidence/sqlserver/runtime-post-commit-outbox/6d576dc01c828264.json"
+}

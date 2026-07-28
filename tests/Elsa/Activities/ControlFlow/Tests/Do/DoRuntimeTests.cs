@@ -4,11 +4,9 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Activities.Do;
-using Elsa.Expressions.Core.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DoActivity = Elsa.Activities.Do.Activities.Do;
 
@@ -17,71 +15,24 @@ namespace Elsa.Activities.Do.Tests;
 /// <summary>
 /// In-process execution coverage for the <c>Do</c> post-test composite running through the real workflow
 /// agent. Built on the shared <see cref="WorkflowExecutionHarness"/>: this file declares the Do-specific
-/// activity constructor and graph shape plus a counting condition evaluator; provider wiring, execution,
-/// and assertions come from the harness.
-///
-/// The condition is bound as an expression so the runtime re-materializes it for every evaluation. A
-/// <see cref="CountingConditionEvaluator"/> returns <c>true</c> for its first <c>holdEvaluations</c>
-/// evaluations and <c>false</c> afterwards. The composite's inputs are materialized once on entry (that
-/// evaluation is consumed but, by the post-test contract, ignored — <c>Do</c> schedules the first pass
-/// unconditionally) and again after each completed pass. So the body runs <c>max(1, holdEvaluations)</c>
-/// times: at least once, then once more per post-completion evaluation that still holds.
-///
-/// These tests exercise the loop's <em>scheduling and re-evaluation cadence</em> (body runs at least once,
-/// re-evaluation per completed pass, distinct iteration id per pass, completion when the condition drops).
-/// They deliberately do not prove that a real condition observes per-pass state the body changed — a
-/// counting mock cannot distinguish real observation from a hidden counter. That end-to-end termination
-/// guarantee is covered by <see cref="DoRealExpressionRuntimeTests"/> using a real JavaScript condition
-/// over a persisted body output.
+/// activity graph shape; provider wiring, CLR activation, execution, and assertions come from the harness.
+/// The condition is an immutable invocation input. Mutable loop control is represented explicitly by a
+/// body outcome (for example <c>Break</c>), never by re-materializing the parent input after each callback.
 /// </summary>
 public sealed class DoRuntimeTests
 {
-    [Theory]
-    [InlineData(0, 1)] // condition false from the start: the unconditional first pass still runs the body once.
-    [InlineData(1, 1)] // entry evaluation is consumed/ignored; the first post-completion evaluation is already false.
-    [InlineData(3, 3)]
-    public async Task ConditionThatHoldsForNEvaluations_RunsBodyExpectedTimes_AndCompletes(int holdEvaluations, int expectedPasses)
-    {
-        var activityExecutionIds = ActivityExecutionIds("actexec-do", "actexec-body", expectedPasses);
-        await using var harness = NewHarness(holdEvaluations, activityExecutionIds);
-
-        var run = await harness.RunAsync(NewExecutable());
-
-        Assert.Equal(expectedPasses, run.States("node-body").Count);
-        run.AssertOutcomes("node-do", ActivityOutcomes.Done);
-        run.AssertWorkflowCompleted();
-    }
-
     [Fact]
     public async Task BodyRunsAtLeastOnce_EvenWhenConditionFalseFromTheStart()
     {
         // The counting evaluator returns false on its very first evaluation; the body still runs once
         // because the first pass is unconditional (post-test semantics).
-        var activityExecutionIds = ActivityExecutionIds("actexec-do", "actexec-body", passes: 1);
-        await using var harness = NewHarness(holdEvaluations: 0, activityExecutionIds);
+        await using var harness = NewHarness("actexec-do", "actexec-body-0");
 
-        var run = await harness.RunAsync(NewExecutable());
+        var run = await harness.RunAsync(NewExecutable(condition: false));
 
         Assert.Single(run.States("node-body"));
         run.AssertOutcomes("node-do", ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
-    }
-
-    [Fact]
-    public async Task EachPass_RecordsADistinctIterationId()
-    {
-        const int holdEvaluations = 3; // 3 passes total.
-        const int expectedPasses = 3;
-        var activityExecutionIds = ActivityExecutionIds("actexec-do", "actexec-body", expectedPasses);
-        await using var harness = NewHarness(holdEvaluations, activityExecutionIds);
-
-        var run = await harness.RunAsync(NewExecutable());
-
-        var iterationIds = run.States("node-body").Select(state => state.IterationId).ToList();
-        Assert.Equal(expectedPasses, iterationIds.Count);
-        Assert.All(iterationIds, id => Assert.False(string.IsNullOrEmpty(id)));
-        // Per-iteration state is distinct: no two passes share an iteration id.
-        Assert.Equal(expectedPasses, iterationIds.Distinct().Count());
     }
 
     [Fact]
@@ -89,32 +40,96 @@ public sealed class DoRuntimeTests
     {
         // The condition would hold for three passes, but the body breaks on its first pass: exactly one
         // body pass (< 3) runs and the loop completes early, without re-checking the condition.
-        await using var harness = NewHarness(holdEvaluations: 3, "actexec-do", "actexec-body-0");
+        await using var harness = NewHarness("actexec-do", "actexec-body-0");
 
-        var run = await harness.RunAsync(NewExecutable(breakOnEntry: true));
+        var run = await harness.RunAsync(NewExecutable(condition: true, breakOnEntry: true));
 
         Assert.Single(run.States("node-body"));
         run.AssertOutcomes("node-do", ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
     }
 
-    private static string[] ActivityExecutionIds(string composite, string bodyPrefix, int passes)
+    [Fact]
+    public async Task BodySetOfTheConditionVariable_IsObservedOnThePostTestCheck_AndTheLoopTerminates()
     {
-        var ids = new List<string> { composite };
-        for (var i = 0; i < passes; i++)
-            ids.Add($"{bodyPrefix}-{i}");
-        return ids.ToArray();
+        // #972 defect 2 (Do mirror): the unconditional first pass Sets the condition variable to false; the
+        // post-test check re-materializes Condition from the live root frame and observes it — exactly one
+        // body pass, then Done (a pinned first-activation snapshot would keep the condition true forever).
+        await using var harness = NewHarness("actexec-do", "actexec-set-0");
+
+        var run = await harness.RunAsync(NewVariableConditionExecutable());
+
+        Assert.Single(run.States("node-set"));
+        run.AssertOutcomes("node-do", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+        var rootFrame = Assert.IsType<VariableFrameState>(run.WorkflowState?.RootVariableFrame);
+        Assert.False(rootFrame.Values["var-keep-going"].InlineValue!.Value.GetBoolean());
     }
 
-    private static WorkflowExecutionHarness NewHarness(int holdEvaluations, params string[] activityExecutionIds) =>
+    private static WorkflowExecutable NewVariableConditionExecutable()
+    {
+        var booleanType = new ValueTypeDescriptor("Boolean");
+        var setNode = new ExecutableNode(
+            executableNodeId: "node-set",
+            authoredActivityId: "authored-set",
+            activityType: "elsa.intrinsic.set",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Value] = BoolLiteral(WorkflowIntrinsicInputKeys.Value, false)
+            },
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.Set,
+            intrinsicVariable: new RuntimeVariableReference("var-keep-going", Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId));
+        var root = new ExecutableNode(
+            executableNodeId: "node-do",
+            authoredActivityId: "authored-do",
+            activityType: typeof(DoActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(DoDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new DoDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["Condition"] = new(
+                    inputKey: "Condition",
+                    targetType: booleanType,
+                    effectivePolicy: ValueProtectionPolicy.InstanceInline,
+                    source: RuntimeInputBindingSource.VariableRead,
+                    variable: new RuntimeVariableReference("var-keep-going", Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId))
+            },
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(DoActivity.BodySlotName, [setNode])],
+            structure: new ExecutableActivityStructure(
+                DoActivity.StructureKind,
+                DoActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { body = "node-set" })));
+
+        return WorkflowExecutionHarness.NewExecutable(
+            root,
+            new RuntimeVariableDeclaration(
+                "var-keep-going",
+                "KeepGoing",
+                booleanType,
+                ValueProtectionPolicy.InstanceInline,
+                new RuntimeInputBinding(
+                    "var-keep-going",
+                    booleanType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    // Starts TRUE: a pinned first-activation snapshot would re-check true forever; only the
+                    // re-materialized post-test check observes the body's false.
+                    literal: ValueEnvelope.Inline(booleanType, JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline))));
+    }
+
+    private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithConstructor<DoActivityConstructor>()
             .WithProbeLeaf()
-            .ConfigureServices(services => services.AddSingleton<IExpressionEvaluator>(new CountingConditionEvaluator(holdEvaluations)))
             .Build(activityExecutionIds);
 
-    private static WorkflowExecutable NewExecutable(bool breakOnEntry = false)
+    private static WorkflowExecutable NewExecutable(bool condition, bool breakOnEntry = false)
     {
         // A body that completes with the Break outcome models a Break leaf placed in the loop body (#299);
         // the loop recognizes it by name and ends early instead of re-checking the condition.
@@ -124,17 +139,12 @@ public sealed class DoRuntimeTests
             authoredActivityId: "authored-do",
             activityType: typeof(DoActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: DoActivityConstructor.DescriptorTypeKey,
+            descriptorType: typeof(DoDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new DoDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
-                ["Condition"] = new RuntimeInputBinding(
-                    inputName: "Condition",
-                    source: RuntimeInputBindingSource.Expression,
-                    expression: new RuntimeExpressionBinding(CountingConditionEvaluator.Language, "do-condition"),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Boolean" })
+                ["Condition"] = BoolLiteral("Condition", condition)
             },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(DoActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body", bodyOutcomes)])],
             structure: new ExecutableActivityStructure(
@@ -145,55 +155,16 @@ public sealed class DoRuntimeTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    /// <summary>
-    /// Deterministic condition evaluator that returns <c>true</c> for its first <c>holdEvaluations</c>
-    /// evaluations and <c>false</c> thereafter. The composite's inputs are materialized once on entry
-    /// (consumed but ignored by the post-test contract) and again after each completed pass, so a
-    /// <c>Do</c> bound to it runs its body <c>max(1, holdEvaluations)</c> times.
-    /// </summary>
-    private sealed class CountingConditionEvaluator(int holdEvaluations) : IExpressionEvaluator
+    private static RuntimeInputBinding BoolLiteral(string key, bool value)
     {
-        public const string Language = "test/counting-condition";
-
-        private int _evaluations;
-
-        public ValueTask<T?> EvaluateAsync<T>(IExpression expression, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
-            new((T?)Evaluate());
-
-        public ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
-            new(Evaluate());
-
-        private object Evaluate()
-        {
-            var hold = _evaluations < holdEvaluations;
-            _evaluations++;
-            return hold;
-        }
-    }
-
-    private sealed class DoActivityConstructor : IActivityConstructor<DoDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(DoDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new DoDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            DoDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var activity = new DoActivity();
-            if (inputs is not null && inputs.TryGetValue("Condition", out var conditionInput))
-                activity.Condition = (InputArgument<bool>)conditionInput;
-            return new(activity);
-        }
+        var type = new ValueTypeDescriptor("Boolean");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            key,
+            type,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), policy));
     }
 
     private sealed record DoDescriptor;

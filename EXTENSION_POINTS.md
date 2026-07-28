@@ -90,6 +90,7 @@ not automatic constitution violations.
 |---|---|
 | Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+| Foundation Identity ASP.NET Core Identity Groundwork provider (concrete Groundwork authority, schema CLI, topology) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |
 
 ### Secrets
@@ -103,9 +104,10 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
+| Provider-neutral persistence scope selection | [`src/Elsa/Persistence/Core/EXTENSION_POINTS.md`](src/Elsa/Persistence/Core/EXTENSION_POINTS.md) |
 | EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; wire-safe document kinds) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; Identity schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 
@@ -113,6 +115,8 @@ not automatic constitution violations.
 |---|---|
 | Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`src/Elsa/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow design (options and executable-pin contribution) | [`src/Elsa/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
 | Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`src/Elsa/Activities/Http/EXTENSION_POINTS.md`](src/Elsa/Activities/Http/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`src/Elsa/Activities/Sequence/EXTENSION_POINTS.md`](src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) |
 | Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md) |
@@ -125,9 +129,9 @@ not automatic constitution violations.
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
-| Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Activities design — Groundwork persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Activities design — persistence commands + lookup (Groundwork) | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Activities design API — catalog and availability services | [`src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) |
+| Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md) |
 
 ### Workflows
 
@@ -136,8 +140,7 @@ not automatic constitution violations.
 | Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) |
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
-| Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Workflows design — persistence commands + diff engine (Groundwork) | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows publishing — policy, slot authority, preflight, projection reconciliation, compiler, and persistence stores | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
@@ -157,8 +160,9 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
+| Diagnostics persistence lifecycle (bounded drain, durable acknowledgement, readiness, observability) | [`src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md) |
 | Structured logs (log store, live feed, sink, source provider) | [`src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md) |
-| OpenTelemetry (telemetry store, live feed, ingestor, redactor, source registry, provider, collector config) | [`src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md) |
+| OpenTelemetry (telemetry store, live feed, ingestor, redactor, trusted OTLP authentication/context, source registry, provider, collector config) | [`src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md) |
 
 ---
 

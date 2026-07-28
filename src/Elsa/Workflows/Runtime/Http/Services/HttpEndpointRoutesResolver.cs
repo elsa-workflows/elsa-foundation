@@ -68,7 +68,7 @@ public sealed class HttpEndpointRoutesResolver(
         // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
         // (never thrown — see the class remarks). This uniqueness check applies to trigger bindings only.
         var claimantsByHash = new Dictionary<string, string>(StringComparer.Ordinal);
-        var bindings = await bindingStore.ListByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        var bindings = await bindingStore.ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
         foreach (var binding in bindings)
         {
             if (claimantsByHash.TryGetValue(binding.StimulusHash, out var owner))

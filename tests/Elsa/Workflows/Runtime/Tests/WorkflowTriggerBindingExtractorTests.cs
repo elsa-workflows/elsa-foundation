@@ -378,7 +378,8 @@ public sealed class WorkflowTriggerBindingExtractorTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private WorkflowTriggerBinding Binding(string nodeId, string stimulusHash) =>
         new(
@@ -412,10 +413,8 @@ public sealed class WorkflowTriggerBindingExtractorTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = executionType },
             childSlots: childSlots);
     }

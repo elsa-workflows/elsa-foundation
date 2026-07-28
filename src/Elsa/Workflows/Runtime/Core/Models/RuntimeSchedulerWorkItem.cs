@@ -18,7 +18,9 @@ public sealed class RuntimeSchedulerWorkItem
         long? sequence = null,
         JsonElement? payload = null,
         IReadOnlyDictionary<string, string>? commandMetadata = null,
-        IReadOnlyDictionary<string, string>? envelopeMetadata = null)
+        IReadOnlyDictionary<string, string>? envelopeMetadata = null,
+        string? executionScopeId = null,
+        ActivityExecutionAttemptLineage? attempt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -28,6 +30,8 @@ public sealed class RuntimeSchedulerWorkItem
 
         if (sequence < 0)
             throw new ArgumentOutOfRangeException(nameof(sequence), "Scheduler work sequence cannot be negative.");
+        if (executionScopeId is not null && string.IsNullOrWhiteSpace(executionScopeId))
+            throw new ArgumentException("Execution scope ID cannot be blank when provided.", nameof(executionScopeId));
 
         WorkItemId = workItemId;
         WorkflowExecutionId = workflowExecutionId;
@@ -41,6 +45,8 @@ public sealed class RuntimeSchedulerWorkItem
         Payload = payload?.Clone();
         CommandMetadata = RuntimeModelMetadata.Snapshot(commandMetadata);
         EnvelopeMetadata = RuntimeModelMetadata.Snapshot(envelopeMetadata);
+        ExecutionScopeId = executionScopeId;
+        Attempt = attempt;
     }
 
     public string WorkItemId { get; }
@@ -55,21 +61,25 @@ public sealed class RuntimeSchedulerWorkItem
     public JsonElement? Payload { get; }
     public IReadOnlyDictionary<string, string> CommandMetadata { get; }
     public IReadOnlyDictionary<string, string> EnvelopeMetadata { get; }
+    public string? ExecutionScopeId { get; }
+    public ActivityExecutionAttemptLineage? Attempt { get; }
 }
 
-public sealed class RuntimeSchedulerWorkQuery
+/// <summary>
+/// One finite, forward-only page of scheduler work for a workflow execution.
+/// </summary>
+public sealed record RuntimeSchedulerWorkQuery : RuntimeStorePageRequest
 {
-    public RuntimeSchedulerWorkQuery(string workflowExecutionId, int? limit = null)
+    public RuntimeSchedulerWorkQuery(
+        string workflowExecutionId,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Scheduler work query limit must be greater than zero when provided.");
-
         WorkflowExecutionId = workflowExecutionId;
-        Limit = limit;
     }
 
     public string WorkflowExecutionId { get; }
-    public int? Limit { get; }
 }

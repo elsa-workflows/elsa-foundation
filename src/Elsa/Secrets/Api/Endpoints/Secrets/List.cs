@@ -17,7 +17,14 @@ internal sealed class List(ISecretManager secretManager) : ElsaEndpoint<SecretQu
 
     public override async Task HandleAsync(SecretQuery request, CancellationToken cancellationToken)
     {
-        var page = await secretManager.ListAsync(request, cancellationToken);
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var page = await secretManager.ListAsync(tenantId, request, cancellationToken);
         await Send.OkAsync(ListSecretsResponse.FromPage(page), cancellationToken);
     }
 }

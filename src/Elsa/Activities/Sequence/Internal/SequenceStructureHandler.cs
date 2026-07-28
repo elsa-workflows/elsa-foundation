@@ -9,7 +9,12 @@ namespace Elsa.Activities.Sequence.Internal;
 
 internal sealed class SequenceStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => SequenceActivity.StructureKind;
 
@@ -52,6 +57,18 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<SequenceExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("Sequence executable structure payload is invalid.");
+        var remapped = new SequenceExecutableStructure(
+            executable.Activities.Select(nodeId => Remap(nodeId, authoredToExecutableNodeIds)).ToArray(),
+            executable.Variables);
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Variables;
 
@@ -63,4 +80,7 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<SequenceAuthoredStructure>(SerializerOptions)
                ?? new SequenceAuthoredStructure();
     }
+
+    private static string Remap(string nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

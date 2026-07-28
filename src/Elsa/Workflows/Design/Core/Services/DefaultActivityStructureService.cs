@@ -24,6 +24,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectChildContractMemberUsage(activity)
+            : [];
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         ArgumentNullException.ThrowIfNull(activity);
@@ -49,6 +58,28 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
         return TryGetHandler(activity.Structure, out var handler)
             ? handler.CompileExecutableStructure(activity)
             : new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
+    }
+
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(authoredToExecutableNodeIds);
+        if (authoredToExecutableNodeIds.Count == 0)
+            return structure;
+
+        if (!TryGetHandler(structure, out var handler))
+            throw new NotSupportedException($"Activity structure '{structure.Kind}@{structure.SchemaVersion}' has no handler for executable child-node remapping.");
+
+        return handler.RemapExecutableStructure(structure, authoredToExecutableNodeIds);
+    }
+
+    public bool HasHandler(ActivityNodeStructure structure)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+
+        return TryGetHandler(structure, out _);
     }
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity)

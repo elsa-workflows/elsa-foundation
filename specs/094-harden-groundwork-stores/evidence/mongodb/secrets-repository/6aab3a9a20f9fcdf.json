@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-try-add",
+  "sourceScenarioId": "secret-concurrent-create-only",
+  "coverageEntryId": "secrets-repository",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "82bd2e11bb1da14b2a331cad53a4a5b69a0b811c21892e4c2b759bb3cec36af5",
+  "executionPath": "provider-driver/mongodb/secrets-repository/6aab3a9a20f9fcdf",
+  "clients": 2,
+  "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
+  "outcome": "pass",
+  "concurrencySemantic": "create-only-try-add",
+  "evidence": "evidence/mongodb/secrets-repository/6aab3a9a20f9fcdf.json"
+}

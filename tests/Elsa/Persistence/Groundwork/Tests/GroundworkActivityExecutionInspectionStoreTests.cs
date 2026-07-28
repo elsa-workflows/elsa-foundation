@@ -3,10 +3,13 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Serialization;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
@@ -18,13 +21,13 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task Store_RoundTrips_And_Lists_In_Execution_Sequence_Order()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         await store.SaveAsync(Projection("wf-1", "ae-2", sequence: 2));
         await store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1));
 
         var found = await store.FindAsync("wf-1", "ae-1");
-        var listed = await store.ListSummariesAsync("wf-1");
+        var listed = await store.ListAllSummariesAsync("wf-1");
 
         Assert.NotNull(found);
         Assert.Equal("ae-1", found.ActivityExecutionId);
@@ -35,9 +38,66 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     }
 
     [Fact]
+    public async Task ListSummariesPageAsync_Uses_Finite_Ordered_Cursor_And_Exact_Count()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var boundedStore = new RuntimeTestBoundedDocumentStore(documentStore);
+        var store = new GroundworkActivityExecutionInspectionStore(
+            documentStore,
+            GroundworkTestSerialization.Serializer,
+            boundedStore);
+        await store.SaveAsync(Projection("wf-1", "ae-2", sequence: 2));
+        await store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1));
+        await store.SaveAsync(Projection("wf-2", "ae-other", sequence: 0));
+
+        var first = await store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf-1", limit: 1));
+        var second = await store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(
+                "wf-1",
+                limit: 1,
+                first.NextContinuationToken));
+
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal("ae-1", Assert.Single(first.Items).ActivityExecutionId);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Equal(2, second.TotalCount);
+        Assert.Equal("ae-2", Assert.Single(second.Items).ActivityExecutionId);
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task SaveAsync_RejectsProviderVersionChangeBetweenLoadAndWrite()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var seedStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
+        await seedStore.SaveAsync(Projection("wf-1", "ae-1", sequence: 1));
+
+        var competingStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
+        var interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = async request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind, request.DocumentKind);
+                Assert.Equal(DocumentId.Compose("wf-1", "ae-1"), request.Id);
+                Assert.Equal(1, request.ExpectedVersion);
+                await competingStore.SaveAsync(Projection("wf-1", "ae-1", sequence: 2));
+            }
+        };
+        var store = new GroundworkActivityExecutionInspectionStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(() =>
+            store.SaveAsync(Projection("wf-1", "ae-1", sequence: 3)).AsTask());
+
+        Assert.Contains("ConcurrencyConflict", exception.InnerException?.Message, StringComparison.Ordinal);
+        var winner = await seedStore.FindAsync("wf-1", "ae-1");
+        Assert.Equal(2, winner!.ExecutionSequence);
+    }
+
+    [Fact]
     public async Task ListSummariesAsync_Returns_Lightweight_Summaries_With_Evidence_Counts()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         await store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1) with
         {
@@ -56,7 +116,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             ]
         });
 
-        var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
+        var summary = Assert.Single(await store.ListAllSummariesAsync("wf-1"));
 
         Assert.Equal("ae-1", summary.ActivityExecutionId);
         Assert.Equal(1, summary.ValueSnapshotCount);
@@ -65,7 +125,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task ListSummariesAsync_Does_Not_Deserialize_Full_Projection_When_Summary_Is_Present()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var projection = Projection("wf-1", "ae-1", sequence: 1) with
         {
             ValueSnapshots =
@@ -93,11 +153,11 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind)),
                 GroundworkTestSerialization.Serializer.SerializeForComparison(document)));
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
-        var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
+        var summary = Assert.Single(await store.ListAllSummariesAsync("wf-1"));
 
         Assert.Equal("ae-1", summary.ActivityExecutionId);
         Assert.Equal(1, summary.ValueSnapshotCount);
@@ -106,12 +166,13 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task CheckpointWriter_Persists_Inspection_Projection()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var inspectionStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             inspectionStore,
@@ -170,19 +231,22 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task FindAsync_Wraps_Json_Projection_Mapping_Exception()
     {
-        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         await documentStore.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose("wf-1", "ae-1"),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                ElsaRuntimeDocumentVersions.Stamp(ElsaRuntimeDocumentVersions.CurrentFor(
+                    ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind)),
                 "{"));
         var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.FindAsync("wf-1", "ae-1").AsTask());
 
-        Assert.IsType<JsonException>(exception.InnerException);
+        var versionException = Assert.IsType<DocumentSchemaVersionException>(exception.InnerException);
+        Assert.Equal(DocumentSchemaVersionFailure.InvalidContent, versionException.Failure);
+        Assert.IsAssignableFrom<JsonException>(versionException.InnerException);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("ae-1", exception.Message, StringComparison.Ordinal);
     }
@@ -190,12 +254,17 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task ListSummariesAsync_Wraps_DocumentStore_Exception()
     {
-        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")), GroundworkTestSerialization.Serializer);
+        var failure = new InvalidOperationException("Provider failure.");
+        var store = new GroundworkActivityExecutionInspectionStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()),
+            GroundworkTestSerialization.Serializer,
+            new ThrowingBoundedDocumentStore(failure));
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
-            () => store.ListSummariesAsync("wf-1").AsTask());
+            () => store.ListAllSummariesAsync("wf-1").AsTask());
 
-        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal("Provider failure.", exception.InnerException!.Message);
         Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
     }
 
@@ -218,7 +287,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     public async Task CheckpointWriter_Wraps_UnitOfWork_Begin_Exception()
     {
         var documentStore = new BeginFailingDocumentStore(
-            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()),
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()),
             new InvalidOperationException("Transaction begin failed."));
         var writer = NewCheckpointWriter(documentStore);
         var commit = InspectionCommit(Projection("wf-1", "ae-1", sequence: 1));
@@ -234,7 +303,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task CheckpointWriter_Rolls_Back_State_When_CommitMarker_Save_Fails()
     {
-        var innerStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var innerStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var documentStore = new CommitMarkerFailingDocumentStore(innerStore);
         var writer = NewCheckpointWriter(documentStore);
         var state = ActivityState("wf-1", "ae-1");
@@ -357,7 +426,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         new(
             documentStore,
             GroundworkTestSerialization.Serializer,
-            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            GroundworkTestAccess.DefaultAccessContextAccessor,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer, GroundworkTestAccess.DefaultAccessContextAccessor),
             new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer),
@@ -399,7 +469,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class ThrowingDocumentStore(Exception exception) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
-        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
+        public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw exception;
@@ -423,6 +493,21 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             throw exception;
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            throw exception;
+    }
+
+    private sealed class ThrowingBoundedDocumentStore(Exception exception) : IBoundedDocumentStore
+    {
+        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw exception;
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
     }
 

@@ -1,27 +1,116 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
 /// <summary>
-/// Golden-fixture drift and backward-compatibility tests for the runtime persistence bridge (W3).
+/// Golden-fixture drift and supported-compatibility tests for the runtime persistence bridge (W3).
 /// </summary>
 /// <remarks>
 /// The drift test freezes the serialized shape of every runtime document kind: it compares the JSON the
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
-/// shape changes without a version bump. The compatibility test proves every v1 fixture still loads
-/// through the real read path under the legacy pre-versioning schema stamp and its production upcaster chain.
+/// shape changes without a version bump. The read-path test loads every supported generation; every kind
+/// except explicitly retained rolling windows supports only its clean current baseline. Executable activity
+/// templates retain v1-to-v2, while post-commit outbox documents retain v3-to-v4.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
     [Fact]
-    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v2() =>
+    public void Every_document_kind_uses_its_declared_readable_baseline()
+    {
+        Assert.All(
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.All,
+            pair =>
+            {
+                var minimumReadable = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(pair.Key);
+                var expected = pair.Key switch
+                {
+                    ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+                    ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
+                    _ => pair.Value
+                };
+                Assert.Equal(expected, minimumReadable);
+            });
+    }
+
+    [Fact]
+    public void Dispatch_dependency_shapes_are_explicitly_versioned_at_v4()
+    {
+        Assert.Equal(
+            4,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+        Assert.Equal(
+            9,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(
+            4,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+    }
+
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
+    public void Version_4_runtime_shapes_use_a_clean_contract(string documentKind)
+    {
+        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(documentKind));
+        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind));
+    }
+
+    [Fact]
+    public void Workflow_executable_declares_a_clean_v9_baseline()
+    {
+        // v9 adds the exact operator-scheduling capability compiled for runtime alterations (#1016).
+        Assert.Equal(
+            9,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(
+            9,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+    }
+
+    [Fact]
+    public void Incident_state_declares_a_clean_v2_baseline()
+    {
         Assert.Equal(
             2,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+                ElsaRuntimeStorageManifest.IncidentStateDocumentKind));
+        Assert.Equal(
+            2,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+                ElsaRuntimeStorageManifest.IncidentStateDocumentKind));
+    }
+
+    [Fact]
+    public void Post_commit_outbox_shape_is_explicitly_versioned_at_v4() =>
+        Assert.Equal(
+            4,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind));
+
+    [Fact]
+    public void Scheduler_work_claim_shape_is_explicitly_versioned_at_v3() =>
+        Assert.Equal(
+            3,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
+
+    [Fact]
+    public void Durable_timer_claim_shape_is_explicitly_versioned_at_v2() =>
+        Assert.Equal(
+            2,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.DurableTimerDocumentKind));
 
     // Set GROUNDWORK_FIXTURE_REGEN=1 and run this project to (re)write the committed fixtures into the
     // source tree after an intentional version bump. Off by default so a normal run only compares.
@@ -36,6 +125,20 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         return data;
     }
 
+    public static TheoryData<string, int> SupportedFixtureVersions()
+    {
+        var data = new TheoryData<string, int>();
+        foreach (var kind in GroundworkRuntimeDocumentFixtureFactory.AllKinds)
+        {
+            var minimum = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(kind);
+            var current = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(kind);
+            for (var version = minimum; version <= current; version++)
+                data.Add(kind, version);
+        }
+
+        return data;
+    }
+
     [Theory]
     [MemberData(nameof(Kinds))]
     public async Task Fixture_Matches_What_The_Bridge_Writes_Today(string kind)
@@ -43,7 +146,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         var (schemaVersion, contentJson) = await GroundworkRuntimeDocumentFixtureFactory.CaptureAsync(kind);
         var currentVersion = Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(kind);
 
-        Assert.Equal(currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), schemaVersion);
+        Assert.Equal(ElsaRuntimeDocumentVersions.Stamp(currentVersion), schemaVersion);
 
         if (Regenerate)
         {
@@ -56,17 +159,14 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Theory]
-    [MemberData(nameof(Kinds))]
-    public async Task Committed_Fixture_Loads_Through_The_Bridge_Under_The_Legacy_Stamp(string kind)
+    [MemberData(nameof(SupportedFixtureVersions))]
+    public async Task Every_Supported_Fixture_Version_Loads_Through_The_Bridge(string kind, int version)
     {
         if (Regenerate)
             return;
 
-        var fixtureContent = ReadCommittedFixture(kind, 1);
-
-        // Seed the committed fixture under the pre-versioning "1.0.0" stamp, exactly as a document written
-        // before per-kind versioning would carry it, then read it back through the real store bridge.
-        var store = await GroundworkRuntimeDocumentFixtureFactory.SeedLegacyFixtureAsync(kind, fixtureContent);
+        var fixtureContent = ReadCommittedFixture(kind, version);
+        var store = await GroundworkRuntimeDocumentFixtureFactory.SeedFixtureAsync(kind, version, fixtureContent);
 
         var spot = await GroundworkRuntimeDocumentFixtureFactory.ReadSpotCheckAsync(kind, store);
 
@@ -94,11 +194,14 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         Assert.Fail(
             $"The serialized shape of runtime document kind '{kind}' no longer matches its committed golden fixture " +
             $"(Fixtures/v{version}/{kind}.json).\n\n" +
-            "A state record shape changed. To evolve a runtime document shape you must, in the same change:\n" +
+            "A state record shape changed. After GA, compatible evolution requires, in the same change:\n" +
             "  1. bump that kind's version in ElsaRuntimeDocumentVersions,\n" +
-            "  2. register an IGroundworkRuntimeDocumentUpcaster for the previous version,\n" +
+            "  2. register a Groundwork IDocumentJsonUpcaster for the previous version,\n" +
             "  3. add a new golden fixture for the new version (run with GROUNDWORK_FIXTURE_REGEN=1), and\n" +
-            "  4. keep the old fixture so historical documents still load.\n\n" +
+            "  4. keep every supported historical fixture.\n" +
+            "For a clean break, replace the current fixture, advance minimum-readable, and document the " +
+            "required datastore reset. For a supported rolling window, use Groundwork upcasters and retain " +
+            "every readable fixture; do not add Elsa-specific compatibility machinery.\n\n" +
             $"Expected (committed fixture, canonical):\n{expectedCanonical}\n\n" +
             $"Actual (written by the bridge today, canonical):\n{actualCanonical}");
     }
@@ -131,21 +234,28 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     // --- Fixture file access ---
 
     private static string ReadCommittedFixture(string kind, int version)
+        => ReadCommittedFixtureFile(kind, version);
+
+    private static string ReadCommittedFixtureFile(string fixtureName, int version)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", kind + ".json");
+        var fileName = fixtureName + ".json";
+        if (Path.IsPathRooted(fileName) || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
+            throw new ArgumentException("Fixture names must be file names.", nameof(fixtureName));
+        var fixturesDirectory = Path.Join(AppContext.BaseDirectory, "Fixtures", $"v{version}");
+        var path = Path.Join(fixturesDirectory, fileName);
         Assert.True(
             File.Exists(path),
-            $"Missing committed golden fixture for kind '{kind}' at '{path}'. " +
+            $"Missing committed golden fixture '{fixtureName}' at '{path}'. " +
             "Run this project with GROUNDWORK_FIXTURE_REGEN=1 to generate it.");
         return File.ReadAllText(path);
     }
 
     private static void WriteFixtureToSource(string kind, int version, string contentJson)
     {
-        var directory = Path.Combine(SourceDirectory(), "Fixtures", $"v{version}");
+        var directory = Path.Join(SourceDirectory(), "Fixtures", $"v{version}");
         Directory.CreateDirectory(directory);
         var canonical = Canonicalize(JsonNode.Parse(contentJson));
-        File.WriteAllText(Path.Combine(directory, kind + ".json"), canonical);
+        File.WriteAllText(Path.Join(directory, kind + ".json"), canonical);
     }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) =>

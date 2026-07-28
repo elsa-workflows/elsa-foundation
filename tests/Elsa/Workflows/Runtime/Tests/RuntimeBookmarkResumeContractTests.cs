@@ -258,7 +258,8 @@ public sealed class RuntimeBookmarkResumeContractTests
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
@@ -273,10 +274,8 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: root.AuthoredActivityId,
             activityType: root.ActivityType,
             activityTypeVersion: root.ActivityTypeVersion,
-            descriptorType: root.DescriptorType,
-            descriptorPayload: root.DescriptorPayload,
+            descriptor: root.Descriptor,
             inputBindings: root.InputBindings,
-            outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
             childSlots:
             [
@@ -290,10 +289,8 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: "activity-delivery",
             activityType: "Elsa.WaitForDeliveryStatus",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private ExecutableNode NewOtherNode() =>
@@ -302,10 +299,8 @@ public sealed class RuntimeBookmarkResumeContractTests
             authoredActivityId: "activity-other",
             activityType: "Elsa.Other",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: Json("{}"),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, Json("{}")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static JsonElement Json(string json)

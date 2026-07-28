@@ -24,8 +24,21 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Elsa.Persistence.Groundwork.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\Tests\Fixtures\v4\workflowExecutionState.json"
+          Link="Fixtures\v4\workflowExecutionState.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Tests\WorkflowExecutionHistoryProviderConformance.cs"
+             Link="WorkflowExecutionHistoryProviderConformance.cs" />
   </ItemGroup>
 
 </Project>

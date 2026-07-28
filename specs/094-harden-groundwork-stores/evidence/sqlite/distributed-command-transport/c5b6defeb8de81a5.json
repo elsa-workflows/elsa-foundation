@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:lease-visible-by-execution-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "4e6141f6183107ed70088c7d502132c117ab7d1836110e873af8c5871e351ceb",
+  "executionPath": "provider-driver/sqlite/distributed-command-transport/c5b6defeb8de81a5",
+  "clients": 1,
+  "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
+  "outcome": "pass",
+  "queryShape": "lease-visible-by-execution-bounded",
+  "nativeQueryIdentity": "lease-visible-commands-by-execution",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
+  "evidence": "evidence/sqlite/distributed-command-transport/c5b6defeb8de81a5.json"
+}

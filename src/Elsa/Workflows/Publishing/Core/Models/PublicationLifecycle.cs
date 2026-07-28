@@ -52,4 +52,3 @@ public sealed class PublicationPolicyResolutionException(string code, string mes
 }
 
 public sealed record PublicationFailure(string Code, string Message);
-

@@ -1,10 +1,15 @@
 using System.Text.Json;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -24,8 +29,14 @@ public class GroundworkWorkflowDefinitionStoreTests
 
     private static async Task<IWorkflowDefinitionStore> SeededStoreAsync(params WorkflowDefinition[] definitions)
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var store = await SeedRawAsync(definitions);
+        return new GroundworkWorkflowDefinitionStore(store);
+    }
 
+    private static async Task<InMemoryDocumentStore> SeedRawAsync(
+        IEnumerable<WorkflowDefinition> definitions)
+    {
+        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
         foreach (var definition in definitions)
         {
             var envelope = new GroundworkDocument<WorkflowDefinition>(
@@ -39,7 +50,7 @@ public class GroundworkWorkflowDefinitionStoreTests
                 content));
         }
 
-        return new GroundworkWorkflowDefinitionStore(store);
+        return store;
     }
 
     private static WorkflowDefinition[] Sample() =>
@@ -48,6 +59,46 @@ public class GroundworkWorkflowDefinitionStoreTests
         new() { Id = "b", Name = "Invoice Generator", Description = null },
         new() { Id = "c", Name = "Shipping", Description = "ORDER fulfilment" },
     ];
+
+    [Fact]
+    public async Task Provider_and_corrupt_payload_reads_surface_domain_scoped_failures()
+    {
+        var providerFailure = new IOException("workflow-provider-read");
+        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var store = new GroundworkWorkflowDefinitionStore(
+            new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Load, providerFailure));
+
+        var providerException = await Assert.ThrowsAsync<DesignPersistenceException>(() => store.FindByIdAsync("workflow-1"));
+        Assert.Equal(DesignPersistenceDomain.Workflow, providerException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Provider, providerException.FailureKind);
+        Assert.Same(providerFailure, providerException.InnerException);
+
+        await raw.SaveAsync(new SaveDocumentRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            "corrupt-workflow",
+            SchemaVersion,
+            "null"));
+        var corruptStore = new GroundworkWorkflowDefinitionStore(raw);
+
+        var corruptException = await Assert.ThrowsAsync<DesignPersistenceException>(() => corruptStore.FindByIdAsync("corrupt-workflow"));
+        Assert.Equal(DesignPersistenceDomain.Workflow, corruptException.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, corruptException.FailureKind);
+    }
+
+    [Fact]
+    public async Task Cancellation_and_domain_read_outcomes_are_not_mapped()
+    {
+        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var cancellation = new OperationCanceledException("workflow-read-cancelled");
+        var cancelled = new GroundworkWorkflowDefinitionStore(
+            new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Load, cancellation));
+
+        var cancellationException = await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled.FindByIdAsync("workflow-1"));
+        Assert.Same(cancellation, cancellationException);
+
+        var domainStore = new GroundworkWorkflowDefinitionStore(raw);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => domainStore.GetAsync("missing"));
+    }
 
     [Fact]
     public async Task FindById_returns_match_via_point_read()
@@ -63,6 +114,20 @@ public class GroundworkWorkflowDefinitionStoreTests
     {
         var store = await SeededStoreAsync(Sample());
         Assert.Null(await store.FindByIdAsync("missing"));
+    }
+
+    [Fact]
+    public async Task Point_read_does_not_require_a_bounded_surface_but_named_queries_do()
+    {
+        var raw = await SeedRawAsync(Sample());
+        var store = new GroundworkWorkflowDefinitionStore(new DocumentStoreOnlyAdapter(raw));
+
+        Assert.Equal("b", (await store.FindByIdAsync("b"))?.Id);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListAsync(new WorkflowDefinitionFilter { Id = "b" }));
+        Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, exception.DocumentKind);
+        Assert.Equal(WorkflowsDesignStorageManifest.ListDefinitionsByIdQuery, exception.QueryIdentity);
     }
 
     [Fact]
@@ -114,6 +179,32 @@ public class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public async Task List_uses_the_selected_named_route_with_its_complete_declared_order()
+    {
+        var raw = await SeedRawAsync(Sample());
+        var bounded = new RecordingBoundedDocumentStore(raw);
+        var store = new GroundworkWorkflowDefinitionStore(raw, bounded);
+
+        var result = await store.ListAsync(
+            new WorkflowDefinitionFilter
+            {
+                SearchTerm = "order",
+                Description = "Handles orders"
+            });
+
+        Assert.Equal(["a"], result.Select(x => x.Id));
+        Assert.NotEmpty(bounded.Queries);
+        Assert.All(
+            bounded.Queries,
+            query =>
+            {
+                Assert.Equal(WorkflowsDesignStorageManifest.SearchDefinitionsQuery, query.QueryIdentity);
+                Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
+                Assert.Equal(WorkflowsDesignStorageManifest.WorkflowDefinitionSearchOrder, query.Order);
+            });
+    }
+
+    [Fact]
     public async Task List_with_no_filter_returns_all()
     {
         var store = await SeededStoreAsync(Sample());
@@ -126,5 +217,80 @@ public class GroundworkWorkflowDefinitionStoreTests
     {
         var store = await SeededStoreAsync();
         Assert.Empty(await store.ListAsync(new WorkflowDefinitionFilter()));
+    }
+
+    [Fact]
+    public async Task Tenant_agnostic_query_requires_explicit_across_scope_privilege_and_records_outcome()
+    {
+        var manifest = WorkflowsDesignStorageManifest.Create();
+        var ordinaryStore = new InMemoryDocumentStore(manifest);
+        var accessor = new MutableAccessContextAccessor
+        {
+            Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))
+        };
+        var source = new SeededSessionSource(Sample()[..2]);
+        var auditSink = new GroundworkPrivilegedAccessSink();
+        var sessions = new GroundworkStoreSessionFactory(
+            accessor,
+            source,
+            new GroundworkPrivilegedAccessRecorder(auditSink));
+        var store = new GroundworkWorkflowDefinitionStore(ordinaryStore, ordinaryStore, sessions);
+        var filter = new WorkflowDefinitionFilter { TenantAgnostic = true };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(filter));
+        Assert.Equal(0, source.OpenCount);
+
+        accessor.Current = PersistenceAccessContext.PrivilegedScoped(
+            new PersistenceScope("tenant-a"),
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(filter));
+        Assert.Equal(0, source.OpenCount);
+
+        accessor.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants"));
+        var results = await store.ListAsync(filter);
+
+        Assert.Equal(["a", "b"], results.Select(definition => definition.Id).Order(StringComparer.Ordinal));
+        Assert.Equal(1, source.OpenCount);
+        var records = auditSink.Snapshot();
+        Assert.Equal(2, records.Count);
+        Assert.Equal(GroundworkPrivilegedAccessEventKind.Acquisition, records[0].EventKind);
+        Assert.Equal(GroundworkPrivilegedAccessEventKind.Outcome, records[1].EventKind);
+        Assert.Equal(records[0].AuditId, records[1].AuditId);
+        Assert.Equal(GroundworkPrivilegedAccessOutcome.Succeeded, records[1].Outcome);
+    }
+
+    private sealed class MutableAccessContextAccessor : IPersistenceAccessContextAccessor
+    {
+        public required PersistenceAccessContext Current { get; set; }
+    }
+
+    private sealed class SeededSessionSource(IReadOnlyList<WorkflowDefinition> definitions)
+        : IGroundworkStoreSessionSource
+    {
+        public int OpenCount { get; private set; }
+
+        public async ValueTask<GroundworkStoreSessionResources> OpenAsync(
+            global::Groundwork.Documents.Scoping.DocumentStoreAccess access,
+            CancellationToken cancellationToken = default)
+        {
+            OpenCount++;
+            var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create(), access);
+            foreach (var definition in definitions)
+            {
+                var document = new GroundworkDocument<WorkflowDefinition>(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+                    definition);
+                await store.SaveAsync(
+                    new SaveDocumentRequest(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                        definition.Id,
+                        SchemaVersion,
+                        JsonSerializer.Serialize(document, GroundworkDesignJson.Options)),
+                    cancellationToken);
+            }
+
+            return new GroundworkStoreSessionResources(store, store);
+        }
     }
 }

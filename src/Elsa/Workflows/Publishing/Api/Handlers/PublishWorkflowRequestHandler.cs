@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -29,7 +30,10 @@ public sealed class PublishWorkflowRequestHandler(
     TimeProvider timeProvider,
     WorkflowPublicationPreflightReader? publicationPreflightReader = null,
     IWorkflowDefinitionVersionStore? workflowVersionStore = null,
-    PublicationSnapshotReviewService? snapshotReviews = null)
+    PublicationSnapshotReviewService? snapshotReviews = null,
+    WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
+    WorkflowExecutableAuthoredInputsSidecar? authoredInputsSidecar = null,
+    ILogger<PublishWorkflowRequestHandler>? logger = null)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -47,7 +51,7 @@ public sealed class PublishWorkflowRequestHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
         var now = timeProvider.GetUtcNow();
-        var executable = await CompileAsync(request.VersionId, now, cancellationToken);
+        var executable = await CompileAsync(request.VersionId, request.TenantId, now, cancellationToken);
         var identity = executable.Identity;
         var resolvedReview = request.PreflightToken is { } preflightToken
             ? await (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
@@ -94,12 +98,14 @@ public sealed class PublishWorkflowRequestHandler(
                 var currentReference = current.SourceReferenceId is { } sourceReferenceId
                     ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
                     : null;
-                if (currentReference is not null && currentReference.DeletedAt is null)
+                if (currentReference is not null &&
+                    currentReference.DeletedAt is null &&
+                    StringComparer.Ordinal.Equals(currentReference.TenantId, request.TenantId))
                     return PublishedWorkflowView.From(executable, currentReference, current, wasCreated: false);
             }
         }
 
-        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, now, cancellationToken);
+        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, request.TenantId, now, cancellationToken);
         var candidate = new PublicationRecord(
             publicationId,
             PublicationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
@@ -117,7 +123,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         PublicationActivationResult? activation = null;
         await rootWriteLeaseManager.ExecuteAsync(
-            identity.ArtifactId,
+            identity,
             $"publish:{publicationId}",
             async ct =>
             {
@@ -130,6 +136,11 @@ public sealed class PublishWorkflowRequestHandler(
                 }
                 catch
                 {
+                    logger?.LogWarning(
+                        "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because activation of publication {PublicationId} failed",
+                        reference.SourceReferenceId,
+                        identity.DefinitionId,
+                        publicationId);
                     await sourceReferenceStore.RetireAsync(
                         reference.SourceReferenceId,
                         timeProvider.GetUtcNow(),
@@ -147,7 +158,11 @@ public sealed class PublishWorkflowRequestHandler(
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
     }
 
-    private ValueTask<WorkflowExecutable> CompileAsync(string versionId, DateTimeOffset now, CancellationToken cancellationToken) =>
+    private ValueTask<WorkflowExecutable> CompileAsync(
+        string versionId,
+        string? tenantId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
         compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(
                 versionId,
@@ -156,7 +171,8 @@ public sealed class PublishWorkflowRequestHandler(
                 now,
                 ExpiresAt: null,
                 PublishedArtifactPrefix,
-                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
+                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
+                tenantId),
             cancellationToken);
 
     private static PublicationRequestIntent? RequestIntent(PublicationAction? action, string? slotName) =>
@@ -170,11 +186,15 @@ public sealed class PublishWorkflowRequestHandler(
         WorkflowExecutable executable,
         string publicationId,
         string slotName,
+        string? tenantId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var identity = executable.Identity;
         var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+        var authoredInputs = workflowVersionStore is not null && authoredInputsSidecar is not null
+            ? authoredInputsSidecar.CopyFrom((await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State)
+            : [];
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
@@ -189,7 +209,10 @@ public sealed class PublishWorkflowRequestHandler(
             Scope: WorkflowExecutableReferenceScope.Published,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             PublicationId: publicationId,
-            SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName));
+            SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
+            LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
+            AuthoredInputs: authoredInputs,
+            TenantId: tenantId);
     }
 
     private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -197,6 +220,11 @@ public sealed class PublishWorkflowRequestHandler(
         var publication = await publicationStore.FindAsync(publicationId, cancellationToken);
         if (publication?.SourceReferenceId is not { } sourceReferenceId)
             return;
+        logger?.LogInformation(
+            "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because publication {PublicationId} was replaced",
+            sourceReferenceId,
+            publication.WorkflowDefinitionId,
+            publicationId);
         await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-replaced", cancellationToken);
     }
 

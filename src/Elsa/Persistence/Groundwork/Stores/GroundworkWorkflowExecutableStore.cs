@@ -1,7 +1,10 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -10,9 +13,15 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// coordinate through provider CAS over the artifact envelope, so a root and physical deletion can
 /// never both win the same race.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind), IWorkflowExecutableStore
+public sealed class GroundworkWorkflowExecutableStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null,
+    ILogger<GroundworkWorkflowExecutableStore>? logger = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, boundedStore), IWorkflowExecutableStore
 {
+    private readonly ILogger<GroundworkWorkflowExecutableStore> _logger = logger ?? NullLogger<GroundworkWorkflowExecutableStore>.Instance;
+
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(executable);
@@ -27,9 +36,13 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
 
         // Artifacts are immutable. Create-only persistence also prevents a concurrent first retention
         // transition from being overwritten by the old find-then-unconditional-save race.
-        await Store.SaveAsync(
+        var result = await Store.SaveAsync(
             new SaveDocumentRequest(DocumentKind, executable.Identity.ArtifactId, schemaVersion, content, ExpectedVersion: 0),
             cancellationToken);
+        if (result.Status is DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict)
+            return;
+
+        throw new InvalidOperationException($"Groundwork rejected workflow executable artifact '{executable.Identity.ArtifactId}' with status '{result.Status}'.");
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -246,15 +259,60 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
             artifactId, document => document.Executable, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
+        RuntimeStorePageRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var executables = await QueryDocumentsAsync<ExecutableDocument, WorkflowExecutable>(
-            ElsaRuntimeStorageManifest.WorkflowExecutableByCollection,
-            ElsaRuntimeStorageManifest.WorkflowExecutableCollection,
-            document => document.Executable,
-            cancellationToken);
-        return executables.ToArray();
+        ArgumentNullException.ThrowIfNull(request);
+
+        // A single undeserializable document must not fault the entire listing: LoadClosureAsync deserializes
+        // every executable per publish/test-run, so one poisoned row would otherwise take down the whole
+        // runtime surface. Skip and log the offender instead, letting healthy artifacts through. When a whole
+        // page deserializes to nothing but more pages remain, advance rather than surface an empty page with a
+        // continuation (which RuntimeStorePage forbids), so callers still make forward progress.
+        var continuation = request.ContinuationToken;
+        while (true)
+        {
+            var result = await BoundedStore.QueryAsync(
+                new DocumentQuery(
+                    DocumentKind,
+                    ElsaRuntimeStorageManifest.PageWorkflowExecutablesQuery,
+                    [Equal(ElsaRuntimeStorageManifest.CollectionField, ElsaRuntimeStorageManifest.WorkflowExecutableCollection)],
+                    [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableArtifactIdField)],
+                    take: request.Limit,
+                    continuation: continuation),
+                cancellationToken);
+
+            var executables = new List<WorkflowExecutable>(result.Documents.Count);
+            foreach (var envelope in result.Documents)
+            {
+                WorkflowExecutable executable;
+                try
+                {
+                    executable = Serializer.Deserialize<ExecutableDocument>(envelope).Executable;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "Skipping undeserializable workflow executable document '{DocumentId}' of kind '{DocumentKind}' while listing executables.",
+                        envelope.Id,
+                        envelope.DocumentKind);
+                    continue;
+                }
+
+                executables.Add(executable);
+            }
+
+            if (executables.Count > 0 || result.NextContinuation is null)
+                return new RuntimeStorePage<WorkflowExecutable>(request, executables, result.NextContinuation);
+
+            continuation = result.NextContinuation;
+        }
     }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
     private async ValueTask<(DocumentEnvelope Envelope, ExecutableDocument Document)?> LoadEnvelopeAsync(
         string artifactId,

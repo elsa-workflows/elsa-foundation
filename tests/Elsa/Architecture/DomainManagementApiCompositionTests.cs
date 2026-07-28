@@ -1,13 +1,33 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Json;
+using CShells;
+using CShells.AspNetCore.Configuration;
+using CShells.AspNetCore.Extensions;
+using CShells.DependencyInjection;
+using CShells.FastEndpoints.Features;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
+using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Graph.Design;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.FastEndpoints;
+using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
+using Elsa.Expressions.Api.Requests;
+using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -16,8 +36,11 @@ using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -49,6 +72,19 @@ public sealed class DomainManagementApiCompositionTests
         await host.AssertJourneyAsync(HttpMethod.Post, "/publishing/workflows/version-1/publish", new { });
         await host.AssertJourneyAsync(HttpMethod.Get, "/runtime/workflows/executables");
 
+        var expressions = await host.Client.GetFromJsonAsync<ExpressionDescriptorsResponse>("/expressions/descriptors");
+        Assert.NotNull(expressions);
+        Assert.Equal(new[] { "Input", "Literal", "Object", "Variable" }, expressions.Items.Select(x => x.Type));
+        Assert.Equal(
+            new[]
+            {
+                ExpressionEditingModeView.Reference,
+                ExpressionEditingModeView.Literal,
+                ExpressionEditingModeView.Structured,
+                ExpressionEditingModeView.Reference
+            },
+            expressions.Items.Select(x => x.EditingMode));
+
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
         Assert.Equal(ExpectedCapabilities, capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
@@ -74,12 +110,159 @@ public sealed class DomainManagementApiCompositionTests
             capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public async Task Activity_availability_diagnostics_is_retrievable_without_request_input()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: false);
+
+        var diagnostics = await host.Client.GetFromJsonAsync<ActivityAvailabilityDiagnostics>(
+            "/design/activities/availability/diagnostics");
+
+        Assert.NotNull(diagnostics);
+        Assert.Empty(diagnostics.Items);
+        Assert.Empty(diagnostics.Sets);
+    }
+
+    [Fact]
+    public async Task Stock_server_shell_advertises_one_graph_design_provider_through_authoring_capabilities()
+    {
+        var enabledFeatures = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ActivitiesDesignApi",
+            "ActivitiesGraphDesign",
+            "ApiCapabilities",
+            "Expressions",
+            "FastEndpoints",
+            "Mediator",
+            "WorkflowsPublishingApi"
+        };
+        var overrides = StockServerFeatureNames()
+            .Where(feature => !enabledFeatures.Contains(feature))
+            .ToDictionary(
+                feature => $"CShells:Shells:default:Features:{feature}",
+                _ => (string?)"false",
+                StringComparer.Ordinal);
+        overrides["CShells:Shells:default:Features:ApiSecurity:AllowAnonymous"] = "true";
+
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Configuration
+            .AddJsonFile(StockServerConfigurationPath)
+            .AddInMemoryCollection(overrides);
+        builder.Services.AddCShellsAspNetCore(shells => shells
+            .WithAssemblies(
+                typeof(FastEndpointsFeature).Assembly,
+                typeof(ApiSecurityFeature).Assembly,
+                typeof(ActivitiesDesignApiFeature).Assembly,
+                typeof(GraphActivitiesDesignFeature).Assembly,
+                typeof(ExpressionsFeature).Assembly,
+                typeof(MediatorFeature).Assembly,
+                typeof(DomainManagementApiCompositionTests).Assembly)
+            .WithConfigurationProvider(builder.Configuration)
+            .WithWebRouting(options => options.EnablePathRouting = true));
+
+        await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission)],
+                "test"));
+            await next(context);
+        });
+        app.MapShells();
+        await app.StartAsync();
+
+        var registry = app.Services.GetRequiredService<IShellRegistry>();
+        var shell = await registry.GetOrActivateAsync("default");
+        var shellSettings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+        Assert.Contains("FastEndpoints", shellSettings.EnabledFeatures);
+        Assert.Contains("ActivitiesDesignApi", shellSettings.EnabledFeatures);
+        Assert.Contains("ActivitiesGraphDesign", shellSettings.EnabledFeatures);
+        var routePatterns = app.Services.GetServices<EndpointDataSource>()
+            .Concat(shell.ServiceProvider.GetServices<EndpointDataSource>())
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText)
+            .Where(pattern => pattern is not null)
+            .ToArray();
+        Assert.Contains(
+            "design/activities/authoring-capabilities",
+            routePatterns,
+            StringComparer.Ordinal);
+        using var client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+        var capabilities = await client.GetFromJsonAsync<ActivityAuthoringCapabilitiesView>(
+            "/design/activities/authoring-capabilities");
+
+        Assert.NotNull(capabilities);
+        var provider = Assert.Single(capabilities.Providers);
+        Assert.Equal("elsa.activity-graph", provider.ProviderKey);
+        Assert.Equal("Activity Graph", provider.DisplayName);
+        Assert.Equal(["1", "2"], provider.ManifestSchemas.Select(x => x.SchemaVersion).Order(StringComparer.Ordinal));
+        Assert.All(provider.ManifestSchemas, schema => Assert.True(schema.IsAuthorable));
+        Assert.Empty(provider.RequiredOutcomes);
+    }
+
+    private static IReadOnlyCollection<string> StockServerFeatureNames()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(StockServerConfigurationPath));
+        return document.RootElement
+            .GetProperty("CShells")
+            .GetProperty("Shells")
+            .GetProperty("default")
+            .GetProperty("Features")
+            .EnumerateObject()
+            .Select(feature => feature.Name)
+            .ToArray();
+    }
+
+    private static string StockServerConfigurationPath =>
+        Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "shells.json");
+
+    private static string RepoRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                    return directory.FullName;
+                directory = directory.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Could not find repository root.");
+        }
+    }
+
+    [ShellFeature(name: "ApiCapabilities")]
+    public sealed class ApiCapabilitiesDependencyFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+        }
+    }
+
+    [ShellFeature(name: "WorkflowsPublishingApi")]
+    public sealed class WorkflowsPublishingDependencyFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        }
+    }
+
     private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         private static readonly string[] CommonEndpointTypes =
         [
             "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
             "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
+            "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
+            "Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities.Get",
             "Elsa.Workflows.Design.Api.Endpoints.Definitions.List",
             "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
             "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowExecutablesEndpoint"
@@ -111,6 +294,7 @@ public sealed class DomainManagementApiCompositionTests
 
             if (includeExpressions)
             {
+                new ExpressionsFeature().ConfigureServices(builder.Services);
                 new ExpressionsApiFeature().ConfigureServices(builder.Services);
                 assemblies.Add(typeof(ExpressionsApiFeature).Assembly);
                 endpointTypes.Add("Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors");
@@ -124,6 +308,13 @@ public sealed class DomainManagementApiCompositionTests
             });
 
             var app = builder.Build();
+            app.Use(async (context, next) =>
+            {
+                context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission)],
+                    "test"));
+                await next(context);
+            });
             app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
             await app.StartAsync();
             return new CustomManagementHost(app, app.GetTestClient());
@@ -148,15 +339,24 @@ public sealed class DomainManagementApiCompositionTests
         }
     }
 
-    private sealed class JourneyRequestSender : IRequestSender
+    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
+            if (request is ListExpressionDescriptors expressionDescriptors)
+                return await HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
+            if (request is GetActivityAuthoringCapabilities authoringCapabilities)
+            {
+                var handler = services.GetRequiredService<
+                    IRequestHandler<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>>();
+                return (T)(object)await handler.Handle(authoringCapabilities, cancellationToken);
+            }
+
             object response = typeof(T) switch
             {
                 var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
-                var type when type == typeof(ExpressionDescriptorsResponse) => new ExpressionDescriptorsResponse([]),
+                var type when type == typeof(ActivityAvailabilityDiagnostics) => new ActivityAvailabilityDiagnostics([], []),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(
                     "publication-1", "definition-1", "version-1", "version-1", "artifact-1", "default",
                     PublicationStatusView.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
@@ -166,7 +366,15 @@ public sealed class DomainManagementApiCompositionTests
                 _ => throw new InvalidOperationException($"Unexpected representative journey response type '{typeof(T)}'.")
             };
 
-            return Task.FromResult((T)response);
+            return (T)response;
+        }
+
+        private async Task<T> HandleExpressionDescriptors<T>(
+            ListExpressionDescriptors request,
+            CancellationToken cancellationToken) where T : notnull
+        {
+            var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
+            return (T)(object)await handler.Handle(request, cancellationToken);
         }
     }
 }

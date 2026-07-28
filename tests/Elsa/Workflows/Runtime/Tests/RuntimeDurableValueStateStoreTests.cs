@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -10,7 +11,7 @@ public sealed class RuntimeDurableValueStateStoreTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 11, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task InMemoryDurableValueStateStore_SavesFindsListsAndDeletesByWorkflowExecution()
+    public async Task InMemoryDurableValueStateStore_SavesFindsPagesAndDeletesByWorkflowExecution()
     {
         var store = new InMemoryDurableValueStateStore();
         var first = NewDurableValue("durable-1", "wfexec-1", "customer");
@@ -22,7 +23,12 @@ public sealed class RuntimeDurableValueStateStoreTests
         await store.SaveAsync(otherWorkflow);
 
         Assert.Equal(first, await store.FindAsync("wfexec-1", "durable-1"));
-        Assert.Equal(2, (await store.ListAsync("wfexec-1")).Count);
+        var firstPage = await store.ListPageAsync(new DurableValueStatePageQuery("wfexec-1", limit: 1));
+        var secondPage = await store.ListPageAsync(new DurableValueStatePageQuery("wfexec-1", limit: 1, firstPage.NextContinuationToken));
+        Assert.Equal("durable-1", Assert.Single(firstPage.Items).DurableValueId);
+        Assert.Equal("durable-2", Assert.Single(secondPage.Items).DurableValueId);
+        Assert.Null(secondPage.NextContinuationToken);
+        Assert.Equal(2, (await store.ListAllDurableValueStatesAsync("wfexec-1")).Count);
 
         Assert.True(await store.DeleteAsync("wfexec-1", "durable-1"));
         Assert.Null(await store.FindAsync("wfexec-1", "durable-1"));

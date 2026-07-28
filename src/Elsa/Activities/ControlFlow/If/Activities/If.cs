@@ -4,8 +4,10 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.If.Activities;
 
@@ -22,9 +24,13 @@ namespace Elsa.Activities.If.Activities;
 /// <c>If</c> with no condition wired up runs the <c>Else</c> branch and emits <see cref="ActivityOutcomes.False"/>.
 /// </remarks>
 [ActivityStructure("elsa.if.structure", "1.0.0")]
+[ActivityOutcome(ActivityOutcomes.True)]
+[ActivityOutcome(ActivityOutcomes.False)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 [ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
 [ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
-public sealed class If : ActivityBase, IActivityChildCompletionHandler
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
 {
     public const string ThenSlotName = "If.Then";
     public const string ElseSlotName = "If.Else";
@@ -32,19 +38,17 @@ public sealed class If : ActivityBase, IActivityChildCompletionHandler
     public const string StructureSchemaVersion = "1.0.0";
 
     /// <summary>The boolean condition that selects the branch to run.</summary>
-    public InputArgument<bool> Condition { get; set; } = null!;
+    [ActivityInput(Key = nameof(Condition))]
+    public bool Condition { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var runtimeContext = RequireRuntimeContext(context);
-        var condition = context.Get(Condition);
         var navigator = IfNavigator.From(runtimeContext.ExecutableNode);
-        var branch = navigator.Select(condition);
+        var branch = navigator.Select(Condition);
 
         if (branch is null)
         {
-            runtimeContext.CompleteCompositeActivity([Outcome(condition)]);
-            return;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(Outcome(Condition)));
         }
 
         runtimeContext.ScheduleChildActivity(
@@ -55,9 +59,11 @@ public sealed class If : ActivityBase, IActivityChildCompletionHandler
                 ["if.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 ["if.targetNodeId"] = branch.ExecutableNodeId
             });
+
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
     }
 
-    public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+    public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -72,12 +78,10 @@ public sealed class If : ActivityBase, IActivityChildCompletionHandler
         // early). Matched by name so If takes no dependency on the (separate) Break activity module.
         if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
         {
-            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(ActivityOutcomes.Break));
         }
 
-        runtimeContext.CompleteCompositeActivity([Outcome(condition)]);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(Outcome(condition)));
     }
 
     private static bool ResolveCompletedBranchCondition(IfNavigator navigator, string completedChildExecutableNodeId)

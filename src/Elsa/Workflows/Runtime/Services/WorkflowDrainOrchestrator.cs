@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -14,6 +15,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
+    private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
+    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
+    private readonly TimeProvider _timeProvider;
 
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
@@ -31,13 +35,10 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, TimeProvider.System)
     {
     }
 
-    // Greediest constructor: MS DI selects it only when the coalescing drain scope factory has been registered (the
-    // opt-in coalescing wiring). On the default path the factory is absent, this constructor is not selected, and the
-    // coordinator runs its existing ownership-only path byte-for-byte unchanged.
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
@@ -45,7 +46,51 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory)
+        TimeProvider timeProvider)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, timeProvider)
+    {
+    }
+
+    // Immediate-mode DI selects this overload (widest satisfiable when no coalescing scope factory is registered) so
+    // the live-drain delivery accessor (WU-2) is injected and the in-memory fast path can engage.
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        TimeProvider timeProvider)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor, timeProvider)
+    {
+    }
+
+    // Coalescing-compatible overload retained for direct callers that do not customize the time provider.
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory, liveDrainDeliveryAccessor, TimeProvider.System)
+    {
+    }
+
+    public WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        TimeProvider timeProvider,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -58,6 +103,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;
+        _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
+        _cadenceResolver = cadenceResolver;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -73,23 +121,101 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
         // Single-writer ownership (RT-2): claim a fencing lease for this drain and expose it as the active ownership
         // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
-        // heartbeat to operational state, giving the recovery scanner real data; a crash mid-drain leaves that lease in
-        // place (the finally never runs) so the interrupted execution stays detectable, while a clean or handled return
-        // releases it to avoid false-positive recovery.
+        // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
+        // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
+        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery.
         if (_ownershipService is null || _ownershipContextAccessor is null)
             return await DrainCoreAsync(envelope, request, cancellationToken);
 
         var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
         using (_ownershipContextAccessor.Push(lease))
+        using (var renewalStop = new CancellationTokenSource())
+        using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
+            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, renewalStop.Token, drainCancellation);
+            RuntimeSchedulerDrainResult? result = null;
+            Exception? drainFailure = null;
+            Exception? renewalFailure = null;
+            Exception? releaseFailure = null;
             try
             {
-                return await DrainCoreAsync(envelope, request, cancellationToken);
+                result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
+            }
+            catch (Exception exception)
+            {
+                drainFailure = exception;
             }
             finally
             {
-                await _ownershipService.ReleaseAsync(lease, cancellationToken);
+                await renewalStop.CancelAsync();
+                try
+                {
+                    await renewalTask;
+                }
+                catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
+                {
+                    // Expected when the drain completes before the next heartbeat cadence.
+                }
+                catch (Exception exception)
+                {
+                    renewalFailure = exception;
+                }
+
+                try
+                {
+                    var release = await _ownershipService.ReleaseAsync(lease, CancellationToken.None);
+                    if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
+                }
+                catch (Exception exception)
+                {
+                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
+                }
             }
+
+            if (renewalFailure is not null)
+                ExceptionDispatchInfo.Capture(renewalFailure).Throw();
+
+            if (drainFailure is not null)
+                ExceptionDispatchInfo.Capture(drainFailure).Throw();
+
+            if (releaseFailure is not null)
+                ExceptionDispatchInfo.Capture(releaseFailure).Throw();
+
+            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
+        }
+    }
+
+    private async Task RenewOwnershipUntilStoppedAsync(
+        RuntimeExecutionLease lease,
+        CancellationToken stopToken,
+        CancellationTokenSource drainCancellation)
+    {
+        var duration = lease.ExpiresAt - lease.AcquiredAt;
+        var cadence = TimeSpan.FromTicks(Math.Max(1, duration.Ticks / 3));
+        while (true)
+        {
+            await Task.Delay(cadence, _timeProvider, stopToken);
+            RuntimeExecutionOwnershipTransitionResult heartbeat;
+            try
+            {
+                heartbeat = await _ownershipService!.HeartbeatAsync(lease, stopToken);
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await drainCancellation.CancelAsync();
+                throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", transitionStatus: null, exception);
+            }
+
+            if (heartbeat.Succeeded || heartbeat.Status == RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
+                continue;
+
+            await drainCancellation.CancelAsync();
+            throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", heartbeat.Status);
         }
     }
 
@@ -98,23 +224,51 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence unchanged.
+        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence.
         if (_coalescingScopeFactory is null)
-        {
-            var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
-            await NotifyObserversAsync(envelope, plainResult, cancellationToken);
-            return plainResult;
-        }
+            return await DrainImmediateAsync(envelope, request, cancellationToken);
+
+        // Coalescing host, but cadence is resolved per execution (ADR 0032 R5). A workflow that authored Immediate must
+        // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the
+        // immediate path, so no relaxable checkpoint is deferred for this run. The mandatory-boundary set is unaffected
+        // either way — those flush immediately under both policies. Authored cadence is read off the pinned executable
+        // (or the run's own per-run stamp on resume); when no resolver is registered the host default (coalesce) stands.
+        var cadence = _cadenceResolver is not null
+            ? await _cadenceResolver.ResolveAsync(envelope, cancellationToken)
+            : null;
+
+        if (cadence is { Coalesced: false })
+            return await DrainImmediateAsync(envelope, request, cancellationToken);
 
         // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
         // quiescence. The flush runs inside the active ownership scope so W5 fencing gates the single durable write. If
         // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
-        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId);
+        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
+        // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, cadence?.MaxSegmentCheckpoints);
         var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
+    }
+
+    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the RT-2
+    // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
+    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip
+    // (WU-2). Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
+    // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
+    // cadence opts this run out of coalescing on an otherwise-coalesced host (ADR 0032 R5).
+    private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        RuntimeSchedulerDrainRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
+            ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
+            : null;
+        var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
+        await NotifyObserversAsync(envelope, plainResult, cancellationToken);
+        return plainResult;
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(

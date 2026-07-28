@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -69,6 +70,43 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, first.Status);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, second.Status);
         Assert.Equal("Idempotency key was already processed.", second.Reason);
+        Assert.Single(processor.EnvelopeIds);
+    }
+
+    [Fact]
+    public async Task Equal_execution_and_idempotency_ids_in_different_partitions_use_independent_actors()
+    {
+        var processor = new RecordingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var tenantA = new WorkflowExecutionPartition("tenant-a");
+        var tenantB = new WorkflowExecutionPartition("tenant-b");
+        var first = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantA));
+        var second = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantB));
+
+        var firstResult = await first.EnqueueAsync(NewEnvelope(1, idempotencyKey: "same-key", partition: tenantA));
+        var secondResult = await second.EnqueueAsync(NewEnvelope(2, idempotencyKey: "same-key", partition: tenantB));
+
+        Assert.NotSame(first, second);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, firstResult.Status);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, secondResult.Status);
+        Assert.Equal(2, processor.EnvelopeIds.Count);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_RejectsEnvelopeForDifferentPartitionWithoutMutatingIdempotencyState()
+    {
+        var processor = new RecordingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var tenantA = new WorkflowExecutionPartition("tenant-a");
+        var tenantB = new WorkflowExecutionPartition("tenant-b");
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", partition: tenantA));
+
+        var rejected = await agent.EnqueueAsync(NewEnvelope(1, idempotencyKey: "same-key", partition: tenantB));
+        var accepted = await agent.EnqueueAsync(NewEnvelope(2, idempotencyKey: "same-key", partition: tenantA));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, rejected.Status);
+        Assert.Equal("Envelope persistence scope does not match this agent.", rejected.Reason);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, accepted.Status);
         Assert.Single(processor.EnvelopeIds);
     }
 
@@ -177,6 +215,209 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.True(LifecycleLockCount(provider) <= 1);
     }
 
+    // ---- #542 / spec 128: terminal actor eviction ---------------------------------------------------------------
+
+    [Fact]
+    public async Task EnqueueAsync_TerminalDrain_SurfacesTerminalMetadataOnAcceptedResult()
+    {
+        var provider = new InProcessWorkflowExecutionActorProvider(new TerminalCommandProcessor());
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var result = await agent.EnqueueAsync(NewEnvelope(1));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        Assert.Equal("true", result.Metadata[InProcessWorkflowExecutionActorProvider.WorkflowTerminatedMetadataKey]);
+    }
+
+    [Fact]
+    public async Task TerminalDrain_EvictsMailbox_LeavingBothRegistriesBoundedAfterManyDistinctRuns()
+    {
+        // Registry-bounded proof for #542: without terminal eviction, both _agents and _lifecycleLocks would retain one
+        // entry per distinct execution ever activated. Driving each distinct execution through a real terminal dispatch
+        // must return both registries to zero because the self-passivating handle evicts on terminal completion.
+        var processor = new TerminalCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+
+        const int distinctExecutions = 5000;
+        for (var index = 0; index < distinctExecutions; index++)
+        {
+            var workflowExecutionId = $"wfexec-{index}";
+            var agent = await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+            var result = await agent.EnqueueAsync(NewEnvelope(index, workflowExecutionId: workflowExecutionId));
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        }
+
+        Assert.Equal(distinctExecutions, processor.ProcessedCount);
+        Assert.Equal(0, AgentCount(provider));
+        Assert.Equal(0, LifecycleLockCount(provider));
+    }
+
+    [Fact]
+    public async Task KillSwitchOff_ReproducesUnboundedRegistryGrowth()
+    {
+        // Kill-switch proof: with PassivateOnTerminal disabled the provider is byte-identical to the pre-#542 behavior —
+        // every distinct terminal execution leaves its mailbox (and lifecycle lock) resident, so both registries grow
+        // one-per-run without bound.
+        var provider = new InProcessWorkflowExecutionActorProvider(
+            new TerminalCommandProcessor(),
+            new RuntimeActorEvictionOptions { PassivateOnTerminal = false });
+
+        const int distinctExecutions = 250;
+        for (var index = 0; index < distinctExecutions; index++)
+        {
+            var workflowExecutionId = $"wfexec-{index}";
+            var agent = await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+            await agent.EnqueueAsync(NewEnvelope(index, workflowExecutionId: workflowExecutionId));
+        }
+
+        Assert.Equal(distinctExecutions, AgentCount(provider));
+        Assert.Equal(distinctExecutions, LifecycleLockCount(provider));
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutionActorActivationReason.Start)]
+    [InlineData(WorkflowExecutionActorActivationReason.ResumeBookmark)]
+    [InlineData(WorkflowExecutionActorActivationReason.ContinueVolatileWait)]
+    [InlineData(WorkflowExecutionActorActivationReason.SchedulerWork)]
+    [InlineData(WorkflowExecutionActorActivationReason.ControlPlaneCommand)]
+    [InlineData(WorkflowExecutionActorActivationReason.Recovery)]
+    [InlineData(WorkflowExecutionActorActivationReason.GeneratedEvent)]
+    public async Task ActivationAfterTerminalEviction_CreatesFreshActiveAgent_ForEveryReason(WorkflowExecutionActorActivationReason reason)
+    {
+        var provider = new InProcessWorkflowExecutionActorProvider(new TerminalCommandProcessor());
+        var evicted = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", reason));
+        await evicted.EnqueueAsync(NewEnvelope(1));
+
+        // The prior mailbox was evicted, so re-activation for this reason must mint a fresh, active agent.
+        var revived = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", reason));
+
+        Assert.NotSame(evicted, revived);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, revived.Descriptor.Status);
+        Assert.Equal(1, AgentCount(provider));
+    }
+
+    [Fact]
+    public async Task RedeliveryRacingTerminalEviction_NeverThrowsAndLeavesNoLiveMailbox()
+    {
+        // Race (a): a redelivered command races the terminal passivation for the same id. Both dispatch through the one
+        // cached mailbox (serialized), so the outcome is always a valid status — never two live mailboxes, never a throw.
+        var provider = new InProcessWorkflowExecutionActorProvider(new TerminalCommandProcessor());
+
+        for (var round = 0; round < 200; round++)
+        {
+            var workflowExecutionId = $"wfexec-{round}";
+            var agent = await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+
+            var first = Task.Run(() => agent.EnqueueAsync(NewEnvelope(1, workflowExecutionId: workflowExecutionId, idempotencyKey: $"{workflowExecutionId}:a")).AsTask());
+            var redelivery = Task.Run(() => agent.EnqueueAsync(NewEnvelope(2, workflowExecutionId: workflowExecutionId, idempotencyKey: $"{workflowExecutionId}:b")).AsTask());
+
+            var results = await Task.WhenAll(first, redelivery).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.All(results, result => Assert.Contains(result.Status, new[]
+            {
+                WorkflowExecutionCommandDispatchStatus.Accepted,
+                WorkflowExecutionCommandDispatchStatus.Deferred,
+                WorkflowExecutionCommandDispatchStatus.Duplicate
+            }));
+        }
+
+        // Every id terminated, so no live mailbox may remain.
+        Assert.Equal(0, AgentCount(provider));
+        Assert.Equal(0, LifecycleLockCount(provider));
+    }
+
+    [Fact]
+    public async Task PassivationBlocksUntilInFlightNonTerminalDrainReleasesTheMailbox()
+    {
+        // Race (b): an eager/reaper passivation cannot barge into a mailbox that an in-flight non-terminal drain still
+        // holds; it must block until the drain releases, preserving single-writer-per-execution.
+        var processor = new BlockingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        var enqueueTask = agent.EnqueueAsync(NewEnvelope(1)).AsTask();
+        await processor.WaitUntilStartedAsync();
+
+        var passivationTask = provider.PassivateAsync(NewPassivationRequest("wfexec-1")).AsTask();
+        await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
+
+        // The drain still owns the mailbox, so passivation must not have completed.
+        Assert.False(passivationTask.IsCompleted);
+
+        processor.Release();
+        var enqueueResult = await enqueueTask;
+        await passivationTask.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, enqueueResult.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, agent.Descriptor.Status);
+        Assert.Equal(0, AgentCount(provider));
+    }
+
+    [Fact]
+    public async Task RedeliveryRacingEvictionAcrossCanonicalLockRetry_DoesNotDeadlockOrLeakLocks()
+    {
+        // Race (c): a re-activation races the terminal eviction of the same id, exercising AcquireLifecycleLockAsync's
+        // verify-after-acquire retry. It must stay serialized on the canonical lock — no deadlock, no throw, no lock leak.
+        var provider = new InProcessWorkflowExecutionActorProvider(new TerminalCommandProcessor());
+        const string workflowExecutionId = "wfexec-race";
+
+        for (var round = 0; round < 250; round++)
+        {
+            var agent = await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+
+            var terminalEvict = Task.Run(() => agent.EnqueueAsync(
+                NewEnvelope(round, workflowExecutionId: workflowExecutionId, idempotencyKey: $"{workflowExecutionId}:{round}")).AsTask());
+            var reactivate = Task.Run(() => provider.GetAgentAsync(
+                NewActivationRequest(workflowExecutionId, WorkflowExecutionActorActivationReason.Recovery)).AsTask());
+
+            await Task.WhenAll(terminalEvict, reactivate).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        // Only one id is ever used; the retry loop must not accumulate stale, orphaned locks or agents.
+        Assert.True(LifecycleLockCount(provider) <= 1);
+        Assert.True(AgentCount(provider) <= 1);
+    }
+
+    [Fact]
+    public async Task LiveMailboxGauge_ReportsRegistrySize_AndDropsAfterTerminalEviction()
+    {
+        using var meter = new Meter($"test-{Guid.NewGuid():N}");
+        var provider = new InProcessWorkflowExecutionActorProvider(
+            new TerminalCommandProcessor(),
+            InProcessWorkflowExecutionActorProvider.DefaultMaxProcessedIdempotencyKeysPerAgent,
+            new RuntimeActorEvictionOptions(),
+            meter);
+
+        Assert.Equal(0, ObserveGauge(meter));
+
+        await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        await provider.GetAgentAsync(NewActivationRequest("wfexec-2"));
+        var terminating = await provider.GetAgentAsync(NewActivationRequest("wfexec-3"));
+        Assert.Equal(3, ObserveGauge(meter));
+
+        await terminating.EnqueueAsync(NewEnvelope(1, workflowExecutionId: "wfexec-3"));
+
+        // The terminal drain evicted wfexec-3's mailbox, so the gauge drops.
+        Assert.Equal(2, ObserveGauge(meter));
+    }
+
+    private static int ObserveGauge(Meter meter)
+    {
+        var observed = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (ReferenceEquals(instrument.Meter, meter) &&
+                instrument.Name == InProcessWorkflowExecutionActorProvider.LiveMailboxGaugeName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<int>((_, measurement, _, _) => observed = measurement);
+        listener.Start();
+        listener.RecordObservableInstruments();
+        return observed;
+    }
+
     [Fact]
     public async Task EnqueueAsync_RejectsEnvelopeForDifferentWorkflowExecution()
     {
@@ -201,38 +442,49 @@ public sealed class RuntimeInProcessAgentProviderTests
     private WorkflowExecutionActorActivationRequest NewActivationRequest(
         string workflowExecutionId,
         WorkflowExecutionActorActivationReason reason = WorkflowExecutionActorActivationReason.Start,
-        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox) =>
+        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox,
+        WorkflowExecutionPartition? partition = null) =>
         new(
             workflowExecutionId: workflowExecutionId,
             reason: reason,
             requestedAt: _now,
             requestedBy: "runtime-test",
-            requiredCapabilities: requiredCapabilities);
+            requiredCapabilities: requiredCapabilities,
+            partition: partition);
 
     private WorkflowExecutionActorPassivationRequest NewPassivationRequest(
         string workflowExecutionId,
         WorkflowExecutionActorPassivationBoundary boundary = WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
-        string reason = "Host drain") =>
+        string reason = "Host drain",
+        WorkflowExecutionPartition? partition = null) =>
         new(
             workflowExecutionId: workflowExecutionId,
             boundary: boundary,
             requestedAt: _now,
-            reason: reason);
+            reason: reason,
+            partition: partition);
 
     // The provider keeps its lifecycle-lock table private (public sealed type, no InternalsVisibleTo), so the
     // growth-regression assertions read its size via reflection rather than a test-only public surface.
-    private static int LifecycleLockCount(InProcessWorkflowExecutionActorProvider provider)
+    private static int LifecycleLockCount(InProcessWorkflowExecutionActorProvider provider) =>
+        PrivateDictionaryCount(provider, "_lifecycleLocks");
+
+    private static int AgentCount(InProcessWorkflowExecutionActorProvider provider) =>
+        PrivateDictionaryCount(provider, "_agents");
+
+    private static int PrivateDictionaryCount(InProcessWorkflowExecutionActorProvider provider, string fieldName)
     {
         var field = typeof(InProcessWorkflowExecutionActorProvider)
-            .GetField("_lifecycleLocks", BindingFlags.Instance | BindingFlags.NonPublic);
-        var locks = (IDictionary)field!.GetValue(provider)!;
-        return locks.Count;
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        var dictionary = (IDictionary)field!.GetValue(provider)!;
+        return dictionary.Count;
     }
 
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         string workflowExecutionId = "wfexec-1",
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        WorkflowExecutionPartition? partition = null)
     {
         using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
         var command = new WorkflowExecutionCommand(
@@ -250,7 +502,8 @@ public sealed class RuntimeInProcessAgentProviderTests
             idempotencyKey: idempotencyKey ?? $"{workflowExecutionId}:command-{index}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: _now,
-            sequence: index);
+            sequence: index,
+            partition: partition);
     }
 
     private static bool IsActorFrameworkReference(string? name) =>
@@ -302,6 +555,19 @@ public sealed class RuntimeInProcessAgentProviderTests
             }
 
             return WorkflowExecutionCommandProcessResult.NoDrain;
+        }
+    }
+
+    private sealed class TerminalCommandProcessor : IWorkflowExecutionCommandExecutor
+    {
+        private int _processedCount;
+
+        public int ProcessedCount => Volatile.Read(ref _processedCount);
+
+        public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _processedCount);
+            return new(WorkflowExecutionCommandProcessResult.Terminal);
         }
     }
 

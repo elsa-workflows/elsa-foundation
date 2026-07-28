@@ -12,9 +12,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// Acceptance for spec 089 sub-unit E (synchronous HTTP responses) — User Story 5 acceptance 5.1-5.5 and FR-021 —
 /// proven at the host level over the real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>). These
 /// are the first tests to exercise the WHOLE sync-response chain end to end with no fakes: a sync-mode endpoint
-/// populates the request scope's <c>SyncHttpResponseSink</c> and dispatches with the request services as ambient
-/// services → the in-process actor drains INLINE on the caller's async flow → a <c>WriteHttpResponse</c> the run
-/// reaches resolves that same sink and writes the live response in the SAME exchange → the middleware returns the
+/// the in-process actor drains INLINE on the caller's async flow → a <c>WriteHttpResponse</c> the run reaches
+/// commits one typed instruction → the request-owned delivery adapter writes that result in the SAME exchange → the middleware returns the
 /// workflow-authored status/headers/body rather than the 202 baseline. The degrade path (suspend-first, timeout),
 /// the async baseline's bit-identical 202, the mid-flow (D+E) resume-writes-response scenario, and the FR-021
 /// ambient-services purity sweep are all covered here.
@@ -55,9 +54,9 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // The durable artifact is recorded alongside the live write (E-D3: the artifact is unconditional).
         var artifact = await ReadArtifactForSingleRunAsync();
-        Assert.Equal(201, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
-        Assert.Equal("""{"id":42}""", artifact.GetProperty(nameof(HttpResponseInstruction.Body)).GetString());
-        Assert.Equal("application/json", artifact.GetProperty(nameof(HttpResponseInstruction.ContentType)).GetString());
+        Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
+        Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
+        Assert.Equal("application/json", artifact.GetProperty("contentType").GetString());
     }
 
     [Fact]
@@ -94,21 +93,34 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
             path: "sync/slow",
             method: "POST",
             resultValueId: "sync-slow-result",
-            // Leave enough headroom for the endpoint checkpoint to commit on a contended CI host; the 30-second
-            // activity stall still guarantees that this five-second request budget is the operation that wins.
-            requestTimeout: TimeSpan.FromSeconds(5),
+            // Leave enough headroom for a cold TestServer/runtime start to commit the endpoint result before
+            // cancellation reaches the deliberately long-running child. The 30-second stall still proves the
+            // endpoint timeout rather than a naturally completed dispatch.
+            requestTimeout: TimeSpan.FromSeconds(2),
             stallDuration: TimeSpan.FromSeconds(30));
 
         var response = await _fixture.Client.PostAsync($"{BasePath}sync/slow",
             new StringContent("""{"n":1}""", Encoding.UTF8, "application/json"));
 
-        Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
+        if (response.StatusCode != HttpStatusCode.RequestTimeout)
+        {
+            var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
+            var states = executions.Count == 1
+                ? await _fixture.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executions.Single().WorkflowExecutionId)
+                : [];
+            Assert.Fail(
+                $"Expected 408, received {(int)response.StatusCode}. " +
+                string.Join(" | ", states.Select(state =>
+                    $"{state.Execution.ExecutableNodeId}:{state.Status}/{state.SubStatus}:{state.Fault?.Message}")));
+        }
 
         // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
         // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
         // semantics rather than merely still being counted.
-        var execution = await _fixture.SingleWorkflowExecutionAsync();
-        var capturedResult = await _fixture.ReadCapturedOutputAsync(execution.WorkflowExecutionId, "sync-slow-result");
+        var (_, capturedResult) = await _fixture.WaitForSingleWorkflowExecutionWithResultProjectionAsync(
+            "Request",
+            "sync-slow-result",
+            TimeSpan.FromSeconds(5));
         Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 
@@ -144,8 +156,8 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // The artifact is still recorded — the async run reached WriteHttpResponse and recorded its intended response.
         var artifact = await _fixture.ReadHttpResponseArtifactAsync(startedId);
-        Assert.Equal(201, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
-        Assert.Equal("""{"id":42}""", artifact.GetProperty(nameof(HttpResponseInstruction.Body)).GetString());
+        Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
+        Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
     }
 
     [Fact]
@@ -181,7 +193,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // And the durable artifact was recorded on the resumed run.
         var artifact = await _fixture.ReadHttpResponseArtifactAsync(workflowExecutionId);
-        Assert.Equal(203, artifact.GetProperty(nameof(HttpResponseInstruction.StatusCode)).GetInt32());
+        Assert.Equal(203, artifact.GetProperty("statusCode").GetInt32());
     }
 
     [Fact]
@@ -207,11 +219,11 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         // envelopes/checkpoints as opaque state; a leaked IServiceProvider would surface as a provider type name in
         // the serialized payload. (Mirrors the T003 integration purity assertion at the HTTP E2E level.)
         var services = _fixture.Services;
-        var executions = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+        var executions = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
         var runId = Assert.Single(executions).WorkflowExecutionId;
 
-        var durableValues = await services.GetRequiredService<IDurableValueStateStore>().ListAsync(runId);
-        var bookmarks = await services.GetRequiredService<IBookmarkStateStore>().ListAsync(runId);
+        var durableValues = await services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(runId);
+        var bookmarks = await services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(runId);
 
         var serialized = new StringBuilder();
         foreach (var value in durableValues)
@@ -230,7 +242,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     /// <summary>Reads the durable HttpResponse artifact for the single run the test started (the store holds exactly one).</summary>
     private async Task<JsonElement> ReadArtifactForSingleRunAsync()
     {
-        var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync();
+        var executions = await _fixture.Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
         var runId = Assert.Single(executions).WorkflowExecutionId;
         return await _fixture.ReadHttpResponseArtifactAsync(runId);
     }

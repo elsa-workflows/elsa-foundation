@@ -13,7 +13,12 @@ namespace Elsa.Activities.If.Internal;
 /// </summary>
 internal sealed class IfStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => IfActivity.StructureKind;
 
@@ -57,6 +62,18 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<IfExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("If executable structure payload is invalid.");
+        var remapped = new IfExecutableStructure(
+            Remap(executable.Then, authoredToExecutableNodeIds),
+            Remap(executable.Else, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBranch(ActivityNode? branch) =>
         branch is null ? [] : [branch];
 
@@ -74,4 +91,7 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<IfAuthoredStructure>(SerializerOptions)
                ?? new IfAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -23,7 +24,8 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.ActivateAsync(fixture.Publication, replacedPublicationId: null);
 
         Assert.Equal(1, fixture.Indexer.PrepareCallCount);
-        Assert.Single(await fixture.BindingStore.ListByStimulusAsync("Event", "orders"));
+        Assert.Single((await fixture.BindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "orders"))).Items);
         Assert.Single(await fixture.ScheduleStore.ListDueAsync(_now.AddHours(2), 10));
 
         await fixture.Reconciler.RemoveAsync(fixture.Publication);
@@ -32,7 +34,7 @@ public sealed class PublicationProjectionReconcilerTests
         var intents = await fixture.IntentStore.ListByPublicationAsync(fixture.Publication.PublicationId);
         Assert.Equal(6, intents.Count);
         Assert.All(intents, intent => Assert.Equal(PublicationProjectionIntentStatus.Delivered, intent.Status));
-        Assert.Empty(await fixture.BindingStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
         Assert.Empty(await fixture.ScheduleStore.ListByPublicationAsync(fixture.Publication.PublicationId));
     }
 
@@ -70,7 +72,7 @@ public sealed class PublicationProjectionReconcilerTests
     {
         var fixture = await Fixture.CreateAsync(_now);
         await fixture.Reconciler.PrepareAsync(fixture.Publication);
-        var candidateBinding = Assert.Single(await fixture.BindingStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        var candidateBinding = Assert.Single(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
         var restoredBinding = candidateBinding with
         {
             TriggerBindingId = WorkflowTriggerBinding.BuildId(
@@ -102,7 +104,7 @@ public sealed class PublicationProjectionReconcilerTests
 
         var visible = Assert.Single(fixture.Observer.VisiblePublicationsByNotification);
         Assert.Equal(new[] { "publication-old" }, visible);
-        Assert.Empty(await fixture.BindingStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
     }
 
     [Fact]
@@ -112,12 +114,13 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.PrepareAsync(fixture.Publication);
         await fixture.Reconciler.ActivateAsync(fixture.Publication, replacedPublicationId: null);
         await fixture.Reconciler.RemoveAsync(fixture.Publication);
-        Assert.Empty(await fixture.BindingStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
 
         await fixture.Reconciler.RestoreAsync(fixture.Publication);
 
         Assert.Equal(2, fixture.Indexer.PrepareCallCount);
-        Assert.Single(await fixture.BindingStore.ListByStimulusAsync("Event", "orders"));
+        Assert.Single((await fixture.BindingStore.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "orders"))).Items);
         Assert.Single(await fixture.ScheduleStore.ListDueAsync(_now.AddHours(2), 10));
     }
 
@@ -180,14 +183,13 @@ public sealed class PublicationProjectionReconcilerTests
                     authoredActivityId: "activity-root",
                     activityType: "Test.Root",
                     activityTypeVersion: "1.0.0",
-                    descriptorType: "Test",
-                    descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                    descriptor: new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
                     inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                    outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                     metadata: new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 now,
-                new Dictionary<string, string>());
+                new Dictionary<string, string>(),
+                IncidentStrategyBuiltIns.FaultReference);
     }
 
     private sealed class ServingProjectionObserver(IWorkflowTriggerBindingStore bindingStore) : IWorkflowTriggerIndexObserver
@@ -198,7 +200,7 @@ public sealed class PublicationProjectionReconcilerTests
             WorkflowTriggerIndexSnapshot snapshot,
             CancellationToken cancellationToken = default)
         {
-            var visible = await bindingStore.ListByStimulusTypeAsync("Event", cancellationToken);
+            var visible = await bindingStore.ListAllByStimulusTypeAsync("Event", cancellationToken);
             VisiblePublicationsByNotification.Add(visible
                 .Select(x => x.PublicationId!)
                 .OrderBy(x => x, StringComparer.Ordinal)
@@ -253,6 +255,7 @@ public sealed class PublicationProjectionReconcilerTests
             var schedule = new RecurringTriggerSchedule(
                 RecurringTriggerSchedule.BuildId(publicationId, executable.Identity.ArtifactId, "node-root"),
                 executable.Identity.ArtifactId,
+                "node-root",
                 "Event",
                 "orders",
                 RecurringScheduleKind.Interval,

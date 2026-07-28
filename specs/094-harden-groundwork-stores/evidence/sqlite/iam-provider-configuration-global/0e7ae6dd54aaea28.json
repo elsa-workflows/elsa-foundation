@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-provider-configuration-scope-and-privilege",
+  "coverageEntryId": "iam-provider-configuration-global",
+  "provider": "sqlite",
+  "providerIdentity": "groundwork-sqlite",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "file-backed-distinct-connections",
+  "manifestFingerprint": "4131618086738b47cd64492ba68e1ccdf90bde9c6580573c720c553be6d1ec7e",
+  "executionPath": "provider-driver/sqlite/iam-provider-configuration-global/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
+  "outcome": "pass",
+  "evidence": "evidence/sqlite/iam-provider-configuration-global/0e7ae6dd54aaea28.json"
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:list-by-scope-bounded",
+  "sourceScenarioId": "secret-bounded-list-equivalence",
+  "coverageEntryId": "secrets-repository",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "12f321425cc00c0ead55da06ea7e5d4a7ae6cc33bd613318fc3bd92133ee582b",
+  "executionPath": "provider-driver/sqlserver/secrets-repository/5e4cbf89c5b8c6b3",
+  "clients": 1,
+  "resultHash": "431d17322fb0725388591d89aeb57d9f700c56b064e1c9e5b35dfd637c20ec40",
+  "outcome": "pass",
+  "queryShape": "list-by-scope-bounded",
+  "nativeQueryIdentity": "list-filtered",
+  "documentKind": "secret",
+  "nativeEvidence": "evidence/sqlserver/secrets-repository/5e4cbf89c5b8c6b3.plan.txt",
+  "evidence": "evidence/sqlserver/secrets-repository/5e4cbf89c5b8c6b3.json"
+}

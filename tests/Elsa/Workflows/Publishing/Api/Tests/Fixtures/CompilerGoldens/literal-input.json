@@ -1,12 +1,17 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:947fe99c3c6e0132cc86cffa05af4f3d543f42224322a4703393ee7aefe8fd18",
-    "artifactId": "artifact-947fe99c3c6e",
+    "artifactHash": "sha256:cf7822f269804268a5591f0dc3a00f6121f8d600a4c5b808dc4581ad6b20ed21",
+    "artifactId": "artifact-cf7822f26980",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
   },
   "resumeTargets": [],
   "rootActivity": {
@@ -14,10 +19,13 @@
     "activityTypeVersion": "1.0.0",
     "authoredActivityId": "write-one",
     "childSlots": [],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "write-one",
     "inputBindings": [
       {
@@ -29,10 +37,6 @@
           {
             "Key": "referenceKey",
             "Value": "Text"
-          },
-          {
-            "Key": "typeName",
-            "Value": "System.String, System.Private.CoreLib"
           }
         ],
         "source": "Literal"

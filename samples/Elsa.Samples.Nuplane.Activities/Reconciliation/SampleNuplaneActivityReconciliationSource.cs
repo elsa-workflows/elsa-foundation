@@ -1,9 +1,9 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Samples.Nuplane.Activities.Activities;
-using Elsa.Samples.Nuplane.Activities.Descriptors;
 
 namespace Elsa.Samples.Nuplane.Activities.Reconciliation;
 
@@ -16,8 +16,11 @@ public sealed class SampleNuplaneActivityReconciliationSource : IActivityReconci
         DisplayName: "Say Hello From Nuplane",
         Category: "Samples",
         Description: "Writes a greeting from an activity provided by a Nuplane-loaded package.",
-        DescriptorType: typeof(SampleNuplaneActivityDescriptor).FullName!,
-        Descriptor: SampleNuplaneActivityDescriptor.Default,
+        ProviderKey: "elsa.clr-activity",
+        ProviderSchemaVersion: "1",
+        ConsumerKey: WellKnownRuntimeActivityConsumers.ClrActivity,
+        ConsumerSchemaVersion: RuntimeActivityDescriptor.InitialSchemaVersion,
+        Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(SayHelloFromNuplane))),
         Inputs:
         [
             new InputDefinition(
@@ -27,6 +30,7 @@ public sealed class SampleNuplaneActivityReconciliationSource : IActivityReconci
                 StorageDriverType: null,
                 DisplayName: "Recipient",
                 Category: null,
+                IsNullable: true,
                 IsRequired: false)
         ],
         Outputs: [],

@@ -22,9 +22,36 @@ public interface IActivityStructureHandler
 
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
+    /// <summary>
+    /// Projects public-contract members referenced by structure-owned relationships such as
+    /// Flowchart outcome ports. Values and expressions must never be included.
+    /// </summary>
+    IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
+
+    /// <summary>
+    /// Rewrites the semantic child-node references in an already compiled structure after its
+    /// authored children have received placement-specific executable identities.
+    /// </summary>
+    /// <remarks>
+    /// Structure payloads are activity-owned. Implementations must rewrite only fields that
+    /// semantically identify projected activity children; arbitrary JSON string replacement is
+    /// unsafe because payloads may also contain unrelated identifiers and metadata.
+    /// </remarks>
+    ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(authoredToExecutableNodeIds);
+        if (authoredToExecutableNodeIds.Count == 0)
+            return structure;
+
+        throw new NotSupportedException($"Structure handler '{Kind}@{SchemaVersion}' does not support executable child-node remapping.");
+    }
 
     /// <summary>
     /// Projects the container-scoped variables declared by this activity node, if any. Container

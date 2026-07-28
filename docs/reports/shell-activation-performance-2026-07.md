@@ -95,9 +95,9 @@ The shell-ready result clears both acceptance thresholds: it is below 30 seconds
 
 ## Warm-lane residual and follow-up
 
-The optimized Production lane's 200 measured requests produced warm p95 `359.953 ms`, above the existing 50 ms budget. A diagnostic run with `RematerializeOnStartup=true` produced warm p95 `35.645 ms`; a vacuumed copy produced `31.999 ms`. This demonstrates that full index-projection rebuild/physical compaction can mask the repeated post-readiness lookup/materialization cost, while exact-history startup deliberately leaves existing data pages untouched.
+The optimized Production lane's 200 measured requests produced warm p95 `359.953 ms`, above the existing 50 ms budget. A historical diagnostic run on the pre-current-main storage composition with `RematerializeOnStartup=true` produced warm p95 `35.645 ms`; a vacuumed copy produced `31.999 ms`. This demonstrates that full index-projection rebuild/physical compaction can mask the repeated post-readiness lookup/materialization cost. Current main subsequently replaced that repair switch with admission-plan fingerprinting and per-boot schema inspection.
 
-This residual is not hidden as a successful acceptance result. Issue #625 was pulled into the same delivery and now adds a bounded immutable workflow-executable cache at the runtime store seam. The final post-cache lanes below remain the merge gate. Operators with a fragmented or suspect SQLite projection can still set `RematerializeOnStartup=true` for one startup and then return it to `false`.
+This residual is not hidden as a successful acceptance result. Issue #625 was pulled into the same delivery and now adds a bounded immutable workflow-executable cache at the runtime store seam. The final post-cache lanes below remain the merge gate.
 
 ## Cache scope and route lookup findings
 
@@ -111,16 +111,32 @@ Cache behavior and safety:
 - concurrent misses for one ID share a provider load, while cancelling one waiter does not cancel the shared load;
 - deterministic least-recently-used eviction keeps resident entries within the configured capacity;
 - save/delete invalidate rather than admitting the caller's object, preserving the provider's idempotent-save authority;
-- cache state is shell/provider-local and starts empty after replacement or process restart; SQLite enables it by default, while PostgreSQL/distributed features require explicit opt-in because invalidation is process-local;
+- cache state is shared across request scopes inside one shell service provider, isolated by authorized persistence scope, and starts empty after shell replacement or process restart; SQLite enables it by default, while PostgreSQL/distributed features require explicit opt-in because invalidation is node-local;
 - metrics expose only bounded hit/miss, eviction-reason, and provider-load outcome/duration dimensions.
 
 ## Operator knobs and rollback
 
 - `Elsa:Readiness:WarmDefaultShell=false` restores request-triggered lazy activation; readiness stays observational and returns unavailable until another request activates the shell.
 - `Elsa:Readiness:DefaultShellName` selects the single shell observed and prepared by the root host. Other shells remain lazy and isolated.
-- `GroundworkRuntimePersistenceSqlite:RematerializeOnStartup=true` forces the prior full materialization/backfill path for repair or verification. The default `false` trusts an exact manifest/provider history tuple and opens the existing store directly.
-- Durable Groundwork runtime and unified features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell/provider). SQLite features default caching to `true`; PostgreSQL/distributed and legacy direct registrations default to direct reads until a host explicitly accepts immutable-artifact retention or supplies cross-node invalidation. Set caching to `false` for immediate rollback; capacity must be positive only while enabled.
-- Missing schema history, or a changed manifest/provider identity or version, always falls back to full materialization regardless of the repair setting.
+- SQLite runtime and unified features expose `SkipSchemaInspectionWhenPlanUnchanged`. It defaults to `false`, preserving per-boot out-of-band drift detection. Enabling it trades that inspection for a single applied-plan fingerprint read when the composed plan is unchanged.
+- Durable Groundwork runtime and unified features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell). SQLite features default caching to `true`; PostgreSQL/distributed and legacy direct registrations default to direct reads until a host explicitly accepts immutable-artifact retention or supplies cross-node invalidation. Set caching to `false` for immediate rollback; capacity must be positive only while enabled.
+- Missing or changed admission fingerprints always execute the full schema inspection/application path regardless of the skip setting.
+
+## Current-main integration evidence
+
+After merging current main into the work branch, the Release server built with zero errors and the deterministic cache, SQLite, PostgreSQL, unified-host, readiness, architecture, and HTTP integration lanes passed. The build reports 31 obsolescence warnings from unchanged current-main Groundwork and publishing sources; this PR introduces no warnings in its diff. The reference server configurations explicitly enable `GroundworkUnifiedPersistenceSqlite.CacheWorkflowExecutables` with capacity `256`.
+
+A fresh local SQLite fixture published `GET /workflows/http/hello-world` (HTTP 200, exact body `Hello World!`) as definition `12FOt8yTb5f`, artifact `artifact-f6655508d471`. Cache-on/off 200-request diagnostics were then run from equivalent low-row-count snapshots. Those samples were collected while unrelated host processes consumed more than three CPU cores, so they are retained only as regression attribution—not acceptance evidence:
+
+| Setting | Warm p95 | Result |
+|---|---:|---|
+| cache off | 1,793.517 ms | fails 50 ms budget |
+| cache on (default) | 2,440.520 ms | fails 50 ms budget |
+
+The run confirms that executable caching alone is insufficient on the integrated current-main runtime and that the machine was not quiet enough for a causal wall-clock conclusion. A macOS sample attributed substantial time to GC/allocation and SQLite-backed durable execution while the run count grew. The required quiet-host 20-boot and 200-request lanes therefore remain open; no PR should claim the 50 ms gate from these contaminated samples.
+
+Raw diagnostic reports and samples are retained under
+[`docs/reports/evidence/092-workflow-executable-cache/current-main-contaminated-2026-07-28/`](evidence/092-workflow-executable-cache/current-main-contaminated-2026-07-28/).
 
 ## Subsequent recommendations
 

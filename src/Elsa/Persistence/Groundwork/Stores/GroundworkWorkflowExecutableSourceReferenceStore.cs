@@ -1,6 +1,8 @@
+using System.Globalization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -8,12 +10,14 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <summary>
 /// Groundwork-backed <see cref="IWorkflowExecutableSourceReferenceStore"/> (ADR 0038/0039/0040). Each per-publish
 /// source reference is one document, mirroring the WorkflowExecutable bridge. A constant collection partition
-/// serves the unfiltered list and the expiry/retirement GC sweep through an equality index (Groundwork is
-/// equality-only, so expiry filtering happens in memory); the by-artifact index serves ListByArtifact and the
-/// GC unreferenced-artifact check.
+/// serves the unfiltered list. Scope, expiry, retirement, and artifact facts are lifted to flat envelope fields
+/// so hot filters use declared bounded routes instead of provider-wide scans.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableSourceReferenceStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind), IWorkflowExecutableSourceReferenceStore
+public sealed class GroundworkWorkflowExecutableSourceReferenceStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, boundedStore), IWorkflowExecutableSourceReferenceStore
 {
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
@@ -31,32 +35,65 @@ public sealed class GroundworkWorkflowExecutableSourceReferenceStore(IDocumentSt
             sourceReferenceId, envelope => envelope.Reference, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-
-        var references = await QueryDocumentsAsync<SourceReferenceEnvelope, WorkflowExecutableSourceReference>(
-            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact,
-            artifactId,
-            envelope => envelope.Reference,
-            cancellationToken);
-
-        return references.ToArray();
-    }
-
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutableSourceReference>> ListAsync(
-        WorkflowExecutableReferenceScope? scope = null,
-        bool liveOnly = false,
-        DateTimeOffset? now = null,
+    public async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+        WorkflowExecutableSourceReferenceArtifactPageQuery query,
         CancellationToken cancellationToken = default)
     {
-        var asOf = now ?? DateTimeOffset.UtcNow;
-        var references = await ListAllAsync(cancellationToken);
+        ArgumentNullException.ThrowIfNull(query);
 
-        return references
-            .Where(reference => scope is null || reference.Scope == scope)
-            .Where(reference => !liveOnly || reference.IsLive(asOf))
-            .ToArray();
+        return await QueryPageAsync(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByArtifactQuery,
+            query,
+            [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, query.ArtifactId)],
+            cancellationToken);
+    }
+
+    public async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+        WorkflowExecutableSourceReferencePageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (query.LiveOnly)
+        {
+            var clauses = new List<DocumentQueryClause>
+            {
+                Equal(ElsaRuntimeStorageManifest.IsRetiredField, bool.FalseString),
+                GreaterThan(ElsaRuntimeStorageManifest.ExpiresAtField, query.Now!.Value)
+            };
+            var queryIdentity = ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesQuery;
+            if (query.Scope is { } scope)
+            {
+                queryIdentity = ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesByScopeQuery;
+                clauses.Insert(0, Equal(ElsaRuntimeStorageManifest.ScopeField, scope.ToString()));
+            }
+
+            if (query.Scope is null)
+            {
+                clauses.Insert(0, Equal(
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceCollection));
+            }
+
+            return await QueryPageAsync(queryIdentity, query, clauses, cancellationToken);
+        }
+
+        if (query.Scope is { } requestedScope)
+        {
+            return await QueryPageAsync(
+                ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByScopeQuery,
+                query,
+                [Equal(ElsaRuntimeStorageManifest.ScopeField, requestedScope.ToString())],
+                cancellationToken);
+        }
+
+        return await QueryPageAsync(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesQuery,
+            query,
+            [Equal(
+                ElsaRuntimeStorageManifest.CollectionField,
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceCollection)],
+            cancellationToken);
     }
 
     public async ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
@@ -71,10 +108,38 @@ public sealed class GroundworkWorkflowExecutableSourceReferenceStore(IDocumentSt
         return true;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
-        var doomed = (await ListAllAsync(cancellationToken))
-            .Where(reference => reference.DeletedAt is not null || reference.IsExpired(now))
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+
+        var result = await DeleteDocumentAsync(sourceReferenceId, cancellationToken);
+        return result.Status == DocumentStoreWriteStatus.Deleted;
+    }
+
+    public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+        WorkflowExecutableSourceReferenceCleanupBatch batch,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        var expired = await QueryBatchAsync(
+            ElsaRuntimeStorageManifest.BatchExpiredWorkflowExecutableSourceReferencesQuery,
+            [LessThanOrEqual(ElsaRuntimeStorageManifest.ExpiresAtField, now)],
+            batch.Limit,
+            cancellationToken);
+        var remaining = batch.Limit - expired.Count;
+        var retired = remaining == 0
+            ? []
+            : await QueryBatchAsync(
+                ElsaRuntimeStorageManifest.BatchRetiredWorkflowExecutableSourceReferencesQuery,
+                [
+                    Equal(ElsaRuntimeStorageManifest.IsRetiredField, bool.TrueString),
+                    GreaterThan(ElsaRuntimeStorageManifest.ExpiresAtField, now)
+                ],
+                remaining,
+                cancellationToken);
+        var doomed = expired
+            .Concat(retired)
             .Select(reference => reference.SourceReferenceId)
             .ToArray();
 
@@ -85,34 +150,119 @@ public sealed class GroundworkWorkflowExecutableSourceReferenceStore(IDocumentSt
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
-        IEnumerable<string> artifactIds,
+        WorkflowExecutableArtifactCandidateBatch candidates,
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(artifactIds);
-        var candidates = artifactIds.Distinct(StringComparer.Ordinal).ToArray();
+        ArgumentNullException.ThrowIfNull(candidates);
 
-        var liveArtifactIds = (await ListAllAsync(cancellationToken))
-            .Where(reference => reference.IsLive(now))
-            .Select(reference => reference.ArtifactId)
-            .ToHashSet(StringComparer.Ordinal);
+        var unreferenced = new List<string>(candidates.ArtifactIds.Count);
+        foreach (var artifactId in candidates.ArtifactIds)
+        {
+            // A single finite route admission is enough: the route predicate includes both live facts and the
+            // artifact identity, so provider-side existence does not materialize this artifact's references.
+            var live = await QueryPageAsync(
+                ElsaRuntimeStorageManifest.FindLiveWorkflowExecutableSourceReferenceByArtifactQuery,
+                new RuntimeStorePageRequest(limit: 1),
+                [
+                    Equal(ElsaRuntimeStorageManifest.ArtifactIdField, artifactId),
+                    Equal(ElsaRuntimeStorageManifest.IsRetiredField, bool.FalseString),
+                    GreaterThan(ElsaRuntimeStorageManifest.ExpiresAtField, now)
+                ],
+                cancellationToken);
+            if (live.Items.Count == 0)
+                unreferenced.Add(artifactId);
+        }
 
-        return candidates.Where(artifactId => !liveArtifactIds.Contains(artifactId)).ToArray();
+        return unreferenced.ToArray();
     }
 
-    private async ValueTask<IReadOnlyList<WorkflowExecutableSourceReference>> ListAllAsync(CancellationToken cancellationToken) =>
-        await QueryDocumentsAsync<SourceReferenceEnvelope, WorkflowExecutableSourceReference>(
-            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByCollection,
-            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceCollection,
-            envelope => envelope.Reference,
+    private async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> QueryPageAsync(
+        string queryIdentity,
+        RuntimeStorePageRequest query,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses,
+                GetOrder(queryIdentity),
+                take: query.Limit,
+                continuation: query.ContinuationToken),
             cancellationToken);
+        return new RuntimeStorePage<WorkflowExecutableSourceReference>(
+            query,
+            result.Documents
+                .Select(Serializer.Deserialize<SourceReferenceEnvelope>)
+                .Select(envelope => envelope.Reference)
+                .ToArray(),
+            result.NextContinuation);
+    }
+
+    private async ValueTask<IReadOnlyList<WorkflowExecutableSourceReference>> QueryBatchAsync(
+        string queryIdentity,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var result = await BoundedStore.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses,
+                GetOrder(queryIdentity),
+                take: limit),
+            cancellationToken);
+        return result.Documents
+            .Select(Serializer.Deserialize<SourceReferenceEnvelope>)
+            .Select(envelope => envelope.Reference)
+            .ToArray();
+    }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
+
+    private static IReadOnlyList<DocumentQueryOrder> GetOrder(string queryIdentity) =>
+        queryIdentity is
+            ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesQuery or
+            ElsaRuntimeStorageManifest.PageLiveWorkflowExecutableSourceReferencesByScopeQuery or
+            ElsaRuntimeStorageManifest.BatchExpiredWorkflowExecutableSourceReferencesQuery or
+            ElsaRuntimeStorageManifest.BatchRetiredWorkflowExecutableSourceReferencesQuery or
+            ElsaRuntimeStorageManifest.FindLiveWorkflowExecutableSourceReferenceByArtifactQuery
+            ?
+            [
+                new DocumentQueryOrder(ElsaRuntimeStorageManifest.ExpiresAtField),
+                new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField)
+            ]
+            : [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField)];
+
+    private static DocumentQueryClause GreaterThan(string fieldPath, DateTimeOffset value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
+            fieldPath,
+            value.ToString("O", CultureInfo.InvariantCulture)));
+
+    private static DocumentQueryClause LessThanOrEqual(string fieldPath, DateTimeOffset value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+            fieldPath,
+            value.ToString("O", CultureInfo.InvariantCulture)));
 
     private static SourceReferenceEnvelope ToEnvelope(WorkflowExecutableSourceReference reference) => new(
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceCollection,
         reference.ArtifactId,
+        reference.Scope.ToString(),
+        reference.ExpiresAt ?? DateTimeOffset.MaxValue,
+        (reference.DeletedAt is not null).ToString(),
         reference);
 
-    // The constant collection partition lets the list/expiry sweep use a keyword equality index instead of a
-    // provider-wide scan; ArtifactId is lifted to the top level so the by-artifact query hits a flat index path.
-    private sealed record SourceReferenceEnvelope(string Collection, string ArtifactId, WorkflowExecutableSourceReference Reference);
+    // The constant collection partition preserves unfiltered enumeration; hot lookup and GC facts are lifted to
+    // flat fields so bounded routes never depend on nested payload projection.
+    private sealed record SourceReferenceEnvelope(
+        string Collection,
+        string ArtifactId,
+        string Scope,
+        DateTimeOffset ExpiresAt,
+        string IsRetired,
+        WorkflowExecutableSourceReference Reference);
 }

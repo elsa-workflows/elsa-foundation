@@ -37,12 +37,25 @@ public interface IRecurringTriggerScheduleStore
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped preparation."));
 
-    /// <summary>Returns every prepared or active schedule owned by one publication.</summary>
-    ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+    /// <summary>Returns one finite, ordered page of prepared or active schedules owned by a publication.</summary>
+    ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
+        RecurringTriggerSchedulePublicationPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<RecurringTriggerSchedule>>(
+            new NotSupportedException("This recurring-schedule store does not support publication-scoped pages."));
+
+    /// <summary>Returns one finite, ordered page of schedules owned by an artifact.</summary>
+    ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(
+        RecurringTriggerScheduleArtifactPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<RecurringTriggerSchedule>>(
+            new NotSupportedException("This recurring-schedule store does not support artifact-scoped pages."));
+
+    /// <summary>Legacy complete traversal for publication-oriented commands.</summary>
+    async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
         string publicationId,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<IReadOnlyCollection<RecurringTriggerSchedule>>(
-            new NotSupportedException("This recurring-schedule store does not support publication-scoped queries."));
+        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
 
     /// <summary>Activates one publication and deactivates only the explicitly replaced publication.</summary>
     ValueTask ActivatePublicationAsync(

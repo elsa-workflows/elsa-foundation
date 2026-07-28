@@ -9,17 +9,25 @@ namespace Elsa.Expressions.Api.Handlers;
 public sealed class ListExpressionDescriptorsRequestHandler(IExpressionDescriptorRegistry registry)
     : IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>
 {
+    private static readonly ExpressionDescriptorView[] IntrinsicAuthoringDescriptors =
+    [
+        new("Literal", "Literal", null, ExpressionEditingModeView.Literal),
+        new("Object", "Object", null, ExpressionEditingModeView.Structured),
+        new("Input", "Input", null, ExpressionEditingModeView.Reference)
+    ];
+
     public Task<ExpressionDescriptorsResponse> Handle(ListExpressionDescriptors request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var descriptors = registry.ListAll()
-            .OrderBy(descriptor => descriptor.DisplayName, StringComparer.Ordinal)
-            .ThenBy(descriptor => descriptor.TypeName, StringComparer.Ordinal)
-            .Select(descriptor => new ExpressionDescriptorView(
+        var descriptors = IntrinsicAuthoringDescriptors
+            .Concat(registry.ListAll().Select(descriptor => new ExpressionDescriptorView(
                 descriptor.TypeName,
                 descriptor.DisplayName,
                 Description: ReadDescription(descriptor),
-                ToView(descriptor.EditingMode)))
+                ToView(descriptor.EditingMode))))
+            .DistinctBy(descriptor => descriptor.Type, StringComparer.Ordinal)
+            .OrderBy(descriptor => descriptor.DisplayName, StringComparer.Ordinal)
+            .ThenBy(descriptor => descriptor.Type, StringComparer.Ordinal)
             .ToArray();
         return Task.FromResult(new ExpressionDescriptorsResponse(descriptors));
     }

@@ -13,7 +13,12 @@ namespace Elsa.Activities.Do.Internal;
 /// </summary>
 internal sealed class DoStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => DoActivity.StructureKind;
 
@@ -53,6 +58,16 @@ internal sealed class DoStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<DoExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("Do executable structure payload is invalid.");
+        var remapped = new DoExecutableStructure(Remap(executable.Body, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBranch(ActivityNode? branch) =>
         branch is null ? [] : [branch];
 
@@ -70,4 +85,7 @@ internal sealed class DoStructureHandler : IActivityStructureHandler
         return activity.Structure.Payload.Deserialize<DoAuthoredStructure>(SerializerOptions)
                ?? new DoAuthoredStructure();
     }
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

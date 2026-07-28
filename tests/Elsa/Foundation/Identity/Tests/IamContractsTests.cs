@@ -36,6 +36,24 @@ public sealed class IamContractsTests
         Assert.Null(missingWithFallback?.TenantId);
     }
 
+    [Fact]
+    public void Bounded_page_request_rejects_unbounded_inputs()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new IamPageRequest(skip: -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new IamPageRequest(take: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new IamPageRequest(take: IamPageRequest.MaximumTake + 1));
+    }
+
+    [Fact]
+    public void Bounded_page_preserves_total_count_and_rejects_impossible_results()
+    {
+        var page = new IamPage<string>(["a", "b"], totalCount: 3);
+
+        Assert.Equal(["a", "b"], page.Items);
+        Assert.Equal(3L, page.TotalCount);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new IamPage<string>(["a"], totalCount: 0));
+    }
+
     private sealed class TestProviderConfigurationStore : IProviderConfigurationStore
     {
         public Dictionary<string, ProviderConfigurationRecord> Global { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -47,5 +65,15 @@ public sealed class IamContractsTests
 
         public ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(Tenant.GetValueOrDefault($"{tenantId}:{provider}"));
+
+        public ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default)
+        {
+            if (configuration.TenantId is null)
+                Global[configuration.Provider] = configuration;
+            else
+                Tenant[$"{configuration.TenantId}:{configuration.Provider}"] = configuration;
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

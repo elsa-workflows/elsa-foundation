@@ -17,34 +17,41 @@
           "ApiCapabilities": {},
           "Secrets": {},
           "SecretsApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
+          "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
+          "ActivitiesBpmn": {},
           "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
-          "ActivitiesCompositionRuntime": {},
           "ActivitiesDesignReconciliation": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
             }
           },
-          "ActivitiesCompositionDesign": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {},
+          "WorkflowsPublishingGroundwork": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkPublishingPersistenceSqlite": {},
-          "GroundworkRuntimePersistenceSqlite": {
-            "RematerializeOnStartup": false
+          "GroundworkUnifiedPersistenceSqlite": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
           },
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},

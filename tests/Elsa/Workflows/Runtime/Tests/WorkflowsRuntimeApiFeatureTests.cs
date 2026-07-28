@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Commands;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -14,6 +17,29 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
     [Fact]
+    public void Registers_runtime_diagnostics_settings_command_handler()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<ICommandHandler<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>>();
+    }
+
+    [Fact]
+    public void Registers_value_payload_reader_through_its_feature_contract_only()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionValuePayloadReader));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ActivityExecutionValuePayloadReader));
+    }
+
+    [Fact]
     public void RegistersRuntimeExecutionServicesAndRequestHandlers()
     {
         var services = new ServiceCollection();
@@ -26,19 +52,22 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         // negative-wiring assertions prove certain contracts are deliberately NOT registered, and the scheduler
         // work-handler set + ordering below is a real composition contract.
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutableActivityTemplateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyReader));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionHierarchyWriter));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusLookup));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeResolver));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeDispatcher));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkConsumptionCheckpointService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityOutputRegister));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IIncidentStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutionLivenessStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowHoldStateStore));
@@ -82,10 +111,13 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = rootProvider.CreateScope();
+        var provider = scope.ServiceProvider;
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();
+        provider.GetRequiredService<IExecutableActivityTemplateStore>();
         provider.GetRequiredService<IWorkflowExecutionCommandExecutor>();
         provider.GetRequiredService<IWorkflowDrainOrchestrator>();
         provider.GetRequiredService<WorkflowDrainOrchestratorOptions>();
@@ -95,13 +127,15 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IActivityExecutionInspectionStore>();
         provider.GetRequiredService<IActivityExecutionInspectionWriter>();
         provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        provider.GetRequiredService<IActivityExecutionHierarchyStore>();
+        provider.GetRequiredService<IActivityExecutionHierarchyReader>();
+        provider.GetRequiredService<IActivityExecutionHierarchyWriter>();
         provider.GetRequiredService<IBookmarkStateStore>();
         provider.GetRequiredService<IBookmarkStimulusLookup>();
         provider.GetRequiredService<IBookmarkResumeResolver>();
         provider.GetRequiredService<IBookmarkResumeDispatcher>();
         provider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
         provider.GetRequiredService<IDurableValueStateStore>();
-        provider.GetRequiredService<IRuntimeActivityOutputRegister>();
         provider.GetRequiredService<IIncidentStateStore>();
         provider.GetRequiredService<IExecutionLivenessStateStore>();
         provider.GetRequiredService<IWorkflowHoldStateStore>();
@@ -127,6 +161,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IRuntimePayloadCapturePolicy>();
         provider.GetRequiredService<IRuntimeInputBindingResolver>();
         provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
+        provider.GetRequiredService<WorkflowIntrinsicExecutor>();
         provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         provider.GetRequiredService<IWorkflowStartDispatcher>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
@@ -134,7 +169,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler);
-        Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler);
+        Assert.Contains(schedulerWorkHandlers, handler =>
+            StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName));
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCreateBookmarkSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCheckpointSchedulerWorkHandler);
@@ -148,9 +184,11 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler) <
-            Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler));
+            Array.FindIndex(schedulerWorkHandlers, handler =>
+                StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName)));
         Assert.True(
-            Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler) <
+            Array.FindIndex(schedulerWorkHandlers, handler =>
+                StringComparer.Ordinal.Equals(handler.Name, WorkflowStartActivitySchedulerWorkHandler.HandlerName)) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler) <
@@ -336,7 +374,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 RuntimeStartActivityCommandPayload.ScheduledActivityReason))));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnPause);
         Assert.Equal(0, result.DrainedCount);
@@ -570,7 +608,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                             executableNodeId: "node-1",
                             severity: IncidentSeverity.Error,
                             status: IncidentStatus.Blocking,
-                            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+                            resolutionOutcome: null,
                             failureType: "ActivityFaulted",
                             message: "Activity failed.",
                             createdAt: now,

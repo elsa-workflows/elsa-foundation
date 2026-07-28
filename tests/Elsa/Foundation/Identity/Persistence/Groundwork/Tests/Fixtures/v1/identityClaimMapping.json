@@ -1,0 +1,21 @@
+{
+  "provider": "google",
+  "providerLookupKey": "identity:ce643a3900cfd9b7b7fc7d575c3e797383aa10b511258d473b3e039cfde7179e",
+  "rule": {
+    "grantPermissions": [
+      "secrets:read"
+    ],
+    "grantRoles": [
+      "role-1"
+    ],
+    "id": "claim-map-1",
+    "matchClaimType": "groups",
+    "matchValue": "admins",
+    "order": 10,
+    "provider": "google",
+    "stopOnMatch": true,
+    "tenantId": "tenant-1"
+  },
+  "ruleId": "claim-map-1",
+  "tenantId": "tenant-1"
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+  "sourceScenarioId": "runtime-scheduler-state-roundtrip",
+  "coverageEntryId": "runtime-scheduler-state",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "0a429b872895598a68a6c9db286ca2ea897a6a8ceec8aca729f1284133398f52",
+  "executionPath": "provider-driver/mongodb/runtime-scheduler-state/9ff7253c911b2760",
+  "clients": 2,
+  "resultHash": "72fe5f0b2124997abc497a935bc7deb5b3b05dea6f60bf2bdb5e296c44a681f3",
+  "outcome": "pass",
+  "restartScenario": "dispose-and-reopen-same-database",
+  "evidence": "evidence/mongodb/runtime-scheduler-state/9ff7253c911b2760.json"
+}

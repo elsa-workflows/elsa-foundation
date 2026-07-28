@@ -1,5 +1,5 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
@@ -29,8 +29,8 @@ public sealed class WorkflowsVersionReconciler(
     IOptions<WorkflowVersionReconcilerOptions> options,
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
-    IAddCommand<WorkflowDefinition> addDefinitionCommand,
-    IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
+    IMaterializeWorkflowDefinitionCommand materializeDefinitionCommand,
+    IMaterializeWorkflowDefinitionVersionCommand materializeVersionCommand,
     ISaveWorkflowDefinitionCommand saveDefinitionCommand,
     IPayloadSerializer payloadSerializer
 )
@@ -67,14 +67,32 @@ public sealed class WorkflowsVersionReconciler(
 
         var definition = await FindDefinition(definitionId, cancellationToken);
         if (definition is null)
-            await addDefinitionCommand.Add(WorkflowDefinition.From(version.Definition), cancellationToken);
+        {
+            // First materialized here, from a source ⇒ the source owns the definition's lifecycle
+            // metadata, including the DeletedAt soft-delete flag (see UpdateDefinitionMetadata).
+            var sourceOwned = WorkflowDefinition.From(version.Definition);
+            sourceOwned.IsSourceOwned = true;
+            await materializeDefinitionCommand.Execute(
+                ReconciliationKey("definition", definitionId),
+                sourceOwned,
+                cancellationToken);
+        }
         else
-            await UpdateDefinitionMetadata(definition, version.Definition, cancellationToken);
+        {
+            await UpdateDefinitionMetadata(
+                definition,
+                version.Definition,
+                candidateSortKey,
+                cancellationToken);
+        }
 
         var versionExists = await VersionExists(definitionId, candidateSortKey, cancellationToken);
         if (!versionExists)
         {
-            await addVersionCommand.Add(WorkflowDefinitionVersion.From(version), cancellationToken);
+            await materializeVersionCommand.Execute(
+                ReconciliationKey("version", definitionId, candidateSortKey),
+                WorkflowDefinitionVersion.From(version),
+                cancellationToken);
             return;
         }
 
@@ -87,17 +105,31 @@ public sealed class WorkflowsVersionReconciler(
     /// an already-persisted definition. Idempotent — writes only when a value actually changed — and never
     /// touches any <see cref="WorkflowDefinitionVersion"/>: versions are immutable and
     /// retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per ADR 0034 (D5).
+    /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
+    /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
     /// authoritative (newest) version thanks to the caller's outdated-version gate (FR-008a).
     /// </summary>
-    private async Task UpdateDefinitionMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming, CancellationToken cancellationToken)
+    private async Task UpdateDefinitionMetadata(
+        WorkflowDefinition persisted,
+        IWorkflowDefinition incoming,
+        string sourceRevision,
+        CancellationToken cancellationToken)
     {
         // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
         // currently live; clear (un-delete) when the source reports it live and it is currently deleted.
-        // A version row is never deleted (retention authority) — only this definition-level flag moves.
+        // A version row is never deleted (retention authority) — only this definition-level flag moves,
+        // and only on definitions the source materialized itself (IsSourceOwned): a catalog-authored
+        // definition's lifecycle belongs to the catalog, so a source's delete intent is ignored on it.
         var incomingDeleted = incoming.DeletedAt is not null;
         var persistedDeleted = persisted.DeletedAt is not null;
         var deletedChanged = incomingDeleted != persistedDeleted;
+
+        if (deletedChanged && !persisted.IsSourceOwned)
+        {
+            LogIgnoredSoftDeleteOnUnownedDefinition(persisted.Id, incomingDeleted);
+            deletedChanged = false;
+        }
 
         if (persisted.Name == incoming.Name && persisted.Description == incoming.Description && !deletedChanged)
             return;
@@ -107,7 +139,10 @@ public sealed class WorkflowsVersionReconciler(
         if (deletedChanged)
             persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
 
-        await saveDefinitionCommand.Execute(persisted, cancellationToken);
+        await saveDefinitionCommand.Execute(
+            ReconciliationKey("definition-metadata", persisted.Id, sourceRevision),
+            persisted,
+            cancellationToken);
         LogMetadataUpdated(persisted.Id);
     }
 
@@ -157,6 +192,13 @@ public sealed class WorkflowsVersionReconciler(
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
     }
 
+    private void LogIgnoredSoftDeleteOnUnownedDefinition(string definitionId, bool incomingDeleted)
+    {
+        logger.LogWarning(
+            "A reconciliation source reported workflow definition '{def}' as {state}, but the definition is not source-owned (catalog-authored). The soft-delete flag was left unchanged.",
+            definitionId, incomingDeleted ? "deleted" : "live");
+    }
+
     private void LogMetadataUpdated(string definitionId)
     {
         if (logger.IsEnabled(LogLevel.Information))
@@ -179,5 +221,12 @@ public sealed class WorkflowsVersionReconciler(
     private async Task<WorkflowDefinition?> FindDefinition(string definitionId, CancellationToken cancellationToken)
     {
         return await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+    }
+
+    private static DesignOperationKey ReconciliationKey(string kind, params string[] identityParts)
+    {
+        var framedIdentity = string.Concat(
+            identityParts.Select(part => $"{part.Length}:{part}"));
+        return new DesignOperationKey($"workflow-reconciliation:{kind}:{framedIdentity}");
     }
 }

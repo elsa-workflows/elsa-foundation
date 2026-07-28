@@ -15,6 +15,7 @@ using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
@@ -74,10 +75,28 @@ public sealed class ClrAssemblyScannerTests
             ("DELETE", "\"DELETE\""));
     }
 
+    [Fact]
+    public void CollectionTypedInputs_CarryElementAliasAndCollectionKind()
+    {
+        // Issue #924: a collection-typed input must report its element type alias plus collection kind so the
+        // authoring catalog can render a list editor instead of a scalar box. ExpectedStatusCodes (ICollection<int>)
+        // and SupportedMethods (ICollection<string>) both decompose to a List of their element alias.
+        using var httpFolder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var models = CreateScanner().Scan(httpFolder.Path);
+
+        var expectedStatusCodes = InputFor<SendHttpRequest>(models, nameof(SendHttpRequest.ExpectedStatusCodes));
+        Assert.Equal("Int32", expectedStatusCodes.Type.Alias);
+        Assert.Equal(CollectionKind.List, expectedStatusCodes.Type.CollectionKind);
+
+        var supportedMethods = InputFor<HttpEndpoint>(models, nameof(HttpEndpoint.SupportedMethods));
+        Assert.Equal("String", supportedMethods.Type.Alias);
+        Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
+    }
+
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A" }
+        { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
+        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
     };
 
     [Theory]
@@ -97,7 +116,10 @@ public sealed class ClrAssemblyScannerTests
         var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
             definition,
             model.Version,
-            model.DescriptorType,
+            model.ProviderKey,
+            model.ProviderSchemaVersion,
+            model.ConsumerKey,
+            model.ConsumerSchemaVersion,
             descriptorPayload,
             "CLR",
             activityType.Assembly.GetName().Name!,
@@ -121,6 +143,48 @@ public sealed class ClrAssemblyScannerTests
         var input = InputFor<UnannotatedFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(UnannotatedFixtureActivity.Message));
 
         Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void CSharpRequiredMember_MapsIsRequired()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(RequiredKeywordFixtureActivity).Assembly);
+
+        var input = InputFor<RequiredKeywordFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(RequiredKeywordFixtureActivity.Message));
+
+        Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void NullableReferenceMetadata_MapsIndependentlyFromRequiredness()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(RequiredKeywordFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        var nonNullableRequired = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.Message));
+        var nullableOptional = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.OptionalNote));
+        var nullableRequired = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.RequiredNullableNote));
+        var nullableValue = InputFor<RequiredKeywordFixtureActivity>(
+            models,
+            nameof(RequiredKeywordFixtureActivity.OptionalCount));
+
+        Assert.True(nonNullableRequired.IsRequired);
+        Assert.False(nonNullableRequired.IsNullable);
+        Assert.False(nullableOptional.IsRequired);
+        Assert.True(nullableOptional.IsNullable);
+        Assert.True(nullableRequired.IsRequired);
+        Assert.True(nullableRequired.IsNullable);
+        Assert.False(nullableValue.IsRequired);
+        Assert.True(nullableValue.IsNullable);
+        Assert.Equal("Int32?", nullableValue.Type.Alias);
     }
 
     [Fact]
@@ -153,6 +217,82 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
         Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Payload)].Category);
         Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
+    }
+
+    [Fact]
+    public void InputDisplayName_IsHumanized_WhenNotExplicitlyAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var input = InputFor<DisplayNameFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(DisplayNameFixtureActivity.ExpectedStatusCodes));
+
+        Assert.Equal("Expected Status Codes", input.DisplayName);
+        Assert.Null(input.Description);
+    }
+
+    [Fact]
+    public void InputDisplayNameAndDescription_AreRespected_WhenAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var input = InputFor<DisplayNameFixtureActivity>(
+            CreateScanner().Scan(folder.Path),
+            nameof(DisplayNameFixtureActivity.ContentType));
+
+        Assert.Equal("Custom Label", input.DisplayName);
+        Assert.Equal("A hand-authored description.", input.Description);
+    }
+
+    [Fact]
+    public void OutputDisplayName_IsHumanized_WhenNotExplicitlyAuthored()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+        var output = model.Outputs.Single(o => o.Name == nameof(DisplayNameFixtureResult.ResponseStatusCode));
+
+        Assert.Equal("Response Status Code", output.DisplayName);
+    }
+
+    [Fact]
+    public void ActivityDisplayName_IsHumanizedTypeName()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+
+        Assert.Equal("Display Name Fixture Activity", model.DisplayName);
+    }
+
+    [Fact]
+    public void Category_IsHumanized_FromAssemblySegment()
+    {
+        // The fixture assembly's last name segment ("ClrFixture") humanizes to "Clr Fixture", proving the
+        // category resolver spaces PascalCase segments instead of emitting the raw token.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(DisplayNameFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(DisplayNameFixtureActivity).FullName);
+
+        Assert.Equal("Clr Fixture", model.Category);
+    }
+
+    [Fact]
+    public void Plain_typed_activity_maps_stable_input_and_result_projection_keys()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(PlainFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(PlainFixtureActivity).FullName);
+        var input = Assert.Single(model.Inputs);
+        var output = Assert.Single(model.Outputs);
+
+        Assert.Equal("message", input.ReferenceKey);
+        Assert.Equal(nameof(PlainFixtureActivity.Message), input.Name);
+        Assert.True(input.IsRequired);
+        Assert.Equal("length", output.ReferenceKey);
+        Assert.Equal(nameof(PlainFixtureResult.Length), output.Name);
+        Assert.True(output.IsRequired);
     }
 
     [Fact]
@@ -246,7 +386,7 @@ public sealed class ClrAssemblyScannerTests
     public void InvalidActivityInputOptions_AreRejectedWithInputIdentity(Type activityType, string inputName, string expectedMessage)
     {
         var property = activityType.GetProperty(inputName)!;
-        var exception = Assert.Throws<InvalidOperationException>(() => InvokeReadActivityInputMetadata(property, property.PropertyType.GetGenericArguments()[0], activityType));
+        var exception = Assert.Throws<InvalidOperationException>(() => InvokeReadActivityInputMetadata(property, property.PropertyType, activityType));
 
         Assert.Contains(activityType.FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains(inputName, exception.Message, StringComparison.Ordinal);
@@ -286,68 +426,76 @@ public sealed class ClrAssemblyScannerTests
         }
     }
 
-    private abstract class ConflictingOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class ConflictingOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(Options = ["one"])]
         [ActivityInputOption("Two", "two")]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
-    private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("One", 1)]
         [ActivityInputOption("Also one", 1)]
-        public InputArgument<int> Value { get; set; } = null!;
+        public int Value { get; set; }
     }
 
-    private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(Options = [""])]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
-    private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("Wrong", true)]
-        public InputArgument<int> Value { get; set; } = null!;
+        public int Value { get; set; }
     }
 
-    private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(OptionsProvider = "fixture", OptionsProviderDependencies = ["Missing"])]
-        public InputArgument<string> Value { get; set; } = null!;
+        public string Value { get; set; } = null!;
     }
 
-    private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
         [ActivityInput(OptionsProviderDependencies = [nameof(Other)])]
-        public InputArgument<string> Value { get; set; } = null!;
-        public InputArgument<string> Other { get; set; } = null!;
+        public string Value { get; set; } = null!;
+
+        [ActivityInput]
+        public string Other { get; set; } = null!;
     }
 
-    private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("Unsafe", 9007199254740992L)]
-        public InputArgument<long> Value { get; set; } = null!;
+        public long Value { get; set; }
     }
 
-    private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("Unsafe", -9007199254740992L)]
-        public InputArgument<long> Value { get; set; } = null!;
+        public long Value { get; set; }
     }
 
-    private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("Infinite", double.PositiveInfinity)]
-        public InputArgument<double> Value { get; set; } = null!;
+        public double Value { get; set; }
     }
 
-    private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
+        [ActivityInput]
         [ActivityInputOption("Integer", 1)]
         [ActivityInputOption("Floating point", 1.0)]
-        public InputArgument<double> Value { get; set; } = null!;
+        public double Value { get; set; }
     }
 
     [Fact]
@@ -364,9 +512,10 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains(nameof(DecimalFidelityActivity.Value), error.Message, StringComparison.Ordinal);
     }
 
-    private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Models.Activity
     {
-        public InputArgument<decimal> Value { get; set; } = null!;
+        [ActivityInput]
+        public decimal Value { get; set; }
     }
 
     [Fact]
@@ -378,12 +527,26 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void ControlFlowAssembly_DiscoversParallelActivity()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ParallelActivity).Assembly);
+
+        var models = CreateScanner().Scan(folder.Path);
+
+        Assert.Contains(models, model => model.ActivityTypeKey == typeof(ParallelActivity).FullName);
+    }
+
+    [Fact]
     public void StructureAttributes_MapToDesignFacet()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
 
         var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(StructuredFixtureActivity).FullName);
         var facet = Assert.Single(model.DesignFacets);
+        var output = Assert.Single(model.Outputs);
+
+        Assert.Equal("summary", output.ReferenceKey);
+        Assert.Equal(nameof(StructuredFixtureResult.Summary), output.Name);
 
         Assert.Equal("fixture.structure", facet.Kind);
         Assert.Equal("1.0.0", facet.SchemaVersion);
@@ -409,14 +572,91 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void ActivityOutcomeAttributes_MapToDesignFacetPorts()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(OutcomeFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(OutcomeFixtureActivity).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+
+        Assert.Equal("1", facet.SchemaVersion);
+        var ports = facet.Payload.GetProperty("ports").EnumerateArray().ToArray();
+        var portNames = ports.Select(p => p.GetProperty("name").GetString()).ToArray();
+        Assert.Equal(new[] { "Done", "Success", "Failed" }, portNames);
+        Assert.All(ports, p => Assert.Equal("outcome", p.GetProperty("type").GetString()));
+    }
+
+    [Fact]
+    public void InheritedOutcomeAttributes_CollectedFromBaseChain()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InheritedOutcomeFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(InheritedOutcomeFixtureActivity).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+        var portNames = facet.Payload.GetProperty("ports").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToArray();
+
+        Assert.Contains("DerivedOutcome", portNames);
+        Assert.Contains("Done", portNames);
+        Assert.Contains("BaseOutcome", portNames);
+    }
+
+    [Fact]
+    public void ActivityWithoutOutcomeAttributes_HasNoOutcomeFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, f => f.Kind == "elsa.outcomes");
+    }
+
+    [Fact]
+    public void SendHttpRequest_OutcomeFacet_ContainsStaticOutcomesAndDynamicStatusCodeDescriptor()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+        var portNames = facet.Payload.GetProperty("ports").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Static base ports (issue #926 replaced Matched/Unmatched with per-status dynamic outcomes).
+        Assert.Contains("Done", portNames);
+        Assert.Contains("Failed", portNames);
+        Assert.Contains("Timeout", portNames);
+        Assert.Equal(3, portNames.Count);
+
+        // The dynamic-outcomes descriptor tells the designer to render one port per authored ExpectedStatusCodes item.
+        var dynamicOutcomes = facet.Payload.GetProperty("dynamicOutcomes");
+        Assert.Equal("valuePerItem", dynamicOutcomes.GetProperty("kind").GetString());
+        Assert.Equal(nameof(SendHttpRequest.ExpectedStatusCodes), dynamicOutcomes.GetProperty("source").GetString());
+        Assert.Equal("Unmatched status code", dynamicOutcomes.GetProperty("unmatched").GetString());
+    }
+
+    [Fact]
+    public void SendHttpRequest_ResponseBody_IsDiscoveredAsFormattedContent()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var responseBody = model.Outputs.Single(output => output.ReferenceKey == "ResponseBody");
+
+        Assert.Equal(ValueRepresentation.FormattedContent, responseBody.SourceRepresentation);
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
 
         var models = CreateScanner().Scan(folder.Path);
 
-        // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → category "ClrFixture".
-        Assert.All(models, m => Assert.Equal("ClrFixture", m.Category));
+        // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → segment "ClrFixture",
+        // humanized to "Clr Fixture" for display (issue #928).
+        Assert.All(models, m => Assert.Equal("Clr Fixture", m.Category));
     }
 
     [Fact]

@@ -3,6 +3,8 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -14,7 +16,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutableStore? _workflowExecutableStore;
+    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutableReader? _executableReader;
 
     /// <summary>
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
@@ -27,7 +32,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IWorkflowExecutableStore? workflowExecutableStore = null,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -37,7 +45,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _workflowExecutableStore = workflowExecutableStore;
+        _cadenceResolver = cadenceResolver;
         _timeProvider = timeProvider;
+        _executableReader = executableReader;
     }
 
     public string Name => HandlerName;
@@ -132,6 +143,15 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? null
             : await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
 
+        var executable = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted) && _workflowExecutableStore is not null
+            ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
+            : null;
+
+        // ADR 0032 R5: at start, resolve the effective cadence (authored-on-executable over host default) and stamp it
+        // onto the durable instance so the read model reports the cadence this run actually executed under, not the
+        // host's current setting. On other checkpoints the stamp is carried forward via PreserveSystemMetadata.
+        var resolvedCadence = executable is not null ? _cadenceResolver?.Resolve(executable) : null;
+
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -142,7 +162,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -163,16 +183,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
-        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId))
+        // SeedVariables are NOT written to the durable-value channel (#972): caller-supplied variable
+        // values overlay the root variable frame in CreateRootVariableFrame, the single runtime truth.
+        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
             workItem.WorkflowExecutionId,
-            payload.SeedVariables.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             payload.SeedInputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,
-            triggerNodeId: payload.SeedTriggerNodeId);
+            triggerNodeId: payload.SeedTriggerNodeId,
+            triggerMetadata: payload.SeedTriggerMetadata);
     }
 
     private static void ValidateTerminalCheckpointStatus(
@@ -193,10 +215,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
-        WorkflowExecutionState? priorWorkflowState)
+        WorkflowExecutionState? priorWorkflowState,
+        WorkflowExecutable? executable,
+        ResolvedCheckpointCadence? resolvedCadence)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -208,7 +232,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt,
-        WorkflowExecutionState? priorWorkflowState)
+        WorkflowExecutionState? priorWorkflowState,
+        WorkflowExecutable? executable,
+        ResolvedCheckpointCadence? resolvedCadence)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -220,17 +246,22 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
-            CorrelationId: priorWorkflowState?.CorrelationId,
-            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
-            TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            CorrelationId: priorWorkflowState?.CorrelationId ?? payload.CorrelationId,
+            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId,
+            TenantId: priorWorkflowState?.TenantId ?? payload.TenantId,
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(StampCheckpointCadence(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState)))
+            }, resolvedCadence), priorWorkflowState, workItem)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -240,10 +271,48 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
     // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
     // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
-    private static Dictionary<string, string> PreserveInstanceName(Dictionary<string, string> metadata, WorkflowExecutionState? priorWorkflowState)
+    private static Dictionary<string, string> PreserveSystemMetadata(
+        Dictionary<string, string> metadata,
+        WorkflowExecutionState? priorWorkflowState,
+        RuntimeSchedulerWorkItem? workItem = null)
     {
         if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var instanceName) == true)
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var existingReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
+        else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
+            metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
+
+        // Carry the per-run cadence stamp (ADR 0032 R5) forward across every state rebuild that does not itself resolve
+        // it (e.g. the workflow-completed transition), unless this rebuild is stamping a freshly-resolved cadence.
+        if (!metadata.ContainsKey(RuntimeMetadataKeys.CheckpointCadence) &&
+            priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointCadence, out var cadenceMode) == true)
+        {
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = cadenceMode;
+            if (priorWorkflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints, out var maxSegment))
+                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = maxSegment;
+        }
+
+        return metadata;
+    }
+
+    // Writes the resolved per-run cadence (ADR 0032 R5) onto the workflow-started system metadata. Absent when no
+    // resolver is registered, leaving the read model to fall back to the host projection for that run.
+    private static Dictionary<string, string> StampCheckpointCadence(
+        Dictionary<string, string> metadata,
+        ResolvedCheckpointCadence? resolvedCadence)
+    {
+        if (resolvedCadence is null)
+            return metadata;
+
+        if (resolvedCadence.Coalesced)
+        {
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.CoalescedMode;
+            if (resolvedCadence.MaxSegmentCheckpoints is { } max)
+                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = max.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.ImmediateMode;
 
         return metadata;
     }
@@ -267,14 +336,21 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }, priorWorkflowState)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
-            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource
+            PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
+            Partition = priorWorkflowState?.Partition ?? payload.Partition,
+            Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
+            TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
+                ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
+                : null
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -307,6 +383,39 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
             }));
+
+    private static VariableFrameState CreateRootVariableFrame(
+        string workflowExecutionId,
+        IReadOnlyDictionary<string, JsonElement> seedVariables,
+        WorkflowExecutable? executable)
+    {
+        if (executable is null)
+            throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' cannot activate its canonical root variable frame without the pinned executable.");
+
+        // The root frame declares exactly the workflow-scope variables (state.Variables compiled into the
+        // executable, #972). The root ACTIVITY's structure variables are a normal container scope owned by the
+        // root node itself — they are NOT folded into the workflow scope here.
+        var projector = new RuntimeVariableDeclarationProjector();
+        var declarations = projector.ProjectDeclarations(executable.WorkflowVariables);
+        var initial = projector.ProjectInitialValues(executable.WorkflowVariables);
+        var values = new Dictionary<string, ValueEnvelope>(initial, StringComparer.Ordinal);
+        foreach (var (referenceKey, declaration) in declarations)
+        {
+            if (!seedVariables.TryGetValue(referenceKey, out var seed) &&
+                !seedVariables.TryGetValue(declaration.Name, out seed))
+                continue;
+
+            var declared = initial[referenceKey];
+            values[referenceKey] = seed.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(declared.Type, declared.Policy)
+                : ValueEnvelope.Inline(declared.Type, seed, declared.Policy);
+        }
+
+        return new VariableFrameFactory().CreateRoot(
+            workflowExecutionId,
+            VariableReference.WorkflowScopeId,
+            values);
+    }
 
     private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem) =>
         SchedulerWorkHandlerHelpers.DeserializePayload(

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -100,7 +101,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
         var store = new InMemoryRecurringTriggerScheduleStore();
         // Seed a stale schedule the current publish no longer contains.
         await store.SaveAsync(new RecurringTriggerSchedule(
-            RecurringTriggerSchedule.BuildId("artifact-1", "old-node"), "artifact-1", "Timer", "old", RecurringScheduleKind.Interval, "PT9M", Now, Now));
+            RecurringTriggerSchedule.BuildId("artifact-1", "old-node"), "artifact-1", "old-node", "Timer", "old", RecurringScheduleKind.Interval, "PT9M", Now, Now));
         var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
 
         await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
@@ -131,7 +132,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Equal(["test.cron"], exception.ProviderIds);
         Assert.Contains("0 0 30 2 *", exception.Message, StringComparison.Ordinal);
         Assert.False(inner.Called);
-        Assert.Equal([priorBinding], await bindingStore.ListByArtifactAsync("artifact-1"));
+        Assert.Equal([priorBinding], await bindingStore.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal(priorSchedule, await scheduleStore.FindAsync(priorSchedule.ScheduleId));
     }
 
@@ -325,7 +326,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
             nodeId, "Cron", stimulusHash, null, new Dictionary<string, string>(), Now);
 
     private static RecurringTriggerSchedule Schedule(string artifactId, string nodeId, string stimulusHash) =>
-        new(RecurringTriggerSchedule.BuildId(artifactId, nodeId), artifactId, "Cron", stimulusHash,
+        new(RecurringTriggerSchedule.BuildId(artifactId, nodeId), artifactId, nodeId, "Cron", stimulusHash,
             RecurringScheduleKind.Cron, "0 * * * *", Now.AddHours(1), Now);
 
     private static WorkflowExecutable Executable(string artifactId, ExecutableNode root) =>
@@ -334,7 +335,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode TriggerNode(string nodeId, string activityType, params ExecutableNode[] children) =>
         Node(nodeId, activityType, new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType }, children);
@@ -350,10 +352,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: document.RootElement.Clone(),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: metadata,
             childSlots: children.Length == 0 ? [] : [new ExecutableChildSlot("Body", children)]);
     }
@@ -435,20 +435,20 @@ public sealed class RecurringTriggerScheduleIndexerTests
     {
         public string ProviderId => providerId!;
 
-        public RecurringScheduleDescriptor? Describe(ExecutableNode node) =>
+        public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? new RecurringScheduleDescriptor(stimulusType, stimulusHash, kind, expression)
-                : null;
+                ? [new RecurringScheduleDescriptor(stimulusType, stimulusHash, kind, expression)]
+                : [];
     }
 
     private sealed class ThrowingScheduleProvider(string activityType, string? providerId, Exception exception) : IRecurringTriggerScheduleProvider
     {
         public string ProviderId => providerId!;
 
-        public RecurringScheduleDescriptor? Describe(ExecutableNode node)
+        public IReadOnlyCollection<RecurringScheduleDescriptor> Describe(ExecutableNode node)
         {
             if (!StringComparer.Ordinal.Equals(node.ActivityType, activityType))
-                return null;
+                return [];
 
             throw exception;
         }

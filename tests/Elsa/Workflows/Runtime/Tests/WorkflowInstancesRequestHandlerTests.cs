@@ -1,10 +1,14 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,9 +23,20 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStore = new();
     private readonly InMemoryDurableValueStateStore _durableValueStore = new();
+    private static readonly IActivityExecutionInspectionAuthorizationContext AllowAll = new AllowAllActivityExecutionInspectionAuthorizationContext();
 
-    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler() =>
-        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy());
+    private ListWorkflowInstancesRequestHandler NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
+        new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);
+
+    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler(RuntimeCheckpointCadenceInspector? cadenceInspector = null) =>
+        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll,
+            cadenceInspector ?? ImmediateCadenceInspector());
+
+    private static RuntimeCheckpointCadenceInspector ImmediateCadenceInspector() =>
+        new([]);
+
+    private static RuntimeCheckpointCadenceInspector CoalescedCadenceInspector(int maxSegmentCheckpoints) =>
+        new([new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = maxSegmentCheckpoints }]);
 
     private async Task SeedWorkflowInstancesAsync(int count)
     {
@@ -38,7 +53,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _activityStore.SaveAsync(Activity("wf-new", "activity-1", ActivityExecutionStatus.Running));
         await _activityStore.SaveAsync(Activity("wf-new", "activity-2", ActivityExecutionStatus.Completed));
         await _incidentStore.TryAddAsync(Incident("wf-new", "incident-1"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances("Running", "definition-1", "correlation-1", 10), CancellationToken.None);
 
@@ -54,13 +69,44 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_uses_the_bounded_store_query_instead_of_materializing_all_states()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var store = new BoundedQueryOnlyWorkflowExecutionStateStore(_workflowStore);
+        var handler = NewListInstanceHandler(store);
+
+        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+
+        Assert.Equal("wf-1", Assert.Single(result.Items).WorkflowExecutionId);
+        Assert.True(store.QueryPageCalled);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_uses_provider_count_contracts_for_summary_counts()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Running, "definition-1"));
+        await _activityStore.SaveAsync(Activity("wf-1", "activity-1", ActivityExecutionStatus.Running));
+        await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
+        var activities = new CountOnlyActivityExecutionStateStore(_activityStore);
+        var incidents = new CountOnlyIncidentStateStore(_incidentStore);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, activities, incidents, AllowAll);
+
+        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+
+        Assert.Equal(1, Assert.Single(result.Items).ActivityCount);
+        Assert.Equal(1, Assert.Single(result.Items).IncidentCount);
+        Assert.True(activities.CountCalled);
+        Assert.True(incidents.CountCalled);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_FiltersAndProjectsDurableRunKind()
     {
         await _workflowStore.SaveAsync(Workflow("wf-test", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.TestRun));
         await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.PublishedRun));
         await _workflowStore.SaveAsync(Workflow("wf-weaver", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.BackgroundWeaverRun));
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRun"), CancellationToken.None);
         var publishedResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "PublishedRun"), CancellationToken.None);
@@ -82,27 +128,51 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var timestamp = Now(-1);
         foreach (var id in new[] { "wf-d", "wf-b", "wf-a", "wf-c" })
             await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Completed, "definition-1", updatedAt: timestamp));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
         var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
-        var previous = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, second.PreviousCursor), CancellationToken.None);
 
         Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
-        Assert.False(first.HasPrevious);
         Assert.True(first.HasNext);
         Assert.Equal(["wf-c", "wf-d"], second.Items.Select(x => x.WorkflowExecutionId));
-        Assert.True(second.HasPrevious);
         Assert.False(second.HasNext);
-        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
+        Assert.Null(second.NextCursor);
         Assert.Equal(4, second.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_preserves_omitted_and_changed_take_cursor_semantics()
+    {
+        await SeedWorkflowInstancesAsync(40);
+        var handler = NewListInstanceHandler();
+
+        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var nextWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, first.NextCursor), CancellationToken.None);
+
+        Assert.Equal(25, nextWithOmittedTake.Count);
+        Assert.Equal("wf-002", nextWithOmittedTake.Items.First().WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_rejects_a_cursor_reused_with_different_filters()
+    {
+        await SeedWorkflowInstancesAsync(3);
+        var handler = NewListInstanceHandler();
+        var first = await handler.Handle(new ListWorkflowInstances(null, "definition-1", null, 1), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListWorkflowInstances(null, "definition-2", null, 1, first.NextCursor),
+            CancellationToken.None));
+
+        Assert.Equal("cursor", exception.ParamName);
     }
 
     [Fact]
     public async Task ListWorkflowInstances_ClampsPageSizeAtBothBounds()
     {
         await SeedWorkflowInstancesAsync(105);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var maximum = await handler.Handle(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
         var minimum = await handler.Handle(new ListWorkflowInstances(null, null, null, 0), CancellationToken.None);
@@ -121,7 +191,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task Paged_route_preserves_its_25_default_and_100_maximum(int? take, int expected)
     {
         await SeedWorkflowInstancesAsync(501);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, null, null, take),
@@ -139,7 +209,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     public async Task Legacy_array_route_preserves_its_100_default_and_500_maximum(int? take, int expected)
     {
         await SeedWorkflowInstancesAsync(501);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, null, null, take).ForLegacyArray(),
@@ -154,7 +224,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("match", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
         await _workflowStore.SaveAsync(Workflow("wrong-execution", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
         await _workflowStore.SaveAsync(Workflow("wrong-definition", WorkflowExecutionStatus.Running, "definition-2", "correlation-1", Now(-5)));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(new ListWorkflowInstances(
             "Running",
@@ -177,7 +247,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             WorkflowExecutionStatus.Running,
             "content-origin-definition",
             sourceDefinitionId: "published-definition"));
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var result = await handler.Handle(
             new ListWorkflowInstances(null, "published-definition", null, 10),
@@ -189,7 +259,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_RejectsMalformedCursor()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             handler.Handle(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
@@ -200,7 +270,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_RejectsUnknownRunKind()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
@@ -212,7 +282,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_MapsMalformedCursorToBadRequestAtHttpBoundary()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
         var endpoint = Factory.Create<TestListInstancesEndpoint>(
             context => context.Response.Body = new MemoryStream(),
@@ -229,7 +299,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_MapsUnknownRunKindToBadRequestAtHttpBoundary()
     {
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = NewListInstanceHandler();
         var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
         var endpoint = Factory.Create<TestListInstancesEndpoint>(
             context => context.Response.Body = new MemoryStream(),
@@ -264,11 +334,84 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task GetWorkflowInstance_OnImmediateHost_ReportsActivityLevelInspection()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
+        Assert.Null(result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_OnCoalescedHost_ReportsBoundaryLevelInspectionWithTheCap()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
+        Assert.Equal(32, result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_PrefersThePerRunStamp_OverAReconfiguredCoalescedHost()
+    {
+        // ADR 0032 R5 per-run stamp: the run executed under Immediate cadence; the host was later reconfigured to
+        // Coalesced. The instance must report the cadence it actually ran under, not the host's current setting.
+        await _workflowStore.SaveAsync(Workflow(
+            "wf-1",
+            WorkflowExecutionStatus.Completed,
+            "definition-1",
+            systemMetadata: new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Immediate"
+            }));
+        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
+        Assert.Null(result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_ReportsAStampedCoalescedRun_EvenOnAnImmediateHost()
+    {
+        await _workflowStore.SaveAsync(Workflow(
+            "wf-1",
+            WorkflowExecutionStatus.Completed,
+            "definition-1",
+            systemMetadata: new Dictionary<string, string>
+            {
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Coalesced",
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = "8"
+            }));
+        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+
+        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+
+        Assert.NotNull(result.Instance);
+        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
+        Assert.Equal(8, result.Instance.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
+    }
+
+    [Fact]
     public async Task ListAndDetailReturnTheSameRunKindAndKeepLegacyStatesUnknown()
     {
         await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Running, "definition-1", runKind: WorkflowRunKind.PublishedRun));
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
-        var listHandler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var listHandler = NewListInstanceHandler();
 
         var list = await listHandler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
         var detail = await NewGetInstanceHandler().Handle(new GetWorkflowInstance("wf-published"), CancellationToken.None);
@@ -295,7 +438,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         string? correlationId = null,
         DateTimeOffset? updatedAt = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
-        string? sourceDefinitionId = null) =>
+        string? sourceDefinitionId = null,
+        IReadOnlyDictionary<string, string>? systemMetadata = null) =>
         new(
             WorkflowExecutionId: id,
             PinnedExecutable: new WorkflowExecutableIdentity(
@@ -313,7 +457,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             CorrelationId: correlationId,
             ParentWorkflowExecutionId: null,
             TenantId: null,
-            SystemMetadata: new Dictionary<string, string>())
+            SystemMetadata: systemMetadata ?? new Dictionary<string, string>())
         {
             RunKind = runKind,
             PinnedSource = sourceDefinitionId is null
@@ -329,6 +473,81 @@ public sealed class WorkflowInstancesRequestHandlerTests
                     "publication-1",
                     "slot-default")
         };
+
+    private sealed class BoundedQueryOnlyWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    {
+        public bool QueryPageCalled { get; private set; }
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
+        {
+            QueryPageCalled = true;
+            return inner.QueryPageAsync(query, cancellationToken);
+        }
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The list handler must not materialize the complete state store.");
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private sealed class CountOnlyActivityExecutionStateStore(IActivityExecutionStateStore inner) : IActivityExecutionStateStore
+    {
+        public bool CountCalled { get; private set; }
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Instance summaries must use the provider count contract.");
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListByParentPageAsync(query, cancellationToken);
+
+        public async ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            CountCalled = true;
+            return await inner.CountAsync(workflowExecutionId, cancellationToken);
+        }
+    }
+
+    private sealed class CountOnlyIncidentStateStore(IIncidentStateStore inner) : IIncidentStateStore
+    {
+        public bool CountCalled { get; private set; }
+
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            inner.TryAddAsync(state, cancellationToken);
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, incidentId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Instance summaries must use the provider count contract.");
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.ListBlockingAsync(workflowExecutionId, cancellationToken);
+
+        public async ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            CountCalled = true;
+            return await inner.CountAsync(workflowExecutionId, cancellationToken);
+        }
+    }
 
     private static ActivityExecutionState Activity(
         string workflowExecutionId,
@@ -367,7 +586,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             executableNodeId: "node-activity-2",
             severity: IncidentSeverity.Error,
             status: IncidentStatus.Blocking,
-            resolutionAction: IncidentResolutionAction.Retry,
+            resolutionOutcome: null,
             failureType: "TestFailure",
             message: "The activity failed.",
             createdAt: Now(-7),

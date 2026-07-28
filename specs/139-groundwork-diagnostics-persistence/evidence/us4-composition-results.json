@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "139-groundwork-diagnostics-persistence",
+  "userStory": "US4",
+  "outcome": "pass",
+  "evidenceClassification": "exact-head-t045-t049-composition-certification",
+  "promotionNote": "This certifies host composition, schema selection, direct generic provider aliasing, SQLite shell activation after pre-start deployment, and the reference-server build. It does not certify the four-provider runtime matrix, performance, EF removal, or final exact-main gates.",
+  "groundworkPackageVersion": "0.0.1-preview.81",
+  "groundworkPackageResolution": "The unified-host project.assets.json resolved all 13 Groundwork runtime libraries to 0.0.1-preview.81.",
+  "testRun": {
+    "recordedAtUtc": "2026-07-25T02:06:42Z",
+    "branch": "codex/642-groundwork-diagnostics-composition",
+    "gitHead": "e70995de5ea6ac14a8f1dacbb558121faf2c42e3",
+    "originMain": "6313171ff33f4c42a54507885a080ce185d35526",
+    "mergeBaseWithOriginMain": "6313171ff33f4c42a54507885a080ce185d35526",
+    "originMainOnlyCommitCount": 0,
+    "branchOnlyCommitCount": 2,
+    "testedSourceState": "Clean exact branch HEAD; divergence and package resolution were recorded immediately before certification.",
+    "machine": {
+      "operatingSystem": "macOS 26.5.2",
+      "architecture": "arm64",
+      "dotnetSdk": "10.0.300"
+    }
+  },
+  "commands": [
+    {
+      "scope": "combined diagnostics deployment schema",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=diagnostics-composition-e70995de5.trx' --results-directory /tmp/elsa-642-exact-e70995de5/composition",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "80f5f648434817f8f29c5ec2035aae13b633d588e92d5ae3c18efe3486eb7131"
+    },
+    {
+      "scope": "diagnostics feature, readiness, lifecycle, and persistence regressions",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=diagnostics-persistence-e70995de5.trx' --results-directory /tmp/elsa-642-exact-e70995de5/persistence",
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "5af25daf905e905cb44ba01b20790e57b6ee9b4160b7b6a25f5d8bfc39330684"
+    },
+    {
+      "scope": "full unified host, including 5 shell-activation and 13 schema-selector cases",
+      "command": "dotnet test tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=unified-host-e70995de5.trx' --results-directory /tmp/elsa-642-exact-e70995de5/unified-host",
+      "passed": 53,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c500b1dd0b615262354f3ceb01306e16a785f2293107b616f523c67a5bf4ab4e"
+    },
+    {
+      "scope": "clean Elsa.Server Release build",
+      "preconditionCommand": "dotnet clean src/Apps/Elsa.Server/Elsa.Server.csproj --configuration Release --consoleLoggerParameters:Summary",
+      "command": "dotnet build src/Apps/Elsa.Server/Elsa.Server.csproj --configuration Release --no-restore --binaryLogger:/tmp/elsa-642-exact-e70995de5/elsa-server-clean-e70995de5.binlog --consoleLoggerParameters:Summary",
+      "errors": 0,
+      "warnings": 29,
+      "warningDisposition": "All 29 warnings are pre-existing Groundwork preview.81 obsolescence warnings in unchanged runtime, secrets, studio-preferences, and publishing sources; the candidate adds no warning-producing source.",
+      "binaryLogSha256": "b52c930b8048096c9496140ba86c57bf2db46db1b410aecde9233c6559a19a09"
+    }
+  ],
+  "reviewRemediation": {
+    "correctnessFinding": "The four direct generic unified-provider overloads did not expose a selected diagnostic deployment source through IDiagnosticRecordDeploymentManifestSource.",
+    "disposition": "Centralized conditional aliasing in AddGroundworkReferenceDeploymentSchema<TDeploymentSource> and routed all four generic provider overloads through it. The 13-case selector suite includes a four-provider regression that proves the physical-schema and diagnostic-deployment contracts resolve to the same singleton.",
+    "freshSchemaConcern": "Withdrawn after re-verification: spec 139 intentionally requires combined deployment before startup, and Groundwork runtime sessions must never materialize or repair schema."
+  },
+  "sourceSha256": {
+    "src/Apps/Elsa.Server/Elsa.Server.csproj": "da238824158a041f56ba55f3465d6099038f4cd7bc64a998897399381688c53e",
+    "src/Apps/Elsa.Server/Program.cs": "62e38fc6b48c965e6614f8500a42e6c8968b70c34ccf9252f994c434fa18a39f",
+    "src/Apps/Elsa.Server/shells.json": "af52a47009bc9a794f026f729b6757dca4918b4e387b1e897e4e2dc7502ccddc",
+    "src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs": "8988df9912d96a22fd1cab1344669eec74da76ea23318fa8ed4498f9d83db728",
+    "src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj": "37d656eb95343bc4130d62f640c46aa8a7ee30820ee81b57eba019c98ce55e3a",
+    "src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md": "953e22d5b98cf43d45d86eb59ecc595d23280a2f9b9d7bde1a6b51a0dd323c27",
+    "src/Elsa/Persistence/Groundwork/GroundworkSchemaFeatureMetadata.cs": "ac3366b664341ccc56905a56dbd0cea73548f21ff4d868de27bd56c9aa3abc0e",
+    "src/Elsa/Persistence/Groundwork/MongoDb/Unified/DependencyInjection/GroundworkMongoDbUnifiedRegistration.cs": "22a28da71d7f1604485aa6b1c89c633a6f1a1671e5a9289a701b7c80aed591e7",
+    "src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj": "65a4ac4f02f82ce35603c598f524981bacf77fdd2817a63c48762dfc60e4b414",
+    "src/Elsa/Persistence/Groundwork/PostgreSql/Unified/DependencyInjection/GroundworkPostgreSqlUnifiedRegistration.cs": "26ebcbf7740b7405542e495e24c18f43f1fddb02254b985f7ef5d2f5389c9b42",
+    "src/Elsa/Persistence/Groundwork/PostgreSql/Unified/Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj": "b5ae032946cd30a48c4c474c48dda2160d9af095546f4297d00add0d3d20896e",
+    "src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj": "16871ca3bfd18522ab3adb8d04846886a312e62c5e03b141ba40210774533663",
+    "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkAllFeaturesDeploymentSchema.cs": "bf2e518e5473205db48ba38d79813c66578c95eea81d26d58c9faaa7729dcd0b",
+    "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkReferenceDeploymentSchemaSelector.cs": "9929c0ea3734ac10596067a3a79886c41aaafba49e9ac5b2a1405f06426f083e",
+    "src/Elsa/Persistence/Groundwork/SqlServer/Unified/DependencyInjection/GroundworkSqlServerUnifiedRegistration.cs": "2117b942ae95d363aab868cee4f2183a71095378d0abc4005ac38431677c02fe",
+    "src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj": "30906a2acbf27c8af4268d1964e868bf5f903815c3a9eff9dbcc45e09ec62d10",
+    "src/Elsa/Persistence/Groundwork/Sqlite/Unified/DependencyInjection/GroundworkSqliteUnifiedRegistration.cs": "947f44d8d5f778d453e6c4dfc1065b7f5644dc16524d0971e2d5efbd196c5164",
+    "src/Elsa/Persistence/Groundwork/Sqlite/Unified/Elsa.Persistence.Groundwork.Sqlite.Unified.csproj": "a0fd4d278421796245634bd88563232e6c023ae58cead2582abeeee8f695fe19",
+    "tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/DiagnosticsGroundworkDeploymentSchemaTests.cs": "c9656bacae6c5140e0329284f2f178d843f018061b5fc63848c8e1614f1f417c",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceFeatureTests.cs": "a27a9ac71b989a0433f6b38ab3f6d70d094134140a5085a9db4b4400c6c3be42",
+    "tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj": "542264ef2afec5419c4f62e1ba966cb4ec3ca6adb40f24e6cc51db1806e0e678",
+    "tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/GroundworkReferenceDeploymentSchemaSelectorTests.cs": "731a19dc188fe893ea9d1239bd1c1df47ac7b77744945e9dcb9abb81573ed632",
+    "tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/GroundworkShellSchemaActivationTests.cs": "0b298f4fb1c52d7281d8c96d9f8f2ddee25a735547d63d933edb20c7a8d8d46a"
+  }
+}

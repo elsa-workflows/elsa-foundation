@@ -20,6 +20,8 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
 {
     public Action<IEvent>? OnPublish { get; set; }
+    public List<IEvent> InlineEvents { get; } = [];
+    public List<IEvent> DeferredEvents { get; } = [];
 
     /// <summary>
     /// Convenience: install an <see cref="OnPublish"/> hook that contributes <paramref name="error"/>
@@ -33,9 +35,34 @@ public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPu
                 validating.Errors.Add(error);
         };
 
-    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+    Task IInlineEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        Publish(@event, InlineEvents);
+
+    Task IDeferredEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        Publish(@event, DeferredEvents);
+
+    private Task Publish(IEvent @event, ICollection<IEvent> events)
     {
         OnPublish?.Invoke(@event);
+        events.Add(@event);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Captures deferred enqueues while honoring cancellation, so post-commit command tests can prove
+/// that a cancelled request token cannot suppress a notification for a durable mutation.
+/// </summary>
+public sealed class CancellationAwareDeferredEventPublisher : IDeferredEventPublisher
+{
+    public List<IEvent> Events { get; } = [];
+    public List<CancellationToken> CancellationTokens { get; } = [];
+
+    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+    {
+        CancellationTokens.Add(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        Events.Add(@event);
         return Task.CompletedTask;
     }
 }

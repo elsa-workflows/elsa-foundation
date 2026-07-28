@@ -1,3 +1,5 @@
+using CShells;
+using CShells.Features;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -37,14 +39,16 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
         var services = new ServiceCollection();
 
         Assert.Throws<ArgumentNullException>(() =>
-            services.AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:", null!));
+            services.AddGroundworkSqliteUnifiedPersistence(
+                "Data Source=:memory:",
+                (WorkflowExecutableCacheOptions)null!));
         Assert.Empty(services);
     }
 
     [Fact]
     public void SettingsArePublicManifestSettingsWithDurableDefaults()
     {
-        var feature = new SqliteGroundworkUnifiedPersistenceShellFeature();
+        var feature = NewFeature();
 
         AssertSetting(feature, EnabledProperty, true);
         AssertSetting(feature, CapacityProperty, 256);
@@ -53,7 +57,7 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
     [Fact]
     public void ConfiguredCapacityIsThreadedToUnifiedRuntimeRegistration()
     {
-        var feature = new SqliteGroundworkUnifiedPersistenceShellFeature();
+        var feature = NewFeature();
         SetSetting(feature, EnabledProperty, true);
         SetSetting(feature, CapacityProperty, 23);
         var services = new ServiceCollection();
@@ -62,6 +66,11 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 
         Assert.Equal(23, provider.GetRequiredService<WorkflowExecutableCacheOptions>().Capacity);
     }
+
+    private static SqliteGroundworkUnifiedPersistenceShellFeature NewFeature() =>
+        new(new ShellFeatureContext(
+            new ShellSettings { Id = new ShellId("sqlite-cache-settings") },
+            []));
 
     private static void AssertSetting(object feature, string name, object expected)
     {

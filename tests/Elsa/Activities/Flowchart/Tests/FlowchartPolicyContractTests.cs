@@ -92,7 +92,7 @@ public sealed class FlowchartPolicyContractTests
 
         await fixture.ExecuteAsync(executable);
 
-        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-c"));
     }
 

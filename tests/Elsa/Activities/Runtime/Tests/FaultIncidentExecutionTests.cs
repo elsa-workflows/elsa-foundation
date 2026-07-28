@@ -1,9 +1,12 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -28,13 +31,14 @@ public sealed class FaultIncidentExecutionTests
         await using var provider = NewProvider(["actexec-fault"]);
         var executable = NewExecutable("Boom!");
 
-        // The agent must accept and drain without the FaultActivityException propagating to the caller.
+        // The agent must accept and drain without fault control flow propagating to the caller.
         await ExecuteAsync(provider, executable);
 
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
         var faultState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-fault");
         Assert.Equal(ActivityExecutionStatus.Faulted, faultState.Status);
-        Assert.Equal("ActivityFaulted", faultState.SubStatus);
+        Assert.Equal("ActivityReturnedFault", faultState.SubStatus);
+        Assert.Equal("workflow.fault", faultState.Fault!.Code);
 
         var incidents = await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1");
         var incident = Assert.Single(incidents);
@@ -67,10 +71,10 @@ public sealed class FaultIncidentExecutionTests
     private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IActivityConstructor, FaultActivityConstructor>();
         services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityActivator, FaultActivityActivator>();
 
         return services.BuildServiceProvider();
     }
@@ -84,36 +88,52 @@ public sealed class FaultIncidentExecutionTests
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
-        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     private WorkflowExecutable NewExecutable(string? message)
     {
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>();
-        if (message is not null)
-            inputBindings["Message"] = new RuntimeInputBinding(
-                inputName: "Message",
+        var stringType = new ValueTypeDescriptor("String");
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            ["message"] = new RuntimeInputBinding(
+                inputKey: "message",
+                targetType: stringType,
+                effectivePolicy: ValueProtectionPolicy.InstanceInline,
                 source: RuntimeInputBindingSource.Literal,
-                literalValue: JsonSerializer.SerializeToElement(message),
-                metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" });
+                literal: message is null
+                    ? ValueEnvelope.Null(stringType, ValueProtectionPolicy.InstanceInline)
+                    : ValueEnvelope.Inline(stringType, JsonSerializer.SerializeToElement(message), ValueProtectionPolicy.InstanceInline))
+        };
+        using var descriptor = JsonDocument.Parse("""{"type":"fault"}""");
+        var contract = new ActivityContract(
+            typeof(Fault).FullName!,
+            "1.0.0",
+            "test/fault",
+            descriptor.RootElement,
+            [new ActivityInputContract("message", nameof(Fault.Message), stringType, false, true, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test/fault", typeof(Fault).FullName!));
 
         var root = new ExecutableNode(
             executableNodeId: "node-fault",
             authoredActivityId: "authored-fault",
             activityType: typeof(Fault).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: FaultActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new FaultDescriptor()),
+            descriptorType: "test/fault",
+            descriptorPayload: descriptor.RootElement,
             inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            activityContract: contract);
 
         return new WorkflowExecutable(
             identity: NewIdentity(),
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
     private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
@@ -149,32 +169,22 @@ public sealed class FaultIncidentExecutionTests
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
-    private sealed class FaultActivityConstructor : IActivityConstructor<FaultDescriptor>
+    private sealed class FaultActivityActivator : IActivityActivator
     {
-        public static string DescriptorTypeKey => typeof(FaultDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            Construct(new FaultDescriptor(), inputs, outputs, cancellationToken);
-
-        public ValueTask<IActivity> Construct(
-            FaultDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationRequest request,
+            CancellationToken cancellationToken = default)
         {
-            var activity = new Fault();
-            if (inputs is not null && inputs.TryGetValue("Message", out var messageInput))
-                activity.Message = (InputArgument<string>)messageInput;
-            return new(activity);
+            var value = request.Inputs.Values["message"];
+            var activity = new Fault
+            {
+                Message = value.Presence == ValuePresence.ExplicitNull
+                    ? null
+                    : value.InlineValue!.Value.GetString()
+            };
+            return ValueTask.FromResult(new ActivityActivationLease(activity));
         }
     }
-
-    private sealed record FaultDescriptor;
 
     private sealed class DeterministicRuntimeExecutionIdGenerator(IEnumerable<string> activityExecutionIds) : IRuntimeExecutionIdGenerator
     {

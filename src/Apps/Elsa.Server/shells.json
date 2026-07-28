@@ -4,14 +4,19 @@
       "default": {
         "Name": "default",
         "Features": {
+          "ActivitiesBpmn": {},
           "ActivitiesControlFlow": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
+          "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
+          "ActivitiesScheduling": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
@@ -20,9 +25,9 @@
             }
           },
           "DiagnosticsOpenTelemetry": {},
-          "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
+          "DiagnosticsGroundworkPersistence": {},
+          "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
-          "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
           "Expressions": {},
           "ExpressionsApi": {},
@@ -61,9 +66,9 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkPublishingPersistenceSqlite": {},
-          "GroundworkRuntimePersistenceSqlite": {
-            "RematerializeOnStartup": false
+          "GroundworkUnifiedPersistenceSqlite": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
           },
           "Http": {},
           "HttpJavaScript": {},
@@ -135,7 +140,6 @@
           },
           "JavaScriptJintEngine": {},
           "JavaScriptWorkflowsDesign": {},
-          "JavaScriptWorkflowsRuntime": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -145,17 +149,34 @@
           "SecretsApi": {},
           "SecretsGroundworkPersistence": {},
           "Serialization": {},
+          "AttentionApi": {},
+          "ModularityAttention": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesGroundworkPersistence": {},
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {},
+          "WorkflowsPublishingGroundwork": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
           },
+          "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {

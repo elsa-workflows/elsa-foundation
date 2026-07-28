@@ -48,6 +48,23 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
     }
 
     [Fact]
+    public async Task OnDrainedAsync_OutcomeBearingBlockingIncident_DoesNotOverrideItsStrategyDecision()
+    {
+        var harness = new Harness(_now);
+        await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveBlockingIncident(new IncidentResolutionOutcome(
+            IncidentResolutionActionKinds.WaitForIntervention,
+            _now,
+            strategy: new Elsa.Workflows.Primitives.Models.IncidentStrategyReference("Fault", "1"),
+            systemSource: null));
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
+
+        Assert.Equal(WorkflowExecutionStatus.Running, (await harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
+        Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
+    [Fact]
     public async Task OnDrainedAsync_WithNestedFlowchartAndSequence_FaultsAncestorsButNotSiblingBranches()
     {
         var harness = new Harness(_now);
@@ -235,7 +252,7 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 AggregateFaultCount: status == ActivityExecutionStatus.Faulted ? 1 : 0,
                 Metadata: new Dictionary<string, string>()));
 
-        public ValueTask<bool> SaveBlockingIncident() =>
+        public ValueTask<bool> SaveBlockingIncident(IncidentResolutionOutcome? resolutionOutcome = null) =>
             IncidentStore.TryAddAsync(new IncidentState(
                 incidentId: "incident-1",
                 workflowExecutionId: "wfexec-1",
@@ -243,7 +260,7 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 executableNodeId: "node-1",
                 severity: IncidentSeverity.Error,
                 status: IncidentStatus.Blocking,
-                resolutionAction: IncidentResolutionAction.WaitForIntervention,
+                resolutionOutcome: resolutionOutcome,
                 failureType: "System.InvalidOperationException",
                 message: "boom",
                 createdAt: _now,

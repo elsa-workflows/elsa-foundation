@@ -64,6 +64,31 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
     }
 
     [Fact]
+    public void TracingFeature_EmitsOnEngineSource_WhenContainerAlsoRegistersAForeignActivitySource()
+    {
+        // Regression gate: ASP.NET Core hosts register an ActivitySource singleton (named "Microsoft.AspNetCore").
+        // The tracer also has an ActivitySource-accepting constructor, so a Type-based descriptor would let DI
+        // greedily inject that foreign source and the engine spans would be emitted under the wrong source name —
+        // invisible to any listener of the engine source. The feature must pin the parameterless construction path.
+        var services = new ServiceCollection();
+        using var foreignSource = new ActivitySource("Microsoft.AspNetCore");
+        services.AddSingleton(foreignSource);
+        services.AddWorkflowRuntime();
+        new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var recorded = new List<Activity>();
+        using var listener = RecordEngineSpans(recorded);
+
+        var tracer = provider.GetRequiredService<IWorkflowEngineTracer>();
+        tracer.StartDrainCycle(new("wfexec-1"))?.Dispose();
+
+        var activity = Assert.Single(recorded);
+        Assert.Equal(WorkflowEngineTelemetry.ActivitySourceName, activity.Source.Name);
+        Assert.Equal(WorkflowEngineTelemetry.DrainSpanName, activity.OperationName);
+    }
+
+    [Fact]
     public async Task CommitterResolvedFromFullCore_EmitsCheckpointSpan_ProvingProductionConstructorThreadsTracer()
     {
         // Hard gate: the committer has two constructors and DI picks the widest it can satisfy. Production registers the
@@ -77,18 +102,26 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
 
         var recorded = new List<Activity>();
-        using var listener = new ActivityListener
+        using var listener = RecordEngineSpans(recorded);
+
+        await committer.CommitAsync(NewMinimalCommit());
+
+        Assert.Contains(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.CheckpointCommitSpanName);
+    }
+
+    /// <summary>Attaches a listener that records every stopped engine-source span into <paramref name="recorded"/>.</summary>
+    private static ActivityListener RecordEngineSpans(List<Activity> recorded)
+    {
+        var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = recorded.Add
         };
         ActivitySource.AddActivityListener(listener);
-
-        await committer.CommitAsync(NewMinimalCommit());
-
-        Assert.Contains(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.CheckpointCommitSpanName);
+        return listener;
     }
+
     private static RuntimeCheckpointCommit NewMinimalCommit() =>
         new(
             CommitId: "commit-1",

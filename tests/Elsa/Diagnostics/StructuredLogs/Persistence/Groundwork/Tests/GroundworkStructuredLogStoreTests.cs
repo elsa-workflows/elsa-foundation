@@ -1,103 +1,66 @@
+using System.Text;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Groundwork.DiagnosticRecords;
-using Groundwork.Sqlite.DiagnosticRecords;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests;
 
-public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
+public sealed class GroundworkStructuredLogStoreTests : GroundworkStructuredLogStoreTestBase
 {
-    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"elsa-structured-logs-{Guid.NewGuid():N}.db");
-    private static readonly StructuredLogStoreBinding Binding = new("tenant-a", "shell-a", "structured-logs");
-
     [Fact]
-    public async Task Two_writers_with_equal_timestamp_and_sequence_replay_in_committed_cursor_order()
+    public async Task Append_before_explicit_lifecycle_start_is_rejected()
     {
-        await using var first = await CreateStoreAsync(Binding);
-        await using var second = await CreateStoreAsync(Binding);
-        var timestamp = DateTimeOffset.Parse("2026-07-12T12:00:00Z");
+        var provider = await CreateProviderAsync(Binding);
+        await using var store = new GroundworkStructuredLogStore(
+            provider,
+            Options.Create(new StructuredLogsOptions()),
+            Binding);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
-        var commits = await Task.WhenAll(
-            first.AppendAsync(Entry(5, "first", timestamp)).AsTask(),
-            second.AppendAsync(Entry(5, "second", timestamp)).AsTask());
-        var ordered = (await first.GetRecentAsync(StructuredLogFilter.None)).ToArray();
-        var replayed = (await first.ReadAfterAsync(ordered[0].ReplayCursor, StructuredLogFilter.None, 100)).Entries;
-
-        Assert.Single(replayed);
-        Assert.Equal(ordered[1].Message, replayed[0].Message);
-        Assert.NotEqual(commits[0].ReplayCursor, commits[1].ReplayCursor);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.AppendAsync(Entry(1, "not-started", DateTimeOffset.UnixEpoch), timeout.Token).AsTask());
+        Assert.Empty(await store.GetRecentAsync(StructuredLogFilter.None));
     }
 
     [Fact]
-    public async Task Restart_preserves_cursor_replay_and_lifetime_logical_high_water()
+    public async Task Lifecycle_stop_before_start_is_terminal_without_retention_io()
     {
-        StructuredLogEntry first;
-        await using (var beforeRestart = await CreateStoreAsync(Binding))
-            first = await beforeRestart.AppendAsync(Entry(11, "before", DateTimeOffset.UnixEpoch));
+        var provider = await CreateProviderAsync(Binding);
+        var observing = new RetentionAcknowledgementLosingStore(provider);
+        var store = new GroundworkStructuredLogStore(
+            observing,
+            Options.Create(new StructuredLogsOptions()),
+            Binding);
 
-        await using var restarted = await CreateStoreAsync(Binding);
-        var second = await restarted.AppendAsync(Entry(12, "after", DateTimeOffset.UnixEpoch));
-        var replay = await restarted.ReadAfterAsync(first.ReplayCursor, StructuredLogFilter.None, 100);
+        await ((IDiagnosticsPersistenceDrain)store).StopAsync();
 
-        Assert.Equal(12, await restarted.GetHighWaterMarkAsync());
-        Assert.Equal([second.ReplayCursor], replay.Entries.Select(x => x.ReplayCursor));
+        Assert.Equal(0, observing.TrimCalls);
+        Assert.Throws<InvalidOperationException>(store.Start);
+        await store.DisposeAsync();
     }
 
     [Fact]
-    public async Task Trim_to_zero_and_restart_preserve_high_water_but_expire_replay_cursor()
+    public async Task Disposal_before_start_is_terminal_without_retention_io()
     {
-        StructuredLogEntry committed;
-        await using (var store = await CreateStoreAsync(Binding))
-        {
-            committed = await store.AppendAsync(Entry(19, "trimmed", DateTimeOffset.UnixEpoch));
-            await store.TrimAsync(0);
-        }
+        var provider = await CreateProviderAsync(Binding);
+        var observing = new RetentionAcknowledgementLosingStore(provider);
+        var store = new GroundworkStructuredLogStore(
+            observing,
+            Options.Create(new StructuredLogsOptions()),
+            Binding);
 
-        await using var restarted = await CreateStoreAsync(Binding);
+        await store.DisposeAsync();
 
-        Assert.Equal(19, await restarted.GetHighWaterMarkAsync());
-        Assert.Empty(await restarted.GetRecentAsync(StructuredLogFilter.None));
-        await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
-            restarted.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 100));
-    }
-
-    [Fact]
-    public async Task Wrong_tenant_scope_and_stream_fail_without_disclosing_which_binding_mismatched()
-    {
-        await using var source = await CreateStoreAsync(Binding);
-        await using var wrongTenant = await CreateStoreAsync(new("tenant-b", "shell-a", "structured-logs"));
-        await using var wrongScope = await CreateStoreAsync(new("tenant-a", "shell-b", "structured-logs"));
-        await using var wrongStream = await CreateStoreAsync(new("tenant-a", "shell-a", "audit-logs"));
-        var committed = await source.AppendAsync(Entry(1, "source", DateTimeOffset.UnixEpoch));
-
-        var tenantError = await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
-            wrongTenant.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 100));
-        var scopeError = await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
-            wrongScope.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 100));
-        var streamError = await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
-            wrongStream.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 100));
-
-        Assert.Equal(tenantError.Message, scopeError.Message);
-        Assert.Equal(scopeError.Message, streamError.Message);
-        Assert.Equal("The structured log replay cursor is unavailable.", scopeError.Message);
-    }
-
-    [Fact]
-    public async Task Default_cursor_is_rejected_at_the_groundwork_store_boundary()
-    {
-        await using var store = await CreateStoreAsync(Binding);
-
-        var exception = await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
-            store.ReadAfterAsync(default(StructuredLogReplayCursor), StructuredLogFilter.None, 100));
-
-        Assert.Equal("The structured log replay cursor is unavailable.", exception.Message);
+        Assert.Equal(0, observing.TrimCalls);
+        Assert.Throws<InvalidOperationException>(store.Start);
     }
 
     [Fact]
@@ -105,7 +68,12 @@ public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
     {
         var provider = await CreateProviderAsync(Binding);
         var lossy = new AcknowledgementLosingStore(provider);
-        await using var store = new GroundworkStructuredLogStore(lossy, Options.Create(new StructuredLogsOptions()), Binding);
+        var counters = new DiagnosticsPersistenceCounters();
+        await using var store = Start(new GroundworkStructuredLogStore(
+            lossy,
+            Options.Create(new StructuredLogsOptions()),
+            Binding,
+            counters));
         var publisher = new RecordingPublisher();
         var sink = new StructuredLogSink(store, publisher);
 
@@ -116,6 +84,47 @@ public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
         Assert.Single(lossy.OperationIds.Distinct());
         Assert.Single(await store.GetRecentAsync(StructuredLogFilter.None));
         Assert.NotNull(publisher.Entries.Single().ReplayCursor);
+        Assert.Equal(1, counters.Snapshot().CommitRetries);
+    }
+
+    [Fact]
+    public async Task Automatic_retention_acknowledgement_loss_retries_the_same_operation_and_keeps_exact_newest_records()
+    {
+        var provider = await CreateProviderAsync(Binding);
+        var lossy = new RetentionAcknowledgementLosingStore(provider);
+        await using var store = Start(new GroundworkStructuredLogStore(
+            lossy,
+            Options.Create(new StructuredLogsOptions()),
+            Binding,
+            maxRetainedEntries: 2,
+            retentionInterval: 3));
+        var timestamp = DateTimeOffset.UnixEpoch;
+
+        await store.AppendAsync(Entry(1, "first", timestamp));
+        await store.AppendAsync(Entry(2, "second", timestamp));
+        await store.AppendAsync(Entry(3, "third", timestamp));
+        await WaitUntilAsync(() => lossy.TrimCalls == 2);
+
+        Assert.Single(lossy.OperationIds.Distinct());
+        Assert.All(lossy.OperationIds, operation => Assert.InRange(Encoding.UTF8.GetByteCount(operation.Nonce), 1, 64));
+        Assert.All(lossy.TrimResults, result => Assert.Equal(1, result.DeletedCount.Value));
+        Assert.Equal(["second", "third"], (await store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+    }
+
+    [Theory]
+    [InlineData("stréam")]
+    [InlineData(" stream")]
+    [InlineData("stream ")]
+    public void Stream_definition_rejects_identifiers_outside_the_portable_provider_domain(string streamId)
+    {
+        Assert.Throws<ArgumentException>(() => GroundworkStructuredLogStore.CreateStreamDefinition(streamId));
+    }
+
+    [Fact]
+    public void Stream_definition_rejects_identifiers_over_sixty_four_bytes()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            GroundworkStructuredLogStore.CreateStreamDefinition(new string('s', 65)));
     }
 
     [Fact]
@@ -124,7 +133,9 @@ public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
         var provider = await CreateProviderAsync(Binding);
         var hanging = new HangingAppendStore(provider);
         var options = Options.Create(new StructuredLogsOptions { ShutdownDrainTimeout = TimeSpan.FromMilliseconds(20) });
-        var store = new GroundworkStructuredLogStore(hanging, options, Binding);
+        var counters = new DiagnosticsPersistenceCounters();
+        var store = new GroundworkStructuredLogStore(hanging, options, Binding, counters);
+        store.Start();
         var append = store.AppendAsync(Entry(1, "pending", DateTimeOffset.UnixEpoch)).AsTask();
         await hanging.Entered.WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -132,39 +143,10 @@ public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
 
         Assert.True(append.IsCompleted);
         await Assert.ThrowsAsync<StructuredLogsException>(() => append);
+        Assert.Equal(1, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.ShutdownTimeout]);
         hanging.Release();
         await hanging.Exited.WaitAsync(TimeSpan.FromSeconds(10));
     }
-
-    public Task InitializeAsync() => Task.CompletedTask;
-
-    public Task DisposeAsync()
-    {
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
-        return Task.CompletedTask;
-    }
-
-    private async Task<GroundworkStructuredLogStore> CreateStoreAsync(StructuredLogStoreBinding binding)
-    {
-        var provider = await CreateProviderAsync(binding);
-        return new(provider, Options.Create(new StructuredLogsOptions()), binding);
-    }
-
-    private Task<SqliteDiagnosticRecordStore> CreateProviderAsync(StructuredLogStoreBinding binding) =>
-        SqliteDiagnosticRecordStoreFactory.CreateAsync(
-            $"Data Source={_databasePath}",
-            GroundworkStructuredLogStore.CreateStreamDefinition(binding.StreamId));
-
-    private static StructuredLogEntry Entry(long sequence, string message, DateTimeOffset timestamp) => new()
-    {
-        Sequence = sequence,
-        Timestamp = timestamp,
-        Level = LogLevel.Information,
-        Category = "Test.Category",
-        Message = message,
-        SourceId = "writer"
-    };
 
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
@@ -244,5 +226,61 @@ public sealed class GroundworkStructuredLogStoreTests : IAsyncLifetime
         }
 
         public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class RetentionAcknowledgementLosingStore(IDiagnosticRecordStore inner) : IDiagnosticRecordStore
+    {
+        private readonly object _gate = new();
+        private int _loseAcknowledgement = 1;
+        private readonly List<DiagnosticOperationId> _operationIds = [];
+        private readonly List<DiagnosticTrimResult> _trimResults = [];
+
+        public int TrimCalls
+        {
+            get
+            {
+                lock (_gate)
+                    return _trimResults.Count;
+            }
+        }
+
+        public IReadOnlyList<DiagnosticOperationId> OperationIds
+        {
+            get
+            {
+                lock (_gate)
+                    return _operationIds.ToArray();
+            }
+        }
+
+        public IReadOnlyList<DiagnosticTrimResult> TrimResults
+        {
+            get
+            {
+                lock (_gate)
+                    return _trimResults.ToArray();
+            }
+        }
+
+        public DiagnosticRecordStoreHandlers Handlers => inner.Handlers;
+
+        public async ValueTask<DiagnosticTrimResult> TrimAsync(
+            DiagnosticTrimRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.TrimAsync(request, cancellationToken);
+            lock (_gate)
+            {
+                _operationIds.Add(request.OperationId);
+                _trimResults.Add(result);
+            }
+
+            if (Interlocked.Exchange(ref _loseAcknowledgement, 0) == 1)
+                throw new DiagnosticAcknowledgementLostException(
+                    DiagnosticOperationKind.Trim,
+                    request.Stream,
+                    request.OperationId);
+            return result;
+        }
     }
 }

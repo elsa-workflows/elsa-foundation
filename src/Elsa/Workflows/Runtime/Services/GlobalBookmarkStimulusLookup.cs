@@ -25,7 +25,7 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var candidates = await _bookmarkStimulusIndex.ListByStimulusAsync(
+        var candidates = await _bookmarkStimulusIndex.ListAllByStimulusAsync(
             request.StimulusType,
             request.StimulusHash,
             cancellationToken);
@@ -46,7 +46,9 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var candidates = await _bookmarkStimulusIndex.ListByStimulusTypeAsync(request.StimulusType, cancellationToken);
+        var candidates = await _bookmarkStimulusIndex.ListAllByStimulusTypeAsync(
+            request.StimulusType,
+            cancellationToken);
 
         // Expiry filtering stays in the lookup layer (the raw index scan is deliberately unfiltered). No
         // correlation scoping: mid-flow bookmark resumes are instance-scoped. Deterministic ordering matches the

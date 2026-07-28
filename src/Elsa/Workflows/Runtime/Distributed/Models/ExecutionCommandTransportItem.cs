@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 
 namespace Elsa.Workflows.Runtime.Distributed.Models;
 
@@ -30,7 +32,7 @@ public sealed class ExecutionCommandTransportItem
         DateTimeOffset? leaseExpiresAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentNullException.ThrowIfNull(envelope);
 
         if (sequence < 0)
@@ -42,8 +44,8 @@ public sealed class ExecutionCommandTransportItem
         if (!string.Equals(workflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new ArgumentException("Transport item workflow execution ID must match the envelope workflow execution ID.", nameof(workflowExecutionId));
 
-        if (leasedByOwnerId is not null && string.IsNullOrWhiteSpace(leasedByOwnerId))
-            throw new ArgumentException("Lease owner ID cannot be blank when provided.", nameof(leasedByOwnerId));
+        if (leasedByOwnerId is not null)
+            DistributedRuntimeIdentityConstraints.Validate(leasedByOwnerId, nameof(leasedByOwnerId));
 
         if (leasedByOwnerId is null ^ leaseExpiresAt is null)
             throw new ArgumentException("A leased transport item must carry both an owner ID and a lease expiry, or neither.", nameof(leasedByOwnerId));
@@ -66,11 +68,19 @@ public sealed class ExecutionCommandTransportItem
     public int DeliveryAttemptCount { get; }
     public string? LeasedByOwnerId { get; }
     public DateTimeOffset? LeaseExpiresAt { get; }
+    /// <summary>
+    /// Monotonically increasing delivery-claim token. Acknowledgements must present this exact value, which
+    /// distinguishes a stale lease by the same owner from the current lease after an expiry/re-lease cycle. It is
+    /// derived from the already-persisted delivery attempt count so adding acknowledgement fencing does not reshape
+    /// the frozen v1 transport-item wire payload.
+    /// </summary>
+    [JsonIgnore]
+    public long? LeaseToken => LeasedByOwnerId is null ? null : DeliveryAttemptCount;
 
     /// <summary>An item is visible (available to lease) when it is unleased or its lease has expired.</summary>
     public bool IsVisible(DateTimeOffset now) => LeasedByOwnerId is null || LeaseExpiresAt is null || LeaseExpiresAt.Value <= now;
 
-    /// <summary>Returns a copy leased by <paramref name="ownerId"/> until <paramref name="leaseExpiresAt"/>, bumping the attempt count.</summary>
+    /// <summary>Returns a copy leased by <paramref name="ownerId"/> until <paramref name="leaseExpiresAt"/>, bumping the attempt count and derived lease token.</summary>
     public ExecutionCommandTransportItem Lease(string ownerId, DateTimeOffset leaseExpiresAt) => new(
         TransportItemId,
         WorkflowExecutionId,

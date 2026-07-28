@@ -11,3 +11,20 @@ public interface IRuntimeFaultCapturePolicy
 {
     RuntimeFaultInfo Capture(Exception exception);
 }
+
+public static class RuntimeFaultCapturePolicyExtensions
+{
+    /// <summary>
+    /// Captures the exception's first inner exception under the same policy (same scrubbing/stack-trace rules as
+    /// the outer capture), or <c>null</c> when there is none. Runtime faults are routinely wrapped one level deep
+    /// (e.g. a checkpoint-writer exception around the physical storage fault), so surfacing the first inner fault
+    /// alongside the outer one keeps the root cause diagnosable (#1031).
+    /// </summary>
+    public static RuntimeFaultInfo? CaptureInner(this IRuntimeFaultCapturePolicy policy, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return exception.InnerException is { } inner ? policy.Capture(inner) : null;
+    }
+}

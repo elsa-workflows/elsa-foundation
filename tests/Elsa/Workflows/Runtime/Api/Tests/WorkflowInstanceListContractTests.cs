@@ -34,7 +34,7 @@ public sealed class WorkflowInstanceListContractTests
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
             "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
         AssertProperties(response,
-            "Items", "PreviousCursor", "NextCursor", "HasPrevious", "HasNext", "Count", "TotalCount");
+            "Items", "NextCursor", "HasNext", "Count", "TotalCount");
         var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
         AssertProperties(item, "RunKind");
         Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
@@ -44,6 +44,25 @@ public sealed class WorkflowInstanceListContractTests
         Assert.Equal("runtime/workflows/instances", links["workflow-instances"].Href);
         Assert.Equal("runtime/workflows/instances/page", links["workflow-instances-page"].Href);
         Assert.Equal(1, RuntimeApiCapabilities.StaticDeclaration.ContractMajorVersion);
+    }
+
+    [Fact]
+    public void Runtime_capability_advertises_every_reusable_boundary_inspection_relation()
+    {
+        var links = RuntimeApiCapabilities.StaticDeclaration.Links.ToDictionary(link => link.Rel, StringComparer.Ordinal);
+
+        string[] relations =
+        [
+            "activity-execution-boundary-detail",
+            "activity-execution-descendants",
+            "activity-execution-layout",
+            "activity-execution-attempt-lineage",
+            "activity-execution-bookmarks",
+            "activity-execution-incidents",
+            "activity-execution-value-evidence",
+            "activity-execution-value-payload"
+        ];
+        Assert.All(relations, relation => Assert.True(links[relation].Templated));
     }
 
     [Theory]
@@ -76,7 +95,7 @@ public sealed class WorkflowInstanceListContractTests
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             Request = Assert.IsType<ListWorkflowInstances>(request);
-            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, null, false, false, 0, 0));
+            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, false, 0, 0));
         }
     }
 }

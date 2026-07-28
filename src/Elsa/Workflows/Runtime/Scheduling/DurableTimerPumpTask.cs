@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
+using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -38,32 +41,60 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// </remarks>
 public sealed class DurableTimerPumpTask : IRecurringTask
 {
-    private readonly IDurableTimerStore _timerStore;
-    private readonly IBookmarkResumeDispatcher _dispatcher;
+    private static readonly PersistenceScope DirectConstructionScope = new(PersistenceScope.DefaultValue);
+
+    private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly IDurableTimerStore? _timerStore;
+    private readonly IBookmarkResumeDispatcher? _dispatcher;
     private readonly IOptions<DurableTimerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DurableTimerPumpTask> _logger;
     private readonly ConcurrentDictionary<TimerKey, TimerBackoff> _timerBackoff = new();
+    private readonly string _claimOwnerId = $"durable-timer-pump:{Guid.NewGuid():N}";
     private int _consecutiveSweepFailures;
 
+    [ActivatorUtilitiesConstructor]
+    public DurableTimerPumpTask(
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<DurableTimerPumpOptions> options,
+        TimeProvider timeProvider,
+        ILogger<DurableTimerPumpTask> logger)
+        : this(options, timeProvider, logger)
+    {
+        ArgumentNullException.ThrowIfNull(scopeRunner);
+        _scopeRunner = scopeRunner;
+    }
+
+    /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public DurableTimerPumpTask(
         IDurableTimerStore timerStore,
         IBookmarkResumeDispatcher dispatcher,
         IOptions<DurableTimerPumpOptions> options,
         TimeProvider timeProvider,
         ILogger<DurableTimerPumpTask> logger)
+        : this(options, timeProvider, logger)
     {
         ArgumentNullException.ThrowIfNull(timerStore);
         ArgumentNullException.ThrowIfNull(dispatcher);
+
+        _timerStore = timerStore;
+        _dispatcher = dispatcher;
+    }
+
+    private DurableTimerPumpTask(
+        IOptions<DurableTimerPumpOptions> options,
+        TimeProvider timeProvider,
+        ILogger<DurableTimerPumpTask> logger)
+    {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _timerStore = timerStore;
-        _dispatcher = dispatcher;
         _options = options;
         _timeProvider = timeProvider;
         _logger = logger;
+        if (_options.Value.ClaimVisibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), "Durable timer claim visibility timeout must be greater than zero.");
     }
 
     /// <summary>
@@ -82,24 +113,25 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         {
             PruneBackoff(options, now);
 
-            var due = await _timerStore.ListDueAsync(now, options.MaxTimersPerTick, cancellationToken);
-            var dispatched = 0;
-
-            foreach (var timer in due)
+            if (_scopeRunner is null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (IsBackingOff(timer, now))
-                    continue;
-
-                if (await FireAsync(timer, options, now, cancellationToken))
-                    dispatched++;
+                await SweepAsync(DirectConstructionScope, _timerStore!, _dispatcher!, options, now, cancellationToken);
+            }
+            else
+            {
+                await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
+                {
+                    await SweepAsync(
+                        persistenceScope,
+                        operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
+                        operationScope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>(),
+                        options,
+                        now,
+                        operationCancellationToken);
+                }, cancellationToken);
             }
 
             _consecutiveSweepFailures = 0;
-
-            if (dispatched > 0 && _logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("Durable timer sweep fired {Dispatched}/{DueCount} due timer(s)", dispatched, due.Count);
         }
         catch (OperationCanceledException)
         {
@@ -116,6 +148,145 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         }
     }
 
+    private async Task SweepAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        IBookmarkResumeDispatcher dispatcher,
+        DurableTimerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (timerStore.SupportsClaimTransitions)
+        {
+            var claims = await timerStore.ClaimDueAsync(
+                new RuntimeDurableTimerClaimRequest(
+                    _claimOwnerId,
+                    now,
+                    options.ClaimVisibilityTimeout,
+                    options.MaxTimersPerTick),
+                cancellationToken);
+            var claimedDispatches = 0;
+            foreach (var claim in claims)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await FireClaimedAsync(
+                        persistenceScope,
+                        timerStore,
+                        dispatcher,
+                        claim,
+                        options,
+                        now,
+                        cancellationToken))
+                {
+                    claimedDispatches++;
+                }
+            }
+
+            if (claimedDispatches > 0 && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(
+                    "Durable timer sweep fired {Dispatched}/{DueCount} claimed timer(s)",
+                    claimedDispatches,
+                    claims.Count);
+            }
+
+            return;
+        }
+
+        var due = await timerStore.ListDueAsync(now, options.MaxTimersPerTick, cancellationToken);
+        var dispatched = 0;
+
+        foreach (var timer in due)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (IsBackingOff(persistenceScope, timer, now))
+                continue;
+
+            if (await FireAsync(persistenceScope, timerStore, dispatcher, timer, options, now, cancellationToken))
+                dispatched++;
+        }
+
+        if (dispatched > 0 && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Durable timer sweep fired {Dispatched}/{DueCount} due timer(s)", dispatched, due.Count);
+    }
+
+    private async Task<bool> FireClaimedAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        IBookmarkResumeDispatcher dispatcher,
+        RuntimeDurableTimerClaim claim,
+        DurableTimerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var renewal = new ClaimRenewalState(claim);
+        BookmarkResumeDispatchResult result;
+        try
+        {
+            result = await DispatchWithClaimRenewalAsync(
+                timerStore,
+                renewal,
+                dispatchCancellationToken => dispatcher.DispatchAsync(
+                    CreateRequest(claim.Timer),
+                    cancellationToken: dispatchCancellationToken),
+                options,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (RuntimeDurableTimerClaimLostException exception)
+        {
+            _logger.LogError(
+                exception,
+                "Durable timer '{TimerId}' claim was lost; leaving successor-owned state untouched",
+                claim.Timer.TimerId);
+            return false;
+        }
+        catch (Exception exception)
+        {
+            await ReleaseAfterFailureAsync(
+                persistenceScope,
+                timerStore,
+                renewal.Current,
+                options,
+                now,
+                cancellationToken);
+            _logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; releasing with backoff", claim.Timer.TimerId);
+            return false;
+        }
+
+        switch (result.Status)
+        {
+            case BookmarkResumeDispatchStatus.Dispatched:
+            case BookmarkResumeDispatchStatus.Duplicate:
+            case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
+            case BookmarkResumeDispatchStatus.ExecutableMissing:
+                await CompleteClaimAsync(persistenceScope, timerStore, renewal.Current, cancellationToken);
+                return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
+
+            case BookmarkResumeDispatchStatus.NotFound:
+                if (now - claim.Timer.DueTime > options.NotFoundGrace)
+                    await CompleteClaimAsync(persistenceScope, timerStore, renewal.Current, cancellationToken);
+                else
+                    await ReleaseAfterFailureAsync(persistenceScope, timerStore, renewal.Current, options, now, cancellationToken);
+                return false;
+
+            default:
+                await ReleaseAfterFailureAsync(persistenceScope, timerStore, renewal.Current, options, now, cancellationToken);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        "Durable timer '{TimerId}' dispatch returned {Status}; releasing with backoff",
+                        claim.Timer.TimerId,
+                        result.Status);
+                }
+                return false;
+        }
+    }
+
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -124,20 +295,19 @@ public sealed class DurableTimerPumpTask : IRecurringTask
 
     // Returns true when the timer was handed to the dispatcher (a real fire), false when it was skipped,
     // kept for retry, or deleted without a dispatch. A per-timer failure never escapes the sweep.
-    private async Task<bool> FireAsync(DurableTimer timer, DurableTimerPumpOptions options, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<bool> FireAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        IBookmarkResumeDispatcher dispatcher,
+        DurableTimer timer,
+        DurableTimerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         BookmarkResumeDispatchResult result;
         try
         {
-            var request = new BookmarkResumeDispatchRequest(
-                timer.WorkflowExecutionId,
-                timer.StimulusType,
-                timer.StimulusHash,
-                timer.Input,
-                idempotencyKey: $"timer:{timer.TimerId}",
-                requestedBy: DurableTimerConstants.PumpRequestedBy);
-
-            result = await _dispatcher.DispatchAsync(request, cancellationToken: cancellationToken);
+            result = await dispatcher.DispatchAsync(CreateRequest(timer), cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -145,7 +315,7 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         }
         catch (Exception exception)
         {
-            BackOff(timer, options, now);
+            BackOff(persistenceScope, timer, options, now);
             _logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; backing off", timer.TimerId);
             return false;
         }
@@ -157,41 +327,185 @@ public sealed class DurableTimerPumpTask : IRecurringTask
             // The workflow execution or its executable is gone: the timer is orphaned, nothing to resume.
             case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
             case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await DeleteAsync(timer, cancellationToken);
+                await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken);
                 return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
             case BookmarkResumeDispatchStatus.NotFound:
                 // Past grace: the bookmark was consumed by an earlier fire (or never will match) — delete.
                 // Within grace: a very short delay may still be committing its bookmark — keep and retry.
                 if (now - timer.DueTime > options.NotFoundGrace)
-                    await DeleteAsync(timer, cancellationToken);
+                    await DeleteAsync(persistenceScope, timerStore, timer, cancellationToken);
                 else
-                    BackOff(timer, options, now);
+                    BackOff(persistenceScope, timer, options, now);
                 return false;
 
             default:
                 // Rejected / Deferred / Ambiguous / ResumeResolutionFailed: transient or fault — keep the
                 // timer and back off so a poisoned timer cannot occupy a dispatch slot every tick.
-                BackOff(timer, options, now);
+                BackOff(persistenceScope, timer, options, now);
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug("Durable timer '{TimerId}' dispatch returned {Status}; backing off", timer.TimerId, result.Status);
                 return false;
         }
     }
 
-    private async Task DeleteAsync(DurableTimer timer, CancellationToken cancellationToken)
+    private async Task DeleteAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        DurableTimer timer,
+        CancellationToken cancellationToken)
     {
-        await _timerStore.DeleteAsync(timer.WorkflowExecutionId, timer.TimerId, cancellationToken);
-        _timerBackoff.TryRemove(new TimerKey(timer.WorkflowExecutionId, timer.TimerId), out _);
+        await timerStore.DeleteAsync(timer.WorkflowExecutionId, timer.TimerId, cancellationToken);
+        _timerBackoff.TryRemove(new TimerKey(persistenceScope, timer.WorkflowExecutionId, timer.TimerId), out _);
     }
 
-    private bool IsBackingOff(DurableTimer timer, DateTimeOffset now) =>
-        _timerBackoff.TryGetValue(new TimerKey(timer.WorkflowExecutionId, timer.TimerId), out var backoff) &&
+    private async Task CompleteClaimAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        RuntimeDurableTimerClaim claim,
+        CancellationToken cancellationToken)
+    {
+        var completion = await timerStore.CompleteClaimAsync(claim, cancellationToken);
+        if (!completion.Succeeded)
+            throw NewClaimLost(claim, "complete", completion.Status);
+        _timerBackoff.TryRemove(
+            new TimerKey(persistenceScope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId),
+            out _);
+    }
+
+    private async Task ReleaseAfterFailureAsync(
+        PersistenceScope persistenceScope,
+        IDurableTimerStore timerStore,
+        RuntimeDurableTimerClaim claim,
+        DurableTimerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var failures = checked(claim.FailureCount + 1);
+        var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
+        var release = await timerStore.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken);
+        if (!release.Succeeded)
+            throw NewClaimLost(claim, "release", release.Status);
+        _timerBackoff.TryRemove(
+            new TimerKey(persistenceScope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId),
+            out _);
+    }
+
+    private async ValueTask<BookmarkResumeDispatchResult> DispatchWithClaimRenewalAsync(
+        IDurableTimerStore timerStore,
+        ClaimRenewalState renewal,
+        Func<CancellationToken, ValueTask<BookmarkResumeDispatchResult>> dispatch,
+        DurableTimerPumpOptions options,
+        CancellationToken cancellationToken)
+    {
+        using var renewalStop = new CancellationTokenSource();
+        using var dispatchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var renewalTask = RenewClaimUntilStoppedAsync(
+            timerStore,
+            renewal,
+            options.ClaimVisibilityTimeout,
+            renewalStop.Token,
+            dispatchCancellation);
+        BookmarkResumeDispatchResult? result = null;
+        Exception? dispatchFailure = null;
+        Exception? renewalFailure = null;
+        try
+        {
+            result = await dispatch(dispatchCancellation.Token);
+        }
+        catch (Exception exception)
+        {
+            dispatchFailure = exception;
+        }
+        finally
+        {
+            await renewalStop.CancelAsync();
+            try
+            {
+                await renewalTask;
+            }
+            catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
+            {
+                // Dispatch completed before the next renewal cadence.
+            }
+            catch (Exception exception)
+            {
+                renewalFailure = exception;
+            }
+        }
+
+        if (renewalFailure is not null)
+            ExceptionDispatchInfo.Capture(renewalFailure).Throw();
+        if (dispatchFailure is not null)
+            ExceptionDispatchInfo.Capture(dispatchFailure).Throw();
+        return result!;
+    }
+
+    private async Task RenewClaimUntilStoppedAsync(
+        IDurableTimerStore timerStore,
+        ClaimRenewalState renewal,
+        TimeSpan visibilityTimeout,
+        CancellationToken stopToken,
+        CancellationTokenSource dispatchCancellation)
+    {
+        var cadence = TimeSpan.FromTicks(Math.Max(1, visibilityTimeout.Ticks / 3));
+        while (true)
+        {
+            await Task.Delay(cadence, _timeProvider, stopToken);
+            RuntimeDurableTimerClaimTransitionResult result;
+            try
+            {
+                result = await timerStore.RenewClaimAsync(
+                    renewal.Current,
+                    _timeProvider.GetUtcNow(),
+                    visibilityTimeout,
+                    stopToken);
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await dispatchCancellation.CancelAsync();
+                throw NewClaimLost(renewal.Current, "renew", status: null, exception);
+            }
+
+            if (result.Status != RuntimeDurableTimerClaimTransitionStatus.Succeeded || result.Claim is null)
+            {
+                await dispatchCancellation.CancelAsync();
+                throw NewClaimLost(renewal.Current, "renew", result.Status);
+            }
+
+            renewal.Current = result.Claim;
+        }
+    }
+
+    private static BookmarkResumeDispatchRequest CreateRequest(DurableTimer timer) =>
+        new(
+            timer.WorkflowExecutionId,
+            timer.StimulusType,
+            timer.StimulusHash,
+            timer.Input,
+            idempotencyKey: $"timer:{timer.TimerId}",
+            requestedBy: DurableTimerConstants.PumpRequestedBy,
+            payloadType: timer.PayloadType,
+            providerId: timer.ProviderId);
+
+    private static RuntimeDurableTimerClaimLostException NewClaimLost(
+        RuntimeDurableTimerClaim claim,
+        string transition,
+        RuntimeDurableTimerClaimTransitionStatus? status,
+        Exception? innerException = null) =>
+        new(claim, transition, status, innerException);
+
+    private bool IsBackingOff(PersistenceScope persistenceScope, DurableTimer timer, DateTimeOffset now) =>
+        _timerBackoff.TryGetValue(new TimerKey(persistenceScope, timer.WorkflowExecutionId, timer.TimerId), out var backoff) &&
         backoff.NextEligibleAt > now;
 
-    private void BackOff(DurableTimer timer, DurableTimerPumpOptions options, DateTimeOffset now)
+    private void BackOff(PersistenceScope persistenceScope, DurableTimer timer, DurableTimerPumpOptions options, DateTimeOffset now)
     {
-        var key = new TimerKey(timer.WorkflowExecutionId, timer.TimerId);
+        var key = new TimerKey(persistenceScope, timer.WorkflowExecutionId, timer.TimerId);
         var failures = _timerBackoff.TryGetValue(key, out var current) ? current.Failures + 1 : 1;
         var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
         _timerBackoff[key] = new TimerBackoff(now + delay, failures);
@@ -240,7 +554,23 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
     }
 
-    private readonly record struct TimerKey(string WorkflowExecutionId, string TimerId);
+    private readonly record struct TimerKey(PersistenceScope PersistenceScope, string WorkflowExecutionId, string TimerId);
 
     private readonly record struct TimerBackoff(DateTimeOffset NextEligibleAt, int Failures);
+
+    private sealed class ClaimRenewalState(RuntimeDurableTimerClaim current)
+    {
+        public RuntimeDurableTimerClaim Current { get; set; } = current;
+    }
+
+    private sealed class RuntimeDurableTimerClaimLostException(
+        RuntimeDurableTimerClaim claim,
+        string transition,
+        RuntimeDurableTimerClaimTransitionStatus? status,
+        Exception? innerException = null)
+        : InvalidOperationException(
+            $"Durable timer claim for '{claim.Timer.TimerId}' in workflow execution '{claim.Timer.WorkflowExecutionId}' " +
+            $"was lost during '{transition}'" +
+            (status is null ? "." : $" with status '{status}'."),
+            innerException);
 }

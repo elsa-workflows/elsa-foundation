@@ -1,0 +1,685 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
+using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
+using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Capabilities;
+using Groundwork.Documents.Store;
+using Groundwork.Sqlite.Documents;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xunit;
+using Xunit.Abstractions;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+
+namespace Elsa.Workflows.Runtime.Benchmarks;
+
+/// <summary>
+/// Engine-level performance benchmark for the real in-process runtime path. Every variant drives the production
+/// dispatch/drain path — save executable → activate the workflow-execution actor → enqueue the Start command →
+/// drain the scheduler to completion — and reports p50/p95 wall time over N timed iterations after warmups. The
+/// durable variants additionally count <c>checkpointCommit</c> documents written per run, which is the durable
+/// fsync cost the engine pays.
+///
+/// Two workflow shapes are measured:
+///   * The canonical <b>2-node</b> workflow: a <c>Flowchart</c> root whose single start node is a <c>WriteLine</c>
+///     leaf (<see cref="Durable_Sqlite_2Node"/>, <see cref="InMemory_2Node"/>).
+///   * A <b>hot loop</b>: a <c>Flowchart</c> whose start node begins a straight-line chain of
+///     <see cref="HotLoopLength"/> pure leaf activities (<see cref="Durable_Sqlite_HotLoop"/>). This is the shape
+///     ADR 0032's checkpoint-cadence work targets — a burst of pure, replay-safe activities whose intermediate
+///     checkpoints are candidates for coalescing/deferral.
+///
+/// Checkpoint-persistence policy is the durable dial under test:
+///   * <b>Immediate</b> (the runtime default; the harness leaves it untouched unless coalescing is enabled) flushes
+///     every checkpoint — every <c>ActivityScheduled</c>/<c>ActivityAttemptClaimed</c>/<c>ActivityCompleted</c>
+///     and workflow-level transition is its own durable commit.
+///   * <b>Coalesced</b> (opt-in via <c>AddCoalescingRuntimeCheckpointPersistence</c>) folds non-mandatory
+///     intra-drain checkpoints into one atomic commit at quiescence; only mandatory boundaries flush immediately.
+///
+/// The hot-loop A/B (<see cref="Durable_Sqlite_HotLoop"/>) measures the same chain under both policies and reports
+/// commits/run for each, isolating coalescing's effect. It soft-asserts Coalesced &lt; Immediate on commits/run —
+/// deterministic in this harness (the fold is data-driven, not timing-driven).
+///
+/// The hot-loop leaf A/B isolates ADR 0032 R2 / spec 107 (now in base): the contract-level
+/// <c>SideEffectProfile { External, ReplaySafe }</c> marker makes the pre-activation claim checkpoint
+/// (<c>ActivityAttemptClaimed</c>) a CONDITIONAL flush under Coalesced — <c>ReplaySafe</c> defers the claim into
+/// the coalesced segment, <c>External</c>/unmarked keeps the immediate flush. The two hot-loop variants use
+/// IDENTICAL graphs (same Flowchart root, same 10-leaf straight-line chain, same node count and nesting) where
+/// ONLY the leaf activity class differs: <see cref="NoOpStep"/> (marked
+/// <c>[ActivitySideEffectProfile(ReplaySafe)]</c>) vs <c>WriteLine</c> (unmarked ⇒ External). Any commits/run
+/// delta between them under the same Coalesced policy is therefore attributable to the marker alone.
+///
+/// SEGMENT-CAP INTERACTION (why the A/B pins <see cref="HotLoopSegmentCap"/>): the coalescing session enforces
+/// <c>MaxSegmentCheckpoints</c> (host default 50). A mandatory claim boundary folds AND RESETS the segment, so
+/// with an External leaf the cap never trips (a fresh segment starts at every leaf). Mark the leaf ReplaySafe
+/// and nothing resets the segment any more — the full ~66-checkpoint burst runs into the cap mid-chain, the
+/// session deactivates, and the drain falls back to per-checkpoint Immediate for the remainder. Measured under
+/// the default cap this INVERTS the comparison (ReplaySafe 16 &gt; External 11 commits/run) even though the
+/// marker is engaged. The A/B therefore raises the cap above the burst size for both leaves (same options,
+/// leaf class still the only variable); a separate single-run diagnostic keeps the default-cap behavior visible.
+/// The cap-deactivation fallback is the next optimization target for hot loops longer than the cap — a cap-hit
+/// could fold-and-reset (like a claim boundary) instead of deactivating coalescing for the rest of the drain.
+///
+/// There are deliberately NO hard latency assertions (they would flake in CI); each iteration asserts only that
+/// the workflow completed. Commit counts are reported and, being deterministic (stable across every observed
+/// iteration), two relationships are softly asserted: Coalesced &lt; Immediate, and ReplaySafe-leaf &lt;
+/// External-leaf under Coalesced. A one-off (untimed) diagnostic run per durable hot-loop variant dumps the
+/// flushed commit kinds — derived from the persisted commit ids — so the residual mandatory boundaries are
+/// named, not guessed. Timings/counts are emitted via <see cref="ITestOutputHelper"/>.
+///
+/// This project lives under benchmarks/ (not tests/), so neither CI test gate runs it — see the csproj header.
+/// Run on demand with: dotnet test benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj
+/// </summary>
+public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
+{
+    private const int WarmupCount = 2;
+    private const int IterationCount = 10;
+    private const int HotLoopLength = 10;
+
+    /// <summary>
+    /// Coalescing segment cap for the hot-loop A/B, deliberately above the burst's total checkpoint count (~66)
+    /// so the cap's deactivation fallback cannot fire and the leaf's side-effect profile is the only variable.
+    /// The host default (50) trips mid-burst once ReplaySafe removes the segment-resetting claim boundaries —
+    /// that interaction is documented by the default-cap diagnostic run, not baked into the A/B numbers.
+    /// </summary>
+    private const int HotLoopSegmentCap = 256;
+    private const string WriteLineNodeId = BenchmarkWorkflows.WriteLineNodeId;
+
+    // A comfortably large deterministic activity-execution id pool; the graphs here consume far fewer
+    // (2-node: 2; hot loop: HotLoopLength + 1 for the flowchart root).
+    private static readonly string[] ActivityExecutionIds =
+        Enumerable.Range(0, 64).Select(index => $"actexec-{index}").ToArray();
+
+    // ---- 2-node baseline ------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Durable_Sqlite_2Node()
+    {
+        var measurement = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: false),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · durable-sqlite · Immediate (Groundwork over on-disk SQLite, fsync per commit)", measurement);
+    }
+
+    [Fact]
+    public async Task InMemory_2Node()
+    {
+        var measurement = await MeasureAsync(
+            () => new ValueTask<HarnessLease>(NewInMemoryLease()),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · in-memory · Immediate (runtime default stores, no fsync)", measurement);
+    }
+
+    // ---- Executable-read cache A/B (ADR 0031 item b / spec 111) --------------------------------------------
+
+    /// <summary>
+    /// Isolates the burst-scoped executable read cache (spec 111): the SAME durable hot-loop and 2-node runs under the
+    /// Coalesced policy, once with the cache disabled and once enabled. Reports p50/p95, durable checkpoint commits/run,
+    /// AND durable executable reads/run — the last is the metric this unit collapses (spec-110 characterization: ~46
+    /// executable reads per 10-activity hot loop, resolving the same immutable pinned artifact every hop). The cache is
+    /// content-addressed and immutable within a drain, so committed durable state is identical either way; only the read
+    /// count and wall time move. Soft-asserts reads-on &lt; reads-off (deterministic here).
+    /// </summary>
+    [Fact]
+    public async Task Durable_Sqlite_ExecutableReadCache_OnVsOff()
+    {
+        var hotLoopOff = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: false),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · Coalesced · executable-cache OFF", hotLoopOff);
+
+        var hotLoopOn = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: true),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · Coalesced · executable-cache ON", hotLoopOn);
+
+        var twoNodeOff = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, burstCache: false),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · Coalesced · executable-cache OFF", twoNodeOff);
+
+        var twoNodeOn = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, burstCache: true),
+            BuildFlowchartWithWriteLine,
+            AssertTwoNodeCompleted);
+        Report("2-node · Coalesced · executable-cache ON", twoNodeOn);
+
+        output.WriteLine(
+            $"=== executable-read summary === hot-loop reads/run: OFF={TypicalReads(hotLoopOff)} ON={TypicalReads(hotLoopOn)}  " +
+            $"2-node reads/run: OFF={TypicalReads(twoNodeOff)} ON={TypicalReads(twoNodeOn)}");
+
+        Assert.True(TypicalReads(hotLoopOn) < TypicalReads(hotLoopOff),
+            $"Expected cache-on reads ({TypicalReads(hotLoopOn)}) < cache-off ({TypicalReads(hotLoopOff)}) for the hot loop.");
+        Assert.True(TypicalReads(twoNodeOn) < TypicalReads(twoNodeOff),
+            $"Expected cache-on reads ({TypicalReads(twoNodeOn)}) < cache-off ({TypicalReads(twoNodeOff)}) for 2-node.");
+    }
+
+    // ---- Routing-structure materialization collapse (ADR 0047 D3) ------------------------------------------
+
+    /// <summary>
+    /// ADR 0047 D3 evidence: counts how many times the Flowchart routing structure is actually materialized
+    /// (deserialized + re-indexed from the pinned executable) per run, via
+    /// <see cref="RoutingStructureMaterializationDiagnostics"/>. Before D3 the composite engine rebuilt the graph on
+    /// every completion hop; with the D3 memo riding on the spec-111 burst-cached executable instance, the structure
+    /// builds once per composite per burst. Reports the collapse for the hot-loop and 2-node shapes with the burst
+    /// cache ON vs OFF (OFF ⇒ a fresh executable instance per hop ⇒ the memo cannot span hops, matching pre-D3), and
+    /// soft-asserts ON &lt; OFF. This is the routing analog of the commits/run and executable-reads/run counters —
+    /// deterministic, not timing-based.
+    /// </summary>
+    [Fact]
+    public async Task RoutingStructureMaterializations_CollapseWithBurstCache()
+    {
+        var hotOn = await CountRoutingMaterializationsAsync(burstCache: true, () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        var hotOff = await CountRoutingMaterializationsAsync(burstCache: false, () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        var twoOn = await CountRoutingMaterializationsAsync(burstCache: true, BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        var twoOff = await CountRoutingMaterializationsAsync(burstCache: false, BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+
+        output.WriteLine("=== ADR 0047 D3 routing-structure materializations/run ===");
+        output.WriteLine($"hot-loop×{HotLoopLength}: burst-cache ON={hotOn}  OFF={hotOff}");
+        output.WriteLine($"2-node:            burst-cache ON={twoOn}  OFF={twoOff}");
+        output.WriteLine("(ON = one materialization per composite per burst; OFF = one per completion hop, the pre-D3 cost.)");
+
+        Assert.True(hotOn < hotOff, $"Expected hot-loop materializations cache-ON ({hotOn}) < cache-OFF ({hotOff}).");
+        Assert.True(twoOn <= twoOff, $"Expected 2-node materializations cache-ON ({twoOn}) <= cache-OFF ({twoOff}).");
+    }
+
+    private static async Task<long> CountRoutingMaterializationsAsync(
+        bool burstCache,
+        Func<WorkflowExecutable> executableFactory,
+        Action<WorkflowExecutionRun> assert)
+    {
+        await using var lease = await NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap, burstCache: burstCache);
+        RoutingStructureMaterializationDiagnostics.Reset();
+        var run = await lease.Harness.RunAsync(executableFactory());
+        assert(run);
+        return RoutingStructureMaterializationDiagnostics.Count;
+    }
+
+    // ---- Hot-loop A/B: Immediate vs Coalesced (durable), plus the External-leaf reference -------------------
+
+    [Fact]
+    public async Task Durable_Sqlite_HotLoop()
+    {
+        var immediate = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: false),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (ReplaySafe leaf) · durable-sqlite · Immediate", immediate);
+
+        var coalesced = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (ReplaySafe leaf) · durable-sqlite · Coalesced (cap {HotLoopSegmentCap})", coalesced);
+
+        // The A/B counterpart: the IDENTICAL chain (same node count, same composite nesting, same connections,
+        // same coalescing options) where only the leaf class differs — WriteLine is unmarked, so its contract
+        // compiles to the fail-safe External profile and its pre-activation claim keeps the mandatory flush.
+        var coalescedExternalLeaf = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (External leaf: WriteLine) · durable-sqlite · Coalesced (cap {HotLoopSegmentCap})", coalescedExternalLeaf);
+
+        // One-off untimed diagnostic runs: name the commit kinds actually flushed, so the residual mandatory
+        // boundaries under each policy/leaf combination are explained rather than guessed. The third run keeps
+        // the HOST-DEFAULT segment cap, documenting the cap-deactivation fallback a ReplaySafe hot loop longer
+        // than the cap runs into (see the class doc: the tail degrades to per-checkpoint Immediate).
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} ReplaySafe leaf · Coalesced (cap {HotLoopSegmentCap})",
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(NewPureLoopNode));
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} External leaf · Coalesced (cap {HotLoopSegmentCap})",
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")));
+        await DumpCommitBreakdownAsync(
+            $"hot-loop×{HotLoopLength} ReplaySafe leaf · Coalesced (HOST-DEFAULT cap 50 — cap trips mid-burst, tail flushes Immediate)",
+            () => NewDurableSqliteHarnessAsync(coalesce: true),
+            () => BuildHotLoopFlowchart(NewPureLoopNode));
+
+        var immediateCommits = TypicalCommits(immediate);
+        var coalescedCommits = TypicalCommits(coalesced);
+        var coalescedExternalCommits = TypicalCommits(coalescedExternalLeaf);
+
+        output.WriteLine(
+            $"=== hot-loop commit summary === Immediate={immediateCommits}/run  " +
+            $"Coalesced(ReplaySafe leaf)={coalescedCommits}/run  Coalesced(External leaf)={coalescedExternalCommits}/run  " +
+            $"(segment cap {HotLoopSegmentCap} for both Coalesced variants)");
+
+        // Both relationships are deterministic in this harness (commit counts are stable across iterations):
+        // coalescing folds the non-mandatory intra-drain checkpoints, and the spec-107 ReplaySafe marker
+        // additionally defers the per-leaf ActivityAttemptClaimed flush the External leaf must keep.
+        Assert.True(
+            coalescedCommits < immediateCommits,
+            $"Expected Coalesced commits/run ({coalescedCommits}) < Immediate commits/run ({immediateCommits}).");
+        Assert.True(
+            coalescedCommits < coalescedExternalCommits,
+            $"Expected ReplaySafe-leaf commits/run ({coalescedCommits}) < External-leaf commits/run ({coalescedExternalCommits}) under Coalesced.");
+    }
+
+    // ---- In-process-hop fast path A/B (spec 109, ADR 0031 follow-up (a)) ------------------------------------
+    // Before/after for the in-process-hop payload short-circuit: the same shape measured with the fast path DISABLED
+    // (durable deserialize path everywhere) and ENABLED (default). Step-0 profiling found the per-hop JSON round-trip is
+    // ~0.4% of a durable hop and ~2% of an in-memory hop, so the delta here is expected to be small (often within
+    // run-to-run noise) — the point of the unit is that the short-circuit stays byte-identical (guardrail test), not a
+    // large throughput win. A/B reported for the in-memory 2-node, in-memory hot loop, and durable hot loop.
+
+    [Fact]
+    public async Task FastPathAb_InMemory_2Node()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), BuildFlowchartWithWriteLine, AssertTwoNodeCompleted);
+        Report("2-node · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_InMemory_HotLoop()
+    {
+        var off = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: false)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => new ValueTask<HarnessLease>(NewInMemoryLease(fastPathEnabled: true)), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · in-memory · fast-path ON (after)", on);
+    }
+
+    [Fact]
+    public async Task FastPathAb_Durable_HotLoop()
+    {
+        // NOTE: durable-SQLite wall time is dominated by fsync + OS-page-cache warmup, which biases whichever
+        // measurement runs second (verified by swapping the order — the effect follows position, not the flag). Read
+        // commits/run (identical) and the guardrail (byte-identical state), not the wall delta, for correctness; the
+        // fast-path wall effect is within warmup noise on these small payloads, matching the Step-0 finding that the
+        // per-hop JSON round-trip is a sub-percent share of a durable hop.
+        var off = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: false), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path OFF (before)", off);
+        var on = await MeasureAsync(() => NewDurableSqliteHarnessAsync(coalesce: false, fastPathEnabled: true), () => BuildHotLoopFlowchart(NewPureLoopNode), AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} · durable-sqlite · Immediate · fast-path ON (after)", on);
+    }
+
+    // ---- Measurement engine ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Runs warmups (discarded) then <see cref="IterationCount"/> timed runs, each on a fresh harness. Collects
+    /// wall time and (for durable harnesses) durable checkpoint-commit counts, counted after the timed window.
+    /// </summary>
+    private async Task<Measurement> MeasureAsync(
+        Func<ValueTask<HarnessLease>> newLease,
+        Func<WorkflowExecutable> executableFactory,
+        Action<WorkflowExecutionRun> assert)
+    {
+        for (var warmup = 0; warmup < WarmupCount; warmup++)
+            await RunOnceAsync(newLease, executableFactory, stopwatch: null, assert);
+
+        var walls = new List<double>(IterationCount);
+        var commits = new List<long>(IterationCount);
+        var reads = new List<long>(IterationCount);
+        for (var iteration = 0; iteration < IterationCount; iteration++)
+        {
+            var stopwatch = new Stopwatch();
+            var (commitCount, readCount) = await RunOnceAsync(newLease, executableFactory, stopwatch, assert);
+            walls.Add(stopwatch.Elapsed.TotalMilliseconds);
+            if (commitCount is { } value)
+                commits.Add(value);
+            reads.Add(readCount);
+        }
+
+        return new Measurement(walls, commits, reads);
+    }
+
+    /// <summary>
+    /// Builds a fresh harness (fixed workflow-execution id ⇒ one run per harness), times only the execution
+    /// (dispatch + scheduler drain), then — outside the timed window — counts durable checkpoint commits.
+    /// Returns the commit count for durable harnesses, or <c>null</c> for the in-memory harness.
+    /// </summary>
+    private async Task<(long? Commits, long Reads)> RunOnceAsync(
+        Func<ValueTask<HarnessLease>> newLease,
+        Func<WorkflowExecutable> executableFactory,
+        Stopwatch? stopwatch,
+        Action<WorkflowExecutionRun> assert)
+    {
+        await using var lease = await newLease();
+        var executable = executableFactory();
+
+        stopwatch?.Start();
+        var run = await lease.Harness.RunAsync(executable);
+        stopwatch?.Stop();
+
+        assert(run);
+
+        var commits = lease.Store is null ? (long?)null : await CountCheckpointCommitsAsync(lease.Store);
+        return (commits, lease.ExecutableReads);
+    }
+
+    /// <summary>
+    /// One-off untimed diagnostic: runs the workflow once on a fresh durable harness, then dumps the persisted
+    /// checkpoint-commit documents grouped by commit kind. The persisted marker does not carry the checkpoint
+    /// name, but every emitter builds its <c>CommitId</c> as <c>commit:{workItemId}:{kind-slug}[:{ids…}]</c>
+    /// (e.g. <c>activity-attempt-claimed</c>, <c>activity-completed</c>, <c>workflow-completed</c>), so the
+    /// kebab-case slug segments identify the flushed boundary. This names the residual mandatory flushes under a
+    /// given policy/leaf combination instead of leaving the commit count unexplained.
+    /// </summary>
+    private async Task DumpCommitBreakdownAsync(
+        string label,
+        Func<ValueTask<HarnessLease>> newLease,
+        Func<WorkflowExecutable> executableFactory)
+    {
+        await using var lease = await newLease();
+        var run = await lease.Harness.RunAsync(executableFactory());
+        run.AssertWorkflowCompleted();
+
+#pragma warning disable GW0004
+        var result = await lease.Store!.QueryAsync(
+            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+#pragma warning restore GW0004
+
+        var kinds = result.Documents
+            .Select(document =>
+            {
+                using var content = JsonDocument.Parse(document.ContentJson);
+                var root = content.RootElement;
+                var commitId =
+                    root.TryGetProperty("commitId", out var camel) ? camel.GetString() :
+                    root.TryGetProperty("CommitId", out var pascal) ? pascal.GetString() : null;
+                return CommitKindSlug(commitId ?? document.Id);
+            })
+            .GroupBy(kind => kind, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        output.WriteLine($"=== flushed-commit breakdown (1 diagnostic run): {label} — total={result.TotalCount} ===");
+        foreach (var group in kinds)
+            output.WriteLine($"  {group.Count(),3} × {group.Key}");
+    }
+
+    /// <summary>
+    /// The commit-kind slugs the runtime's emitters put into their <c>CommitId</c>s (grep <c>CommitId: $"commit:</c>
+    /// under src/Elsa). Work-item ids also contain kebab-case hops (<c>schedule-child</c>, <c>invoke</c>, …), so a
+    /// naive "alphabetic segments" heuristic drowns the signal; matching this closed set keeps the dump readable.
+    /// </summary>
+    private static readonly string[] KnownCommitKindSlugs =
+    [
+        "activity-attempt-claimed", "activity-scheduled", "activity-started", "activity-completed",
+        "activity-inspection-captured", "parent-activity-completed", "activity-suspended", "activity-cancelled",
+        "bookmark-created", "incident-recorded", "workflow-faulted", "scheduler-poison", "intrinsic", "cancel"
+    ];
+
+    /// <summary>
+    /// Extracts the commit-kind slug from a <c>commit:{workItemId}:{kind-slug}[:{ids…}]</c> id by matching the
+    /// runtime's known kind slugs; unmatched ids (e.g. the terminal continuation-checkpoint flush) fall back to
+    /// their last two segments.
+    /// </summary>
+    private static string CommitKindSlug(string commitId)
+    {
+        foreach (var slug in KnownCommitKindSlugs)
+            if (commitId.Contains($":{slug}", StringComparison.Ordinal))
+                return slug;
+
+        var segments = commitId.Split(':');
+        return segments.Length >= 2 ? $"…{segments[^2]}:{segments[^1]}" : commitId;
+    }
+
+    private static async Task<long> CountCheckpointCommitsAsync(IDocumentStore store)
+    {
+        // Provider-agnostic count of durable checkpoint-commit documents (the fsync unit under measurement),
+        // equivalent to `SELECT COUNT(*) FROM groundwork_documents WHERE document_kind='checkpointCommit'`.
+#pragma warning disable GW0004
+        var result = await store.QueryAsync(
+            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+#pragma warning restore GW0004
+        return result.TotalCount;
+    }
+
+    private static void AssertTwoNodeCompleted(WorkflowExecutionRun run)
+    {
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted(WriteLineNodeId);
+    }
+
+    private static void AssertHotLoopCompleted(WorkflowExecutionRun run)
+    {
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted(LoopNodeId(0));
+        run.AssertCompleted(LoopNodeId(HotLoopLength - 1));
+    }
+
+    // ---- Reporting ------------------------------------------------------------------------------------------
+
+    private void Report(string variant, Measurement measurement)
+    {
+        var ordered = measurement.Walls.OrderBy(value => value).ToArray();
+        output.WriteLine($"=== engine benchmark: {variant} ===");
+        output.WriteLine($"warmups={WarmupCount}  timed runs={ordered.Length}");
+        output.WriteLine($"p50={Percentile(ordered, 50):F2} ms  p95={Percentile(ordered, 95):F2} ms  " +
+                         $"min={ordered[0]:F2} ms  max={ordered[^1]:F2} ms  mean={ordered.Average():F2} ms");
+        if (measurement.Commits.Count > 0)
+        {
+            var commits = measurement.Commits;
+            output.WriteLine($"durable checkpoint commits/run: typical={TypicalCommits(measurement)}  " +
+                             $"min={commits.Min()}  max={commits.Max()}  " +
+                             $"(stable={(commits.Min() == commits.Max() ? "yes" : "no")})");
+        }
+        if (measurement.Reads.Count > 0)
+        {
+            var reads = measurement.Reads;
+            output.WriteLine($"durable executable reads/run: typical={TypicalReads(measurement)}  " +
+                             $"min={reads.Min()}  max={reads.Max()}  " +
+                             $"(stable={(reads.Min() == reads.Max() ? "yes" : "no")})");
+        }
+        output.WriteLine("per-run wall (ms): " + string.Join(", ", measurement.Walls.Select(value => value.ToString("F2"))));
+    }
+
+    /// <summary>The representative (modal) commit count; commit counts are deterministic so this is the stable value.</summary>
+    private static long TypicalCommits(Measurement measurement) => Modal(measurement.Commits);
+
+    /// <summary>The representative (modal) executable-read count per run.</summary>
+    private static long TypicalReads(Measurement measurement) => Modal(measurement.Reads);
+
+    private static long Modal(IReadOnlyList<long> values) =>
+        values
+            .GroupBy(value => value)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key)
+            .First().Key;
+
+    private static double Percentile(IReadOnlyList<double> orderedAscending, double percentile)
+    {
+        if (orderedAscending.Count == 0)
+            return double.NaN;
+        var rank = (int)Math.Ceiling(percentile / 100.0 * orderedAscending.Count);
+        return orderedAscending[Math.Clamp(rank - 1, 0, orderedAscending.Count - 1)];
+    }
+
+    // ---- Harness construction -------------------------------------------------------------------------------
+
+    private static HarnessLease NewInMemoryLease(bool fastPathEnabled = true)
+    {
+        var readCounter = new ExecutableReadCounter();
+        var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
+                CountExecutableReads(services, readCounter);
+            })
+            .Build(ActivityExecutionIds);
+        return new HarnessLease(harness, store: null, databasePath: null, readCounter);
+    }
+
+    private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null, bool fastPathEnabled = true, bool burstCache = true)
+    {
+        var readCounter = new ExecutableReadCounter();
+        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
+        var store = await SqliteDocumentStoreFactory.CreateAsync(
+            $"Data Source={databasePath}",
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
+            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
+            GroundworkTestAccess.DefaultScoped);
+
+        var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                // Swap the runtime's in-memory store defaults for the durable Groundwork bridges, backed by the
+                // raw SQLite document store above plus the shared bounded-query adapter. This is the exact wiring
+                // the ActivityDraftTestRun suite uses to drive real end-to-end execution over SQLite.
+                services.AddSingleton<IDocumentStore>(store);
+                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddGroundworkRuntimeStores();
+
+                // Opt into burst-coalescing checkpoint persistence AFTER the durable stores are registered — the
+                // decorator captures the last (durable) registration of each runtime store. Without this call the
+                // runtime keeps its default Immediate policy (every checkpoint is its own commit). A caller may
+                // pin the segment cap; omitted, the shipped default (50) applies.
+                if (coalesce)
+                    services.AddCoalescingRuntimeCheckpointPersistence(options =>
+                    {
+                        if (maxSegmentCheckpoints is { } cap)
+                            options.MaxSegmentCheckpoints = cap;
+                    });
+
+                // spec 109: toggle the in-process hop fast path for the A/B variants.
+                services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
+
+                // spec 111: toggle the burst-scoped executable read cache and count durable executable reads.
+                services.RemoveAll<RuntimeBurstCacheOptions>();
+                services.AddSingleton(new RuntimeBurstCacheOptions { Enabled = burstCache });
+                CountExecutableReads(services, readCounter);
+            })
+            .Build(ActivityExecutionIds);
+
+        return new HarnessLease(harness, store, databasePath, readCounter);
+    }
+
+    // Wraps the last IWorkflowExecutableStore registration with a shared FindAsync counter (the durable reads the burst
+    // cache exists to save). The counter sits UNDER the burst-cache reader, so a cache hit does not reach it.
+    private static void CountExecutableReads(IServiceCollection services, ExecutableReadCounter readCounter)
+    {
+        services.AddSingleton(readCounter);
+        var descriptor = services.Last(d => d.ServiceType == typeof(IWorkflowExecutableStore));
+        services.Remove(descriptor);
+        services.Add(new ServiceDescriptor(
+            typeof(IWorkflowExecutableStore),
+            sp =>
+            {
+                var inner = (IWorkflowExecutableStore)(descriptor.ImplementationInstance
+                    ?? descriptor.ImplementationFactory?.Invoke(sp)
+                    ?? ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!));
+                return new CountingExecutableStore(inner, readCounter);
+            },
+            descriptor.Lifetime));
+    }
+
+    // ---- Workflow graphs ------------------------------------------------------------------------------------
+    // Thin forwarders onto the shared BenchmarkWorkflows builders (see that type); kept as named locals so the
+    // [Fact] bodies and their documentation above read unchanged.
+
+    private static WorkflowExecutable BuildFlowchartWithWriteLine() => BenchmarkWorkflows.TwoNode();
+
+    private static WorkflowExecutable BuildHotLoopFlowchart(Func<int, ExecutableNode> makeLeaf) =>
+        BenchmarkWorkflows.HotLoop(HotLoopLength, makeLeaf);
+
+    private static string LoopNodeId(int index) => BenchmarkWorkflows.LoopNodeId(index);
+
+    private static ExecutableNode NewPureLoopNode(int index) => BenchmarkWorkflows.NoOpLeaf(index);
+
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text) => BenchmarkWorkflows.NewWriteLineNode(nodeId, text);
+
+    /// <summary>A run measurement: per-iteration wall times, per-iteration commit counts (durable only), and executable-read counts.</summary>
+    private sealed record Measurement(IReadOnlyList<double> Walls, IReadOnlyList<long> Commits, IReadOnlyList<long> Reads);
+
+    private sealed class ExecutableReadCounter
+    {
+        private long _count;
+        public long Count => Interlocked.Read(ref _count);
+        public void Increment() => Interlocked.Increment(ref _count);
+    }
+
+    private sealed class CountingExecutableStore(IWorkflowExecutableStore inner, ExecutableReadCounter counter) : IWorkflowExecutableStore
+    {
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
+        {
+            counter.Increment();
+            return inner.FindAsync(artifactId, cancellationToken);
+        }
+
+        public ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) => inner.SaveAsync(executable, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) => inner.DeleteAsync(artifactId, cancellationToken);
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId, string leaseId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+        public ValueTask<bool> RenewRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
+        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default) => inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(string artifactId, string operationId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+        public ValueTask<bool> CancelDeletionAsync(WorkflowExecutableDeletionGuard guard, CancellationToken cancellationToken = default) => inner.CancelDeletionAsync(guard, cancellationToken);
+        public ValueTask<bool> DeleteAsync(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.DeleteAsync(guard, now, cancellationToken);
+        public ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) => inner.ListPageAsync(request, cancellationToken);
+    }
+
+    /// <summary>Owns one harness run plus (for the durable variant) its SQLite store and temp database file.</summary>
+    private sealed class HarnessLease(WorkflowExecutionHarness harness, IDocumentStore? store, string? databasePath, ExecutableReadCounter readCounter)
+        : IAsyncDisposable
+    {
+        public WorkflowExecutionHarness Harness { get; } = harness;
+
+        /// <summary>The durable document store (for commit counting), or <c>null</c> for the in-memory harness.</summary>
+        public IDocumentStore? Store { get; } = store;
+
+        /// <summary>Durable executable-store FindAsync calls during the run (the reads the burst cache saves).</summary>
+        public long ExecutableReads => readCounter.Count;
+
+        public async ValueTask DisposeAsync()
+        {
+            await Harness.DisposeAsync();
+            if (Store is IAsyncDisposable asyncStore)
+                await asyncStore.DisposeAsync();
+            else if (Store is IDisposable disposableStore)
+                disposableStore.Dispose();
+
+            if (databasePath is null)
+                return;
+            foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException)
+                {
+                    // Best-effort cleanup of the temp database; a leftover file must not fail the benchmark.
+                }
+            }
+        }
+    }
+}
+
+/// <summary>
+/// A pure, benchmark-local CLR leaf: it completes immediately with the single <c>Done</c> outcome and performs
+/// no externally observable side effect (it touches only in-workflow control flow). Declared
+/// <c>[ActivitySideEffectProfile(ReplaySafe)]</c> per ADR 0032 R1 / spec 107, so under the Coalesced policy its
+/// pre-activation <c>ActivityAttemptClaimed</c> checkpoint defers into the coalesced segment instead of flushing
+/// per activity — the exact relaxation the hot-loop A/B measures against the unmarked (External) WriteLine leaf.
+/// Discovered by the runtime type registrar via the AppDomain assembly scan (the benchmark assembly is loaded),
+/// exactly as the shipped primitive activities are.
+/// </summary>
+[ActivityOutcome("Done")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class NoOpStep : Activity<ActivityUnit>
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}

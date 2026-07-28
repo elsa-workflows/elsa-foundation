@@ -1,0 +1,13 @@
+provider=mongodb
+document-kind=executionCommandTransport
+route=count-pending-commands-by-execution
+physical-name=execution_command_transport
+physical-cardinality=100000
+plan-classification=index-scan
+index=command-by-execution-sequence
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=none
+materialized-candidate-count=0
+command-count=1
+command-0=Count|count|mongodb-json|index-scan|command-by-execution-sequence|document_kind,sequence,storage_scope,workflowExecutionIdKey|1||d458a1b8890ff189d33275fe3d1bc8a13b0b628e3b11fb26d8e3fc0cf0587109

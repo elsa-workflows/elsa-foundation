@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-provider-configuration-scope-and-privilege",
+  "coverageEntryId": "iam-provider-configuration-global",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "d65fa634c4fc63cfaeaf3b725907210d42d906b5827ed4708fdbd1c0c5041d1e",
+  "executionPath": "provider-driver/postgresql/iam-provider-configuration-global/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "654b40702badbf1fa38bd50c9326bfac21fdde310670e168959063f12f915594",
+  "outcome": "pass",
+  "evidence": "evidence/postgresql/iam-provider-configuration-global/0e7ae6dd54aaea28.json"
+}

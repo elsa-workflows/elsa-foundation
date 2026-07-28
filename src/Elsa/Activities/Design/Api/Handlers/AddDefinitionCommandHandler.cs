@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -14,8 +15,7 @@ public sealed class AddDefinitionCommandHandler(
     IActivityDefinitionFactory definitionFactory,
     IActivityDefinitionVersionFactory versionFactory,
     IActivityDefinitionVersionStore versionStore,
-    IAddActivityDefinitionCommand addCommand,
-    IActivityDefinitionStore definitionStore)
+    IAddActivityDefinitionCommand addCommand)
 
     : ICommandHandler<AddDefinition, ActivityDefinitionVersionDetailsView>
 {
@@ -23,17 +23,14 @@ public sealed class AddDefinitionCommandHandler(
 
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
-        var exists = await definitionStore.ExistsByActivityTypeKeyAsync(command.ActivityTypeKey, cancellationToken);
-        if (exists)
-        {
-            throw new ArgumentException($"Activity definition with ActivityTypeKey='{command.ActivityTypeKey}' already exists");
-        }
-
         var definition = definitionFactory.Create(command.ActivityTypeKey, command.Category, command.DisplayName, command.Description);
         var version = versionFactory.Create(
             definition,
             initialVersion,
-            command.DescriptorType,
+            command.ProviderKey,
+            command.ProviderSchemaVersion,
+            command.ConsumerKey,
+            command.ConsumerSchemaVersion,
             command.DescriptorPayload,
             command.SourceKind,
             command.SourceId,
@@ -42,9 +39,13 @@ public sealed class AddDefinitionCommandHandler(
             command.DesignFacets ?? [],
             command.ExecutionType ?? ActivityExecutionType.Action);
 
-        await addCommand.Execute(ActivityDefinition.From(definition), ActivityDefinitionVersion.From(version), cancellationToken);
+        var added = await addCommand.Execute(
+            new DesignOperationKey(command.OperationKey),
+            ActivityDefinition.From(definition),
+            ActivityDefinitionVersion.From(version),
+            cancellationToken);
 
-        var addedVersion = await versionStore.GetWithDefinitionAsync(version.Id, cancellationToken);
+        var addedVersion = await versionStore.GetWithDefinitionAsync(added.VersionId, cancellationToken);
         return addedVersion.ToDetailsView();
     }
 }

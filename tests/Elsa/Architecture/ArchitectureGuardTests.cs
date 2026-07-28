@@ -108,6 +108,21 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies()
+    {
+        var projects = ProjectFiles().ToArray();
+        var projectsByName = projects.ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var missing = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Where(projectName => !projectsByName.ContainsKey(projectName))
+            .ToArray();
+        Assert.True(missing.Length == 0, "Missing provider-neutral persistence projects: " + string.Join(", ", missing));
+
+        var violations = new EfCoreSurfaceScanner(RepoRoot).FindProtectedProviderNeutralityViolations();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Elsa_primitives_has_no_external_package_references()
     {
         var primitives = ProjectFiles().Single(x => x.Name == "Elsa.Primitives");
@@ -159,6 +174,46 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_graph_authoring_when_activity_design_is_enabled(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
+        Assert.True(
+            features.ContainsKey("ActivitiesGraphDesign"),
+            $"{fileName} must enable ActivitiesGraphDesign so Activity Design advertises the graph authoring provider.");
+    }
+
+    [Fact]
+    public void Docker_reference_shell_enables_graph_authoring_with_activity_design()
+    {
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-server.shells.json");
+        var features = ReadDefaultShellFeatures(path);
+
+        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
+        Assert.True(features.ContainsKey("ActivitiesGraphDesign"));
+    }
+
+    [Fact]
+    public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Dockerfile"));
+        var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
+        var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
+
+        Assert.True(restoreStart >= 0, "The server Dockerfile must contain a dotnet restore command.");
+        Assert.True(publishStart > restoreStart, "The server Dockerfile must restore before publishing.");
+
+        var restoreCommand = dockerfile[restoreStart..publishStart];
+        var publishCommand = dockerfile[publishStart..];
+        Assert.Contains("-p:PublishReadyToRun=true", restoreCommand, StringComparison.Ordinal);
+        Assert.Contains("--no-restore", publishCommand, StringComparison.Ordinal);
+        Assert.Contains("-p:PublishReadyToRun=true", publishCommand, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
     public void Server_default_shell_enables_http_endpoint_activity_feature(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
@@ -183,20 +238,74 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
-    public void Server_default_shell_preserves_runtime_and_design_persistence_while_adding_publication_authority(string fileName)
+    public void Server_default_shell_selects_one_unified_Groundwork_persistence_leaf(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
-        Assert.True(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
-            $"{fileName} must preserve the existing runtime Groundwork database across upgrades.");
-        Assert.True(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must preserve the existing workflow Design EF database across upgrades.");
-        Assert.True(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must preserve the existing activity Design EF database across upgrades.");
-        Assert.True(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
-            $"{fileName} must add Publishing durability as an independent persistence lane.");
-        Assert.False(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must not silently move existing Design data to a different database.");
+        Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
+            $"{fileName} must select one Groundwork SQLite target for the six provider-level persistence families.");
+        Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
+            $"{fileName} must not compose a second Groundwork provider leaf.");
+        Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
+            $"{fileName} must not select the retired standalone Publishing lane.");
+        Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified workflow-design persistence with EF Core.");
+        Assert.False(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
+            $"{fileName} must not override unified activity-design persistence with EF Core.");
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_the_bounded_executable_cache(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+        var settings = Assert.IsType<JsonObject>(features["GroundworkUnifiedPersistenceSqlite"]);
+
+        Assert.True(settings["CacheWorkflowExecutables"]?.GetValue<bool>());
+        Assert.Equal(256, settings["WorkflowExecutableCacheCapacity"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
+    {
+        var productionTargets = XDocument.Load(Path.Combine(RepoRoot, "src", "Elsa", "Directory.Build.targets"));
+        var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
+        Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
+
+        const string unitOfWorkAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkDocumentUnitOfWorkStore.cs";
+        var unitOfWorkSource = File.ReadAllText(Path.Combine(RepoRoot, unitOfWorkAdapterPath));
+        Assert.Single(Regex.Matches(unitOfWorkSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(unitOfWorkSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Single(Regex.Matches(unitOfWorkSource, "Groundwork document unit-of-work adapter does not query documents.").Cast<Match>());
+
+        const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
+        var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
+        Assert.Single(Regex.Matches(scopedAdapterSource, @"\bDocumentStoreQuery\b").Cast<Match>());
+        Assert.Equal(3, Regex.Matches(scopedAdapterSource, @"\bPortableDocumentQuery\b").Count);
+        Assert.Equal(7, Regex.Matches(scopedAdapterSource, @"WithDocumentsAsync\(store => store\.").Count);
+
+        var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
+        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
+            .Select(file => new
+            {
+                File = file,
+                RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
+            })
+            .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
+            .Where(candidate =>
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, unitOfWorkAdapterPath) &&
+                !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
+            .SelectMany(candidate =>
+            {
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
+                return forbiddenTypes
+                    .Where(type => Regex.IsMatch(source, $@"\b{type}\b"))
+                    .Select(type => $"{candidate.RelativePath}: {type}");
+            })
+            .ToArray();
+
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -204,22 +313,56 @@ public sealed class ArchitectureGuardTests
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
         Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_catalogs_and_enables_dashboard_dependencies_in_the_default_shell(string fileName)
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        Assert.Contains("Elsa.Workflows.Design.Validations", references);
+        Assert.Contains("Elsa.Workflows.Runtime.Resumption", references);
+        Assert.Contains("typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(WorkflowsRuntimeResumptionFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("WorkflowDesignValidations", features);
+        Assert.Contains("WorkflowsRuntimeResumption", features);
+    }
+
     [Fact]
-    public void Server_catalogs_the_dedicated_publishing_persistence_lane()
+    public void Server_catalogs_graph_design_separately_from_graph_runtime()
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+
+        Assert.Contains("Elsa.Activities.Graph.Design", references);
+        Assert.Contains("Elsa.Activities.Graph.Runtime", references);
+        Assert.Contains("typeof(GraphActivitiesDesignFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(GraphActivitiesRuntimeFeature).Assembly", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Server_catalogs_workflow_design_validations_required_by_dashboard()
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
         var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
 
-        Assert.Contains("Elsa.Workflows.Publishing.Persistence.Groundwork.Sqlite", references);
-        Assert.Contains("SqliteGroundworkPublishingPersistenceShellFeature", program, StringComparison.Ordinal);
+        Assert.Contains("Elsa.Workflows.Design.Validations", references);
+        Assert.Contains(
+            "typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly",
+            program,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -291,9 +434,70 @@ public sealed class ArchitectureGuardTests
                 "Elsa.Activities.Runtime",
                 "Elsa.Activities.Runtime.Core",
                 "Elsa.Activities.Primitives",
-                "Elsa.Activities.Composition.Runtime",
+                "Elsa.Activities.Graph.Runtime",
+                "Elsa.Activities.DispatchWorkflow.Runtime",
             ],
             IsDesignReference);
+
+    [Fact]
+    public void Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries()
+    {
+        var projects = ProjectFiles().ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var runtime = projects["Elsa.Activities.DispatchWorkflow.Runtime"];
+        var design = projects["Elsa.Activities.DispatchWorkflow.Design"];
+        var runtimeReferences = ProjectReferences(runtime).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var designReferences = ProjectReferences(design).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var forbiddenReferences = new[]
+        {
+            "Elsa.Activities.Composition.Runtime",
+            "Elsa.Workflows.Design.Core",
+            "Elsa.Studio"
+        };
+
+        Assert.Contains("Elsa.Workflows.Runtime.Core", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime.Resumption", runtimeReferences);
+        Assert.Contains(
+            "WorkflowsRuntimeResumption",
+            File.ReadAllText(Path.Join(Path.GetDirectoryName(runtime.FullPath)!, "DispatchWorkflowRuntimeFeature.cs")),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(forbiddenReferences, runtimeReferences.Contains);
+        Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+
+        var sourceFiles = new[] { runtime, design }
+            .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
+        var workflowDefinitionActivityReferences = sourceFiles
+            .Where(file => StripCommentsAndStringLiterals(File.ReadAllText(file)).Contains("WorkflowDefinitionActivity", StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(RepoRoot, file))
+            .ToArray();
+        Assert.Empty(workflowDefinitionActivityReferences);
+
+        var forbiddenContractTerms = new[]
+        {
+            "MassTransit",
+            "ServiceBus",
+            "RoutingChannel",
+            "TransportSelection",
+            "Priority",
+            "Affinity"
+        };
+        var transportContractReferences = sourceFiles
+            .SelectMany(file =>
+            {
+                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenContractTerms
+                    .Where(term => text.Contains(term, StringComparison.Ordinal))
+                    .Select(term => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {term}");
+            })
+            .ToArray();
+        Assert.Empty(transportContractReferences);
+    }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
     public void Activity_construction_feature_projects_do_not_reference_each_other()
@@ -301,8 +505,8 @@ public sealed class ArchitectureGuardTests
         string[] featureProjects =
         [
             "Elsa.Activities.Primitives",
-            "Elsa.Activities.Composition.Runtime",
-            "Elsa.Activities.Composition.Design",
+            "Elsa.Activities.Graph.Runtime",
+            "Elsa.Activities.Graph.Design",
             "Elsa.Activities.Design.Reconciliation.Clr",
         ];
         var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
@@ -405,47 +609,20 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on the DescriptorType key alone; no per-kind branch.
-    public void Construction_and_reconciliation_contain_no_per_descriptor_type_branch()
+    [Fact]
+    public void Legacy_activity_factory_and_constructor_registry_are_absent()
     {
-        string[] relativePaths =
+        string[] removedPaths =
         [
             "src/Elsa/Activities/Runtime/Services/ActivityFactory.cs",
             "src/Elsa/Activities/Runtime/Services/ActivityConstructorRegistry.cs",
-            // The task's "ActivityVersionsReconcilingHandler" is CollectActivityVersions in the current tree.
-            "src/Elsa/Activities/Design/Reconciliation/Handlers/CollectActivityVersions.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "src/Elsa/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
         ];
-
-        // A per-kind branch would surface as a switch, an equality test against the descriptor-type/kind
-        // string, or a reference to a concrete descriptor type / the deleted kind discriminator. These three
-        // dispatchers key purely on the DescriptorType string (registry lookup), never branch on its value.
-        // NB: a lexical scan can't catch every conceivable rewrite (e.g. `.Equals(...)` or a lookup table
-        // keyed on kind); it pins the common forms and the concrete-type references.
-        string[] forbiddenTokens =
-        [
-            "switch",
-            "descriptorType ==",
-            "DescriptorType ==",
-            "ImplementationKind",
-            "ImplementationDescriptor",
-            "ClrActivityDescriptor",
-            "WorkflowIdentity",
-            "TypeInformation",
-        ];
-
-        var violations = new List<string>();
-        foreach (var relativePath in relativePaths)
-        {
-            var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Assert.True(File.Exists(fullPath), $"Expected source file '{relativePath}' to exist.");
-
-            var code = StripCommentsAndStringLiterals(File.ReadAllText(fullPath));
-            violations.AddRange(forbiddenTokens
-                .Where(token => code.Contains(token, StringComparison.Ordinal))
-                .Select(token => $"{relativePath}: {token}"));
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+        var violations = removedPaths.Where(relativePath =>
+            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Empty(violations);
     }
 
     private static bool IsDesignReference(ProjectInfo reference) =>
@@ -467,7 +644,8 @@ public sealed class ArchitectureGuardTests
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
         || project.Name == "Elsa.Activities.Runtime"
-        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal);
+        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Graph.Runtime";
 
     [Fact]
     public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()

@@ -27,9 +27,10 @@ public sealed class FlowchartExecutionStateGoldenTests
         """;
 
     [Fact]
-    public void StateMetadataKey_IsFrozenWireLiteral()
+    public void StateTypeIdentity_IsFrozenWireContract()
     {
-        Assert.Equal("elsa.flowchart.executionState", FlowchartExecutionEngine.StateMetadataKey);
+        Assert.Equal("Elsa.Flowchart.ExecutionState", FlowchartExecutionEngine.StateTypeAlias);
+        Assert.Equal(1, FlowchartExecutionEngine.StateSchemaVersion);
     }
 
     [Fact]

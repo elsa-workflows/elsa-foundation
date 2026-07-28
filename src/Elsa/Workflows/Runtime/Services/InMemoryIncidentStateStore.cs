@@ -32,6 +32,8 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
         lock (_syncRoot)
         {
             var key = new IncidentStateKey(state.WorkflowExecutionId, state.IncidentId);
+            _states.TryGetValue(key, out var existing);
+            IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, state);
             _states[key] = state;
             return new ValueTask<IncidentState>(state);
         }
@@ -48,6 +50,15 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
             _states.TryGetValue(new IncidentStateKey(workflowExecutionId, incidentId), out var state);
             return new ValueTask<IncidentState?>(state);
         }
+    }
+
+    public ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+            return new ValueTask<int>(_states.Keys.Count(key => key.WorkflowExecutionId == workflowExecutionId));
     }
 
     public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -76,6 +87,17 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
 
             return new ValueTask<IReadOnlyCollection<IncidentState>>(states);
         }
+    }
+
+    /// <summary>
+    /// Returns one stable snapshot of every in-memory incident. Operational read models use this to evaluate
+    /// the complete volatile store without issuing one query per workflow execution.
+    /// </summary>
+    public ValueTask<IReadOnlyCollection<IncidentState>> ListAllAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+            return ValueTask.FromResult<IReadOnlyCollection<IncidentState>>(_states.Values.ToArray());
     }
 
     private IncidentState[] ListByWorkflowExecution(string workflowExecutionId) =>

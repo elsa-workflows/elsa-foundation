@@ -36,12 +36,14 @@ public sealed class ParallelActivityTests : IDisposable
 
     public void Dispose() => _serviceProvider.Dispose();
 
+    private ParallelActivity NewActivity() => new(_store);
+
     [Fact]
     public async Task Execute_ForksAllBranches_WithDistinctBranchIdsAndParentLinkage_AndDefers()
     {
         var context = NewContext();
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         var requests = context.GetChildActivityScheduleRequests();
         Assert.Equal(3, requests.Count);
@@ -59,8 +61,7 @@ public sealed class ParallelActivityTests : IDisposable
         Assert.Equal(branchIds.Length, branchIds.Distinct().Count());
 
         // Fork defers; the join completes the composite once branches finish.
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -70,10 +71,9 @@ public sealed class ParallelActivityTests : IDisposable
         // Only one of three branches completed so far.
         _store.SeedCompletedBranch("node-a");
 
-        await CompleteAsync(context, "node-a");
+        var continuation = await CompleteAsync(context, "node-a");
 
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -84,10 +84,10 @@ public sealed class ParallelActivityTests : IDisposable
         _store.SeedCompletedBranch("node-b");
         _store.SeedCompletedBranch("node-c");
 
-        await CompleteAsync(context, "node-c");
+        var continuation = await CompleteAsync(context, "node-c");
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -102,10 +102,9 @@ public sealed class ParallelActivityTests : IDisposable
         // reach the threshold of 3 and wrongly complete; correct behavior is to keep deferring.
         _store.SeedForeignParentActivity("node-c", parentActivityExecutionId: "actexec-other-composite");
 
-        await CompleteAsync(context, "node-b");
+        var continuation = await CompleteAsync(context, "node-b");
 
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -115,10 +114,10 @@ public sealed class ParallelActivityTests : IDisposable
         _store.SeedCompletedBranch("node-a");
         _store.SeedCompletedBranch("node-b");
 
-        await CompleteAsync(context, "node-b");
+        var continuation = await CompleteAsync(context, "node-b");
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -129,10 +128,9 @@ public sealed class ParallelActivityTests : IDisposable
         _store.SeedCompletedBranch("node-a");
         _store.SeedCompletedBranch("node-a");
 
-        await CompleteAsync(context, "node-a");
+        var continuation = await CompleteAsync(context, "node-a");
 
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -140,11 +138,11 @@ public sealed class ParallelActivityTests : IDisposable
     {
         var context = NewContext(includeBranches: false);
 
-        await ExecuteAsync(context);
+        var continuation = await ExecuteAsync(context);
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -162,10 +160,13 @@ public sealed class ParallelActivityTests : IDisposable
     {
         var context = NewContext();
         // Default threshold = all 3 branches; one faulted branch makes the success threshold unreachable, so
-        // the join faults the composite (the throw is recorded by the engine as a composite incident).
+        // the join returns an authored structural fault for the engine to record.
         _store.SeedFaultedBranch("node-a");
 
-        await Assert.ThrowsAsync<ParallelExecutionException>(() => FaultAsync(context, "node-a").AsTask());
+        var continuation = await FaultAsync(context, "node-a");
+
+        Assert.Equal(RuntimeStructuralContinuationKind.Fault, continuation.Kind);
+        Assert.Equal("parallel.join.unsatisfied", continuation.Fault!.Code);
     }
 
     [Fact]
@@ -175,10 +176,9 @@ public sealed class ParallelActivityTests : IDisposable
         // Threshold 2 of 3: one faulted branch still leaves two branches that can satisfy the join, so defer.
         _store.SeedFaultedBranch("node-a");
 
-        await FaultAsync(context, "node-a");
+        var continuation = await FaultAsync(context, "node-a");
 
-        Assert.True(context.CompositeCompletionDeferred);
-        Assert.False(context.CompositeCompletionRequested);
+        Assert.True(continuation.IsDeferred);
     }
 
     [Fact]
@@ -190,10 +190,10 @@ public sealed class ParallelActivityTests : IDisposable
         _store.SeedCompletedBranch("node-b");
         _store.SeedCompletedBranch("node-c");
 
-        await CompleteAsync(context, "node-c");
+        var continuation = await CompleteAsync(context, "node-c");
 
-        Assert.True(context.CompositeCompletionRequested);
-        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+        Assert.True(continuation.IsComplete);
+        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
     }
 
     [Fact]
@@ -206,29 +206,20 @@ public sealed class ParallelActivityTests : IDisposable
             .AsTask());
     }
 
-    [Fact]
-    public async Task Execute_Throws_WhenRuntimeContextIsMissing()
-    {
-        await Assert.ThrowsAsync<ParallelExecutionException>(() => ((IActivity)new ParallelActivity())
-            .ExecuteAsync(new NonRuntimeActivityExecutionContext(_serviceProvider, new ParallelActivity()))
-            .AsTask());
-    }
+    private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
+        ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
-    private static ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
-        ((IActivity)context.Activity).ExecuteAsync(context);
-
-    private static ValueTask CompleteAsync(SimpleActivityExecutionContext context, string completedNodeId) =>
+    private static ValueTask<RuntimeStructuralContinuation> CompleteAsync(SimpleActivityExecutionContext context, string completedNodeId) =>
         ((ParallelActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, $"actexec-{completedNodeId}", completedNodeId, [ActivityOutcomes.Done]));
 
-    private static ValueTask FaultAsync(SimpleActivityExecutionContext context, string faultedNodeId) =>
+    private static ValueTask<RuntimeStructuralContinuation> FaultAsync(SimpleActivityExecutionContext context, string faultedNodeId) =>
         ((ParallelActivity)context.Activity).OnChildFaultedAsync(
             new ActivityChildFaultedContext(context, $"actexec-{faultedNodeId}", faultedNodeId, "incident-1"));
 
     private SimpleActivityExecutionContext NewContext(bool includeBranches = true, int? threshold = null) =>
         new(
-            _serviceProvider,
-            new ParallelActivity { Id = ParallelExecutionId, NodeId = ParallelNodeId },
+            new ParallelActivity(_store),
             CancellationToken.None,
             "wfexec-1",
             NewIdentity(),
@@ -247,10 +238,8 @@ public sealed class ParallelActivityTests : IDisposable
             authoredActivityId: "authored-parallel",
             activityType: typeof(ParallelActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
@@ -269,10 +258,8 @@ public sealed class ParallelActivityTests : IDisposable
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/probe",
             activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static ActivityExecutionState NewRunningState() =>
@@ -314,7 +301,8 @@ public sealed class ParallelActivityTests : IDisposable
 
     private sealed class FakeActivityExecutionStateStore : IActivityExecutionStateStore
     {
-        private readonly List<ActivityExecutionState> _states = [];
+        private readonly InMemoryActivityExecutionStateStore _inner = new();
+        private int _nextStateOrdinal;
 
         public void SeedCompletedBranch(string executableNodeId) => SeedBranch(executableNodeId, ActivityExecutionStatus.Completed);
 
@@ -333,8 +321,8 @@ public sealed class ParallelActivityTests : IDisposable
 
         private void SeedActivity(string executableNodeId, ActivityExecutionStatus status, string parentActivityExecutionId)
         {
-            _states.Add(new ActivityExecutionState(
-                Execution: new ActivityExecution($"actexec-{executableNodeId}-{_states.Count}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
+            var state = new ActivityExecutionState(
+                Execution: new ActivityExecution($"actexec-{executableNodeId}-{_nextStateOrdinal++}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
                 Status: status,
                 SubStatus: null,
                 ScheduledAt: DateTimeOffset.UnixEpoch,
@@ -349,45 +337,25 @@ public sealed class ParallelActivityTests : IDisposable
                 IncidentIds: [],
                 FaultCount: 0,
                 AggregateFaultCount: 0,
-                Metadata: new Dictionary<string, string>()));
+                Metadata: new Dictionary<string, string>());
+            _inner.SaveAsync(state).GetAwaiter().GetResult();
         }
 
-        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
-        {
-            _states.Add(state);
-            return new(state);
-        }
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(state, cancellationToken);
 
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states.FirstOrDefault(s => s.Execution.ActivityExecutionId == activityExecutionId));
+            _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states.Where(s => s.Execution.WorkflowExecutionId == workflowExecutionId).ToArray());
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListPageAsync(query, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states
-                .Where(s =>
-                    s.Execution.WorkflowExecutionId == workflowExecutionId &&
-                    StringComparer.Ordinal.Equals(s.ParentActivityExecutionId, parentActivityExecutionId))
-                .ToArray());
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListByParentPageAsync(query, cancellationToken);
     }
 
-    private sealed class NonRuntimeActivityExecutionContext(IServiceProvider serviceProvider, IActivity activity) : IActivityExecutionContext
-    {
-        public Elsa.Expressions.Core.Contracts.IExpressionExecutionContext ExpressionExecutionContext => null!;
-        public IActivity Activity { get; } = activity;
-        public IActivityExecutionContext ParentActivityExecutionContext => null!;
-        public CancellationToken CancellationToken => CancellationToken.None;
-
-        public TService GetRequiredService<TService>() where TService : notnull =>
-            serviceProvider.GetRequiredService<TService>();
-
-        public T? Get<T>(InputArgument<T>? input) => default;
-        public void Set<T>(OutputArgument<T>? output, T? value, string? outputName = null) { }
-        public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
-        public void SetOutcomes(string[] outcomes) { }
-        public IEnumerable<string> GetOutcomes() => [];
-        public void CreateBookmark(ActivityBookmarkRequest request) { }
-        public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => [];
-    }
 }

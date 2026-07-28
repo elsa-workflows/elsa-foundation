@@ -26,6 +26,9 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     /// </summary>
     public string DefinitionId { get; init; } = definitionId;
 
+    /// <summary>The exact draft promoted into this immutable version, when authored through Design.</summary>
+    public string? SourceDraftId { get; init; }
+
     /// <summary>
     /// Navigation property to the <see cref="WorkflowDefinition"/> entity
     /// </summary>
@@ -65,5 +68,6 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
         {
             Id = source.Id,
             State = source.State,
+            SourceDraftId = source.SourceDraftId
         };
 }

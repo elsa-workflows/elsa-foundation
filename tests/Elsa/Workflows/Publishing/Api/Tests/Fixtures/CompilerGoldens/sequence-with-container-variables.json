@@ -1,12 +1,17 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:4747db0537991ceaef5e313e76fb7eebb20b6e72204af9e6004def81be69a38a",
-    "artifactId": "artifact-4747db053799",
+    "artifactHash": "sha256:7ff16529e61d0f78751430b827ca5bb9a4b6d8b68c28a758323d980ce2a33e6f",
+    "artifactId": "artifact-7ff16529e61d",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
+  },
+  "inputContract": {
+    "inputs": [],
+    "version": 1
   },
   "resumeTargets": [],
   "rootActivity": {
@@ -21,10 +26,13 @@
             "activityTypeVersion": "1.0.0",
             "authoredActivityId": "write-one",
             "childSlots": [],
-            "descriptorPayload": {
-              "TypeAlias": "Object"
+            "descriptor": {
+              "consumerKey": "elsa.clr-activity",
+              "payload": {
+                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+              },
+              "schemaVersion": "1"
             },
-            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
             "executableNodeId": "write-one",
             "inputBindings": [
               {
@@ -36,10 +44,6 @@
                   {
                     "Key": "referenceKey",
                     "Value": "Text"
-                  },
-                  {
-                    "Key": "typeName",
-                    "Value": "System.String, System.Private.CoreLib"
                   }
                 ],
                 "source": "Literal"
@@ -61,10 +65,13 @@
         "name": "Sequence.Activities"
       }
     ],
-    "descriptorPayload": {
-      "TypeAlias": "Object"
+    "descriptor": {
+      "consumerKey": "elsa.clr-activity",
+      "payload": {
+        "TypeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
+      },
+      "schemaVersion": "1"
     },
-    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
     "executableNodeId": "sequence",
     "inputBindings": [],
     "metadata": [
@@ -85,17 +92,97 @@
         ],
         "variables": [
           {
-            "default": {
-              "expressionType": "Literal",
-              "value": "0"
+            "initialBinding": {
+              "activityResult": null,
+              "conversionPlan": {
+                "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+                "limits": {
+                  "maxCollectionItems": 10000,
+                  "maxDepth": 64,
+                  "maxPayloadBytes": 1048576
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "options": {},
+                "profile": null,
+                "schemaVersion": 1,
+                "sourceRepresentation": "TextValue",
+                "sourceType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
+              "effectivePolicy": {
+                "isSensitive": false,
+                "lifecycle": 1,
+                "metadata": {},
+                "redactionMode": null,
+                "requiresEncryption": false,
+                "retentionPolicy": null,
+                "storage": 1
+              },
+              "expression": null,
+              "inputKey": "var-counter",
+              "inputName": "var-counter",
+              "literal": {
+                "externalReference": null,
+                "inlineValue": "0",
+                "policy": {
+                  "isSensitive": false,
+                  "lifecycle": 1,
+                  "metadata": {},
+                  "redactionMode": null,
+                  "requiresEncryption": false,
+                  "retentionPolicy": null,
+                  "storage": 1
+                },
+                "presence": 2,
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                }
+              },
+              "literalValue": "0",
+              "metadata": {
+                "referenceKey": "var-counter"
+              },
+              "source": 0,
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "variable": null,
+              "workflowRequest": null
             },
             "name": "Counter",
-            "referenceKey": "var-counter",
-            "storageDriverType": null,
+            "policy": {
+              "isSensitive": false,
+              "lifecycle": 1,
+              "metadata": {},
+              "redactionMode": null,
+              "requiresEncryption": false,
+              "retentionPolicy": null,
+              "storage": 1
+            },
             "type": {
               "alias": "String",
-              "collectionKind": "Single"
-            }
+              "collectionKind": "Single",
+              "schema": null,
+              "schemaVersion": null
+            },
+            "variableKey": "var-counter"
           }
         ]
       },

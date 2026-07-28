@@ -29,6 +29,39 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Workflow_and_activity_design_source_projects_are_ef_free_boundaries()
+    {
+        // Spec 093 T075: design persistence ships only Groundwork, so the whole design source lane —
+        // including the provider-neutral projects the .Core/.Groundwork rules do not already cover — is a
+        // guarded EF-free boundary. Reintroducing EF anywhere they can reach (direct or transitive) fails
+        // Core_and_groundwork_projects_are_ef_free_now above.
+        var boundaries = new EfCoreSurfaceScanner(RepoRoot).EfFreeBoundaryProjectNames();
+
+        string[] designProjectsBeyondCoreAndGroundwork =
+        [
+            "Elsa.Workflows.Design.Api",
+            "Elsa.Workflows.Design.Validations",
+            "Elsa.Workflows.Design.JavaScript",
+            "Elsa.Activities.Design.Api"
+        ];
+
+        Assert.All(
+            designProjectsBeyondCoreAndGroundwork,
+            project => Assert.Contains(project, boundaries));
+    }
+
+    [Fact]
+    public void Reviewed_provider_neutral_persistence_families_are_explicit_ef_free_boundaries()
+    {
+        var baseline = EfCoreSurfaceBaseline.LoadDocument(BaselinePath);
+        var reviewedProjects = baseline.ProtectedProviderNeutralProjects ?? [];
+        var discoveredBoundaries = new EfCoreSurfaceScanner(RepoRoot).EfFreeBoundaryProjectNames();
+
+        Assert.Equal(PersistenceProviderNeutralityBoundary.ProjectNames, reviewedProjects);
+        Assert.All(reviewedProjects, project => Assert.Contains(project, discoveredBoundaries));
+    }
+
+    [Fact]
     public void Scanner_follows_windows_style_project_references_on_every_host()
     {
         using var fixture = new TemporaryRepository();
@@ -69,6 +102,23 @@ public sealed class EfCoreSurfaceRatchetTests
         Assert.Contains(
             "EF surface shrank [EfProjects]; remove this stale baseline entry: removed.csproj",
             differences);
+    }
+
+    [Fact]
+    public void Baseline_comparison_rejects_an_incomplete_repository_restore_instead_of_reporting_phantom_changes()
+    {
+        var baseline = EmptySurface() with
+        {
+            ResolvedEfPackageConsumers = ["src/Consumer/Consumer.csproj -> Microsoft.EntityFrameworkCore"]
+        };
+        var actual = EmptySurface() with { ProjectsMissingAssets = ["src/Consumer/Consumer.csproj"] };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            EfCoreSurfaceBaseline.Compare(baseline, actual));
+
+        Assert.Contains("dotnet restore Elsa.Server.slnx", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("src/Consumer/Consumer.csproj", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("EF surface shrank", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -326,6 +376,147 @@ public sealed class EfCoreSurfaceRatchetTests
         Assert.Contains(
             "src/Feature/Abstractions/Elsa.Feature.Abstractions.csproj reaches EF package Microsoft.EntityFrameworkCore",
             violations);
+    }
+
+    [Fact]
+    public void Scanner_classifies_every_in_scope_provider_neutral_persistence_family_as_ef_free()
+    {
+        using var fixture = new TemporaryRepository();
+        foreach (var (path, name) in new[]
+                 {
+                     ("src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj", "Elsa.Workflows.Runtime.Core"),
+                     ("src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj", "Elsa.Foundation.Identity.Abstractions"),
+                     ("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", "Elsa.Secrets.Core"),
+                     ("src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj", "Elsa.Workflows.Runtime.Distributed")
+                 })
+        {
+            fixture.Write(path, $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup><AssemblyName>{{name}}</AssemblyName></PropertyGroup>
+                  <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
+                </Project>
+                """);
+        }
+
+        var violations = new EfCoreSurfaceScanner(fixture.Path).Scan().FindEfFreeBoundaryViolations();
+
+        Assert.All(
+            PersistenceProviderNeutralityBoundary.ProjectNames,
+            project => Assert.Contains(violations, violation =>
+                violation.Contains(project, StringComparison.Ordinal) &&
+                violation.Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("Groundwork.Documents")]
+    [InlineData("Microsoft.Data.Sqlite")]
+    [InlineData("Microsoft.Data.SqlClient")]
+    [InlineData("Npgsql")]
+    [InlineData("MongoDB.Driver")]
+    public void Scanner_rejects_reviewed_concrete_provider_packages_from_provider_neutral_projects(string packageName)
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><AssemblyName>Elsa.Secrets.Core</AssemblyName></PropertyGroup>
+              <ItemGroup><PackageReference Include="{{packageName}}" /></ItemGroup>
+            </Project>
+            """);
+
+        var violations = new EfCoreSurfaceScanner(fixture.Path).Scan().FindEfFreeBoundaryViolations();
+
+        Assert.Contains(
+            $"src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj reaches concrete provider package {packageName}",
+            violations);
+    }
+
+    [Fact]
+    public void Scanner_evaluates_conditional_directory_build_packages_inherited_by_a_protected_project()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("Directory.Build.props", """
+            <Project>
+              <ItemGroup Condition="'$(MSBuildProjectName)' == 'Elsa.Secrets.Core'">
+                <PackageReference Include="MongoDB.Driver" />
+              </ItemGroup>
+              <ItemGroup Condition="'$(MSBuildProjectName)' == 'Elsa.Unrelated.Core'">
+                <PackageReference Include="Npgsql" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><AssemblyName>Elsa.Secrets.Core</AssemblyName></PropertyGroup>
+            </Project>
+            """);
+
+        var violations = new EfCoreSurfaceScanner(fixture.Path).Scan().FindEfFreeBoundaryViolations();
+
+        Assert.Contains(
+            "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj reaches concrete provider package MongoDB.Driver",
+            violations);
+        Assert.DoesNotContain(violations, violation => violation.Contains("Npgsql", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_follows_explicit_shared_build_imports_for_protected_projects()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("eng/persistence-provider.props", """
+            <Project>
+              <ItemGroup><PackageReference Include="Npgsql" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><AssemblyName>Elsa.Secrets.Core</AssemblyName></PropertyGroup>
+              <Import Project="../../../../eng/persistence-provider.props" />
+            </Project>
+            """);
+
+        var violations = new EfCoreSurfaceScanner(fixture.Path).Scan().FindEfFreeBoundaryViolations();
+
+        Assert.Contains(
+            "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj reaches concrete provider package Npgsql",
+            violations);
+    }
+
+    [Fact]
+    public void Scanner_uses_each_protected_projects_resolved_graph_without_counting_unrelated_projects()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><AssemblyName>Elsa.Secrets.Core</AssemblyName></PropertyGroup>
+            </Project>
+            """);
+        fixture.Write("src/Elsa/Secrets/Core/obj/project.assets.json", """
+            {
+              "libraries": {
+                "Microsoft.Data.SqlClient/6.1.0": {},
+                "Unrelated.Json.Library/1.0.0": {}
+              }
+            }
+            """);
+        fixture.Write("src/Elsa/Unrelated/Elsa.Unrelated.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        fixture.Write("src/Elsa/Unrelated/obj/project.assets.json", """
+            {
+              "libraries": {
+                "MongoDB.Driver/3.4.0": {}
+              }
+            }
+            """);
+
+        var violations = new EfCoreSurfaceScanner(fixture.Path).Scan().FindEfFreeBoundaryViolations();
+
+        Assert.Contains(
+            "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj resolves concrete provider package Microsoft.Data.SqlClient",
+            violations);
+        Assert.DoesNotContain(violations, violation => violation.Contains("Unrelated.Json.Library", StringComparison.Ordinal));
+        Assert.DoesNotContain(violations, violation => violation.Contains("Elsa.Unrelated.csproj", StringComparison.Ordinal));
+        Assert.DoesNotContain(violations, violation => violation.Contains("MongoDB.Driver", StringComparison.Ordinal));
     }
 
     private static string BaselinePath => Path.Combine(

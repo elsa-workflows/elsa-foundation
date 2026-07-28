@@ -21,13 +21,12 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
     [Fact]
     public void Project_ReturnsOnlyWorkflowOutputs_ExcludingVariablesInputsAndActivityCaptures()
     {
-        // Variables and inputs live under their own reserved prefixes; an activity-output capture shares the
+        // Inputs live under their own reserved prefix; another durable producer can share the
         // OutputName tag but derives its value id from the authored output reference. None may leak into the
         // workflow-output read surface.
         var durableValues = new List<DurableValueState>();
         durableValues.AddRange(States(RuntimeWorkflowStateSeed.BuildSeedChanges(
             ExecutionId,
-            variables: new Dictionary<string, object?> { ["greeting"] = "Hello" },
             inputs: new Dictionary<string, object?> { ["name"] = "Ada" },
             capturedAt: _now)));
         durableValues.Add(NewDurableValue("authored-out-1", "ActivityResult", "activity-level", _now));

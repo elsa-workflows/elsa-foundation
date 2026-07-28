@@ -2,12 +2,16 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class RuntimeResumptionServiceTests
 {
+    private const string MarkerKind = "Test.Marker";
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -24,7 +28,64 @@ public sealed class RuntimeResumptionServiceTests
 
         var outboxRequest = Assert.Single(harness.OutboxProcessor.Requests);
         Assert.Null(outboxRequest.WorkflowExecutionId);
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, outboxRequest.IntentKind);
+        Assert.Null(outboxRequest.IntentKind);
+    }
+
+    [Fact]
+    public async Task SweepAsync_DeliversContributedIntentCommittedThroughRealCheckpointAndOutbox()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<Marker>();
+        services.AddRuntimePostCommitIntentHandler<MarkerHandler>(MarkerKind);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var scopedProvider = scope.ServiceProvider;
+        var intent = NewMarkerIntent();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-marker-1",
+            Checkpoint: new RuntimeCheckpoint(
+                "checkpoint-marker-1",
+                RuntimeCheckpointNames.PostCommitIntentRecorded,
+                "wfexec-marker-1",
+                Now,
+                [],
+                new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+            PostCommitIntents: [intent],
+            Metadata: new Dictionary<string, string>());
+
+        var commitResult = await scopedProvider.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
+        Assert.True(commitResult.Succeeded);
+        var store = scopedProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+
+        var marker = scopedProvider.GetRequiredService<Marker>();
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            scopedProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
+            new FakeWorkQueue(),
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            new InMemoryWorkflowExecutionStateStore());
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal(1, result.OutboxDeliveredCount);
+        var deliveredIntent = Assert.Single(marker.Intents);
+        Assert.Equal(intent.IntentId, deliveredIntent.IntentId);
+        Assert.Equal(intent.Kind, deliveredIntent.Kind);
+        Assert.Equal(intent.WorkflowExecutionId, deliveredIntent.WorkflowExecutionId);
+        Assert.Equal(intent.ActivityExecutionId, deliveredIntent.ActivityExecutionId);
+        Assert.Equal(intent.IdempotencyKey, deliveredIntent.IdempotencyKey);
+        Assert.Equal(intent.RecordedAt, deliveredIntent.RecordedAt);
+        Assert.Empty(agentProvider.Activations);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
     }
 
     [Fact]
@@ -217,7 +278,8 @@ public sealed class RuntimeResumptionServiceTests
             recoveryScanner,
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(afterLeaseExpiry));
+            new FixedTimeProvider(afterLeaseExpiry),
+            new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
             leaseTimeout: leaseDuration,
@@ -235,6 +297,131 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, envelope.Command.Kind);
     }
 
+    [Fact]
+    public async Task SweepAsync_PurgesResidualWorkForTerminalExecutionInsteadOfRedriving()
+    {
+        // spec 113: the drainer's terminal-status guard strands a RunSchedulerWork item in the durable queue when a
+        // workflow reaches a terminal status. Backlog discovery has no terminal filter, so the completed execution is
+        // surfaced every sweep. Re-driving it would enqueue yet another stranded item and emit a fresh drain span each
+        // tick — perpetual churn. The sweep must instead purge the residue and never re-drive a terminal execution.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 1));
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 2));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-terminal", WorkflowExecutionStatus.Completed));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        // No re-drive: the terminal execution is never activated and no command envelope is sent.
+        Assert.Empty(result.Dispatches);
+        Assert.Empty(agentProvider.Activations);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+        // The residual work is purged, so backlog discovery can no longer resurface the execution.
+        Assert.Equal(1, result.TerminalExecutionsPurged);
+        Assert.Equal(2, result.PurgedWorkItemCount);
+        Assert.True(result.DidWork);
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-terminal"))).Items);
+    }
+
+    [Fact]
+    public async Task SweepAsync_StillRedrivesNonTerminalExecutionWithBacklog()
+    {
+        // Regression guard: a suspended/running execution with genuine backlog must still be re-driven (Window C
+        // recovery). Only terminal executions are purged; non-terminal ones keep their redelivery.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-live", 1));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-live", WorkflowExecutionStatus.Suspended));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        var dispatch = Assert.Single(result.Dispatches);
+        Assert.Equal("wfexec-live", dispatch.WorkflowExecutionId);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, dispatch.Outcome);
+        Assert.Equal(0, result.TerminalExecutionsPurged);
+        Assert.Equal(0, result.PurgedWorkItemCount);
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, Assert.Single(agentProvider.Agent.Envelopes).Command.Kind);
+        // The non-terminal execution is re-driven, never reaped.
+        Assert.Empty(agentProvider.Passivations);
+    }
+
+    [Fact]
+    public async Task SweepAsync_ReapsLingeringTerminalMailbox_AfterPurgingResidualWork()
+    {
+        // #542 / spec 128 straggler reaper: a terminal execution whose mailbox outlived it (eager eviction disabled,
+        // skipped, or the terminal status arrived from a post-commit intent rather than the dispatched command) is
+        // collected by the sweep — it purges residual work AND passivates the mailbox through the agent provider.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-terminal", 1));
+        var stateStore = new InMemoryWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewState("wfexec-terminal", WorkflowExecutionStatus.Completed));
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            stateStore);
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        // Never re-driven, but reaped: exactly one passivation for the terminal id.
+        Assert.Empty(result.Dispatches);
+        Assert.Empty(agentProvider.Activations);
+        var passivation = Assert.Single(agentProvider.Passivations);
+        Assert.Equal("wfexec-terminal", passivation.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary, passivation.Boundary);
+        Assert.Equal(1, result.TerminalExecutionsPurged);
+    }
+
+    private static RuntimeSchedulerWorkItem NewResidualWorkItem(string workflowExecutionId, int index) =>
+        new(
+            workItemId: $"work-{index}",
+            workflowExecutionId: workflowExecutionId,
+            commandId: $"command-{index}",
+            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            envelopeId: $"envelope-{index}",
+            idempotencyKey: $"{workflowExecutionId}:command-{index}",
+            enqueuedAt: Now,
+            recordedAt: Now,
+            sequence: index);
+
+    private static WorkflowExecutionState NewState(string workflowExecutionId, WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: workflowExecutionId,
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: Now,
+            StartedAt: Now,
+            UpdatedAt: Now,
+            CompletedAt: status.IsTerminal() ? Now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
     private static RuntimeRecoveryCandidate NewCandidate(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
@@ -243,6 +430,31 @@ public sealed class RuntimeResumptionServiceTests
             reason: RuntimeInterruptionReason.HostStopped,
             detectedAt: Now,
             requeueFromLastCheckpoint: true);
+
+    private static RuntimePostCommitIntent NewMarkerIntent() =>
+        new(
+            intentId: "intent-marker-1",
+            workflowExecutionId: "wfexec-marker-1",
+            kind: MarkerKind,
+            recordedAt: Now,
+            activityExecutionId: "actexec-marker-1",
+            idempotencyKey: "marker-1",
+            payload: null,
+            metadata: new Dictionary<string, string>());
+
+    private sealed class Marker
+    {
+        public List<RuntimePostCommitIntent> Intents { get; } = [];
+    }
+
+    private sealed class MarkerHandler(Marker marker) : IRuntimePostCommitIntentHandler
+    {
+        public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+        {
+            marker.Intents.Add(intent);
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class Harness
     {
@@ -254,13 +466,15 @@ public sealed class RuntimeResumptionServiceTests
                 RecoveryScanner,
                 AgentProvider,
                 new ShortRuntimeExecutionIdGenerator(),
-                new FixedTimeProvider(Now));
+                new FixedTimeProvider(Now),
+                StateStore);
         }
 
         public FakeOutboxProcessor OutboxProcessor { get; } = new();
         public FakeWorkQueue WorkQueue { get; } = new();
         public FakeRecoveryScanner RecoveryScanner { get; } = new();
         public FakeAgentProvider AgentProvider { get; } = new();
+        public InMemoryWorkflowExecutionStateStore StateStore { get; } = new();
         public RuntimeResumptionService Service { get; }
     }
 
@@ -284,8 +498,8 @@ public sealed class RuntimeResumptionServiceTests
         public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
-            new([]);
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+            new(new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, []));
 
         public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             new((RuntimeSchedulerWorkItem?)null);
@@ -312,6 +526,7 @@ public sealed class RuntimeResumptionServiceTests
     private sealed class FakeAgentProvider : IWorkflowExecutionActorProvider
     {
         public List<WorkflowExecutionActorActivationRequest> Activations { get; } = [];
+        public List<WorkflowExecutionActorPassivationRequest> Passivations { get; } = [];
         public FakeAgent Agent { get; } = new();
         public string? FailFor { get; set; }
 
@@ -326,7 +541,11 @@ public sealed class RuntimeResumptionServiceTests
             return new(Agent);
         }
 
-        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) => default;
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)
+        {
+            Passivations.Add(request);
+            return default;
+        }
     }
 
     private sealed class FakeAgent : IWorkflowExecutionActor

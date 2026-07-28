@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-claim-mapping",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
+  "executionPath": "provider-driver/sqlserver/iam-claim-mapping/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "f9ad2f0348fed7160306d424f1670289c4c44093db2276b00cc1bc92ca8cb2c3",
+  "outcome": "pass",
+  "evidence": "evidence/sqlserver/iam-claim-mapping/0e7ae6dd54aaea28.json"
+}

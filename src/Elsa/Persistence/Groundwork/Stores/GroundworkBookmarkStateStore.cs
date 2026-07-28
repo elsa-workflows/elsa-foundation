@@ -11,9 +11,17 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// chosen by the host through feature composition and never leaks into this bridge or into runtime
 /// domain code.
 /// </summary>
-public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+public sealed class GroundworkBookmarkStateStore(
+    IDocumentStore store,
+    IGroundworkRuntimeDocumentSerializer serializer,
+    IBoundedDocumentStore? boundedStore = null)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.BookmarkStateDocumentKind), IBookmarkStateStore, IBookmarkStimulusIndex
 {
+    private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
+
+    private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
+        "Bookmark-state queries require an admitted bounded document-store runtime.");
+
     public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -44,46 +52,86 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
             GroundworkCompositeDocumentId.From(workflowExecutionId, bookmarkId), state => state, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(
+        BookmarkStatePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(query);
 
-        return await QueryDocumentsAsync<BookmarkState, BookmarkState>(
-            ElsaRuntimeStorageManifest.BookmarkStateByWorkflowExecution, workflowExecutionId, state => state, cancellationToken);
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.ListBookmarksByWorkflowExecutionQuery,
+                [Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, query.WorkflowExecutionId)],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.BookmarkIdField)],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
+            cancellationToken);
+
+        return new RuntimeStorePage<BookmarkState>(
+            query,
+            result.Documents.Select(Serializer.Deserialize<BookmarkState>).ToArray(),
+            result.NextContinuation);
     }
 
-    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(
+        BookmarkStimulusPageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        ArgumentNullException.ThrowIfNull(query);
 
-        // The cross-execution index is keyed by stimulus hash only (every provider supports single-field
-        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
-        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
-        var bookmarks = await QueryDocumentsAsync<BookmarkState, BookmarkState>(
-            ElsaRuntimeStorageManifest.BookmarkStateByStimulus, stimulusHash, state => state, cancellationToken);
-
-        return bookmarks
-            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
-            .ToArray();
+        return await QueryStimulusPageAsync(
+            ElsaRuntimeStorageManifest.ListBookmarksByStimulusAndTypeQuery,
+            query,
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.BookmarkStimulusLookupKeyField,
+                    StimulusLookupKey.FromPair(query.StimulusType, query.StimulusHash))
+            ],
+            cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
+        BookmarkStimulusTypePageQuery query,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentNullException.ThrowIfNull(query);
 
-        // Type-scoped scan (spec 089 D). The cross-execution index is hash-keyed, so it cannot serve a type-only
-        // query; rather than add a new index (and its Condition-7 backfill), a full type-scoped scan is used —
-        // identical to the sibling GroundworkWorkflowTriggerBindingStore.ListByStimulusTypeAsync (spec 089 B). This
-        // feeds the route-table refresh/rebuild, not a hot per-request path. A clause-free PortableDocumentQuery
-        // matches every bookmark document; we narrow to the requested stimulus type in code. Raw snapshots (incl.
-        // Metadata) are returned; expiry filtering stays in the lookup layer per the index's documented contract.
-        // No new index means the persisted document shape and SchemaVersion are unchanged.
-        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
-
-        return result.Documents
-            .Select(envelope => Serializer.Deserialize<BookmarkState>(envelope))
-            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
-            .ToArray();
+        return await QueryStimulusPageAsync(
+            ElsaRuntimeStorageManifest.ListBookmarksByStimulusTypeQuery,
+            query,
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.BookmarkStimulusTypeLookupKeyField,
+                    StimulusLookupKey.FromType(query.StimulusType))
+            ],
+            cancellationToken);
     }
+
+    private async ValueTask<RuntimeStorePage<BookmarkState>> QueryStimulusPageAsync(
+        string queryIdentity,
+        RuntimeStorePageRequest query,
+        IReadOnlyList<DocumentQueryClause> clauses,
+        CancellationToken cancellationToken)
+    {
+        var result = await Queries.QueryAsync(
+            new DocumentQuery(
+                DocumentKind,
+                queryIdentity,
+                clauses,
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.BookmarkIdField)
+                ],
+                take: query.Limit,
+                continuation: query.ContinuationToken),
+            cancellationToken);
+        return new RuntimeStorePage<BookmarkState>(
+            query,
+            result.Documents.Select(Serializer.Deserialize<BookmarkState>).ToArray(),
+            result.NextContinuation);
+    }
+
+    private static DocumentQueryClause Equal(string fieldPath, string value) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 }

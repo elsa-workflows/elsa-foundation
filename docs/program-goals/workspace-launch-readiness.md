@@ -47,6 +47,7 @@ This bucket exists to turn the Elsa foundation workspace from "still being polis
 - [Unfinished work](../reports/unfinished-work.md)
 - [Program goals index](README.md)
 - [AGENTS.md](../../AGENTS.md)
+- Dependency: [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) — a launchable workspace must also start fast; host boot / first-request latency is tracked in its own bucket, not here.
 
 ## Current Roadmap Notes
 

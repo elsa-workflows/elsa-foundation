@@ -58,6 +58,22 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_StartOnly_DoesNotFilterBindingsByCorrelationScope()
+    {
+        // #1001 scopes only existing bookmark resumes. A published Event binding's authored scope is not a
+        // start-selector: the matching type/hash binding must still start even when its scope differs.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a", correlationScope: "order-9"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        var result = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, correlationId: "order-7"));
+
+        Assert.Equal(1, result.StartedCount);
+        Assert.Equal("artifact-1", Assert.Single(startDispatcher.Requests).ArtifactId);
+    }
+
+    [Fact]
     public async Task Route_ResumeOnly_FansInToEveryWaitingInstanceAcrossExecutions()
     {
         // Bookmarks are seeded directly into the store (not produced by running published workflows) as a
@@ -297,10 +313,12 @@ public sealed class StimulusRouterTests
     {
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The router must reuse the supplied match set, not query the store.");
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
+            WorkflowTriggerBindingTypePageQuery query,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(
@@ -334,7 +352,8 @@ public sealed class StimulusRouterTests
         string artifactId,
         string nodeId,
         string? publicationId = null,
-        string? slotId = null) =>
+        string? slotId = null,
+        string? correlationScope = null) =>
         new(
             TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, StimulusHash),
             ArtifactId: artifactId,
@@ -344,7 +363,7 @@ public sealed class StimulusRouterTests
             ExecutableNodeId: nodeId,
             StimulusType: StimulusType,
             StimulusHash: StimulusHash,
-            CorrelationScope: null,
+            CorrelationScope: correlationScope,
             Metadata: new Dictionary<string, string>(),
             CreatedAt: _now,
             PublicationId: publicationId,
@@ -453,10 +472,8 @@ public sealed class StimulusRouterTests
                 authoredActivityId: "authored-node-wait",
                 activityType: "Elsa.Event",
                 activityTypeVersion: "1.0.0",
-                descriptorType: "test",
-                descriptorPayload: document.RootElement.Clone(),
+                descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
                 metadata: new Dictionary<string, string>());
         }
     }

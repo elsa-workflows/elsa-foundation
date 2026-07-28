@@ -1,0 +1,18 @@
+{
+  "externalIdentity": {
+    "lastSeenAt": "1970-01-01T00:00:00\u002B00:00",
+    "linkPolicy": "Auto",
+    "linkedAt": "1970-01-01T00:00:00\u002B00:00",
+    "provider": "google",
+    "providerSubject": "sub-123",
+    "tenantId": "tenant-1",
+    "userId": "user-1"
+  },
+  "loginKey": "identity:8291f275d9404ec441d2abebb0212c2c4f8d2ef4d0714a35a0d3944689ccf8b7",
+  "loginProvider": "google",
+  "providerDisplayName": null,
+  "providerKey": "sub-123",
+  "tenantId": "tenant-1",
+  "userId": "user-1",
+  "userLookupKey": "identity:d9645329266bc696b3abfedbd51b4d4ebf59a485e54938c3aaa557e22edf6efd"
+}

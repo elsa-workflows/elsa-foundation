@@ -1,6 +1,4 @@
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Scheduling.Activities;
@@ -30,24 +28,23 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </para>
 /// </remarks>
 [TriggerActivity]
-public sealed class Timer : CodeActivity<string>
+public sealed class Timer : Activity<TimerResult>
 {
     /// <summary>The stable activity type key the trigger/schedule providers match on.</summary>
     public const string ActivityType = "Elsa.Timer";
-
-    public Timer() : base(ActivityType)
-    {
-    }
 
     /// <summary>
     /// The recurrence interval, as an authored literal: an ISO-8601 duration (<c>PT5M</c>) or a
     /// <see cref="TimeSpan"/> string (<c>00:05:00</c>). Drives the stimulus hash and the recurring schedule.
     /// </summary>
-    public InputArgument<string> Interval { get; set; } = null!;
+    [ActivityInput(Key = nameof(Interval))]
+    [Required]
+    public string Interval { get; set; } = null!;
 
-    protected override void Execute(IActivityExecutionContext context)
-    {
-        var interval = context.Get(Interval);
-        context.Set(Result, interval);
-    }
+    protected override ValueTask<ActivityTransition<TimerResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new TimerResult(Interval)));
 }
+
+/// <summary>The atomic result produced when a recurring timer starts a workflow.</summary>
+public sealed record TimerResult(
+    [property: Output(Key = "Result", Path = "interval")] string Interval);

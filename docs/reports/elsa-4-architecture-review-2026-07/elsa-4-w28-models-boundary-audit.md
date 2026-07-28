@@ -89,7 +89,7 @@ anchors in **bold**.
 | ActivityExecutionState.cs | `ActivityExecution`, `ActivityExecutionState`, `ActivityExecutionStatus` (enum 0–7) | 98 | a | Persisted durable-state record; `[JsonConstructor]` on primary ctor | **golden `activityExecutionState.json` (`status:1`)** | Services(17), Activities.*(8), **Contracts**(3), **Persistence**, Flowchart |
 | ActivitySchedulingProvenance.cs | `ActivitySchedulingProvenance` | 48 | a | Correlation record (why/where scheduled); `Empty` singleton + `From` factory; embedded in ActivityExecutionState | rides activityExecutionState wire | Activities.*(5), Services, **Contracts**, Runtime.Api, Flowchart |
 | RecordedActivityOutput.cs | `RecordedActivityOutput` | 18 | a | Recorded-output value holder (validating ctor) | none direct | Activities.Runtime, Services |
-| RuntimeOutputCapture.cs | `RuntimeOutputCapture` | 43 | a | Durable output→durable-value promotion declaration (validating ctor); part of compiled `ExecutableNode` | rides workflowExecutable wire | Publishing.Api (compiler), Activities.Runtime |
+| RuntimeOutputCapture.cs | `RuntimeOutputCapture` | 43 | removed by spec 095 | Superseded by one atomic `ActivityCompletion.Result` plus read-only `ActivityResultProjectionContract` entries; no independent output-capture slot remains. | removed from workflowExecutable wire | none |
 
 ### Group 2 — Bookmarks, durable values, incidents (persisted state)
 

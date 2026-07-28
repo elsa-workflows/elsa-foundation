@@ -1,4 +1,5 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
@@ -24,6 +25,7 @@ public sealed class AddDefinitionCommandHandlerTests
 
         var result = await handler.Handle(
             new AddDefinition(
+                "create-request-1",
                 "Rootless workflow",
                 Description: null,
                 InitialState: new WorkflowDefinitionStateView(RootActivity: null),
@@ -41,6 +43,7 @@ public sealed class AddDefinitionCommandHandlerTests
         Assert.Equal(persistence.Draft.WorkflowDefinitionId, result.Draft.DefinitionId);
         Assert.Null(result.Draft.State.RootActivity);
         Assert.Equal(layout, Assert.Single(result.Draft.Layout));
+        Assert.Equal(new DesignOperationKey("create-request-1"), persistence.OperationKey);
     }
 
     private sealed class RecordingAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand
@@ -49,19 +52,27 @@ public sealed class AddDefinitionCommandHandlerTests
         public WorkflowDefinitionDraft? Draft { get; private set; }
         public IReadOnlyCollection<DesignMetadataRecord>? Layout { get; private set; }
 
-        public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation) =>
+        public DesignOperationKey? OperationKey { get; private set; }
+
+        public Task<WorkflowDefinitionCreated> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition workflowDefinition,
+            WorkflowDefinitionDraft draft,
+            CancellationToken cancellation) =>
             throw new InvalidOperationException("The API must use the layout-aware creation operation.");
 
-        public Task Execute(
+        public Task<WorkflowDefinitionCreated> Execute(
+            DesignOperationKey operationKey,
             WorkflowDefinition workflowDefinition,
             WorkflowDefinitionDraft draft,
             IReadOnlyCollection<DesignMetadataRecord> layout,
             CancellationToken cancellation)
         {
+            OperationKey = operationKey;
             Definition = workflowDefinition;
             Draft = draft;
             Layout = layout;
-            return Task.CompletedTask;
+            return Task.FromResult(new WorkflowDefinitionCreated(workflowDefinition.Id, draft.Id));
         }
     }
 

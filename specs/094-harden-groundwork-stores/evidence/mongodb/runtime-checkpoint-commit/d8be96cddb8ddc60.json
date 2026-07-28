@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:after-durable-decision-before-caller-acknowledgement",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "31cff41a1308c8f772de91cb6df5c5c74cf887076842c97dede9d8f11f07c2ad",
+  "executionPath": "provider-driver/mongodb/runtime-checkpoint-commit/d8be96cddb8ddc60",
+  "clients": 2,
+  "resultHash": "8ea697e0054009834546404f2b6bea1f43678e92c2598e60f35d4d0ca72c6135",
+  "outcome": "pass",
+  "failureWindow": "after-durable-decision-before-caller-acknowledgement",
+  "evidence": "evidence/mongodb/runtime-checkpoint-commit/d8be96cddb8ddc60.json"
+}

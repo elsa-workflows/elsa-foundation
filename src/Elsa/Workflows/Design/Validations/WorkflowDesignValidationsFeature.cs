@@ -16,8 +16,9 @@ namespace Elsa.Workflows.Design.Validations;
 /// <summary>
 /// Activation unit for the workflow-design validations sub-domain (Unit C FR-032). Registers the
 /// single <see cref="ExecuteValidations"/> handler for <c>OnDraftValidating</c> plus the baseline
-/// universal validators (FR-033) — unknown-activity-version, missing root activity,
-/// variable-uniqueness, required-input/output, variable-expression-resolver — as <see cref="IDraftValidator"/>
+/// universal validators (FR-033) — unknown-activity-version, unhandled-activity-structure,
+/// missing root activity, variable-uniqueness, required-input/output,
+/// variable-expression-resolver, value-flow — as <see cref="IDraftValidator"/>
 /// implementations. The handler resolves every <see cref="IDraftValidator"/> and aggregates their
 /// errors. Activity-specific validators ship in their activity feature (FR-034) by registering
 /// their own <see cref="IDraftValidator"/>.
@@ -54,9 +55,12 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<CatalogVersionResolver>();
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
+        services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();
         services.AddScoped<IDraftValidator, RequiredInputOutputValidator>();
         services.AddScoped<IDraftValidator, VariableExpressionResolverValidator>();
+        services.AddScoped<IDraftValidator, IntrinsicVariableTargetValidator>();
+        services.AddScoped<IDraftValidator, ValueFlowValidator>();
     }
 }

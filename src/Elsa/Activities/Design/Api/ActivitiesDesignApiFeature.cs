@@ -3,7 +3,12 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
+using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Api.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Stores;
+using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
@@ -23,11 +28,18 @@ namespace Elsa.Activities.Design.Api;
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { "ApiCapabilities", "Expressions" }
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
+    private static readonly string ProcessDependencyCursorSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
     public ActivityAvailabilityOptions ActivityAvailability { get; set; } = new();
+    public string? DependencyCursorSigningKey { get; set; }
+    public int DependencyDefaultPageSize { get; set; } = 100;
+    public int DependencyMaximumPageSize { get; set; } = 500;
+    public TimeSpan ForkReservationLifetime { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan ForkReservationRetention { get; set; } = TimeSpan.FromDays(1);
 
     public override void ConfigureServices(IServiceCollection services)
     {
@@ -35,12 +47,53 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
+        services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
             new DefaultActivityAvailabilityEvaluator(sp.GetRequiredService<IOptions<ActivityAvailabilityOptions>>().Value));
         services.TryAddSingleton<IActivityAvailabilityDiagnosticsProjector, DefaultActivityAvailabilityDiagnosticsProjector>();
         services.TryAddSingleton<IActivityAvailabilitySettingsStore, InMemoryActivityAvailabilitySettingsStore>();
+        services.TryAddScoped<ActivityUpgradePlanner>();
+        services.TryAddScoped<IActivityUpgradePlanner>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
+        services.TryAddScoped<IActivityUpgradePlanRefresher>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
+        services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
+        services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
+        services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();
+        services.TryAddSingleton<ActivityContractAuthoringValidator>();
+        services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
+        services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
+        services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<ActivityDependencyCursorOptions>().Configure(options =>
+            options.SigningKey = string.IsNullOrWhiteSpace(DependencyCursorSigningKey)
+                ? ProcessDependencyCursorSigningKey
+                : DependencyCursorSigningKey);
+        services.AddOptions<ActivityDependencyReaderOptions>().Configure(options =>
+        {
+            options.DefaultPageSize = DependencyDefaultPageSize;
+            options.MaximumPageSize = DependencyMaximumPageSize;
+        });
+        services.TryAddSingleton<IActivityDependencyCursorCodec, HmacActivityDependencyCursorCodec>();
+        services.TryAddSingleton<IActivityManagementCursorCodec, HmacActivityManagementCursorCodec>();
+        services.TryAddSingleton<IActivityForkCandidateIdCodec, HmacActivityForkCandidateIdCodec>();
+        services.AddOptions<ActivityForkReservationOptions>().Configure(options =>
+        {
+            options.Lifetime = ForkReservationLifetime;
+            options.Retention = ForkReservationRetention;
+        });
+        services.TryAddScoped<ActivityDependencyReader>();
+        services.TryAddScoped<ReusableActivityAuthoringService>();
+        services.TryAddScoped<ActivityForkService>();
+        services.TryAddScoped<ActivityDefinitionManagementProjectionService>();
+        services.TryAddScoped<ActivityContractProposalService>();
+        services.TryAddScoped<ActivityVersionLifecycleService>();
+        services.TryAddScoped<ActivityDefinitionRecommendationService>();
+        services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBuiltInAuthoringDescriptorProvider, IntrinsicAuthoringDescriptorProvider>());
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "ordinary-round-trip",
+  "sourceScenarioId": "iam-ordinary-store-revision-conflicts",
+  "coverageEntryId": "iam-credential",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "56c4e25ff82c7f118c16c98d49e5a8dce26b98d773a74d956bd2b5187e68608e",
+  "executionPath": "provider-driver/sqlserver/iam-credential/0e7ae6dd54aaea28",
+  "clients": 2,
+  "resultHash": "63b3a91983178d2f7966c3a328152fbd81f1ca582b45610d23c1449d01e637fe",
+  "outcome": "pass",
+  "evidence": "evidence/sqlserver/iam-credential/0e7ae6dd54aaea28.json"
+}

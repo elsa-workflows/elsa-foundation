@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.20
 
 # =============================================================================
 # Elsa.Server production image
@@ -14,9 +14,25 @@
 # optional mounted shells.json. See docs/docker.md for the full surface.
 # =============================================================================
 
-# ---- Build stage ------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# ---- Restore stage ----------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
+
+# TARGETARCH is supplied automatically by BuildKit (amd64 or arm64) and drives the
+# .NET runtime identifier used for the ReadyToRun publish below. It is declared here
+# (after FROM) so it is in scope for the restore/publish RUN steps.
+#
+# Why a RID at all: ReadyToRun (spec 134) is a per-RID AOT pre-compilation of the
+# app's own ~90 assemblies (crossgen2), which cuts first-request JIT cost. R2R
+# therefore REQUIRES a concrete RuntimeIdentifier — a portable (RID-less) publish
+# cannot be R2R-compiled. Docker's GitHub builder routes linux/amd64 and linux/arm64
+# to matching native runners, so crossgen runs natively for each target instead of
+# under QEMU. The publish stays framework-dependent (--self-contained false) so it
+# still runs on the shared aspnet runtime in the final stage and only the app
+# assemblies grow, not the image by a whole bundled runtime. Scoping R2R to the
+# Dockerfile (not the csproj) keeps every local `dotnet build`/dev inner-loop on the
+# fast JIT publish.
+ARG TARGETARCH
 
 # Copy repo-root build configuration first so restore layers cache well.
 # Directory.Build.props carries package metadata only (no build-behavior changes);
@@ -31,19 +47,43 @@ COPY Directory.Packages.props ./
 COPY NuGet.config ./
 COPY Elsa.Server.slnx ./
 
-# Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
-COPY src/ ./src/
+# Copy only restore inputs while preserving their source-tree paths. Ordinary source
+# changes no longer invalidate the expensive RID-specific restore layer. The recursive
+# patterns cover the complete project graph without a manually maintained file list.
+COPY --parents src/**/*.csproj src/**/*.targets ./
 
-# Restore and publish only the server host; project references are pulled in transitively.
+# Restore only the server host; project references are pulled in transitively.
 #
 # WarningsNotAsErrors=NU1603 tolerates a restore-only warning that can appear in a clean
 # environment when a transitive preview dependency resolves to a newer available version,
 # without relaxing the repo's TreatWarningsAsErrors for real code warnings.
-RUN dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
+# Map BuildKit's TARGETARCH (amd64/arm64) to the .NET RID (linux-x64/linux-arm64).
+# Restore is RID-specific because R2R needs the target's crossgen2 + runtime pack.
+RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
+    && dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
+        -r "$RID" \
+        -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
-RUN dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
+
+# ---- Build stage ------------------------------------------------------------
+FROM restore AS build
+
+# Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
+COPY src/ ./src/
+
+# ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
+# TieredCompilation and TieredPGO are left at their .NET 10 defaults (both already
+# on) — R2R images still participate in tiered compilation, so the defaults are
+# already optimal and are deliberately NOT overridden here. InvariantGlobalization
+# is deliberately NOT enabled: the host does auth + culture-sensitive work, so
+# dropping ICU is unsafe (see specs/134-container-readytorun-publish/research.md).
+RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
+    && dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
         -c Release \
+        -r "$RID" \
+        --self-contained false \
         --no-restore \
+        -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603 \
         -o /app/publish
 

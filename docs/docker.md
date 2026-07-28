@@ -11,6 +11,10 @@ Postgres-backed persistence.
 The repo default `src/Apps/Elsa.Server/shells.json` (SQLite) is intentionally left untouched; the
 compose stack mounts its own curated `shells.json` instead.
 
+> Just want to run the prebuilt images from Docker Hub with plain `docker run` (no checkout, no
+> build)? See the [Docker Hub quickstart](docker-hub-quickstart.md), which also covers supplying a
+> custom `shells.json` and how Studio feature toggles are persisted.
+
 ---
 
 ## Quickstart (full reference stack)
@@ -95,6 +99,7 @@ environment variables. Standard .NET double-underscore (`__`) env keys override 
 | `ASPNETCORE_URLS` | Kestrel bind (already set in the image) | `http://+:8080` |
 | `Elsa__ModuleManagement__ApiKey` | The Elsa host management key the server accepts on its `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). Server-side only — the browser never sees or sends it. **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
+| `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
@@ -134,6 +139,11 @@ PostgreSQL document store:
   enabled but do not persist. If you want persisted diagnostics, add
   `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` / `DiagnosticsStructuredLogsPersistenceEFCoreSqlite`
   back and give `/app` a writable volume for the SQLite files.
+
+- Engine self-instrumentation is enabled: `WorkflowsRuntimeTracing` emits engine spans and
+  `DiagnosticsOpenTelemetryEngineBridge` forwards them into the OpenTelemetry ingestion store, so
+  Studio's timing view is populated. Without the persistence lane above, the traces live in the
+  in-memory store and reset on restart.
 
 - The `SampleNuplaneActivities` and `WeatherForecastSample` sample features are dropped because they
   require Nuplane feed packages that are not present in the image.

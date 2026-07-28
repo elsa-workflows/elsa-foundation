@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "queryShape:lease-visible-by-execution-bounded",
+  "sourceScenarioId": "distributed-bounded-route-equivalence",
+  "coverageEntryId": "distributed-command-transport",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "768571c92263a0696520844f5dda3f7ea3c95238ace780e6996d76c54cc1121f",
+  "executionPath": "provider-driver/sqlserver/distributed-command-transport/c5b6defeb8de81a5",
+  "clients": 1,
+  "resultHash": "6d99a301db0eed7f0acb35b4392204ba20f6fcf8fcb1ff39e96eaaee276c8644",
+  "outcome": "pass",
+  "queryShape": "lease-visible-by-execution-bounded",
+  "nativeQueryIdentity": "lease-visible-commands-by-execution",
+  "documentKind": "executionCommandTransport",
+  "nativeEvidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.plan.txt",
+  "evidence": "evidence/sqlserver/distributed-command-transport/c5b6defeb8de81a5.json"
+}

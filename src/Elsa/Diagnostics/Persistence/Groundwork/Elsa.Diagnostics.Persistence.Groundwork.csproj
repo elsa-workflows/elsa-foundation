@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Groundwork.Core" />
+    <PackageReference Include="Groundwork.DiagnosticRecords" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Diagnostics.Persistence.csproj" />
+    <ProjectReference Include="..\..\OpenTelemetry\Persistence\Groundwork\Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\StructuredLogs\Persistence\Groundwork\Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+  </ItemGroup>
+
+</Project>

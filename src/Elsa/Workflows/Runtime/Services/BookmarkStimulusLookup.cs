@@ -18,7 +18,7 @@ public sealed class BookmarkStimulusLookup : IBookmarkStimulusLookup
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var bookmarks = await _bookmarkStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken);
+        var bookmarks = await _bookmarkStateStore.ListAllBookmarkStatesAsync(request.WorkflowExecutionId, cancellationToken);
         var matches = bookmarks
             .Where(bookmark => Matches(bookmark, request))
             .OrderBy(bookmark => bookmark.CreatedAt)

@@ -1,0 +1,14 @@
+provider=postgresql
+document-kind=secret
+route=list-filtered
+physical-name=secrets
+physical-cardinality=100000
+plan-classification=indexed
+index=secret_u001fsecret_filtered_list_0816e9556a66
+storage-scope-predicate=true
+route-predicate=true
+finite-limit=16
+materialized-candidate-count=16
+command-count=2
+command-0=Count|count|postgresql-json|index-scan|secret_u001fsecret_filtered_list_0816e9556a66|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|1||b9105cfc3ed0bdeae69f613dff38a18b8409877c0e50baaab6d6b8b31f97bb02
+command-1=Page|page|postgresql-json|index-scan|secret_u001fsecret_filtered_list_0816e9556a66|document_kind,hasNonExpiringActiveVersion,maxActiveVersionExpiresAt,status,storage_scope,tenantId|16|normalizedName:Ascending:false,storage_scope:Ascending:true,id_comparison_key:Ascending:true|c652714071a5600536831eaf778b62ad82effbe4a83054fc81460eb437bc1849

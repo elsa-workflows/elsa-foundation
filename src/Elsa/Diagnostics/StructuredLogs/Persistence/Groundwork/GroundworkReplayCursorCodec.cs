@@ -8,6 +8,7 @@ internal static class GroundworkReplayCursorCodec
 {
     private const string Version = "slrc1";
     private const string Source = "groundwork";
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     public static StructuredLogReplayCursor Encode(
         StructuredLogStoreBinding binding,
@@ -35,9 +36,11 @@ internal static class GroundworkReplayCursorCodec
         StructuredLogStoreBinding expectedBinding,
         out GroundworkReplayCursorParts parts)
     {
+        ArgumentNullException.ThrowIfNull(expectedBinding);
         parts = default;
         if (!cursor.IsValid)
             return false;
+
         var segments = cursor.Value?.Split('.');
         if (segments is not [Version, Source, var entrySource, var binding, var record, var provider] ||
             !CryptographicOperations.FixedTimeEquals(
@@ -47,9 +50,9 @@ internal static class GroundworkReplayCursorCodec
 
         try
         {
-            var entrySourceId = Encoding.UTF8.GetString(FromBase64Url(entrySource));
-            var recordToken = Encoding.UTF8.GetString(FromBase64Url(record));
-            var providerPosition = Encoding.UTF8.GetString(FromBase64Url(provider));
+            var entrySourceId = DecodeCanonical(entrySource);
+            var recordToken = DecodeCanonical(record);
+            var providerPosition = DecodeCanonical(provider);
             if (string.IsNullOrWhiteSpace(entrySourceId) ||
                 string.IsNullOrWhiteSpace(recordToken) ||
                 string.IsNullOrWhiteSpace(providerPosition))
@@ -59,6 +62,10 @@ internal static class GroundworkReplayCursorCodec
             return true;
         }
         catch (FormatException)
+        {
+            return false;
+        }
+        catch (DecoderFallbackException)
         {
             return false;
         }
@@ -72,6 +79,14 @@ internal static class GroundworkReplayCursorCodec
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string DecodeCanonical(string value)
+    {
+        var bytes = FromBase64Url(value);
+        if (!StringComparer.Ordinal.Equals(value, Base64Url(bytes)))
+            throw new FormatException("The replay cursor contains a noncanonical Base64URL segment.");
+        return StrictUtf8.GetString(bytes);
+    }
 
     private static byte[] FromBase64Url(string value)
     {

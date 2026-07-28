@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-idempotency-marker",
+  "sourceScenarioId": "runtime-checkpoint-idempotency",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.80",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "7fcf202c2bbf25c81bb9257c86e6a2baf118ecb4bc7507c5569e9fd90dba2dfe",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24",
+  "clients": 2,
+  "resultHash": "f2204451baf4ec56f3e07d6008f0d0eb2711573341c858e38b4e30a15692b1eb",
+  "outcome": "pass",
+  "concurrencySemantic": "create-only-idempotency-marker",
+  "evidence": "evidence/sqlserver/runtime-checkpoint-commit/10f38a26e09d6b24.json"
+}

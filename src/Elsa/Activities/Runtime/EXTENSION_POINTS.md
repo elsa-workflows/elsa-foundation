@@ -1,8 +1,8 @@
 # Extension points — Activities.Runtime domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtime` — the composition root where `ActivitiesRuntimeFeature` registers the activity construction factory, the descriptor-type → constructor registry, the single aggregating `RegisterActivityConstructors` handler, and the startup task that drives the Registry + StartUp Task pattern.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtime`, which coordinates transient activation, pinned-input hydration, atomic transition handling, and CLR type discovery.
 
-> Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Construction is discriminated by the descriptor type's `FullName`, not a `Kind` string.
+> Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Runtime invocation consumes only the compiled `ActivityContract` and canonical bindings.
 
 ---
 
@@ -11,12 +11,17 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 ### `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
-- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. When a faulted activity has a parent, it rides a child-fault parent-evaluation work item (`ChildFaultParentEvaluation`) on the fault incident checkpoint so a fork/join parent can resolve its join deterministically (#308). Composite activities may request child executable-node scheduling through the runtime activity execution context; generic workflow-level edge traversal remains outside this handler. It does not load Design-owned authored workflow models.
+- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by materializing or reusing the committed input snapshot, acquiring an `IActivityActivator` lease, executing one closed typed transition, and atomically recording completion or fault state. Structural activities are invoked through `IRuntimeStructuralActivity` and must return one `RuntimeStructuralContinuation` decision. When a faulted activity has a parent, it rides a child-fault parent-evaluation work item (`ChildFaultParentEvaluation`) on the fault incident checkpoint so a fork/join parent can resolve its join deterministically (#308). It does not load Design-owned authored workflow models.
 
 ### `WorkflowParentActivityCompletionSchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
-- **Usage:** handles `ParentCompletionEvaluation` completion work by reconstructing the running parent activity and invoking `IActivityChildCompletionHandler` for a completed child, or `IActivityChildFaultHandler` for a faulted child (work items tagged `runtime.childFaulted`, #308). For a faulted child whose parent does not implement `IActivityChildFaultHandler` the handler no-ops, leaving the fault a blocking incident. The handler enqueues child `ScheduleActivity` work requested by the parent or completes the parent activity when the parent requests composite completion. It does not interpret workflow-level edges or load Design-owned authored workflow models.
+- **Usage:** handles `ParentCompletionEvaluation` by reactivating the transient parent from its pinned snapshot and invoking `IRuntimeActivityChildCompletionHandler` for a completed child, or `IRuntimeActivityChildFaultHandler` for a faulted child (work items tagged `runtime.childFaulted`, #308). Each callback returns a `RuntimeStructuralContinuation` for the runtime to apply. For a faulted child whose parent does not implement `IRuntimeActivityChildFaultHandler` the handler no-ops, leaving the fault a blocking incident. It does not interpret workflow-level edges or load Design-owned authored workflow models.
+
+### `WorkflowNotifyParentActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
+- **Kind:** Scheduler work contributor.
+- **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
+- **Usage:** handles `WorkflowExecutionCommandKind.NotifyParentActivity` (spec 126, seam C) by reactivating the target parent — the notifying child's committed parent — from its pinned snapshot and invoking `IRuntimeActivityChildNotificationHandler.OnChildNotifiedAsync`, applying the returned continuation and any staged seam-A subtree cancellations / child schedules / further parent notifications in one atomic checkpoint commit. A parent that does not implement the interface, or is no longer `Running`, silently acks the notification (late delivery is legal — a notifying child that has since completed or faulted still delivers). The notifying child keeps running throughout. Its `HandlerName` is a frozen wire value (persisted in scheduler poison/drain records). It does not interpret workflow-level edges or load Design-owned authored workflow models.
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
@@ -30,51 +35,33 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** CLR reconciliation records the activity version as `Trigger`; publish-time compilation also reads the marker from the CLR construction descriptor so legacy catalog rows authored before the marker was persisted still compile into routable trigger nodes.
 - **Related runtime seam:** `IActivityTriggerStimulusProvider` in `Elsa.Workflows.Runtime.Core`; a marked activity must have a provider contributed by its owning feature.
 
-### `IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Contribution (one constructor per descriptor type).
-- **Signature:** `string DescriptorType { get; }`; `ValueTask<IActivity> Construct(TDescriptor descriptor, IDictionary<string, InputArgument>?, IDictionary<string, OutputArgument>?, CancellationToken)` (with the non-generic `IActivityConstructor` bridge that owns `payload.Deserialize<TDescriptor>()`).
-- **Register:** `services.AddSingleton<IActivityConstructor, MyConstructor>()`.
-- **Aggregated by:** the single `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (this feature), which collects every registered constructor and adds it to the registry. The registry enforces one-constructor-per-`DescriptorType` (throws on a duplicate).
+### `IActivityActivator` *(Activities Runtime — `Elsa.Activities.Runtime`)*
+- **Kind:** Replacement activation boundary.
+- **Signature:** `ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken)` returns an async-disposable `ActivityActivationLease`.
+- **Usage:** creates one fresh activity and owned service scope per invocation attempt, then hydrates plain annotated inputs from the committed snapshot. The shipped CLR implementation is `ClrActivityActivator` in `Elsa.Activities.Primitives`.
 
-**Known implementations (shipped):**
-- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.ClrActivityDescriptor`; the default/primitive CLR kind — resolves the activity's stable alias via `IWellKnownTypeRegistry`)*
-- `Elsa.Activities.Composition.Runtime` — `WorkflowActivityConstructor` *(descriptor type `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; the Workflow kind)*
+### `IRuntimeStructuralActivity` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Engine-only structural execution protocol.
+- **Signature:** `ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)`.
+- **Usage:** implemented by composite activities that schedule and coordinate executable children. The runtime invokes this method instead of the ordinary `IActivity.ExecuteAsync` path, then applies exactly one immutable continuation decision: `Complete(outcome)`, `Defer`, `Faulted(fault)`, or `Cancel(reason)`. A terminal decision cannot also schedule children, and the initial `Defer` decision must schedule at least one child.
 
-### `IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Activity-owned continuation handler.
-- **Signature:** `ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)`.
-- **Usage:** implemented by composite activities that own child-completion routing semantics. The runtime invokes it only for parent-completion evaluation work after reconstructing the parent activity from the pinned executable artifact.
+### `IRuntimeActivityChildCompletionHandler` / `IRuntimeActivityChildFaultHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Engine-only structural re-evaluation protocols.
+- **Signatures:** `OnChildCompletedAsync(ActivityChildCompletedContext context)` and `OnChildFaultedAsync(ActivityChildFaultedContext context)` each return `ValueTask<RuntimeStructuralContinuation>`.
+- **Usage:** implemented by structural activities that own child completion or fault routing. The runtime invokes them only for parent-evaluation work after reconstructing the parent from the pinned executable artifact. A callback may return `Defer` while existing children are still running or after scheduling the next child; otherwise it returns one terminal continuation decision. A parent that does not implement the fault callback leaves the child's fault as a blocking incident.
+- **Child-subtree cancellation (spec 112):** during a callback the parent may also stage `RequestChildSubtreeCancellation(childActivityExecutionId, reason)` on the context for any of its live direct children. The runtime terminalizes the target's whole execution subtree to `Cancelled`/`ParentCancelled`, deletes its bookmarks/durable timers/queued scheduler work via `IActivityScopeCleanupStore`, and suppresses its non-terminal incidents — all inside the same checkpoint commit as the continuation. Honored with `Defer` and `Complete` only; a terminal target is skipped as a legal first-completion-wins race; unknown, non-child, or duplicate targets fault the evaluation.
+- **Child-fault absorption (spec 115):** during a child-**fault** evaluation the parent may stage `RequestChildFaultAbsorption(incidentId, reason)` naming the evaluation's incident. The incident resolves with an internal `AbsorbFault` resolution outcome sourced from `StructuralFaultAbsorption`, and the faulted child's leftover subtree is reclaimed (live descendants `Cancelled`/`FaultAbsorbed`, resources cleaned, their other incidents suppressed) in the same commit as the continuation — the composite consumes the fault and keeps routing instead of re-faulting or leaving a blocking incident. Honored with `Defer`/`Complete`; at most one per evaluation; a wrong or missing incident id, a completion-evaluation staging, or a `Fault`/`Cancel` continuation faults the evaluation; an already-terminal incident skips as a legal redelivery race. Composes with spec-112 cancellations in the same evaluation.
+
+### `IRuntimeActivityChildNotificationHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Engine-only structural re-evaluation protocol (spec 126, seam C — the child→parent counterpart of the parent→child seams above).
+- **Signature:** `OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)` returns `ValueTask<RuntimeStructuralContinuation>`.
+- **Parent notification (spec 126):** a still-running structural child stages `RequestParentNotification(code, payload?)` on its own execution context during any of its evaluations (invoke, or a child-completion/child-fault evaluation of its own children). The notification commits atomically with the child's `Defer`/`Complete` state as a durable `NotifyParentActivity` work item and reaches — always and only — the child's committed parent (no target parameter; spoof-proof). A parent implementing this interface receives `OnChildNotifiedAsync` with the code, payload, and the notifying child's identity (aei, node, iteration id), and may return any continuation and stage seam-A subtree cancellations / child schedules exactly as in a child-completion evaluation (an interrupting consumer tears the notifying child down in the same commit; seam-B absorption stays child-fault-evaluation-only). The child keeps running throughout; a notification whose child has since completed or faulted still delivers, and only a non-`Running` (or non-implementing) parent acks it away. Staging from a root activity (no committed parent), an empty/oversized (>128) code, an oversized payload, or a `Fault`/`Cancel` continuation with staged notifications faults the evaluation deterministically. One hop only — bubbling to a grandparent is the consumer's own recursion (it stages its own `RequestParentNotification`).
 
 **Known implementations (shipped):**
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 - `Elsa.Activities.ControlFlow` — `Parallel` *(fork/join: counts branch completions toward the join threshold)* and the `If`/`Switch`/`For`/`ForEach`/`While`/`Do` control-flow composites
-
-### `IActivityChildFaultHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
-- **Kind:** Activity-owned continuation handler (fault side of `IActivityChildCompletionHandler`).
-- **Signature:** `ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)`.
-- **Usage:** implemented by composite activities that must react to a child branch reaching a terminal `Faulted` state. The runtime invokes it for parent-completion evaluation work tagged `runtime.childFaulted` (raised by `ChildFaultParentEvaluation` on the branch fault incident). A composite that does not implement it is unaffected: a faulted child stays a blocking incident and is not propagated to the parent.
-
-**Known implementations (shipped):**
-- `Elsa.Activities.ControlFlow` — `Parallel` *(fault-aware fork/join: faults the composite once the join's success threshold is unreachable, #308)*
-- `Elsa.Activities.Flowchart` — `Flowchart` *(fault-aware fork/join: faults the flowchart when an inbound branch of an all-inbound join faults, #308)*
-
----
-
-## Events
-
-`CatalogParityTests` scans the `Elsa.Activities.Runtime.Core` assembly, paired with this catalog file, for `IEvent` types.
-
-### OnActivityConstructorsInitializing
-`(ICollection<IActivityConstructor> Constructors)`
-
-**Semantic.** The activity constructor registry is initialising. Every registered `IActivityConstructor` is contributed to the `Constructors` collection, then flushed into the registry.
-
-**Delivery strategy.** Sequential — all constructors must be registered before the first activity construction.
-
-**Publication site.** `ActivityConstructorsStartupTask` (`Elsa.Activities.Runtime`) — fired once at startup.
-
-**Expected handler.** Exactly one: `RegisterActivityConstructors` (this feature).
+- Fault callback implementations: `Parallel` *(faults once its success threshold is unreachable)* and `Flowchart` *(faults when an inbound branch of an all-inbound join faults)*.
 
 ---
 

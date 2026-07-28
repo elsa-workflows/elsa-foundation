@@ -1,23 +1,125 @@
+using System.Text.Json;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Exceptions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
-public sealed class GroundworkAddActivityDefinitionVersionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer)
-    : IAddCommand<ActivityDefinitionVersion>
+/// <summary>Replay-safe Groundwork implementation for adding one activity definition version.</summary>
+public sealed class GroundworkAddActivityDefinitionVersionCommand(
+    IPayloadSerializer payloadSerializer,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IActivityDefinitionVersionStore versionStore,
+    IDistributedLockProvider lockProvider,
+    ISystemClock clock,
+    IDesignAtomicWriter atomicWrite)
+    : IAddActivityDefinitionVersionCommand
 {
-    public Task Add(ActivityDefinitionVersion entity, CancellationToken cancellationToken = default)
-    {
-        var save = GroundworkDocumentWriter.ToSaveRequest(
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
-            ActivitiesDesignStorageManifest.SchemaVersion,
-            entity,
-            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
+    private const string OperationKind = "activity.version.add.v1";
 
-        return store.SaveAsync(save, cancellationToken);
+    public async Task<ActivityDefinitionVersionAdded> Execute(
+        DesignOperationKey operationKey,
+        ActivityDefinitionVersion version,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(version);
+        ArgumentNullException.ThrowIfNull(operationKey);
+
+        // The Groundwork document writer does not auto-stamp entity timestamps (the EF Core store does),
+        // so stamp the new version here to avoid persisting DateTimeOffset.MinValue.
+        var now = clock.UtcNow;
+        version.CreatedAt = version.LastModifiedAt = now;
+
+        var accessContext = accessContextAccessor.Current;
+        accessContext.EnsureTenantScope(version.TenantId);
+        var versionJson = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
+        var requestMaterial = VersionAddRequestMaterial.From(version);
+        var lockKey = ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(version.DefinitionId);
+        await using var lockHandle = await lockProvider.AcquireLockAsync(
+            lockKey,
+            null,
+            cancellationToken);
+
+        var result = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            atomicWrite,
+            operationKey,
+            OperationKind,
+            requestMaterial,
+            [ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind],
+            async (context, token) =>
+            {
+                await context.SaveAsync(
+                    GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                        ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
+                        ActivitiesDesignStorageManifest.SchemaVersion,
+                        version,
+                        versionJson,
+                        accessContext,
+                        persistenceDomain: DesignPersistenceDomain.Activity) with
+                    { ExpectedVersion = 0 },
+                    token);
+
+                return new ActivityDefinitionVersionAdded(
+                    version.DefinitionId,
+                    version.Id,
+                    version.Version,
+                    version.Hash);
+            },
+            jsonOptions: versionJson,
+            cancellationToken: cancellationToken,
+            beforeAttempt: async token =>
+            {
+                if (await versionStore.FindByDefinitionAndSortKeyAsync(
+                        version.DefinitionId,
+                        version.SemVerSortKey,
+                        token) is not null)
+                {
+                    throw new ActivityDefinitionVersionConflictException(version.DefinitionId, version.Version);
+                }
+            });
+        return result.Value;
+    }
+
+    // DefinitionId is semantic here: the command adds a version to an already-existing definition. All values
+    // generated by this operation (the version ID, timestamps, scope, sort key, and Hash) stay outside the hash.
+    private sealed record VersionAddRequestMaterial(
+        string DefinitionId,
+        string Version,
+        string ProviderKey,
+        string ProviderSchemaVersion,
+        string ConsumerKey,
+        string ConsumerSchemaVersion,
+        JsonElement? DescriptorPayload,
+        IEnumerable<InputDefinition> Inputs,
+        IEnumerable<OutputDefinition> Outputs,
+        IEnumerable<ActivityDesignFacet> DesignFacets,
+        ActivityExecutionType ExecutionType,
+        string SourceKind,
+        string SourceId)
+    {
+        public static VersionAddRequestMaterial From(ActivityDefinitionVersion version) => new(
+            version.DefinitionId,
+            version.Version,
+            version.ProviderKey,
+            version.ProviderSchemaVersion,
+            version.ConsumerKey,
+            version.ConsumerSchemaVersion,
+            version.DescriptorPayload.ValueKind == JsonValueKind.Undefined ? null : version.DescriptorPayload,
+            version.Inputs,
+            version.Outputs,
+            version.DesignFacets,
+            version.ExecutionType,
+            version.SourceKind,
+            version.SourceId);
     }
 }

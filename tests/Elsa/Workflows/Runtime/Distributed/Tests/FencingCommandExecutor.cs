@@ -15,12 +15,16 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 internal sealed class FencingCommandExecutor : IWorkflowExecutionCommandExecutor
 {
     private readonly IRuntimeExecutionOwnershipService _ownership;
+    private readonly Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? _commitEffect;
     private readonly ConcurrentQueue<string> _committed = new();
 
-    public FencingCommandExecutor(IRuntimeExecutionOwnershipService ownership)
+    public FencingCommandExecutor(
+        IRuntimeExecutionOwnershipService ownership,
+        Func<WorkflowExecutionCommandEnvelope, RuntimeExecutionLease, CancellationToken, ValueTask>? commitEffect = null)
     {
         ArgumentNullException.ThrowIfNull(ownership);
         _ownership = ownership;
+        _commitEffect = commitEffect;
     }
 
     /// <summary>Envelope IDs whose durable commit passed the fencing check on this node, in commit order.</summary>
@@ -34,6 +38,8 @@ internal sealed class FencingCommandExecutor : IWorkflowExecutionCommandExecutor
         // superseded node that later tries to commit its stale token is rejected here, not by the transport.
         var lease = await _ownership.AcquireAsync(envelope.WorkflowExecutionId, cancellationToken);
         await _ownership.EnsureCurrentAsync(envelope.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+        if (_commitEffect is not null)
+            await _commitEffect(envelope, lease, cancellationToken);
         _committed.Enqueue(envelope.EnvelopeId);
 
         // An accepted outcome so the pump acks the transport item; the drain itself performed no scheduler work here.

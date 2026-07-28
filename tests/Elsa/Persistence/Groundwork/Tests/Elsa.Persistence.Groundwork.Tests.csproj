@@ -10,20 +10,40 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Attention\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <!-- Spec 129 cold-start op-count baseline probe composes the full GroundworkAllFeaturesDeploymentSchema
+         source set, so the four remaining feature manifest-source assemblies are referenced directly. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Committed golden fixtures: the frozen v1 serialized shape of every runtime document kind.
-         Copied next to the test assembly so the drift/compatibility tests can load them at runtime. -->
+    <!-- Committed current-version golden fixtures plus the supported workflow-executable v5 and
+         executable-activity-template v1 generations.
+         Copied next to the test assembly so drift and read-path tests can load them at runtime. -->
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

@@ -14,18 +14,18 @@ public sealed class ExecuteWorkflowRequestHandler(
     : IRequestHandler<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
     private const string RequestedBy = "runtime-api";
-    private static readonly RuntimeVariableScopeFactory ScopeFactory = new();
+    private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
 
     public async Task<WorkflowExecutionStartDispatchView> Handle(ExecuteWorkflow request, CancellationToken cancellationToken)
     {
         // Seed authored workflow variable defaults so `variables.*` input expressions resolve to their
         // declared values in production (Seam C, #254). The defaults are read from the compiled executable's
-        // root structure, not the design document, keeping authored content separate from the runtime
-        // artifact (§E2.9). A missing executable is left to the dispatcher to reject with its own diagnostics.
+        // workflow-scope declarations, not the design document, keeping authored content separate from the
+        // runtime artifact (§E2.9). A missing executable is left to the dispatcher to reject with its own diagnostics.
         var executable = await executableStore.FindAsync(request.ArtifactId, cancellationToken);
         var variables = executable is null
             ? EmptyVariables
-            : ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
+            : VariableDeclarations.ProjectDeclaredVariableDefaultsByName(executable.WorkflowVariables);
 
         // Caller-supplied workflow inputs (#286): threaded into the start dispatch so `input.*` expressions
         // resolve to them in production. Unlike variables (which carry authored defaults), inputs have no

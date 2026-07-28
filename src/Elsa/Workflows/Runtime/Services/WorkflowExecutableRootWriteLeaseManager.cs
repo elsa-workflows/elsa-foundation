@@ -23,24 +23,75 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseId);
         ArgumentNullException.ThrowIfNull(write);
 
+        await ExecuteLeasedAsync([artifactId], leaseId, write, cancellationToken);
+    }
+
+    public async ValueTask ExecuteAsync(
+        WorkflowExecutableIdentity root,
+        string leaseId,
+        Func<CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseId);
+        ArgumentNullException.ThrowIfNull(write);
+
+        var closure = await new WorkflowExecutableDependencyGraph(executableStore).LoadClosureAsync(root, cancellationToken);
+        await ExecuteLeasedAsync(
+            closure.Select(executable => executable.Identity.ArtifactId),
+            leaseId,
+            write,
+            cancellationToken);
+    }
+
+    private async ValueTask ExecuteLeasedAsync(
+        IEnumerable<string> artifactIds,
+        string leaseId,
+        Func<CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken)
+    {
+        var orderedArtifactIds = artifactIds
+            .Select(artifactId =>
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+                return artifactId;
+            })
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (orderedArtifactIds.Length == 0)
+            throw new ArgumentException("At least one executable artifact must be leased.", nameof(artifactIds));
+
         var duration = options.Value.RootWriteLeaseDuration;
         if (duration <= TimeSpan.Zero)
             throw new InvalidOperationException($"{nameof(WorkflowExecutableGarbageCollectionOptions.RootWriteLeaseDuration)} must be greater than zero.");
 
-        var now = timeProvider.GetUtcNow();
-        var lease = await executableStore.TryAcquireRootWriteLeaseAsync(
-            artifactId,
-            leaseId,
-            now.Add(duration),
-            now,
-            cancellationToken);
-
-        if (lease is null)
-            throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
+        var leases = new List<WorkflowExecutableRootWriteLease>(orderedArtifactIds.Length);
+        try
+        {
+            foreach (var artifactId in orderedArtifactIds)
+            {
+                var now = timeProvider.GetUtcNow();
+                var lease = await executableStore.TryAcquireRootWriteLeaseAsync(
+                    artifactId,
+                    leaseId,
+                    now.Add(duration),
+                    now,
+                    cancellationToken);
+                if (lease is null)
+                    throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
+                leases.Add(lease);
+            }
+        }
+        catch
+        {
+            await ReleaseAllAsync(leases);
+            throw;
+        }
 
         using var renewalStop = new CancellationTokenSource();
         using var writeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var renewalTask = RenewUntilStoppedAsync(lease, duration, renewalStop.Token, writeCancellation);
+        var renewalTask = RenewUntilStoppedAsync(leases, duration, renewalStop.Token, writeCancellation);
         Exception? writeFailure = null;
         Exception? renewalFailure = null;
         try
@@ -67,7 +118,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
                 renewalFailure = exception;
             }
 
-            await executableStore.ReleaseRootWriteLeaseAsync(lease, CancellationToken.None);
+            await ReleaseAllAsync(leases);
         }
 
         if (renewalFailure is not null)
@@ -78,7 +129,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
     }
 
     private async Task RenewUntilStoppedAsync(
-        WorkflowExecutableRootWriteLease lease,
+        IReadOnlyCollection<WorkflowExecutableRootWriteLease> leases,
         TimeSpan duration,
         CancellationToken stopToken,
         CancellationTokenSource writeCancellation)
@@ -87,18 +138,40 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         while (true)
         {
             await Task.Delay(cadence, timeProvider, stopToken);
-            var now = timeProvider.GetUtcNow();
-            var renewed = await executableStore.RenewRootWriteLeaseAsync(
-                lease,
-                now.Add(duration),
-                now,
-                stopToken);
+            foreach (var lease in leases)
+            {
+                var now = timeProvider.GetUtcNow();
+                var renewed = await executableStore.RenewRootWriteLeaseAsync(
+                    lease,
+                    now.Add(duration),
+                    now,
+                    stopToken);
 
-            if (renewed)
-                continue;
+                if (renewed)
+                    continue;
 
-            await writeCancellation.CancelAsync();
-            throw new WorkflowExecutableRootWriteLeaseLostException(lease.ArtifactId, lease.LeaseId);
+                await writeCancellation.CancelAsync();
+                throw new WorkflowExecutableRootWriteLeaseLostException(lease.ArtifactId, lease.LeaseId);
+            }
         }
+    }
+
+    private async ValueTask ReleaseAllAsync(IEnumerable<WorkflowExecutableRootWriteLease> leases)
+    {
+        Exception? firstFailure = null;
+        foreach (var lease in leases.Reverse())
+        {
+            try
+            {
+                await executableStore.ReleaseRootWriteLeaseAsync(lease, CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                firstFailure ??= exception;
+            }
+        }
+
+        if (firstFailure is not null)
+            ExceptionDispatchInfo.Capture(firstFailure).Throw();
     }
 }

@@ -14,7 +14,12 @@ namespace Elsa.Activities.Switch.Internal;
 /// </summary>
 internal sealed class SwitchStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
+        // strings from the global FastEndpoints options; nested structure payload reads must match.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => SwitchActivity.StructureKind;
 
@@ -74,6 +79,20 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
 
+    public ActivityNodeStructure RemapExecutableStructure(
+        ActivityNodeStructure structure,
+        IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
+    {
+        var executable = structure.Payload.Deserialize<SwitchExecutableStructure>(SerializerOptions)
+                         ?? throw new InvalidOperationException("Switch executable structure payload is invalid.");
+        var remapped = new SwitchExecutableStructure(
+            executable.Cases
+                .Select(@case => new SwitchExecutableCase(@case.Match, Remap(@case.Activity, authoredToExecutableNodeIds)))
+                .ToArray(),
+            Remap(executable.Default, authoredToExecutableNodeIds));
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+    }
+
     private static IEnumerable<ActivityNode> ToBranch(ActivityNode? branch) =>
         branch is null ? [] : [branch];
 
@@ -85,4 +104,7 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
 
     private static SwitchAuthoredStructure ReadAuthoredStructure(ActivityNode activity) =>
         SwitchAuthoredStructureReader.Read(activity);
+
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
+        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
 }

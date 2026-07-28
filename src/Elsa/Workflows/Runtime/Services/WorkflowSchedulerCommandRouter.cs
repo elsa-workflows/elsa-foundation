@@ -1,4 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -9,12 +11,20 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly IWorkflowSchedulerDrainPolicy _schedulerDrainPolicy;
     private readonly IWorkflowDrainOrchestrator _drainCoordinator;
     private readonly TimeProvider _timeProvider;
+    private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
+    private readonly IWorkflowBurstScopeAccessor? _burstScopeAccessor;
+    private readonly RuntimeBurstCacheOptions _burstCacheOptions;
+    private readonly IWorkflowAlterationActorCommandExecutor? _alterationActorCommandExecutor;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
         IWorkflowDrainOrchestrator drainCoordinator,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IWorkflowBurstScopeAccessor? burstScopeAccessor = null,
+        RuntimeBurstCacheOptions? burstCacheOptions = null,
+        IWorkflowAlterationActorCommandExecutor? alterationActorCommandExecutor = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -24,6 +34,10 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _schedulerDrainPolicy = schedulerDrainPolicy;
         _drainCoordinator = drainCoordinator;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _activityExecutionStateStore = activityExecutionStateStore;
+        _burstScopeAccessor = burstScopeAccessor;
+        _burstCacheOptions = burstCacheOptions ?? new RuntimeBurstCacheOptions();
+        _alterationActorCommandExecutor = alterationActorCommandExecutor;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -39,6 +53,15 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(options);
 
+        if (envelope.Command.Kind == WorkflowExecutionCommandKind.AlterWorkflow)
+        {
+            if (_alterationActorCommandExecutor is null)
+                throw new InvalidOperationException("Runtime alterations are not composed for this runtime host.");
+            await _alterationActorCommandExecutor.ExecuteAsync(envelope, cancellationToken);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
+        }
+
+        var executionScopeId = await ResolveExecutionScopeIdAsync(envelope, cancellationToken);
         var workItem = new RuntimeSchedulerWorkItem(
             workItemId: envelope.EnvelopeId,
             workflowExecutionId: envelope.WorkflowExecutionId,
@@ -51,7 +74,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             sequence: envelope.Sequence,
             payload: envelope.Command.Payload,
             commandMetadata: envelope.Command.Metadata,
-            envelopeMetadata: envelope.Metadata);
+            envelopeMetadata: envelope.Metadata,
+            executionScopeId: executionScopeId);
 
         workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
 
@@ -65,7 +89,48 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         if (options.AmbientServices is not null)
             drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
-        var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
-        return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
+        // Establish the burst-scoped reconstructible cache for this drain (ADR 0031 item b, spec 111). One command
+        // envelope drives one drain-to-quiescence = one burst, spanning every drain cycle and both cadence branches
+        // (Immediate/Coalesced) inside the orchestrator; two sequential drains of the same execution get separate
+        // scopes, so cache entries never leak across drains. When the kill switch is off (or no accessor is wired) no
+        // scope is pushed and every executable read takes the durable path — byte-identical to the burst-absent path.
+        var burstScope = _burstScopeAccessor is not null && _burstCacheOptions.Enabled
+            ? new WorkflowBurstScope(drainRequest.WorkflowExecutionId)
+            : null;
+
+        if (burstScope is null)
+        {
+            var plainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+            return WorkflowExecutionCommandProcessResult.FromDrain(plainResult);
+        }
+
+        using (_burstScopeAccessor!.Push(burstScope))
+        {
+            try
+            {
+                var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+                return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
+            }
+            finally
+            {
+                await burstScope.DisposeAsync();
+            }
+        }
+    }
+
+    private async ValueTask<string?> ResolveExecutionScopeIdAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionStateStore is null || envelope.Command.Kind != WorkflowExecutionCommandKind.ResumeBookmark)
+            return null;
+        if (!envelope.Command.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionId, out var activityExecutionId) ||
+            string.IsNullOrWhiteSpace(activityExecutionId))
+        {
+            return null;
+        }
+
+        var state = await _activityExecutionStateStore.FindAsync(envelope.WorkflowExecutionId, activityExecutionId, cancellationToken);
+        return state?.ExecutionScopeId ?? state?.Provenance.ExecutionScopeId;
     }
 }

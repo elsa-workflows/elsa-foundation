@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:create-only-try-add",
+  "sourceScenarioId": "secret-concurrent-create-only",
+  "coverageEntryId": "secrets-repository",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.76",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "8978689b19c72ba33dd45610de2d55fb6b4adaae6b3a1240a6e175291e0416bd",
+  "executionPath": "provider-driver/sqlserver/secrets-repository/6aab3a9a20f9fcdf",
+  "clients": 2,
+  "resultHash": "c77369cef77aa4d608f57f4e42483e901761f588cdbcbeb7ff5b33d7a3993927",
+  "outcome": "pass",
+  "concurrencySemantic": "create-only-try-add",
+  "evidence": "evidence/sqlserver/secrets-repository/6aab3a9a20f9fcdf.json"
+}
