@@ -35,9 +35,11 @@ deliberately withholds the atomic-commit guarantee until deployment evidence is 
 
 ## Schema operations (deployment pipelines)
 
-Schema application is an operator/CLI responsibility. Startup admits the exact applied target and
+Schema application is normally an operator/CLI responsibility. Startup admits the exact applied target and
 never applies or repairs schema unless the host explicitly opted into safe startup auto-apply
-(`AutoApplySchemaOnStartup`).
+(`AutoApplySchemaOnStartup`). For unified deployments, that option covers both safe pending document-schema
+operations and missing diagnostic-record streams. It never rewrites drifted stream definitions, applies
+destructive operations, or turns runtime session opening into a deployment path.
 
 ```bash
 dotnet tool restore
@@ -51,7 +53,7 @@ dotnet groundwork apply  … --connection-env <ENV_VAR> --safe
 dotnet groundwork status … --connection-env <ENV_VAR>
 ```
 
-Pinned CLI contract (tool `0.0.1-preview.80`; executable evidence in
+Pinned CLI contract (tool `0.0.1-preview.94`; executable evidence in
 `UnifiedSchemaToolContractTests`):
 
 - `validate --offline` — exit `0` with deterministic target fingerprints; mutation-free; rejects a
@@ -69,6 +71,10 @@ Pinned CLI contract (tool `0.0.1-preview.80`; executable evidence in
 Each provider's admission initializer (Prepare phase) validates the applied target fingerprint
 and pending operations against the composed manifest and fails startup with the exact
 incompatibility; schema drift is a blocking diagnostic, never an empty store or a slower path.
+Unified providers run diagnostic-stream deployment at Prepare order `1`, after document admission at
+order `0` and before the diagnostics lifecycle in the Default phase. When auto-apply is disabled, missing
+streams retain the existing `GW-DIAG-DEPLOY-001` failure. With auto-apply enabled, missing streams are created
+idempotently and incompatible persisted definitions retain `GW-DIAG-DEPLOY-002`.
 `GroundworkSchemaReadinessTask` (Start phase) then verifies an admitted publication with explicit
 transaction-boundary evidence exists at all — closing the mis-composition gap where no provider
 admission ran — and never applies or falls back.

@@ -69,8 +69,11 @@ public static class GroundworkSqliteUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddSqliteGroundworkDocumentStore(
             connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => SqliteDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies();
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),

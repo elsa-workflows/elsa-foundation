@@ -61,8 +61,11 @@ public static class GroundworkMongoDbUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
         services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => MongoDbDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString, databaseName));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         return services.AddGroundworkUnifiedStoreFamilies();
     }
 }
