@@ -293,11 +293,11 @@ describe("workflow publication operations", () => {
     await fixture.current().reviewPublication(
       currentReview,
       intent,
-      { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+      { mode: "exact", requestedVersion: " 2.1.0-rc.1 " });
     await flushUpdates();
 
     expect(fixture.current().publicationReview).toMatchObject({
-      versionSelection: { mode: "exact", requestedVersion: "2.1.0-rc.1" },
+      versionSelection: { mode: "exact", requestedVersion: " 2.1.0-rc.1 " },
       versionPreflight: {
         assignmentMode: "exact",
         resolvedVersion: "2.1.0-rc.1",
@@ -308,6 +308,9 @@ describe("workflow publication operations", () => {
     await fixture.current().confirmPublication(intent, { mode: "exact", requestedVersion: "2.1.0-rc.1" });
     await flushUpdates();
 
+    expect(fixture.postJson).toHaveBeenCalledWith(
+      "/design/workflows/drafts/draft-1/promotion-preflight",
+      { requestedVersion: "2.1.0-rc.1" });
     expect(fixture.postJson).toHaveBeenCalledWith(
       "/design/workflows/drafts/draft-1/promote",
       { requestedVersion: "2.1.0-rc.1" });
@@ -346,6 +349,74 @@ describe("workflow publication operations", () => {
       }
     });
   });
+
+  it("accepts the server-resolved action when a new channel becomes occupied during review", async () => {
+    const fixture = renderOperations({ resolveSideBySideAsReplace: true });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "sideBySide", slotName: "blue" };
+
+    await fixture.current().reviewPublication(
+      fixture.current().publicationReview!,
+      intent,
+      { mode: "automatic" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview?.preflight).toMatchObject({
+      resolvedAction: "replace",
+      slotName: "blue"
+    });
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.postJson.mock.calls.filter(([url]) => url === "/publishing/workflows/preflight")).toHaveLength(2);
+    expect(fixture.postJson).toHaveBeenLastCalledWith(
+      "/publishing/workflows/version-2/publish",
+      expect.objectContaining({ action: "replace", slotName: "blue" }));
+    expect(fixture.current().publicationReview?.phase).toBe("success");
+  });
+
+  it("records an authoritative review failure without immediately treating it as unreviewed", async () => {
+    const fixture = renderOperations({ exactVersionSupport: true });
+    await prepare(fixture);
+    const currentReview = fixture.current().publicationReview!;
+    fixture.failNextVersionPreflight();
+
+    await fixture.current().reviewPublication(
+      currentReview,
+      currentReview.intent,
+      { mode: "exact", requestedVersion: "2.1.0" });
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      reviewFailed: true,
+      reviewPending: false,
+      versionSelection: { mode: "exact", requestedVersion: "2.1.0" },
+      preflight: undefined,
+      versionPreflight: undefined,
+      failureMessage: expect.stringContaining("Authoritative review failed")
+    });
+  });
+
+  it("allows only one publication mutation pipeline at a time", async () => {
+    const fixture = renderOperations({ saveDelayMs: 20 });
+    await prepare(fixture);
+    const intent: PublicationIntent = {
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    };
+
+    await Promise.all([
+      fixture.current().confirmPublication(intent),
+      fixture.current().confirmPublication(intent)
+    ]);
+    await flushUpdates();
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/publish"))).toHaveLength(1);
+  });
 });
 
 async function prepare(fixture: ReturnType<typeof renderOperations>) {
@@ -376,12 +447,15 @@ function renderOperations(options: {
   failPolicyLoad?: boolean;
   exactVersionSupport?: boolean;
   delayExactVersion?: string;
+  saveDelayMs?: number;
+  resolveSideBySideAsReplace?: boolean;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
   const mutationOrder: string[] = [];
   let publishAttempts = 0;
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
+  let failNextVersionPreflight = false;
   const getJson = vi.fn(async (url: string) => {
     if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false);
     if (url === "/publishing/workflows/definition-1/policy") {
@@ -395,6 +469,10 @@ function renderOperations(options: {
   const postJson = vi.fn(async (url: string, body?: Record<string, unknown>) => {
     if (url === "/design/workflows/drafts/draft-1/promotion-preflight") {
       mutationOrder.push("version-preflight");
+      if (failNextVersionPreflight) {
+        failNextVersionPreflight = false;
+        throw new Error("version preflight unavailable");
+      }
       const requestedVersion = typeof body?.requestedVersion === "string" ? body.requestedVersion.trim() : null;
       if (requestedVersion === options.delayExactVersion) {
         await new Promise(resolve => setTimeout(resolve, 20));
@@ -418,7 +496,9 @@ function renderOperations(options: {
         definitionId: "definition-1",
         versionId: null,
         slotName: body?.slotName ?? "default",
-        resolvedAction: body?.action ?? "replace",
+        resolvedAction: options.resolveSideBySideAsReplace && body?.action === "sideBySide"
+          ? "replace"
+          : body?.action ?? "replace",
         policySource: "request",
         policyRevision: 1,
         canActivate: true,
@@ -472,6 +552,7 @@ function renderOperations(options: {
   } as unknown as StudioEndpointContext;
   const saveDraft = vi.fn(async (snapshot: WorkflowDraft) => {
     mutationOrder.push("save");
+    if (options.saveDelayMs) await new Promise(resolve => setTimeout(resolve, options.saveDelayMs));
     const saved = structuredClone(snapshot);
     saved.validationErrors = (options.savedValidationErrors ?? []).map(message => ({ message }));
     return saved;
@@ -511,6 +592,7 @@ function renderOperations(options: {
     getJson,
     postJson,
     mutationOrder,
+    failNextVersionPreflight: () => { failNextVersionPreflight = true; },
     ...callbacks
   };
 }

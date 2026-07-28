@@ -71,6 +71,7 @@ export function useWorkflowOperations({
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const publicationReviewRequest = useRef(0);
+  const publicationMutationInFlight = useRef(false);
   const [runInputPrompt, setRunInputPrompt] = useState<{
     draft: WorkflowDraft;
     inputs: WorkflowInput[];
@@ -174,6 +175,7 @@ export function useWorkflowOperations({
       intent,
       versionSelection,
       reviewPending: true,
+      reviewFailed: false,
       preflight: undefined,
       versionPreflight: undefined,
       failureMessage: undefined
@@ -181,7 +183,7 @@ export function useWorkflowOperations({
     setError("");
     try {
       const requestedVersion = versionSelection.mode === "exact"
-        ? versionSelection.requestedVersion
+        ? versionSelection.requestedVersion.trim()
         : undefined;
       const [preflight, versionPreflight] = await Promise.all([
         preflightSnapshot(context, review, intent),
@@ -196,14 +198,11 @@ export function useWorkflowOperations({
         intent,
         versionSelection,
         reviewPending: false,
+        reviewFailed: false,
         preflight,
         versionPreflight,
         proposedVersion: versionPreflight?.resolvedVersion ?? current.proposedVersion,
-        failureMessage: !preflight.canActivate
-          ? "Server preflight found conflicts. Choose another Publication channel or resolve the listed claims."
-          : versionPreflight && !versionPreflight.isReady
-            ? versionPreflight.issues.map(issue => issue.message).join(" ")
-            : undefined
+        failureMessage: undefined
       } : current);
     } catch (error) {
       if (request !== publicationReviewRequest.current) return;
@@ -214,6 +213,7 @@ export function useWorkflowOperations({
         intent,
         versionSelection,
         reviewPending: false,
+        reviewFailed: true,
         preflight: undefined,
         versionPreflight: undefined,
         failureMessage: `Authoritative review failed. No changes were saved, promoted, or published. ${reason}`
@@ -244,7 +244,7 @@ export function useWorkflowOperations({
     const versionMatches = publicationReview.versionSelection.mode === versionSelection.mode
       && (versionSelection.mode === "automatic"
         || publicationReview.versionSelection.mode === "exact"
-        && publicationReview.versionSelection.requestedVersion === versionSelection.requestedVersion);
+        && publicationReview.versionSelection.requestedVersion.trim() === versionSelection.requestedVersion.trim());
     if (publicationReview.reviewPending
       || !publicationPreflightMatchesIntent(reviewedPreflight, intent)
       || !versionMatches) {
@@ -259,6 +259,8 @@ export function useWorkflowOperations({
       setError("The selected version is not ready for promotion. Resolve the version issue before publishing.");
       return;
     }
+    if (publicationMutationInFlight.current) return;
+    publicationMutationInFlight.current = true;
     setOperation("publishing");
     setError("");
     let promotedVersionId = publicationReview.promotedVersionId;
@@ -299,7 +301,7 @@ export function useWorkflowOperations({
         const promoted = await promoteDraft(
           context,
           persistedDraft.id,
-          versionSelection.mode === "exact" ? versionSelection.requestedVersion : undefined);
+          versionSelection.mode === "exact" ? versionSelection.requestedVersion.trim() : undefined);
         promotedVersionId = promoted.id;
         setPublicationReview(current => current ? { ...current, promotedVersionId, proposedVersion: promoted.version } : current);
       }
@@ -375,6 +377,7 @@ export function useWorkflowOperations({
       }
       setError(failureMessage);
     } finally {
+      publicationMutationInFlight.current = false;
       setOperation("idle");
     }
   }, [context, publicationReview, reload, reviewPublication, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);

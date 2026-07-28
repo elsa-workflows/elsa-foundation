@@ -253,6 +253,10 @@
   padding-left: 20px;
 }
 
+.wf-publication-recovery p {
+  margin: 0 0 8px;
+}
+
 @media (max-width: 640px) {
   .wf-publication-summary,
   .wf-publication-detail-grid {

@@ -124,7 +124,36 @@ describe("publication channel UX", () => {
       expect.anything(),
       { action: "replace", slotName: "default" },
       { mode: "exact", requestedVersion: "2.1.0-rc.1" });
+    expect(text(container)).toContain("2.1.0-rc.1");
+    expect(text(container)).not.toContain("2.0.0 · assigned automatically");
     expect(button(container, "Publish").disabled).toBe(true);
+    expect(text(container)).toContain("Not ready");
+  });
+
+  it("keeps a failed authoritative review stable until the author retries or changes the selection", () => {
+    const onReview = vi.fn(async () => undefined);
+    const container = render(review({
+      preflight: undefined,
+      reviewFailed: true,
+      failureMessage: "Authoritative review failed. No changes were saved, promoted, or published."
+    }), { onReview });
+
+    expect(onReview).not.toHaveBeenCalled();
+    flushSync(() => button(container, "Retry review").click());
+    expect(onReview).toHaveBeenCalledOnce();
+  });
+
+  it("does not submit while the current review is blocked", () => {
+    const onPublish = vi.fn(async () => undefined);
+    const container = render(review({
+      preflight: undefined,
+      reviewPending: true
+    }), { onPublish });
+
+    flushSync(() => container.querySelector("form")!.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true })));
+
+    expect(onPublish).not.toHaveBeenCalled();
   });
 
   it("renders success as a compact outcome with both visible footer actions", () => {
@@ -145,7 +174,9 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain("Workflow is published");
     expect(text(container)).toContain("Version 2.1.0 is active");
-    expect(button(container, "Close")).toBeDefined();
+    expect(button(container, "Close").classList.contains("wf-primary-action")).toBe(true);
+    expect(button(container, "Open published executable").classList.contains("wf-primary-action")).toBe(false);
+    expect(document.activeElement).toBe(container.querySelector("#publication-success-title"));
     flushSync(() => button(container, "Open published executable").click());
     expect(onOpen).toHaveBeenCalledOnce();
   });
@@ -162,6 +193,7 @@ describe("publication channel UX", () => {
     expect(button(container, "Retry publication")).toBeDefined();
     expect(button(container, "Close")).toBeDefined();
     expect(container.querySelector("select[aria-label='Publication channel']")).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector("#publication-recovery-title"));
   });
 
   it("uses a fixed three-region shell so body alerts cannot displace the footer", () => {

@@ -44,6 +44,7 @@ export interface PublicationReviewState {
   versionPreflightSupported: boolean;
   exactVersionSupported: boolean;
   reviewPending?: boolean;
+  reviewFailed?: boolean;
   promotedVersionId?: string;
   savedDraft?: WorkflowDraft;
   failureMessage?: string;
@@ -167,7 +168,6 @@ export function publicationPreflightMatchesIntent(
   intent: PublicationIntent
 ): preflight is PublicationPreflight {
   return Boolean(preflight
-    && preflight.resolvedAction === intent.action
     && preflight.slotName === intent.slotName);
 }
 

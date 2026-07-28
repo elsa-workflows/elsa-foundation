@@ -58,18 +58,20 @@ export function PublicationReviewDialog({
       && review.versionPreflight.assignmentMode === versionSelection.mode
       && (versionSelection.mode === "automatic"
         || review.versionPreflight.requestedVersion === versionSelection.requestedVersion.trim()));
+  const matchingVersionPreflight = versionEvidenceMatches ? review.versionPreflight : undefined;
   const currentSelectionMatches = review.intent.action === intent.action
     && review.intent.slotName === intent.slotName
     && review.intent.expectedPublicationId === intent.expectedPublicationId
     && review.versionSelection.mode === versionSelection.mode
     && (versionSelection.mode === "automatic"
       || review.versionSelection.mode === "exact"
-      && review.versionSelection.requestedVersion === versionSelection.requestedVersion);
+      && review.versionSelection.requestedVersion.trim() === versionSelection.requestedVersion.trim());
   const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
   useDialogFocus(dialogRef, closeOnEscape);
 
   useEffect(() => {
     if (!onReview || !editableReview || !channelIsValid || review.validationErrors.length > 0) return;
+    if (review.reviewFailed && currentSelectionMatches) return;
     if ((review.reviewPending && currentSelectionMatches) || (reviewedPreflight && versionEvidenceMatches)) return;
     void onReview(review, intent, versionSelection);
   }, [
@@ -96,15 +98,25 @@ export function PublicationReviewDialog({
       ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
       : "No trigger changes."
     : formatChangeCount(changes.triggers);
-  const versionIssues = review.versionPreflight?.issues ?? [];
+  const versionIssues = matchingVersionPreflight?.issues ?? [];
   const blocked = review.validationErrors.length > 0
     || !channelIsValid
     || review.reviewPending
     || !reviewedPreflight
     || !reviewedPreflight.canActivate
     || review.versionPreflightSupported && !versionEvidenceMatches
-    || review.versionPreflight?.isReady === false;
+    || matchingVersionPreflight?.isReady === false;
   const statusMessage = publicationStatusMessage(review, blocked);
+  const submitDisabled = busy || (review.phase === "partialFailure"
+    ? Boolean(review.reviewPending)
+    : review.phase === "savedFailure"
+      ? review.validationErrors.length > 0
+      : blocked);
+
+  useEffect(() => {
+    if (review.phase !== "success" && review.phase !== "partialFailure" && review.phase !== "savedFailure") return;
+    dialogRef.current?.querySelector<HTMLElement>(".wf-publication-outcome h4")?.focus();
+  }, [review.phase]);
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
@@ -119,6 +131,7 @@ export function PublicationReviewDialog({
       >
         <form onSubmit={event => {
           event.preventDefault();
+          if (submitDisabled) return;
           void onPublish(intent, versionSelection);
         }}>
           <header className="wf-dialog-heading wf-publication-header">
@@ -210,16 +223,18 @@ export function PublicationReviewDialog({
                     <DecisionFact
                       label="Version"
                       value={versionSelection.mode === "exact"
-                        ? review.versionPreflight?.resolvedVersion || versionSelection.requestedVersion || "Enter an exact version"
-                        : review.versionPreflight?.resolvedVersion
-                          ? `${review.versionPreflight.resolvedVersion} · assigned automatically by version policy`
+                        ? matchingVersionPreflight?.resolvedVersion || versionSelection.requestedVersion || "Enter an exact version"
+                        : matchingVersionPreflight?.resolvedVersion
+                          ? `${matchingVersionPreflight.resolvedVersion} · assigned automatically by version policy`
                           : "Assigned automatically by version policy"}
                     />
                     <DecisionFact
                       label="Readiness"
                       value={review.reviewPending
                         ? "Checking current policy and target…"
-                        : reviewedPreflight?.canActivate && review.versionPreflight?.isReady !== false
+                        : reviewedPreflight?.canActivate
+                          && versionEvidenceMatches
+                          && matchingVersionPreflight?.isReady !== false
                           ? "Ready to publish"
                           : "Not ready"}
                     />
@@ -315,7 +330,20 @@ export function PublicationReviewDialog({
                   </div>
                 ) : null}
 
-                {review.failureMessage ? <p className="wf-publication-recovery" role="alert">{review.failureMessage}</p> : null}
+                {review.failureMessage ? (
+                  <div className="wf-publication-recovery" role="alert">
+                    <p>{review.failureMessage}</p>
+                    {review.reviewFailed && onReview ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onReview(review, intent, versionSelection)}
+                      >
+                        Retry review
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <details className="wf-publication-disclosure">
                   <summary>Changes details</summary>
@@ -352,23 +380,28 @@ export function PublicationReviewDialog({
           </div>
 
           <footer className="wf-dialog-actions wf-publication-footer">
-            <button type="button" onClick={onCancel} disabled={busy}>
+            <button
+              type="button"
+              className={review.phase === "success" ? "wf-primary-action" : undefined}
+              onClick={onCancel}
+              disabled={busy}
+            >
               {review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}
             </button>
             {review.phase === "success" ? (
-              <button type="button" className="wf-primary-action" onClick={onOpenPublishedExecutable}>
+              <button type="button" onClick={onOpenPublishedExecutable}>
                 Open published executable
               </button>
             ) : review.phase === "partialFailure" ? (
-              <button type="submit" disabled={busy || review.reviewPending}>
+              <button type="submit" disabled={submitDisabled}>
                 Retry publication
               </button>
             ) : review.phase === "savedFailure" ? (
               review.validationErrors.length === 0
-                ? <button type="submit" disabled={busy}>Retry publication</button>
+                ? <button type="submit" disabled={submitDisabled}>Retry publication</button>
                 : null
             ) : (
-              <button type="submit" disabled={busy || blocked}>
+              <button type="submit" disabled={submitDisabled}>
                 {busy && review.phase === "publishing" ? "Publishing…" : "Publish"}
               </button>
             )}
@@ -384,7 +417,7 @@ function PublicationSuccess({ review }: { review: PublicationReviewState }) {
     <section className="wf-publication-outcome wf-publication-outcome-success" aria-labelledby="publication-success-title">
       <div className="wf-publication-outcome-mark" aria-hidden="true">✓</div>
       <div>
-        <h4 id="publication-success-title">Workflow is published</h4>
+        <h4 id="publication-success-title" tabIndex={-1}>Workflow is published</h4>
         <p>
           Version <strong>{review.proposedVersion}</strong> is active in Publication channel{" "}
           <strong>{review.published?.slotName}</strong>.
@@ -405,7 +438,7 @@ function PublicationSuccess({ review }: { review: PublicationReviewState }) {
 function PublicationRecovery({ review }: { review: PublicationReviewState }) {
   return (
     <section className="wf-publication-outcome" aria-labelledby="publication-recovery-title">
-      <h4 id="publication-recovery-title">The version was retained, but the channel was not activated</h4>
+      <h4 id="publication-recovery-title" tabIndex={-1}>The version was retained, but the channel was not activated</h4>
       <p>{review.failureMessage}</p>
       <dl className="wf-publication-detail-grid">
         <DecisionFact label="Retained version" value={review.proposedVersion} />
@@ -418,7 +451,7 @@ function PublicationRecovery({ review }: { review: PublicationReviewState }) {
 function PublicationSavedFailure({ review }: { review: PublicationReviewState }) {
   return (
     <section className="wf-publication-outcome" aria-labelledby="publication-saved-failure-title">
-      <h4 id="publication-saved-failure-title">No version or publication was created</h4>
+      <h4 id="publication-saved-failure-title" tabIndex={-1}>No version or publication was created</h4>
       <p>{review.failureMessage}</p>
       {review.validationErrors.length ? (
         <div className="wf-publication-risks" role="alert">

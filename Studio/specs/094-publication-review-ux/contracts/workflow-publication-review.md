@@ -118,7 +118,9 @@ exact versions. Studio treats either relation's absence as unsupported for exact
 - Validate Semantic Version syntax and precedence server-side.
 - Accept only unused versions with precedence greater than the latest promoted version; forward prerelease versions are valid.
 - Reject invalid, duplicate, and non-forward requests before promotion with actionable diagnostics.
-- Bind exact-version validation to the same candidate, policy, target/concurrency, and review-token guarantees as automatic publication.
+- Bind exact-version validation to the draft identity and normalized version selection. Publication
+  target, policy, concurrency, and review-token evidence remains bound independently by publication
+  preflight; promotion and activation each repeat their authoritative checks at mutation time.
 - Preserve existing authorization and policy decisions; custom version creates no new permission.
 - Return a final confirmed version from promotion/outcome.
 
