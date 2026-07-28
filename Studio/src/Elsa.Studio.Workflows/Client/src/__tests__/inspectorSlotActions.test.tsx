@@ -269,13 +269,15 @@ function descriptor(overrides: Partial<StudioActivityDescriptor> = {}): StudioAc
 }
 
 describe("InspectorPanel tabbed layout", () => {
-  it("moves Node ID and Activity type into Details without the Activity version", () => {
+  it("keeps Node ID under the title and Activity type in Details without the Activity version", () => {
     const container = render(panelElement([]));
+    const context = container.querySelector<HTMLElement>(".wf-inspector-context")!;
+    expect(context.textContent).toContain("Node ID");
+    expect(context.textContent).toContain("foreach-1");
     activateTab(container, "Details");
     const detailsPanel = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
 
-    expect(detailsPanel.textContent).toContain("Node ID");
-    expect(detailsPanel.textContent).toContain("foreach-1");
+    expect(detailsPanel.textContent).not.toContain("Node ID");
     expect(detailsPanel.textContent).toContain("Activity type");
     expect(detailsPanel.textContent).toContain("Elsa.Activities.ForEach.Activities.ForEach");
     expect(detailsPanel.textContent).not.toContain("Activity version");

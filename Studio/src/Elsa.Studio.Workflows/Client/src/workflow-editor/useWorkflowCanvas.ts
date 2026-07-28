@@ -22,6 +22,7 @@ import {
   buildCanvas,
   buildSequenceEdges,
   buildUnsupportedActivityCanvas,
+  collectActivityNodeIds,
   createActivityNode,
   createWorkflowEdge,
   getActivityDisplay,
@@ -48,6 +49,7 @@ import {
   type BpmnNodeData
 } from "../bpmn/bpmnAdapter";
 import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
+import { removeActivityPresentation } from "../activityPresentation";
 import { activityDragDataType, pointerDragThreshold } from "./constants";
 import {
   clientPointFromEvent,
@@ -175,16 +177,26 @@ export function useWorkflowCanvas({
     }
 
     const canvas = isUnsupportedDesigner
-      ? buildUnsupportedActivityCanvas(scopeOwner, catalog, draft?.layout ?? [], formatActivitySummary)
+      ? buildUnsupportedActivityCanvas(
+          scopeOwner,
+          catalog,
+          draft?.layout ?? [],
+          formatActivitySummary,
+          draft?.activityPresentation)
       : scope
         ? scope.slot.mode === "bpmn"
           ? buildBpmnCanvas(scope, catalog, draft?.layout ?? []) as unknown as { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }
-          : buildCanvas(scope, catalog, draft?.layout ?? [], formatActivitySummary)
+          : buildCanvas(
+              scope,
+              catalog,
+              draft?.layout ?? [],
+              formatActivitySummary,
+              draft?.activityPresentation)
         : { nodes: [], edges: [] };
     pendingViewportNodeIdsRef.current = canvas.nodes.map(node => node.id);
     setNodes(canvas.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current })));
     setEdges(canvas.edges as WorkflowEdge[]);
-  }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner, scopeViewportKey]);
+  }, [catalog, draft?.activityPresentation, draft?.layout, isUnsupportedDesigner, scope, scopeOwner, scopeViewportKey]);
 
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // document's selected node id. Keep both projections aligned so Enter/Space has the same result as a
@@ -252,7 +264,12 @@ export function useWorkflowCanvas({
         ]
       : layout, []);
 
-  const commitCanvas = useCallback((nextNodes: Node<WorkflowNodeData>[], nextEdges: WorkflowEdge[], additionalActivities: ActivityNode[] = []) => {
+  const commitCanvas = useCallback((
+    nextNodes: Node<WorkflowNodeData>[],
+    nextEdges: WorkflowEdge[],
+    additionalActivities: ActivityNode[] = [],
+    removedNodeIds: Iterable<string> = []
+  ) => {
     if (isUnsupportedDesigner) return;
 
     editDraft(({ draft: current, frames: currentFrames }) => {
@@ -278,6 +295,9 @@ export function useWorkflowCanvas({
       return {
         ...current,
         layout: nextLayout,
+        activityPresentation: removeActivityPresentation(
+          current.activityPresentation ?? [],
+          removedNodeIds),
         state: {
           ...current.state,
           rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner, catalogByVersion)
@@ -389,9 +409,15 @@ export function useWorkflowCanvas({
         ? [next]
         : [...currentScope.slot.activities, next];
       const updatedRoot = updateScopeActivities(current.state.rootActivity, currentFrames, nextActivities, catalogByVersion);
+      const displacedNodeIds = currentScope.slot.cardinality === "single"
+        ? currentScope.slot.activities.flatMap(activity => [...collectActivityNodeIds(activity, catalogByVersion)])
+        : [];
 
       return {
         ...current,
+        activityPresentation: removeActivityPresentation(
+          current.activityPresentation ?? [],
+          displacedNodeIds),
         layout: pinLayout(current.layout, next.nodeId, position),
         state: { ...current.state, rootActivity: updatedRoot }
       };
@@ -772,6 +798,14 @@ export function useWorkflowCanvas({
     if (isUnsupportedDesigner) return;
     if (deletedNodes.length === 0) return;
     const deletedIds = new Set(deletedNodes.map(node => node.id));
+    const removedActivityNodeIds = deletedNodes.reduce((result, node) => {
+      const boundNodeId = (node.data as unknown as BpmnNodeData).boundActivity?.nodeId;
+      const activityNodeId = boundNodeId ?? node.id;
+      const activity = scope?.slot.activities.find(candidate => candidate.nodeId === activityNodeId);
+      return activity
+        ? collectActivityNodeIds(activity, catalogByVersion, result)
+        : result.add(activityNodeId);
+    }, new Set<string>());
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
     const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
@@ -782,7 +816,7 @@ export function useWorkflowCanvas({
       select(nextFocus?.id ?? null);
       if (nextFocus) queueCanvasNodeFocus(nextFocus.id);
     }
-    commitCanvas(nextNodes, nextEdges);
+    commitCanvas(nextNodes, nextEdges, [], removedActivityNodeIds);
   };
 
   const onEdgesDelete = (deletedEdges: WorkflowEdge[]) => {

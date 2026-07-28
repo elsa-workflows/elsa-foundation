@@ -8,6 +8,7 @@ import { StudioActionNotice } from "../feedback/ActionNotice";
 import { StatusPill } from "../feedback/StatusPill";
 import { StudioListContainer, StudioListRow } from "../list/ListRow";
 import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
+import { CopyableIdentifier } from "../identity/CopyableIdentifier";
 
 let cleanup: (() => void) | null = null;
 
@@ -15,6 +16,8 @@ afterEach(() => {
   cleanup?.();
   cleanup = null;
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function mount(node: React.ReactElement): HTMLElement {
@@ -46,6 +49,75 @@ describe("StudioButton", () => {
     expect(button.className).toBe("studio-button danger");
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(clicks).toBe(1);
+  });
+});
+
+describe("CopyableIdentifier", () => {
+  it("exposes the exact identifier and copies it with a local accessible confirmation", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "activity-node-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Node ID" value={value} />);
+
+    const renderedValue = host.querySelector<HTMLElement>(".studio-copyable-identifier__value")!;
+    expect(renderedValue.title).toBe(value);
+    expect(renderedValue.getAttribute("aria-label")).toBe(`Node ID: ${value}`);
+
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+  });
+
+  it("announces a local failure when clipboard and fallback copying are unavailable", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false)
+    });
+    const host = mount(<CopyableIdentifier label="Activity Type" value="Elsa.WriteLine" />);
+
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent)
+        .toBe("Could not copy Activity Type"));
+    Reflect.deleteProperty(document, "execCommand");
+  });
+
+  it("middle-truncates constrained identifiers while retaining and copying the exact value", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(70);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      font: "",
+      measureText: (text: string) => ({ width: text.length * 8 })
+    } as CanvasRenderingContext2D);
+    const value = "activity-node-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Node ID" value={value} />);
+    const renderedValue = host.querySelector<HTMLElement>(".studio-copyable-identifier__value")!;
+
+    await vi.waitFor(() => expect(renderedValue.textContent).toContain("…"));
+    expect(renderedValue.textContent).not.toBe(value);
+    expect(renderedValue.title).toBe(value);
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+  });
+
+  it("resets the copied glyph after its visible confirmation interval", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    const host = mount(<CopyableIdentifier label="Node ID" value="node-1" />);
+    const button = host.querySelector<HTMLButtonElement>("button")!;
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+    await vi.waitFor(
+      () => expect(host.querySelector("[role='status']")?.textContent).toBe(""),
+      { timeout: 2_000 });
   });
 });
 

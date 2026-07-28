@@ -185,6 +185,40 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
+  it("uses frozen source-reference wording before the live catalog fallback", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={[{ ...catalog[0]!, displayName: "Renamed live catalog label" }]}
+        executableNodeFacts={{
+          executableNodeId: "node-1",
+          authoredActivityId: "write-line",
+          activityType: activity.activityType,
+          activityTypeVersion: activity.activityTypeVersion,
+          structureKind: null,
+          available: true,
+          outputCaptures: [],
+          authoredInputsAccess: "visible",
+          authoredInputs: [],
+          inputBindings: [],
+          presentation: {
+            nodeId: "write-line",
+            displayName: "Frozen notify step",
+            description: "Wording captured with this source reference."
+          }
+        }}
+      />
+    );
+
+    expect(container.querySelector(".wf-activity-overview h4")?.textContent)
+      .toBe("Frozen notify step");
+    expect(container.querySelector(".wf-activity-overview-description")?.textContent)
+      .toBe("Wording captured with this source reference.");
+    expect(container.textContent).not.toContain("Renamed live catalog label");
+  });
+
   it("defers reusable Boundary inspection to its independently lazy Runtime Evidence chunk", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue({
       ...inspection([]),

@@ -3,9 +3,12 @@ import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, Li
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
+  collectActivityNodeIds,
   createActivityNode,
+  findActivityNode,
   findNodeScopePath,
   getActivityDisplay,
+  getChildSlots,
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
@@ -13,6 +16,12 @@ import {
   updateActivity,
   type ChildSlot
 } from "../workflowAdapter";
+import {
+  indexActivityPresentation,
+  removeActivityPresentation,
+  resolveActivityLabel,
+  updateActivityPresentation
+} from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
@@ -334,9 +343,16 @@ export function WorkflowEditor({
       if (!current?.state.rootActivity) return null;
       const normalizedRoot = normalizeActivityStructures(current.state.rootActivity, catalogByVersion);
       if (!normalizedRoot || normalizedRoot === current.state.rootActivity) return null;
+      const previousNodeIds = collectActivityNodeIds(current.state.rootActivity, catalogByVersion);
+      const normalizedNodeIds = collectActivityNodeIds(normalizedRoot, catalogByVersion);
+      const removedNodeIds = new Set(
+        [...previousNodeIds].filter(nodeId => !normalizedNodeIds.has(nodeId)));
 
       return {
         ...current,
+        activityPresentation: removeActivityPresentation(
+          current.activityPresentation ?? [],
+          removedNodeIds),
         state: {
           ...current.state,
           rootActivity: normalizedRoot
@@ -472,6 +488,12 @@ export function WorkflowEditor({
       if (!current || !rootActivity) return null;
       return {
         ...current,
+        activityPresentation: removeActivityPresentation(
+          current.activityPresentation ?? [],
+          slot.activities.reduce(
+            (nodeIds, oldActivity) =>
+              collectActivityNodeIds(oldActivity, catalogByVersion, nodeIds),
+            new Set<string>())),
         state: {
           ...current.state,
           rootActivity: updateActivity(rootActivity, ownerNodeId, owner => replaceSlotActivities(owner, slot, [next]), catalogByVersion)
@@ -505,6 +527,22 @@ export function WorkflowEditor({
       };
     });
   }, [catalogByVersion, editDraft]);
+
+  const updateSelectedPresentation = useCallback((
+    presentation: { displayName?: string | null; description?: string | null }
+  ) => {
+    const nodeId = inspectedNode?.nodeId;
+    if (!nodeId) return;
+    editDraft(({ draft: current }) => current
+      ? {
+          ...current,
+          activityPresentation: updateActivityPresentation(
+            current.activityPresentation ?? [],
+            nodeId,
+            presentation)
+        }
+      : null);
+  }, [editDraft, inspectedNode?.nodeId]);
 
   // Rewrites the current scope owner's BPMN payload through `apply` (inspector edits for pure
   // elements and their outbound sequence flows).
@@ -559,7 +597,7 @@ export function WorkflowEditor({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `${details?.definition.name || "workflow"}.bpmn`;
+      anchor.download = `${details?.definition?.name || "workflow"}.bpmn`;
       anchor.click();
       URL.revokeObjectURL(url);
       setError("");
@@ -568,7 +606,7 @@ export function WorkflowEditor({
       setStatus("");
       setError("BPMN export failed.");
     }
-  }, [context, details?.definition.name, draft, setError, setStatus]);
+  }, [context, details?.definition?.name, draft, setError, setStatus]);
 
   const importBpmn = useCallback(async (file: File) => {
     const rootActivity = draft?.state.rootActivity;
@@ -680,9 +718,34 @@ export function WorkflowEditor({
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
+  const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
+  const visibleFrames = frames.map(frame => {
+    const owner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+    const slot = owner
+      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === frame.slotId)
+      : undefined;
+    const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
+    return owner && slot
+      ? {
+          ...frame,
+          label: slotCrumbLabel(
+            resolveActivityLabel(
+              presentationByNodeId.get(owner.nodeId),
+              catalogItem,
+              catalogItem?.activityTypeKey ?? owner.activityVersionId),
+            slot)
+        }
+      : frame;
+  });
+  const inspectedPresentation = inspectedNode
+    ? presentationByNodeId.get(inspectedNode.nodeId)
+    : undefined;
   const inspectedLabel = inspectedNode
     ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
-      ?? (inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode.nodeId))
+      ?? resolveActivityLabel(
+        inspectedPresentation,
+        inspectedCatalogItem,
+        inspectedCatalogItem?.activityTypeKey ?? inspectedNode.activityVersionId))
     : "";
 
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
@@ -750,6 +813,7 @@ export function WorkflowEditor({
           selectedNode={inspectedNode}
           selectedNodeLabel={inspectedLabel}
           selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
+          selectedPresentation={inspectedPresentation}
           selectedDescriptor={inspectedDescriptor}
           selectedNodeAvailability={inspectedNodeAvailability}
           selectedReusableDefinitionId={inspectedReusableDefinitionId}
@@ -778,6 +842,7 @@ export function WorkflowEditor({
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
+          onSelectedPresentationChange={updateSelectedPresentation}
           onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}
           onReplaceSlotActivity={replaceSlotActivity}
@@ -1036,7 +1101,7 @@ export function WorkflowEditor({
             <WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} />
           ) : (
           <>
-          <ScopeBreadcrumb frames={frames} onNavigate={next => navigateToScope(next, null)} />
+          <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
           <GraphAuthoringCanvas
             canvasRef={canvasRef}
             canvasProps={{

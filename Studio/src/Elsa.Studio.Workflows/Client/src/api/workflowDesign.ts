@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { scopedVariableSignature } from "../scopedVariables";
+import { normalizeActivityPresentation } from "../activityPresentation";
 import type { ActivityCatalogLookup } from "../workflowAdapter";
 import type {
   ActivityInputOptionsResponse,
@@ -293,7 +294,11 @@ export async function getWorkflowDefinitionVersion(context: StudioEndpointContex
     "workflow-versions",
     { versionId });
   const details = await context.http.getJson<WorkflowDefinitionVersionDetails>(path);
-  return { ...details, state: expandStateFromWire(details.state) };
+  return {
+    ...details,
+    state: expandStateFromWire(details.state),
+    activityPresentation: normalizeActivityPresentation(details.activityPresentation)
+  };
 }
 
 export async function updateDraft(context: StudioEndpointContext, draft: WorkflowDraft) {
@@ -304,7 +309,8 @@ export async function updateDraft(context: StudioEndpointContext, draft: Workflo
     { draftId: draft.id });
   const saved = await context.http.putJson<WorkflowDraftResponse>(path, {
     state: canonicalizeStateForWire(draft.state),
-    layout: draft.layout
+    layout: draft.layout,
+    activityPresentation: normalizeActivityPresentation(draft.activityPresentation)
   });
   return normalizeWorkflowDraft(saved);
 }
@@ -504,6 +510,7 @@ function normalizeWorkflowDraft(draft: WorkflowDraftResponse): WorkflowDraft {
   return {
     ...draft,
     state: expandStateFromWire(draft.state),
+    activityPresentation: normalizeActivityPresentation(draft.activityPresentation),
     validationErrors: Array.isArray(draft.validationErrors) ? draft.validationErrors : []
   };
 }

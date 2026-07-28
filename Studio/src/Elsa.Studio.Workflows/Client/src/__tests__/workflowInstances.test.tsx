@@ -23,6 +23,16 @@ describe("Runtime-pinned workflow instance rendering", () => {
         inputBindings: [],
         childSlots: []
       },
+      chosenReference: {
+        sourceReferenceId: "reference-1",
+        selection: "requested",
+        layout: [],
+        activityPresentation: [{
+          executableNodeId: "exec-root",
+          displayName: "Frozen root",
+          description: "Published wording"
+        }]
+      },
       references: []
     } satisfies WorkflowExecutableDetails;
     const details = {
@@ -50,6 +60,11 @@ describe("Runtime-pinned workflow instance rendering", () => {
       activityVersionId: "executable-missing:Example.Root@1.0.0"
     });
     expect(projected.id).toBe("draft:synthetic");
+    expect(projected.activityPresentation).toEqual([{
+      nodeId: "authored-root",
+      displayName: "Frozen root",
+      description: "Published wording"
+    }]);
   });
 
   it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {

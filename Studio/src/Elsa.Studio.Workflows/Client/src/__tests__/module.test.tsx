@@ -587,7 +587,8 @@ describe("workflows module", () => {
     const writeLine = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
       .find(button => button.textContent?.includes("Write Line"));
     expect(writeLine?.getAttribute("role")).toBe("treeitem");
-    expect(writeLine?.getAttribute("title")).toBe("Writes a line to the console.");
+    expect(writeLine?.getAttribute("title")).toBe(
+      "Writes a line to the console. — Exact version 1.0.0");
     expect(writeLine?.textContent).toContain("Writes a line to the console.");
     expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
     expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
@@ -1853,7 +1854,18 @@ describe("workflows module", () => {
       if (url.includes("/executables/artifact-1")) {
         return url.includes("ref=ref-0")
           ? response(executableDetail({ chosenReference: { sourceReferenceId: "ref-0", selection: "requested", layout: [] } }))
-          : response(executableDetail());
+          : response(executableDetail({
+              chosenReference: {
+                sourceReferenceId: "ref-1",
+                selection: "newest-live",
+                layout: [{ nodeId: "write-line-1", x: 40, y: 20 }, { nodeId: "send-email-1", x: 320, y: 20 }],
+                activityPresentation: [{
+                  executableNodeId: "exec-write-line-1",
+                  displayName: "Log greeting",
+                  description: "Writes the user-facing greeting to the console."
+                }]
+              }
+            }));
       }
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence", displayName: "Sequence" }),
@@ -1873,10 +1885,15 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Executable Inspector");
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
-    await waitForText(container, "Write Line");
+    await waitForText(container, "Log greeting");
     await waitForText(container, "Not available in this environment");
     const ghost = container.querySelector(".wf-node-ghost");
     expect(ghost?.textContent).toContain("SendEmail");
+    const namedNode = [...container.querySelectorAll<HTMLElement>(".react-flow__node")]
+      .find(node => node.textContent?.includes("Log greeting"));
+    expect(namedNode).toBeTruthy();
+    await click(namedNode!);
+    expect(container.textContent).toContain("Writes the user-facing greeting to the console.");
 
     // The reference is current with the definition's latest version: no drift caption, source link enabled.
     expect(container.textContent).not.toContain("the definition's latest is");

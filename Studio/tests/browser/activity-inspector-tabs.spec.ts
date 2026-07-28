@@ -18,6 +18,18 @@ test("activity Inspector tabs keep fixed context, scroll independently, and surv
   await expect(context).toContainText("No longer available for new use");
   await expect(innerTabs).toHaveText(["Inputs", "Outputs", "Variables", "Slots", "Details", "Version"]);
   await expect(inputs).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByText("Node ID", { exact: true })).toBeVisible();
+  await inspector.getByRole("button", { name: "Copy Node ID" }).click();
+  await expect(inspector.getByRole("status")).toHaveText("Node ID copied");
+
+  await inspector.getByRole("tab", { name: "Details" }).click();
+  const displayName = inspector.getByLabel("Display name");
+  const description = inspector.getByLabel("Description");
+  await displayName.fill("Notify the buyer");
+  await description.fill("Send the order confirmation after payment.");
+  await expect(displayName).toHaveValue("Notify the buyer");
+  await expect(description).toHaveValue("Send the order confirmation after payment.");
+  await inputs.click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   const inputsPanel = inspector.locator("[role='tabpanel']:not([hidden])");

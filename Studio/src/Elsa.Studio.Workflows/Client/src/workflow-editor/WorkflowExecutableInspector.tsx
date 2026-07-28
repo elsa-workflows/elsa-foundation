@@ -15,6 +15,7 @@ import type {
   WorkflowExecutableReference
 } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
+import { resolveActivityLabel } from "../activityPresentation";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -183,7 +184,8 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
       data.activityCatalog,
       data.inputSources?.authoredInputs ?? [],
       data.inputSources?.compiledInputs ?? [],
-      data.inputSources?.accessState ?? data.inputSources?.access ?? null
+      data.inputSources?.accessState ?? data.inputSources?.access ?? null,
+      data.detail.chosenReference?.activityPresentation ?? []
     ) : null,
     [data]
   );
@@ -290,6 +292,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
           ) : <div className="wf-side-resize-spacer" />}
           <WorkflowExecutableSidePanel
             detail={data.detail}
+            activityCatalog={data.activityCatalog}
             graph={graph}
             chosenReference={chosenReference}
             sourceDefinition={sourceDefinition}
@@ -379,8 +382,18 @@ export function buildExecutableInspectorCanvas(
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
   const baseCanvas = support === "unsupported" || !scope
-    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, layout, formatActivitySummary)
-    : buildCanvas(scope, activityCatalog, layout, formatActivitySummary);
+    ? buildUnsupportedActivityCanvas(
+        scopeOwner,
+        activityCatalog,
+        layout,
+        formatActivitySummary,
+        graph.activityPresentation)
+    : buildCanvas(
+        scope,
+        activityCatalog,
+        layout,
+        formatActivitySummary,
+        graph.activityPresentation);
 
   const nodes = baseCanvas.nodes.map(node => {
     const fact = graph.factsByNodeId.get(node.id);
@@ -394,7 +407,12 @@ export function buildExecutableInspectorCanvas(
       selected,
       data: {
         ...node.data,
-        ...(ghost && fact ? { ghost: true, label: ghostNodeLabel(fact.activityType) } : {}),
+        ...(ghost && fact ? {
+          ghost: true,
+          label: graph.activityPresentation.some(record => record.nodeId === node.id)
+            ? node.data.label
+            : ghostNodeLabel(fact.activityType)
+        } : {}),
         onEnterSlot: (slot: ChildSlot) => {
           const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
           if (plan) onNavigateToScope(plan.frames);
@@ -406,8 +424,9 @@ export function buildExecutableInspectorCanvas(
   return decorateWorkflowCanvasElements(nodes, edges);
 }
 
-function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference, collapsed, expanded, maximized, onToggleCollapsed, onToggleMaximized }: {
+function WorkflowExecutableSidePanel({ detail, activityCatalog, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference, collapsed, expanded, maximized, onToggleCollapsed, onToggleMaximized }: {
   detail: WorkflowExecutableDetails;
+  activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
   chosenReference: WorkflowExecutableReference | null;
   sourceDefinition: SourceDefinitionState;
@@ -426,6 +445,18 @@ function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDef
     { id: "references", title: `References (${detail.references.length})`, order: 1, icon: <ListTree size={14} />, render: () => null }
   ];
   const selectedFact = selectedNodeId ? graph.factsByNodeId.get(selectedNodeId) : null;
+  const selectedPresentation = selectedNodeId
+    ? graph.activityPresentation.find(record => record.nodeId === selectedNodeId)
+    : null;
+  const selectedCatalogItem = selectedFact
+    ? activityCatalog.find(item =>
+        item.activityTypeKey === selectedFact.activityType
+        && item.version === selectedFact.activityTypeVersion)
+      ?? activityCatalog.find(item => item.activityTypeKey === selectedFact.activityType)
+    : null;
+  const selectedDisplayName = selectedFact
+    ? resolveActivityLabel(selectedPresentation, selectedCatalogItem, selectedFact.activityType)
+    : null;
   const sourceDraft = sourceDefinition.status === "ready" ? sourceDefinition.draft : null;
   const sourceDefinitionId = sourceDefinition.status === "ready" ? sourceDefinition.definition.id : null;
   const currentDraftVersionId = useMemo(
@@ -525,7 +556,11 @@ function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDef
                     hasDraftEquivalence={hasDraftEquivalence}
                   />
                 </section>
-                <WorkflowExecutableNodePanel fact={selectedFact ?? null} />
+                <WorkflowExecutableNodePanel
+                  fact={selectedFact ?? null}
+                  displayName={selectedDisplayName}
+                  description={selectedPresentation?.description}
+                />
               </>
             ) : (
               <section className="wf-instance-section">
@@ -547,13 +582,29 @@ function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDef
 // Read-only view of the selected node's Execution Material facts: type identity, input-binding
 // summaries (literals/expressions arrive pre-truncated; reference-typed values only name their
 // type/id, never the secret), each binding's pinned conversion plan, and output captures with theirs.
-function WorkflowExecutableNodePanel({ fact }: { fact: ExecutableGraphNodeFacts | null }) {
+function WorkflowExecutableNodePanel({
+  fact,
+  displayName,
+  description
+}: {
+  fact: ExecutableGraphNodeFacts | null;
+  displayName: string | null;
+  description?: string | null;
+}) {
   if (!fact) return null;
 
   return (
     <section className="wf-instance-section">
       <h4>Selected node</h4>
       <dl className="wf-instance-meta">
+        <dt>Display name</dt>
+        <dd>{displayName}</dd>
+        {description ? (
+          <>
+            <dt>Description</dt>
+            <dd>{description}</dd>
+          </>
+        ) : null}
         <dt>Type</dt>
         <dd>{fact.activityType} <small>{fact.activityTypeVersion}</small></dd>
         <dt>Executable node</dt>

@@ -109,6 +109,27 @@ describe("buildExecutableActivityGraph", () => {
     });
   });
 
+  it("keeps repeated authored nodes distinct by executable identity and presentation", () => {
+    const graph = buildExecutableActivityGraph(sequenceRoot([
+      executableNode({ executableNodeId: "exec-1", authoredActivityId: "shared-child" }),
+      executableNode({ executableNodeId: "exec-2", authoredActivityId: "shared-child" })
+    ]), catalog, [], [], null, [
+      { executableNodeId: "exec-1", displayName: "First placement" },
+      { executableNodeId: "exec-2", displayName: "Second placement" }
+    ]);
+
+    const children = graph.root.structure?.payload.activities as ActivityNode[];
+    expect(children.map(child => child.nodeId)).toEqual(["exec-1", "exec-2"]);
+    expect(graph.activityPresentation).toEqual([
+      { nodeId: "exec-1", displayName: "First placement", description: undefined },
+      { nodeId: "exec-2", displayName: "Second placement", description: undefined }
+    ]);
+    expect(findExecutableNodeFacts(graph, { executableNodeId: "exec-1" })?.presentation?.displayName)
+      .toBe("First placement");
+    expect(findExecutableNodeFacts(graph, { executableNodeId: "exec-2" })?.presentation?.displayName)
+      .toBe("Second placement");
+  });
+
   it("falls back to generic slots when the catalog cannot supply a structure facet", () => {
     const graph = buildExecutableActivityGraph(executableNode({
       authoredActivityId: "custom-1",

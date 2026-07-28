@@ -311,6 +311,7 @@ export interface StudioWorkflowContextActivity {
   id: string;
   type: string;
   displayName?: string;
+  description?: string;
 }
 
 export interface StudioWorkflowContextConnection {

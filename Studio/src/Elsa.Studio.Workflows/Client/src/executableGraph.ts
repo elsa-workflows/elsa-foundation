@@ -3,10 +3,12 @@ import type {
   ActivityCatalogItem,
   ActivityNode,
   ActivityNodeStructure,
+  ActivityPresentationRecord,
   WorkflowExecutableChildSlot,
   WorkflowExecutableConnection,
   WorkflowExecutableConnectionEndpoint,
   WorkflowExecutableAuthoredInput,
+  WorkflowExecutableActivityPresentation,
   WorkflowExecutableCompiledInput,
   WorkflowExecutableInputBinding,
   WorkflowExecutableNode,
@@ -37,11 +39,13 @@ export interface ExecutableGraphNodeFacts {
   outputCaptures: WorkflowExecutableOutputCapture[];
   authoredInputs: WorkflowExecutableAuthoredInput[];
   authoredInputsAccess: string | null;
+  presentation?: ActivityPresentationRecord;
 }
 
 export interface ExecutableActivityGraph {
   root: ActivityNode;
   factsByNodeId: Map<string, ExecutableGraphNodeFacts>;
+  activityPresentation: ActivityPresentationRecord[];
 }
 
 export function buildExecutableActivityGraph(
@@ -49,7 +53,8 @@ export function buildExecutableActivityGraph(
   catalog: ActivityCatalogItem[],
   authoredInputs: WorkflowExecutableAuthoredInput[] = [],
   compiledInputs: WorkflowExecutableCompiledInput[] = [],
-  authoredInputsAccess: string | null = null
+  authoredInputsAccess: string | null = null,
+  activityPresentation: WorkflowExecutableActivityPresentation[] = []
 ): ExecutableActivityGraph {
   const catalogByType = new Map<string, ActivityCatalogItem[]>();
   for (const item of catalog) {
@@ -57,6 +62,10 @@ export function buildExecutableActivityGraph(
   }
 
   const factsByNodeId = new Map<string, ExecutableGraphNodeFacts>();
+  const presentationByExecutableNodeId = new Map(
+    activityPresentation.map(record => [record.executableNodeId, record]));
+  const nodeIdsByExecutableId = selectGraphNodeIds(root);
+  const adaptedPresentation: ActivityPresentationRecord[] = [];
   const authoredInputsByNodeId = new Map<string, WorkflowExecutableAuthoredInput[]>();
   for (const input of authoredInputs) {
     authoredInputsByNodeId.set(input.executableNodeId, [...(authoredInputsByNodeId.get(input.executableNodeId) ?? []), input]);
@@ -68,7 +77,19 @@ export function buildExecutableActivityGraph(
 
   const adapt = (node: WorkflowExecutableNode): ActivityNode => {
     const catalogItem = resolveExecutableCatalogItem(node, catalogByType);
-    const nodeId = node.authoredActivityId || node.executableNodeId;
+    // Authored ids align ordinary nodes with the authored layout sidecar. Repeated reusable
+    // placements can legitimately project the same authored id more than once, however; those
+    // occurrences must use their executable ids so facts, labels, and React node identities remain
+    // distinct instead of overwriting one another.
+    const nodeId = nodeIdsByExecutableId.get(node.executableNodeId) ?? node.executableNodeId;
+    const presentation = presentationByExecutableNodeId.get(node.executableNodeId);
+    const adaptedNodePresentation = presentation
+      ? {
+          nodeId,
+          displayName: presentation.displayName,
+          description: presentation.description
+        }
+      : undefined;
     factsByNodeId.set(nodeId, {
       executableNodeId: node.executableNodeId,
       authoredActivityId: node.authoredActivityId,
@@ -79,8 +100,10 @@ export function buildExecutableActivityGraph(
       inputBindings: compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [],
       outputCaptures: node.outputCaptures ?? [],
       authoredInputs: authoredInputsByNodeId.get(node.executableNodeId) ?? [],
-      authoredInputsAccess
+      authoredInputsAccess,
+      presentation: adaptedNodePresentation
     });
+    if (adaptedNodePresentation) adaptedPresentation.push(adaptedNodePresentation);
 
     return {
       nodeId,
@@ -93,7 +116,42 @@ export function buildExecutableActivityGraph(
     };
   };
 
-  return { root: adapt(root), factsByNodeId };
+  return { root: adapt(root), factsByNodeId, activityPresentation: adaptedPresentation };
+}
+
+function selectGraphNodeIds(root: WorkflowExecutableNode) {
+  const nodes: WorkflowExecutableNode[] = [];
+  const authoredIdCounts = new Map<string, number>();
+  const visit = (node: WorkflowExecutableNode) => {
+    nodes.push(node);
+    if (node.authoredActivityId) {
+      authoredIdCounts.set(
+        node.authoredActivityId,
+        (authoredIdCounts.get(node.authoredActivityId) ?? 0) + 1);
+    }
+    for (const slot of node.childSlots ?? []) {
+      for (const child of slot.activities ?? []) visit(child);
+    }
+  };
+  visit(root);
+  const preferredIds = new Map<WorkflowExecutableNode, string>();
+  const preferredIdCounts = new Map<string, number>();
+  for (const node of nodes) {
+    const preferredId = node.authoredActivityId &&
+      authoredIdCounts.get(node.authoredActivityId) === 1
+      ? node.authoredActivityId
+      : node.executableNodeId;
+    preferredIds.set(node, preferredId);
+    preferredIdCounts.set(preferredId, (preferredIdCounts.get(preferredId) ?? 0) + 1);
+  }
+
+  return new Map(nodes.map(node => {
+    const preferredId = preferredIds.get(node) ?? node.executableNodeId;
+    return [
+      node.executableNodeId,
+      preferredIdCounts.get(preferredId) === 1 ? preferredId : node.executableNodeId
+    ] as const;
+  }));
 }
 
 export function findExecutableNodeFacts(
@@ -101,11 +159,16 @@ export function findExecutableNodeFacts(
   identity: { executableNodeId?: string | null; authoredActivityId?: string | null } | null | undefined
 ) {
   if (!graph || !identity) return undefined;
+  if (identity.executableNodeId) {
+    const byExecutableId = [...graph.factsByNodeId.values()]
+      .find(fact => fact.executableNodeId === identity.executableNodeId);
+    if (byExecutableId) return byExecutableId;
+  }
   if (identity.authoredActivityId) {
     const byAuthoredId = graph.factsByNodeId.get(identity.authoredActivityId);
     if (byAuthoredId) return byAuthoredId;
   }
-  return [...graph.factsByNodeId.values()].find(fact => fact.executableNodeId === identity.executableNodeId);
+  return undefined;
 }
 
 // True when the graph node was minted for a catalog miss ("not available in this environment").

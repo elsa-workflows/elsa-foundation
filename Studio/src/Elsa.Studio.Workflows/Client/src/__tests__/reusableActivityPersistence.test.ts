@@ -46,7 +46,8 @@ describe("reusable activity draft persistence", () => {
 
     expect(putJson).toHaveBeenCalledWith("/design/workflows/drafts/workflow-draft-1", {
       state,
-      layout: []
+      layout: [],
+      activityPresentation: []
     });
     expect(saved.state.strategyOptions).toEqual(state.strategyOptions);
   });

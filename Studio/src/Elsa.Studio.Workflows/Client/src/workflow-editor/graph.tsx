@@ -4,7 +4,7 @@ import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, type ChildSlot, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
-import { formatActivityVersion, renderActivityIcon, truncate } from "../workflowFormatting";
+import { renderActivityIcon, truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext } from "./contexts";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
@@ -22,7 +22,6 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
-  const version = nodeData.activityDefinitionVersion ? formatActivityVersion(nodeData.activityDefinitionVersion) : null;
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   const slotNavigation = React.useContext(WorkflowSlotNavigationContext);
@@ -32,6 +31,8 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     <div
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : ""].filter(Boolean).join(" ")}
       data-icon={nodeData.icon ?? "activity"}
+      title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
+      aria-description={nodeData.description}
     >
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       {availability ? (
@@ -42,9 +43,8 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       <div className="wf-node-content">
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
         <span className="wf-node-copy">
-          <strong>{nodeData.label}</strong>
+          <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
-          {version ? <small className="wf-node-version" title={`Exact version ${version.full}`}>v{version.short}</small> : null}
         </span>
       </div>
       {nodeData.childSlots.length > 0 ? (

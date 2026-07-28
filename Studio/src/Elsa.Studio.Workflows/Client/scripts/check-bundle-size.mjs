@@ -36,10 +36,12 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // 117.60/366.67/353.59 kB. Activity Definition graph authoring then added the small eager registry bridge
 // needed to pass shared property, expression, and graph-panel contributions into the deferred draft editor;
 // the definitions path measures 370.06 kB, so its budget gains 1 kB while the heavy designer stays deferred.
+// Per-occurrence activity presentation then added its normalization and display-label helpers to the shared
+// design adapter; CI measures the definitions path at 371.34 kB, so its budget gains 2 kB.
 const budgets = {
   entryJavaScript: 120_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 371_000,
+  definitionsLandingTotal: 373_000,
   upgradeLandingTotal: 358_000,
   individualChunk: 500_000
 };

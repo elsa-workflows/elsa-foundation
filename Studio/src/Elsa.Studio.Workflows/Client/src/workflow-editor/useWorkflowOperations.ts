@@ -416,6 +416,7 @@ export function useWorkflowOperations({
         definitionId: draftSnapshot.definitionId,
         snapshotId,
         state: draftSnapshot.state,
+        activityPresentation: draftSnapshot.activityPresentation,
         inputs
       });
       startTestRun({ draftSignature, view: nextTestRun });

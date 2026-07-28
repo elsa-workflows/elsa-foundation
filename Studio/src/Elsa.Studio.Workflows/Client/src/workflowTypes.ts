@@ -75,6 +75,7 @@ export interface WorkflowDefinitionVersionDetails {
   definition: Pick<WorkflowDefinitionSummary, "id" | "name" | "description" | "createdAt" | "lastModifiedAt">;
   state: WorkflowDefinitionState;
   layout: DesignMetadataRecord[];
+  activityPresentation?: ActivityPresentationRecord[];
 }
 
 export interface WorkflowDraft {
@@ -83,6 +84,7 @@ export interface WorkflowDraft {
   sourceVersionId?: string | null;
   state: WorkflowDefinitionState;
   layout: DesignMetadataRecord[];
+  activityPresentation?: ActivityPresentationRecord[];
   validationErrors: ValidationError[];
 }
 
@@ -152,6 +154,12 @@ export interface DesignMetadataRecord {
   width?: number | null;
   height?: number | null;
   additionalProperties?: Record<string, unknown> | null;
+}
+
+export interface ActivityPresentationRecord {
+  nodeId: string;
+  displayName?: string | null;
+  description?: string | null;
 }
 
 export interface ValidationError {
@@ -524,6 +532,7 @@ export interface StartWorkflowDraftTestRunRequest {
   definitionId: string;
   snapshotId: string;
   state: WorkflowDefinitionState;
+  activityPresentation?: ActivityPresentationRecord[];
   artifactVersion?: string | null;
   inputs?: WorkflowExecutionInputs;
 }
@@ -700,8 +709,15 @@ export interface WorkflowExecutableChosenReference {
   sourceReferenceId: string;
   selection: string;
   layout: DesignMetadataRecord[];
+  activityPresentation?: WorkflowExecutableActivityPresentation[] | null;
   authoredInputs?: WorkflowExecutableAuthoredInput[] | null;
   authoredInputsAccess?: string | null;
+}
+
+export interface WorkflowExecutableActivityPresentation {
+  executableNodeId: string;
+  displayName?: string | null;
+  description?: string | null;
 }
 
 // The executable detail response (plan §3): identity block, Execution Material node tree, the chosen

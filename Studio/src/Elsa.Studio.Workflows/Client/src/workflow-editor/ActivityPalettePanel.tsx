@@ -34,6 +34,11 @@ export function ActivityPalettePanel({
   const treeId = useId();
   const treeRef = useRef<HTMLDivElement | null>(null);
   const [focusedItemKey, setFocusedItemKey] = useState<string | null>(null);
+  const activityChoiceCounts = new Map<string, number>();
+  for (const activity of groups.flatMap(group => group.activities)) {
+    const identity = activity.activityDefinitionId ?? activity.activityTypeKey;
+    activityChoiceCounts.set(identity, (activityChoiceCounts.get(identity) ?? 0) + 1);
+  }
   const visibleItemKeys = groups.flatMap(group => {
     const categoryKey = `category:${group.category}`;
     const expanded = searching || expandedCategories.has(group.category);
@@ -128,9 +133,11 @@ export function ActivityPalettePanel({
                   const displayName = getActivityDisplay(activity);
                   const icon = resolveActivityIcon(activity);
                   const activityKey = `activity:${activity.activityVersionId}`;
-                  const version = activity.activityDefinitionVersion
-                    ? formatActivityVersion(activity.activityDefinitionVersion)
-                    : null;
+                  const version = formatActivityVersion(
+                    activity.activityDefinitionVersion ?? activity.version);
+                  const activityIdentity = activity.activityDefinitionId ?? activity.activityTypeKey;
+                  const showVersion = (activityChoiceCounts.get(activityIdentity) ?? 0) > 1;
+                  const exactVersionLabel = `Exact version ${version.full}`;
                   return (
                     <button
                       type="button"
@@ -141,7 +148,8 @@ export function ActivityPalettePanel({
                       tabIndex={activeItemKey === activityKey ? 0 : -1}
                       key={activity.activityVersionId}
                       draggable
-                      title={description || getActivityDisplay(activity)}
+                      title={[description, exactVersionLabel].filter(Boolean).join(" — ")}
+                      aria-label={`${displayName}, ${exactVersionLabel}`}
                       aria-describedby={descriptionId}
                       onClick={() => onActivityClick(activity)}
                       onDragStart={event => onActivityDragStart(event, activity)}
@@ -161,7 +169,7 @@ export function ActivityPalettePanel({
                         <strong>{displayName}</strong>
                         {description ? <small id={descriptionId}>{description}</small> : null}
                       </span>
-                      {version ? (
+                      {showVersion ? (
                         <span className="wf-palette-version" title={`Exact version ${version.full}`} aria-label={`Exact version ${version.full}`}>
                           v{version.short}
                         </span>

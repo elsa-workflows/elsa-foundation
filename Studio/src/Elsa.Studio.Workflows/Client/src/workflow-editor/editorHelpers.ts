@@ -1,12 +1,13 @@
 import type { Node } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
 import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
 import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowConnectSource, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import { resolveActivityLabel } from "../activityPresentation";
 
 export function pageItems<T>(items: T[], page: number, pageSize: number) {
   return items.slice((page - 1) * pageSize, page * pageSize);
@@ -541,7 +542,11 @@ export function resolveConnectEndSource(
 export { clientPointFromEvent };
 
 export function getDraftSignature(draft: WorkflowDraft) {
-  return JSON.stringify({ state: draft.state, layout: draft.layout });
+  return JSON.stringify({
+    state: draft.state,
+    layout: draft.layout,
+    activityPresentation: draft.activityPresentation
+  });
 }
 
 export function getDraftRevision(draft: WorkflowDraft) {
@@ -569,18 +574,34 @@ export function describeSlotContents(slot: ChildSlot, catalogByVersion?: Map<str
   return `${count} activit${count === 1 ? "y" : "ies"}`;
 }
 
-export function collectWorkflowContextActivities(activity: ActivityNode | null | undefined, catalogByVersion: Map<string, ActivityCatalogItem>, result: Array<{ id: string; type: string; displayName?: string }> = []) {
+export function collectWorkflowContextActivities(
+  activity: ActivityNode | null | undefined,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  result: Array<{ id: string; type: string; displayName?: string; description?: string }> = [],
+  presentationByNodeId: Map<string, ActivityPresentationRecord> = new Map()
+) {
   if (!activity) return result;
 
   const catalogItem = catalogByVersion.get(activity.activityVersionId);
+  const presentation = presentationByNodeId.get(activity.nodeId);
   result.push({
     id: activity.nodeId,
     type: catalogItem?.activityTypeKey ?? activity.activityVersionId,
-    displayName: catalogItem ? getActivityDisplay(catalogItem) : undefined
+    displayName: resolveActivityLabel(
+      presentation,
+      catalogItem,
+      catalogItem?.activityTypeKey ?? activity.activityVersionId),
+    description: presentation?.description?.trim() || undefined
   });
 
   for (const slot of getChildSlots(activity, catalogByVersion)) {
-    for (const child of slot.activities) collectWorkflowContextActivities(child, catalogByVersion, result);
+    for (const child of slot.activities) {
+      collectWorkflowContextActivities(
+        child,
+        catalogByVersion,
+        result,
+        presentationByNodeId);
+    }
   }
 
   return result;
@@ -613,6 +634,9 @@ export function cloneWorkflowDraftForUndo(draft: WorkflowDraft) {
 }
 
 export function createDraftSnapshotId(draft: WorkflowDraft) {
+  // Test Run snapshot identity describes executable behavior. Presentation and canvas layout still
+  // participate in autosave/undo through getDraftSignature, but must not mint a different behavioral
+  // snapshot for an otherwise identical workflow.
   return `${draft.id}-${hashString(JSON.stringify(draft.state))}`;
 }
 

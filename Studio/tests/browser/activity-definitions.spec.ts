@@ -706,6 +706,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   });
   expect(JSON.stringify(journey.submittedRoot)).not.toContain("activityDefinition");
   await expect(page.getByRole("button", { name: /Published browser activity exact version 2\.0\.0/ })).toBeVisible();
+  await expect(page.locator(".wf-node-version")).toHaveCount(0);
   const inspector = page.getByRole("complementary", { name: "Activity inspector" });
   await expect(inspector).toContainText("activity-def-browser");
   await expect(inspector).toContainText("published-version-1");

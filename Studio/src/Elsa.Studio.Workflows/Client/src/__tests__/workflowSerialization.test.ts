@@ -109,4 +109,21 @@ describe("workflow serialization", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.draft.layout).toEqual(current.layout);
   });
+
+  it("prunes preserved presentation when Code view JSON removes its owning node", () => {
+    const current = draft();
+    current.activityPresentation = [
+      { nodeId: "root", displayName: "Root" },
+      { nodeId: "removed", displayName: "Removed" }
+    ];
+
+    const result = buildDraftFromJson(JSON.stringify({ state: current.state }), current);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.draft.activityPresentation).toEqual([
+        { nodeId: "root", displayName: "Root", description: undefined }
+      ]);
+    }
+  });
 });

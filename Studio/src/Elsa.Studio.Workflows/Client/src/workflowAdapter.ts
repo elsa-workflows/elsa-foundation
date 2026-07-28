@@ -1,8 +1,12 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
 import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
+import { getActivityDisplay } from "./activityDisplay";
+import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
+
+export { getActivityDisplay } from "./activityDisplay";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
@@ -24,6 +28,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  description?: string;
   // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
   // ghost ("not available in this environment") instead of pretending the activity resolves.
   ghost?: boolean;
@@ -127,6 +132,34 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   }
 
   return owner;
+}
+
+export function collectActivityNodeIds(
+  activity: ActivityNode,
+  catalog: ActivityCatalogLookup,
+  result: Set<string> = new Set()
+) {
+  result.add(activity.nodeId);
+  for (const slot of getChildSlots(activity, catalog)) {
+    for (const child of slot.activities) collectActivityNodeIds(child, catalog, result);
+  }
+  return result;
+}
+
+export function findActivityNode(
+  activity: ActivityNode | null | undefined,
+  nodeId: string,
+  catalog?: ActivityCatalogLookup
+): ActivityNode | null {
+  if (!activity) return null;
+  if (activity.nodeId === nodeId) return activity;
+  for (const slot of getChildSlots(activity, catalog)) {
+    for (const child of slot.activities) {
+      const found = findActivityNode(child, nodeId, catalog);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // One containment step on the way to a target node: `child` lives in `slot` of `parent`.
@@ -524,14 +557,23 @@ export function buildCanvas(
   scope: CanvasScope,
   catalog: ActivityCatalogItem[],
   layout: DesignMetadataRecord[],
-  formatSummary?: WorkflowNodeSummaryFormatter
+  formatSummary?: WorkflowNodeSummaryFormatter,
+  activityPresentation?: ActivityPresentationRecord[]
 ) {
   const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
   const layoutByNodeId = new Map(layout.map(record => [record.nodeId, record]));
+  const presentationByNodeId = indexActivityPresentation(activityPresentation);
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
-    return createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {}, formatSummary);
+    return createWorkflowNode(
+      activity,
+      catalogItem,
+      { x: position.x, y: position.y },
+      {},
+      formatSummary,
+      presentationByNodeId.get(activity.nodeId)
+    );
   });
 
   return {
@@ -544,7 +586,8 @@ export function buildUnsupportedActivityCanvas(
   activity: ActivityNode,
   catalog: ActivityCatalogItem[],
   layout: DesignMetadataRecord[],
-  formatSummary?: WorkflowNodeSummaryFormatter
+  formatSummary?: WorkflowNodeSummaryFormatter,
+  activityPresentation?: ActivityPresentationRecord[]
 ) {
   const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
   const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
@@ -555,7 +598,7 @@ export function buildUnsupportedActivityCanvas(
       deletable: false,
       draggable: false,
       suppressFlowPorts: true
-    }, formatSummary)],
+    }, formatSummary, indexActivityPresentation(activityPresentation).get(activity.nodeId))],
     edges: [] satisfies Edge[]
   };
 }
@@ -807,22 +850,13 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
   return normalizeFlowchartStartNode(next);
 }
 
-export function getActivityDisplay(activity: ActivityCatalogItem) {
-  const shortName = activity.activityTypeKey.split(".").at(-1) || activity.activityTypeKey;
-  const displayName = activity.displayName?.trim();
-  if (!displayName || displayName === activity.activityTypeKey || displayName.includes(".")) {
-    return humanizeActivityTypeName(shortName);
-  }
-
-  return displayName;
-}
-
 function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
   options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean } = {},
-  formatSummary?: WorkflowNodeSummaryFormatter
+  formatSummary?: WorkflowNodeSummaryFormatter,
+  presentation?: ActivityPresentationRecord
 ): Node<WorkflowNodeData> {
   return {
     id: activity.nodeId,
@@ -832,12 +866,17 @@ function createWorkflowNode(
     deletable: options.deletable,
     draggable: options.draggable,
     data: {
-      label: catalogItem ? getActivityDisplay(catalogItem) : activity.activityVersionId,
+      label: resolveActivityLabel(
+        presentation,
+        catalogItem,
+        catalogItem?.activityTypeKey ?? activity.activityVersionId
+      ),
       activityVersionId: activity.activityVersionId,
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
       summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
+      description: presentation?.description ?? undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity, catalogItem),
@@ -891,13 +930,6 @@ function isBpmnCatalogItem(activity: ActivityCatalogItem | undefined) {
   if (!activity) return false;
   if (activity.activityTypeKey.endsWith(".BpmnProcess")) return true;
   return readStructureDesignFacet(activity)?.kind === bpmnStructureKind;
-}
-
-function humanizeActivityTypeName(name: string) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .trim();
 }
 
 function createStructureForActivity(activity: ActivityCatalogItem): ActivityNodeStructure | null {

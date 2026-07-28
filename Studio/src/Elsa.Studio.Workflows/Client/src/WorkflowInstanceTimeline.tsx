@@ -1,11 +1,14 @@
 import { useMemo } from "react";
-import { getActivityDisplay, resolveActivityIcon } from "./workflowAdapter";
+import { resolveActivityLabel } from "./activityPresentation";
+import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
+import { resolveActivityIcon } from "./workflowAdapter";
 import { formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "./workflowTypes";
 
-export function WorkflowExecutionTimeline({ activities, activityCatalog, selectedEvidenceId = null, onSelectEvidence }: {
+export function WorkflowExecutionTimeline({ activities, activityCatalog, executableGraph, selectedEvidenceId = null, onSelectEvidence }: {
   activities: ActivityExecutionStateSummary[];
   activityCatalog: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
@@ -23,8 +26,9 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, selecte
     <ol className="wf-timeline" aria-label="Execution timeline">
       {ordered.map(activity => {
         const catalogItem = catalogByTypeKey.get(activity.activityType);
+        const presentation = findExecutableNodeFacts(executableGraph, activity)?.presentation;
         const icon = resolveActivityIcon(catalogItem);
-        const label = catalogItem ? getActivityDisplay(catalogItem) : (shortTypeName(activity.activityType) ?? activity.activityType);
+        const label = resolveActivityLabel(presentation, catalogItem, activity.activityType);
         const typeName = shortTypeName(activity.activityType) ?? activity.activityType;
         const timestamp = formatClockTime(activity.startedAt ?? activity.scheduledAt);
         const duration = formatDuration(activity.startedAt, activity.completedAt);

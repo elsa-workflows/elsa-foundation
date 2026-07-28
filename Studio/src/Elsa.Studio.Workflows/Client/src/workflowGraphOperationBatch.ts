@@ -1,5 +1,5 @@
 import type { ActivityCatalogItem, ActivityNode, DesignMetadataRecord, WorkflowDraft } from "./workflowTypes";
-import { createActivityNode } from "./workflowAdapter";
+import { collectActivityNodeIds, createActivityNode } from "./workflowAdapter";
 import { camelize } from "./activityProperties";
 
 export const workflowGraphOperationApplyEvent = "elsa-studio:apply-workflow-graph-operation-batch";
@@ -122,6 +122,10 @@ export function applyWorkflowGraphOperationBatch(
 
   if (!nextDraft.state.rootActivity) throw new Error("Weaver batch did not produce a root activity.");
 
+  const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
+  const reachableNodeIds = collectActivityNodeIds(nextDraft.state.rootActivity, catalogByVersion);
+  nextDraft.activityPresentation = (nextDraft.activityPresentation ?? [])
+    .filter(record => reachableNodeIds.has(record.nodeId));
   nextDraft.sourceVersionId = null;
   return {
     draft: nextDraft,

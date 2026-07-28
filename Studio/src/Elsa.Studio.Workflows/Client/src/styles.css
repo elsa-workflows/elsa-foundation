@@ -1099,6 +1099,14 @@
   white-space: nowrap;
 }
 
+.wf-activity-overview-description {
+  margin: 2px 0;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
 .wf-activity-copy-line,
 .wf-activity-overview-status {
   display: flex;
@@ -3513,7 +3521,6 @@
   font-weight: 650;
 }
 
-.wf-node-version,
 .wf-palette-version {
   color: var(--wf-accent);
   font-family: var(--studio-font-mono);
@@ -3982,8 +3989,57 @@ button.wf-node-slot-badge:focus-visible {
 }
 
 .wf-inspector-context {
+  display: grid;
+  gap: 6px;
   flex: 0 0 auto;
   padding: 12px 12px 10px;
+}
+
+.wf-activity-presentation-fields {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.wf-activity-presentation-fields label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 6px;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: var(--wf-label-weight, 600);
+}
+
+.wf-activity-presentation-fields input,
+.wf-activity-presentation-fields textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 8px;
+}
+
+.wf-activity-presentation-fields textarea {
+  resize: vertical;
+}
+
+.wf-activity-presentation-fields input:focus-visible,
+.wf-activity-presentation-fields textarea:focus-visible {
+  border-color: var(--studio-focus);
+  box-shadow: var(--wf-focus-ring);
+  outline: none;
+}
+
+.wf-activity-presentation-fields small {
+  color: var(--wf-muted-text);
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .wf-inspector-tabs {

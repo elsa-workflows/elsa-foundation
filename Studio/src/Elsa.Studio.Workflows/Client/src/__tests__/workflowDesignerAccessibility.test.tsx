@@ -130,11 +130,32 @@ describe("workflow designer keyboard accessibility", () => {
 });
 
 describe("activity palette version chip", () => {
-  it("shows the short semantic version and keeps the full behavioral hash in the title", () => {
+  it("hides an unambiguous version while retaining the exact version for assistive text", () => {
     const exactVersion = "1.0.0+892535311ec55c1b9930041e93cee112b2494283";
     const writeLine = { ...activity("write-line", "Write Line"), activityDefinitionVersion: exactVersion };
 
     flushSync(() => root.render(<PaletteHarness activities={[writeLine]} onInsert={() => {}} />));
+
+    expect(container.querySelector(".wf-palette-version")).toBeNull();
+    const row = container.querySelector<HTMLElement>(".wf-palette-activity")!;
+    expect(row.title).toContain(`Exact version ${exactVersion}`);
+    expect(row.getAttribute("aria-label")).toContain(`Exact version ${exactVersion}`);
+  });
+
+  it("shows compact versions when multiple selectable versions would otherwise be ambiguous", () => {
+    const exactVersion = "1.0.0+892535311ec55c1b9930041e93cee112b2494283";
+    const writeLine = {
+      ...activity("write-line-v1", "Write Line"),
+      activityDefinitionId: "write-line",
+      activityDefinitionVersion: exactVersion
+    };
+    const writeLineV2 = {
+      ...activity("write-line-v2", "Write Line"),
+      activityDefinitionId: "write-line",
+      activityDefinitionVersion: "2.0.0"
+    };
+
+    flushSync(() => root.render(<PaletteHarness activities={[writeLine, writeLineV2]} onInsert={() => {}} />));
 
     const chip = container.querySelector<HTMLElement>(".wf-palette-version")!;
     expect(chip.textContent).toBe("v1.0.0");

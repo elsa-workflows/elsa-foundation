@@ -163,13 +163,13 @@ describe("activity Inspector tabs", () => {
     const container = render(<Harness />);
 
     expect(container.querySelector(".wf-inspector-context")?.textContent).toContain("Send HTTP Request");
-    expect(container.querySelector(".wf-inspector-context")?.textContent).not.toContain("Node ID");
+    expect(container.querySelector(".wf-inspector-context")?.textContent).toContain("Node ID");
+    expect(container.querySelector(".wf-inspector-context")?.textContent).toContain("send-http-1");
     expect(container.textContent).toContain("This activity has no configurable inputs.");
 
     click(tabs(container).find(tab => tab.textContent === "Details")!);
     const details = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
-    expect(details.textContent).toContain("Node ID");
-    expect(details.textContent).toContain("send-http-1");
+    expect(details.textContent).not.toContain("Node ID");
     expect(details.textContent).toContain(descriptor.typeName);
 
     click(tabs(container).find(tab => tab.textContent === "Version")!);

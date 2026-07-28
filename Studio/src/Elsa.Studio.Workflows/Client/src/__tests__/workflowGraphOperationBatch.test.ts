@@ -113,6 +113,59 @@ describe("workflow graph operation batch", () => {
     expect(root.text).toMatchObject({ expression: { type: "Literal", value: "Hello" } });
     expect("Text" in root).toBe(false);
   });
+
+  it("prunes presentation for a removed activity subtree while preserving reachable records", () => {
+    const grandchild = {
+      nodeId: "grandchild",
+      activityVersionId: "write-line-v1",
+      inputs: [],
+      outputs: []
+    };
+    const removed = {
+      nodeId: "removed",
+      activityVersionId: "sequence-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "sequence",
+        schemaVersion: "1.0.0",
+        payload: { activities: [grandchild] }
+      }
+    };
+    const root = {
+      nodeId: "root",
+      activityVersionId: "sequence-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "sequence",
+        schemaVersion: "1.0.0",
+        payload: { activities: [removed] }
+      }
+    };
+    const draft = workflowDraft({
+      state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
+      activityPresentation: [
+        { nodeId: "root", displayName: "Root" },
+        { nodeId: "removed", displayName: "Removed" },
+        { nodeId: "grandchild", displayName: "Nested removed" }
+      ]
+    });
+
+    const result = applyWorkflowGraphOperationBatch(draft, {
+      schemaVersion: "elsa.workflow-graph-operation-batch.v1",
+      workflowDefinitionId: "definition-1",
+      operations: [{
+        id: "op-remove",
+        kind: "remove-activity",
+        parameters: { activityId: "removed" }
+      }]
+    }, []);
+
+    expect(result.draft.activityPresentation).toEqual([
+      { nodeId: "root", displayName: "Root" }
+    ]);
+  });
 });
 
 function workflowDraft(overrides: Partial<WorkflowDraft> = {}): WorkflowDraft {

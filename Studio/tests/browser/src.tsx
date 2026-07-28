@@ -469,6 +469,11 @@ function ActivityInspectorTabsFixture() {
   const [activeOuterPanel, setActiveOuterPanel] = useState<"inspector" | "runtime" | "artifacts">("inspector");
   const [activeTabId, setActiveTabId] = useState<React.ComponentProps<typeof InspectorPanel>["activeTabId"]>("inputs");
   const [activity, setActivity] = useState(activityInspectorTabNode);
+  const [presentation, setPresentation] = useState({
+    nodeId: activityInspectorTabNode.nodeId,
+    displayName: "",
+    description: ""
+  });
 
   return (
     <main className="wf-editor browser-fixture">
@@ -489,6 +494,7 @@ function ActivityInspectorTabsFixture() {
             selectedNode={activity}
             selectedNodeLabel="Long running browser activity"
             selectedActivityType={activityInspectorTabDescriptor.typeName}
+            selectedPresentation={presentation}
             selectedDescriptor={activityInspectorTabDescriptor}
             selectedNodeAvailability={{
               state: "RemovedFromCatalog",
@@ -510,6 +516,7 @@ function ActivityInspectorTabsFixture() {
             activeTabId={activeTabId}
             onActiveTabChange={setActiveTabId}
             onSelectedActivityChange={setActivity}
+            onSelectedPresentationChange={value => setPresentation(current => ({ ...current, ...value }))}
             onEnterSlot={() => undefined}
             onReplaceSlotActivity={() => undefined}
           />
@@ -899,9 +906,14 @@ function ReusableBoundaryFixture() {
         <section className="wf-instance-canvas-shell" aria-label="Workflow canvas">
           <h2>Workflow canvas</h2>
           {selected ? (
-            <button type="button" className="wf-node" data-icon="reusable" aria-label={`${getActivityDisplay(palette[0])} exact version ${selectedCatalogItem?.activityDefinitionVersion}`}>
+            <button
+              type="button"
+              className="wf-node"
+              data-icon="reusable"
+              aria-label={`${getActivityDisplay(palette[0])} exact version ${selectedCatalogItem?.activityDefinitionVersion}`}
+              title={`Exact version ${selectedCatalogItem?.activityDefinitionVersion}`}
+            >
               <strong>{getActivityDisplay(palette[0])}</strong>
-              <small className="wf-node-version">v{selectedCatalogItem?.activityDefinitionVersion}</small>
             </button>
           ) : <p>Select the recommended reusable activity.</p>}
           <button type="button" onClick={dispatch} disabled={!selected}>Dispatch workflow</button>

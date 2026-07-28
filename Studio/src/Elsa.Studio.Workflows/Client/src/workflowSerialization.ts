@@ -1,11 +1,14 @@
 import { canonicalizeStateForWire, expandStateFromWire } from "./activityInputWire";
-import type { DesignMetadataRecord, WorkflowDefinitionState, WorkflowDraft } from "./workflowTypes";
+import type { ActivityPresentationRecord, DesignMetadataRecord, WorkflowDefinitionState, WorkflowDraft } from "./workflowTypes";
+import { normalizeActivityPresentation } from "./activityPresentation";
+import { collectActivityNodeIds } from "./workflowAdapter";
 
 export interface WorkflowExportPayload {
   name?: string;
   definitionId: string;
   state: WorkflowDefinitionState;
   layout: DesignMetadataRecord[];
+  activityPresentation: ActivityPresentationRecord[];
 }
 
 /**
@@ -18,7 +21,8 @@ export function buildExportPayload(draft: WorkflowDraft, name?: string | null): 
     ...(name ? { name } : {}),
     definitionId: draft.definitionId,
     state: canonicalizeStateForWire(draft.state),
-    layout: draft.layout
+    layout: draft.layout,
+    activityPresentation: normalizeActivityPresentation(draft.activityPresentation)
   };
 }
 
@@ -27,7 +31,8 @@ export function serializeDraftToJson(draft: WorkflowDraft): string {
   return JSON.stringify(
     {
       state: canonicalizeStateForWire(draft.state),
-      layout: draft.layout
+      layout: draft.layout,
+      activityPresentation: normalizeActivityPresentation(draft.activityPresentation)
     },
     null,
     2
@@ -55,20 +60,33 @@ export function buildDraftFromJson(text: string, current: WorkflowDraft): DraftF
     return { ok: false, error: "Workflow JSON must be an object with a 'state' property." };
   }
 
-  const record = parsed as { state?: unknown; layout?: unknown };
+  const record = parsed as { state?: unknown; layout?: unknown; activityPresentation?: unknown };
   if (!record.state || typeof record.state !== "object") {
     return { ok: false, error: "Workflow JSON is missing a valid 'state' object." };
   }
   if (record.layout !== undefined && !Array.isArray(record.layout)) {
     return { ok: false, error: "'layout' must be an array when present." };
   }
+  if (record.activityPresentation !== undefined && !Array.isArray(record.activityPresentation)) {
+    return { ok: false, error: "'activityPresentation' must be an array when present." };
+  }
+
+  const state = expandStateFromWire(record.state as WorkflowDefinitionState);
+  const reachableNodeIds = state.rootActivity
+    ? collectActivityNodeIds(state.rootActivity, new Map())
+    : new Set<string>();
+  const requestedPresentation = record.activityPresentation === undefined
+    ? current.activityPresentation
+    : record.activityPresentation as ActivityPresentationRecord[];
 
   return {
     ok: true,
     draft: {
       ...current,
-      state: expandStateFromWire(record.state as WorkflowDefinitionState),
-      layout: (record.layout as DesignMetadataRecord[] | undefined) ?? current.layout
+      state,
+      layout: (record.layout as DesignMetadataRecord[] | undefined) ?? current.layout,
+      activityPresentation: normalizeActivityPresentation(requestedPresentation)
+        .filter(presentation => reachableNodeIds.has(presentation.nodeId))
     }
   };
 }

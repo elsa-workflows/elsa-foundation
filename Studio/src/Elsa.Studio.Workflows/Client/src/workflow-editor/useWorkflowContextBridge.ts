@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { collectWorkflowContextActivities, collectWorkflowContextConnections, getDraftRevision } from "./editorHelpers";
+import { indexActivityPresentation } from "../activityPresentation";
 
 interface WorkflowContextBridgeParams {
   details: WorkflowDefinitionDetails | null;
@@ -35,7 +36,15 @@ export function useWorkflowContextBridge({
 }: WorkflowContextBridgeParams) {
   // The full-tree walks depend only on the draft + catalog; memoized so selection/inspection changes
   // (which re-fire the effect) only rewrite the scalar snapshot fields.
-  const activities = useMemo(() => draft ? collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
+  const activities = useMemo(
+    () => draft
+      ? collectWorkflowContextActivities(
+          draft.state.rootActivity,
+          catalogByVersion,
+          [],
+          indexActivityPresentation(draft.activityPresentation))
+      : [],
+    [catalogByVersion, draft]);
   const connections = useMemo(() => draft ? collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
   const diagnostics = useMemo(
     () => (draft?.validationErrors ?? []).map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." })),

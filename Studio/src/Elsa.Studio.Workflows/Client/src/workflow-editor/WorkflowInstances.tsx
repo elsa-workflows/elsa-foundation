@@ -6,6 +6,7 @@ import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
+import { resolveActivityLabel } from "../activityPresentation";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -428,7 +429,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             catalog,
             sourceResult.sources?.authoredInputs ?? [],
             sourceResult.sources?.compiledInputs ?? [],
-            sourceResult.access)
+            sourceResult.access,
+            executableResult.executable.chosenReference?.activityPresentation ?? [])
         : null;
       setData({
         details,
@@ -555,6 +557,13 @@ export function projectPinnedExecutable(
   executableGraph?: ExecutableActivityGraph
 ): WorkflowDefinitionVersionDetails {
   const timestamp = executable.createdAt ?? details.instance.createdAt;
+  const graph = executableGraph ?? buildExecutableActivityGraph(
+    executable.rootActivity,
+    catalog,
+    [],
+    [],
+    null,
+    executable.chosenReference?.activityPresentation ?? []);
   return {
     id: details.instance.definitionVersionId,
     version: details.instance.artifactVersion,
@@ -565,8 +574,9 @@ export function projectPinnedExecutable(
       createdAt: timestamp,
       lastModifiedAt: timestamp
     },
-    state: { rootActivity: (executableGraph ?? buildExecutableActivityGraph(executable.rootActivity, catalog)).root },
-    layout: executable.chosenReference?.layout ?? []
+    state: { rootActivity: graph.root },
+    layout: executable.chosenReference?.layout ?? [],
+    activityPresentation: graph.activityPresentation
   };
 }
 
@@ -689,8 +699,18 @@ export function buildInstanceCanvas(
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
   const baseCanvas = support === "unsupported" || !scope
-    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout, formatActivitySummary)
-    : buildCanvas(scope, activityCatalog, definitionVersion.layout, formatActivitySummary);
+    ? buildUnsupportedActivityCanvas(
+        scopeOwner,
+        activityCatalog,
+        definitionVersion.layout,
+        formatActivitySummary,
+        definitionVersion.activityPresentation)
+    : buildCanvas(
+        scope,
+        activityCatalog,
+        definitionVersion.layout,
+        formatActivitySummary,
+        definitionVersion.activityPresentation);
   const readonlyNodes = baseCanvas.nodes.map(node => ({
     ...node,
     draggable: false,
@@ -863,6 +883,7 @@ function WorkflowInstanceInspector({
                 <WorkflowExecutionTimeline
                   activities={details.activities}
                   activityCatalog={activityCatalog}
+                  executableGraph={executableGraph}
                   selectedEvidenceId={selectedEvidenceId}
                   onSelectEvidence={openActivityEvidence}
                 />
@@ -1019,7 +1040,11 @@ export function WorkflowActivityExecutionDetails({
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
   const declaredInputs = readDeclaredActivityInputs(catalogItem?.inputs);
-  const activityLabel = catalogItem?.displayName || shortTypeName(activity.activityType) || activity.activityType;
+  const activityLabel = resolveActivityLabel(
+    executableNodeFacts?.presentation,
+    catalogItem,
+    activity.activityType);
+  const activityDescription = executableNodeFacts?.presentation?.description?.trim();
   const activityTypeLabel = shortTypeName(activity.activityType) ?? activity.activityType;
   const statusLabel = [activity.status, activity.subStatus].filter(Boolean).join(" · ");
   const startedLabel = formatDate(activity.startedAt);
@@ -1049,6 +1074,9 @@ export function WorkflowActivityExecutionDetails({
                 onCopyFailed={markCopyFailed}
               />
             </div>
+            {activityDescription
+              ? <p className="wf-activity-overview-description">{activityDescription}</p>
+              : null}
             <div className="wf-activity-copy-line wf-activity-overview-type">
               <span title={activity.activityType}>{activityTypeLabel} <small>{activity.activityTypeVersion}</small></span>
               <CopyValueButton
