@@ -85,7 +85,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-definitions",
         path: "/workflows/activity-definitions",
         label: "Activity Definitions",
-        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
+        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-definitions",

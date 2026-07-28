@@ -101,7 +101,7 @@ export function createOutcomeContract(name: string, contract: ActivityContract):
   return {
     referenceKey: generateReferenceKey(name, contract.outcomes.map(member => member.referenceKey)),
     name: name.trim(),
-    isEmitted: false,
+    isEmitted: true,
     description: null
   };
 }

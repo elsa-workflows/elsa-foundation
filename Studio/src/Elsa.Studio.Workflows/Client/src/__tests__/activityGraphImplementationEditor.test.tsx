@@ -2,18 +2,33 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
-import { ActivityGraphImplementationEditor } from "../ActivityGraphImplementationEditor";
+import type {
+  StudioActivityDefinitionImplementationEditorProps,
+  StudioExpressionDescriptor,
+  StudioExpressionEditorContribution
+} from "@elsa-workflows/studio-sdk";
+import {
+  ActivityGraphImplementationEditor,
+  ActivityGraphPublicInterfaceEditor
+} from "../ActivityGraphImplementationEditor";
+import { inputReferenceContribution } from "../inputReferenceContribution";
+import type { ActivityCatalogItem } from "../workflowTypes";
 
 vi.mock("../api/activityDesign", () => ({
   useWorkflowActivities: () => ({
-    data: { activities: [rootCatalogItem] },
+    data: { activities: catalogItems },
     isPending: false,
     isError: false
   })
 }));
+vi.mock("../api/expressions", () => ({
+  listExpressionDescriptors: async () => expressionDescriptors,
+  listConversionProfiles: async () => [],
+  listVariableTypeDescriptors: async () => []
+}));
 
-let rootCatalogItem = catalogItem();
+let catalogItems: ActivityCatalogItem[] = [catalogItem()];
+let expressionDescriptors: StudioExpressionDescriptor[] = [];
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
 
 afterEach(() => {
@@ -21,7 +36,8 @@ afterEach(() => {
     flushSync(() => item.root.unmount());
     item.container.remove();
   }
-  rootCatalogItem = catalogItem();
+  catalogItems = [catalogItem()];
+  expressionDescriptors = [];
 });
 
 describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
@@ -75,6 +91,168 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
   });
 });
 
+describe("ActivityGraphImplementationEditor shared designer", () => {
+  it("uses the shared workspace, treats the root as scope owner, and persists undo through onChange", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value: flowchartImplementationValue(),
+      onChange
+    });
+
+    expect(rendered.container.querySelector("[data-graph-authoring-resource='activity-definition-graph']")).not.toBeNull();
+    expect(rendered.container.querySelector("[data-graph-root-location]")?.textContent).toContain("Flowchart");
+    expect(rendered.container.textContent).not.toContain("Inputs (JSON array)");
+    expect(rendered.container.querySelector("[data-graph-node-id='root']")).toBeNull();
+
+    click(buttonByText(rendered.container, "Primitives1"));
+    click(buttonByText(rendered.container, "Write line"));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        rootActivity: expect.objectContaining({
+          structure: expect.objectContaining({
+            payload: expect.objectContaining({
+              activities: [expect.objectContaining({ activityVersionId: "write-line-v1" })]
+            })
+          })
+        })
+      })
+    }));
+
+    click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
+    expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
+  });
+
+  it("places public contract inputs in the graph node expression scope", async () => {
+    expressionDescriptors = [{ type: "Input", displayName: "Input", editingMode: "reference" }];
+    catalogItems = [flowchartCatalogItem(), inputLeafCatalogItem()];
+    const rendered = renderDesigner({
+      value: {
+        payload: {
+          rootActivity: {
+            nodeId: "root",
+            activityVersionId: "flowchart-v1",
+            inputs: [],
+            outputs: [],
+            structure: {
+              kind: "Flowchart",
+              schemaVersion: "1.0.0",
+              payload: {
+                activities: [{
+                  nodeId: "write-line-1",
+                  activityVersionId: "write-line-v1",
+                  inputs: [],
+                  outputs: [],
+                  structure: null
+                }],
+                connections: [],
+                startNodeId: null,
+                nodeMetadata: {},
+                connectionMetadata: {}
+              }
+            }
+          },
+          variables: [],
+          outputMappings: [],
+          outcomeMappings: []
+        },
+        layout: []
+      },
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [{
+          referenceKey: "customer-id",
+          name: "CustomerId",
+          displayName: "Customer ID",
+          type: { alias: "String", collectionKind: "Single" }
+        }],
+        outputs: [],
+        outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
+      },
+      expressionEditors: [inputReferenceContribution]
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+
+    await vi.waitFor(() => {
+      const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
+      expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
+    });
+  });
+});
+
+describe("ActivityGraphImplementationEditor boundary output mappings", () => {
+  it("requires a mapping for required outputs and adds one through a shared expression editor", async () => {
+    expressionDescriptors = [{ type: "Input", displayName: "Public input", editingMode: "reference" }];
+    const onChange = vi.fn();
+    const rendered = renderEditor({
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [{
+          referenceKey: "customer-id",
+          name: "CustomerId",
+          displayName: "Customer ID",
+          type: { alias: "String", collectionKind: "Single" }
+        }],
+        outputs: [{
+          referenceKey: "result",
+          name: "Result",
+          displayName: "Result",
+          type: { alias: "String", collectionKind: "Single" },
+          isRequired: true
+        }],
+        outcomes: [{ referenceKey: "approved-boundary", name: "Approved", isEmitted: true }]
+      },
+      expressionEditors: [inputExpressionEditor],
+      onChange
+    });
+
+    expect(rendered.container.textContent).toContain("A required public output needs exactly one boundary expression.");
+    await vi.waitFor(() => expect(buttonByText(rendered.container, "Add expression").disabled).toBe(false));
+    click(buttonByText(rendered.container, "Add expression"));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        outputMappings: [{
+          outputReferenceKey: "result",
+          source: {
+            syntax: "Input",
+            value: { referenceKey: "customer-id" }
+          }
+        }]
+      })
+    }));
+  });
+
+  it("allows an optional output to remain unmapped", () => {
+    const rendered = renderEditor({
+      contract: {
+        contractSchemaVersion: "1",
+        inputs: [],
+        outputs: [{
+          referenceKey: "note",
+          name: "Note",
+          type: { alias: "String", collectionKind: "Single" },
+          isRequired: false
+        }],
+        outcomes: [{ referenceKey: "approved-boundary", name: "Approved", isEmitted: true }]
+      }
+    });
+
+    expect(rendered.container.textContent).toContain("No boundary expression is configured.");
+    expect(rendered.container.textContent).not.toContain("A required public output needs exactly one boundary expression.");
+  });
+});
+
+const inputExpressionEditor: StudioExpressionEditorContribution = {
+  id: "test.input",
+  supports: context => context.syntax === "Input",
+  surfaces: {
+    inline: ({ value, onChange, disabled }) => <button type="button" disabled={disabled} onClick={() => onChange({ referenceKey: "customer-id" })}>{JSON.stringify(value)}</button>
+  },
+  createDefaultValue: () => ({ referenceKey: "customer-id" })
+};
+
 function renderEditor(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}) {
   const container = document.createElement("div");
   document.body.append(container);
@@ -96,6 +274,44 @@ function renderEditor(overrides: Partial<StudioActivityDefinitionImplementationE
       ]
     },
     value: implementationValue(),
+    readOnly: false,
+    onChange: () => {},
+    ...overrides
+  };
+  flushSync(() => root.render(<ActivityGraphPublicInterfaceEditor {...props} />));
+  const rendered = { root, container };
+  mounted.push(rendered);
+  return rendered;
+}
+
+function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}) {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const props: StudioActivityDefinitionImplementationEditorProps = {
+    context: {
+      baseUrl: "test://activity-graph",
+      http: {
+        getJson: vi.fn(async () => ({ items: [] }))
+      }
+    } as unknown as StudioActivityDefinitionImplementationEditorProps["context"],
+    definitionId: "definition-1",
+    draftId: "draft-1",
+    revision: 1,
+    providerKey: "elsa.activity-graph",
+    providerSchemaVersion: "2",
+    manifestFingerprint: "sha256:test",
+    contract: {
+      contractSchemaVersion: "1",
+      inputs: [],
+      outputs: [],
+      outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }]
+    },
+    propertyEditors: [],
+    expressionEditors: [],
+    graphAuthoringPanels: [],
+    historyResetKey: "draft-1:active",
+    value: flowchartImplementationValue(),
     readOnly: false,
     onChange: () => {},
     ...overrides
@@ -143,8 +359,80 @@ function catalogItem() {
   };
 }
 
-function buttonByText(container: HTMLElement, text: string) {
-  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === text);
+function flowchartCatalogItem() {
+  return {
+    activityVersionId: "flowchart-v1",
+    activityTypeKey: "Elsa.Flowchart",
+    version: "1.0.0",
+    category: "Composition",
+    displayName: "Flowchart",
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    ports: []
+  };
+}
+
+function leafCatalogItem() {
+  return {
+    activityVersionId: "write-line-v1",
+    activityTypeKey: "Elsa.WriteLine",
+    version: "1.0.0",
+    category: "Primitives",
+    displayName: "Write line",
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    ports: []
+  };
+}
+
+function inputLeafCatalogItem() {
+  return {
+    ...leafCatalogItem(),
+    inputs: [{
+      name: "Message",
+      typeName: "System.String",
+      displayName: "Message",
+      description: "Message to write.",
+      isBrowsable: true,
+      isWrapped: true,
+      defaultSyntax: "Input"
+    }]
+  };
+}
+
+function flowchartImplementationValue() {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "flowchart-v1",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: "Flowchart",
+          schemaVersion: "1.0.0",
+          payload: {
+            activities: [],
+            connections: [],
+            startNodeId: null,
+            nodeMetadata: {},
+            connectionMetadata: {}
+          }
+        }
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
+function buttonByText(container: HTMLElement, text: string, attribute?: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate =>
+    attribute ? candidate.getAttribute(attribute) === text : candidate.textContent?.trim() === text);
   if (!button) throw new Error(`Button not found: ${text}`);
   return button;
 }

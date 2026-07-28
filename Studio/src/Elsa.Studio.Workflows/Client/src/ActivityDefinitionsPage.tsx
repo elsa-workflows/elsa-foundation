@@ -1,7 +1,15 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw, Search } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext, StudioRuntimeSettings, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDefinitionImplementationEditorContribution,
+  StudioActivityPropertyEditorContribution,
+  StudioEndpointContext,
+  StudioExpressionEditorContribution,
+  StudioRuntimeSettings,
+  StudioWorkflowDesignerPanelContribution,
+  StudioWorkflowRunInputEditorContribution
+} from "@elsa-workflows/studio-sdk";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
@@ -30,12 +38,18 @@ type RouteState = {
 export function ActivityDefinitionsPage({
   context,
   activityEditors = () => [],
+  graphExtensions = () => ({ properties: [], expressions: [], panels: [] }),
   inputEditors = () => [],
   runtime = {},
   navigateToStudioPath = defaultStudioPathNavigation
 }: {
   context: StudioEndpointContext;
   activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
+  graphExtensions?: () => {
+    properties: StudioActivityPropertyEditorContribution[];
+    expressions: StudioExpressionEditorContribution[];
+    panels: StudioWorkflowDesignerPanelContribution[];
+  };
   inputEditors?: () => StudioWorkflowRunInputEditorContribution[];
   runtime?: StudioRuntimeSettings;
   navigateToStudioPath?(path: string): void;
@@ -73,7 +87,8 @@ export function ActivityDefinitionsPage({
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+      const extensions = graphExtensions();
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
         if (route.returnPlanId) {
           navigationBlockedRef.current = false;
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);

@@ -182,7 +182,7 @@ export function decorateReusableCatalog(
   });
 }
 
-function toActivityDescriptor(activity: ActivityCatalogItem): StudioActivityDescriptor {
+export function toActivityDescriptor(activity: ActivityCatalogItem): StudioActivityDescriptor {
   const name = activity.activityTypeKey.split(".").at(-1) ?? activity.activityTypeKey;
   const numericVersion = Number(activity.version);
   return {

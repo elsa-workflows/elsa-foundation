@@ -96,6 +96,46 @@ _Avoid_: Attention code embedded in a domain core module, Dashboard integration 
 A Slot owned by the Workflows module for extending the workflow designer, such as panel tabs, toolbar actions, node actions, or property editors. Built-in designer tabs are also Contributions into these Slots.
 _Avoid_: Hardcoded designer area
 
+**Graph Activity Definition**:
+An Activity Definition whose behavior is designed as a graph of activities. It is a reusable activity, not a Workflow Definition.
+_Avoid_: Graph workflow, Workflow Definition
+
+**Activity Definition Graph**:
+The graph of activities that defines a Graph Activity Definition's behavior. It uses the shared graph-authoring experience without adopting the Workflow Definition lifecycle.
+_Avoid_: Root activity editor, Workflow Definition
+
+**Activity Graph Composition Model**:
+The structural model of an Activity Definition Graph: Flowchart, Sequence, or BPMN. It is chosen when the Graph Activity Definition is created and changed later only through an explicit migration.
+_Avoid_: Root activity, Implementation provider
+
+**Activity Definition Public Interface**:
+The inputs, outputs, and outcomes an Activity Definition exposes to workflows that use it. The Public Interface describes the reusable boundary independently of how a provider implements the activity.
+_Avoid_: Workflow properties, Graph inputs when referring to the reusable boundary
+
+**Activity Outcome**:
+A named control-flow exit an Activity Definition may produce. Every kind of activity may expose multiple Activity Outcomes; an emitted outcome must be supported by the implementation, while a non-emitted outcome may remain in the Public Interface for compatibility or history.
+_Avoid_: Graph-only outcome, Single completion result
+
+**Boundary Outcome Mapping**:
+An explicit association from an outcome emitted by an Activity Definition Graph to an outcome exposed by its Public Interface. Each graph outcome maps to at most one public outcome, while several graph outcomes may converge on the same public outcome; mappings are authored deliberately and never inferred from matching names.
+_Avoid_: Inferred outcome, Outcome alias
+
+**Boundary Output Mapping**:
+An expression that produces one public output of a Graph Activity Definition from its graph implementation. A required public output has exactly one Boundary Output Mapping; an optional public output has at most one.
+_Avoid_: Output alias, Inferred output
+
+**Activity Graph Variable**:
+A named value scoped to an Activity Definition Graph's implementation. It is not part of the Public Interface; public inputs enter the graph's expression scope directly and are not duplicated as Activity Graph Variables.
+_Avoid_: Public input, Public variable
+
+**Activity Contract Proposal**:
+A provider-inferred suggestion to change an Activity Definition Public Interface based on an exact saved implementation revision. A proposal changes neither the draft nor its Public Interface until the user reviews and applies selected changes.
+_Avoid_: Inferred contract, Automatic contract update
+
+**Activity Category**:
+A free-form display label used to group activities in discovery surfaces. Users may reuse a visible category or introduce a new non-empty label; an Activity Category has no independently managed identity or lifecycle.
+_Avoid_: Managed category, Category entity
+
 **Activity Property Editor Slot**:
 A Workflow Designer Slot for editor Contributions that edit activity property values. Contributions to this Slot match by activity property metadata, value type, expression type, and priority.
 _Avoid_: Generic panel slot, component
@@ -255,6 +295,10 @@ _Avoid_: Apply, publish
 **Test Run**:
 A Studio-initiated transient dispatch of a workflow draft for validation. A Test Run may create transient runtime artifacts and should link to workflow execution evidence when available without saving, promoting, or publishing the draft.
 _Avoid_: Published run, apply
+
+**Activity Test Run**:
+A Studio-initiated transient execution of an exact saved Activity Definition draft revision. It validates the reusable activity and exposes runtime evidence without publishing a version.
+_Avoid_: Workflow Test Run, Published Run
 
 **Runtime Evidence**:
 Execution information produced by a dispatched workflow, such as status, instance identity, activity count, incident count, logs, traces, artifact references, timing, and expiration.

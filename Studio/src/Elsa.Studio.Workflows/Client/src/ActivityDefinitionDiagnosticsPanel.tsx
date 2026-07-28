@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
   StudioActivityDiagnostic,
@@ -14,9 +15,16 @@ export type ActivityDraftValidationFailure =
   | "forbidden"
   | "not-found";
 
+export interface ActivityDefinitionLocalDiagnostic {
+  area: "JSON";
+  severity: DiagnosticTone;
+  message: string;
+}
+
 export function ActivityDefinitionDiagnosticsPanel({
   validation,
   failure,
+  localDiagnostics = [],
   focusAnnouncement,
   canReturn,
   onFocus,
@@ -24,43 +32,77 @@ export function ActivityDefinitionDiagnosticsPanel({
 }: {
   validation?: ActivityDraftValidationView | null;
   failure?: ActivityDraftValidationFailure | null;
+  localDiagnostics?: ActivityDefinitionLocalDiagnostic[];
   focusAnnouncement?: string | null;
   canReturn: boolean;
   onFocus(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onReturn(): void;
 }) {
-  if (!validation && !failure) return null;
+  const defaultOpen = Boolean(failure || !validation?.isValid || localDiagnostics.some(item => item.severity === "error"));
+  const resetKey = [
+    validation?.validatedAt ?? "",
+    failure ?? "",
+    ...localDiagnostics.map(item => `${item.severity}:${item.message}`)
+  ].join("|");
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => setOpen(defaultOpen), [defaultOpen, resetKey]);
+
+  if (!validation && !failure && localDiagnostics.length === 0) return null;
 
   const diagnostics = validation?.diagnostics ?? [];
-  const counts = countSeverities(diagnostics);
+  const counts = countSeverities(diagnostics, localDiagnostics);
+  const groups = groupDiagnostics(diagnostics);
 
   return <section className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
-    <header className="ad-diagnostics-header">
+    <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+      <summary>
+        <span>Draft diagnostics</span>
+        <span>{counts.error} errors · {counts.warning} warnings · {counts.info} info</span>
+      </summary>
+    <div className="ad-diagnostics-content">
+      <header className="ad-diagnostics-header">
       <div>
-        <span className="ad-kicker">Exact saved revision</span>
+        <span className="ad-kicker">{validation || failure ? "Exact saved revision" : "Local authoring buffer"}</span>
         <h2 id="activity-diagnostics-title">Draft diagnostics</h2>
         <p>{validation
           ? validation.isValid
             ? `Revision ${validation.revision} passed validation. The result is server-authoritative for this exact saved revision.`
             : `Revision ${validation.revision} was rejected by draft validation. Correct the errors before publication or Test Run.`
-          : validationFailureMessage(failure!)}</p>
+          : failure
+            ? validationFailureMessage(failure)
+            : "Local authoring diagnostics must be resolved or reset before revision-sensitive actions can continue."}</p>
       </div>
       {validation ? <span className={`ad-validation-result is-${validation.isValid ? "valid" : "invalid"}`}>
         {validation.isValid ? <CheckCircle2 size={16} aria-hidden /> : <AlertCircle size={16} aria-hidden />}
         {validation.isValid ? "Valid draft" : "Draft rejected"}
       </span> : null}
-    </header>
+      </header>
     <div className="ad-diagnostic-counts" aria-label="Diagnostic severity counts">
       <SeverityCount severity="error" count={counts.error} />
       <SeverityCount severity="warning" count={counts.warning} />
       <SeverityCount severity="info" count={counts.info} />
     </div>
-    {diagnostics.length ? <ActivityDiagnosticList diagnostics={diagnostics} onFocus={onFocus} /> : validation ? <p className="ad-diagnostics-empty">No diagnostics were returned for this saved revision.</p> : null}
+    {groups.map(group => <section key={group.area} className="ad-diagnostic-group" aria-labelledby={`activity-diagnostics-${group.id}`}>
+      <h3 id={`activity-diagnostics-${group.id}`}>{group.area}</h3>
+      <ActivityDiagnosticList diagnostics={group.diagnostics} onFocus={onFocus} label={`${group.area} diagnostics`} />
+    </section>)}
+    {localDiagnostics.length ? <section className="ad-diagnostic-group" aria-labelledby="activity-diagnostics-json">
+      <h3 id="activity-diagnostics-json">JSON</h3>
+      <ul className="ad-diagnostic-list" aria-label="JSON diagnostics">
+        {localDiagnostics.map((diagnostic, index) => <li key={`${diagnostic.severity}:${index}`} className={`ad-diagnostic-item is-${diagnostic.severity}`}>
+          <div className="ad-diagnostic-item-heading"><span className="ad-diagnostic-severity">{severityIcon(diagnostic.severity)} {severityLabel(diagnostic.severity)}</span><code className="ad-diagnostic-code">activity.authoring.json</code></div>
+          <p>{diagnostic.message}</p>
+        </li>)}
+      </ul>
+    </section> : null}
+    {!diagnostics.length && !localDiagnostics.length && validation ? <p className="ad-diagnostics-empty">No diagnostics were returned for this saved revision.</p> : null}
     <div className="ad-diagnostic-context" role="status" aria-live="polite">
       <span>{focusAnnouncement ?? "Select a diagnostic to move to a supported contract control or provider-owned implementation location."}</span>
       {canReturn ? <button type="button" onClick={onReturn}><Undo2 size={15} aria-hidden /> Return to diagnostic</button> : null}
     </div>
     <p className="ad-runtime-distinction"><strong>Runtime is separate.</strong> A later Test Run can be rejected during dispatch even when this draft is valid; Runtime rejection is reported by the Test Run experience, not as a draft-validation transport failure.</p>
+    </div>
+    </details>
   </section>;
 }
 
@@ -115,11 +157,40 @@ function SeverityCount({ severity, count }: { severity: DiagnosticTone; count: n
   return <span className={`is-${severity}`}>{severityIcon(severity)} <strong>{count}</strong> {severity}{count === 1 ? "" : "s"}</span>;
 }
 
-function countSeverities(diagnostics: StudioActivityDiagnostic[]) {
-  return diagnostics.reduce((counts, diagnostic) => {
-    counts[safeSeverity(diagnostic.severity)] += 1;
-    return counts;
+function countSeverities(
+  diagnostics: StudioActivityDiagnostic[],
+  localDiagnostics: ActivityDefinitionLocalDiagnostic[] = []
+) {
+  const counts = diagnostics.reduce((result, diagnostic) => {
+    result[safeSeverity(diagnostic.severity)] += 1;
+    return result;
   }, { error: 0, warning: 0, info: 0 });
+  return localDiagnostics.reduce((result, diagnostic) => {
+    result[diagnostic.severity] += 1;
+    return result;
+  }, counts);
+}
+
+function groupDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
+  const groups = new Map<string, StudioActivityDiagnostic[]>();
+  for (const diagnostic of diagnostics) {
+    const area = diagnosticArea(diagnostic);
+    groups.set(area, [...(groups.get(area) ?? []), diagnostic]);
+  }
+  return [...groups].map(([area, items]) => ({
+    area,
+    id: area.toLocaleLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
+    diagnostics: items
+  }));
+}
+
+function diagnosticArea(diagnostic: StudioActivityDiagnostic) {
+  const pointer = diagnostic.location?.jsonPointer ?? "";
+  if (pointer.startsWith("/contract")) return "Public contract";
+  if (pointer.startsWith("/outputMappings") || pointer.startsWith("/outcomeMappings")) return "Boundary mappings";
+  if (pointer.startsWith("/rootActivity") || pointer.startsWith("/variables")) return "Graph";
+  if (diagnostic.location?.providerKey) return "Provider";
+  return "General";
 }
 
 function safeSeverity(severity: string): DiagnosticTone {

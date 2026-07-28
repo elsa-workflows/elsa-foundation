@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
 import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
@@ -19,7 +18,7 @@ import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { maxInspectorWidth, maxPaletteWidth, minInspectorWidth, minPaletteWidth, weaverUnavailableTitle } from "./constants";
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
-import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext, type WorkflowSlotNavigation } from "./contexts";
+import type { WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
@@ -29,8 +28,7 @@ import {
   normalizeWorkflowError
 } from "./editorHelpers";
 import { WorkflowAlert } from "./WorkflowAlert";
-import { nodeTypes, edgeTypes, ConnectMenu } from "./graph";
-import { workflowCanvasAriaLabelConfig } from "./workflowAccessibility";
+import { ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
@@ -51,6 +49,9 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
+import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
+import { GraphAuthoringWorkspace } from "../graph-authoring/GraphAuthoringWorkspace";
+import { filterGraphAuthoringContributions } from "../graph-authoring/graphAuthoringContributions";
 import {
   InspectorPanel,
   resolveActivityInspectorTabId,
@@ -689,7 +690,7 @@ export function WorkflowEditor({
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const contributedPanelTabs = workflowDesignerPanels
+  const contributedPanelTabs = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition")
     .map(panel => {
       const ContributedPanel = panel.component;
       return {
@@ -969,8 +970,11 @@ export function WorkflowEditor({
         />
       ) : null}
 
-      <div className={editorBodyClassName} style={editorBodyStyle}>
-        <aside className="wf-palette" aria-label="Activities panel">
+      <GraphAuthoringWorkspace
+        resourceKind="workflow-definition"
+        className={editorBodyClassName}
+        style={editorBodyStyle}
+        palette={<aside className="wf-palette" aria-label="Activities panel">
           <div className="wf-panel-title">
             <PanelTabList
               label="Activities panel tabs"
@@ -1002,9 +1006,8 @@ export function WorkflowEditor({
             </span>
           </div>
           {paletteExpanded ? activeLeftPanel.render() : null}
-        </aside>
-
-        {paletteExpanded && !maximizedSidePanel ? (
+        </aside>}
+        paletteResizeHandle={paletteExpanded && !maximizedSidePanel ? (
           <div
             className="wf-side-resize-handle left"
             role="separator"
@@ -1018,8 +1021,7 @@ export function WorkflowEditor({
             onKeyDown={event => handleSidePanelResizeKeyDown("palette", event)}
           />
         ) : <div className="wf-side-resize-spacer" />}
-
-        <main className="wf-canvas-shell">
+        canvas={<main className="wf-canvas-shell">
           <div className="wf-canvas-tabs">
             <PanelTabList
               label="Editor view tabs"
@@ -1035,50 +1037,40 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={frames} onNavigate={next => navigateToScope(next, null)} />
-          <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
-            <WorkflowEdgeActionsContext.Provider value={edgeActions}>
-              <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>
-              <WorkflowSlotNavigationContext.Provider value={slotNavigation}>
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                onInit={setReactFlowInstance}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodesDelete={onNodesDelete}
-                onEdgesDelete={onEdgesDelete}
-                onConnect={onConnect}
-                onConnectStart={canCreateActivityFromPort ? onConnectStart : undefined}
-                onConnectEnd={canCreateActivityFromPort ? onConnectEnd : undefined}
-                onReconnect={isFlowchartDesigner || isBpmnDesigner ? onReconnect : undefined}
-                isValidConnection={isValidConnection}
-                onDragOver={onCanvasDragOver}
-                onDragLeave={onCanvasDragLeave}
-                onDrop={onCanvasDrop}
-                onPaneClick={() => select(null)}
-                onNodeClick={(_, node) => select(node.id)}
-                onNodeDragStop={isUnsupportedDesigner ? undefined : commitLayout}
-                minZoom={0.2}
-                maxZoom={1.8}
-                nodesConnectable={canCreateActivityFromPort}
-                nodesDraggable={!isUnsupportedDesigner}
-                nodeDragThreshold={5}
-                selectionOnDrag
-                multiSelectionKeyCode={["Shift", "Meta", "Control"]}
-                deleteKeyCode={isUnsupportedDesigner ? null : ["Backspace", "Delete"]}
-                panActivationKeyCode={null}
-                ariaLabelConfig={workflowCanvasAriaLabelConfig}
-                defaultEdgeOptions={{ type: "workflow" }}
-              >
-                <Background gap={18} size={1} />
-                <Controls />
-                <MiniMap pannable zoomable />
-              </ReactFlow>
-              </WorkflowSlotNavigationContext.Provider>
-              </WorkflowNodeAvailabilityContext.Provider>
-            </WorkflowEdgeActionsContext.Provider>
+          <GraphAuthoringCanvas
+            canvasRef={canvasRef}
+            canvasProps={{
+              onDragOver: onCanvasDragOver,
+              onDragLeave: onCanvasDragLeave,
+              onDrop: onCanvasDrop
+            }}
+            edgeActions={edgeActions}
+            availabilityLookup={availabilityLookup}
+            slotNavigation={slotNavigation}
+            reactFlowProps={{
+              nodes,
+              edges,
+              onInit: setReactFlowInstance,
+              onNodesChange,
+              onEdgesChange,
+              onNodesDelete,
+              onEdgesDelete,
+              onConnect,
+              onConnectStart: canCreateActivityFromPort ? onConnectStart : undefined,
+              onConnectEnd: canCreateActivityFromPort ? onConnectEnd : undefined,
+              onReconnect: isFlowchartDesigner || isBpmnDesigner ? onReconnect : undefined,
+              isValidConnection,
+              onDragOver: onCanvasDragOver,
+              onDragLeave: onCanvasDragLeave,
+              onDrop: onCanvasDrop,
+              onPaneClick: () => select(null),
+              onNodeClick: (_, node) => select(node.id),
+              onNodeDragStop: isUnsupportedDesigner ? undefined : commitLayout,
+              nodesConnectable: canCreateActivityFromPort,
+              nodesDraggable: !isUnsupportedDesigner,
+              deleteKeyCode: isUnsupportedDesigner ? null : ["Backspace", "Delete"]
+            }}
+            overlays={<>
             {insideEmptySlot ? (
               <SlotEmptyState
                 slotLabel={scope?.slot.label ?? "this slot"}
@@ -1100,7 +1092,8 @@ export function WorkflowEditor({
                 onClose={() => setConnectMenu(null)}
               />
             ) : null}
-          </div>
+            </>}
+          />
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}
@@ -1110,9 +1103,8 @@ export function WorkflowEditor({
           />
           </>
           )}
-        </main>
-
-        {inspectorExpanded && !maximizedSidePanel ? (
+        </main>}
+        inspectorResizeHandle={inspectorExpanded && !maximizedSidePanel ? (
           <div
             className="wf-side-resize-handle right"
             role="separator"
@@ -1126,8 +1118,7 @@ export function WorkflowEditor({
             onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
           />
         ) : <div className="wf-side-resize-spacer" />}
-
-        <aside className="wf-inspector" aria-label="Inspector panel">
+        inspector={<aside className="wf-inspector" aria-label="Inspector panel">
           <div className="wf-panel-title">
             <PanelTabList
               label="Inspector panel tabs"
@@ -1159,8 +1150,8 @@ export function WorkflowEditor({
             </span>
           </div>
           {inspectorExpanded ? activeRightPanel.render() : null}
-        </aside>
-      </div>
+        </aside>}
+      />
     </section>
   );
 }

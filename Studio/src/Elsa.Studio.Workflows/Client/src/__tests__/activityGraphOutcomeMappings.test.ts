@@ -4,6 +4,7 @@ import {
   activityGraphSchema2ImplementationEditorContribution
 } from "../activityGraphContribution";
 import {
+  canAddActivityGraphOutcomeMapping,
   getActivityGraphOutcomeMappingOptions,
   normalizeActivityGraphPayload
 } from "../ActivityGraphImplementationEditor";
@@ -62,6 +63,15 @@ describe("Activity Graph schema-2 boundary outcome mappings", () => {
     expect(options.boundaryOutcomes).toEqual([
       { referenceKey: "approved-boundary", name: "Approved" }
     ]);
+  });
+
+  it("allows several source outcomes to converge on one public boundary while keeping sources unique", () => {
+    const mappings = [
+      { sourceOutcomeReferenceKey: "approved", boundaryOutcomeReferenceKey: "accepted-boundary" }
+    ];
+
+    expect(canAddActivityGraphOutcomeMapping(mappings, "rejected")).toBe(true);
+    expect(canAddActivityGraphOutcomeMapping(mappings, "approved")).toBe(false);
   });
 });
 

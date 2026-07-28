@@ -288,6 +288,7 @@ export interface StudioPanelContribution {
 }
 
 export type StudioWorkflowDesignerPanelSide = "left" | "right";
+export type StudioGraphAuthoringResourceKind = "workflow-definition" | "activity-definition-graph";
 
 export interface StudioWorkflowDesignerPanelProps<TContext = unknown> {
   context: TContext;
@@ -298,6 +299,11 @@ export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
   title: string;
   side: StudioWorkflowDesignerPanelSide;
   order?: number;
+  /**
+   * Resource hosts this panel supports. Omission preserves the pre-existing workflow-only contract;
+   * extensions must opt in before they can receive an Activity Definition graph context.
+   */
+  supportedResourceKinds?: StudioGraphAuthoringResourceKind[];
   component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
 }
 
@@ -1317,6 +1323,21 @@ export interface StudioActivityOutcomeContract {
 
 export interface StudioActivityDefinitionContract {
   contractSchemaVersion: string;
+  inputs?: Array<Record<string, unknown> & {
+    referenceKey: string;
+    name: string;
+    displayName?: string | null;
+    description?: string | null;
+    type?: Record<string, unknown>;
+  }>;
+  outputs?: Array<Record<string, unknown> & {
+    referenceKey: string;
+    name: string;
+    displayName?: string | null;
+    description?: string | null;
+    type?: Record<string, unknown>;
+    isRequired?: boolean;
+  }>;
   outcomes: StudioActivityOutcomeContract[];
 }
 
@@ -1329,6 +1350,10 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   providerSchemaVersion: string;
   manifestFingerprint: string;
   contract?: StudioActivityDefinitionContract;
+  propertyEditors?: StudioActivityPropertyEditorContribution[];
+  expressionEditors?: StudioExpressionEditorContribution[];
+  graphAuthoringPanels?: StudioWorkflowDesignerPanelContribution[];
+  historyResetKey?: string;
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
@@ -1343,6 +1368,8 @@ export interface StudioActivityDefinitionImplementationEditorContribution {
     request: StudioActivityDiagnosticFocusRequest
   ): StudioActivityDiagnosticFocusResult | Promise<StudioActivityDiagnosticFocusResult>;
   component: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
+  /** Optional provider-owned boundary mappings shown beside the public contract, not on the graph canvas. */
+  publicInterfaceComponent?: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 
 export interface ElsaStudioModuleApi {

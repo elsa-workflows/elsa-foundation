@@ -475,13 +475,15 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.getByText("No Activity Definitions yet")).toBeVisible();
 
   await page.getByRole("button", { name: "Create Activity Definition" }).click();
-  await expect(page.getByRole("combobox", { name: "Implementation provider" })).toHaveValue("elsa.activity-graph|1");
+  await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
-  await page.getByRole("textbox", { name: "Category" }).fill("Browser tests");
+  await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
+  await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await page.getByRole("tab", { name: "Public Interface" }).click();
   await page.getByRole("textbox", { name: "Member name" }).fill("Customer note");
   await page.getByRole("button", { name: "Add input" }).click();
   const contractInput = page.getByRole("group", { name: "Input 1: Customer note" });
@@ -491,47 +493,41 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await contractInput.getByRole("textbox", { name: "Literal JSON value" }).fill("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
   await expect(page.getByText("Saved revision 2")).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Root activity" }).locator("option", { hasText: "Flowchart" })).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Root activity" }).selectOption("sequence-v1");
+  await page.getByRole("tab", { name: "Designer" }).click();
+  await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
+  await addPaletteActivity(page, "Write line");
   await expect(page.getByText("Saved revision 3")).toBeVisible();
-  await page.getByRole("combobox", { name: "Activity for Activities" }).selectOption("write-line-v1");
-  await page.getByRole("button", { name: "Add activity" }).click();
+  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await addPaletteActivity(page, "Delay");
   await expect(page.getByText("Saved revision 4")).toBeVisible();
-  await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Activity for Activities" }).selectOption("delay-v1");
-  await page.getByRole("button", { name: "Add activity" }).click();
-  await expect(page.getByText("Saved revision 5")).toBeVisible();
-  await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
+  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
 
   await page.reload();
-  await expect(page.getByText("Saved revision 5")).toBeVisible();
+  await expect(page.getByText("Saved revision 4")).toBeVisible();
+  await page.getByRole("tab", { name: "Public Interface" }).click();
   await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Literal JSON value" })).toHaveValue("null");
-  await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
-  await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
-  page.once("dialog", dialog => dialog.dismiss());
-  await page.getByRole("combobox", { name: "Root activity" }).selectOption("delay-v1");
-  await expect(page.getByRole("combobox", { name: "Root activity" })).toHaveValue("sequence-v1");
-  await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
-  await page.locator(".ad-graph-node").filter({ hasText: "Write line" }).click();
+  await page.getByRole("tab", { name: "Designer" }).click();
+  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await selectGraphNode(page, "Write line");
   page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.locator(".ad-graph-node").getByText("Write line", { exact: true })).toBeVisible();
+  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
 
   state.conflictNextSave = true;
-  await page.locator(".ad-graph-node").filter({ hasText: "Delay" }).click();
-  await page.getByRole("textbox", { name: "Activity inputs JSON" }).fill('[{"name":"Duration","value":"00:00:05"}]');
-  await page.getByRole("button", { name: "Apply inputs" }).click();
+  await selectGraphNode(page, "Delay");
+  await page.getByRole("button", { name: "Move activity left" }).click();
   await expect(page.getByText("Local work preserved")).toBeVisible();
-  await expect(page.getByText(/server draft advanced to revision 6/i)).toBeVisible();
-  await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
+  await expect(page.getByText(/server draft advanced to revision 5/i)).toBeVisible();
+  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
   await expect(page).toHaveURL(/draft=activity-draft-recovery/);
   await expect(page.getByText("Saved revision 1")).toBeVisible();
-  await expect(page.locator(".ad-graph-node").getByText("Delay", { exact: true })).toBeVisible();
+  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
   expect(state.conflictCopyPayload).toMatchObject({ rootActivity: { activityVersionId: "sequence-v1", structure: { payload: { activities: [
-    { activityVersionId: "write-line-v1" },
-    { activityVersionId: "delay-v1", inputs: [{ name: "Duration", value: "00:00:05" }] }
+    { activityVersionId: "delay-v1" },
+    { activityVersionId: "write-line-v1" }
   ] } } } });
   expect(state.draft.contract).toMatchObject({ inputs: [{ referenceKey: "customer-note", isRequired: false, isNullable: true, default: { syntax: "Literal", value: null }, storageDriverKey: "elsa.json", durability: "Required" }] });
 });
@@ -540,6 +536,7 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
+  await page.getByRole("tab", { name: "Public Interface" }).click();
   await expect(page.getByText("Add input currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
   expect(state.proposalApplies).toBe(0);
@@ -576,11 +573,13 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Public Interface" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 
   await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
-  await expect(page.getByRole("combobox", { name: "Root activity" })).toBeFocused();
+  await expect(page.locator("[data-graph-root-location]")).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Designer" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
 
   await page.getByRole("button", { name: "Focus activity.future-location" }).click();
@@ -597,6 +596,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await page.locator(".ad-diagnostics-panel summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
 
@@ -624,13 +624,15 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
 test("Activity Graph diagnostics focus accessible root context while the exact control is pending", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
-  state.catalogBlocked = true;
-  await page.goto("/?mode=activity-definitions");
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
-  await page.getByRole("textbox", { name: "Display name" }).fill("Pending catalog activity");
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await createBrowserActivity(page);
   await expect(page.getByText("Saved revision 1")).toBeVisible();
 
+  state.draft = {
+    ...state.draft,
+    provider: { ...state.draft.provider, payload: initialGraphPayload() }
+  };
+  state.catalogBlocked = true;
+  await page.reload();
   state.validationMode = "invalid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
@@ -670,10 +672,10 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("combobox", { name: "Root activity" }).selectOption("sequence-v1");
-  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
+  await page.locator(".ad-diagnostics-panel summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Prepare publication" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
@@ -2352,8 +2354,22 @@ async function createBrowserActivity(page: Page) {
   await page.goto("/?mode=activity-definitions");
   await page.getByRole("button", { name: "Create Activity Definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
+  await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();
   await expect(page.getByText("Saved revision 1")).toBeVisible({ timeout: 15_000 });
+}
+
+async function selectSequenceComposition(page: Page) {
+  await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence" }) }).click();
+}
+
+async function addPaletteActivity(page: Page, name: string) {
+  await page.getByRole("searchbox", { name: "Search activity palette" }).fill(name);
+  await page.getByRole("treeitem").filter({ hasText: name }).click();
+}
+
+async function selectGraphNode(page: Page, name: string) {
+  await page.locator(".react-flow__node").filter({ hasText: name }).dispatchEvent("click");
 }
 
 function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {
