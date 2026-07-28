@@ -104,6 +104,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
+  const [designerLifecycleOpen, setDesignerLifecycleOpen] = useState(false);
   const [codeBufferState, setCodeBufferState] = useState<ActivityDefinitionDraftCodeBufferState>({
     dirty: false,
     valid: true
@@ -495,6 +496,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   const canEditProvider = hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
   const revisionSensitiveActionsBlocked = status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty;
   const dependentActionsBlocked = !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
+  const graphDesignerActive = activeView === "designer" && draft.provider.providerKey === "elsa.activity-graph";
   const updateCodeBufferState = useCallback((next: ActivityDefinitionDraftCodeBufferState) => {
     setCodeBufferState(current => current.dirty === next.dirty && current.valid === next.valid ? current : next);
   }, []);
@@ -529,9 +531,27 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     onBack(true);
   };
 
-  return <main className="ad-page ad-draft-editor" aria-labelledby="activity-draft-title">
-    <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><h1 id="activity-draft-title">{draftHeaderTitle(definitionDisplayName, draft)}</h1><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button><button type="button" onClick={() => void validateSavedRevision()} disabled={dependentActionsBlocked}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button></div></header>
+  return <main className={`ad-page ad-draft-editor${graphDesignerActive ? " is-graph-designer" : ""}`} aria-labelledby="activity-draft-title">
+    <div className="ad-draft-editor-toolbar">
+      <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
+      <header className="ad-workbench-header"><div><span className="ad-kicker">Exact mutable draft</span><div className="ad-draft-title-line"><h1 id="activity-draft-title">{draftHeaderTitle(definitionDisplayName, draft)}</h1><span className={`ad-save-chip is-${contractLocallyValid ? status : "failed"}`}>{contractLocallyValid ? saveStatusLabel(status, draft.revision) : "Correction required"}</span></div><p><code>{draft.draftId}</code> · {draft.provider.providerKey} · schema {draft.provider.schemaVersion}</p></div><div className="ad-header-actions"><button type="button" onClick={() => setMigrationOpen(true)} disabled={revisionSensitiveActionsBlocked}>Migrate provider</button><button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button><button type="button" onClick={() => void validateSavedRevision()} disabled={dependentActionsBlocked}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button><button type="button" className="ad-primary-action" onClick={saveNow} disabled={!contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button></div></header>
+    </div>
+    <nav className="ad-authoring-view-tabs" role="tablist" aria-label="Activity Definition authoring views">
+      {([
+        ["designer", "Designer"],
+        ["public-interface", "Public Interface"],
+        ["code", "Code"]
+      ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={activeView === id} onClick={() => setActiveView(id)}>{label}</button>)}
+    </nav>
+    <details
+      className="ad-draft-lifecycle"
+      open={!graphDesignerActive || designerLifecycleOpen}
+      onToggle={event => {
+        if (graphDesignerActive) setDesignerLifecycleOpen(event.currentTarget.open);
+      }}
+    >
+    <summary>Draft details &amp; publication</summary>
+    <div className="ad-draft-lifecycle-content">
     <label className="ad-draft-label"><span>Draft label <small>Optional · need not be unique</small></span><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small></label>
     <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid ? "alert" : "status"} aria-live="polite"><strong>{contractLocallyValid ? saveStatusLabel(status, draft.revision) : "Contract correction required"}</strong><span>{contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : `Server revision ${draft.revision} is saved, but a visible literal is not valid contract data and has not been added to the autosave queue. Correct it or explicitly discard local changes.`}</span></div>
     <ActivityDefinitionPublicationReview
@@ -545,15 +565,10 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
       onFocusDiagnostic={focusDiagnostic}
       onOpenVersion={versionId => onOpenVersion(draft.definitionId, versionId)}
     />
+    </div>
+    </details>
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from revision {recovery.baseRevision} for {recovery.providerKey} schema {recovery.providerSchemaVersion}. It expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}
     {status === "conflict" ? <section className="ad-conflict-card" role="alert"><AlertTriangle size={20} /><div><h2>Local work preserved</h2><p>The server draft advanced to revision {conflictRevision}. Studio paused autosave and will not force overwrite or merge opaque provider state.</p><button type="button" onClick={() => void createConflictCopy()} disabled={copying}><CopyPlus size={16} /> {copying ? "Creating recovery draft…" : "Create parallel recovery draft"}</button>{copyError ? <span>Recovery could not be confirmed. The local work remains in this editor.</span> : null}</div></section> : null}
-    <nav className="ad-authoring-view-tabs" role="tablist" aria-label="Activity Definition authoring views">
-      {([
-        ["designer", "Designer"],
-        ["public-interface", "Public Interface"],
-        ["code", "Code"]
-      ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={activeView === id} onClick={() => setActiveView(id)}>{label}</button>)}
-    </nav>
     <section role="tabpanel" aria-label="Public Interface" hidden={activeView !== "public-interface"}>
     {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading the authorized contract capability catalog…</div> : <div ref={contractEditorRef}><ActivityDefinitionContractEditor
       contract={draft.contract}
@@ -598,7 +613,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
       </Suspense>
     </section> : null}
     </section>
-    <section role="tabpanel" aria-label="Designer" hidden={activeView !== "designer"}>
+    <section className="ad-designer-view" role="tabpanel" aria-label="Designer" hidden={activeView !== "designer"}>
     {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}:${status === "conflict" ? `conflict-${conflictRevision ?? "unknown"}` : "active"}`} value={{ payload: draft.provider.payload, layout: draft.layout }} readOnly={status === "conflict" || proposalApplying} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
     </section>
     <section role="tabpanel" aria-label="Code" hidden={activeView !== "code"}>

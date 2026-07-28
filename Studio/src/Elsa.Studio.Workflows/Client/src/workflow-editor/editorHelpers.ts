@@ -456,11 +456,11 @@ export function readStoredBoolean(key: string, fallback: boolean) {
   return fallback;
 }
 
-export function readStoredMaximizedSide(): WorkflowSidePanel | null {
+export function readStoredMaximizedSide(key = workflowSidePanelMaximizedStorageKey): WorkflowSidePanel | null {
   const storage = getLocalStorage();
   if (!storage) return null;
 
-  const value = storage.getItem(workflowSidePanelMaximizedStorageKey);
+  const value = storage.getItem(key);
   return value === "palette" || value === "inspector" ? value : null;
 }
 

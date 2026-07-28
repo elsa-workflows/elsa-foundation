@@ -104,6 +104,14 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(rendered.container.querySelector("[data-graph-root-location]")?.textContent).toContain("Flowchart");
     expect(rendered.container.textContent).not.toContain("Inputs (JSON array)");
     expect(rendered.container.querySelector("[data-graph-node-id='root']")).toBeNull();
+    expect(buttonByText(rendered.container, "Collapse activities panel", "aria-label")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Maximize activities panel", "aria-label")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Collapse inspector panel", "aria-label")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Maximize inspector panel", "aria-label")).toBeTruthy();
+    expect(rendered.container.querySelector("[aria-label='Resize activities panel']")).toBeTruthy();
+    expect(rendered.container.querySelector("[aria-label='Resize inspector panel']")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Auto-layout Activity Graph", "aria-label")).toBeTruthy();
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Variables");
 
     click(buttonByText(rendered.container, "Primitives1"));
     click(buttonByText(rendered.container, "Write line"));
@@ -118,6 +126,10 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
         })
       })
     }));
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Inputs");
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Outputs");
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Details");
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Version");
 
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
     expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
@@ -178,6 +190,13 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
       const picker = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']");
       expect([...picker!.options].map(option => option.textContent)).toContainEqual(expect.stringContaining("Customer ID"));
     });
+  });
+
+  it("keeps the shared inspector read-only when the Activity Definition host is locked", () => {
+    catalogItems = [flowchartCatalogItem()];
+    const rendered = renderDesigner({ readOnly: true });
+
+    expect(rendered.container.querySelector<HTMLFieldSetElement>(".wf-inspector-tab-panels")?.disabled).toBe(true);
   });
 });
 

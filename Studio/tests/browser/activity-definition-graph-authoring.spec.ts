@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.setTimeout(60_000);
+
 test("Activity Definition graph authoring shares the designer without workflow lifecycle UI", async ({ page }) => {
   const requests = await mockGraphAuthoring(page);
   await page.goto("/?mode=activity-definition-graph-authoring&theme=black-glass");
@@ -7,6 +9,18 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await expect(page.getByRole("heading", { name: "Browser graph activity" })).toBeVisible();
   await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo Activity Graph edit" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Auto-layout Activity Graph" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse activities panel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Maximize activities panel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse inspector panel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Maximize inspector panel" })).toBeVisible();
+  await expect(page.getByRole("separator", { name: "Resize activities panel" })).toBeVisible();
+  await expect(page.getByRole("separator", { name: "Resize inspector panel" })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Inputs");
+  await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Outputs");
+  await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Variables");
+  await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Details");
+  await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Version");
   await expect(page.getByRole("button", { name: /Publish|Deploy|Instances|Triggers|Schedule/i })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Create Activity Definition" }).click();

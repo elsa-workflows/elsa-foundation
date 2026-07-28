@@ -17,35 +17,51 @@ import {
 import type { WorkflowSidePanel } from "./editorTypes";
 import { clamp, readStoredBoolean, readStoredMaximizedSide, readStoredNumber, writeStoredValue } from "./editorHelpers";
 
+export interface SidePanelLayoutStorageKeys {
+  paletteWidth: string;
+  inspectorWidth: string;
+  paletteCollapsed: string;
+  inspectorCollapsed: string;
+  maximized: string;
+}
+
+const workflowSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
+  paletteWidth: workflowPaletteWidthStorageKey,
+  inspectorWidth: workflowInspectorWidthStorageKey,
+  paletteCollapsed: workflowPaletteCollapsedStorageKey,
+  inspectorCollapsed: workflowInspectorCollapsedStorageKey,
+  maximized: workflowSidePanelMaximizedStorageKey
+};
+
 // Owns the palette/inspector width, collapse and maximize state, their persistence, and the
 // pointer/keyboard resize handlers. Lifted out of WorkflowEditor so the editor no longer carries the
 // five side-panel useStates and their sync effects.
-export function useSidePanelLayout() {
-  const [paletteWidth, setPaletteWidth] = useState(() => readStoredNumber(workflowPaletteWidthStorageKey, defaultPaletteWidth, minPaletteWidth, maxPaletteWidth));
-  const [inspectorWidth, setInspectorWidth] = useState(() => readStoredNumber(workflowInspectorWidthStorageKey, defaultInspectorWidth, minInspectorWidth, maxInspectorWidth));
-  const [paletteCollapsed, setPaletteCollapsed] = useState(() => readStoredBoolean(workflowPaletteCollapsedStorageKey, false));
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => readStoredBoolean(workflowInspectorCollapsedStorageKey, false));
-  const [maximizedSidePanel, setMaximizedSidePanel] = useState<WorkflowSidePanel | null>(readStoredMaximizedSide);
+export function useSidePanelLayout(storageKeys: SidePanelLayoutStorageKeys = workflowSidePanelStorageKeys) {
+  const [paletteWidth, setPaletteWidth] = useState(() => readStoredNumber(storageKeys.paletteWidth, defaultPaletteWidth, minPaletteWidth, maxPaletteWidth));
+  const [inspectorWidth, setInspectorWidth] = useState(() => readStoredNumber(storageKeys.inspectorWidth, defaultInspectorWidth, minInspectorWidth, maxInspectorWidth));
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() => readStoredBoolean(storageKeys.paletteCollapsed, false));
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => readStoredBoolean(storageKeys.inspectorCollapsed, false));
+  const [maximizedSidePanel, setMaximizedSidePanel] = useState<WorkflowSidePanel | null>(() => readStoredMaximizedSide(storageKeys.maximized));
 
   useEffect(() => {
-    writeStoredValue(workflowPaletteWidthStorageKey, String(paletteWidth));
-  }, [paletteWidth]);
+    writeStoredValue(storageKeys.paletteWidth, String(paletteWidth));
+  }, [paletteWidth, storageKeys.paletteWidth]);
 
   useEffect(() => {
-    writeStoredValue(workflowInspectorWidthStorageKey, String(inspectorWidth));
-  }, [inspectorWidth]);
+    writeStoredValue(storageKeys.inspectorWidth, String(inspectorWidth));
+  }, [inspectorWidth, storageKeys.inspectorWidth]);
 
   useEffect(() => {
-    writeStoredValue(workflowPaletteCollapsedStorageKey, String(paletteCollapsed));
-  }, [paletteCollapsed]);
+    writeStoredValue(storageKeys.paletteCollapsed, String(paletteCollapsed));
+  }, [paletteCollapsed, storageKeys.paletteCollapsed]);
 
   useEffect(() => {
-    writeStoredValue(workflowInspectorCollapsedStorageKey, String(inspectorCollapsed));
-  }, [inspectorCollapsed]);
+    writeStoredValue(storageKeys.inspectorCollapsed, String(inspectorCollapsed));
+  }, [inspectorCollapsed, storageKeys.inspectorCollapsed]);
 
   useEffect(() => {
-    writeStoredValue(workflowSidePanelMaximizedStorageKey, maximizedSidePanel);
-  }, [maximizedSidePanel]);
+    writeStoredValue(storageKeys.maximized, maximizedSidePanel);
+  }, [maximizedSidePanel, storageKeys.maximized]);
 
   useEffect(() => {
     if (!maximizedSidePanel) return;

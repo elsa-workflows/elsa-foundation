@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type {
@@ -71,6 +71,8 @@ interface InspectorPanelProps {
   catalog: ActivityCatalogItem[];
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
+  variablesPanel?: ReactNode;
+  readOnly?: boolean;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
@@ -112,6 +114,8 @@ export function InspectorPanel({
   catalog,
   catalogByVersion,
   selectedSupportsScopedVariables,
+  variablesPanel,
+  readOnly = false,
   propertyEditors,
   expressionEditors,
   expressionDescriptors,
@@ -245,7 +249,7 @@ export function InspectorPanel({
         ariaLabel="Activity inspector sections"
         onSelect={tabId => selectTab(tabId as ActivityInspectorTabId)}
       />
-      <div className="wf-inspector-tab-panels">
+      <fieldset className="wf-inspector-tab-panels" disabled={readOnly} aria-disabled={readOnly || undefined}>
         <StudioTabPanel {...tabPanelProps("inputs")}>
           {propertiesPanel}
         </StudioTabPanel>
@@ -264,17 +268,19 @@ export function InspectorPanel({
         </StudioTabPanel>
         {selectedSupportsScopedVariables ? (
           <StudioTabPanel {...tabPanelProps("variables")}>
-            <div className="wf-container-variables">
-              <ScopedVariablesEditor
-                context={context}
-                variables={readContainerVariables(selectedNode)}
-                title="Container variables"
-                addLabel="Add container variable"
-                emptyLabel="No container variables declared on this activity."
-                warnings={shadowingWarningMap(scopedVariableAnalysis.shadowingWarnings, selectedNode.nodeId)}
-                onChange={next => onSelectedActivityChange(writeContainerVariables(selectedNode, next as VariableDefinition[]))}
-              />
-            </div>
+            {variablesPanel ?? (
+              <div className="wf-container-variables">
+                <ScopedVariablesEditor
+                  context={context}
+                  variables={readContainerVariables(selectedNode)}
+                  title="Container variables"
+                  addLabel="Add container variable"
+                  emptyLabel="No container variables declared on this activity."
+                  warnings={shadowingWarningMap(scopedVariableAnalysis.shadowingWarnings, selectedNode.nodeId)}
+                  onChange={next => onSelectedActivityChange(writeContainerVariables(selectedNode, next as VariableDefinition[]))}
+                />
+              </div>
+            )}
           </StudioTabPanel>
         ) : null}
         {hasSlots ? (
@@ -370,7 +376,7 @@ export function InspectorPanel({
           ) : null}
           </div>
         </StudioTabPanel>
-      </div>
+      </fieldset>
     </div>
   );
 }

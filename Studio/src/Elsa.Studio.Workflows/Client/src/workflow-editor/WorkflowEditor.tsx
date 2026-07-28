@@ -25,7 +25,7 @@ import {
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
-import { maxInspectorWidth, maxPaletteWidth, minInspectorWidth, minPaletteWidth, weaverUnavailableTitle } from "./constants";
+import { weaverUnavailableTitle } from "./constants";
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowSlotNavigation } from "./contexts";
 import {
@@ -60,7 +60,7 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
-import { GraphAuthoringWorkspace } from "../graph-authoring/GraphAuthoringWorkspace";
+import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { filterGraphAuthoringContributions } from "../graph-authoring/graphAuthoringContributions";
 import {
   InspectorPanel,
@@ -190,6 +190,22 @@ export function WorkflowEditor({
     startSidePanelResize,
     handleSidePanelResizeKeyDown
   } = useSidePanelLayout();
+  const sidePanelLayout = {
+    paletteWidth,
+    inspectorWidth,
+    paletteCollapsed,
+    inspectorCollapsed,
+    maximizedSidePanel,
+    setInspectorCollapsed,
+    paletteExpanded,
+    inspectorExpanded,
+    editorBodyClassName,
+    editorBodyStyle,
+    toggleSidePanelCollapsed,
+    toggleSidePanelMaximized,
+    startSidePanelResize,
+    handleSidePanelResizeKeyDown
+  };
 
   const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft, restoreDraft: loadDraft });
 
@@ -1098,57 +1114,16 @@ export function WorkflowEditor({
         </div>
       ) : null}
 
-      <GraphAuthoringWorkspace
+      <GraphAuthoringWorkbench
         resourceKind="workflow-definition"
-        className={editorBodyClassName}
-        style={editorBodyStyle}
-        palette={<aside className="wf-palette" aria-label="Activities panel">
-          <div className="wf-panel-title">
-            <PanelTabList
-              label="Activities panel tabs"
-              tabs={leftPanelTabs}
-              activeTabId={activeLeftPanel.id}
-              onSelect={setActiveLeftPanelId}
-            />
-            <span className="wf-panel-actions">
-              <button
-                type="button"
-                className="wf-panel-action-button"
-                aria-label={paletteCollapsed ? "Expand activities panel" : "Collapse activities panel"}
-                title={paletteCollapsed ? "Expand" : "Collapse"}
-                onClick={() => toggleSidePanelCollapsed("palette")}
-              >
-                {paletteCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-              </button>
-              {!paletteCollapsed ? (
-                <button
-                  type="button"
-                  className="wf-panel-action-button"
-                  aria-label={maximizedSidePanel === "palette" ? "Restore activities panel" : "Maximize activities panel"}
-                  title={maximizedSidePanel === "palette" ? "Restore" : "Maximize"}
-                  onClick={() => toggleSidePanelMaximized("palette")}
-                >
-                  {maximizedSidePanel === "palette" ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                </button>
-              ) : null}
-            </span>
-          </div>
-          {paletteExpanded ? activeLeftPanel.render() : null}
-        </aside>}
-        paletteResizeHandle={paletteExpanded && !maximizedSidePanel ? (
-          <div
-            className="wf-side-resize-handle left"
-            role="separator"
-            aria-label="Resize activities panel"
-            aria-orientation="vertical"
-            aria-valuemin={minPaletteWidth}
-            aria-valuemax={maxPaletteWidth}
-            aria-valuenow={paletteWidth}
-            tabIndex={0}
-            onPointerDown={event => startSidePanelResize("palette", event)}
-            onKeyDown={event => handleSidePanelResizeKeyDown("palette", event)}
-          />
-        ) : <div className="wf-side-resize-spacer" />}
+        layout={sidePanelLayout}
+        palette={{
+          ariaLabel: "Activities panel",
+          tabLabel: "Activities panel tabs",
+          tabs: leftPanelTabs,
+          activeTabId: activeLeftPanel.id,
+          onSelect: setActiveLeftPanelId
+        }}
         canvas={<main className="wf-canvas-shell">
           <div className="wf-canvas-tabs">
             <PanelTabList
@@ -1232,53 +1207,13 @@ export function WorkflowEditor({
           </>
           )}
         </main>}
-        inspectorResizeHandle={inspectorExpanded && !maximizedSidePanel ? (
-          <div
-            className="wf-side-resize-handle right"
-            role="separator"
-            aria-label="Resize inspector panel"
-            aria-orientation="vertical"
-            aria-valuemin={minInspectorWidth}
-            aria-valuemax={maxInspectorWidth}
-            aria-valuenow={inspectorWidth}
-            tabIndex={0}
-            onPointerDown={event => startSidePanelResize("inspector", event)}
-            onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
-          />
-        ) : <div className="wf-side-resize-spacer" />}
-        inspector={<aside className="wf-inspector" aria-label="Inspector panel">
-          <div className="wf-panel-title">
-            <PanelTabList
-              label="Inspector panel tabs"
-              tabs={rightPanelTabs}
-              activeTabId={activeRightPanel.id}
-              onSelect={setActiveRightPanelId}
-            />
-            <span className="wf-panel-actions">
-              <button
-                type="button"
-                className="wf-panel-action-button"
-                aria-label={inspectorCollapsed ? "Expand inspector panel" : "Collapse inspector panel"}
-                title={inspectorCollapsed ? "Expand" : "Collapse"}
-                onClick={() => toggleSidePanelCollapsed("inspector")}
-              >
-                {inspectorCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-              </button>
-              {!inspectorCollapsed ? (
-                <button
-                  type="button"
-                  className="wf-panel-action-button"
-                  aria-label={maximizedSidePanel === "inspector" ? "Restore inspector panel" : "Maximize inspector panel"}
-                  title={maximizedSidePanel === "inspector" ? "Restore" : "Maximize"}
-                  onClick={() => toggleSidePanelMaximized("inspector")}
-                >
-                  {maximizedSidePanel === "inspector" ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                </button>
-              ) : null}
-            </span>
-          </div>
-          {inspectorExpanded ? activeRightPanel.render() : null}
-        </aside>}
+        inspector={{
+          ariaLabel: "Inspector panel",
+          tabLabel: "Inspector panel tabs",
+          tabs: rightPanelTabs,
+          activeTabId: activeRightPanel.id,
+          onSelect: setActiveRightPanelId
+        }}
       />
     </section>
   );

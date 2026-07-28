@@ -5,7 +5,7 @@ import {
   type Edge,
   type Node
 } from "@xyflow/react";
-import { ArrowLeft, ArrowRight, ChevronRight, CornerDownRight, Redo2, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, ChevronRight, ListTree, Network, Redo2, Trash2, Undo2 } from "lucide-react";
 import type {
   StudioActivityDefinitionContract,
   StudioActivityDefinitionImplementationEditorProps,
@@ -33,17 +33,30 @@ import { ActivityPalettePanel } from "./workflow-editor/ActivityPalettePanel";
 import { groupActivityPalette } from "./workflow-editor/editorHelpers";
 import { GraphAuthoringCanvas } from "./graph-authoring/GraphAuthoringCanvas";
 import { activityGraphDocumentAdapter, activityGraphLayoutToDesign } from "./activityGraphDocumentAdapter";
-import type { WorkflowEdge } from "./workflow-editor/editorTypes";
-import { GraphAuthoringWorkspace } from "./graph-authoring/GraphAuthoringWorkspace";
-import { GraphAuthoringInspector } from "./graph-authoring/GraphAuthoringInspector";
+import type { WorkflowEdge, WorkflowEditorPanelTab } from "./workflow-editor/editorTypes";
+import { GraphAuthoringWorkbench } from "./graph-authoring/GraphAuthoringWorkbench";
 import { useGraphAuthoringCanvas } from "./graph-authoring/useGraphAuthoringCanvas";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
-import { ActivityPropertiesPanel } from "./ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
 import { decorateWorkflowCanvasElements } from "./workflow-editor/workflowAccessibility";
 import { listExpressionDescriptors } from "./api/expressions";
 import { WorkflowReferenceAuthoringProvider } from "./workflowReferenceAuthoring";
+import {
+  activityGraphInspectorCollapsedStorageKey,
+  activityGraphInspectorWidthStorageKey,
+  activityGraphPaletteCollapsedStorageKey,
+  activityGraphPaletteWidthStorageKey,
+  activityGraphSidePanelMaximizedStorageKey
+} from "./workflow-editor/constants";
+import { useSidePanelLayout, type SidePanelLayoutStorageKeys } from "./workflow-editor/useSidePanelLayout";
+import {
+  InspectorPanel,
+  type ActivityInspectorTabId
+} from "./workflow-editor/InspectorPanel";
+import { compareWorkflowPanelTabs } from "./workflow-editor/PanelTabList";
+import { supportsScopedVariables } from "./scopedVariables";
+import { computeAutoLayout } from "./workflowLayout";
 
 export interface ActivityGraphOutcomeMapping {
   sourceOutcomeReferenceKey: string;
@@ -74,6 +87,13 @@ export interface ActivityGraphOutputMapping {
 
 const emptyActivities: ActivityNode[] = [];
 const emptyOutcomeContracts: StudioActivityDefinitionContract["outcomes"] = [];
+const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
+  paletteWidth: activityGraphPaletteWidthStorageKey,
+  inspectorWidth: activityGraphInspectorWidthStorageKey,
+  paletteCollapsed: activityGraphPaletteCollapsedStorageKey,
+  inspectorCollapsed: activityGraphInspectorCollapsedStorageKey,
+  maximized: activityGraphSidePanelMaximizedStorageKey
+};
 
 export function ActivityGraphPublicInterfaceEditor({
   context,
@@ -219,6 +239,9 @@ export function ActivityGraphImplementationEditor({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [paletteSearch, setPaletteSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set());
+  const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
+  const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
   const draggedActivityRef = useRef<ActivityCatalogItem | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +250,7 @@ export function ActivityGraphImplementationEditor({
     complete(result: StudioActivityDiagnosticFocusResult): void;
   } | null>(null);
   const expressionState = useActivityGraphExpressionDescriptors(context);
+  const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys);
 
   const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>) => {
     const documentOwner = findNodeByPath(documentRoot, scopePath, catalogByVersion) ?? documentRoot;
@@ -279,10 +303,8 @@ export function ActivityGraphImplementationEditor({
   const activities = slot?.activities ?? emptyActivities;
   const selected = activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
   const selectedCatalogItem = selected ? catalogByVersion.get(selected.activityVersionId) : undefined;
-  const selectedDescriptor = selectedCatalogItem ? toActivityDescriptor(selectedCatalogItem) : null;
   const selectedIndex = selected ? activities.findIndex(activity => activity.nodeId === selected.nodeId) : -1;
   const selectedSupported = selected ? supportsActivityNode(selected, selectedCatalogItem) : true;
-  const selectedChildSlot = selected && selectedSupported ? getChildSlots(selected, catalogByVersion)[0] : undefined;
   const availableActivities = catalog.filter(item => item.available !== false && supportsActivityGraphAuthoring(item));
   const filteredPaletteGroups = useMemo(() => {
     const search = paletteSearch.trim().toLocaleLowerCase();
@@ -470,101 +492,175 @@ export function ActivityGraphImplementationEditor({
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);
   };
+  const autoLayoutCanvas = () => {
+    if (!slot || nodes.length === 0) return;
+    const positions = computeAutoLayout(nodes, edges, slot.mode === "sequence" ? "sequence" : "flowchart");
+    const nextNodes = nodes.map(node => {
+      const position = positions.get(node.id);
+      return position ? { ...node, position } : node;
+    });
+    setNodes(nextNodes);
+    commitCanvas(nextNodes, edges);
+  };
 
-  const palette = <aside className="wf-palette ad-graph-palette" aria-label="Activities panel">
-    <div className="wf-panel-title"><strong>Activities</strong></div>
-    <section data-graph-root-location tabIndex={-1} className="ad-graph-scope-owner"><span>Activity graph</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a composition"}</strong><small>The root owns this graph scope and is not a canvas node.</small></section>
-    {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
-    {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
-    {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly}>{getActivityDisplay(activity)}</button>)}</div> : null}
-    <ActivityPalettePanel
-      paletteSearch={paletteSearch}
-      onSearchChange={setPaletteSearch}
-      groups={filteredPaletteGroups}
-      expandedCategories={expandedCategories}
-      onToggleCategory={category => setExpandedCategories(current => {
-        const next = new Set(current);
-        if (next.has(category)) next.delete(category);
-        else next.add(category);
-        return next;
-      })}
-      onActivityClick={activity => {
-        draggedActivityRef.current = activity;
-        addActivity();
-      }}
-      onActivityDragStart={(event, activity) => {
-        draggedActivityRef.current = activity;
-        event.dataTransfer.effectAllowed = "copy";
-      }}
-      onActivityDragEnd={() => {
-        draggedActivityRef.current = null;
-      }}
-      onActivityPointerDown={() => undefined}
-    />
-    {supportedPanels.filter(panel => panel.side === "left").map(panel => {
-      const Panel = panel.component;
-      return <section key={panel.id} className="ad-graph-contributed-panel"><h3>{panel.title}</h3><Panel context={panelContext} /></section>;
-    })}
-  </aside>;
+  const inspectedNode = selected ?? owner;
+  const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
+  const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
+  const inspectedSlots = inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [];
+  const inspectedSupportsVariables = selected
+    ? supportsScopedVariables(selected, selectedCatalogItem)
+    : scopePath.length === 0 || supportsScopedVariables(owner, ownerCatalogItem);
+  const scopedVariableAnalysis = {
+    visibleVariables,
+    shadowingWarnings: [],
+    status: "ready" as const
+  };
+  const replaceInspectedSlotActivity = (ownerNodeId: string, targetSlot: ReturnType<typeof getChildSlots>[number], activity: ActivityCatalogItem) => {
+    const next = createActivityNode(activity, createNodeId(activity));
+    const nextRoot = updateActivity(
+      root,
+      ownerNodeId,
+      current => replaceSlotActivities(current, targetSlot, [next]),
+      catalogByVersion
+    );
+    commitRoot(nextRoot);
+    setSelectedNodeId(next.nodeId);
+  };
 
-  const inspector = <GraphAuthoringInspector
-    title={selected ? "Activity inspector" : "Graph inspector"}
-    actions={selected ? <div className="ad-graph-node-actions">
-      <button type="button" aria-label="Move activity left" onClick={() => moveSelected(-1)} disabled={readOnly || selectedIndex <= 0}><ArrowLeft size={15} /></button>
-      <button type="button" aria-label="Move activity right" onClick={() => moveSelected(1)} disabled={readOnly || selectedIndex < 0 || selectedIndex === activities.length - 1}><ArrowRight size={15} /></button>
-      <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
-    </div> : null}
-  >
-    {selected ? <fieldset disabled={readOnly} className="ad-graph-inspector-fields">
-      <legend>{selectedCatalogItem ? getActivityDisplay(selectedCatalogItem) : selected.activityVersionId}</legend>
-      {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
-      {selectedChildSlot ? <button type="button" onClick={() => { setScopePath(path => [...path, selected.nodeId]); setSelectedNodeId(null); }}><CornerDownRight size={15} /> Edit {selectedChildSlot.label}</button> : null}
-      <ActivityPropertiesPanel
-        context={context}
-        workflowState={workflowState}
-        activity={selected}
-        descriptor={selectedDescriptor}
-        editors={propertyEditors}
-        expressionEditors={expressionEditors}
-        expressionDescriptors={expressionState.descriptors}
-        expressionDescriptorStatus={expressionState.status}
-        descriptorStatus={catalogQuery.isPending ? "loading" : catalogQuery.isError ? "failed" : "ready"}
-        visibleVariables={visibleVariables}
-        scopeStatus="ready"
-        dictionarySessionScope={`activity-graph:${draftId}:${selected.nodeId}`}
-        onChange={updateSelected}
-      />
-    </fieldset> : <section className="ad-graph-root-inspector">
-      <h3>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Activity graph"}</h3>
-      <p>The composition root owns this scope and is intentionally not rendered as a canvas node.</p>
-      <fieldset disabled={readOnly}>
-        <ScopedVariablesEditor
-          context={context}
-          variables={toVariableEditorRecords(payload.variables)}
-          title="Graph variables"
-          addLabel="Add graph variable"
-          emptyLabel="No graph variables are defined."
-          onChange={updateVariables}
-        />
-      </fieldset>
-    </section>}
-    {!slot && root.activityVersionId && ownerSupported ? <p>The current activity is a leaf and has no child graph scope.</p> : null}
-    {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
-    {supportedPanels.filter(panel => panel.side === "right").map(panel => {
-      const Panel = panel.component;
-      return <section key={panel.id} className="ad-graph-contributed-panel"><h3>{panel.title}</h3><Panel context={panelContext} /></section>;
-    })}
-  </GraphAuthoringInspector>;
+  const contributedPanelTabs = supportedPanels.map(panel => {
+    const Panel = panel.component;
+    return {
+      id: panel.id,
+      title: panel.title,
+      side: panel.side,
+      order: panel.order ?? 500,
+      icon: null,
+      render: () => <Panel context={panelContext} />
+    };
+  });
+  const leftPanelTabs: WorkflowEditorPanelTab[] = [
+    {
+      id: "activities",
+      title: "Activities",
+      order: 0,
+      icon: <Boxes size={15} />,
+      render: () => (
+        <div className="ad-graph-palette">
+          <section data-graph-root-location tabIndex={-1} className="ad-graph-scope-owner"><span>Activity graph</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a composition"}</strong><small>The root owns this graph scope and is not a canvas node.</small></section>
+          {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
+          {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
+          {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly}>{getActivityDisplay(activity)}</button>)}</div> : null}
+          <ActivityPalettePanel
+            paletteSearch={paletteSearch}
+            onSearchChange={setPaletteSearch}
+            groups={filteredPaletteGroups}
+            expandedCategories={expandedCategories}
+            disabled={readOnly}
+            onToggleCategory={category => setExpandedCategories(current => {
+              const next = new Set(current);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            })}
+            onActivityClick={activity => {
+              draggedActivityRef.current = activity;
+              addActivity();
+            }}
+            onActivityDragStart={(event, activity) => {
+              draggedActivityRef.current = activity;
+              event.dataTransfer.effectAllowed = "copy";
+            }}
+            onActivityDragEnd={() => {
+              draggedActivityRef.current = null;
+            }}
+            onActivityPointerDown={() => undefined}
+          />
+        </div>
+      )
+    },
+    ...contributedPanelTabs.filter(tab => tab.side === "left")
+  ].sort(compareWorkflowPanelTabs);
+  const rightPanelTabs: WorkflowEditorPanelTab[] = [
+    {
+      id: "inspector",
+      title: "Inspector",
+      order: 0,
+      icon: <ListTree size={15} />,
+      render: () => (
+        <>
+          {selected ? <div className="ad-graph-node-actions">
+            <button type="button" aria-label="Move activity left" onClick={() => moveSelected(-1)} disabled={readOnly || selectedIndex <= 0}><ArrowLeft size={15} /></button>
+            <button type="button" aria-label="Move activity right" onClick={() => moveSelected(1)} disabled={readOnly || selectedIndex < 0 || selectedIndex === activities.length - 1}><ArrowRight size={15} /></button>
+            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+          </div> : null}
+          {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
+          {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
+          <InspectorPanel
+            key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
+            context={context}
+            workflowState={workflowState}
+            selectedNode={inspectedNode}
+            selectedNodeLabel={inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode?.nodeId ?? "Activity graph"}
+            selectedActivityType={inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey ?? "Unknown"}
+            selectedDescriptor={inspectedDescriptor}
+            selectedNodeAvailability={null}
+            selectedSlots={inspectedSlots}
+            inspectingScopeOwner={!selected}
+            catalog={availableActivities}
+            catalogByVersion={catalogByVersion}
+            selectedSupportsScopedVariables={inspectedSupportsVariables}
+            readOnly={readOnly}
+            variablesPanel={!selected && scopePath.length === 0 ? (
+              <fieldset disabled={readOnly} className="wf-container-variables">
+                <ScopedVariablesEditor
+                  context={context}
+                  variables={toVariableEditorRecords(payload.variables)}
+                  title="Graph variables"
+                  addLabel="Add graph variable"
+                  emptyLabel="No graph variables are defined."
+                  onChange={updateVariables}
+                />
+              </fieldset>
+            ) : undefined}
+            propertyEditors={propertyEditors}
+            expressionEditors={expressionEditors}
+            expressionDescriptors={expressionState.descriptors}
+            expressionDescriptorStatus={expressionState.status}
+            descriptorStatus={catalogQuery.isPending ? "loading" : catalogQuery.isError ? "failed" : "ready"}
+            onRetryExpressionDescriptors={expressionState.retry}
+            scopedVariableAnalysis={scopedVariableAnalysis}
+            activeTabId={activeInspectorTabId}
+            onActiveTabChange={setActiveInspectorTabId}
+            onSelectedActivityChange={updateSelected}
+            onEnterSlot={ownerNodeId => {
+              if (ownerNodeId !== owner.nodeId) setScopePath(path => [...path, ownerNodeId]);
+              setSelectedNodeId(null);
+            }}
+            onReplaceSlotActivity={(ownerNodeId, targetSlot, _label, activity) => replaceInspectedSlotActivity(ownerNodeId, targetSlot, activity)}
+          />
+        </>
+      )
+    },
+    ...contributedPanelTabs.filter(tab => tab.side === "right")
+  ].sort(compareWorkflowPanelTabs);
+  const activeLeftPanel = leftPanelTabs.find(tab => tab.id === activeLeftPanelId) ?? leftPanelTabs[0];
+  const activeRightPanel = rightPanelTabs.find(tab => tab.id === activeRightPanelId) ?? rightPanelTabs[0];
 
   return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
-    <GraphAuthoringWorkspace
+    <GraphAuthoringWorkbench
       resourceKind="activity-definition-graph"
-      className="wf-editor-body ad-graph-workspace"
-      palette={palette}
-      paletteResizeHandle={<div className="wf-side-resize-spacer" />}
+      className="ad-graph-workspace"
+      layout={sidePanelLayout}
+      palette={{
+        ariaLabel: "Activities panel",
+        tabLabel: "Activities panel tabs",
+        tabs: leftPanelTabs,
+        activeTabId: activeLeftPanel.id,
+        onSelect: setActiveLeftPanelId
+      }}
       canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer">
         <nav className="ad-graph-breadcrumb" aria-label="Graph scope"><button type="button" onClick={() => { setScopePath([]); setSelectedNodeId(null); }} disabled={scopePath.length === 0}>Root</button>{scopePath.map((nodeId, index) => <span key={nodeId}><ChevronRight size={14} /><button type="button" onClick={() => { setScopePath(path => path.slice(0, index + 1)); setSelectedNodeId(null); }}>{nodeLabel(findNodeByPath(root, scopePath.slice(0, index + 1), catalogByVersion), catalogByVersion)}</button></span>)}</nav>
-        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph history"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button></div></div>
+        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={autoLayoutCanvas} disabled={readOnly || nodes.length === 0}><Network size={16} /></button></div></div>
         {slot ? <GraphAuthoringCanvas
           canvasProps={{
             onDragOver: event => {
@@ -604,8 +700,13 @@ export function ActivityGraphImplementationEditor({
           overlays={nodes.length === 0 ? <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>Choose an authorized activity from the palette to compose this graph.</span></div> : null}
         /> : <div className="ad-graph-empty"><strong>{root.activityVersionId ? "Leaf implementation" : "Choose a composition"}</strong><span>{root.activityVersionId ? "This activity does not own a child graph scope." : "Select Flowchart, Sequence, or BPMN to begin."}</span></div>}
       </main>}
-      inspectorResizeHandle={<div className="wf-side-resize-spacer" />}
-      inspector={inspector}
+      inspector={{
+        ariaLabel: "Inspector panel",
+        tabLabel: "Inspector panel tabs",
+        tabs: rightPanelTabs,
+        activeTabId: activeRightPanel.id,
+        onSelect: setActiveRightPanelId
+      }}
     />
   </div>;
 }
@@ -707,6 +808,7 @@ function ActivityGraphOutputMappingEditor({
 }
 
 function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
+  const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{
     descriptors: StudioExpressionDescriptor[];
     status: "loading" | "ready" | "failed";
@@ -726,9 +828,12 @@ function useActivityGraphExpressionDescriptors(context: StudioActivityDefinition
     return () => {
       active = false;
     };
-  }, [context]);
+  }, [context, retryVersion]);
 
-  return state;
+  return {
+    ...state,
+    retry: () => setRetryVersion(version => version + 1)
+  };
 }
 
 function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {

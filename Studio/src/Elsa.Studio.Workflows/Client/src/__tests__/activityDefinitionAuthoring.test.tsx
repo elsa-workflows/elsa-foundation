@@ -94,8 +94,14 @@ describe("Activity Definition authoring", () => {
       expect(route.get("section")).toBe("editor");
     });
     await waitForText(rendered.container, "Saved revision 1");
+    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(true);
+    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-draft-lifecycle")?.open).toBe(false);
+    expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
+    click(buttonByText(rendered.container, "Public Interface"));
+    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
+    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-draft-lifecycle")?.open).toBe(true);
     await rendered.unmount();
-  });
+  }, 10_000);
 
   it("labels the create dialog fields with accessible names and placeholders", async () => {
     const rendered = renderPage({

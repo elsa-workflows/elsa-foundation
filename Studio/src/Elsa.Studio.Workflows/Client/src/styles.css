@@ -4089,8 +4089,12 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-inspector-tab-panels {
   display: flex;
+  min-width: 0;
   min-height: 0;
   flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .wf-inspector-tab-panel {
