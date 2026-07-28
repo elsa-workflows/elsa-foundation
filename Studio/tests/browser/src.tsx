@@ -5,7 +5,18 @@ import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/
 import { ActivityDefinitionsPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
 import { ActivityUpgradeWorkbenchPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityUpgradeWorkbenchPage";
 import { Elsa3ReusableImportPage } from "../../src/Elsa.Studio.Workflows/Client/src/Elsa3ReusableImportPage";
-import { activityGraphImplementationEditorContribution } from "../../src/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
+import {
+  activityGraphImplementationEditorContribution,
+  activityGraphSchema2ImplementationEditorContribution
+} from "../../src/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
+import {
+  ActivityGraphImplementationEditor,
+  ActivityGraphPublicInterfaceEditor
+} from "../../src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
+import { ActivityDefinitionCreateDialog } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog";
+import { ActivityDefinitionDraftCodeView } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView";
+import { ActivityDefinitionDiagnosticsPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
+import { ActivityDefinitionTestRunDialog } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { WorkflowDefinitions } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { setDialogs } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
@@ -40,7 +51,10 @@ import {
   validateActivityVersionChangePrecondition
 } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/activityVersionChangeModel";
 import { WorkflowActivityExecutionDetails } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
-import type { ActivityDefinitionVersionView } from "../../src/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
+import type {
+  ActivityDefinitionDraftView,
+  ActivityDefinitionVersionView
+} from "../../src/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
 import "./fixture.css";
@@ -62,6 +76,7 @@ const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary"
 const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
+const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const endpointContext = createEndpointContext(window.location.origin);
 
@@ -83,6 +98,210 @@ function ActivityDefinitionRoutesFixture() {
   return path.startsWith("/workflows/activity-definitions/upgrades")
     ? <ActivityUpgradeWorkbenchPage context={endpointContext} />
     : <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} navigateToStudioPath={navigate} /></QueryClientProvider>;
+}
+
+function ActivityDefinitionGraphAuthoringFixture() {
+  const [draft, setDraft] = useState<ActivityDefinitionDraftView>(browserGraphAuthoringDraft());
+  const [activeView, setActiveView] = useState<"designer" | "public-interface" | "code">("designer");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [testRunOpen, setTestRunOpen] = useState(false);
+  const [createdMessage, setCreatedMessage] = useState("");
+  const updateImplementation = (value: { payload: unknown; layout: ActivityDefinitionDraftView["layout"] }) =>
+    setDraft(current => ({
+      ...current,
+      provider: { ...current.provider, payload: value.payload },
+      layout: value.layout,
+      validation: null
+    }));
+  const implementationProps = {
+    context: endpointContext,
+    definitionId: draft.definitionId,
+    draftId: draft.draftId,
+    revision: draft.revision,
+    providerKey: draft.provider.providerKey,
+    providerSchemaVersion: draft.provider.schemaVersion,
+    manifestFingerprint: draft.provider.manifestFingerprint,
+    contract: draft.contract,
+    propertyEditors: [],
+    expressionEditors: [],
+    graphAuthoringPanels: [],
+    historyResetKey: `${draft.draftId}:${draft.provider.schemaVersion}`,
+    value: { payload: draft.provider.payload, layout: draft.layout },
+    readOnly: false,
+    onChange: updateImplementation
+  };
+  const validation = {
+    draftId: draft.draftId,
+    revision: draft.revision,
+    isValid: false,
+    validatedAt: "2026-07-28T00:00:00Z",
+    diagnostics: [
+      browserGraphDiagnostic("activity.contract.outcome-required", "Error", "/contract/outcomes"),
+      browserGraphDiagnostic("activity.graph.outcome-mapping-required", "Error", "/outcomeMappings"),
+      browserGraphDiagnostic("activity.graph.node-incomplete", "Warning", "/rootActivity/structure"),
+      browserGraphDiagnostic("activity.graph.provider-note", "Info", "/provider", "elsa.activity-graph")
+    ]
+  } satisfies NonNullable<ActivityDefinitionDraftView["validation"]>;
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <main className="ad-page ad-draft-editor" aria-label="Activity Definition graph authoring fixture">
+        <header className="ad-workbench-header">
+          <div>
+            <span className="ad-kicker">Activity Definition authoring</span>
+            <h1>Browser graph activity</h1>
+            <p>Activity-specific graph editing without workflow lifecycle controls.</p>
+          </div>
+          <div className="ad-header-actions">
+            <button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button>
+            <button type="button" onClick={() => setTestRunOpen(true)}>Test Run</button>
+            <button
+              type="button"
+              onClick={() => setDraft(current => ({
+                ...current,
+                provider: {
+                  ...current.provider,
+                  schemaVersion: current.provider.schemaVersion === "2" ? "1" : "2"
+                }
+              }))}
+            >
+              {draft.provider.schemaVersion === "2" ? "Preview legacy schema" : "Return to schema 2"}
+            </button>
+          </div>
+        </header>
+        {createdMessage ? <p role="status">{createdMessage}</p> : null}
+        <nav className="ad-authoring-view-tabs" role="tablist" aria-label="Activity Definition authoring views">
+          {([
+            ["designer", "Designer"],
+            ["public-interface", "Public Interface"],
+            ["code", "Code"]
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={activeView === id} onClick={() => setActiveView(id)}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <section role="tabpanel" aria-label="Designer" hidden={activeView !== "designer"}>
+          <ActivityGraphImplementationEditor {...implementationProps} />
+        </section>
+        <section role="tabpanel" aria-label="Public Interface" hidden={activeView !== "public-interface"}>
+          <ActivityGraphPublicInterfaceEditor {...implementationProps} />
+        </section>
+        <section role="tabpanel" aria-label="Code" hidden={activeView !== "code"}>
+          <ActivityDefinitionDraftCodeView
+            draft={draft}
+            readOnly={false}
+            canUndo={false}
+            canRedo={false}
+            onApply={setDraft}
+            onUndo={() => {}}
+            onRedo={() => {}}
+            onBufferStateChange={() => {}}
+          />
+        </section>
+        <ActivityDefinitionDiagnosticsPanel
+          validation={validation}
+          canReturn={false}
+          onFocus={async diagnostic => ({
+            kind: "focused",
+            announcement: `Focused ${diagnostic.code}.`
+          })}
+          onReturn={() => {}}
+        />
+        {createOpen ? <ActivityDefinitionCreateDialog
+          context={endpointContext}
+          activityEditors={[activityGraphSchema2ImplementationEditorContribution]}
+          onClose={() => setCreateOpen(false)}
+          onCreated={created => {
+            setCreateOpen(false);
+            setCreatedMessage(`Created ${created.definition.displayName}.`);
+          }}
+        /> : null}
+        {testRunOpen ? <ActivityDefinitionTestRunDialog
+          context={endpointContext}
+          draft={draft}
+          definitionLabel="Browser graph activity"
+          inputEditors={[]}
+          prepareExactRevision={async onPhase => {
+            onPhase("validating");
+            return {
+              revision: draft.revision,
+              validation: { ...validation, isValid: true, diagnostics: [] }
+            };
+          }}
+          onFocusDiagnostic={async () => ({ kind: "unsupported", announcement: "No diagnostic location." })}
+          onClose={() => setTestRunOpen(false)}
+          onOpenRun={() => {}}
+        /> : null}
+      </main>
+    </QueryClientProvider>
+  );
+}
+
+function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
+  return {
+    draftId: "activity-graph-authoring-draft",
+    definitionId: "activity-graph-authoring-definition",
+    tenantId: "browser-tenant",
+    revision: 3,
+    sourceVersionId: null,
+    status: "active",
+    contract: {
+      contractSchemaVersion: "1",
+      inputs: [],
+      outputs: [],
+      outcomes: [
+        { referenceKey: "accepted", name: "Accepted", isEmitted: true },
+        { referenceKey: "declined", name: "Declined", isEmitted: true }
+      ]
+    },
+    provider: {
+      providerKey: "elsa.activity-graph",
+      schemaVersion: "2",
+      manifestFingerprint: "sha256:browser-graph-authoring",
+      payload: {
+        rootActivity: {
+          nodeId: "root",
+          activityVersionId: "flowchart-v1",
+          inputs: [],
+          outputs: [],
+          structure: {
+            kind: "Flowchart",
+            schemaVersion: "1",
+            payload: { activities: [], connections: [] }
+          }
+        },
+        variables: [],
+        outputMappings: [],
+        outcomeMappings: []
+      }
+    },
+    layout: [],
+    validation: null,
+    createdAt: "2026-07-28T00:00:00Z",
+    updatedAt: "2026-07-28T00:00:00Z",
+    presentationLabel: "Browser graph"
+  };
+}
+
+function browserGraphDiagnostic(
+  code: string,
+  severity: "Error" | "Warning" | "Info",
+  jsonPointer: string,
+  providerKey?: string
+) {
+  return {
+    code,
+    severity,
+    message: `${code} browser diagnostic`,
+    subject: {
+      kind: "ActivityDefinitionDraft",
+      id: "activity-graph-authoring-draft",
+      revision: 3
+    },
+    location: { jsonPointer, providerKey },
+    metadata: {}
+  };
 }
 
 const expressionDescriptors: StudioExpressionDescriptor[] = [
@@ -1062,6 +1281,8 @@ document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : 
 createRoot(document.getElementById("root")!).render(
   publicationReviewFixture
     ? <PublicationReviewFixture />
+    : activityGraphAuthoringFixture
+    ? <ActivityDefinitionGraphAuthoringFixture />
     : versionChangeFixture
     ? <QueryClientProvider client={queryClient}><VersionChangeFixture /></QueryClientProvider>
     : elsa3ReusableImportFixture

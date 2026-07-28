@@ -6859,3 +6859,120 @@ html[data-theme="brass-instrument"] .wf-chip {
   color: var(--wf-accent);
   outline: none;
 }
+
+/* Activity Definition creation: a free-form Category input with authorized catalog suggestions. */
+.ad-category-combobox > div {
+  position: relative;
+}
+
+.ad-category-combobox [role="listbox"] {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + .25rem);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 12rem;
+  margin: 0;
+  padding: .25rem;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-md);
+  list-style: none;
+}
+
+.ad-category-combobox [role="option"] > button {
+  width: 100%;
+  min-height: 2.1rem;
+  border: 0;
+  border-radius: calc(var(--studio-radius) * .75);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+}
+
+.ad-category-combobox [role="option"][aria-selected="true"] > button,
+.ad-category-combobox [role="option"] > button:hover,
+.ad-category-combobox [role="option"] > button:focus-visible {
+  background: var(--studio-accent-soft);
+  outline: none;
+}
+
+.ad-composition-picker {
+  display: grid;
+  gap: .55rem;
+  min-width: 0;
+  margin: 0;
+  padding: .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+}
+
+.ad-composition-picker legend {
+  padding: 0 .35rem;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+}
+
+.ad-authoring-view-tabs {
+  display: flex;
+  gap: .25rem;
+  align-items: center;
+  margin-block: .75rem;
+  padding: .25rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+}
+
+.ad-authoring-view-tabs button {
+  min-height: 2.1rem;
+  padding-inline: .8rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--studio-radius) * .75);
+  background: transparent;
+  color: var(--studio-text-muted);
+  font: inherit;
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.ad-authoring-view-tabs button[aria-selected="true"] {
+  border-color: var(--studio-border);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+}
+
+.ad-authoring-view-tabs button:focus-visible {
+  outline: var(--studio-focus-ring);
+  outline-offset: 1px;
+}
+
+.ad-code-view {
+  min-height: 38rem;
+}
+
+.ad-graph-scope-owner {
+  display: grid;
+  gap: .2rem;
+  padding: .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+}
+
+.ad-graph-scope-owner span,
+.ad-graph-scope-owner small {
+  color: var(--studio-text-muted);
+}
+
+.ad-graph-root-options {
+  display: grid;
+  gap: .35rem;
+}

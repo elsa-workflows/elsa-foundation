@@ -33,11 +33,13 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // formatting. That raised the clean-install entry/landing measurements to 120.52/369.60/356.52 kB. The
 // summary and built-in-profile primitives now live in the small conversionSource module, leaving the full
 // conversionSettings chunk deferred with the Workflow Editor. Clean-install measurements are consequently
-// 117.60/366.67/353.59 kB, so the landing budgets return to their pre-output-editor values with >3 kB margin.
+// 117.60/366.67/353.59 kB. Activity Definition graph authoring then added the small eager registry bridge
+// needed to pass shared property, expression, and graph-panel contributions into the deferred draft editor;
+// the definitions path measures 370.06 kB, so its budget gains 1 kB while the heavy designer stays deferred.
 const budgets = {
   entryJavaScript: 120_000,
   stylesheet: 185_000,
-  definitionsLandingTotal: 370_000,
+  definitionsLandingTotal: 371_000,
   upgradeLandingTotal: 358_000,
   individualChunk: 500_000
 };

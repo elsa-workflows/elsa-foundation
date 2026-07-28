@@ -31,14 +31,15 @@ describe("Activity Definition authoring", () => {
   it("creates with the sole authorable provider and enters the exact initial draft", async () => {
     const postJson = vi.fn(async (_url: string, _body: unknown) => ({
       definition: definitionIdentity(),
-      draft: draftSummary()
+      draft: draftSummary({ providerSchemaVersion: "2" })
     }));
     const rendered = renderPage({
+      contributions: [graphContribution(), graphContribution("2")],
       getJson: async (url: string) => {
         if (url === "/capabilities") return capabilities();
         if (url.startsWith("/design/activities/definitions?")) return page([]);
-        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
-        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft();
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities({ graphSchemas: ["1", "2"] });
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ providerSchemaVersion: "2" });
         throw new Error(`Unexpected GET ${url}`);
       },
       postJson
@@ -46,8 +47,9 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No Activity Definitions yet");
     click(buttonByText(rendered.container, "Create Activity Definition"));
-    await waitForText(rendered.container, "Activity Graph");
-    await waitFor(() => expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")?.value).toBe("elsa.activity-graph|1"));
+    await waitForText(rendered.container, "Graph composition");
+    expect(rendered.container.querySelector("select[name='provider']")).toBeNull();
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true);
 
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='category']")!, "Finance");
@@ -60,9 +62,19 @@ describe("Activity Definition authoring", () => {
       description: null,
       provider: {
         providerKey: "elsa.activity-graph",
-        schemaVersion: "1",
+        schemaVersion: "2",
         payload: {
-          rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null },
+          rootActivity: {
+            nodeId: "root",
+            activityVersionId: "flowchart-v1",
+            inputs: {},
+            outputs: {},
+            structure: {
+              kind: "elsa.flowchart.structure",
+              schemaVersion: "1.0.0",
+              payload: { activities: [], connections: [], startNodeId: null, nodeMetadata: {}, connectionMetadata: {} }
+            }
+          },
           variables: [],
           outputMappings: []
         }
@@ -97,7 +109,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No Activity Definitions yet");
     click(buttonByText(rendered.container, "Create Activity Definition"));
-    await waitForText(rendered.container, "Activity Graph");
+    await waitForText(rendered.container, "Graph composition");
 
     const displayName = rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!;
     const category = rendered.container.querySelector<HTMLInputElement>("input[name='category']")!;
@@ -112,7 +124,7 @@ describe("Activity Definition authoring", () => {
   });
 
   it("does not preselect among multiple providers and sends an intentional exact key override", async () => {
-    const capabilitiesResponse = authoringCapabilities();
+    const capabilitiesResponse = authoringCapabilities({ graphSchemas: ["1", "2"] });
     capabilitiesResponse.providers.push({
       providerKey: "contoso.script",
       displayName: "Script",
@@ -121,13 +133,13 @@ describe("Activity Definition authoring", () => {
     });
     const postJson = vi.fn(async (_url: string, _body: unknown) => ({ definition: definitionIdentity(), draft: draftSummary() }));
     const rendered = renderPage({
-      contributions: [graphContribution(), { ...graphContribution(), id: "script", providerKey: "contoso.script" }],
+      contributions: [graphContribution("2"), { ...graphContribution(), id: "script", providerKey: "contoso.script" }],
       postJson,
       getJson: async (url: string) => {
         if (url === "/capabilities") return capabilities();
         if (url.startsWith("/design/activities/definitions?")) return page([]);
         if (url === "/design/activities/authoring-capabilities") return capabilitiesResponse;
-        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ providerSchemaVersion: "2" });
         throw new Error(`Unexpected GET ${url}`);
       }
     });
@@ -137,7 +149,8 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Script");
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
-    change(provider, "elsa.activity-graph|1");
+    expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
+    change(provider, "elsa.activity-graph|2");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     click(buttonByText(rendered.container, "Set an exact key"));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
@@ -168,6 +181,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "No Activity Definitions yet");
     click(buttonByText(rendered.container, "Create Activity Definition"));
     await waitForText(rendered.container, "Script");
+    expect(rendered.container.textContent).toContain("Implementation type");
     expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")?.value).toBe("");
     await rendered.unmount();
   });
@@ -187,7 +201,8 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No Activity Definitions yet");
     click(buttonByText(rendered.container, "Create Activity Definition"));
-    await waitForText(rendered.container, "Activity Graph");
+    await waitForText(rendered.container, "Graph composition");
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Generated identity");
     click(buttonByText(rendered.container, "Set an exact key"));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.hidden.override");
@@ -1753,7 +1768,7 @@ function renderPage(options: {
   const context = {
     baseUrl: `test://activity-definition-authoring-${Math.random()}`,
     http: {
-      getJson: options.getJson,
+      getJson: (url: string) => url === "/design/activities/catalog" ? Promise.resolve(activityCatalog()) : options.getJson(url),
       postJson: options.postJson ?? vi.fn(),
       putJson: options.putJson ?? vi.fn()
     }
@@ -1775,11 +1790,11 @@ function renderPage(options: {
   };
 }
 
-function graphContribution(): StudioActivityDefinitionImplementationEditorContribution {
+function graphContribution(providerSchemaVersion = "1"): StudioActivityDefinitionImplementationEditorContribution {
   return {
     id: "activity-graph",
     providerKey: "elsa.activity-graph",
-    providerSchemaVersion: "1",
+    providerSchemaVersion,
     createInitialImplementation: () => ({
       payload: {
         rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null },
@@ -1806,6 +1821,7 @@ function capabilities() {
   return { capabilities: [{ id: "elsa.api.activity-design", contractVersion: "1", links: [
     { rel: "activity-definitions", href: "design/activities/definitions" },
     { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
+    { rel: "activity-catalog", href: "design/activities/catalog" },
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
@@ -1907,7 +1923,7 @@ function publicationReceipt(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function authoringCapabilities() {
+function authoringCapabilities({ graphSchemas = ["1"] }: { graphSchemas?: string[] } = {}) {
   return {
     contractSchemaVersions: ["1"],
     activityTypeKeyRules: {
@@ -1922,7 +1938,7 @@ function authoringCapabilities() {
     providers: [{
       providerKey: "elsa.activity-graph",
       displayName: "Activity Graph",
-      manifestSchemas: [{ schemaVersion: "1", isAuthorable: true, migratableFromSchemaVersions: ["1"] }],
+      manifestSchemas: graphSchemas.map(schemaVersion => ({ schemaVersion, isAuthorable: true, migratableFromSchemaVersions: ["1"] })),
       requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }]
     }],
     types: [{
@@ -1959,7 +1975,7 @@ function definitionIdentity() {
   };
 }
 
-function draftSummary() {
+function draftSummary({ providerSchemaVersion = "1" }: { providerSchemaVersion?: string } = {}) {
   return {
     draftId: "activity-draft-1",
     definitionId: "activity-def-1",
@@ -1967,13 +1983,13 @@ function draftSummary() {
     sourceVersionId: null,
     status: "active",
     providerKey: "elsa.activity-graph",
-    providerSchemaVersion: "1",
+    providerSchemaVersion,
     updatedAt: "2026-07-17T10:00:00Z",
     presentationLabel: null
   };
 }
 
-function fullDraft(overrides: Partial<{ draftId: string; revision: number; payload: unknown }> = {}): ActivityDefinitionDraftView {
+function fullDraft(overrides: Partial<{ draftId: string; revision: number; payload: unknown; providerSchemaVersion: string }> = {}): ActivityDefinitionDraftView {
   return {
     draftId: overrides.draftId ?? "activity-draft-1",
     definitionId: "activity-def-1",
@@ -1984,7 +2000,7 @@ function fullDraft(overrides: Partial<{ draftId: string; revision: number; paylo
     contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] },
     provider: {
       providerKey: "elsa.activity-graph",
-      schemaVersion: "1",
+      schemaVersion: overrides.providerSchemaVersion ?? "1",
       manifestFingerprint: "sha256:graph",
       payload: overrides.payload ?? { rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null }, variables: [], outputMappings: [] }
     },
@@ -1993,6 +2009,31 @@ function fullDraft(overrides: Partial<{ draftId: string; revision: number; paylo
     createdAt: "2026-07-17T10:00:00Z",
     updatedAt: "2026-07-17T10:00:00Z",
     presentationLabel: null
+  };
+}
+
+function activityCatalog() {
+  return {
+    activities: [
+      compositionActivity("flowchart-v1", "Elsa.Activities.Flowchart", "Flowchart", "General"),
+      compositionActivity("sequence-v1", "Elsa.Activities.Sequence", "Sequence", "Control flow"),
+      compositionActivity("bpmn-v1", "Elsa.Activities.BpmnProcess", "BPMN Process", "Control flow"),
+      compositionActivity("write-line-v1", "Elsa.Activities.WriteLine", "Write Line", "Utilities")
+    ]
+  };
+}
+
+function compositionActivity(activityVersionId: string, activityTypeKey: string, displayName: string, category: string) {
+  return {
+    activityVersionId,
+    activityTypeKey,
+    displayName,
+    version: "1.0.0",
+    category,
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    authoringTemplate: { nodeId: "template", activityVersionId, inputs: {}, outputs: {}, structure: null }
   };
 }
 

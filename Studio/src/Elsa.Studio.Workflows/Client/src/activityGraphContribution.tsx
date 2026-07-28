@@ -3,6 +3,7 @@ import type { StudioActivityDefinitionImplementationEditorContribution } from "@
 import { activityGraphDiagnosticFocusEvent, type ActivityGraphDiagnosticFocusEventDetail } from "./activityGraphDiagnosticFocus";
 
 const ActivityGraphImplementationEditor = lazy(() => import("./ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphImplementationEditor })));
+const ActivityGraphPublicInterfaceEditor = lazy(() => import("./ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphPublicInterfaceEditor })));
 
 export const activityGraphImplementationEditorContribution = createActivityGraphContribution("1");
 export const activityGraphSchema2ImplementationEditorContribution = createActivityGraphContribution("2");
@@ -52,6 +53,7 @@ function createActivityGraphContribution(schemaVersion: "1" | "2"): StudioActivi
         });
       });
     },
+    publicInterfaceComponent: ActivityGraphPublicInterfaceEditor,
     component: ActivityGraphImplementationEditor
   };
 }

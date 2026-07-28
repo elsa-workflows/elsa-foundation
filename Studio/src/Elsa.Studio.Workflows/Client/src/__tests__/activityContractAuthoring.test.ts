@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   authorableContractTypes,
   createInputContract,
+  createOutcomeContract,
   createOutputContract,
   defaultMode,
   generateReferenceKey,
@@ -77,6 +78,24 @@ describe("Activity contract authoring model", () => {
   it("generates deterministic collision-safe reference keys without requiring unique names", () => {
     expect(generateReferenceKey("Résumé status", ["resume-status"])).toBe("resume-status-2");
     expect(generateReferenceKey("Résumé status", ["resume-status", "resume-status-2"])).toBe("resume-status-3");
+  });
+
+  it("creates emitted outcomes independently of the implementation provider", () => {
+    const zeroOutcomes = emptyContract();
+    const oneOutcome = { ...emptyContract(), outcomes: [{ referenceKey: "done", name: "Done", isEmitted: false, description: null }] };
+    const multipleOutcomes = {
+      ...emptyContract(),
+      outcomes: [
+        { referenceKey: "done", name: "Done", isEmitted: true, description: null },
+        { referenceKey: "failed", name: "Failed", isEmitted: false, description: null }
+      ]
+    };
+
+    expect(createOutcomeContract("Completed", zeroOutcomes)).toMatchObject({ referenceKey: "completed", isEmitted: true });
+    expect(createOutcomeContract("Done", oneOutcome)).toMatchObject({ referenceKey: "done-2", isEmitted: true });
+    expect(createOutcomeContract("Timed out", multipleOutcomes)).toMatchObject({ referenceKey: "timed-out", isEmitted: true });
+    expect(oneOutcome.outcomes[0].isEmitted).toBe(false);
+    expect(multipleOutcomes.outcomes[1].isEmitted).toBe(false);
   });
 
   it("preserves unknown member and type fields while changing a catalog-backed selection", () => {
