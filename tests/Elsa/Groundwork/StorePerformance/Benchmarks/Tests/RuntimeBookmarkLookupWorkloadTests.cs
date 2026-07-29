@@ -17,10 +17,10 @@ public sealed class RuntimeBookmarkLookupWorkloadTests
         Assert.Equal(RuntimeBookmarkLookupWorkload.ExpectedInputFingerprint, result.InputFingerprint);
         Assert.Equal(RuntimeBookmarkLookupWorkload.ExpectedResultDigest, result.ResultDigest);
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.Get(RuntimeBookmarkLookupWorkload.WorkloadId).OperationSequence, result.ObservableOperations);
-        Assert.Equal(RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow, adapter.Primary.Store.States.Count);
-        Assert.Equal(RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow, adapter.Secondary.Store.States.Count);
-        Assert.Equal(RuntimeBookmarkLookupWorkload.MatchingBookmarks, adapter.Primary.Store.States.Count(state => state.BookmarkId.StartsWith("bookmark-match-", StringComparison.Ordinal)));
-        Assert.Equal(RuntimeBookmarkLookupWorkload.MatchingBookmarks, adapter.Secondary.Store.States.Count(state => state.BookmarkId.StartsWith("bookmark-match-", StringComparison.Ordinal)));
+        Assert.Equal(RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow, adapter.Primary.States.Count);
+        Assert.Equal(RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow, adapter.Secondary.States.Count);
+        Assert.Equal(RuntimeBookmarkLookupWorkload.MatchingBookmarks, adapter.Primary.States.Count(state => state.BookmarkId.StartsWith("bookmark-match-", StringComparison.Ordinal)));
+        Assert.Equal(RuntimeBookmarkLookupWorkload.MatchingBookmarks, adapter.Secondary.States.Count(state => state.BookmarkId.StartsWith("bookmark-match-", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -40,18 +40,42 @@ public sealed class RuntimeBookmarkLookupWorkloadTests
         var adapter = new DictionaryBookmarkLookupAdapter();
         await new RuntimeBookmarkLookupWorkload().ExecuteAsync(adapter);
 
-        Assert.Equal(2, adapter.Primary.Index.Requests.Count);
-        Assert.Null(adapter.Primary.Index.Requests[0].ContinuationToken);
-        Assert.NotNull(adapter.Primary.Index.Requests[1].ContinuationToken);
-        Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Index.Requests[0].Limit);
-        Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Index.Requests[1].Limit);
+        Assert.Equal(3, adapter.Primary.Requests.Count);
+        Assert.Null(adapter.Primary.Requests[0].ContinuationToken);
+        Assert.NotNull(adapter.Primary.Requests[1].ContinuationToken);
+        Assert.Null(adapter.Primary.Requests[2].ContinuationToken);
+        Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Requests[0].Limit);
+        Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Requests[1].Limit);
+        Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Requests[2].Limit);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Rejects_scope_adapters_that_leak_results_in_either_direction(
+        bool leakPrimaryIntoSecondary,
+        bool leakSecondaryIntoPrimary)
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeBookmarkLookupWorkload().ExecuteAsync(
+                new DictionaryBookmarkLookupAdapter(
+                    leakPrimaryIntoSecondary: leakPrimaryIntoSecondary,
+                    leakSecondaryIntoPrimary: leakSecondaryIntoPrimary)).AsTask());
     }
 
     [Fact]
-    public async Task Rejects_a_scope_adapter_that_leaks_the_primary_results()
+    public async Task Rejects_a_store_that_discards_seeded_state()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new RuntimeBookmarkLookupWorkload().ExecuteAsync(new DictionaryBookmarkLookupAdapter(leakSecondScope: true)).AsTask());
+            new RuntimeBookmarkLookupWorkload().ExecuteAsync(new DictionaryBookmarkLookupAdapter(discardPrimarySaves: true)).AsTask());
+    }
+
+    [Fact]
+    public void Rejects_a_scope_whose_state_store_does_not_own_the_stimulus_index()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new RuntimeBookmarkLookupScope(new StateOnlyBookmarkStore()));
+
+        Assert.Contains("same instance", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -93,46 +117,124 @@ public sealed class RuntimeBookmarkLookupWorkloadTests
 
     private sealed class DictionaryBookmarkLookupAdapter : IRuntimeBookmarkLookupWorkloadAdapter
     {
-        private readonly bool _leakSecondScope;
+        private readonly bool _leakPrimaryIntoSecondary;
+        private readonly bool _leakSecondaryIntoPrimary;
+        private readonly bool _discardPrimarySaves;
         private readonly DictionaryBookmarkLookupFault _fault;
 
         public DictionaryBookmarkLookupAdapter(
-            bool leakSecondScope = false,
+            bool leakPrimaryIntoSecondary = false,
+            bool leakSecondaryIntoPrimary = false,
+            bool discardPrimarySaves = false,
             DictionaryBookmarkLookupFault fault = DictionaryBookmarkLookupFault.None)
         {
-            _leakSecondScope = leakSecondScope;
+            _leakPrimaryIntoSecondary = leakPrimaryIntoSecondary;
+            _leakSecondaryIntoPrimary = leakSecondaryIntoPrimary;
+            _discardPrimarySaves = discardPrimarySaves;
             _fault = fault;
         }
 
-        public DictionaryBookmarkScope Primary { get; } = new();
-        public DictionaryBookmarkScope Secondary { get; } = new();
+        public DictionaryBookmarkStore Primary { get; } = new();
+        public DictionaryBookmarkStore Secondary { get; } = new();
 
         public ValueTask<RuntimeBookmarkLookupScopes> OpenIsolatedScopesAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Primary.Index.Fault = _fault;
-            Secondary.Index.Fault = _fault;
+            Primary.Fault = _fault;
+            Secondary.Fault = _fault;
+            IBookmarkStateStore primary = _discardPrimarySaves
+                ? new DelegatingBookmarkStore(new StateOnlyBookmarkStore(), Primary)
+                : _leakSecondaryIntoPrimary
+                    ? new SelectiveLeakBookmarkStore(Primary, Secondary)
+                    : Primary;
+            IBookmarkStateStore secondary = _leakPrimaryIntoSecondary
+                ? new SelectiveLeakBookmarkStore(Secondary, Primary)
+                : Secondary;
             return new(new RuntimeBookmarkLookupScopes(
-                new(Primary.Store, Primary.Index),
-                new(Secondary.Store, _leakSecondScope ? Primary.Index : Secondary.Index)));
+                new(primary),
+                new(secondary)));
         }
     }
 
-    private sealed class DictionaryBookmarkScope
+    private sealed class StateOnlyBookmarkStore : IBookmarkStateStore
     {
-        public DictionaryBookmarkScope()
-        {
-            Store = new DictionaryBookmarkStore();
-            Index = new DictionaryBookmarkIndex(Store);
-        }
+        public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
+            => new(state);
 
-        public DictionaryBookmarkStore Store { get; }
-        public DictionaryBookmarkIndex Index { get; }
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            new(false);
+
+        public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            new((BookmarkState?)null);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The bookmark lookup workload only uses the stimulus index.");
     }
 
-    private sealed class DictionaryBookmarkStore : IBookmarkStateStore
+    private sealed class DelegatingBookmarkStore(
+        IBookmarkStateStore stateStore,
+        IBookmarkStimulusIndex stimulusIndex) : IBookmarkStateStore, IBookmarkStimulusIndex
     {
+        public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default) =>
+            stateStore.SaveAsync(state, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            stateStore.DeleteAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            stateStore.FindAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default) =>
+            stateStore.ListPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(
+            BookmarkStimulusPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            stimulusIndex.ListByStimulusPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
+            BookmarkStimulusTypePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            stimulusIndex.ListByStimulusTypePageAsync(query, cancellationToken);
+    }
+
+    private sealed class SelectiveLeakBookmarkStore(
+        DictionaryBookmarkStore localStore,
+        IBookmarkStimulusIndex foreignIndex) : IBookmarkStateStore, IBookmarkStimulusIndex
+    {
+        public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default) =>
+            localStore.SaveAsync(state, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            localStore.DeleteAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            localStore.FindAsync(workflowExecutionId, bookmarkId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default) =>
+            localStore.ListPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(
+            BookmarkStimulusPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            localStore.States.Any(state => state.StimulusType == query.StimulusType && state.StimulusHash == query.StimulusHash)
+                ? localStore.ListByStimulusPageAsync(query, cancellationToken)
+                : foreignIndex.ListByStimulusPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
+            BookmarkStimulusTypePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            localStore.ListByStimulusTypePageAsync(query, cancellationToken);
+    }
+
+    private sealed class DictionaryBookmarkStore : IBookmarkStateStore, IBookmarkStimulusIndex
+    {
+        private const string Continuation = "next";
         private readonly Dictionary<(string WorkflowExecutionId, string BookmarkId), BookmarkState> _states = new();
+
+        public DictionaryBookmarkLookupFault Fault { get; set; }
+        public IReadOnlyCollection<BookmarkState> States => _states.Values;
+        public List<BookmarkStimulusPageQuery> Requests { get; } = [];
 
         public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
         {
@@ -150,26 +252,13 @@ public sealed class RuntimeBookmarkLookupWorkloadTests
         public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The bookmark lookup workload only uses the stimulus index.");
 
-        public IReadOnlyCollection<BookmarkState> States => _states.Values;
-    }
-
-    private sealed class DictionaryBookmarkIndex : IBookmarkStimulusIndex
-    {
-        private const string Continuation = "next";
-
-        public DictionaryBookmarkIndex(DictionaryBookmarkStore store) => Store = store;
-
-        public DictionaryBookmarkStore Store { get; }
-        public List<BookmarkStimulusPageQuery> Requests { get; } = [];
-        public DictionaryBookmarkLookupFault Fault { get; set; }
-
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(
             BookmarkStimulusPageQuery query,
             CancellationToken cancellationToken = default)
         {
             Requests.Add(query);
 
-            var matches = Store.States
+            var matches = States
                 .Where(state => state.StimulusType == query.StimulusType && state.StimulusHash == query.StimulusHash)
                 .OrderBy(state => state.WorkflowExecutionId, StringComparer.Ordinal)
                 .ThenBy(state => state.BookmarkId, StringComparer.Ordinal)

@@ -62,11 +62,15 @@ public sealed class RuntimeBookmarkLookupWorkload
         RequirePage(secondPage, expectedMatches.Skip(PageSize), "second bookmark lookup page", continuationRequired: false);
         operations.Add("read-next-bounded-page");
 
-        var secondaryPage = await scopes.Secondary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+        var primaryHashInSecondaryScope = await scopes.Secondary.BookmarkStimulusIndex.ListByStimulusPageAsync(
             new BookmarkStimulusPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
             cancellationToken);
-        if (secondaryPage.Items.Count != 0 || secondaryPage.NextContinuationToken is not null)
-            throw new InvalidOperationException("The secondary logical storage scope exposed bookmark lookup results from the primary scope.");
+        RequireEmptyPage(primaryHashInSecondaryScope, "secondary logical storage scope exposed bookmark lookup results from the primary scope");
+
+        var secondaryHashInPrimaryScope = await scopes.Primary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+            new BookmarkStimulusPageQuery(PrimaryStimulusType, SecondaryStimulusHash, PageSize),
+            cancellationToken);
+        RequireEmptyPage(secondaryHashInPrimaryScope, "primary logical storage scope exposed bookmark lookup results from the secondary scope");
         operations.Add("verify-cross-scope-isolation");
 
         if (!operations.SequenceEqual(scenario.OperationSequence, StringComparer.Ordinal))
@@ -74,7 +78,7 @@ public sealed class RuntimeBookmarkLookupWorkload
 
         var actualObservations = new SortedDictionary<string, object>(StringComparer.Ordinal)
         {
-            ["crossScopeResultCount"] = secondaryPage.Items.Count,
+            ["crossScopeResultCount"] = primaryHashInSecondaryScope.Items.Count + secondaryHashInPrimaryScope.Items.Count,
             ["firstPageCount"] = firstPage.Items.Count,
             ["matchingBookmarkIdentityDigest"] = Hash(JsonSerializer.Serialize(firstPage.Items.Concat(secondPage.Items).Select(state => state.BookmarkId), CanonicalJsonOptions)),
             ["secondPageCount"] = secondPage.Items.Count,
@@ -190,6 +194,13 @@ public sealed class RuntimeBookmarkLookupWorkload
         actual.Count == expected.Count &&
         actual.All(pair => expected.TryGetValue(pair.Key, out var expectedValue) && Equals(pair.Value, expectedValue));
 
+    private static void RequireEmptyPage(RuntimeStorePage<BookmarkState> page, string failure)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        if (page.Items.Count != 0 || page.NextContinuationToken is not null)
+            throw new InvalidOperationException($"The {failure}.");
+    }
+
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
@@ -235,8 +246,24 @@ public interface IRuntimeBookmarkLookupWorkloadAdapter
 /// <summary>Two scopes expose only the bookmark state and stimulus-index public contracts.</summary>
 public sealed record RuntimeBookmarkLookupScopes(RuntimeBookmarkLookupScope Primary, RuntimeBookmarkLookupScope Secondary);
 
-/// <summary>One host-selected logical storage scope.</summary>
-public sealed record RuntimeBookmarkLookupScope(IBookmarkStateStore BookmarkStateStore, IBookmarkStimulusIndex BookmarkStimulusIndex);
+/// <summary>
+/// One host-selected logical storage scope. The stimulus index is required to be the same store
+/// instance that owns bookmark state, matching the runtime composition contract.
+/// </summary>
+public sealed record RuntimeBookmarkLookupScope
+{
+    public RuntimeBookmarkLookupScope(IBookmarkStateStore bookmarkStateStore)
+    {
+        BookmarkStateStore = bookmarkStateStore ?? throw new ArgumentNullException(nameof(bookmarkStateStore));
+        BookmarkStimulusIndex = bookmarkStateStore as IBookmarkStimulusIndex
+            ?? throw new ArgumentException(
+                "The bookmark state store must implement IBookmarkStimulusIndex on the same instance.",
+                nameof(bookmarkStateStore));
+    }
+
+    public IBookmarkStateStore BookmarkStateStore { get; }
+    public IBookmarkStimulusIndex BookmarkStimulusIndex { get; }
+}
 
 public sealed record RuntimeBookmarkLookupResult(
     string InputFingerprint,
