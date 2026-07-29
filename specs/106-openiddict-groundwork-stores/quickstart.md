@@ -93,7 +93,9 @@ store-contract denominator from the restored OpenIddict 7.5.0 XML:
 Application=42, Authorization=32, Scope=28, Token=43, total 145.
 
 These results prove only the behavior-preservation and
-manifest/codec/boundary slice described above. T005 and T006 remain open.
+manifest/codec/boundary slice described above. T005 retains its executable
+probe-source evidence; T006 remains open until the current configured
+Groundwork family is recertified on all four providers.
 There is no `IOpenIddict*Store` implementation, replacement registration,
 session/UoW/CAS/redeem flow, four-provider matrix, unified deployment
 selection, or performance evidence. The EF oracle remains load-bearing for
@@ -145,3 +147,37 @@ On re-review, the reviewer withdrew the blocker after verifying fixed 256-row
 provider pages and Groundwork's compiled provider-side ID tie-break, and
 reported no remaining Scope blocker. This is an implementation checkpoint, not
 the three-review exact-HEAD merge gate required by T070.
+
+## Current-main replay checkpoint — 2026-07-29
+
+The replay branch was cut from Elsa `6751087c613b150f4c435d11230dbde00eade37e`
+and reconstructs the accepted source slices without merging or rebasing the
+conflicting draft PR. It deliberately excludes the old preview.88/preview.90
+package-family and provider-evidence commits. Those serialized inputs are stale
+and must be replaced only by the exact-head provider-evidence import required by
+Spec 094.
+
+The replay registers the Behavior, Groundwork adapter, and adapter test projects
+in `Elsa.Server.slnx`. The rejected untracked application, authorization, and
+token-store worker files remain outside this branch: review found undeclared
+mutation routes, replay-unsafe operation identities, invalid query terminal/sort
+shapes, an incorrect expiration projection, relationship races, and tests that
+either did not compile or did not exercise the claimed contracts.
+
+Container-free verification on the replay head:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --logger 'console;verbosity=minimal'
+# 51 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
+  -c Release --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests' \
+  --logger 'console;verbosity=minimal'
+# 4 passed
+```
+
+This checkpoint substantiates T009, T010, T018, and T019 on current Elsa main.
+It does not close T006, T011-T013, T016-T017, T020-T022, any complete token or
+registry-store task, provider conformance, host acceptance, performance, or EF
+removal.
