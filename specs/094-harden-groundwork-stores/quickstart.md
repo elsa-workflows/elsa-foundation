@@ -925,7 +925,8 @@ The container-free #646 checkpoint executes the frozen `queue-drain` v1.1 vector
 `IWorkflowSchedulerPoisonStore` only. It enqueues the fixed 128 × 32 workload, then independently
 rereads every exact 32-item FIFO before reading the exact bounded first 16 workflow IDs and racing
 two independently-created queue clients for each selected head. Eight winning current claims are
-completed. Five claims expire and are reclaimed under higher
+accepted only after claim inspection proves one exact active owner per workflow, then completed.
+Five claims expire and are reclaimed under higher
 fences; each old acknowledgement is attempted while its successor is still current and must return
 the public `Stale` outcome. Three current claims are acknowledged before matching poison records
 are written and read through the public poison contract. A third distinct client then verifies the
@@ -941,11 +942,25 @@ evidence, or Spec 094 task completion. T100 remains unchecked.
 Root verification strengthened the worker result after finding that its initial enqueue check
 compared only three work-item members and did not reread the unselected 112 workflows. The accepted
 candidate compares every public work-item member, rereads all 4,096 items through the independently
-opened client, adds a response-only final-seed rejection test, and compares the full poison record
-returned by `ListAsync`. The focused queue suite is **14/14**, the complete benchmark-harness test
-project is **228/228**, the benchmark project warnings-as-errors build is clean, both changed-code
+opened client, inspects the persisted single-winner result of every contention, adds a response-only
+final-seed rejection test, and compares the full poison record returned by `ListAsync`. The focused
+queue suite is **16/16**, the complete benchmark-harness test
+project is **230/230**, the benchmark project warnings-as-errors build is clean, both changed-code
 path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
 correctness checks; provider and restart evidence remain deliberately unclaimed.
+
+The three initial adversarial reviews examined `8c1c27e..8b3cb89f`. Evidence integrity passed, but
+correctness requested changes because the runner trusted returned contention claims without first
+inspecting persisted active ownership, compared only claim-item IDs, and did not bind retry takeover
+and stale acknowledgement to the losing and original-winning clients respectively. Scope/test
+preservation confirmed the delta was additive and contained, but requested a fail-closed duplicate
+active-claim mutation and replacement of the lexical provider-neutrality assertion. All findings
+were accepted: persisted single-winner inspection and its mutation test were added; every claimed
+work-item member is compared with a corrupted-item mutation; retries use the actual losing client
+and stale acknowledgements use the actual original winner, with exact takeover counters; and the
+adapter signature test now recursively permits only an explicit provider-neutral type set. The
+initial evidence PASS is retained as historical review evidence but is not treated as final-head
+approval.
 
 ## 8. Readiness audit
 
