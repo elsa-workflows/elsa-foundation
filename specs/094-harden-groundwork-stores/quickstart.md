@@ -868,6 +868,28 @@ public-contract correctness only: it does not claim
 provider or restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
 coverage-ledger evidence, or Spec 094 task completion; T100 remains unchecked.
 
+Three adversarial read-only reviewers inspected initial frozen range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..3534f5047adf92978d42fef46a23336e959f5153`.
+The review runtime admitted two workers concurrently; the scope/test-preservation review started
+immediately when the first slot released. Their findings and dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The exact public-contract flow, deterministic result digest, scoped two-client contention, retry timing, stale-fence rejection, and distinct shared-backing reopen were internally consistent with the production transition contracts. | PASS |
+| Evidence integrity | The contention sentinel checked count, identity, and fence but did not prove the winning public owner or exact item/claim state. `RequireContentionClaim` now admits only either declared contender and requires exact claim/item owner, fence, claim time, visibility, and Delivering state. Sentinel-only wrong-owner and wrong-state faults cover the boundary. | PASS |
+| Evidence integrity | The first wrong-state fault persisted its fabricated Pending response, so it failed on a second claim rather than exact-state validation. The fake now persists the genuine transition and fabricates only the response; the dedicated test reaches the exact-current-claim error and proves exactly one backing claim. | PASS |
+| Evidence integrity | Delivered reopen reads did not compare the returned identity or cleared lifecycle state, allowing one unrelated delivered record to answer every lookup. They now require exact identity, Delivered status, cleared availability/owner/start/visibility/failure, one attempt, exact completion time, and the accepted fence. A return-only wrong-identity fault proves that check while the dedicated test verifies unchanged backing. The production model rejects construction of Delivered records with owner/start/visibility, so those explicit defensive assertions cannot be paired with a legal stale-owner fixture. | PASS |
+| Scope/test preservation | The delta is additive and confined to the outbox runner, its tests, and this evidence record. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
+
+The originating evidence reviewer re-inspected final implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..53048926f07590f730a39cce85c8dab7d90da89f`,
+independently reproduced focused **26/26**, and returned PASS with no remaining blocker, P1, or P2.
+Root independently reproduced focused **26/26**, complete container-free **211/211**, and
+warning-as-error builds with **0 warnings / 0 errors**. Exact changed-file formatter checks and
+`git diff --check` are clean. The project-wide formatter also reports a pre-existing whitespace
+defect in `IamNormalizedLookupWorkload.cs`, which is outside this exact range and was not rewritten
+in this checkpoint.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
