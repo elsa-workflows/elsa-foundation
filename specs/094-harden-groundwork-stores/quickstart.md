@@ -918,6 +918,72 @@ exact outbox stale-ack contract **4/4** across SQLite, SQL Server, PostgreSQL, a
 formatter checks and `git diff --check` are clean; the touched cancellation-crash test also
 normalizes a pre-existing seven-line initializer indentation defect without changing behavior.
 
+### Queue drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `queue-drain` v1.1 vector through
+`IWorkflowSchedulerWorkQueue`, `IWorkflowSchedulerWorkClaimInspection`, and
+`IWorkflowSchedulerPoisonStore` only. It enqueues the fixed 128 × 32 workload, then independently
+rereads every exact 32-item FIFO before reading the exact bounded first 16 workflow IDs and racing
+two independently-created queue clients for each selected head. Eight winning current claims are
+accepted only after claim inspection proves one exact active owner per workflow, then completed.
+Five claims expire and are reclaimed under higher
+fences; each old acknowledgement is attempted while its successor is still current and must return
+the public `Stale` outcome. Three current claims are acknowledged before matching poison records
+are written and read through the public poison contract. A third distinct client then verifies the
+advanced normal/poison queue heads, the still-current successor claims, and all three poison records.
+
+`completedItemCount = 8` deliberately describes only the normal-completion group. The three poison
+claims are also acknowledged before their poison records are written; they are represented by
+`poisonItemCount = 3`, not folded into that frozen normal-completion observation. This is
+shared-backing public-contract correctness only: it does not claim provider or process-restart
+durability, native-plan evidence, timing, EF comparison, a physical-form verdict, coverage-ledger
+evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification strengthened the worker result after finding that its initial enqueue check
+compared only three work-item members and did not reread the unselected 112 workflows. The accepted
+candidate compares every public work-item member, rereads all 4,096 items through the independently
+opened client, inspects the persisted single-winner result of every contention, adds a response-only
+final-seed rejection test, and compares the full poison record returned by `ListAsync`. The focused
+queue suite is **17/17**, the complete benchmark-harness test
+project is **231/231**, the benchmark project warnings-as-errors build is clean, both changed-code
+path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
+correctness checks; provider and restart evidence remain deliberately unclaimed.
+
+The three initial adversarial reviews examined `8c1c27e..8b3cb89f`. Evidence integrity passed, but
+correctness requested changes because the runner trusted returned contention claims without first
+inspecting persisted active ownership, compared only claim-item IDs, and did not bind retry takeover
+and stale acknowledgement to the losing and original-winning clients respectively. Scope/test
+preservation confirmed the delta was additive and contained, but requested a fail-closed duplicate
+active-claim mutation and replacement of the lexical provider-neutrality assertion. All findings
+were accepted: persisted single-winner inspection and its mutation test were added; every claimed
+work-item member is compared with a corrupted-item mutation; retries use the actual losing client
+and stale acknowledgements use the actual original winner, with exact takeover counters; and the
+adapter signature test now recursively permits only an explicit provider-neutral type set. The
+initial evidence PASS is retained as historical review evidence but is not treated as final-head
+approval.
+
+The first final-head pass over `8c1c27e..7a675dd` produced PASS verdicts on correctness and evidence
+but the scope/test-preservation reviewer found that the race discarded requester identity, allowing
+a cross-claimant owner grant to masquerade as the other client’s win. That reviewer also found that
+the semantic provider-neutrality check omitted inherited interfaces and base types. Both findings
+were accepted, superseding all verdicts on that head: each contention result now carries the actual
+requesting, winning, and losing client; the returned owner must equal that request’s owner; a
+cross-claimant-grant mutation fails closed; and the explicit type traversal includes inherited
+interfaces and base types (with only the records’ provider-neutral `IEquatable<T>` shape allowed).
+Root’s post-freeze audit then found that initial persisted ownership inspection still used the
+Secondary client unconditionally. That head was also superseded: every winner is now inspected
+through its actual losing/opposing client, and the focused fake requires exactly **16** such
+opposing-client inspections.
+
+The canonical three-axis review of `8c1c27e..51373f1` passed with no blocker, P1, or P2.
+Correctness/mechanism verified requester binding, actual-client propagation, opposing-client
+inspection, takeover/stale provenance, full claimed-item fidelity, poison/reopen behavior, and the
+frozen digest. Evidence integrity independently reran the focused suite (**17/17**) and confirmed
+that all observations and nonclaims are truthful. Scope/test preservation confirmed that the delta
+contains only this runner, its additive tests, and this quickstart; no frozen workload, shared
+serialized file, task, ledger, EF oracle, provider, production registration, package, solution, or
+shell changed, no test was removed or weakened, and T100 remains unchecked.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
