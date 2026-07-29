@@ -641,8 +641,9 @@ source checkpoint; Spec 144 was base-only. Root revalidation at the integrated h
 and scope/test-preservation reviewers returned PASS on exact range
 `ea4683674f8d3bc6961c99e7c0efda20ce819e6f..4c9c9e7044d66972860a77b7608708195943f48d`.
 The evidence reviewer confirmed the code and PR metadata but required this integration paragraph
-before its originating-reviewer record re-verification; merge remains forbidden until that verdict
-and the hosted checks pass.
+before its originating-reviewer record re-verification, then returned PASS at record head
+`eab814884191446aa2009933d8eb9825d3eacef9`. Merge remains forbidden until all three reviewers
+confirm the final record-only head and the hosted checks pass.
 
 ## 8. Readiness audit
 
