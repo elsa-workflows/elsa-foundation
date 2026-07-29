@@ -1010,7 +1010,7 @@ sequence, verifies exact per-workflow reopen counts (48 for the acknowledged pri
 for each other stream), and separately fails closed on response-only send, corrupt item/token/order,
 fabricated visible-list, and fabricated count behavior. The semantic adapter guard traverses
 inherited interfaces and base types against an explicit provider-neutral type set. The focused suite
-is **17/17**, the complete container-free benchmark-harness project is **248/248**, the benchmark
+is **18/18**, the complete container-free benchmark-harness project is **249/249**, the benchmark
 warnings-as-errors build is clean, changed-code formatter checks pass, and `git diff --check` is
 clean.
 
@@ -1036,6 +1036,15 @@ must fail closed. Token and owner fencing are now isolated independently while t
 tuple still proves their combined takeover boundary. The semantic surface guard now traverses
 `IExecutionCommandTransport` itself and explicitly permits only the provider-neutral types exposed
 by that public contract.
+
+The final code-bearing review of `286f559..9682f4961` passed correctness/mechanism with no blocker,
+P1, or P2. Evidence integrity and the originating scope reviewer agreed that the three stale
+combinations, both fencing mutations, takeover, and the semantic-surface fix were sound, but each
+reported one evidence-only P2: adding `IgnoreLeaseOwner` made the committed **17/17** and
+**248/248** test counts stale. Root had independently rerun the exact candidate at **18/18** focused
+and **249/249** complete-project, so this documentation-only disposition records those verified
+counts. No code, workload vector, task, ledger, provider, EF oracle, production registration,
+package, solution, or shell changed in the disposition.
 
 ## 8. Readiness audit
 
