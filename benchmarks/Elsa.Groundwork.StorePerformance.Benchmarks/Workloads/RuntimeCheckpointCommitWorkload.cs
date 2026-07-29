@@ -47,11 +47,18 @@ public sealed class RuntimeCheckpointCommitWorkload
         await clients.Primary.Executables.SaveAsync(executable, cancellationToken);
         RequireExecutable(await clients.Primary.Executables.FindAsync(executable.Identity.ArtifactId, cancellationToken), executable);
         RequireExecutable(await clients.Secondary.Executables.FindAsync(executable.Identity.ArtifactId, cancellationToken), executable);
+        // IRuntimeCheckpointCommitStore owns the executable root-write lease around its atomic root mutation.
+        // Acquiring a second caller-side lease here would duplicate that provider responsibility and can race it.
 
         var leases = new Dictionary<string, RuntimeExecutionLease>(StringComparer.Ordinal);
         foreach (var executionId in ExecutionIds())
-            leases.Add(executionId, await clients.Primary.Ownership.AcquireAsync(executionId, cancellationToken));
-        if (leases.Count != ExecutionCount || leases.Values.Any(lease => lease.FencingToken <= 0))
+        {
+            var lease = await clients.Primary.Ownership.AcquireAsync(executionId, cancellationToken);
+            RequireCurrentLease(lease, executionId);
+            await clients.Primary.Ownership.EnsureCurrentAsync(executionId, lease.FencingToken, cancellationToken);
+            leases.Add(executionId, lease);
+        }
+        if (leases.Count != ExecutionCount)
             throw new InvalidOperationException("The checkpoint workload could not acquire the required current execution fences.");
         operations.Add("seed-fenced-executions");
 
@@ -61,6 +68,7 @@ public sealed class RuntimeCheckpointCommitWorkload
         {
             var executionId = ExecutionIdFor(index);
             var bundle = CreateBundle(index, leases[executionId].ToFence(), executable.Identity);
+            await RequireHeartbeatAsync(clients.Primary.Ownership, leases[executionId], cancellationToken);
             var acknowledgement = await clients.Primary.Checkpoints.CommitAsync(bundle.Commit, Immediate, cancellationToken);
             acknowledgedCommitIds.Add(RequireAcknowledgement(acknowledgement, bundle, "accepted checkpoint"));
             bundles.Add(bundle.Commit.CommitId, bundle);
@@ -82,11 +90,14 @@ public sealed class RuntimeCheckpointCommitWorkload
                                          !replayRead.OutboxIds.SequenceEqual(OutboxIdsForExecution(bundles.Values, replay.ExecutionId), StringComparer.Ordinal);
         if (replayCreatedDuplicateWork)
             throw new InvalidOperationException("Equivalent replay created duplicate or altered post-commit work.");
+        await RequireConflictingReplayRejectionAsync(clients.Secondary.Checkpoints, replay.Commit, cancellationToken);
         operations.Add("replay-equivalent-commit");
 
         var staleExecutionId = ExecutionIdFor(0);
         var staleFence = leases[staleExecutionId].ToFence();
         var successor = await clients.Secondary.Ownership.AcquireAsync(staleExecutionId, cancellationToken);
+        RequireCurrentLease(successor, staleExecutionId);
+        await clients.Secondary.Ownership.EnsureCurrentAsync(staleExecutionId, successor.FencingToken, cancellationToken);
         if (successor.FencingToken <= staleFence.FencingToken)
             throw new InvalidOperationException("Ownership supersession did not issue a newer fencing token.");
         var staleBundles = new[]
@@ -105,6 +116,7 @@ public sealed class RuntimeCheckpointCommitWorkload
         var reopened = await adapter.ReopenClientAsync(cancellationToken);
         if (reopened is null || !IsDistinctClient(reopened, clients.Primary) || !IsDistinctClient(reopened, clients.Secondary))
             throw new InvalidOperationException("The checkpoint workload adapter must reopen a genuinely distinct public-store client.");
+        RequireExecutable(await reopened.Executables.FindAsync(executable.Identity.ArtifactId, cancellationToken), executable);
         var reopenedRead = await ReadBundlesAsync(reopened, bundles.Values, cancellationToken);
         var reopenedBundleMatched = reopenedRead.Equals(primaryRead);
         if (!reopenedBundleMatched)
@@ -198,6 +210,40 @@ public sealed class RuntimeCheckpointCommitWorkload
         throw new InvalidOperationException("The checkpoint store accepted a stale fencing token.");
     }
 
+    private static async ValueTask RequireHeartbeatAsync(
+        IRuntimeExecutionOwnershipService ownership,
+        RuntimeExecutionLease lease,
+        CancellationToken cancellationToken)
+    {
+        var heartbeat = await ownership.HeartbeatAsync(lease, cancellationToken);
+        if (!heartbeat.Succeeded || heartbeat.CurrentFencingToken != lease.FencingToken)
+            throw new InvalidOperationException("The checkpoint workload could not refresh its current execution fence before commit.");
+    }
+
+    private static async ValueTask RequireConflictingReplayRejectionAsync(
+        IRuntimeCheckpointCommitStore store,
+        RuntimeCheckpointCommit accepted,
+        CancellationToken cancellationToken)
+    {
+        var conflict = accepted with
+        {
+            Metadata = new Dictionary<string, string>(accepted.Metadata, StringComparer.Ordinal)
+            {
+                ["replay"] = "conflicting"
+            }
+        };
+        try
+        {
+            await store.CommitAsync(conflict, Immediate, cancellationToken);
+        }
+        catch (RuntimeCheckpointReplayConflictException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("The checkpoint store accepted a conflicting replay for an existing commit identity.");
+    }
+
     private static async ValueTask<BundleRead> ReadBundlesAsync(
         RuntimeCheckpointCommitClient client,
         IEnumerable<ExpectedBundle> bundles,
@@ -225,6 +271,7 @@ public sealed class RuntimeCheckpointCommitWorkload
         var activities = await ReadPagesAsync(
             token => client.Activities.ListPageAsync(new ActivityExecutionStatePageQuery(executionId, 3, token), cancellationToken),
             activity => activity.Execution.ActivityExecutionId,
+            3,
             "activity");
         var expectedActivities = bundles.SelectMany(bundle => bundle.Activities).OrderBy(activity => activity.Execution.ActivityExecutionId, StringComparer.Ordinal).ToArray();
         RequireActivities(activities, expectedActivities);
@@ -232,6 +279,7 @@ public sealed class RuntimeCheckpointCommitWorkload
         var durableValues = await ReadPagesAsync(
             token => client.DurableValues.ListPageAsync(new DurableValueStatePageQuery(executionId, 2, token), cancellationToken),
             value => value.DurableValueId,
+            2,
             "durable-value");
         var expectedValues = bundles.SelectMany(bundle => bundle.DurableValues).OrderBy(value => value.DurableValueId, StringComparer.Ordinal).ToArray();
         RequireDurableValues(durableValues, expectedValues);
@@ -240,12 +288,13 @@ public sealed class RuntimeCheckpointCommitWorkload
         var expectedOutbox = bundles.SelectMany(bundle => bundle.Outbox).OrderBy(item => item.OutboxItemId, StringComparer.Ordinal).ToArray();
         RequireOutbox(outbox, expectedOutbox);
 
-        return new ExecutionRead(activities.Count, durableValues.Count, outbox.Count, outbox.Select(item => item.OutboxItemId).OrderBy(id => id, StringComparer.Ordinal).ToArray());
+        return new ExecutionRead(activities.Count, durableValues.Count, outbox.Count, outbox.Select(item => item.OutboxItemId).ToArray());
     }
 
     private static async ValueTask<List<T>> ReadPagesAsync<T>(
         Func<string?, ValueTask<RuntimeStorePage<T>>> read,
         Func<T, string> identity,
+        int requestedLimit,
         string name)
     {
         var results = new List<T>();
@@ -254,7 +303,8 @@ public sealed class RuntimeCheckpointCommitWorkload
         do
         {
             var page = await read(token);
-            if (page is null || page.Items.Count == 0 && page.NextContinuationToken is not null ||
+            if (page is null || page.Items.Count > requestedLimit ||
+                page.Items.Count == 0 && page.NextContinuationToken is not null ||
                 page.Items.Any(item => string.IsNullOrWhiteSpace(identity(item))) ||
                 page.Items.Select(identity).Distinct(StringComparer.Ordinal).Count() != page.Items.Count ||
                 page.NextContinuationToken is not null && !tokens.Add(page.NextContinuationToken))
@@ -284,10 +334,10 @@ public sealed class RuntimeCheckpointCommitWorkload
 
     private static void RequireOutbox(IReadOnlyCollection<RuntimePostCommitOutboxItem> actual, IReadOnlyList<RuntimePostCommitOutboxItem> expected)
     {
-        var orderedActual = actual.OrderBy(item => item.OutboxItemId, StringComparer.Ordinal).ToArray();
-        if (orderedActual.Length != expected.Count || orderedActual.Select(item => item.OutboxItemId).Distinct(StringComparer.Ordinal).Count() != expected.Count)
+        var returnedItems = actual.ToArray();
+        if (returnedItems.Length != expected.Count || returnedItems.Select(item => item.OutboxItemId).Distinct(StringComparer.Ordinal).Count() != expected.Count)
             throw new InvalidOperationException("A public outbox reread did not match the exact committed work cardinality or identities.");
-        foreach (var (returned, committed) in orderedActual.Zip(expected))
+        foreach (var (returned, committed) in returnedItems.Zip(expected))
         {
             if (returned.OutboxItemId != committed.OutboxItemId || returned.Status != committed.Status ||
                 returned.RecordedAt != committed.RecordedAt || returned.AvailableAt != committed.AvailableAt ||
@@ -388,6 +438,16 @@ public sealed class RuntimeCheckpointCommitWorkload
     {
         if (actual is null || actual.Identity != expected.Identity || actual.CreatedAt != expected.CreatedAt || actual.RootActivity.ExecutableNodeId != expected.RootActivity.ExecutableNodeId)
             throw new InvalidOperationException("The checkpoint workload executable FindAsync response did not expose the saved immutable executable.");
+    }
+
+    private static void RequireCurrentLease(RuntimeExecutionLease lease, string executionId)
+    {
+        if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, executionId) ||
+            string.IsNullOrWhiteSpace(lease.LeaseId) ||
+            string.IsNullOrWhiteSpace(lease.OwnerId) ||
+            lease.FencingToken <= 0 ||
+            lease.IsExpired(DateTimeOffset.UtcNow))
+            throw new InvalidOperationException("The checkpoint workload ownership service did not return a current fence for the requested execution.");
     }
 
     private static IEnumerable<string> ExecutionIds() => Enumerable.Range(0, ExecutionCount).Select(index => ExecutionIdFor(index));

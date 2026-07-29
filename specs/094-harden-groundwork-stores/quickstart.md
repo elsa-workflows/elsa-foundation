@@ -788,7 +788,8 @@ and measurement responsibilities.
 The container-free #646 checkpoint executes the frozen `checkpoint-commit` v1.1 vector through
 public runtime contracts only. Two independently created clients share adapter-supplied backing,
 and a third distinct client exercises the reopen boundary. The runner seeds one immutable executable,
-acquires current ownership fences for 128 executions, and submits all 1,024 immediate checkpoint
+acquires and publicly validates current ownership fences for 128 executions, heartbeats the relevant
+fence before each commit, and submits all 1,024 immediate checkpoint
 bundles: each bundle contains one workflow-execution update, four activity changes, three inline
 durable-value changes carrying the exact 512-byte deterministic payload, and two post-commit outbox
 items materialized through the production `RuntimePostCommitOutboxItems` helper.
@@ -797,25 +798,45 @@ Accepted checkpoint identities and their digest are derived from returned outbox
 The runner then rereads every workflow, all 4,096 activities through three-item continuation pages,
 all 3,072 durable values through two-item continuation pages, and all 2,048 outbox items through the
 exact 16-item per-execution bound. An equivalent replay through the second client must preserve the
-same 16 logical outbox items. After the second ownership client supersedes the selected execution,
+same 16 logical outbox items, and a conflicting request under the accepted commit ID must expose the
+public replay-conflict exception. Returned pages must honor their three-/two-item bounds, and outbox
+items must retain deterministic delivery order. After the second ownership client supersedes the selected execution,
 two distinct stale commits are released together through the two commit clients; both outcomes and
 both retries must reject the old fence, and a complete public reread must expose no stale workflow,
 activity, value, outbox, or replay-marker effect. The third client repeats the full public reread.
 This is shared-backing distinct-client visibility, not process/storage restart evidence.
 
-Root verification passed the focused workload suite **29/29**, the complete no-container benchmark
-suite **179/179**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
+Root verification passed the focused workload suite **35/35**, the complete no-container benchmark
+suite **185/185**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
 path-restricted formatting, and `git diff --check`. The focused fake matrix rejects aliased clients
-or component instances, split or fresh backing, response-only executable writes, missing or
-synthetic acknowledgements, dropped workflow/activity/value/outbox state, malformed continuation
-behavior, altered returned identities/payload/accounting facts, replay duplication, stale acceptance,
-partial stale mutation, and leaked replay markers.
+or component instances, split or fresh backing, response-only executable writes, unavailable
+store-owned executable root leases, expired or unrefreshable execution leases, missing or synthetic
+acknowledgements, dropped workflow/activity/value/outbox state, malformed or over-limit continuation
+behavior, fabricated page members, altered returned identities/payload/accounting facts, reordered
+outbox work, equivalent replay duplication, conflicting replay acceptance, stale acceptance, partial
+stale mutation, and leaked replay markers.
 
-Independent exact-range review remains required before merge. This checkpoint does not execute an
-EF comparator or provider matrix, start a database container, collect timing/native-plan evidence,
-select a physical form, edit the coverage ledger, issue a performance verdict, or advance a Spec 094
-task. Groundwork #50 completion, preview.95 evidence reconciliation, real EF comparators, and the
-remaining workload-contract ratifications stay in the #646 completion gate.
+Three adversarial read-only reviewers inspected initial frozen range
+`4b1eadeea42984f9ebcf3134c60f07134abec7cf..ce67cfd61460fd8f6fb6131bfd3d33b9bfc9adcc`.
+Their findings and dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | One-minute production execution leases could expire across 1,024 commits; the replacement validates every acquired lease, calls `EnsureCurrentAsync`, and requires a successful exact-token heartbeat before every accepted commit. | Re-verification pending |
+| Correctness/mechanism | Public page bounds and outbox order were normalized rather than proved. The replacement rejects over-limit pages (the public page model also rejects them), uses genuinely fabricated-member and ignored-limit faults, and compares returned outbox order without sorting. | Re-verification pending |
+| Correctness/mechanism | Equivalent replay did not reject a conflicting fingerprint. The replacement submits an altered request under the accepted commit ID and requires `RuntimeCheckpointReplayConflictException`; the fake retains canonical marker fingerprints and includes an acceptance fault. | Re-verification pending |
+| Correctness/mechanism | The reviewer asked the workload caller to acquire the executable root-write lease. The production checkpoint store owns that lease around its atomic write; caller acquisition would duplicate and potentially conflict with it. The fake now models and counts the same store-owned boundary and an unavailable-lease fault. This runner does not independently prove the provider-internal lease race; existing runtime/provider conformance remains authoritative. | Withdrawal requested |
+| Evidence integrity | The “fabricated member” fault repeated a real member. It now returns a unique plausible activity/value record absent from backing. | Re-verification pending |
+| Evidence integrity | The runner does not inject a valid-current-fence mid-commit failure or recreate storage after failure. That is a retained provider failure/restart gate, not evidence supplied by this shared-backing runner. | Accepted limitation |
+| Scope/test preservation | The reviewer found the delta additive, the 179-test initial suite preserved, and no project/package/provider/EF/container/ledger/task surface change. | PASS |
+
+This checkpoint does not execute an EF comparator or provider matrix, start a database container,
+inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
+collect timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a
+performance verdict, independently prove provider-internal executable root-lease exclusion, or
+advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconciliation, real EF
+comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
+stay in the #646 completion gate.
 
 ## 8. Readiness audit
 

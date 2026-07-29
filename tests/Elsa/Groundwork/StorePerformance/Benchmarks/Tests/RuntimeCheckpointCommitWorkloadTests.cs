@@ -28,6 +28,8 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         Assert.All(adapter.Shared.ActivityPageRequests, request => Assert.Equal(3, request.Limit));
         Assert.All(adapter.Shared.DurableValuePageRequests, request => Assert.Equal(2, request.Limit));
         Assert.All(adapter.Shared.OutboxRequests, request => Assert.Equal(16, request.Limit));
+        Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.HeartbeatCount);
+        Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.RootWriteLeaseCount);
     }
 
     [Theory]
@@ -37,6 +39,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
     [InlineData(CheckpointFault.SameReopenedClient)]
     [InlineData(CheckpointFault.FreshReopenedBacking)]
     [InlineData(CheckpointFault.ExecutableResponseOnly)]
+    [InlineData(CheckpointFault.RootWriteLeaseUnavailable)]
     [InlineData(CheckpointFault.AcknowledgementDropsWork)]
     [InlineData(CheckpointFault.AcknowledgementBindsWrongCommit)]
     [InlineData(CheckpointFault.DropWorkflow)]
@@ -47,21 +50,31 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
     [InlineData(CheckpointFault.PagingDuplicate)]
     [InlineData(CheckpointFault.PagingReorder)]
     [InlineData(CheckpointFault.PagingIgnoreContinuation)]
+    [InlineData(CheckpointFault.PagingIgnoresLimit)]
     [InlineData(CheckpointFault.PagingFabricatedMember)]
     [InlineData(CheckpointFault.ReplayDuplicatesOutbox)]
+    [InlineData(CheckpointFault.AcceptConflictingReplay)]
     [InlineData(CheckpointFault.StaleAccepted)]
     [InlineData(CheckpointFault.StalePartialMutation)]
     [InlineData(CheckpointFault.StaleLeaksReplayMarker)]
     [InlineData(CheckpointFault.IgnoreExpectedFence)]
+    [InlineData(CheckpointFault.ExpiredLease)]
+    [InlineData(CheckpointFault.HeartbeatRejected)]
     [InlineData(CheckpointFault.AlterReturnedPayload)]
     [InlineData(CheckpointFault.AlterReturnedActivityIdentity)]
     [InlineData(CheckpointFault.AlterReturnedDurableIdentity)]
     [InlineData(CheckpointFault.AlterWorkflowAccounting)]
     [InlineData(CheckpointFault.AlterReturnedOutboxFacts)]
+    [InlineData(CheckpointFault.OutboxReordered)]
     public async Task Fails_closed_when_a_public_checkpoint_contract_surface_drifts(CheckpointFault fault)
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new RuntimeCheckpointCommitWorkload().ExecuteAsync(new CheckpointAdapter(fault)).AsTask());
+        var attempt = () => new RuntimeCheckpointCommitWorkload().ExecuteAsync(new CheckpointAdapter(fault)).AsTask();
+        if (fault == CheckpointFault.PagingIgnoresLimit)
+            await Assert.ThrowsAsync<ArgumentException>(attempt);
+        else if (fault == CheckpointFault.RootWriteLeaseUnavailable)
+            await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(attempt);
+        else
+            await Assert.ThrowsAsync<InvalidOperationException>(attempt);
     }
 
     [Fact]
@@ -121,11 +134,14 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public Dictionary<string, DurableValueState> DurableValues { get; } = new(StringComparer.Ordinal);
         public List<RuntimePostCommitOutboxItem> Outbox { get; } = [];
         public Dictionary<string, RuntimeCheckpointCommitStoreResult> Markers { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, string> MarkerFingerprints { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, RuntimeExecutionLease> Leases { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, long> FenceCounters { get; } = new(StringComparer.Ordinal);
         public List<ActivityExecutionStatePageQuery> ActivityPageRequests { get; } = [];
         public List<DurableValueStatePageQuery> DurableValuePageRequests { get; } = [];
         public List<RuntimePostCommitOutboxQuery> OutboxRequests { get; } = [];
+        public int HeartbeatCount { get; set; }
+        public int RootWriteLeaseCount { get; set; }
     }
 
     private sealed class CheckpointPublicStore :
@@ -150,6 +166,11 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             {
                 if (_backing.Markers.TryGetValue(commit.CommitId, out var replay))
                 {
+                    var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+                    if (_fault != CheckpointFault.AcceptConflictingReplay &&
+                        (!_backing.MarkerFingerprints.TryGetValue(commit.CommitId, out var acceptedFingerprint) ||
+                         !StringComparer.Ordinal.Equals(acceptedFingerprint, fingerprint)))
+                        throw new RuntimeCheckpointReplayConflictException(commit.CommitId);
                     if (_fault == CheckpointFault.ReplayDuplicatesOutbox)
                         _backing.Outbox.AddRange(commit.StateChanges.PostCommitOutbox.Select(change => change.State));
                     return new(replay);
@@ -162,14 +183,30 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
                     if (_fault == CheckpointFault.StalePartialMutation)
                         _backing.Activities[commit.StateChanges.ActivityExecutions.First().StateId] = commit.StateChanges.ActivityExecutions.First().State;
                     if (_fault == CheckpointFault.StaleLeaksReplayMarker)
+                    {
                         _backing.Markers[commit.CommitId] = Acknowledgement(commit);
+                        _backing.MarkerFingerprints[commit.CommitId] = RuntimeCheckpointCommitFingerprint.Compute(commit);
+                    }
                     throw new RuntimeStaleFencingTokenException(commit.WorkflowExecutionId, commit.ExpectedFence?.FencingToken ?? 0, current?.FencingToken ?? 0);
                 }
 
-                Apply(commit);
-                var acknowledgement = Acknowledgement(commit);
-                _backing.Markers.Add(commit.CommitId, acknowledgement);
-                return new(acknowledgement);
+                var artifactId = commit.StateChanges.WorkflowExecution?.State.PinnedExecutable.ArtifactId
+                    ?? throw new InvalidOperationException("The checkpoint fake requires a workflow-execution root.");
+                var rootLease = AcquireRootWriteLease(artifactId, $"checkpoint:{commit.CommitId}");
+                if (rootLease is null)
+                    throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, $"checkpoint:{commit.CommitId}");
+                try
+                {
+                    Apply(commit);
+                    var acknowledgement = Acknowledgement(commit);
+                    _backing.Markers.Add(commit.CommitId, acknowledgement);
+                    _backing.MarkerFingerprints.Add(commit.CommitId, RuntimeCheckpointCommitFingerprint.Compute(commit));
+                    return new(acknowledgement);
+                }
+                finally
+                {
+                    ReleaseRootWriteLease(rootLease);
+                }
             }
         }
 
@@ -181,13 +218,37 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
                 var token = _backing.FenceCounters.GetValueOrDefault(workflowExecutionId) + 1;
                 _backing.FenceCounters[workflowExecutionId] = token;
                 var now = DateTimeOffset.UtcNow;
-                var lease = new RuntimeExecutionLease($"lease-{workflowExecutionId}-{token}", workflowExecutionId, "checkpoint-workload", now, now.AddHours(1), token);
+                var acquiredAt = _fault == CheckpointFault.ExpiredLease ? now.AddHours(-2) : now;
+                var expiresAt = _fault == CheckpointFault.ExpiredLease ? now.AddHours(-1) : now.AddHours(1);
+                var lease = new RuntimeExecutionLease($"lease-{workflowExecutionId}-{token}", workflowExecutionId, "checkpoint-workload", acquiredAt, expiresAt, token);
                 _backing.Leases[workflowExecutionId] = lease;
                 return new(lease);
             }
         }
 
-        public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_backing.Gate)
+            {
+                var current = _backing.Leases.GetValueOrDefault(lease.WorkflowExecutionId);
+                if (_fault == CheckpointFault.HeartbeatRejected || current is null ||
+                    current.LeaseId != lease.LeaseId || current.FencingToken != lease.FencingToken)
+                    return new(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Stale, current?.FencingToken));
+                if (current.IsExpired(DateTimeOffset.UtcNow))
+                    return new(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Expired, current.FencingToken));
+
+                _backing.HeartbeatCount++;
+                _backing.Leases[lease.WorkflowExecutionId] = new RuntimeExecutionLease(
+                    current.LeaseId,
+                    current.WorkflowExecutionId,
+                    current.OwnerId,
+                    current.AcquiredAt,
+                    DateTimeOffset.UtcNow.AddHours(1),
+                    current.FencingToken);
+                return new(new RuntimeExecutionOwnershipTransitionResult(RuntimeExecutionOwnershipTransitionStatus.Applied, current.FencingToken));
+            }
+        }
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default)
         {
@@ -206,9 +267,15 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         ValueTask<WorkflowExecutable?> IWorkflowExecutableStore.FindAsync(string artifactId, CancellationToken cancellationToken) =>
             new(_fault == CheckpointFault.ExecutableResponseOnly ? null : _backing.Executables.GetValueOrDefault(artifactId));
         ValueTask<bool> IWorkflowExecutableStore.DeleteAsync(string artifactId, CancellationToken cancellationToken) => new(_backing.Executables.Remove(artifactId));
-        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId, string leaseId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => new((WorkflowExecutableRootWriteLease?)null);
-        public ValueTask<bool> RenewRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => new(false);
-        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(string artifactId, string leaseId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            new(AcquireRootWriteLease(artifactId, leaseId));
+        public ValueTask<bool> RenewRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            new(_backing.Executables.ContainsKey(lease.ArtifactId));
+        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default)
+        {
+            ReleaseRootWriteLease(lease);
+            return ValueTask.CompletedTask;
+        }
         public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(string artifactId, string operationId, DateTimeOffset expiresAt, DateTimeOffset now, CancellationToken cancellationToken = default) => new((WorkflowExecutableDeletionGuard?)null);
         public ValueTask<bool> CancelDeletionAsync(WorkflowExecutableDeletionGuard guard, CancellationToken cancellationToken = default) => new(false);
         public ValueTask<bool> DeleteAsync(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, CancellationToken cancellationToken = default) => new(false);
@@ -252,10 +319,25 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             {
                 CheckpointFault.DropOutbox => items.Skip(1).ToArray(),
                 CheckpointFault.AlterReturnedOutboxFacts => items.Select(Tamper).ToArray(),
+                CheckpointFault.OutboxReordered => items.Reverse().ToArray(),
                 _ => items
             }));
         }
         public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        private WorkflowExecutableRootWriteLease? AcquireRootWriteLease(string artifactId, string leaseId)
+        {
+            if (_fault == CheckpointFault.RootWriteLeaseUnavailable || !_backing.Executables.ContainsKey(artifactId))
+                return null;
+
+            _backing.RootWriteLeaseCount++;
+            return new WorkflowExecutableRootWriteLease(artifactId, leaseId, $"root-write:{leaseId}");
+        }
+
+        private static void ReleaseRootWriteLease(WorkflowExecutableRootWriteLease lease)
+        {
+            ArgumentNullException.ThrowIfNull(lease);
+        }
 
         private void Apply(RuntimeCheckpointCommit commit)
         {
@@ -295,6 +377,8 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             if (_fault == CheckpointFault.PagingIgnoreContinuation)
                 offset = 0;
             var items = source.Skip(offset).Take(query.Limit).ToArray();
+            if (_fault == CheckpointFault.PagingIgnoresLimit && offset == 0)
+                items = source.ToArray();
             if (_fault == CheckpointFault.PagingDrop && offset == 0)
                 items = items.Skip(1).ToArray();
             if (_fault == CheckpointFault.PagingDuplicate && offset > 0 && source.Count > 0)
@@ -302,7 +386,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             if (_fault == CheckpointFault.PagingReorder)
                 Array.Reverse(items);
             if (_fault == CheckpointFault.PagingFabricatedMember && offset > 0 && source.Count > 0)
-                items = [source[0], .. items.Take(Math.Max(0, query.Limit - 1))];
+                items = [Fabricate(source[0]), .. items.Take(Math.Max(0, query.Limit - 1))];
             var nextOffset = _fault == CheckpointFault.PagingIgnoreContinuation && query.ContinuationToken is not null
                 ? int.Parse(query.ContinuationToken, System.Globalization.CultureInfo.InvariantCulture) + query.Limit
                 : offset + query.Limit;
@@ -313,6 +397,17 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         private static DurableValueState Tamper(DurableValueState state) => new(
             $"tampered-{state.DurableValueId}", state.WorkflowExecutionId, state.ValueId, state.Type, state.Lifecycle, state.Storage,
             state.InlineValue, state.ExternalReference, state.SourceActivityExecutionId, state.CapturedAt, state.Metadata);
+
+        private static T Fabricate<T>(T item) =>
+            item switch
+            {
+                ActivityExecutionState activity => (T)(object)(activity with
+                {
+                    Execution = activity.Execution with { ActivityExecutionId = $"fabricated-{activity.Execution.ActivityExecutionId}" }
+                }),
+                DurableValueState value => (T)(object)Tamper(value),
+                _ => throw new InvalidOperationException($"The checkpoint fake cannot fabricate a {typeof(T).Name} page member.")
+            };
 
         private static RuntimePostCommitOutboxItem Tamper(RuntimePostCommitOutboxItem item)
         {
@@ -328,9 +423,10 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
     public enum CheckpointFault
     {
         None, AliasInitialClients, AliasedComponentInstances, DifferentInitialBacking, SameReopenedClient, FreshReopenedBacking, ExecutableResponseOnly,
+        RootWriteLeaseUnavailable,
         AcknowledgementDropsWork, AcknowledgementBindsWrongCommit, DropWorkflow, DropActivity, DropDurableValue, DropOutbox, PagingDrop, PagingDuplicate, PagingReorder,
-        PagingIgnoreContinuation, ReplayDuplicatesOutbox, StaleAccepted, StalePartialMutation, StaleLeaksReplayMarker,
-        IgnoreExpectedFence, AlterReturnedPayload, AlterReturnedActivityIdentity, AlterReturnedDurableIdentity, AlterWorkflowAccounting, PagingFabricatedMember,
-        AlterReturnedOutboxFacts
+        PagingIgnoreContinuation, PagingIgnoresLimit, ReplayDuplicatesOutbox, AcceptConflictingReplay, StaleAccepted, StalePartialMutation,
+        StaleLeaksReplayMarker, IgnoreExpectedFence, ExpiredLease, HeartbeatRejected, AlterReturnedPayload, AlterReturnedActivityIdentity,
+        AlterReturnedDurableIdentity, AlterWorkflowAccounting, PagingFabricatedMember, AlterReturnedOutboxFacts, OutboxReordered
     }
 }
