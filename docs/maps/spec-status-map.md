@@ -114,11 +114,11 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | retained |
 | [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Draft | - | 23 | 0 | - |
 | [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
-| [091-lazy-shell-activation](../../specs/091-lazy-shell-activation/spec.md) | Observable Shell Readiness and Cold Activation | Approved for implementation | - | 38 | 1 | - |
+| [091-lazy-shell-activation](../../specs/091-lazy-shell-activation/spec.md) | Observable Shell Readiness and Cold Activation | Approved for implementation | - | 39 | 0 | - |
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
 | [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 104 | 0 | retained, deferred, out of scope |
-| [092-workflow-executable-cache](../../specs/092-workflow-executable-cache/spec.md) | Bounded Workflow Executable Cache | Approved for implementation | - | 30 | 2 | retained |
+| [092-workflow-executable-cache](../../specs/092-workflow-executable-cache/spec.md) | Bounded Workflow Executable Cache | Approved for implementation | - | 32 | 0 | retained |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 87 | 1 | superseded |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
