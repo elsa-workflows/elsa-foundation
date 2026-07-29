@@ -1,6 +1,6 @@
 # Extension points — Diagnostics: Structured Logs domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.StructuredLogs` — the server feature that captures host log events into an in-memory store and exposes them over HTTP + Server-Sent Events. All seams are **overridable `.Core` contracts**; there are no contributor interfaces or published events in v1.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.StructuredLogs` — the server feature that captures host log events into an in-memory store by default and exposes them over HTTP + Server-Sent Events. All seams are **overridable `.Core` contracts**; there are no contributor interfaces or published events in v1.
 
 The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
 
@@ -52,11 +52,14 @@ conformance adapter over Groundwork's specialized `IDiagnosticRecordStore`. It u
 cursors, idempotent batch operation ids, bounded declared predicates, snapshot continuation, exact trim, and
 provider inspection state for lifetime high-water. The Elsa Core contract has no Groundwork dependency; hosts
 construct and register the adapter with their selected Groundwork provider and a
-`StructuredLogStoreBinding` (tenant, host storage scope, and logical stream).
+`StructuredLogStoreBinding` (tenant, host storage scope, and logical stream). The aggregate
+`DiagnosticsGroundworkPersistence` feature is the current first-party durable and reference-host composition:
+it installs this concrete feature, replaces the in-memory store, and contributes its diagnostic-record stream
+to the combined Groundwork deployment manifest.
 
 ### Temporary EF Core compatibility override
 
-`Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` ships **`EfCoreStructuredLogStore`**, an `IStructuredLogStore` override that makes captured logs durable. It is enabled per-provider, e.g. the `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature.
+`Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` ships **`EfCoreStructuredLogStore`**, an `IStructuredLogStore` override that makes captured logs durable. It is enabled per-provider, e.g. the `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature. It remains only as a temporary comparison, oracle, and compatibility implementation until #646 completes the retained performance measurement and #647 deletes the EF diagnostics surface; it has not yet been removed.
 
 Key design points (so the override stays safe on a high-volume, hot logging path):
 - **Non-blocking append** writes to the existing bounded `Channel` (drop-oldest); a background drain loop batch-inserts into the `StructuredLogsDbContext` and completes accepted append operations after commit.

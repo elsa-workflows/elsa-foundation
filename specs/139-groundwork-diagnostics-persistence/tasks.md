@@ -210,7 +210,8 @@
 - [ ] T053 [US4] Delete Structured Logs EF implementation projects and their tests under `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/` while preserving provider-neutral conformance coverage
 - [ ] T054 [US4] Delete OpenTelemetry EF implementation projects and their tests under `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/` and `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/` while preserving provider-neutral conformance coverage
 - [ ] T055 [US4] Remove diagnostics EF project/registration/migration/package usages from `Elsa.Server.slnx` and affected diagnostics projects; remove EF entries from `Directory.Packages.props` only when the repository-wide dependency audit proves no remaining feature consumes them
-- [ ] T056 [P] [US4] Update `src/Elsa/Diagnostics/StructuredLogs/README.md`, `src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`, `src/Elsa/Diagnostics/OpenTelemetry/README.md`, and `src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`
+- [X] T056 [P] [US4] Update `src/Elsa/Diagnostics/StructuredLogs/README.md`, `src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`, `src/Elsa/Diagnostics/OpenTelemetry/README.md`, and `src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`
+  - Evidence: The four domain docs now name `DiagnosticsGroundworkPersistence` as the first-party/reference-host durable composition and preserve EF as the retained #646 comparison/oracle/compatibility implementation pending #647 deletion.
 - [ ] T057 [US4] Run the complete four-provider suite, solution build, architecture audit, and final `rg` zero-EF/zero-core-Groundwork checks documented in `specs/139-groundwork-diagnostics-persistence/quickstart.md`
 
 **Checkpoint**: Diagnostics has one first-party Groundwork persistence model, four-provider proof, pre-start deployment support, and zero EF implementation surface.
