@@ -100,7 +100,7 @@
 
 ## Decision 10: Serialize shared-file integration
 
-**Decision**: Only the final-removal integration lane edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or the coverage ledger at one time. Vertical lanes land provider code/evidence first. The host selection files and host project form one explicitly admitted earlier #647 slice after the intake review plus #643/#932 source gates; solution, central-package, and coverage-ledger edits remain later serialized slices.
+**Decision**: Only one admitted integration slice edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or the coverage ledger at one time. Vertical lanes land provider code/evidence first. A prerequisite #646 coverage-ledger import is serialized before T011. The host selection files and host project then form one explicitly admitted #647 slice after the intake review plus #643/#932 source gates; solution and central-package edits remain later serialized #647 slices.
 
 **Rationale**: These files are cross-lane merge and truth surfaces. Serialization prevents stale overwrites and keeps the package/host/evidence story coherent.
 

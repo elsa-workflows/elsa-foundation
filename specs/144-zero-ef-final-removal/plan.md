@@ -32,7 +32,7 @@ Complete issue #647 as the final dependency-ordered zero-EF lane after #642, #64
 - Existing test subjects/objectives survive; deletion requires recorded architect approval.
 - The permanent guard scans every project and refuses incomplete restore evidence.
 - Only one lane at a time edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or `coverage-ledger.json`.
-- Shared files are changed only in explicitly admitted, serialized #647 integration slices. The T029-T031 host slice is the sole earlier exception: it starts only after the intake review and its #643/#932 source prerequisites pass; package/solution/coverage-ledger edits remain later slices.
+- Shared files are changed only in explicitly admitted, serialized integration slices. A prerequisite #646 coverage-ledger import is admitted before T011; the T029-T031 #647 host slice starts only after the intake review and its #643/#932 source prerequisites pass; package and solution edits remain later #647 slices.
 - No compatibility repository or production EF data migration is created.
 
 **Scale/Scope**: Current intake spans 8 EF projects, 24 direct package references, 9 central versions, 19 direct EF project references, 22 static transitive project consumers, 57 static transitive package consumers, 103 restored EF package consumers, 11 migration files, 11 `DbContext` files, 41 registration occurrences, and 3 host-configuration occurrences. The guard covers every source, test, benchmark, tool, and app project in the repository, including projects omitted from `Elsa.Server.slnx`.
@@ -138,7 +138,7 @@ Research is consolidated in [research.md](research.md). The load-bearing decisio
 7. Preserve complete restored-graph evidence using a discovery-driven all-project restore receipt that binds the exact project set, dependency-affecting inputs, and assets; reject missing, stale, or unbound assets.
 8. Reconcile OpenIddict wording by distinguishing delivery ownership from program completion membership.
 9. Keep the temporary benchmark harness/oracles only until evidence import is complete, then remove them in the final slice.
-10. Serialize all shared package/solution/host/coverage-ledger edits; admit T029-T031 as a single #647-owned host slice only after T010, T012, T017, and T019-T028 pass.
+10. Serialize all shared package/solution/host/coverage-ledger edits; admit any prerequisite #646 coverage-ledger import before T011, then admit T029-T031 as a single #647-owned host slice only after T010, T012, T017, and T019-T028 pass.
 
 ## Phase 1: Design & Contracts
 
