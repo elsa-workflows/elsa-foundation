@@ -56,8 +56,7 @@ public sealed class RuntimeOutboxDrainWorkload
         RequireExactClaims(primaryClaims, ExpectedDueIds(BatchSize), "outbox-primary", expectedFence: 1, BatchSize);
 
         var contentionClaims = await ClaimContentionSentinelAsync(clients, cancellationToken);
-        if (contentionClaims.Count != 1 || contentionClaims[0].OutboxItemId != DueId(BatchSize) || contentionClaims[0].FencingToken != 1)
-            throw new InvalidOperationException("Concurrent claimants did not produce exactly one current claim for the outbox contention sentinel.");
+        var originalSentinelClaim = RequireContentionClaim(contentionClaims);
         operations.Add("claim-due-batch");
 
         var completedAt = FixedNowUtc.AddSeconds(1);
@@ -87,7 +86,6 @@ public sealed class RuntimeOutboxDrainWorkload
         RequireExactClaims(retryClaims, ExpectedDueIds(RetryableEntries), "outbox-retry", expectedFence: 2, RetryableEntries);
         operations.Add("record-delivered-and-retryable-results");
 
-        var originalSentinelClaim = contentionClaims.Single();
         var originalSentinelClient = StringComparer.Ordinal.Equals(originalSentinelClaim.OwnerId, "outbox-contender-0")
             ? clients.Primary
             : clients.Secondary;
@@ -219,6 +217,32 @@ public sealed class RuntimeOutboxDrainWorkload
             return true;
         }
         throw new InvalidOperationException("The outbox store accepted a stale completion.");
+    }
+
+    private static RuntimePostCommitOutboxClaim RequireContentionClaim(
+        IReadOnlyList<RuntimePostCommitOutboxClaim> claims)
+    {
+        if (claims.Count != 1)
+            throw new InvalidOperationException("Concurrent claimants did not converge to one outbox contention-sentinel owner.");
+
+        var claim = claims[0];
+        var validOwner = StringComparer.Ordinal.Equals(claim.OwnerId, "outbox-contender-0") ||
+                         StringComparer.Ordinal.Equals(claim.OwnerId, "outbox-contender-1");
+        if (claim.OutboxItemId != DueId(BatchSize) ||
+            !validOwner ||
+            claim.FencingToken != 1 ||
+            claim.ClaimedAt != FixedNowUtc ||
+            claim.VisibleAfter != FixedNowUtc.Add(PrimaryVisibility) ||
+            claim.Item.Status != RuntimePostCommitOutboxStatus.Delivering ||
+            !StringComparer.Ordinal.Equals(claim.Item.DeliveringOwnerId, claim.OwnerId) ||
+            claim.Item.DeliveryFencingToken != claim.FencingToken ||
+            claim.Item.DeliveryStartedAt != claim.ClaimedAt ||
+            claim.Item.DeliveryVisibleAfter != claim.VisibleAfter)
+        {
+            throw new InvalidOperationException("The outbox contention sentinel did not expose one exact current public claim.");
+        }
+
+        return claim;
     }
 
     private static async ValueTask RequireReopenedStateAsync(

@@ -41,6 +41,8 @@ public sealed class RuntimeOutboxDrainWorkloadTests
     [InlineData(OutboxFault.DuplicateClaim)]
     [InlineData(OutboxFault.WrongReclaimFence)]
     [InlineData(OutboxFault.ReturnWrongOwner)]
+    [InlineData(OutboxFault.SentinelWrongOwner)]
+    [InlineData(OutboxFault.SentinelWrongState)]
     [InlineData(OutboxFault.StaleAccepted)]
     [InlineData(OutboxFault.ResponseOnlyCompletion)]
     [InlineData(OutboxFault.EarlyRetry)]
@@ -174,6 +176,18 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                         claim = new RuntimePostCommitOutboxClaim(claim.Item, claim.OwnerId, claim.FencingToken - 1, claim.ClaimedAt, claim.VisibleAfter);
                     if (_fault == OutboxFault.ReturnWrongOwner)
                         claim = new RuntimePostCommitOutboxClaim(claim.Item, "wrong-owner", claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter);
+                    if (_fault == OutboxFault.SentinelWrongOwner &&
+                        item.Intent.WorkflowExecutionId == "outbox-drain-contention" &&
+                        request.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
+                    {
+                        claim = new RuntimePostCommitOutboxClaim(claim.Item, "wrong-sentinel-owner", claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter);
+                    }
+                    if (_fault == OutboxFault.SentinelWrongState &&
+                        item.Intent.WorkflowExecutionId == "outbox-drain-contention" &&
+                        request.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
+                    {
+                        claim = new RuntimePostCommitOutboxClaim(item, claim.OwnerId, claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter);
+                    }
                     if (_fault != OutboxFault.DuplicateClaim)
                         _backing.Items[item.OutboxItemId] = claim.Item;
                     if (item.Intent.WorkflowExecutionId == "outbox-drain-contention")
@@ -265,6 +279,8 @@ public enum OutboxFault
     DuplicateClaim,
     WrongReclaimFence,
     ReturnWrongOwner,
+    SentinelWrongOwner,
+    SentinelWrongState,
     StaleAccepted,
     ResponseOnlyCompletion,
     EarlyRetry,
