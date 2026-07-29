@@ -21,7 +21,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 - **Consumed by:** `WorkflowVersionsReconcilingHandler : IEventHandler<OnWorkflowVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles against the workflow catalog.
 
 **Known implementations (shipped):**
-- None currently in-repo. Add a source to integrate a code-first workflow definition provider (e.g. attribute-decorated C# classes) or a file-based import.
+- `GitWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Git`, `SourceKind = "git"`) — reads immutable version files from a git repository (spec 085 / ADR 0034). Feature: `WorkflowsDesignGitReconciliation`.
+- `JsonWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Json`, `SourceKind = "Json"`) — reads workflow-definition versions from one or more JSON files (a single `FilePath` XOR an ordered `Files` list; required `SourceId`), mirroring the Activities-side `JsonActivityReconciliation` source. Feature: `JsonWorkflowReconciliation` (opt-in; not enabled in any default shell).
+- Add a further source to integrate other providers (e.g. a code-first attribute-decorated C# provider, or a CRM pull).
 
 ---
 
