@@ -881,7 +881,10 @@ immediately when the first slot released. Their findings and dispositions are:
 | Evidence integrity | The contention sentinel checked count, identity, and fence but did not prove the winning public owner or exact item/claim state. `RequireContentionClaim` now admits only either declared contender and requires exact claim/item owner, fence, claim time, visibility, and Delivering state. Sentinel-only wrong-owner and wrong-state faults cover the boundary. | PASS |
 | Evidence integrity | The first wrong-state fault persisted its fabricated Pending response, so it failed on a second claim rather than exact-state validation. The fake now persists the genuine transition and fabricates only the response; the dedicated test reaches the exact-current-claim error and proves exactly one backing claim. | PASS |
 | Evidence integrity | Delivered reopen reads did not compare the returned identity or cleared lifecycle state, allowing one unrelated delivered record to answer every lookup. They now require exact identity, Delivered status, cleared availability/owner/start/visibility/failure, one attempt, exact completion time, and the accepted fence. A return-only wrong-identity fault proves that check while the dedicated test verifies unchanged backing. The production model rejects construction of Delivered records with owner/start/visibility, so those explicit defensive assertions cannot be paired with a legal stale-owner fixture. | PASS |
-| Scope/test preservation | The delta is additive and confined to the outbox runner, its tests, and this evidence record. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
+| Correctness/mechanism | Primary, retry, successor, and reread checks admitted internally consistent but request-shifted claim timestamps. Exact checks now bind outer and persisted start/visibility times to each request's `Now` and timeout; isolated return-only and persisted-time faults fail closed. | PASS |
+| Correctness/mechanism | Any `InvalidOperationException` was counted as a stale-fence rejection. The public completion contract and transition now expose `RuntimePostCommitOutboxStaleClaimException`; the runner catches only that type, and an unrelated-failure fault proves other completion failures propagate. The runtime store contract test verifies the stale exception's presented and current ownership evidence. | PASS |
+| Evidence integrity | Retry-at executed at `10:01:01`, then successor reclaim moved semantic time backward to `10:01:00`. Successor reclaim now uses `retryAt`, one second after expiry, and the positive fake records every claim request time and requires monotonic chronology. | PASS |
+| Scope/test preservation | The additive delta is confined to the outbox runner/tests/evidence plus the minimal public stale-claim exception, completion-contract documentation, transition classification, and its runtime store contract assertion. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
 
 The originating evidence reviewer re-inspected final implementation range
 `52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..53048926f07590f730a39cce85c8dab7d90da89f`,
@@ -891,6 +894,16 @@ warning-as-error builds with **0 warnings / 0 errors**. Exact changed-file forma
 `git diff --check` are clean. The project-wide formatter also reports a pre-existing whitespace
 defect in `IamNormalizedLookupWorkload.cs`, which is outside this exact range and was not rewritten
 in this checkpoint.
+
+A later record-complete review of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..0088dd409413ce40df254d6ac79383399247b0fe`
+found the claim-time, exception-classification, and chronology gaps recorded above. Final
+implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..4b93bbf9eed28925dbdd4e410b71b83fd8111e26`
+closes them. Root reproduced focused **29/29**, complete container-free **214/214**, the runtime
+store contract **14/14**, and warning-as-error benchmark builds with **0 warnings / 0 errors**.
+The runtime store project reports one pre-existing xUnit analyzer warning in
+`RuntimeStartCommandSchedulingTests.cs`; the changed runtime contract test is clean.
 
 ## 8. Readiness audit
 
