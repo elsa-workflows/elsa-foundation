@@ -42,7 +42,7 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         operations.Add("send-concurrent-commands");
 
         var first = RequireLeaseWave(
-            await LeaseWaveAsync(clients, FixedNowUtc, "lease-owner", cancellationToken),
+            await LeaseWaveAsync(clients, FixedNowUtc, "lease-first", cancellationToken),
             expectedToken: 1,
             FixedNowUtc);
         operations.Add("lease-visible-bounded-batch");
@@ -50,7 +50,7 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         var redeliveryNow = FixedNowUtc.Add(Visibility).AddSeconds(1);
         operations.Add("advance-past-visibility-expiry");
         var successors = RequireLeaseWave(
-            await LeaseWaveAsync(clients, redeliveryNow, "lease-owner", cancellationToken),
+            await LeaseWaveAsync(clients, redeliveryNow, "lease-successor", cancellationToken),
             expectedToken: 2,
             redeliveryNow);
         if (!successors.Select(tuple => tuple.Item.TransportItemId).SequenceEqual(first.Select(tuple => tuple.Item.TransportItemId), StringComparer.Ordinal))
@@ -60,6 +60,21 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         foreach (var tuple in first)
             if (await tuple.Client.AckAsync(PrimaryWorkflowId, tuple.Item.TransportItemId, tuple.Item.LeasedByOwnerId!, tuple.Item.LeaseToken!.Value, redeliveryNow, cancellationToken))
                 throw new InvalidOperationException("The command transport accepted a stale acknowledgement.");
+        for (var index = 0; index < successors.Count; index++)
+        {
+            var successor = successors[index];
+            var firstGenerationToken = first[index].Item.LeaseToken!.Value;
+            if (await successor.Client.AckAsync(
+                    PrimaryWorkflowId,
+                    successor.Item.TransportItemId,
+                    successor.Item.LeasedByOwnerId!,
+                    firstGenerationToken,
+                    redeliveryNow,
+                    cancellationToken))
+            {
+                throw new InvalidOperationException("The command transport accepted a stale token from its current lease owner.");
+            }
+        }
         operations.Add("attempt-stale-acknowledgement");
 
         foreach (var tuple in successors)
@@ -170,11 +185,11 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var readyCount = 0; var take = BatchSize / ConcurrentLeasers;
-        var callers = new[] { clients.Primary, clients.Secondary }.Select(async client =>
+        var callers = new[] { clients.Primary, clients.Secondary }.Select(async (client, index) =>
         {
             if (Interlocked.Increment(ref readyCount) == ConcurrentLeasers) ready.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
-            var owner = prefix;
+            var owner = $"{prefix}-{index}";
             var items = await client.LeaseAsync(PrimaryWorkflowId, owner, now, Visibility, take, cancellationToken);
             return new LeaseAttempt(client, owner, items);
         }).ToArray();

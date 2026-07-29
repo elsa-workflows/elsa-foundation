@@ -1017,10 +1017,20 @@ clean.
 The initial three-axis review of `286f559..8322a48` passed evidence integrity and scope/test
 preservation, but correctness found that the first and successor lease generations used different
 owner IDs. A stale acknowledgement could therefore be rejected for owner mismatch even if the
-transport ignored its required lease token. The finding was accepted: both generations now use the
-same owner, making token 1 versus token 2 the only stale discriminator, and a dedicated
-`IgnoreLeaseToken` mutation proves that token-blind acknowledgement fails the runner while the
-successor is current.
+transport ignored its required lease token. The first remediation used one owner across both
+generations and added an `IgnoreLeaseToken` mutation. On the next exact-range review, correctness
+and evidence integrity passed, but scope/test preservation correctly rejected that shape because it
+erased the contract's cross-node takeover semantics; the same review also found that the semantic
+surface guard treated `IExecutionCommandTransport` as a terminal allowed type instead of traversing
+its public members.
+
+The accepted remediation preserves distinct client and generation owners. It first proves that the
+actual first-generation owner/token tuples are stale after takeover, then pairs each successor with
+the old token for the same transport item and attempts acknowledgement through the current
+successor owner. That second probe isolates token fencing from owner mismatch before the current
+token succeeds, and the `IgnoreLeaseToken` mutation must fail closed. The semantic surface guard
+now traverses `IExecutionCommandTransport` itself and explicitly permits only the provider-neutral
+types exposed by that public contract.
 
 ## 8. Readiness audit
 

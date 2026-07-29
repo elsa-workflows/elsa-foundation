@@ -18,7 +18,8 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
         Assert.Equal(3, adapter.Opened.Count);
         Assert.Equal(8176, adapter.Shared.Items.Count);
         Assert.Equal([8, 8, 8, 8], adapter.Shared.LeaseTakes);
-        Assert.Equal(16, adapter.Shared.StaleAcknowledgementsWithCurrentSuccessor);
+        Assert.Equal(32, adapter.Shared.StaleAcknowledgementsWithCurrentSuccessor);
+        Assert.Equal(16, adapter.Shared.TokenOnlyStaleAcknowledgements);
         Assert.Equal(16, adapter.Shared.CurrentAcknowledgements);
     }
 
@@ -44,12 +45,15 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
     [Fact]
     public void Public_adapter_surface_is_provider_neutral()
     {
-        var roots = new[] { typeof(ICommandTransportWorkloadAdapter), typeof(CommandTransportClients) };
+        var roots = new[] { typeof(ICommandTransportWorkloadAdapter), typeof(CommandTransportClients), typeof(IExecutionCommandTransport) };
         var allowed = new HashSet<Type>
         {
-            typeof(void), typeof(bool), typeof(int), typeof(string), typeof(object), typeof(CancellationToken),
-            typeof(ValueTask<>), typeof(IEquatable<>), typeof(ICommandTransportWorkloadAdapter),
-            typeof(CommandTransportClients), typeof(IExecutionCommandTransport)
+            typeof(void), typeof(bool), typeof(int), typeof(long), typeof(string), typeof(object),
+            typeof(DateTimeOffset), typeof(TimeSpan), typeof(CancellationToken), typeof(ValueTask<>),
+            typeof(IReadOnlyList<>), typeof(IReadOnlyCollection<>), typeof(IEquatable<>),
+            typeof(ICommandTransportWorkloadAdapter), typeof(CommandTransportClients),
+            typeof(IExecutionCommandTransport), typeof(ExecutionCommandTransportItem),
+            typeof(WorkflowExecutionCommandEnvelope)
         };
         var surface = roots.SelectMany(ExposedSignatureTypes).SelectMany(ExpandType).Distinct().ToArray();
 
@@ -91,6 +95,7 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
         public Dictionary<string, long> Sequences { get; } = [];
         public List<int> LeaseTakes { get; } = [];
         public int StaleAcknowledgementsWithCurrentSuccessor { get; set; }
+        public int TokenOnlyStaleAcknowledgements { get; set; }
         public int CurrentAcknowledgements { get; set; }
     }
 
@@ -167,6 +172,8 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
                               !item.IsVisible(now);
                 if (!current && item.LeaseToken == 2 && !item.IsVisible(now))
                     backing.StaleAcknowledgementsWithCurrentSuccessor++;
+                if (!current && item.LeasedByOwnerId == owner && item.LeaseToken != token && !item.IsVisible(now))
+                    backing.TokenOnlyStaleAcknowledgements++;
                 if (!current && fault == TransportFault.AcceptStale)
                     return new(true);
                 if (current && fault == TransportFault.RejectCurrent)
