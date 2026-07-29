@@ -78,8 +78,8 @@
 - [x] T028 Run every affected solution test lane plus full `Elsa.Server.slnx` build
 - [x] T029 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
 - [x] T030 Complete both task lists, run `speckit-analyze`, and resolve all critical/high cross-artifact findings
-- [ ] T031 Push the branch, open one PR with `Closes #624` and `Closes #625`, converge required automated reviews and CI, and merge without bypassing protections
-- [ ] T032 Audit main, both issue states, and the merged benchmark/documentation artifacts
+- [x] T031 Push the branch, open one PR with `Closes #624` and `Closes #625`, converge required automated reviews and CI, and merge without bypassing protections
+- [x] T032 Audit main, both issue states, and the merged benchmark/documentation artifacts
 
 ## Dependencies and Execution Order
 
