@@ -384,6 +384,39 @@ integrity, and scope/test preservation. All three returned clean; no finding was
 OpenIddict, the frozen EF performance oracles, non-diagnostics shell settings, and existing tests
 remain intact.
 
+## T056 diagnostics documentation checkpoint and independent review (2026-07-29)
+
+Task T056 updates the Structured Logs and OpenTelemetry domain READMEs and extension-point catalogs
+to the current composition truth: in-memory stores remain the defaults without persistence,
+`DiagnosticsGroundworkPersistence` is the first-party durable feature selected by the reference
+`Elsa.Server`, and the diagnostics EF implementations remain temporary #646 comparison/oracle and
+compatibility paths until #647 deletes them. This checkpoint does not claim current four-provider
+promotion, a #646 performance verdict, EF removal, package cleanup, or completion of T047,
+T050-T055, or T057.
+
+Three adversarial read-only reviewers inspected frozen candidate range
+`5be8d0c72d703b6b7f9de0331804705f65086609..e1a879eddfed16750c5ca6b6a28ec84665d6cfe6`:
+
+- Correctness/mechanism found that the Structured Logs README attributed wake-hint publication to
+  `GroundworkStructuredLogStore`; production code assigns that responsibility to
+  `StructuredLogSink` after the store returns a committed append.
+- Evidence integrity found that the existing four-case `DiagnosticsDocumentationTests` suite does
+  not read any of the four T056 domain documents. Its 4/4 pass is retained only as an auxiliary
+  regression result and is not cited as T056 verification. T056 is supported by direct comparison
+  with the production feature, store, shell-composition, and retained-EF sources plus the exact-range
+  reviews.
+- Scope/test preservation found that the initial rewrite removed the only operator-facing details
+  for enabling and safely running the retained OpenTelemetry EF oracle. Removing those details
+  before #646 finishes would have weakened the live compatibility path.
+
+Remediation commit `7168dc28a5992feb587236c512061f8f1d6deeaf` assigns wake publication to
+the sink and restores concise EF enablement, feedback-loop protection, factory lifetime,
+migration/drain startup, and shutdown-flush guidance while explicitly marking EF temporary and
+non-reference-host. The originating correctness and scope reviewers re-inspected the remediation
+and returned **PASS**. `git diff --check` is clean; the auxiliary documentation suite passed 4/4
+after a targeted restore, with existing Groundwork migration warnings and no container or provider
+execution.
+
 ## Final dependency audit
 
 ```bash

@@ -1,6 +1,6 @@
 # Extension points — Diagnostics: OpenTelemetry domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.OpenTelemetry` — the server feature that collects OpenTelemetry signals (traces, metrics, logs) over OTLP/HTTP protobuf into capacity-bounded in-memory stores and exposes them over HTTP query endpoints + Server-Sent Events. Data-pipeline seams are **overridable `.Core` contracts**; the ASP.NET Core package adds a scoped receiver-authentication seam, and post-redaction ingestion uses an additive contributor contract.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.OpenTelemetry` — the server feature that collects OpenTelemetry signals (traces, metrics, logs) over OTLP/HTTP protobuf into capacity-bounded in-memory stores by default and exposes them over HTTP query endpoints + Server-Sent Events. Data-pipeline seams are **overridable `.Core` contracts**; the ASP.NET Core package adds a scoped receiver-authentication seam, and post-redaction ingestion uses an additive contributor contract.
 
 The collect/serve pipeline is decomposed into single-responsibility roles so a durable backend or external transport can replace just one of them:
 
@@ -27,7 +27,7 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 ### `IOpenTelemetryStore` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask WriteAsync(OpenTelemetryBatch batch, …)`, `ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(…)`, `ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(…)`, `ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, …)`, `ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(…)`, `ValueTask<OpenTelemetryLogResult> QueryLogsAsync(…)`, `ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(…)`.
 - **Default impl:** `InMemoryOpenTelemetryStore` — capacity-bounded ring buffers per signal (trace/span/metric-point/log-record/resource), bounds from `OpenTelemetryDiagnosticsOptions.*Capacity`. Stores normalized batches; oldest entries roll off and are counted as dropped. **It also populates the source registry** (`IOpenTelemetrySourceRegistry.MarkSeen`) for each resource it writes, and serves resource queries/storage diagnostics from that registry.
-- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. The shipped `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature registers `EfCoreOpenTelemetryStore`, which persists resources/traces/spans/metric instruments/metric points/logs through EF Core and still calls `IOpenTelemetrySourceRegistry.MarkSeen` on write. Any other durable override MUST also call `MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty.
+- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. The first-party `DiagnosticsGroundworkPersistence` aggregate installs `GroundworkOpenTelemetryStore`, which persists resources/traces/spans/metric instruments/metric points/logs through Groundwork and still calls `IOpenTelemetrySourceRegistry.MarkSeen` on write. It is the reference-host durable composition and contributes its diagnostic-record streams and document schema to Groundwork deployment. Any other durable override MUST also call `MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty.
 
 ### `IOpenTelemetryLiveFeed` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask PublishAsync(OpenTelemetryBatch batch, …)`, `IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken)`.
@@ -76,13 +76,19 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 ## Deferred
 
 - **gRPC ingestion** — kept behind `OpenTelemetryDiagnosticsOptions.EnableGrpc` (default `false`); no gRPC route is mapped. The binding is host-specific.
-- **Persistence providers beyond SQLite** — `IOpenTelemetryStore` is the override seam for durable backends. SQLite EFCore persistence is shipped; other EF providers or external stores can use the same replacement-contract shape.
+
+## Temporary EF Core compatibility override
+
+`Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and the
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature remain as temporary comparison, oracle, and
+compatibility implementations. They have not been removed: #646 owns the retained performance measurement,
+and #647 owns the subsequent EF deletion. They are not the first-party/reference-host durable composition.
 
 ---
 
 ## Notes
 
-- Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from `store.GetAfterAsync(sequence)`). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
+- Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from bounded `ReadAfterAsync` pages using an opaque committed cursor). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
 - This domain uses **SSE instead of SignalR** and exposes the same OTLP handler through both FastEndpoints shell composition and an explicit ASP.NET Core route mapper. See [`README.md`](README.md#deviations-from-the-elsa-core-source).
 
 ---
