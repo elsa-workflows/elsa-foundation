@@ -686,12 +686,12 @@ Three adversarial read-only reviewers rejected initial range
 | Scope/test preservation | The reviewers confirmed the four-path additive scope, provider-neutral adapter surface, unchanged EF oracle/ledger/tasks, and absence of new EF/provider/container dependencies. No scope remediation was required beyond correcting the durability claim and executing the frozen concurrency parameter. |
 
 The same originating reviewers re-inspected exact replacement range
-`cc9c76a8503c3f2313511ff6a9238193dd46f5fd..373b0724ec3b455b5542d2bd443c3721447786d7`
+`cc9c76a8503c3f2313511ff6a9238193dd46f5fd..64bc9d6d7d164a9572c57e26f2beb2aa9cddfd19`
 and returned:
 
 | Axis | Final exact-range verdict |
 |---|---|
-| Correctness/mechanism | PASS — the released-together wave requires one grant and one denial with the same winner/token, binds the grant to the requesting claimant, rereads the winner, and rejects both dual-grant and cross-claimant-result fakes. The separate catalog-observed takeover keeps `currentOwner=worker-beta` and tokens `1,2,3` deterministic without normalizing the contention winner. Owner, expiry, order, and bound faults all fail closed. |
+| Correctness/mechanism | PASS — the released-together wave requires one grant and one denial with the same winner/token, binds the grant to the requesting claimant, rereads the winner, and rejects both dual-grant and persisted cross-claimant-winner fakes. The latter would pass winner/denial/re-read agreement alone because it stores and returns the same wrong contender, but fails the requester/result binding. The separate catalog-observed takeover keeps `currentOwner=worker-beta` and tokens `1,2,3` deterministic without normalizing the contention winner. Owner, expiry, order, and bound faults all fail closed. |
 | Evidence integrity | PASS — independently recomputed input/result digests remain `17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985` and `3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4`. Source, this checkpoint, and PR metadata consistently claim shared-backing/distinct-client visibility only and reserve persisted restart and native-plan evidence. |
 | Scope/test preservation | PASS — the exact delta remains four additive paths; the Runtime Distributed reference adds no EF/provider/container dependency, and tasks, coverage ledger, provider evidence, EF oracle, and existing tests are unchanged. The focused suite passed 18/18, the complete no-container benchmark suite 95/95, the warning-as-error Release build had 0 warnings/errors, and the exact-range diff check was clean. |
 
