@@ -5,6 +5,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -236,7 +237,7 @@ public sealed class DispatchWorkflowCancellationCrashTests
                 Assert.Single(actors.Activations);
                 Assert.Single(actors.Actor.Envelopes);
 
-                await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.RecordDeliveryResultAsync(
+                await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => outbox.RecordDeliveryResultAsync(
                     expiredClaim,
                     Delivered(expiredClaim, Now.AddMinutes(2))).AsTask());
                 await outbox.RecordDeliveryResultAsync(
@@ -406,13 +407,13 @@ public sealed class DispatchWorkflowCancellationCrashTests
         dispatch.ParentWorkflowExecutionId,
         dispatch.TenantId,
         new Dictionary<string, string>())
-    {
-        RunKind = dispatch.RunKind,
-        PinnedSource = dispatch.ChildSource,
-        Partition = dispatch.Partition,
-        Authority = dispatch.Authority,
-        DispatchNestingDepth = 1
-    };
+        {
+            RunKind = dispatch.RunKind,
+            PinnedSource = dispatch.ChildSource,
+            Partition = dispatch.Partition,
+            Authority = dispatch.Authority,
+            DispatchNestingDepth = 1
+        };
 
     private static RuntimeCheckpointCommit ParentCancelCommit(string parentWorkflowExecutionId)
     {

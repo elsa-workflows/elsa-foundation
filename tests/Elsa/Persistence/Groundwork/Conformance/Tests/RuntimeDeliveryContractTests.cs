@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -140,7 +141,7 @@ public sealed class RuntimeDeliveryContractTests
             OutboxClaimRequest("owner-restarted", reclaimedAt)));
         Assert.True(reclaimed.FencingToken > initial.FencingToken);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() =>
             first.RecordDeliveryResultAsync(
                 initial,
                 DeliveryResult(RuntimePostCommitOutboxStatus.Delivered, reclaimedAt)).AsTask());

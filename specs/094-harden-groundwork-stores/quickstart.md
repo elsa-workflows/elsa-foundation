@@ -845,6 +845,79 @@ advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconcil
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
 stay in the #646 completion gate.
 
+### Outbox drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `outbox-drain` v1.1 vector through
+`IRuntimeCheckpointCommitStore`, `IRuntimePostCommitOutboxClaimStore`,
+`IRuntimePostCommitOutboxClaimCompletionStore`, and `IPostCommitOutboxLookupStore` only. It seeds
+all 1,024 pending records through public checkpoint commits (never the in-memory test insertion
+seam), claims the exact first 32 due identities in declared order, and uses a later scoped sentinel
+to release two independent claimants simultaneously without assuming which claimant wins. After
+the first 32 current claims are completed as 25 delivered and seven retryable; the retryables are
+absent immediately before, and exactly present at, their recorded retry time. Only then, after the
+sentinel visibility expires, the non-winning client reclaims that scoped sentinel under a higher
+fence. Completion using its original claim is rejected without changing the successor state. A third
+distinct client point-rereads every affected identity, status, owner, and fencing token.
+
+The focused fake matrix rejects aliased or split clients/backing, response-only checkpoint seed or
+completion, ignored due/scope/limit/order behavior, a missing or wrong scoped sentinel, duplicate
+current claims, wrong fence or owner (including sentinel-only owner/state fabrication), stale
+completion acceptance, premature/late retry visibility, and altered public reread fences or
+delivered identities. It also rejects return-only or persisted claim-time drift and distinguishes the
+stable stale-claim exception from an unrelated completion failure. The focused suite passed
+**29/29**. This is shared-backing
+public-contract correctness only: it does not claim
+provider or restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion; T100 remains unchecked.
+
+Three adversarial read-only reviewers inspected initial frozen range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..3534f5047adf92978d42fef46a23336e959f5153`.
+The review runtime admitted two workers concurrently; the scope/test-preservation review started
+immediately when the first slot released. Their findings and dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The exact public-contract flow, deterministic result digest, scoped two-client contention, retry timing, stale-fence rejection, and distinct shared-backing reopen were internally consistent with the production transition contracts. | PASS |
+| Evidence integrity | The contention sentinel checked count, identity, and fence but did not prove the winning public owner or exact item/claim state. `RequireContentionClaim` now admits only either declared contender and requires exact claim/item owner, fence, claim time, visibility, and Delivering state. Sentinel-only wrong-owner and wrong-state faults cover the boundary. | PASS |
+| Evidence integrity | The first wrong-state fault persisted its fabricated Pending response, so it failed on a second claim rather than exact-state validation. The fake now persists the genuine transition and fabricates only the response; the dedicated test reaches the exact-current-claim error and proves exactly one backing claim. | PASS |
+| Evidence integrity | Delivered reopen reads did not compare the returned identity or cleared lifecycle state, allowing one unrelated delivered record to answer every lookup. They now require exact identity, Delivered status, cleared availability/owner/start/visibility/failure, one attempt, exact completion time, and the accepted fence. A return-only wrong-identity fault proves that check while the dedicated test verifies unchanged backing. The production model rejects construction of Delivered records with owner/start/visibility, so those explicit defensive assertions cannot be paired with a legal stale-owner fixture. | PASS |
+| Correctness/mechanism | Primary, retry, successor, and reread checks admitted internally consistent but request-shifted claim timestamps. Exact checks now bind outer and persisted start/visibility times to each request's `Now` and timeout; isolated return-only and persisted-time faults fail closed. | PASS |
+| Correctness/mechanism | Any `InvalidOperationException` was counted as a stale-fence rejection. The public completion contract and transition now expose `RuntimePostCommitOutboxStaleClaimException`; the runner catches only that type, and an unrelated-failure fault proves other completion failures propagate. The runtime store contract test verifies the stale exception's presented and current ownership evidence. | PASS |
+| Evidence integrity | Retry-at executed at `10:01:01`, then successor reclaim moved semantic time backward to `10:01:00`. Successor reclaim now uses `retryAt`, one second after expiry, and the positive fake records every claim request time and requires monotonic chronology. | PASS |
+| Scope/test preservation | The typed stale exception initially broke exact-type assertions outside the first focused slices. Twelve stale-specific assertions across runtime, dispatch projection, Groundwork store/crash/redrive, and provider-conformance tests now require the stable type; genuinely unrelated and legacy-result failures retain `InvalidOperationException`. | PASS |
+| Evidence integrity | The first persisted-time fault shifted both the stored item and returned claim, so it failed at response validation instead of proving reopen detection. It now returns the genuine retry claim, persists only a shifted retry item, and must reach the reopened-retry current-claim error. | PASS |
+| Scope/test preservation | The additive delta is confined to the outbox runner/tests/evidence plus the minimal public stale-claim exception, completion-contract documentation, transition classification, and its runtime store contract assertion. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
+
+The originating evidence reviewer re-inspected final implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..53048926f07590f730a39cce85c8dab7d90da89f`,
+independently reproduced focused **26/26**, and returned PASS with no remaining blocker, P1, or P2.
+Root independently reproduced focused **26/26**, complete container-free **211/211**, and
+warning-as-error builds with **0 warnings / 0 errors**. Exact changed-file formatter checks and
+`git diff --check` are clean. The project-wide formatter also reports a pre-existing whitespace
+defect in `IamNormalizedLookupWorkload.cs`, which is outside this exact range and was not rewritten
+in this checkpoint.
+
+A later record-complete review of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..0088dd409413ce40df254d6ac79383399247b0fe`
+found the claim-time, exception-classification, and chronology gaps recorded above. Final
+implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..4b93bbf9eed28925dbdd4e410b71b83fd8111e26`
+closes them. Root reproduced focused **29/29**, complete container-free **214/214**, the runtime
+store contract **14/14**, and warning-as-error benchmark builds with **0 warnings / 0 errors**.
+The runtime store project reports one pre-existing xUnit analyzer warning in
+`RuntimeStartCommandSchedulingTests.cs`; the changed runtime contract test is clean.
+
+Correctness re-verification of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..1626c2c4086982d4531451aa3a80d7cbed84002f`
+found the exact-type preservation and persisted-fault isolation gaps recorded above. Final
+preservation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..5731d62521422609c9362d72f439fd132c816e0a`
+closes them. Root reproduced benchmark focused **29/29** and complete **214/214**, affected runtime
+classes **62/62**, dispatch projection **9/9**, Groundwork store/crash/redrive **72/72**, and the
+exact outbox stale-ack contract **4/4** across SQLite, SQL Server, PostgreSQL, and MongoDB. Changed-file
+formatter checks and `git diff --check` are clean; the touched cancellation-crash test also
+normalizes a pre-existing seven-line initializer indentation defect without changing behavior.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
