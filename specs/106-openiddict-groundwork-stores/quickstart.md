@@ -101,71 +101,20 @@ store matrix, unified deployment selection, or performance evidence. The EF
 oracle remains load-bearing for #646 and must not be deleted by this
 checkpoint.
 
-## Scope-store candidate checkpoint — 2026-07-25
-
-The first complete public store slice now implements all 28
-`IOpenIddictScopeStore<OpenIddictGroundworkScope>` members. Named name-set and
-resource queries execute through declared scale-bearing routes, and Groundwork's
-compiled plan supplies the provider-side identity tie-break even when the
-caller-visible route declares no optional sort. Full enumerations stream fixed
-256-row provider pages; no page is client-filtered or client-sorted. A name-set
-request is deduplicated and rejected above 900 distinct values before a
-provider session opens.
-
-The direct SQLite fixture applies the real physical schema and opens a fresh
-leased connection for every store session. It proves descriptor round trips,
-unique-name rejection, CAS update/delete with concurrency-token rotation,
-deterministic pages and membership results, exact count, cancellation, local
-empty/zero-count handling, invalid/oversized input rejection, adapter-scoped
-serialization failure, and generic-delegate rejection before delegate or
-provider access.
-
-```bash
-dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
-  -c Release --no-restore \
-  --filter 'FullyQualifiedName~GroundworkOpenIddictScopeStoreTests|FullyQualifiedName~OpenIddictGroundworkStorageManifestTests'
-# 23 passed
-
-dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
-  -c Release --no-restore \
-  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Sqlite_executes_the_declared_token_prune_mutation_with_an_exact_count_and_cancellation&FullyQualifiedName!~Four_provider_public_capabilities_execute_the_same_openiddict_contract'
-# 12 passed
-```
-
-This is source and test evidence, not closure of T035 or T040: the test and
-implementation landed together without durable red-before-green evidence, and
-the exact-family T006 admission gate remains open. T011/T016 also remain open
-because the complete four-store manifest and its bounded mutations are not
-truthful until Groundwork #141 lands and the configured #143 capability is
-recertified. Registration, the shared 145-member suite, the real
-four-provider store matrix, host acceptance, performance, and EF removal also
-remain open.
-
-An adversarial read-only implementation review initially challenged the
-all-results stream as unbounded and found weak boundary proof. Root accepted
-the proof gaps, added exact duplicate-concurrency, empty/default/oversized,
-zero-count, invalid-culture, and independent-client coverage, and rejected the
-total-result cap because it would violate OpenIddict's nullable-count contract.
-On re-review, the reviewer withdrew the blocker after verifying fixed 256-row
-provider pages and Groundwork's compiled provider-side ID tie-break, and
-reported no remaining Scope blocker. This is an implementation checkpoint, not
-the three-review exact-HEAD merge gate required by T070.
-
 ## Current-main replay checkpoint — 2026-07-29
 
 The replay branch was cut from Elsa `6751087c613b150f4c435d11230dbde00eade37e`
-and reconstructs the accepted source slices without merging or rebasing the
-conflicting draft PR. It deliberately excludes the old preview.88/preview.90
-package-family and provider-evidence commits. Those serialized inputs are stale
-and must be replaced only by the exact-head provider-evidence import required by
-Spec 094.
+and reconstructs only the provider-neutral foundation without merging or
+rebasing the conflicting draft PR. It deliberately excludes the old
+preview.88/preview.90 package-family and provider-evidence commits. Those
+serialized inputs are stale and must be replaced only by the exact-head
+provider-evidence import required by Spec 094.
 
 The replay registers the Behavior, Groundwork adapter, and adapter test projects
-in `Elsa.Server.slnx`. The rejected untracked application, authorization, and
-token-store worker files remain outside this branch: review found undeclared
-mutation routes, replay-unsafe operation identities, invalid query terminal/sort
-shapes, an incorrect expiration projection, relationship races, and tests that
-either did not compile or did not exercise the claimed contracts.
+in `Elsa.Server.slnx`. Application, authorization, Scope, and token store source
+remain outside this foundation checkpoint. The initially replayed Scope and
+relationship-free token candidates were reverted because T006 is still open
+and the plan forbids later implementation before that admission gate.
 
 Container-free verification on the replay head:
 
@@ -200,17 +149,17 @@ hard-coded to an obsolete preview, and that a Scope lease could be disposed
 outside the adapter exception boundary. Re-verification then found that the
 token query iterator still had the same disposal gap and that Scope readiness
 was no longer preserved after moving session acquisition inside its mapped
-boundary. The remediation:
+boundary. The candidate fixes passed their focused tests, but the complete
+Scope/token candidates were then reverted to honor T006 sequencing. The
+retained foundation remediation:
 
 - removed the false mutation proof and reopened T005/T006;
-- corrected authorization/token projections, indexes, and token ID tie-breaks,
-  and expanded manifest/codec tests across all four model descriptors;
+- corrected the retained canonical records and expanded codec tests across all
+  four model descriptors;
 - now derives the reported Groundwork version from
-  `Directory.Packages.props`;
-- moved Scope lease lifetime into the adapter boundary and added explicit
-  disposal exception/cancellation mapping tests;
-- preserves Scope readiness failures through its public store methods; and
-- gives the token query iterator the same explicit mapped-disposal boundary.
+  `Directory.Packages.props`; and
+- removed the out-of-order Scope/token source rather than waiving its readiness
+  and disposal findings.
 
 The evidence review found that T005 was not reproducible, T010 did not exercise
 all descriptor fields and corrupt/future envelopes, T035/T040 had advanced
@@ -226,7 +175,9 @@ The scope-preservation review additionally found that a cross-provider bounded
 mutation router introduced an unconsumed, high-blast prerequisite unrelated to
 this checkpoint. That commit was reverted in full. It also confirmed the
 canonical JSON, package-version, T005/T006, and evidence inconsistencies above
-and found a ten-endpoint inventory mislabeled as nine; all were corrected.
+and found a ten-endpoint inventory mislabeled as nine; all were corrected. Its
+sequencing finding was dispositive: Scope and token implementation source was
+also reverted because T006 remains open.
 
 Root verification after those dispositions and the router revert:
 

@@ -23,7 +23,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Groundwork\Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
