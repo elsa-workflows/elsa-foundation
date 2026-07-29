@@ -833,8 +833,9 @@ Their findings and dispositions are:
 The originating reviewers re-inspected exact replacement range
 `4b1eadeea42984f9ebcf3134c60f07134abec7cf..860c844d72ad35947df1dd3d6446c6fe25e7a012`
 and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Their
-independent verification included the focused **35/35**, complete no-container **185/185**, exact
-digest recomputation, and clean exact-range diff.
+independent verification included the focused **35/35**, exact digest recomputation, and clean
+exact-range diff; the scope reviewer also reran the complete no-container **185/185** result recorded
+by root above.
 
 This checkpoint does not execute an EF comparator or provider matrix, start a database container,
 inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
