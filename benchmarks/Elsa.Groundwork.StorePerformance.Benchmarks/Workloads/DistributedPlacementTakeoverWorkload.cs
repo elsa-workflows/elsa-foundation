@@ -15,6 +15,7 @@ public sealed class DistributedPlacementTakeoverWorkload
     private const string InitialOwner = "worker-alpha";
     private const string TakeoverOwner = "worker-beta";
     private const string ContendingOwner = "worker-gamma";
+    private const string UnusedOwner = "worker-delta";
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -72,8 +73,16 @@ public sealed class DistributedPlacementTakeoverWorkload
         var afterExpiry = now.Add(duration).AddTicks(1);
         operations.Add("advance-past-expiry");
 
+        await RequireSingleContentionWinnerAsync(
+            clients,
+            candidateIds[1],
+            afterExpiry,
+            duration,
+            cancellationToken);
         var takeover = await clients.Secondary.TryClaimAsync(Claim(selectedId, TakeoverOwner, afterExpiry, duration), afterExpiry, cancellationToken);
         RequireClaim(takeover, ExecutionPlacementClaimOutcome.Granted, selectedId, TakeoverOwner, renewed.Lease.PlacementToken + 1, afterExpiry, afterExpiry.Add(duration), "expired placement takeover");
+        await RequireEmptyOwnedListAsync(clients.Primary, InitialOwner, afterExpiry, TakeoverCandidates, "expired owner filtering", cancellationToken);
+        await RequireEmptyOwnedListAsync(clients.Primary, UnusedOwner, afterExpiry, 1, "owner filtering", cancellationToken);
         operations.Add("take-over-expired-placement");
 
         await clients.Primary.ReleaseAsync(renewed.Lease, cancellationToken);
@@ -218,6 +227,66 @@ public sealed class DistributedPlacementTakeoverWorkload
         }
     }
 
+    private static async ValueTask RequireSingleContentionWinnerAsync(
+        DistributedPlacementTakeoverClients clients,
+        string executionId,
+        DateTimeOffset now,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        var contenders = new[]
+        {
+            (Store: clients.Primary, Owner: TakeoverOwner),
+            (Store: clients.Secondary, Owner: ContendingOwner)
+        };
+        if (contenders.Length != ConcurrentClaimants)
+            throw new InvalidOperationException("The placement takeover contention wave no longer matches the catalog claimant count.");
+
+        var allReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readyCount = 0;
+        var attempts = contenders.Select(async contender =>
+        {
+            if (Interlocked.Increment(ref readyCount) == ConcurrentClaimants)
+                allReady.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+            return await contender.Store.TryClaimAsync(
+                Claim(executionId, contender.Owner, now, duration),
+                now,
+                cancellationToken);
+        }).ToArray();
+
+        await allReady.Task.WaitAsync(cancellationToken);
+        release.TrySetResult();
+        var results = await Task.WhenAll(attempts);
+        var winners = results.Where(result => result.Outcome == ExecutionPlacementClaimOutcome.Granted).ToArray();
+        var denials = results.Where(result => result.Outcome == ExecutionPlacementClaimOutcome.Denied).ToArray();
+        if (winners.Length != 1 || denials.Length != ConcurrentClaimants - 1)
+            throw new InvalidOperationException("The placement takeover contention wave did not converge to one granted winner and one denied contender.");
+
+        var winner = winners[0];
+        var denied = denials[0];
+        RequireLease(winner.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention winner");
+        RequireLease(denied.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention denial");
+        var persisted = await clients.Primary.FindAsync(executionId, cancellationToken);
+        RequireLease(persisted, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "persisted contention winner");
+    }
+
+    private static async ValueTask RequireEmptyOwnedListAsync(
+        IExecutionPlacementStore store,
+        string owner,
+        DateTimeOffset now,
+        int take,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var leases = await store.ListOwnedAsync(
+            new ExecutionPlacementLeaseListRequest(owner, now, take),
+            cancellationToken);
+        if (leases.Count != 0)
+            throw new InvalidOperationException($"The placement takeover {operation} returned a lease that should have been excluded.");
+    }
+
     private static void RequireClaim(
         ExecutionPlacementClaimResult? result,
         ExecutionPlacementClaimOutcome expectedOutcome,
@@ -264,7 +333,7 @@ public sealed class DistributedPlacementTakeoverWorkload
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 }
 
-/// <summary>Opens independent public placement clients over one adapter-selected durable backing.</summary>
+/// <summary>Opens independent public placement clients over one adapter-selected shared backing.</summary>
 public interface IDistributedPlacementTakeoverWorkloadAdapter
 {
     ValueTask<DistributedPlacementTakeoverClients> OpenIndependentClientsAsync(CancellationToken cancellationToken = default);

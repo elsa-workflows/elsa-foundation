@@ -648,25 +648,42 @@ confirm the final record-only head and the hosted checks pass.
 ### Placement takeover correctness-runner checkpoint
 
 The container-free #646 checkpoint executes the frozen `placement-takeover` v1.1 public-operation
-vector through `IExecutionPlacementStore`. Two independently opened clients share adapter-owned
-durable backing; a third, distinct reopened client must observe the takeover winner. The runner
+vector through `IExecutionPlacementStore`. Two independently opened clients share adapter-supplied
+backing; a third, distinct client opened through the adapter's reopen boundary must observe the
+takeover winner. The runner
 binds the complete 512-execution input universe, verifies 256 live placements and 256 unplaced
 identities, exercises current-owner renewal and foreign-owner denial, advances past expiry, grants
-the takeover with monotonic tokens `1,2,3`, rejects the stale release, and reproduces the ratified
-input fingerprint and result digest.
+one winner under a two-client released-together contention wave, performs the catalog-observed
+takeover with monotonic tokens `1,2,3`, rejects the stale release, and reproduces the ratified input
+fingerprint and result digest.
 
 The bounded owner-list route is probed at both 64 and 256 rows. This is deliberate: a single
-256-row query over exactly 256 live rows could not distinguish a correctly bounded provider route
-from one that ignored `Take`. Fault-injectable tests also reject missing active writes, aliased or
-separate client backing, a non-durable reopen, incorrect lease identity/timestamps/tokens, wrong
-ordering, an ignored query limit, and stale release of the takeover winner.
+256-row query over exactly 256 live rows could not detect an implementation that ignored `Take` in
+its observable API result. Additional post-expiry probes reject ignored owner and live-lease
+filters. Fault-injectable tests also reject missing active writes, aliased or separate client
+backing, missing state at the distinct-client reopen boundary, incorrect lease
+identity/timestamps/tokens, dual contention grants, wrong ordering, an ignored query limit, and
+stale release of the takeover winner. These source-level probes do not establish provider-side
+query-plan boundedness or persistence across process/storage recreation.
 
-Root verification passed the focused workload suite **14/14**, the benchmark project
-warning-as-error Release build with **0 warnings/errors**, and `git diff --check`. This checkpoint
+Root verification passed the focused workload suite **17/17**, the complete no-container benchmark
+suite **94/94**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
+and `git diff --check`. This checkpoint
 does not execute an EF comparator or any provider matrix, start a database container, collect
 timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a performance
 verdict, or advance T076/T093/T100. Groundwork #50 and the missing real EF placement comparator (or
 a separately ratified no-oracle policy) remain later admission gates.
+
+Three adversarial read-only reviewers rejected initial range
+`cc9c76a8503c3f2313511ff6a9238193dd46f5fd..a9e55b43f7a6437c2fa3b78d1808276f8f6a88d5`:
+
+| Axis | Confirmed finding and replacement disposition |
+|---|---|
+| Correctness/mechanism | `concurrentClaimants` was only compared with literal `2`; every store call was sequential, so a non-atomic claim implementation could pass. The replacement releases two independent-client contenders together against one expired lease, requires exactly one grant and one denial carrying the same winner/token, rereads the winner, and includes a deterministic dual-grant fake in which both contenders read expiry before either writes. |
+| Correctness/mechanism | The initial owner-list data contained only live `worker-alpha` leases, so ignored owner/expiry predicates were invisible. Post-expiry probes now require no remaining alpha lease and no lease for an unused owner; selective ignored-owner and ignored-expiry fakes must fail. The existing 64/256 probes continue to cover observable ordering and `Take`. |
+| Evidence integrity | The checkpoint called a shared in-memory dictionary “durable backing” and described a new wrapper as durable reopen evidence. The replacement describes only adapter-supplied shared backing and distinct-client reopen visibility, and explicitly reserves persisted restart evidence for later real-provider admission. |
+| Evidence integrity | The checkpoint implied the API-level 64/256 probe proved provider-side bounded execution. The replacement limits the claim to detecting an ignored `Take` in observable results and explicitly reserves native query-plan boundedness for later provider evidence. |
+| Scope/test preservation | The reviewers confirmed the four-path additive scope, provider-neutral adapter surface, unchanged EF oracle/ledger/tasks, and absence of new EF/provider/container dependencies. No scope remediation was required beyond correcting the durability claim and executing the frozen concurrency parameter. |
 
 ## 8. Readiness audit
 

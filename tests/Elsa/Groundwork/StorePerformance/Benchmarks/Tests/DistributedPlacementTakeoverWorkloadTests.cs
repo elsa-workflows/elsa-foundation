@@ -8,7 +8,7 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
 public sealed class DistributedPlacementTakeoverWorkloadTests
 {
     [Fact]
-    public async Task Reproduces_the_exact_catalog_golden_through_independent_durable_clients()
+    public async Task Reproduces_the_exact_catalog_golden_through_independent_shared_backing_clients()
     {
         var adapter = new AtomicPlacementAdapter();
         var result = await new DistributedPlacementTakeoverWorkload().ExecuteAsync(adapter);
@@ -24,9 +24,11 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             ReproducibleWorkloadScenarioCatalog.Get(DistributedPlacementTakeoverWorkload.WorkloadId)
                 .CreateExpectedObservations()["takeoverCandidateIdentityDigest"],
             result.ObservableResults["takeoverCandidateIdentityDigest"]);
-        Assert.Equal(DistributedPlacementTakeoverWorkload.ActivePlacements + 3, adapter.Shared.TryClaimCalls);
-        Assert.Equal(2, adapter.Shared.ListOwnedCalls);
-        Assert.True(adapter.Shared.FindCalls >= DistributedPlacementTakeoverWorkload.ExecutionCount - DistributedPlacementTakeoverWorkload.ActivePlacements + 3);
+        Assert.Equal(DistributedPlacementTakeoverWorkload.ActivePlacements + 5, adapter.Shared.TryClaimCalls);
+        Assert.Equal(4, adapter.Shared.ListOwnedCalls);
+        Assert.Equal(
+            DistributedPlacementTakeoverWorkload.ExecutionCount - DistributedPlacementTakeoverWorkload.ActivePlacements + 4,
+            adapter.Shared.FindCalls);
         Assert.Equal(3, adapter.OpenedClients.Count);
         Assert.Equal(3, adapter.OpenedClients.Distinct(ReferenceEqualityComparer.Instance).Count());
     }
@@ -54,7 +56,7 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
     [InlineData(PlacementAdapterFault.SeparateInitialBacking)]
     [InlineData(PlacementAdapterFault.ReopenSameClient)]
     [InlineData(PlacementAdapterFault.ReopenSeparateBacking)]
-    public async Task Rejects_clients_that_are_not_independent_or_durably_reopened(PlacementAdapterFault fault)
+    public async Task Rejects_clients_that_are_not_independent_or_visible_through_a_reopened_client(PlacementAdapterFault fault)
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new DistributedPlacementTakeoverWorkload().ExecuteAsync(new AtomicPlacementAdapter(fault)).AsTask());
@@ -66,7 +68,10 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
     [InlineData(PlacementAdapterFault.WrongFindLeaseExpiry)]
     [InlineData(PlacementAdapterFault.ReverseOwnedList)]
     [InlineData(PlacementAdapterFault.IgnoreOwnedListTake)]
+    [InlineData(PlacementAdapterFault.IgnoreOwnedListOwner)]
+    [InlineData(PlacementAdapterFault.IgnoreOwnedListExpiry)]
     [InlineData(PlacementAdapterFault.DropNonCandidatePlacement)]
+    [InlineData(PlacementAdapterFault.NonAtomicDualGrant)]
     [InlineData(PlacementAdapterFault.StaleReleaseClearsWinner)]
     public async Task Fails_closed_when_public_store_outcomes_drift(PlacementAdapterFault fault)
     {
@@ -137,6 +142,8 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
         public int TryClaimCalls { get; set; }
         public int FindCalls { get; set; }
         public int ListOwnedCalls { get; set; }
+        public int NonAtomicReadyCount { get; set; }
+        public TaskCompletionSource NonAtomicRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private sealed class AtomicPlacementStore(PlacementBacking backing, PlacementAdapterFault fault) : IExecutionPlacementStore
@@ -160,6 +167,9 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
         public ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (fault == PlacementAdapterFault.NonAtomicDualGrant && IsExpiredContentionCandidate(claim.WorkflowExecutionId, now))
+                return SimulateNonAtomicDualGrantAsync(claim, cancellationToken);
+
             lock (backing.Sync)
             {
                 backing.TryClaimCalls++;
@@ -192,7 +202,9 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             {
                 backing.ListOwnedCalls++;
                 var leases = backing.Leases.Values
-                    .Where(lease => lease.OwnerId == request.OwnerId && !lease.IsExpired(request.Now))
+                    .Where(lease =>
+                        (fault == PlacementAdapterFault.IgnoreOwnedListOwner || lease.OwnerId == request.OwnerId) &&
+                        (fault == PlacementAdapterFault.IgnoreOwnedListExpiry || !lease.IsExpired(request.Now)))
                     .OrderBy(lease => lease.ExpiresAt)
                     .ThenBy(lease => lease.WorkflowExecutionId, StringComparer.Ordinal)
                     .Take(fault == PlacementAdapterFault.IgnoreOwnedListTake ? int.MaxValue : request.Take)
@@ -212,6 +224,28 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             if (fault != PlacementAdapterFault.DropNonCandidatePlacement || !claim.WorkflowExecutionId.StartsWith("placement-live-", StringComparison.Ordinal))
                 backing.Leases[claim.WorkflowExecutionId] = lease;
             return lease;
+        }
+
+        private bool IsExpiredContentionCandidate(string workflowExecutionId, DateTimeOffset now)
+        {
+            lock (backing.Sync)
+                return backing.Leases.TryGetValue(workflowExecutionId, out var current) && current.IsExpired(now);
+        }
+
+        private async ValueTask<ExecutionPlacementClaimResult> SimulateNonAtomicDualGrantAsync(
+            ExecutionPlacementClaim claim,
+            CancellationToken cancellationToken)
+        {
+            lock (backing.Sync)
+            {
+                backing.TryClaimCalls++;
+                if (++backing.NonAtomicReadyCount == DistributedPlacementTakeoverWorkload.ConcurrentClaimants)
+                    backing.NonAtomicRelease.TrySetResult();
+            }
+
+            await backing.NonAtomicRelease.Task.WaitAsync(cancellationToken);
+            lock (backing.Sync)
+                return Result(ExecutionPlacementClaimOutcome.Granted, Write(claim));
         }
 
         private ExecutionPlacementClaimResult Result(ExecutionPlacementClaimOutcome outcome, ExecutionPlacementLease lease)
@@ -238,6 +272,9 @@ public enum PlacementAdapterFault
     WrongFindLeaseExpiry,
     ReverseOwnedList,
     IgnoreOwnedListTake,
+    IgnoreOwnedListOwner,
+    IgnoreOwnedListExpiry,
     DropNonCandidatePlacement,
+    NonAtomicDualGrant,
     StaleReleaseClearsWinner
 }
