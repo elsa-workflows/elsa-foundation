@@ -55,9 +55,15 @@ public sealed class OpenIddictGroundworkCodecTests
         var application = new OpenIddictGroundworkApplication
         {
             Id = "application-a",
+            ApplicationType = "web",
             ClientId = "client-a",
+            ClientSecret = "secret-a",
+            ClientType = "confidential",
+            ConsentType = "explicit",
+            DisplayName = "Application A",
             RedirectUris = ["https://one.example/callback"],
             PostLogoutRedirectUris = ["https://one.example/logout"],
+            JsonWebKeySet = "{\"keys\":[]}",
             Permissions = ["endpoint:token"],
             Requirements = ["pkce"],
             DisplayNames = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["en-US"] = "Application A" },
@@ -72,14 +78,19 @@ public sealed class OpenIddictGroundworkCodecTests
             Scopes = ["api", "profile"],
             Status = "valid",
             Subject = "subject-a",
-            Type = "permanent"
+            Type = "permanent",
+            Properties = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal) { ["feature"] = property.RootElement.Clone() }
         };
         var scope = new OpenIddictGroundworkScope
         {
             Id = "scope-a",
+            Description = "API scope",
+            DisplayName = "API",
             Name = "api",
             Resources = ["resource-a"],
-            Descriptions = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["en-US"] = "API scope" }
+            Descriptions = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["en-US"] = "API scope" },
+            DisplayNames = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["en-US"] = "API" },
+            Properties = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal) { ["feature"] = property.RootElement.Clone() }
         };
         var token = new OpenIddictGroundworkToken
         {
@@ -89,6 +100,8 @@ public sealed class OpenIddictGroundworkCodecTests
             CreationDate = DateTimeOffset.UnixEpoch,
             ExpirationDate = DateTimeOffset.UnixEpoch.AddHours(1),
             Payload = "payload-a",
+            Properties = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal) { ["feature"] = property.RootElement.Clone() },
+            RedemptionDate = DateTimeOffset.UnixEpoch.AddMinutes(30),
             ReferenceId = "reference-a",
             Status = "valid",
             Subject = "subject-a",
@@ -97,51 +110,113 @@ public sealed class OpenIddictGroundworkCodecTests
 
         AssertRecordRoundTrip(application, record =>
         {
+            Assert.Equal("web", record.ApplicationType);
             Assert.Equal("client-a", record.ClientId);
+            Assert.Equal("secret-a", record.ClientSecret);
+            Assert.Equal("confidential", record.ClientType);
+            Assert.Equal("explicit", record.ConsentType);
+            Assert.Equal("Application A", record.DisplayName);
             Assert.Equal("https://one.example/callback", Assert.Single(record.RedirectUris));
+            Assert.Equal("https://one.example/logout", Assert.Single(record.PostLogoutRedirectUris));
+            Assert.Equal("{\"keys\":[]}", record.JsonWebKeySet);
+            Assert.Equal("endpoint:token", Assert.Single(record.Permissions));
+            Assert.Equal("pkce", Assert.Single(record.Requirements));
             Assert.Equal("Application A", record.DisplayNames["en-US"]);
             Assert.True(record.Properties["feature"].GetProperty("enabled").GetBoolean());
+            Assert.Equal("strict", record.Settings["mode"]);
         });
         AssertRecordRoundTrip(authorization, record =>
         {
             Assert.Equal(application.Id, record.ApplicationId);
+            Assert.Equal(DateTimeOffset.UnixEpoch, record.CreationDate);
             Assert.Equal(new[] { "api", "profile" }, record.Scopes);
+            Assert.Equal("valid", record.Status);
+            Assert.Equal("subject-a", record.Subject);
+            Assert.Equal("permanent", record.Type);
+            Assert.True(record.Properties["feature"].GetProperty("enabled").GetBoolean());
         });
         AssertRecordRoundTrip(scope, record =>
         {
+            Assert.Equal("API scope", record.Description);
+            Assert.Equal("API scope", record.Descriptions["en-US"]);
+            Assert.Equal("API", record.DisplayName);
+            Assert.Equal("API", record.DisplayNames["en-US"]);
             Assert.Equal("api", record.Name);
             Assert.Equal("resource-a", Assert.Single(record.Resources));
+            Assert.True(record.Properties["feature"].GetProperty("enabled").GetBoolean());
         });
         AssertRecordRoundTrip(token, record =>
         {
+            Assert.Equal(application.Id, record.ApplicationId);
             Assert.Equal(authorization.Id, record.AuthorizationId);
+            Assert.Equal(DateTimeOffset.UnixEpoch, record.CreationDate);
+            Assert.Equal(DateTimeOffset.UnixEpoch.AddHours(1), record.ExpirationDate);
+            Assert.Equal("payload-a", record.Payload);
+            Assert.True(record.Properties["feature"].GetProperty("enabled").GetBoolean());
+            Assert.Equal(DateTimeOffset.UnixEpoch.AddMinutes(30), record.RedemptionDate);
             Assert.Equal("reference-a", record.ReferenceId);
+            Assert.Equal("valid", record.Status);
+            Assert.Equal("subject-a", record.Subject);
             Assert.Equal("refresh_token", record.Type);
         });
     }
 
-    [Fact]
-    public void Corrupt_future_wrong_kind_and_identity_mismatch_fail_with_the_adapter_serialization_outcome()
+    [Theory]
+    [InlineData("Application")]
+    [InlineData("Authorization")]
+    [InlineData("Scope")]
+    [InlineData("Token")]
+    public void Every_record_kind_rejects_corrupt_future_wrong_kind_and_identity_mismatch(string recordKind)
     {
-        var future = Envelope(OpenIddictGroundworkJson.TokenDocumentKind, "token-a", "v2", "{}", 1);
-        var corrupt = Envelope(OpenIddictGroundworkJson.TokenDocumentKind, "token-a", "v1", "{", 1);
-        var wrongKind = Envelope(OpenIddictGroundworkJson.ScopeDocumentKind, "token-a", "v1", "{}", 1);
+        switch (recordKind)
+        {
+            case "Application":
+                AssertRejectedPayloads<OpenIddictGroundworkApplication>(
+                    OpenIddictGroundworkJson.ApplicationDocumentKind,
+                    OpenIddictGroundworkJson.AuthorizationDocumentKind);
+                break;
+            case "Authorization":
+                AssertRejectedPayloads<OpenIddictGroundworkAuthorization>(
+                    OpenIddictGroundworkJson.AuthorizationDocumentKind,
+                    OpenIddictGroundworkJson.ScopeDocumentKind);
+                break;
+            case "Scope":
+                AssertRejectedPayloads<OpenIddictGroundworkScope>(
+                    OpenIddictGroundworkJson.ScopeDocumentKind,
+                    OpenIddictGroundworkJson.TokenDocumentKind);
+                break;
+            case "Token":
+                AssertRejectedPayloads<OpenIddictGroundworkToken>(
+                    OpenIddictGroundworkJson.TokenDocumentKind,
+                    OpenIddictGroundworkJson.ApplicationDocumentKind);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(recordKind));
+        }
+    }
+
+    private static void AssertRejectedPayloads<TRecord>(string documentKind, string wrongDocumentKind)
+        where TRecord : OpenIddictGroundworkRecord
+    {
+        var future = Envelope(documentKind, "record-a", "v2", "{}", 1);
+        var corrupt = Envelope(documentKind, "record-a", "v1", "{", 1);
+        var wrongKind = Envelope(wrongDocumentKind, "record-a", "v1", "{}", 1);
         var wrongIdentity = Envelope(
-            OpenIddictGroundworkJson.TokenDocumentKind,
-            "token-a",
+            documentKind,
+            "record-a",
             "v1",
-            "{\"id\":\"token-b\",\"concurrencyToken\":\"opaque\"}",
+            "{\"id\":\"record-b\",\"concurrencyToken\":\"opaque\"}",
             1);
 
         Assert.IsType<global::Groundwork.Documents.Serialization.DocumentSchemaVersionException>(
             Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
-                OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkToken>(future)).InnerException);
+                OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(future)).InnerException);
         Assert.NotNull(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
-            OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkToken>(corrupt)).InnerException);
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(corrupt)).InnerException);
         Assert.Null(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
-            OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkToken>(wrongKind)).InnerException);
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(wrongKind)).InnerException);
         Assert.Null(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
-            OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkToken>(wrongIdentity)).InnerException);
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(wrongIdentity)).InnerException);
     }
 
     private static void AssertRecordRoundTrip<TRecord>(TRecord record, Action<TRecord> assert)

@@ -86,11 +86,13 @@
 **Decision**: Groundwork
 [#141](https://github.com/valence-works/groundwork/issues/141) owns fenced
 cross-unit relationship guards for dependent cleanup and prune. Groundwork
-[#143](https://github.com/valence-works/groundwork/issues/143) owns a
+[#143](https://github.com/valence-works/groundwork/issues/143) delivered the
 manifest-fixed same-unit assignment action whose result is the exact matched
-count. Application/authorization/token operations that require either
-capability remain blocked until the public contracts are ratified, implemented,
-published, and recertified on all four providers.
+count and is available in Elsa's configured preview.95 family. Operations that
+require #143 remain blocked until current-family recertification closes T006.
+Application/authorization/token operations requiring #141 remain blocked until
+its public contracts are implemented, published, imported, and recertified on
+all four providers.
 
 **Rationale**: Oracle re-verification found that the former prune transition
 shape was semantically unequal. OpenIddict prune reads related records under

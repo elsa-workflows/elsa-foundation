@@ -103,7 +103,8 @@ public static class OpenIddictGroundworkStorageManifest
                     TokenApplicationIndex,
                     TokenAuthorizationIndex,
                     TokenReferenceIndex,
-                    TokenSubjectIndex
+                    TokenSubjectIndex,
+                    TokenCompoundIndex
                 ],
                 [
                     TokenListQuery,
@@ -135,9 +136,11 @@ public static class OpenIddictGroundworkStorageManifest
     public static PhysicalTableDefinition CreateAuthorizationDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_authorizations",
         [
+            Column("applicationId", "applicationId", length: MaxIndexedIdentifierLength, isNullable: true),
+            Column("creationDate", "creationDate", PortablePhysicalType.DateTime, isNullable: true),
             Column("subject", "subject", isNullable: true),
             Column("status", "status", isNullable: true),
-            Column("expiration", "expiration", PortablePhysicalType.DateTime, isNullable: true),
+            Column("type", "type", length: MaxIndexedTypeLength, isNullable: true),
             CollectionColumn("scope", "scopes")
         ],
         Envelope,
@@ -145,7 +148,7 @@ public static class OpenIddictGroundworkStorageManifest
             OrderedIndex(
                 AuthorizationIdIndex.Identity,
                 Envelope.IdComparisonKeyColumn),
-            Index(AuthorizationSubjectIndex.Identity, "subject", "status", "expiration")
+            Index(AuthorizationSubjectIndex.Identity, "subject", "applicationId", "status", "type")
         ]);
 
     public static PhysicalTableDefinition CreateScopeDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
@@ -168,7 +171,7 @@ public static class OpenIddictGroundworkStorageManifest
             Column("applicationId", "applicationId", length: MaxIndexedIdentifierLength, isNullable: true),
             Column("authorizationId", "authorizationId", length: MaxIndexedIdentifierLength, isNullable: true),
             Column("creationDate", "creationDate", PortablePhysicalType.DateTime, isNullable: true),
-            Column("expiration", "expiration", PortablePhysicalType.DateTime, isNullable: true),
+            Column("expirationDate", "expirationDate", PortablePhysicalType.DateTime, isNullable: true),
             Column("referenceId", "referenceId", length: MaxIndexedIdentifierLength, isNullable: true),
             Column("status", "status", length: MaxIndexedStatusLength, isNullable: true),
             Column("subject", "subject", length: MaxIndexedSubjectLength, isNullable: true),
@@ -179,10 +182,17 @@ public static class OpenIddictGroundworkStorageManifest
             OrderedIndex(
                 TokenIdIndex.Identity,
                 Envelope.IdComparisonKeyColumn),
-            Index(TokenApplicationIndex.Identity, "applicationId", "status"),
-            Index(TokenAuthorizationIndex.Identity, "authorizationId", "status"),
+            Index(TokenApplicationIndex.Identity, "applicationId"),
+            Index(TokenAuthorizationIndex.Identity, "authorizationId"),
             UniqueIndex(TokenReferenceIndex.Identity, "referenceId"),
-            Index(TokenSubjectIndex.Identity, "subject", "status")
+            Index(TokenSubjectIndex.Identity, "subject"),
+            Index(
+                TokenCompoundIndex.Identity,
+                "subject",
+                "applicationId",
+                "status",
+                "type",
+                Envelope.IdComparisonKeyColumn)
         ]);
 
     private static readonly DocumentEnvelopeDefinition Envelope = new();
@@ -198,7 +208,7 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly LogicalIndexDeclaration AuthorizationIdIndex =
         KeywordIndex("openiddict-authorization-by-id", "id");
     private static readonly LogicalIndexDeclaration AuthorizationSubjectIndex = CompoundIndex(
-        "openiddict-authorization-by-subject-status-expiration", "subject", "status", "expiration");
+        "openiddict-authorization-by-subject-application-status-type", "subject", "applicationId", "status", "type");
     private static readonly LogicalIndexDeclaration AuthorizationScopeIndex =
         CollectionIndex("openiddict-authorization-by-scope", "scopes");
     private static readonly LogicalIndexDeclaration ScopeIdIndex =
@@ -209,13 +219,15 @@ public static class OpenIddictGroundworkStorageManifest
         CollectionIndex("openiddict-scope-by-resource", "resources");
     private static readonly LogicalIndexDeclaration TokenIdIndex =
         KeywordIndex("openiddict-token-by-id", "id");
-    private static readonly LogicalIndexDeclaration TokenApplicationIndex = CompoundIndex(
-        "openiddict-token-by-application-id", "applicationId", "status");
-    private static readonly LogicalIndexDeclaration TokenAuthorizationIndex = CompoundIndex(
-        "openiddict-token-by-authorization-id", "authorizationId", "status");
+    private static readonly LogicalIndexDeclaration TokenApplicationIndex =
+        KeywordIndex("openiddict-token-by-application-id", "applicationId");
+    private static readonly LogicalIndexDeclaration TokenAuthorizationIndex =
+        KeywordIndex("openiddict-token-by-authorization-id", "authorizationId");
     private static readonly LogicalIndexDeclaration TokenReferenceIndex = KeywordIndex("openiddict-token-by-reference-id", "referenceId", unique: true);
-    private static readonly LogicalIndexDeclaration TokenSubjectIndex = CompoundIndex(
-        "openiddict-token-by-subject", "subject", "status");
+    private static readonly LogicalIndexDeclaration TokenSubjectIndex =
+        KeywordIndex("openiddict-token-by-subject", "subject");
+    private static readonly LogicalIndexDeclaration TokenCompoundIndex = CompoundIndex(
+        "openiddict-token-by-subject-application-status-type", "subject", "applicationId", "status", "type", "id");
     private static readonly BoundedQueryDeclaration ApplicationListQuery =
         UnfilteredListQuery(ListApplicationsQuery, ApplicationIdIndex);
     private static readonly BoundedQueryDeclaration ClientIdQuery =
@@ -227,7 +239,7 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly BoundedQueryDeclaration AuthorizationListQuery =
         UnfilteredListQuery(ListAuthorizationsQuery, AuthorizationIdIndex);
     private static readonly BoundedQueryDeclaration AuthorizationSubjectQuery =
-        RangeQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectIndex);
+        EqualityQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectIndex);
     private static readonly BoundedQueryDeclaration AuthorizationScopeQuery =
         CollectionQuery(FindAuthorizationByScopeQuery, AuthorizationScopeIndex);
     private static readonly BoundedQueryDeclaration ScopeListQuery =
@@ -276,21 +288,16 @@ public static class OpenIddictGroundworkStorageManifest
         UnfilteredListQuery(ListTokensQuery, TokenIdIndex);
     private static readonly BoundedQueryDeclaration TokenCompoundQuery = new(
         FindTokenQuery,
-        TokenIdIndex.Identity,
+        TokenCompoundIndex.Identity,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Ascending,
         QueryPagingSupport.Offset,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsDisjunction: true,
         sortFields: [new BoundedQuerySortField("id", PhysicalSortDirection.Ascending)],
-        predicateFields: [],
-        residualPredicateFields:
-        [
-            Residual("subject", IndexValueKind.Keyword, PortableQueryOperation.Equal),
-            Residual("applicationId", IndexValueKind.Keyword, PortableQueryOperation.Equal),
-            Residual("status", IndexValueKind.Keyword, PortableQueryOperation.Equal),
-            Residual("type", IndexValueKind.Keyword, PortableQueryOperation.Equal)
-        ]);
+        predicateFields: TokenCompoundIndex.Fields.Take(4).Select(field => new BoundedQueryPredicateField(
+            field.Path,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })).ToArray());
     private static readonly BoundedQueryDeclaration TokenApplicationQuery =
         EqualityQuery(FindTokenByApplicationIdQuery, TokenApplicationIndex);
     private static readonly BoundedQueryDeclaration TokenAuthorizationQuery =
@@ -360,7 +367,9 @@ public static class OpenIddictGroundworkStorageManifest
 
     private static LogicalIndexDeclaration CompoundIndex(string identity, params string[] paths) =>
         new(identity,
-            paths.Select(path => new IndexField(path, path == "expiration" ? IndexValueKind.DateTime : IndexValueKind.Keyword)).ToArray(),
+            paths.Select(path => new IndexField(
+                path,
+                path is "creationDate" or "expirationDate" ? IndexValueKind.DateTime : IndexValueKind.Keyword)).ToArray(),
             IndexValueKind.Keyword,
             isUnique: false,
             MissingValueBehavior.Excluded);
@@ -439,25 +448,5 @@ public static class OpenIddictGroundworkStorageManifest
         QueryPagingSupport.Offset,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true);
-
-    private static BoundedQueryDeclaration RangeQuery(string identity, LogicalIndexDeclaration index) => new(
-        identity,
-        index.Identity,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
-        QuerySortSupport.None,
-        QueryPagingSupport.Offset,
-        BoundedQueryExecutionClass.ScaleBearing,
-        predicateFields: index.Fields.Select(field => new BoundedQueryPredicateField(
-            field.Path,
-            new HashSet<PortableQueryOperation>
-            {
-                field.Path == "expiration" ? PortableQueryOperation.LessThanOrEqual : PortableQueryOperation.Equal
-            })).ToArray());
-
-    private static BoundedQueryResidualPredicateField Residual(
-        string path,
-        IndexValueKind valueKind,
-        PortableQueryOperation operation) =>
-        new(path, valueKind, new HashSet<PortableQueryOperation> { operation });
 
 }

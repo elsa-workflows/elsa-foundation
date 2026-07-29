@@ -7,13 +7,17 @@ EF fixture remains the behavior and #646 performance oracle until the exit gate.
 ## Reproducible inventory
 
 ```bash
-rg -n '\[(Fact|Theory)\]' \
-  tests/Elsa/Foundation/Identity/Tests/OpenIddict \
-  tests/Elsa/Foundation/Identity/Tests/Api/DevelopmentOrDemoGuardTests.cs \
-  tests/Elsa/Foundation/Identity/Tests/Api/DevelopmentOrDemoGuardShellActivationTests.cs \
-  tests/Elsa/Foundation/Identity/Tests/Api/EnabledShellCompositionTests.cs \
-  tests/Elsa/Foundation/Identity/Tests/Api/TokenEndpointTests.cs \
-  tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkHttpAcceptanceTests.cs
+{
+  rg -n '\[(Fact|Theory)\]' \
+    tests/Elsa/Foundation/Identity/Tests/OpenIddict \
+    tests/Elsa/Foundation/Identity/Tests/Api/DevelopmentOrDemoGuardTests.cs \
+    tests/Elsa/Foundation/Identity/Tests/Api/DevelopmentOrDemoGuardShellActivationTests.cs \
+    tests/Elsa/Foundation/Identity/Tests/Api/EnabledShellCompositionTests.cs \
+    tests/Elsa/Foundation/Identity/Tests/Api/TokenEndpointTests.cs \
+    tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkHttpAcceptanceTests.cs
+  rg -n 'FeatureClassesRegisterOwnedServices|OidcAndOpenIddictProvidersAreExposedThroughSameProviderManager|OpenIddictTokenServiceIssuesRefreshesValidatesAndRevokesContractTokens' \
+    tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs
+}
 ```
 
 The stale preparation baseline held 51 direct HTTP/token/shell objectives plus
@@ -65,7 +69,7 @@ ledger records retention scope, not passed execution evidence.
 
 ## Shared token-endpoint host objectives — 10
 
-These tests do not name OpenIddict in their test bodies, but all nine reach its
+These tests do not name OpenIddict in their test bodies, but all ten reach its
 EF-backed token service through `TokenEndpointFixture`. They are part of the
 retention denominator; a token-only source scan would miss them.
 

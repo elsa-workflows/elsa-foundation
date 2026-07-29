@@ -28,9 +28,9 @@ public sealed class GroundworkOpenIddictScopeStore(
 
     public async ValueTask<long> CountAsync(CancellationToken cancellationToken)
     {
-        await using var session = await sessions.CreateAsync(cancellationToken);
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
             return await session.BoundedDocumentStore.CountAsync(
                 ScopeQuery(OpenIddictGroundworkStorageManifest.ListScopesQuery)
                     .Select(BoundedQueryResultOperation.Count),
@@ -55,9 +55,9 @@ public sealed class GroundworkOpenIddictScopeStore(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
-        await using var session = await sessions.CreateAsync(cancellationToken);
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
             var result = await session.DocumentStore.SaveAsync(
                 OpenIddictGroundworkRecordSerializer.CreateSaveRequest(scope, expectedVersion: 0),
                 cancellationToken);
@@ -77,9 +77,9 @@ public sealed class GroundworkOpenIddictScopeStore(
         if (scope.PersistenceVersion <= 0)
             throw Concurrency(DocumentStoreWriteStatus.ConcurrencyConflict);
 
-        await using var session = await sessions.CreateAsync(cancellationToken);
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
             var result = await session.DocumentStore.DeleteAsync(
                 new DeleteDocumentRequest(
                     OpenIddictGroundworkJson.ScopeDocumentKind,
@@ -102,9 +102,9 @@ public sealed class GroundworkOpenIddictScopeStore(
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(identifier);
-        await using var session = await sessions.CreateAsync(cancellationToken);
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
             var document = await session.DocumentStore.LoadAsync(
                 OpenIddictGroundworkJson.ScopeDocumentKind,
                 identifier,
@@ -124,9 +124,9 @@ public sealed class GroundworkOpenIddictScopeStore(
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
-        await using var session = await sessions.CreateAsync(cancellationToken);
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
             var document = await session.BoundedDocumentStore.FirstOrDefaultAsync(
                 EqualQuery(OpenIddictGroundworkStorageManifest.FindScopeByNameQuery, "name", name)
                     .Select(BoundedQueryResultOperation.First),
@@ -337,11 +337,11 @@ public sealed class GroundworkOpenIddictScopeStore(
         if (scope.PersistenceVersion <= 0)
             throw Concurrency(DocumentStoreWriteStatus.ConcurrencyConflict);
 
-        await using var session = await sessions.CreateAsync(cancellationToken);
         var previousConcurrencyToken = scope.ConcurrencyToken;
-        scope.ConcurrencyToken = Guid.NewGuid().ToString("N");
         try
         {
+            await using var session = await sessions.CreateAsync(cancellationToken);
+            scope.ConcurrencyToken = Guid.NewGuid().ToString("N");
             var result = await session.DocumentStore.SaveAsync(
                 OpenIddictGroundworkRecordSerializer.CreateSaveRequest(scope, scope.PersistenceVersion),
                 cancellationToken);
@@ -360,55 +360,62 @@ public sealed class GroundworkOpenIddictScopeStore(
         [EnumeratorCancellation] CancellationToken cancellationToken,
         bool singlePage = false)
     {
-        await using var session = await sessions.CreateAsync(cancellationToken);
+        var session = await sessions.CreateAsync(cancellationToken);
         var skip = query.Skip ?? 0;
         var remaining = query.Take;
-        while (true)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var take = singlePage
-                ? remaining
-                : remaining is null
-                    ? TraversalPageSize
-                    : Math.Min(TraversalPageSize, remaining.Value);
-            DocumentQueryResult page;
-            try
+            while (true)
             {
-                page = await session.BoundedDocumentStore.QueryAsync(
-                    query.Page(skip, take),
-                    cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                throw Translate(exception, operation);
-            }
-
-            foreach (var document in page.Documents)
-            {
-                OpenIddictGroundworkScope scope;
+                cancellationToken.ThrowIfCancellationRequested();
+                var take = singlePage
+                    ? remaining
+                    : remaining is null
+                        ? TraversalPageSize
+                        : Math.Min(TraversalPageSize, remaining.Value);
+                DocumentQueryResult page;
                 try
                 {
-                    scope = OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkScope>(document);
+                    page = await session.BoundedDocumentStore.QueryAsync(
+                        query.Page(skip, take),
+                        cancellationToken);
                 }
                 catch (Exception exception)
                 {
                     throw Translate(exception, operation);
                 }
 
-                yield return scope;
-            }
+                foreach (var document in page.Documents)
+                {
+                    OpenIddictGroundworkScope scope;
+                    try
+                    {
+                        scope = OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkScope>(document);
+                    }
+                    catch (Exception exception)
+                    {
+                        throw Translate(exception, operation);
+                    }
 
-            skip += page.Documents.Count;
-            if (singlePage ||
-                page.Documents.Count == 0 ||
-                skip >= page.TotalCount ||
-                remaining is not null && page.Documents.Count >= remaining.Value)
-            {
-                yield break;
-            }
+                    yield return scope;
+                }
 
-            if (remaining is not null)
-                remaining -= page.Documents.Count;
+                skip += page.Documents.Count;
+                if (singlePage ||
+                    page.Documents.Count == 0 ||
+                    skip >= page.TotalCount ||
+                    remaining is not null && page.Documents.Count >= remaining.Value)
+                {
+                    yield break;
+                }
+
+                if (remaining is not null)
+                    remaining -= page.Documents.Count;
+            }
+        }
+        finally
+        {
+            await OpenIddictGroundworkStoreSessionFactory.DisposeAsync(session, operation);
         }
     }
 

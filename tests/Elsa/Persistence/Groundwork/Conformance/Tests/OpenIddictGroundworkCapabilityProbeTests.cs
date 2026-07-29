@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork.Composition;
+using Elsa.Foundation.Identity.OpenIddict.Groundwork.Models;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
@@ -139,15 +140,10 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
         await driver.ResetPhysicalAsync([new OpenIddictGroundworkStorageManifestSource()]);
 
         const string id = "token-a";
-        const string content = """{"referenceId":"refresh-a","subject":"subject-a","status":"valid","expiration":"2030-01-01T00:00:00+00:00"}""";
+        var request = Token(id, "refresh-a", "subject-a", expectedVersion: 0);
         await using (var writer = await driver.OpenPhysicalClientAsync(DocumentStoreAccess.Global))
         {
-            var saved = await writer.DocumentStore.SaveAsync(new SaveDocumentRequest(
-                OpenIddictGroundworkJson.TokenDocumentKind,
-                id,
-                "v1",
-                content,
-                0));
+            var saved = await writer.DocumentStore.SaveAsync(request);
 
             Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
             Assert.NotNull(saved.Document);
@@ -158,7 +154,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
             var loaded = await reader.DocumentStore.LoadAsync(OpenIddictGroundworkJson.TokenDocumentKind, id);
 
             Assert.NotNull(loaded);
-            Assert.Equal(content, loaded.ContentJson);
+            Assert.Equal(request.ContentJson, loaded.ContentJson);
             Assert.Equal(1, loaded.Version);
         }
     }
@@ -170,12 +166,11 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
         await driver.InitializeAsync();
         await driver.ResetPhysicalAsync([new OpenIddictGroundworkStorageManifestSource()]);
         await using var client = await driver.OpenPhysicalClientAsync(DocumentStoreAccess.Global);
-        await client.DocumentStore.SaveAsync(new SaveDocumentRequest(
-            OpenIddictGroundworkJson.TokenDocumentKind,
+        await client.DocumentStore.SaveAsync(Token(
             "token-a",
-            "v1",
-            """{"referenceId":"refresh-a","subject":"subject-a","status":"valid","expiration":"2030-01-01T00:00:00+00:00"}""",
-            0));
+            "refresh-a",
+            "subject-a",
+            expectedVersion: 0));
 
         var query = new DocumentQuery(
             OpenIddictGroundworkJson.TokenDocumentKind,
@@ -365,63 +360,6 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
     }
 
     [Fact]
-    public async Task Sqlite_executes_the_declared_token_prune_mutation_with_an_exact_count_and_cancellation()
-    {
-        var database = TemporaryDatabasePath();
-        try
-        {
-            var source = await CreatePhysicalSourceAsync();
-            await ApplySqliteSchemaAsync(source, database);
-            var store = new SqlitePhysicalDocumentStore(
-                $"Data Source={database}",
-                source.CreateManifest(),
-                source.PhysicalTarget.Routes,
-                DocumentStoreAccess.Global);
-            var route = source.PhysicalTarget.Routes.Single(candidate =>
-                candidate.StorageUnit.Value == OpenIddictGroundworkJson.TokenDocumentKind);
-            var mutations = SqlitePhysicalMutationRuntime.Create(
-                store,
-                source.CreateManifest(),
-                route,
-                source.PhysicalTarget.Provider);
-            const string expiration = "2030-01-01T00:00:00+00:00";
-
-            Assert.Equal(DocumentStoreWriteStatus.Saved, (await store.SaveAsync(
-                Token("token-prune-1", "refresh-prune-1", "subject-prune", 0, expiration))).Status);
-            Assert.Equal(DocumentStoreWriteStatus.Saved, (await store.SaveAsync(
-                Token("token-prune-2", "refresh-prune-2", "subject-prune", 0, expiration))).Status);
-            Assert.Equal(DocumentStoreWriteStatus.Saved, (await store.SaveAsync(
-                Token("token-preserve", "refresh-preserve", "subject-preserve", 0, expiration))).Status);
-
-            var mutation = PruneTokens("prune-openiddict-tokens-1", expiration);
-            var explanation = await mutations.ExplainAsync(mutation);
-            var completed = await mutations.ExecuteAsync(mutation);
-            var replayed = await mutations.ExecuteAsync(mutation);
-
-            Assert.Equal(OpenIddictGroundworkStorageManifest.PruneTokensMutation, explanation.Plan.MutationIdentity);
-            Assert.NotEmpty(explanation.Commands);
-            Assert.All(explanation.Commands, command => Assert.NotEmpty(command.Selectors));
-            Assert.Equal(BoundedMutationStatus.Completed, completed.Status);
-            Assert.Equal(2, completed.AffectedCount);
-            Assert.Equal(BoundedMutationStatus.Replayed, replayed.Status);
-            Assert.Equal(2, replayed.AffectedCount);
-            Assert.Null(await store.LoadAsync(OpenIddictGroundworkJson.TokenDocumentKind, "token-prune-1"));
-            Assert.Null(await store.LoadAsync(OpenIddictGroundworkJson.TokenDocumentKind, "token-prune-2"));
-            Assert.NotNull(await store.LoadAsync(OpenIddictGroundworkJson.TokenDocumentKind, "token-preserve"));
-
-            using var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => mutations.ExecuteAsync(
-                PruneTokens("prune-openiddict-tokens-cancelled", expiration),
-                cancellation.Token));
-        }
-        finally
-        {
-            File.Delete(database);
-        }
-    }
-
-    [Fact]
     public async Task Public_schema_source_has_deterministic_host_naming_and_fingerprint_transformation()
     {
         var manifest = (await new OpenIddictGroundworkStorageManifestSource()
@@ -494,7 +432,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
     [InlineData("sqlserver")]
     [InlineData("postgresql")]
     [InlineData("mongodb")]
-    public async Task Four_provider_public_capabilities_execute_the_same_openiddict_contract(string providerKey)
+    public async Task Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract(string providerKey)
     {
         await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
         await driver.InitializeAsync();
@@ -508,7 +446,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
         Assert.Equal(0, status.ExitCode);
         Assert.Equal("ready", status.Report.GetProperty("outcome").GetString());
         Assert.Equal(providerKey, driver.Descriptor.ProviderKey);
-        Assert.Equal("0.0.1-preview.86", driver.Descriptor.ProviderVersion);
+        Assert.Equal(ConfiguredGroundworkVersion(), driver.Descriptor.ProviderVersion);
         driver.Descriptor.Topology.EnsureSupports(
             GroundworkTopologyCapabilities.PersistentStorage |
             GroundworkTopologyCapabilities.IndependentClients |
@@ -585,48 +523,6 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
             Assert.Null(conflict.Document);
         }
 
-        var tokenRoute = physicalSource.PhysicalTarget.Routes.Single(route =>
-            route.StorageUnit.Value == OpenIddictGroundworkJson.TokenDocumentKind);
-        const string expiration = "2030-01-01T00:00:00+00:00";
-        if (string.Equals(providerKey, "postgresql", StringComparison.Ordinal))
-        {
-            // PostgreSQL's strict native-mutation inspector requires the actual EXPLAIN
-            // to select the declared index. The driver reuses the real native-route
-            // fixture: one matching token plus 4,096 non-matching contrast rows, then ANALYZE.
-            await driver.PrepareNativeRoutePlanDatasetAsync([
-                PruneTokenMutationPlanDataset(tokenRoute, expiration)
-            ]);
-        }
-        else
-        {
-            await using var writer = await driver.OpenPhysicalClientAsync(DocumentStoreAccess.Global);
-            Assert.Equal(DocumentStoreWriteStatus.Saved, (await writer.DocumentStore.SaveAsync(
-                Token("token-four-provider-prune", "refresh-four-provider-prune", "subject-prune", 0, expiration))).Status);
-        }
-
-        await using (var client = await driver.OpenPhysicalClientAsync(DocumentStoreAccess.Global))
-        {
-            var mutations = CreateMutationExplainer(
-                client.DocumentStore,
-                physicalSource.CreateManifest(),
-                tokenRoute,
-                physicalSource.PhysicalTarget.Provider);
-            var mutation = PruneTokens($"prune-openiddict-{providerKey}", expiration);
-            var mutationPlan = await mutations.ExplainAsync(mutation);
-            var mutationResult = await mutations.ExecuteAsync(mutation);
-
-            Assert.NotEmpty(mutationPlan.Commands);
-            Assert.All(mutationPlan.Commands, command => Assert.NotEmpty(command.Selectors));
-            Assert.Equal(BoundedMutationStatus.Completed, mutationResult.Status);
-            Assert.Equal(1, mutationResult.AffectedCount);
-
-            using var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => mutations.ExecuteAsync(
-                PruneTokens($"prune-openiddict-{providerKey}-cancelled", expiration),
-                cancellation.Token));
-        }
-
         await using var restarted = await driver.OpenPhysicalClientAsync(DocumentStoreAccess.Global);
         Assert.NotNull(await restarted.DocumentStore.LoadAsync(
             OpenIddictGroundworkJson.ApplicationDocumentKind,
@@ -643,80 +539,30 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
         string referenceId,
         string subject,
         long expectedVersion,
-        string expiration = "2030-01-01T00:00:00+00:00") => new(
-        OpenIddictGroundworkJson.TokenDocumentKind,
-        id,
-        "v1",
-        $$"""{"referenceId":"{{referenceId}}","subject":"{{subject}}","status":"valid","expiration":"{{expiration}}"}""",
-        expectedVersion);
+        string expiration = "2030-01-01T00:00:00+00:00") =>
+        OpenIddictGroundworkRecordSerializer.CreateSaveRequest(
+            new OpenIddictGroundworkToken
+            {
+                Id = id,
+                ReferenceId = referenceId,
+                Subject = subject,
+                Status = "valid",
+                ExpirationDate = DateTimeOffset.Parse(
+                    expiration,
+                    System.Globalization.CultureInfo.InvariantCulture)
+            },
+            expectedVersion);
 
-    private static DocumentMutation PruneTokens(string operationId, string expiration) => new(
-        OpenIddictGroundworkJson.TokenDocumentKind,
-        OpenIddictGroundworkStorageManifest.PruneTokensMutation,
-        operationId,
-        [
-            DocumentQueryClause.Of(DocumentQueryComparison.Equal("subject", "subject-prune")),
-            DocumentQueryClause.Of(DocumentQueryComparison.Equal("status", "valid")),
-            DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual("expiration", expiration))
-        ]);
-
-    private static GroundworkNativeRoutePlanRequest PruneTokenMutationPlanDataset(
-        ExecutableStorageRoute tokenRoute,
-        string expiration)
+    private static string ConfiguredGroundworkVersion()
     {
-        var expirationValue = DateTimeOffset.Parse(expiration, System.Globalization.CultureInfo.InvariantCulture);
-        return new GroundworkNativeRoutePlanRequest(
-            OpenIddictGroundworkJson.TokenDocumentKind,
-            OpenIddictGroundworkStorageManifest.FindTokenBySubjectQuery,
-            tokenRoute.PrimaryStorage.Name.Identifier,
-            routeField: "subject",
-            projectedFields: tokenRoute.ProjectedColumns
-                .Select(column => column.Definition.LogicalName)
-                .ToArray(),
-            storageScope: DocumentScopeSelection.Global.StorageKey!,
-            routeValue: "subject-prune",
-            limit: 1,
-            acceptanceCardinality: 4097,
-            candidateDocumentId: "token-four-provider-prune",
-            candidateContentJson: "{}",
-            candidateSchemaVersion: "v1",
-            projectedValues:
-            [
-                GroundworkNativeRouteProjectedValue.String("referenceId", "refresh-four-provider-prune"),
-                GroundworkNativeRouteProjectedValue.String("subject", "subject-prune", "subject-contrast"),
-                GroundworkNativeRouteProjectedValue.String("status", "valid", "revoked"),
-                GroundworkNativeRouteProjectedValue.DateTime("expiration", expirationValue, expirationValue.AddDays(1))
-            ],
-            requiredPredicateFields: ["subject", "status", "expiration"],
-            expectedCommandKinds: [PhysicalDocumentQueryCommandKind.First],
-            indexFields: ["subject", "status", "expiration"],
-            evidenceKind: "openiddict-native-mutation-plan",
-            contentColumn: tokenRoute.Envelope.CanonicalJson.Identifier,
-            expectedIndexName: tokenRoute.Indexes.Single(index =>
-                index.Columns.Select(column => column.Column.LogicalName)
-                    .SequenceEqual(["subject", "status", "expiration"], StringComparer.Ordinal)).Name.Identifier,
-            matchingCardinality: 1,
-            varyingProjectedFields: ["referenceId"]);
+        var packageDocument = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"));
+        return packageDocument.Descendants("PackageVersion")
+            .Single(element => string.Equals(
+                (string?)element.Attribute("Include"),
+                "Groundwork.Core",
+                StringComparison.Ordinal))
+            .Attribute("Version")!.Value;
     }
-
-    private static IPhysicalDocumentMutationExplainer CreateMutationExplainer(
-        IDocumentStore store,
-        StorageManifest manifest,
-        ExecutableStorageRoute route,
-        ProviderIdentity provider) =>
-        store switch
-        {
-            SqlitePhysicalDocumentStore sqlite =>
-                SqlitePhysicalMutationRuntime.Create(sqlite, manifest, route, provider),
-            SqlServerPhysicalDocumentStore sqlServer =>
-                SqlServerPhysicalMutationRuntime.Create(sqlServer, manifest, route, provider),
-            PostgreSqlPhysicalDocumentStore postgreSql =>
-                PostgreSqlPhysicalMutationRuntime.Create(postgreSql, manifest, route, provider),
-            MongoDbPhysicalDocumentStore mongoDb =>
-                MongoDbPhysicalMutationRuntime.Create(mongoDb, manifest, route, provider),
-            _ => throw new NotSupportedException(
-                $"The OpenIddict capability probe does not recognize physical store '{store.GetType().FullName}'.")
-        };
 
     private static async ValueTask<GroundworkPhysicalSchemaManifestSource> CreatePhysicalSourceAsync() =>
         await GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(

@@ -40,4 +40,23 @@ public sealed class OpenIddictGroundworkStoreSessionFactory(
             throw new OpenIddictGroundworkProviderException("session.open", exception);
         }
     }
+
+    internal static async ValueTask DisposeAsync(
+        GroundworkStoreSession session,
+        string operation)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        try
+        {
+            await session.DisposeAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new OpenIddictGroundworkProviderException($"{operation}.dispose", exception);
+        }
+    }
 }

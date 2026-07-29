@@ -70,7 +70,7 @@ public sealed class OpenIddictGroundworkStorageManifestTests
                 "applicationId",
                 "authorizationId",
                 "creationDate",
-                "expiration",
+                "expirationDate",
                 "referenceId",
                 "status",
                 "subject",
@@ -78,9 +78,36 @@ public sealed class OpenIddictGroundworkStorageManifestTests
             },
             columns.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(PortablePhysicalType.DateTime, columns["creationDate"].Type);
-        Assert.Equal(PortablePhysicalType.DateTime, columns["expiration"].Type);
+        Assert.Equal(PortablePhysicalType.DateTime, columns["expirationDate"].Type);
         Assert.All(columns.Values.Where(column => column.Type == PortablePhysicalType.String), column =>
             Assert.InRange(column.Length!.Value, 1, 256));
+        Assert.Contains(definition.Indexes, index =>
+            index.Columns.Take(4).Select(column => column.ColumnLogicalName)
+                .SequenceEqual(["subject", "applicationId", "status", "type"], StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Authorization_storage_projects_only_canonical_lifecycle_and_filter_paths()
+    {
+        var definition = OpenIddictGroundworkStorageManifest.CreateAuthorizationDefinition();
+        var columns = definition.ProjectedColumns.ToDictionary(column => column.Path, StringComparer.Ordinal);
+
+        Assert.Equal(
+            new[]
+            {
+                "applicationId",
+                "creationDate",
+                "scopes",
+                "status",
+                "subject",
+                "type"
+            },
+            columns.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(PortablePhysicalType.DateTime, columns["creationDate"].Type);
+        Assert.DoesNotContain("expiration", columns.Keys);
+        Assert.Contains(definition.Indexes, index =>
+            index.Columns.Select(column => column.ColumnLogicalName)
+                .SequenceEqual(["subject", "applicationId", "status", "type"], StringComparer.Ordinal));
     }
 
     [Fact]

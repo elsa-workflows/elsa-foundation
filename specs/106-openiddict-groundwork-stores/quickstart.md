@@ -93,15 +93,15 @@ store-contract denominator from the restored OpenIddict 7.5.0 XML:
 Application=42, Authorization=32, Scope=28, Token=43, total 145.
 
 These results prove only the behavior-preservation and
-manifest/codec/boundary slice described above. T005 retains its executable
-probe-source evidence; T006 remains open until the current configured
-Groundwork family is recertified on all four providers.
-There is no `IOpenIddict*Store` implementation, replacement registration,
-session/UoW/CAS/redeem flow, four-provider matrix, unified deployment
-selection, or performance evidence. The EF oracle remains load-bearing for
-#646 and must not be deleted by this checkpoint.
+manifest/codec/boundary slice described above. T005 and T006 remain open until
+the corrected admitted-mutation probe passes on the exact configured
+Groundwork family. There is no replacement registration, complete four-store
+implementation, relationship-safe session/UoW/CAS/redeem flow, four-provider
+store matrix, unified deployment selection, or performance evidence. The EF
+oracle remains load-bearing for #646 and must not be deleted by this
+checkpoint.
 
-## Scope-store checkpoint — 2026-07-25
+## Scope-store candidate checkpoint — 2026-07-25
 
 The first complete public store slice now implements all 28
 `IOpenIddictScopeStore<OpenIddictGroundworkScope>` members. Named name-set and
@@ -132,9 +132,12 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
 # 12 passed
 ```
 
-This closes T035 and T040 only. T011/T016 remain open because the complete
-four-store manifest and its bounded mutations are not truthful until Groundwork
-#141 and #143 land. Registration, the shared 145-member suite, the real
+This is source and test evidence, not closure of T035 or T040: the test and
+implementation landed together without durable red-before-green evidence, and
+the exact-family T006 admission gate remains open. T011/T016 also remain open
+because the complete four-store manifest and its bounded mutations are not
+truthful until Groundwork #141 lands and the configured #143 capability is
+recertified. Registration, the shared 145-member suite, the real
 four-provider store matrix, host acceptance, performance, and EF removal also
 remain open.
 
@@ -169,7 +172,7 @@ Container-free verification on the replay head:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --logger 'console;verbosity=minimal'
-# 51 passed
+# 56 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   -c Release --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests' \
@@ -177,7 +180,8 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
 # 4 passed
 ```
 
-This checkpoint substantiates T009, T010, T018, and T019 on current Elsa main.
+The post-review candidate substantiates T009, T010, T018, and T019 on current
+Elsa main.
 It does not close T006, T011-T013, T016-T017, T020-T022, any complete token or
 registry-store task, provider conformance, host acceptance, performance, or EF
 removal.
