@@ -735,6 +735,54 @@ collect timing or native-plan evidence, select a physical form, edit the coverag
 performance verdict, or advance T076/T093/T100. Groundwork #50 and the missing executable EF runtime
 comparator (or a separately ratified no-oracle policy) remain later admission gates.
 
+### Trigger-binding stimulus lookup correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `trigger-binding-stimulus-lookup` v1.1
+vector through `IWorkflowTriggerBindingStore` and
+`IWorkflowExecutableSourceReferenceStore`. Two host-selected logical scopes each prepare all 96
+publications and all 4,608 bindings, matching the established two-scope interpretation of
+`tenantCount: 2`. Publication activation includes one explicit predecessor replacement. The primary
+scope retains exactly 31 active exact matches, 17 inactive replacement records, one active
+same-type/different-hash distractor, and one active different-type/same-hash distractor.
+
+The runner deliberately traverses opaque continuations rather than using list-all convenience
+extensions. It validates the exact stimulus result as 20+11, the complete type lookup including
+the alternate-hash record, every 48-record publication projection in both scopes, and every live
+Published executable-source reference at the frozen instant. Returned bindings are correlated
+with returned source references by publication, artifact, and tenant facts. Both directions of
+logical-scope isolation are probed. All six observations are then derived from those
+validated public-store results rather than copied from the seed plan.
+
+Before freezing the candidate, root review found that the initial fault harness injected binding
+and source leakage only into the secondary scope even though the runner probed both directions. The
+final harness adds the reverse-direction faults and explicit missing-prepared-binding and
+discarded-source-save cases. Together with activation, replacement, predicate, projection,
+pagination, ordering, count, source-live/scope/time, source-fact, and public-surface faults, the
+focused suite contains 29 injected failure modes plus three positive/surface cases.
+
+Three adversarial read-only reviewers inspected exact range
+`88717fa00eda7cf95fb6a00019ce68fa0504fd83..8223e55b220b80990de59bf589ada6c8da7f0551`
+and returned:
+
+| Axis | Final exact-range verdict |
+|---|---|
+| Correctness/mechanism | PASS — the frozen vector, public production routes, activation/replacement state, full bounded traversals, returned-data correlations, observation digest, and 29 fault modes are coherent. The reviewer independently reran 32/32 focused cases. |
+| Evidence integrity | PASS — the literal input fingerprint `4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc` and result digest `00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a` reproduce, and no seed expectation manufactures a reported observation. No provider, EF, timing, native-plan, physical-form, persistence, ledger, verdict, or task evidence is claimed. |
+| Scope/test preservation | PASS — the effective delta is exactly the provider-neutral runner and its tests, adds no project/package/host/solution/shell/ledger/generated dependency, preserves all existing tests, and introduces no hidden EF or provider dependency. |
+
+Root verification on the integrated head passed the focused suite **32/32**, the complete
+no-container benchmark suite **150/150**, and the warning-as-error build with **0 warnings/errors**.
+`dotnet format` verification passed for the benchmark test project, and the exact checkpoint passed
+`git diff --check`. The benchmark project's whole-project information-severity formatter remains
+blocked by 16 pre-existing whitespace findings in unchanged
+`Workloads/IamNormalizedLookupWorkload.cs`; this checkpoint does not claim that broader formatter
+gate.
+
+This correctness runner does not execute an EF comparator or provider matrix, start a database
+container, collect timing or native-plan evidence, select a physical form, edit the coverage
+ledger, issue a performance verdict, or advance a Spec 094 task. Those remain later #646 admission
+and measurement responsibilities.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
