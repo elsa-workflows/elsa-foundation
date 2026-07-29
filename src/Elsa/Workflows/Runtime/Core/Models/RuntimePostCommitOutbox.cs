@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -395,12 +396,22 @@ public static class RuntimePostCommitOutboxClaimTransitions
         ArgumentNullException.ThrowIfNull(result);
 
         if (!StringComparer.Ordinal.Equals(current.OutboxItemId, claim.OutboxItemId) ||
-            !StringComparer.Ordinal.Equals(result.OutboxItemId, claim.OutboxItemId) ||
-            current.Status != RuntimePostCommitOutboxStatus.Delivering ||
+            !StringComparer.Ordinal.Equals(result.OutboxItemId, claim.OutboxItemId))
+        {
+            throw new InvalidOperationException($"Post-commit outbox completion identity does not match claim '{claim.OutboxItemId}'.");
+        }
+
+        if (current.Status != RuntimePostCommitOutboxStatus.Delivering ||
             !StringComparer.Ordinal.Equals(current.DeliveringOwnerId, claim.OwnerId) ||
             current.DeliveryFencingToken != claim.FencingToken)
         {
-            throw new InvalidOperationException($"Post-commit outbox claim for '{claim.OutboxItemId}' is stale or not owned by this claimant.");
+            throw new RuntimePostCommitOutboxStaleClaimException(
+                claim.OutboxItemId,
+                claim.OwnerId,
+                claim.FencingToken,
+                current.DeliveringOwnerId,
+                current.DeliveryFencingToken,
+                current.Status);
         }
 
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(current.DeliveryAttemptCount);

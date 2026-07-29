@@ -863,7 +863,9 @@ The focused fake matrix rejects aliased or split clients/backing, response-only 
 completion, ignored due/scope/limit/order behavior, a missing or wrong scoped sentinel, duplicate
 current claims, wrong fence or owner (including sentinel-only owner/state fabrication), stale
 completion acceptance, premature/late retry visibility, and altered public reread fences or
-delivered identities. The focused suite passed **26/26**. This is shared-backing
+delivered identities. It also rejects return-only or persisted claim-time drift and distinguishes the
+stable stale-claim exception from an unrelated completion failure. The focused suite passed
+**29/29**. This is shared-backing
 public-contract correctness only: it does not claim
 provider or restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
 coverage-ledger evidence, or Spec 094 task completion; T100 remains unchecked.

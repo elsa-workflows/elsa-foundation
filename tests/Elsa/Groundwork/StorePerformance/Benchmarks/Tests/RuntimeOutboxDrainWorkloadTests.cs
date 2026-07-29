@@ -22,6 +22,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         Assert.Equal(2, adapter.Shared.ContentionAttempts);
         Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, adapter.Shared.PrimaryClaims.Count);
         Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, adapter.Shared.PrimaryCompletions);
+        Assert.Equal(adapter.Shared.ClaimRequestTimes.Order(), adapter.Shared.ClaimRequestTimes);
         Assert.True(adapter.Shared.Events.LastIndexOf("complete-primary") < adapter.Shared.Events.IndexOf("reclaim-sentinel"));
         Assert.True(adapter.Shared.Events.IndexOf("reclaim-sentinel") < adapter.Shared.Events.IndexOf("attempt-stale-sentinel-completion"));
     }
@@ -84,6 +85,32 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         Assert.Null(persisted.DeliveryVisibleAfter);
     }
 
+    [Theory]
+    [InlineData(OutboxFault.ReturnShiftedClaimTimes)]
+    [InlineData(OutboxFault.PersistShiftedClaimTimes)]
+    public async Task Claim_time_drift_reaches_exact_public_claim_validation(OutboxFault fault)
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutboxDrainWorkload().ExecuteAsync(new OutboxAdapter(fault)).AsTask());
+
+        Assert.Contains("exact bounded ordered current ownership", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unrelated_completion_failure_is_not_counted_as_stale_claim_rejection()
+    {
+        var adapter = new OutboxAdapter(OutboxFault.UnrelatedStaleFailure);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutboxDrainWorkload().ExecuteAsync(adapter).AsTask());
+
+        Assert.Equal("Synthetic unrelated completion failure.", exception.Message);
+        var persisted = adapter.Shared.Items["outbox-due-0032"];
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, persisted.Status);
+        Assert.Equal("outbox-sentinel-successor", persisted.DeliveringOwnerId);
+        Assert.Equal(2, persisted.DeliveryFencingToken);
+    }
+
     [Fact]
     public void Public_adapter_surface_contains_only_provider_neutral_runtime_contracts()
     {
@@ -137,6 +164,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         public int ContentionClaims { get; set; }
         public int ContentionAttempts { get; set; }
         public int PrimaryCompletions { get; set; }
+        public List<DateTimeOffset> ClaimRequestTimes { get; } = [];
         public List<string> Events { get; } = [];
     }
 
@@ -179,6 +207,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
             cancellationToken.ThrowIfCancellationRequested();
             lock (_backing.Gate)
             {
+                _backing.ClaimRequestTimes.Add(request.Now);
                 if (request.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
                     _backing.ContentionAttempts++;
                 if (_fault == OutboxFault.MissingSentinel && request.WorkflowExecutionId == "outbox-drain-contention")
@@ -203,6 +232,19 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                 {
                     var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, request);
                     var persistedClaimItem = claim.Item;
+                    if (_fault is OutboxFault.ReturnShiftedClaimTimes or OutboxFault.PersistShiftedClaimTimes)
+                    {
+                        var shiftedRequest = new RuntimePostCommitOutboxClaimRequest(
+                            request.OwnerId,
+                            request.Now.AddSeconds(1),
+                            request.VisibilityTimeout,
+                            request.Limit,
+                            request.WorkflowExecutionId,
+                            request.IntentKind);
+                        claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, shiftedRequest);
+                        if (_fault == OutboxFault.PersistShiftedClaimTimes)
+                            persistedClaimItem = claim.Item;
+                    }
                     if (_fault == OutboxFault.WrongReclaimFence && claim.FencingToken > 1)
                         claim = new RuntimePostCommitOutboxClaim(claim.Item, claim.OwnerId, claim.FencingToken - 1, claim.ClaimedAt, claim.VisibleAfter);
                     if (_fault == OutboxFault.ReturnWrongOwner)
@@ -261,6 +303,8 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                 var current = _backing.Items.GetValueOrDefault(completion.Claim.OutboxItemId)
                     ?? throw new InvalidOperationException("Outbox item was not found.");
                 var stale = current.Status != RuntimePostCommitOutboxStatus.Delivering || current.DeliveringOwnerId != completion.Claim.OwnerId || current.DeliveryFencingToken != completion.Claim.FencingToken;
+                if (stale && _fault == OutboxFault.UnrelatedStaleFailure)
+                    throw new InvalidOperationException("Synthetic unrelated completion failure.");
                 if (stale && _fault == OutboxFault.StaleAccepted)
                     return ValueTask.CompletedTask;
                 var updated = RuntimePostCommitOutboxClaimTransitions.Complete(current, completion.Claim, completion.DeliveryResult);
@@ -335,5 +379,8 @@ public enum OutboxFault
     EarlyRetry,
     LateRetry,
     WrongReread,
-    WrongDeliveredIdentity
+    WrongDeliveredIdentity,
+    ReturnShiftedClaimTimes,
+    PersistShiftedClaimTimes,
+    UnrelatedStaleFailure
 }

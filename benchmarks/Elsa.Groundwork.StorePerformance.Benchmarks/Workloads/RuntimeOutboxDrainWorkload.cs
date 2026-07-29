@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
@@ -53,7 +54,14 @@ public sealed class RuntimeOutboxDrainWorkload
         var primaryClaims = await clients.Primary.Claims.ClaimAsync(
             new RuntimePostCommitOutboxClaimRequest("outbox-primary", FixedNowUtc, PrimaryVisibility, BatchSize),
             cancellationToken);
-        RequireExactClaims(primaryClaims, ExpectedDueIds(BatchSize), "outbox-primary", expectedFence: 1, BatchSize);
+        RequireExactClaims(
+            primaryClaims,
+            ExpectedDueIds(BatchSize),
+            "outbox-primary",
+            expectedFence: 1,
+            BatchSize,
+            FixedNowUtc,
+            PrimaryVisibility);
 
         var contentionClaims = await ClaimContentionSentinelAsync(clients, cancellationToken);
         var originalSentinelClaim = RequireContentionClaim(contentionClaims);
@@ -83,7 +91,14 @@ public sealed class RuntimeOutboxDrainWorkload
         var retryClaims = await clients.Primary.Claims.ClaimAsync(
             new RuntimePostCommitOutboxClaimRequest("outbox-retry", retryAt, SuccessorVisibility, BatchSize, PrimaryWorkflowExecutionId),
             cancellationToken);
-        RequireExactClaims(retryClaims, ExpectedDueIds(RetryableEntries), "outbox-retry", expectedFence: 2, RetryableEntries);
+        RequireExactClaims(
+            retryClaims,
+            ExpectedDueIds(RetryableEntries),
+            "outbox-retry",
+            expectedFence: 2,
+            RetryableEntries,
+            retryAt,
+            SuccessorVisibility);
         operations.Add("record-delivered-and-retryable-results");
 
         var originalSentinelClient = StringComparer.Ordinal.Equals(originalSentinelClaim.OwnerId, "outbox-contender-0")
@@ -92,11 +107,18 @@ public sealed class RuntimeOutboxDrainWorkload
         var successorSentinelClient = ReferenceEquals(originalSentinelClient, clients.Primary)
             ? clients.Secondary
             : clients.Primary;
-        var successorNow = FixedNowUtc.Add(PrimaryVisibility);
+        var successorNow = retryAt;
         var successorSentinelClaims = await successorSentinelClient.Claims.ClaimAsync(
             new RuntimePostCommitOutboxClaimRequest("outbox-sentinel-successor", successorNow, SuccessorVisibility, 1, ContentionWorkflowExecutionId),
             cancellationToken);
-        RequireExactClaims(successorSentinelClaims, [DueId(BatchSize)], "outbox-sentinel-successor", expectedFence: 2, 1);
+        RequireExactClaims(
+            successorSentinelClaims,
+            [DueId(BatchSize)],
+            "outbox-sentinel-successor",
+            expectedFence: 2,
+            1,
+            successorNow,
+            SuccessorVisibility);
         var successorSentinelClaim = successorSentinelClaims.Single();
         operations.Add("reclaim-after-visibility-expiry");
 
@@ -212,7 +234,7 @@ public sealed class RuntimeOutboxDrainWorkload
                     new RuntimePostCommitOutboxDeliveryResult(staleClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, recordedAt)),
                 cancellationToken);
         }
-        catch (InvalidOperationException)
+        catch (RuntimePostCommitOutboxStaleClaimException)
         {
             return true;
         }
@@ -283,12 +305,17 @@ public sealed class RuntimeOutboxDrainWorkload
         IReadOnlyList<string> expectedIds,
         string ownerId,
         long expectedFence,
-        int expectedLimit)
+        int expectedLimit,
+        DateTimeOffset expectedNow,
+        TimeSpan expectedVisibility)
     {
+        var expectedVisibleAfter = expectedNow.Add(expectedVisibility);
         if (claims.Count != expectedLimit || claims.Select(claim => claim.OutboxItemId).Distinct(StringComparer.Ordinal).Count() != expectedLimit ||
             !claims.Select(claim => claim.OutboxItemId).SequenceEqual(expectedIds, StringComparer.Ordinal) ||
             claims.Any(claim => claim.OwnerId != ownerId || claim.FencingToken != expectedFence || claim.Item.Status != RuntimePostCommitOutboxStatus.Delivering ||
-                claim.Item.DeliveringOwnerId != ownerId || claim.Item.DeliveryFencingToken != expectedFence || claim.VisibleAfter <= claim.ClaimedAt))
+                claim.ClaimedAt != expectedNow || claim.VisibleAfter != expectedVisibleAfter ||
+                claim.Item.DeliveringOwnerId != ownerId || claim.Item.DeliveryFencingToken != expectedFence ||
+                claim.Item.DeliveryStartedAt != expectedNow || claim.Item.DeliveryVisibleAfter != expectedVisibleAfter))
         {
             throw new InvalidOperationException("The public outbox claim did not return the exact bounded ordered current ownership result.");
         }
@@ -297,7 +324,8 @@ public sealed class RuntimeOutboxDrainWorkload
     private static void RequireCurrentClaim(RuntimePostCommitOutboxItem? actual, RuntimePostCommitOutboxClaim expected, string operation)
     {
         if (actual is null || actual.Status != RuntimePostCommitOutboxStatus.Delivering || actual.OutboxItemId != expected.OutboxItemId ||
-            actual.DeliveringOwnerId != expected.OwnerId || actual.DeliveryFencingToken != expected.FencingToken || actual.DeliveryVisibleAfter != expected.VisibleAfter)
+            actual.DeliveringOwnerId != expected.OwnerId || actual.DeliveryFencingToken != expected.FencingToken ||
+            actual.DeliveryStartedAt != expected.ClaimedAt || actual.DeliveryVisibleAfter != expected.VisibleAfter)
         {
             throw new InvalidOperationException($"The public outbox reread did not expose the expected current claim after {operation}.");
         }
