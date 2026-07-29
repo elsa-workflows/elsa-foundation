@@ -33,6 +33,7 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
     [InlineData(TransportFault.CorruptLeaseItem)]
     [InlineData(TransportFault.CorruptLeaseToken)]
     [InlineData(TransportFault.ReverseLeaseOrder)]
+    [InlineData(TransportFault.IgnoreLeaseToken)]
     [InlineData(TransportFault.AcceptStale)]
     [InlineData(TransportFault.RejectCurrent)]
     [InlineData(TransportFault.FabricateReopenList)]
@@ -161,7 +162,9 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
                 if (index < 0)
                     return new(false);
                 var item = backing.Items[index];
-                var current = item.LeasedByOwnerId == owner && item.LeaseToken == token && !item.IsVisible(now);
+                var current = item.LeasedByOwnerId == owner &&
+                              (item.LeaseToken == token || fault == TransportFault.IgnoreLeaseToken) &&
+                              !item.IsVisible(now);
                 if (!current && item.LeaseToken == 2 && !item.IsVisible(now))
                     backing.StaleAcknowledgementsWithCurrentSuccessor++;
                 if (!current && fault == TransportFault.AcceptStale)
@@ -207,6 +210,7 @@ public enum TransportFault
     CorruptLeaseItem,
     CorruptLeaseToken,
     ReverseLeaseOrder,
+    IgnoreLeaseToken,
     AcceptStale,
     RejectCurrent,
     FabricateReopenList,

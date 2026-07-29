@@ -1010,9 +1010,17 @@ sequence, verifies exact per-workflow reopen counts (48 for the acknowledged pri
 for each other stream), and separately fails closed on response-only send, corrupt item/token/order,
 fabricated visible-list, and fabricated count behavior. The semantic adapter guard traverses
 inherited interfaces and base types against an explicit provider-neutral type set. The focused suite
-is **16/16**, the complete container-free benchmark-harness project is **247/247**, the benchmark
+is **17/17**, the complete container-free benchmark-harness project is **248/248**, the benchmark
 warnings-as-errors build is clean, changed-code formatter checks pass, and `git diff --check` is
 clean.
+
+The initial three-axis review of `286f559..8322a48` passed evidence integrity and scope/test
+preservation, but correctness found that the first and successor lease generations used different
+owner IDs. A stale acknowledgement could therefore be rejected for owner mismatch even if the
+transport ignored its required lease token. The finding was accepted: both generations now use the
+same owner, making token 1 versus token 2 the only stale discriminator, and a dedicated
+`IgnoreLeaseToken` mutation proves that token-blind acknowledgement fails the runner while the
+successor is current.
 
 ## 8. Readiness audit
 

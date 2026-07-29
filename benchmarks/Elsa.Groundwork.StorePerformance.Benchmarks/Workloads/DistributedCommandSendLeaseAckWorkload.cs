@@ -42,7 +42,7 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         operations.Add("send-concurrent-commands");
 
         var first = RequireLeaseWave(
-            await LeaseWaveAsync(clients, FixedNowUtc, "lease-first", cancellationToken),
+            await LeaseWaveAsync(clients, FixedNowUtc, "lease-owner", cancellationToken),
             expectedToken: 1,
             FixedNowUtc);
         operations.Add("lease-visible-bounded-batch");
@@ -50,7 +50,7 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         var redeliveryNow = FixedNowUtc.Add(Visibility).AddSeconds(1);
         operations.Add("advance-past-visibility-expiry");
         var successors = RequireLeaseWave(
-            await LeaseWaveAsync(clients, redeliveryNow, "lease-successor", cancellationToken),
+            await LeaseWaveAsync(clients, redeliveryNow, "lease-owner", cancellationToken),
             expectedToken: 2,
             redeliveryNow);
         if (!successors.Select(tuple => tuple.Item.TransportItemId).SequenceEqual(first.Select(tuple => tuple.Item.TransportItemId), StringComparer.Ordinal))
@@ -170,11 +170,11 @@ public sealed class DistributedCommandSendLeaseAckWorkload
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var readyCount = 0; var take = BatchSize / ConcurrentLeasers;
-        var callers = new[] { clients.Primary, clients.Secondary }.Select(async (client, index) =>
+        var callers = new[] { clients.Primary, clients.Secondary }.Select(async client =>
         {
             if (Interlocked.Increment(ref readyCount) == ConcurrentLeasers) ready.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
-            var owner = $"{prefix}-{index}";
+            var owner = prefix;
             var items = await client.LeaseAsync(PrimaryWorkflowId, owner, now, Visibility, take, cancellationToken);
             return new LeaseAttempt(client, owner, items);
         }).ToArray();
