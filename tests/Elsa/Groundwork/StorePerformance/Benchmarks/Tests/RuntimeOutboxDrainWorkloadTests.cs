@@ -55,6 +55,18 @@ public sealed class RuntimeOutboxDrainWorkloadTests
     }
 
     [Fact]
+    public async Task Return_only_sentinel_state_fabrication_reaches_exact_current_claim_validation()
+    {
+        var adapter = new OutboxAdapter(OutboxFault.SentinelWrongState);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutboxDrainWorkload().ExecuteAsync(adapter).AsTask());
+
+        Assert.Contains("exact current public claim", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, adapter.Shared.ContentionClaims);
+    }
+
+    [Fact]
     public void Public_adapter_surface_contains_only_provider_neutral_runtime_contracts()
     {
         var types = new[] { typeof(IRuntimeOutboxDrainWorkloadAdapter), typeof(RuntimeOutboxDrainClients), typeof(RuntimeOutboxDrainClient) };
@@ -172,6 +184,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                 foreach (var item in selected)
                 {
                     var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, request);
+                    var persistedClaimItem = claim.Item;
                     if (_fault == OutboxFault.WrongReclaimFence && claim.FencingToken > 1)
                         claim = new RuntimePostCommitOutboxClaim(claim.Item, claim.OwnerId, claim.FencingToken - 1, claim.ClaimedAt, claim.VisibleAfter);
                     if (_fault == OutboxFault.ReturnWrongOwner)
@@ -189,7 +202,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                         claim = new RuntimePostCommitOutboxClaim(item, claim.OwnerId, claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter);
                     }
                     if (_fault != OutboxFault.DuplicateClaim)
-                        _backing.Items[item.OutboxItemId] = claim.Item;
+                        _backing.Items[item.OutboxItemId] = persistedClaimItem;
                     if (item.Intent.WorkflowExecutionId == "outbox-drain-contention")
                         _backing.ContentionClaims++;
                     if (request.OwnerId == "outbox-primary")
