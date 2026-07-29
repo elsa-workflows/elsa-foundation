@@ -75,6 +75,21 @@ public sealed class DistributedCommandSendLeaseAckWorkload
                 throw new InvalidOperationException("The command transport accepted a stale token from its current lease owner.");
             }
         }
+        for (var index = 0; index < successors.Count; index++)
+        {
+            var successor = successors[index];
+            var firstGenerationOwner = first[index].Item.LeasedByOwnerId!;
+            if (await successor.Client.AckAsync(
+                    PrimaryWorkflowId,
+                    successor.Item.TransportItemId,
+                    firstGenerationOwner,
+                    successor.Item.LeaseToken!.Value,
+                    redeliveryNow,
+                    cancellationToken))
+            {
+                throw new InvalidOperationException("The command transport accepted a stale owner with its current lease token.");
+            }
+        }
         operations.Add("attempt-stale-acknowledgement");
 
         foreach (var tuple in successors)

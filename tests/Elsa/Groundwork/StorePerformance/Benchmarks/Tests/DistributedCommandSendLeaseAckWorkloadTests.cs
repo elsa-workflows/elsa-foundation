@@ -18,8 +18,9 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
         Assert.Equal(3, adapter.Opened.Count);
         Assert.Equal(8176, adapter.Shared.Items.Count);
         Assert.Equal([8, 8, 8, 8], adapter.Shared.LeaseTakes);
-        Assert.Equal(32, adapter.Shared.StaleAcknowledgementsWithCurrentSuccessor);
+        Assert.Equal(48, adapter.Shared.StaleAcknowledgementsWithCurrentSuccessor);
         Assert.Equal(16, adapter.Shared.TokenOnlyStaleAcknowledgements);
+        Assert.Equal(16, adapter.Shared.OwnerOnlyStaleAcknowledgements);
         Assert.Equal(16, adapter.Shared.CurrentAcknowledgements);
     }
 
@@ -35,6 +36,7 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
     [InlineData(TransportFault.CorruptLeaseToken)]
     [InlineData(TransportFault.ReverseLeaseOrder)]
     [InlineData(TransportFault.IgnoreLeaseToken)]
+    [InlineData(TransportFault.IgnoreLeaseOwner)]
     [InlineData(TransportFault.AcceptStale)]
     [InlineData(TransportFault.RejectCurrent)]
     [InlineData(TransportFault.FabricateReopenList)]
@@ -96,6 +98,7 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
         public List<int> LeaseTakes { get; } = [];
         public int StaleAcknowledgementsWithCurrentSuccessor { get; set; }
         public int TokenOnlyStaleAcknowledgements { get; set; }
+        public int OwnerOnlyStaleAcknowledgements { get; set; }
         public int CurrentAcknowledgements { get; set; }
     }
 
@@ -167,13 +170,15 @@ public sealed class DistributedCommandSendLeaseAckWorkloadTests
                 if (index < 0)
                     return new(false);
                 var item = backing.Items[index];
-                var current = item.LeasedByOwnerId == owner &&
+                var current = (item.LeasedByOwnerId == owner || fault == TransportFault.IgnoreLeaseOwner) &&
                               (item.LeaseToken == token || fault == TransportFault.IgnoreLeaseToken) &&
                               !item.IsVisible(now);
                 if (!current && item.LeaseToken == 2 && !item.IsVisible(now))
                     backing.StaleAcknowledgementsWithCurrentSuccessor++;
                 if (!current && item.LeasedByOwnerId == owner && item.LeaseToken != token && !item.IsVisible(now))
                     backing.TokenOnlyStaleAcknowledgements++;
+                if (!current && item.LeasedByOwnerId != owner && item.LeaseToken == token && !item.IsVisible(now))
+                    backing.OwnerOnlyStaleAcknowledgements++;
                 if (!current && fault == TransportFault.AcceptStale)
                     return new(true);
                 if (current && fault == TransportFault.RejectCurrent)
@@ -218,6 +223,7 @@ public enum TransportFault
     CorruptLeaseToken,
     ReverseLeaseOrder,
     IgnoreLeaseToken,
+    IgnoreLeaseOwner,
     AcceptStale,
     RejectCurrent,
     FabricateReopenList,

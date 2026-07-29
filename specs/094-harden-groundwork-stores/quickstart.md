@@ -1028,9 +1028,14 @@ The accepted remediation preserves distinct client and generation owners. It fir
 actual first-generation owner/token tuples are stale after takeover, then pairs each successor with
 the old token for the same transport item and attempts acknowledgement through the current
 successor owner. That second probe isolates token fencing from owner mismatch before the current
-token succeeds, and the `IgnoreLeaseToken` mutation must fail closed. The semantic surface guard
-now traverses `IExecutionCommandTransport` itself and explicitly permits only the provider-neutral
-types exposed by that public contract.
+token succeeds, and the `IgnoreLeaseToken` mutation must fail closed. The originating reviewer then
+found a replacement P1: those two probes still allowed a transport that ignored the owner while
+enforcing the token. The final candidate therefore also attempts each current token through its
+matched first-generation owner before current acknowledgement; the `IgnoreLeaseOwner` mutation
+must fail closed. Token and owner fencing are now isolated independently while the original stale
+tuple still proves their combined takeover boundary. The semantic surface guard now traverses
+`IExecutionCommandTransport` itself and explicitly permits only the provider-neutral types exposed
+by that public contract.
 
 ## 8. Readiness audit
 
