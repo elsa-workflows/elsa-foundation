@@ -260,7 +260,17 @@ public sealed class RuntimeOutboxDrainWorkload
                 var retry = retryClaims.Single(claim => claim.OutboxItemId == completed.OutboxItemId);
                 RequireCurrentClaim(actual, retry, "reopened retry");
             }
-            else if (actual is null || actual.Status != RuntimePostCommitOutboxStatus.Delivered || actual.DeliveryFencingToken != completed.FencingToken || actual.DeliveredAt is null)
+            else if (actual is null ||
+                     !StringComparer.Ordinal.Equals(actual.OutboxItemId, completed.OutboxItemId) ||
+                     actual.Status != RuntimePostCommitOutboxStatus.Delivered ||
+                     actual.AvailableAt is not null ||
+                     actual.DeliveryAttemptCount != 1 ||
+                     actual.DeliveringOwnerId is not null ||
+                     actual.DeliveryStartedAt is not null ||
+                     actual.DeliveredAt != FixedNowUtc.AddSeconds(1) ||
+                     actual.LastFailureMessage is not null ||
+                     actual.DeliveryFencingToken != completed.FencingToken ||
+                     actual.DeliveryVisibleAfter is not null)
             {
                 throw new InvalidOperationException("The reopened client did not expose the delivered outbox result.");
             }

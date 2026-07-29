@@ -48,6 +48,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
     [InlineData(OutboxFault.EarlyRetry)]
     [InlineData(OutboxFault.LateRetry)]
     [InlineData(OutboxFault.WrongReread)]
+    [InlineData(OutboxFault.WrongDeliveredIdentity)]
     public async Task Fails_closed_when_a_public_outbox_contract_surface_drifts(OutboxFault fault)
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -64,6 +65,23 @@ public sealed class RuntimeOutboxDrainWorkloadTests
 
         Assert.Contains("exact current public claim", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, adapter.Shared.ContentionClaims);
+    }
+
+    [Fact]
+    public async Task Return_only_delivered_identity_fabrication_reaches_exact_reopened_state_validation()
+    {
+        var adapter = new OutboxAdapter(OutboxFault.WrongDeliveredIdentity);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutboxDrainWorkload().ExecuteAsync(adapter).AsTask());
+
+        Assert.Contains("delivered outbox result", exception.Message, StringComparison.Ordinal);
+        var persisted = adapter.Shared.Items["outbox-due-0007"];
+        Assert.Equal("outbox-due-0007", persisted.OutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, persisted.Status);
+        Assert.Null(persisted.DeliveringOwnerId);
+        Assert.Null(persisted.DeliveryStartedAt);
+        Assert.Null(persisted.DeliveryVisibleAfter);
     }
 
     [Fact]
@@ -264,6 +282,24 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                 var item = _backing.Items.GetValueOrDefault(outboxItemId);
                 if (item is not null && _fault == OutboxFault.WrongReread)
                     item = Copy(item, deliveryFencingToken: item.DeliveryFencingToken + 1);
+                if (item is not null && _fault == OutboxFault.WrongDeliveredIdentity && item.Status == RuntimePostCommitOutboxStatus.Delivered)
+                {
+                    item = new RuntimePostCommitOutboxItem(
+                        "unrelated-delivered-item",
+                        item.Intent,
+                        item.Status,
+                        item.RecordedAt,
+                        item.AvailableAt,
+                        item.RetryPolicy,
+                        item.DeliveryAttemptCount,
+                        item.DeliveringOwnerId,
+                        item.DeliveryStartedAt,
+                        item.DeliveredAt,
+                        item.LastFailureMessage,
+                        item.Metadata,
+                        item.DeliveryFencingToken,
+                        item.DeliveryVisibleAfter);
+                }
                 return new(item);
             }
         }
@@ -298,5 +334,6 @@ public enum OutboxFault
     ResponseOnlyCompletion,
     EarlyRetry,
     LateRetry,
-    WrongReread
+    WrongReread,
+    WrongDeliveredIdentity
 }
