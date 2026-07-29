@@ -174,10 +174,22 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             lock (backing.Sync)
             {
                 backing.TryClaimCalls++;
-                if (!backing.Leases.TryGetValue(claim.WorkflowExecutionId, out var current) || current.IsExpired(now))
+                if (!backing.Leases.TryGetValue(claim.WorkflowExecutionId, out var current))
                     return new(Result(ExecutionPlacementClaimOutcome.Granted, Write(claim)));
+                if (current.IsExpired(now))
+                    return new(Result(
+                        ExecutionPlacementClaimOutcome.Granted,
+                        fault == PlacementAdapterFault.CrossClaimantGrant && claim.WorkflowExecutionId == "placement-expired-0001"
+                            ? WriteAsOtherContentionOwner(claim)
+                            : Write(claim)));
                 if (current.OwnerId == claim.OwnerId)
+                {
+                    if (fault == PlacementAdapterFault.CrossClaimantGrant &&
+                        claim.WorkflowExecutionId == "placement-expired-0001" &&
+                        current.PlacementToken == 2)
+                        return new(Result(ExecutionPlacementClaimOutcome.Denied, Copy(current)));
                     return new(Result(ExecutionPlacementClaimOutcome.Renewed, Write(claim)));
+                }
                 return new(Result(ExecutionPlacementClaimOutcome.Denied, Copy(current)));
             }
         }
@@ -227,6 +239,16 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             return lease;
         }
 
+        private ExecutionPlacementLease WriteAsOtherContentionOwner(ExecutionPlacementClaim claim)
+        {
+            var wrongOwner = claim.OwnerId == "worker-beta" ? "worker-gamma" : "worker-beta";
+            return Write(new ExecutionPlacementClaim(
+                claim.WorkflowExecutionId,
+                wrongOwner,
+                claim.RequestedAt,
+                claim.ExpiresAt));
+        }
+
         private bool IsExpiredContentionCandidate(string workflowExecutionId, DateTimeOffset now)
         {
             lock (backing.Sync)
@@ -251,14 +273,6 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
 
         private ExecutionPlacementClaimResult Result(ExecutionPlacementClaimOutcome outcome, ExecutionPlacementLease lease)
         {
-            if (fault == PlacementAdapterFault.CrossClaimantGrant &&
-                outcome == ExecutionPlacementClaimOutcome.Granted &&
-                lease.WorkflowExecutionId == "placement-expired-0001" &&
-                lease.PlacementToken == 2)
-            {
-                var wrongOwner = lease.OwnerId == "worker-beta" ? "worker-gamma" : "worker-beta";
-                return new(outcome, new ExecutionPlacementLease(lease.WorkflowExecutionId, wrongOwner, lease.PlacementToken, lease.AcquiredAt, lease.ExpiresAt));
-            }
             if (fault != PlacementAdapterFault.WrongClaimToken)
                 return new(outcome, lease);
             return new(outcome, new ExecutionPlacementLease(lease.WorkflowExecutionId, lease.OwnerId, lease.PlacementToken + 1, lease.AcquiredAt, lease.ExpiresAt));
