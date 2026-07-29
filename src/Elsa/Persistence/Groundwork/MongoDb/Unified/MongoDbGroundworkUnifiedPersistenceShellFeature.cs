@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.MongoDb.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceMongoDb",
     DisplayName = "Groundwork MongoDB Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set and the exact pre-applied schema are required at startup.",
+    Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required; safe missing document structures and diagnostic streams can be auto-applied at startup.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
@@ -45,7 +45,7 @@ public class MongoDbGroundworkUnifiedPersistenceShellFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Auto-apply schema on startup",
-        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Description = "When enabled, safe pending document-schema operations and missing diagnostic-record streams are applied automatically at startup instead of requiring Groundwork.Tool. Drift and destructive operations are never auto-applied.",
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 

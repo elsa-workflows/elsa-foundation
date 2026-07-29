@@ -318,6 +318,32 @@ resolution, source hashes, and retained-result hashes are in
 complete T045 and T049. They do not certify the four-provider promotion matrix, performance, or EF
 deletion; those remain under T050-T057.
 
+## Diagnostic-stream startup auto-apply follow-up (2026-07-28)
+
+Groundwork PR [#149](https://github.com/valence-works/groundwork/pull/149) added the public,
+provider-neutral `IDiagnosticRecordDeploymentApplier` and published it in `0.0.1-preview.94`. The
+four provider packages expose matching appliers, and Groundwork.Tool uses the same boundary.
+Appliers preflight every declared stream, reject definition drift before mutation, validate
+provider topology, materialize only missing streams, and require a ready postcondition.
+
+Elsa's four unified provider leaves now register that applier plus a shared diagnostic deployment
+initializer. The initializer runs in `LifecyclePhase.Prepare` at order `1`, after document-schema
+admission at order `0` and before diagnostics startup in the Default phase. It is active only when
+`AutoApplySchemaOnStartup` is enabled and the selected deployment source declares diagnostic
+streams. Runtime session factories remain read-only.
+
+Focused verification passed:
+
+- complete unified-host suite: **56/56**, including fresh SQLite creation, disabled-mode
+  `GW-DIAG-DEPLOY-001`, restart idempotency, drift refusal with `GW-DIAG-DEPLOY-002`, and all four
+  provider registrations;
+- shared diagnostics persistence: **168/168** (162 lifecycle/non-CLI plus 6 real CLI schema cases);
+- diagnostics Groundwork composition: **6/6**;
+- Structured Logs Groundwork adapter: **18/18**;
+- OpenTelemetry Groundwork adapter: **76/76**; and
+- `Elsa.Server` build: **0 errors** (existing `GW000*` migration warnings remain tracked outside
+  this correction).
+
 ## Host-composition independent review (2026-07-25)
 
 The correctness/mechanism and evidence-integrity reviewers first inspected exact pre-remediation

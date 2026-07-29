@@ -141,8 +141,11 @@ public static class GroundworkSqliteUnifiedRegistration
             autoApplyOnStartup,
             skipInspectionWhenPlanUnchanged,
             storeCacheOptions);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => SqliteDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),

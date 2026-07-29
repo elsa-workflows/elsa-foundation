@@ -153,6 +153,13 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                         inspectionConnection, manifestId, providerName, currentStamp, cancellationToken);
             }
 
+            // Groundwork's pragma-aware connection currently applies its options from synchronous Open().
+            // Admission uses asynchronous provider I/O, so explicitly reopen the already-admitted target
+            // through that override before operation stores suppress the persistent WAL pragma. This remains
+            // after the readiness verdict so rejected no-auto-apply admission stays side-effect free.
+            await inspectionConnection.CloseAsync();
+            inspectionConnection.Open();
+
             if (!sessionSource.IsInitialized)
             {
                 var manifest = source.CreateManifest();

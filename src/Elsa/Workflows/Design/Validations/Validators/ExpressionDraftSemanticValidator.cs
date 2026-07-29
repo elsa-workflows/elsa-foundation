@@ -85,15 +85,24 @@ public sealed class ExpressionDraftSemanticValidator(
 
     private static bool TryGetSource(object? value, out string source)
     {
-        source = value switch
+        switch (value)
         {
-            string text => text,
-            ExpressionDefinition definition => definition.Source,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString() ?? string.Empty,
-            JsonElement { ValueKind: JsonValueKind.Object } element when TryGetJsonSource(element, out var jsonSource) => jsonSource,
-            _ => string.Empty
-        };
-        return !string.IsNullOrEmpty(source);
+            case string text:
+                source = text;
+                return true;
+            case ExpressionDefinition definition:
+                source = definition.Source;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.String } element:
+                source = element.GetString() ?? string.Empty;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.Object } element when TryGetJsonSource(element, out var jsonSource):
+                source = jsonSource;
+                return true;
+            default:
+                source = string.Empty;
+                return false;
+        }
     }
 
     private static bool TryGetJsonSource(JsonElement element, out string source)

@@ -35,7 +35,11 @@ manifest only when the host explicitly selects it and uses the matching deployme
 OpenTelemetry: it selects both Groundwork adapters, contributes the combined diagnostics document schema,
 and selects a deployment schema that also exposes the five diagnostic-record streams. The selected unified
 provider leaf supplies the matching `IDiagnosticRecordStoreSessionFactory`; the streams must be applied by
-Groundwork.Tool before runtime admission. SQLite stays the default composition; PostgreSQL is opt-in via
+`Groundwork.Tool` before runtime admission when startup auto-apply is disabled. When
+`AutoApplySchemaOnStartup` is enabled, the unified provider also registers a provider-native
+`IDiagnosticRecordDeploymentApplier`: a `Prepare`-phase initializer creates only missing streams, rejects
+definition drift before mutation, and re-inspects the complete deployment before diagnostics startup.
+SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
 **Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema
@@ -52,6 +56,12 @@ bare `IServiceProvider` built without a host lifecycle (e.g. some tests) has no 
 it must drive it explicitly before the first provider operation. `IDocumentStore` resolves beforehand as a
 `GroundworkScopedDocumentStore`; its first operation throws a descriptive `InvalidOperationException` until the
 session source is admitted. Resolution itself never blocks or performs provider I/O.
+
+Unified providers register a second `Prepare` initializer at order `1`, after document admission at order `0`.
+It participates only when the selected deployment source declares diagnostic-record streams. With startup
+auto-apply disabled it performs no mutation and the existing diagnostics admission reports missing streams;
+with auto-apply enabled it calls the provider deployment applier. Runtime diagnostic session factories remain
+read-only in both modes.
 
 **Atomic runtime admission.** The runtime manifest declares the logical `runtime-checkpoint-commit` path on
 the `checkpointCommit` storage unit as requiring `AtomicCommit` plus observed

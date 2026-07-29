@@ -121,8 +121,11 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddPostgreSqlGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => PostgreSqlDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => PostgreSqlDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowRunHealth(
             _ => new Npgsql.NpgsqlConnection(connectionString),
