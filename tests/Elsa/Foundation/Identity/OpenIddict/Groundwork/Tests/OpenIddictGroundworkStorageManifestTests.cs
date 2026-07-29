@@ -30,4 +30,35 @@ public sealed class OpenIddictGroundworkStorageManifestTests
             route.RouteIdentity == OpenIddictGroundworkStorageManifest.FindTokenByReferenceIdQuery);
         Assert.Matches("^[A-Fa-f0-9]{64}$", OpenIddictGroundworkStorageManifest.Fingerprint);
     }
+
+    [Fact]
+    public void Authorization_and_token_projections_use_canonical_record_paths()
+    {
+        var authorizationPaths = OpenIddictGroundworkStorageManifest
+            .CreateAuthorizationDefinition()
+            .ProjectedColumns
+            .Select(column => column.Path)
+            .ToHashSet(StringComparer.Ordinal);
+        var tokenPaths = OpenIddictGroundworkStorageManifest
+            .CreateTokenDefinition()
+            .ProjectedColumns
+            .Select(column => column.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["applicationId", "creationDate", "scopes", "status", "subject", "type"],
+            authorizationPaths.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            [
+                "applicationId",
+                "authorizationId",
+                "creationDate",
+                "expirationDate",
+                "referenceId",
+                "status",
+                "subject",
+                "type"
+            ],
+            tokenPaths.Order(StringComparer.Ordinal));
+    }
 }

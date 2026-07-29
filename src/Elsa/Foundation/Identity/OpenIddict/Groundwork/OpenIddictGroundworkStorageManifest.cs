@@ -91,13 +91,15 @@ public static class OpenIddictGroundworkStorageManifest
     public static PhysicalTableDefinition CreateAuthorizationDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_authorizations",
         [
+            Column("applicationId", "applicationId", isNullable: true),
+            Column("creationDate", "creationDate", PortablePhysicalType.DateTime, isNullable: true),
             Column("subject", "subject", isNullable: true),
             Column("status", "status", isNullable: true),
-            Column("expiration", "expiration", PortablePhysicalType.DateTime),
+            Column("type", "type", isNullable: true),
             CollectionColumn("scope", "scopes")
         ],
         Envelope,
-        [Index(AuthorizationSubjectIndex.Identity, "subject", "status", "expiration")]);
+        [Index(AuthorizationSubjectIndex.Identity, "subject", "applicationId", "status", "type")]);
 
     public static PhysicalTableDefinition CreateScopeDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_scopes",
@@ -111,15 +113,19 @@ public static class OpenIddictGroundworkStorageManifest
     public static PhysicalTableDefinition CreateTokenDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_tokens",
         [
+            Column("applicationId", "applicationId", isNullable: true),
+            Column("authorizationId", "authorizationId", isNullable: true),
+            Column("creationDate", "creationDate", PortablePhysicalType.DateTime, isNullable: true),
+            Column("expirationDate", "expirationDate", PortablePhysicalType.DateTime, isNullable: true),
             Column("referenceId", "referenceId", isNullable: true),
             Column("subject", "subject", isNullable: true),
             Column("status", "status", isNullable: true),
-            Column("expiration", "expiration", PortablePhysicalType.DateTime)
+            Column("type", "type", isNullable: true)
         ],
         Envelope,
         [
             UniqueIndex(TokenReferenceIndex.Identity, "referenceId"),
-            Index(TokenSubjectIndex.Identity, "subject", "status", "expiration")
+            Index(TokenSubjectIndex.Identity, "subject", "status", "expirationDate")
         ]);
 
     private static readonly DocumentEnvelopeDefinition Envelope = new();
@@ -130,7 +136,7 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly LogicalIndexDeclaration ApplicationPostLogoutRedirectUriIndex =
         CollectionIndex("openiddict-application-by-post-logout-redirect-uri", "postLogoutRedirectUris");
     private static readonly LogicalIndexDeclaration AuthorizationSubjectIndex = CompoundIndex(
-        "openiddict-authorization-by-subject-status-expiration", "subject", "status", "expiration");
+        "openiddict-authorization-by-subject-application-status-type", "subject", "applicationId", "status", "type");
     private static readonly LogicalIndexDeclaration AuthorizationScopeIndex =
         CollectionIndex("openiddict-authorization-by-scope", "scopes");
     private static readonly LogicalIndexDeclaration ScopeNameIndex = KeywordIndex("openiddict-scope-by-name", "name", unique: true);
@@ -138,7 +144,7 @@ public static class OpenIddictGroundworkStorageManifest
         CollectionIndex("openiddict-scope-by-resource", "resources");
     private static readonly LogicalIndexDeclaration TokenReferenceIndex = KeywordIndex("openiddict-token-by-reference-id", "referenceId", unique: true);
     private static readonly LogicalIndexDeclaration TokenSubjectIndex = CompoundIndex(
-        "openiddict-token-by-subject-status-expiration", "subject", "status", "expiration");
+        "openiddict-token-by-subject-status-expiration", "subject", "status", "expirationDate");
 
     private static readonly BoundedQueryDeclaration ClientIdQuery = PointQuery(FindApplicationByClientIdQuery, ClientIdIndex);
     private static readonly BoundedQueryDeclaration ApplicationRedirectUriQuery =
@@ -214,7 +220,7 @@ public static class OpenIddictGroundworkStorageManifest
 
     private static LogicalIndexDeclaration CompoundIndex(string identity, params string[] paths) =>
         new(identity,
-            paths.Select(path => new IndexField(path, path == "expiration" ? IndexValueKind.DateTime : IndexValueKind.Keyword)).ToArray(),
+            paths.Select(path => new IndexField(path, path == "expirationDate" ? IndexValueKind.DateTime : IndexValueKind.Keyword)).ToArray(),
             IndexValueKind.Keyword,
             isUnique: false,
             MissingValueBehavior.Excluded);
@@ -264,6 +270,6 @@ public static class OpenIddictGroundworkStorageManifest
             field.Path,
             new HashSet<PortableQueryOperation>
             {
-                field.Path == "expiration" ? PortableQueryOperation.LessThanOrEqual : PortableQueryOperation.Equal
+                field.Path == "expirationDate" ? PortableQueryOperation.LessThanOrEqual : PortableQueryOperation.Equal
             })).ToArray());
 }

@@ -121,12 +121,13 @@ Container-free verification on the replay head:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --logger 'console;verbosity=minimal'
-# 31 passed
+# 32 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
-  -c Release --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests' \
+  -c Release \
+  --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests|FullyQualifiedName~ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments' \
   --logger 'console;verbosity=minimal'
-# 4 passed
+# 5 passed
 ```
 
 The post-review candidate substantiates T009, T018, and T019 on current
@@ -184,12 +185,13 @@ Root verification after those dispositions and the router revert:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --no-build --no-restore --logger 'console;verbosity=minimal'
-# 31 passed
+# 32 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
-  -c Release --no-restore --filter OpenIddictPersistenceArchitectureTests \
+  -c Release --no-restore \
+  --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests|FullyQualifiedName~ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments' \
   --logger 'console;verbosity=minimal'
-# 4 passed
+# 5 passed
 
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   -c Release --no-build --no-restore \
