@@ -35,6 +35,7 @@ public sealed class RuntimeQueueDrainWorkloadTests
     [InlineData(QueueFault.ResponseOnlySeed)]
     [InlineData(QueueFault.UnderfillWorkflowPage)]
     [InlineData(QueueFault.ReverseWorkflowPage)]
+    [InlineData(QueueFault.CrossClaimantGrant)]
     [InlineData(QueueFault.ReturnShiftedClaimTime)]
     [InlineData(QueueFault.ReturnCorruptedClaimItem)]
     [InlineData(QueueFault.DuplicateActiveClaimInspection)]
@@ -64,7 +65,7 @@ public sealed class RuntimeQueueDrainWorkloadTests
         var allowed = new HashSet<Type>
         {
             typeof(void), typeof(bool), typeof(int), typeof(string), typeof(object), typeof(CancellationToken),
-            typeof(ValueTask<>), typeof(IRuntimeQueueDrainWorkloadAdapter), typeof(RuntimeQueueDrainClients),
+            typeof(ValueTask<>), typeof(IEquatable<>), typeof(IRuntimeQueueDrainWorkloadAdapter), typeof(RuntimeQueueDrainClients),
             typeof(RuntimeQueueDrainClient), typeof(IWorkflowSchedulerWorkQueue), typeof(IWorkflowSchedulerPoisonStore),
             typeof(IWorkflowSchedulerWorkClaimInspection)
         };
@@ -78,7 +79,9 @@ public sealed class RuntimeQueueDrainWorkloadTests
             .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType))
             .Concat(type.GetConstructors().SelectMany(constructor => constructor.GetParameters()).Select(parameter => parameter.ParameterType))
             .Concat(type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
-                .Select(property => property.PropertyType));
+                .Select(property => property.PropertyType))
+            .Concat(type.GetInterfaces())
+            .Concat(type.BaseType is null ? [] : [type.BaseType]);
 
     private static IEnumerable<Type> ExpandType(Type type)
     {
@@ -185,7 +188,16 @@ public sealed class RuntimeQueueDrainWorkloadTests
         {
             if (request.OwnerId.StartsWith("queue-contender-", StringComparison.Ordinal))
                 Interlocked.Increment(ref _backing.ContentionAttempts);
-            var claim = await _backing.Queue.ClaimAsync(request, cancellationToken);
+            var effectiveRequest = request;
+            if (_fault == QueueFault.CrossClaimantGrant && request.OwnerId.StartsWith("queue-contender-", StringComparison.Ordinal))
+            {
+                effectiveRequest = new RuntimeSchedulerWorkClaimRequest(
+                    request.WorkflowExecutionId,
+                    request.OwnerId == "queue-contender-0" ? "queue-contender-1" : "queue-contender-0",
+                    request.Now,
+                    request.VisibilityTimeout);
+            }
+            var claim = await _backing.Queue.ClaimAsync(effectiveRequest, cancellationToken);
             if (claim is not null && request.OwnerId.StartsWith("queue-contender-", StringComparison.Ordinal))
                 _backing.InitialWinnerClientIndexes[request.WorkflowExecutionId] = _clientIndex;
             if (claim is not null && request.OwnerId == "queue-successor" &&
@@ -287,6 +299,7 @@ public enum QueueFault
     ResponseOnlySeed,
     UnderfillWorkflowPage,
     ReverseWorkflowPage,
+    CrossClaimantGrant,
     ReturnShiftedClaimTime,
     ReturnCorruptedClaimItem,
     DuplicateActiveClaimInspection,

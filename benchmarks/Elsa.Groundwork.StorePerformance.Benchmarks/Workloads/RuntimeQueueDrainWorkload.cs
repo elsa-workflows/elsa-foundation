@@ -53,23 +53,25 @@ public sealed class RuntimeQueueDrainWorkload
         if (!workflowIds.SequenceEqual(expectedWorkflowIds, StringComparer.Ordinal))
             throw new InvalidOperationException("The public queue did not return the exact bounded deterministic workflow-id page.");
 
-        var initialClaims = await ClaimContentionAsync(clients, expectedWorkflowIds, FixedNowUtc, PrimaryVisibility, "queue-contender", cancellationToken);
-        RequireExactClaims(initialClaims, expectedWorkflowIds, "queue-contender", expectedFence: 1, FixedNowUtc, PrimaryVisibility);
+        var contentionWinners = await ClaimContentionAsync(clients, expectedWorkflowIds, FixedNowUtc, PrimaryVisibility, "queue-contender", cancellationToken);
+        var initialClaims = contentionWinners.Select(winner => winner.Claim).ToArray();
+        RequireExactClaims(contentionWinners, expectedWorkflowIds, "queue-contender", expectedFence: 1, FixedNowUtc, PrimaryVisibility);
         await RequireExactActiveClaimsAsync(clients.Secondary.Claims, initialClaims, FixedNowUtc, "contention", cancellationToken);
         operations.Add("claim-bounded-batch");
 
-        var normalClaims = initialClaims.Take(BatchSize - RetryableItems - PoisonItems).ToArray();
-        var retryClaims = initialClaims.Skip(normalClaims.Length).Take(RetryableItems).ToArray();
-        var poisonClaims = initialClaims.Skip(normalClaims.Length + retryClaims.Length).ToArray();
-        foreach (var claim in normalClaims)
-            RequireApplied(await WinningClient(clients, claim).Queue.CompleteClaimAsync(claim, cancellationToken), "complete current scheduler claim");
+        var normalWinners = contentionWinners.Take(BatchSize - RetryableItems - PoisonItems).ToArray();
+        var retryWinners = contentionWinners.Skip(normalWinners.Length).Take(RetryableItems).ToArray();
+        var poisonWinners = contentionWinners.Skip(normalWinners.Length + retryWinners.Length).ToArray();
+        foreach (var winner in normalWinners)
+            RequireApplied(await winner.WinningClient.Queue.CompleteClaimAsync(winner.Claim, cancellationToken), "complete current scheduler claim");
         operations.Add("complete-current-claims");
 
         var successorNow = FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1);
         var successors = new List<RuntimeSchedulerWorkClaim>();
-        foreach (var claim in retryClaims)
+        foreach (var winner in retryWinners)
         {
-            var successor = await LosingClient(clients, claim).Queue.ClaimAsync(
+            var claim = winner.Claim;
+            var successor = await winner.LosingClient.Queue.ClaimAsync(
                 new RuntimeSchedulerWorkClaimRequest(claim.Item.WorkflowExecutionId, "queue-successor", successorNow, SuccessorVisibility),
                 cancellationToken);
             if (successor is null)
@@ -81,12 +83,12 @@ public sealed class RuntimeQueueDrainWorkload
         }
         operations.Add("retry-expired-claim");
 
-        foreach (var claim in poisonClaims)
+        foreach (var winner in poisonWinners)
         {
-            var winningClient = WinningClient(clients, claim);
-            RequireApplied(await winningClient.Queue.CompleteClaimAsync(claim, cancellationToken), "acknowledge poison scheduler claim");
+            var claim = winner.Claim;
+            RequireApplied(await winner.WinningClient.Queue.CompleteClaimAsync(claim, cancellationToken), "acknowledge poison scheduler claim");
             var record = CreatePoisonRecord(claim.Item, successorNow.AddSeconds(1));
-            var stored = await winningClient.Poison.RecordAsync(record, cancellationToken);
+            var stored = await winner.WinningClient.Poison.RecordAsync(record, cancellationToken);
             RequirePoisonRecord(stored, record);
             RequirePoisonRecord(
                 await clients.Primary.Poison.FindAsync(record.WorkflowExecutionId, record.WorkItemId, cancellationToken),
@@ -95,12 +97,12 @@ public sealed class RuntimeQueueDrainWorkload
         var poisonRecords = await clients.Primary.Poison.ListAsync(WorkflowId(BatchSize - PoisonItems), cancellationToken);
         if (poisonRecords.Count != 1)
             throw new InvalidOperationException("The public poison-store list did not expose the recorded poison state.");
-        RequirePoisonRecord(poisonRecords.Single(), CreatePoisonRecord(poisonClaims[0].Item, successorNow.AddSeconds(1)));
+        RequirePoisonRecord(poisonRecords.Single(), CreatePoisonRecord(poisonWinners[0].Claim.Item, successorNow.AddSeconds(1)));
         operations.Add("record-and-read-poison-state");
 
-        foreach (var claim in retryClaims)
+        foreach (var winner in retryWinners)
         {
-            var result = await WinningClient(clients, claim).Queue.CompleteClaimAsync(claim, cancellationToken);
+            var result = await winner.WinningClient.Queue.CompleteClaimAsync(winner.Claim, cancellationToken);
             if (result.Status != RuntimeSchedulerWorkClaimTransitionStatus.Stale)
                 throw new InvalidOperationException("The scheduler queue accepted a stale acknowledgement.");
         }
@@ -110,7 +112,13 @@ public sealed class RuntimeQueueDrainWorkload
         var reopened = await adapter.ReopenClientAsync(cancellationToken);
         if (reopened is null || !IsDistinctClient(reopened, clients.Primary) || !IsDistinctClient(reopened, clients.Secondary))
             throw new InvalidOperationException("The queue workload adapter must reopen a genuinely distinct public-store client.");
-        await RequireReopenedStateAsync(reopened, normalClaims, poisonClaims, successors, successorNow, cancellationToken);
+        await RequireReopenedStateAsync(
+            reopened,
+            normalWinners.Select(winner => winner.Claim).ToArray(),
+            poisonWinners.Select(winner => winner.Claim).ToArray(),
+            successors,
+            successorNow,
+            cancellationToken);
 
         if (!operations.SequenceEqual(scenario.OperationSequence, StringComparer.Ordinal))
             throw new InvalidOperationException("The queue workload operation order no longer matches the catalog contract.");
@@ -118,10 +126,10 @@ public sealed class RuntimeQueueDrainWorkload
         var actualObservations = new SortedDictionary<string, object>(StringComparer.Ordinal)
         {
             ["claimedIdentityDigest"] = Hash(JsonSerializer.Serialize(initialClaims.Select(claim => claim.Item.WorkItemId), CanonicalJson)),
-            ["completedItemCount"] = normalClaims.Length,
-            ["currentOwnerCount"] = initialClaims.Count,
-            ["poisonItemCount"] = poisonClaims.Length,
-            ["retryableItemCount"] = retryClaims.Length,
+            ["completedItemCount"] = normalWinners.Length,
+            ["currentOwnerCount"] = initialClaims.Length,
+            ["poisonItemCount"] = poisonWinners.Length,
+            ["retryableItemCount"] = retryWinners.Length,
             ["staleAcknowledgementRejected"] = true
         };
         if (!ObservationsMatch(actualObservations, scenario.CreateExpectedObservations()))
@@ -156,7 +164,7 @@ public sealed class RuntimeQueueDrainWorkload
         return Scenario;
     }
 
-    private static async ValueTask<IReadOnlyList<RuntimeSchedulerWorkClaim>> ClaimContentionAsync(
+    private static async ValueTask<IReadOnlyList<QueueContentionWinner>> ClaimContentionAsync(
         RuntimeQueueDrainClients clients,
         IReadOnlyList<string> workflowIds,
         DateTimeOffset now,
@@ -164,26 +172,35 @@ public sealed class RuntimeQueueDrainWorkload
         string ownerPrefix,
         CancellationToken cancellationToken)
     {
-        var claims = new List<RuntimeSchedulerWorkClaim>();
+        var claims = new List<QueueContentionWinner>();
         foreach (var workflowId in workflowIds)
         {
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var readyCount = 0;
-            var contenders = new[] { clients.Primary.Queue, clients.Secondary.Queue }
-                .Select(async (queue, index) =>
+            var contenders = new[] { clients.Primary, clients.Secondary }
+                .Select(async (client, index) =>
                 {
                     if (Interlocked.Increment(ref readyCount) == ConcurrentClaimants)
                         ready.TrySetResult();
                     await release.Task.WaitAsync(cancellationToken);
-                    return await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(workflowId, $"{ownerPrefix}-{index}", now, visibility), cancellationToken);
+                    var requestedOwner = $"{ownerPrefix}-{index}";
+                    var claim = await client.Queue.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(workflowId, requestedOwner, now, visibility),
+                        cancellationToken);
+                    return (Client: client, RequestedOwner: requestedOwner, Claim: claim);
                 }).ToArray();
             await ready.Task.WaitAsync(cancellationToken);
             release.TrySetResult();
-            var winner = (await Task.WhenAll(contenders)).OfType<RuntimeSchedulerWorkClaim>().ToArray();
-            if (winner.Length != 1)
+            var attempts = await Task.WhenAll(contenders);
+            var winners = attempts.Where(attempt => attempt.Claim is not null).ToArray();
+            if (winners.Length != 1)
                 throw new InvalidOperationException("Concurrent scheduler claimants did not converge to one current owner.");
-            claims.Add(winner[0]);
+            var winner = winners.Single();
+            if (winner.Claim!.OwnerId != winner.RequestedOwner)
+                throw new InvalidOperationException("The scheduler queue granted a claim under an owner other than the requesting contender.");
+            var losingClient = ReferenceEquals(winner.Client, clients.Primary) ? clients.Secondary : clients.Primary;
+            claims.Add(new QueueContentionWinner(winner.Claim, winner.Client, losingClient));
         }
         return claims;
     }
@@ -251,18 +268,18 @@ public sealed class RuntimeQueueDrainWorkload
     }
 
     private static void RequireExactClaims(
-        IReadOnlyList<RuntimeSchedulerWorkClaim> claims,
+        IReadOnlyList<QueueContentionWinner> winners,
         IReadOnlyList<string> workflowIds,
         string ownerPrefix,
         long expectedFence,
         DateTimeOffset expectedNow,
         TimeSpan expectedVisibility)
     {
-        if (claims.Count != workflowIds.Count || claims.Select(claim => claim.Item.WorkItemId).Distinct(StringComparer.Ordinal).Count() != workflowIds.Count)
+        if (winners.Count != workflowIds.Count || winners.Select(winner => winner.Claim.Item.WorkItemId).Distinct(StringComparer.Ordinal).Count() != workflowIds.Count)
             throw new InvalidOperationException("The public queue claim did not return one bounded current ownership result per workflow.");
         for (var index = 0; index < workflowIds.Count; index++)
         {
-            var claim = claims[index];
+            var claim = winners[index].Claim;
             if (!(claim.OwnerId is "queue-contender-0" or "queue-contender-1"))
                 throw new InvalidOperationException("The public queue contention claim exposed an undeclared owner.");
             RequireExactClaim(claim, CreateSeedItems(index)[0], claim.OwnerId, expectedFence, expectedNow, expectedVisibility);
@@ -316,17 +333,6 @@ public sealed class RuntimeQueueDrainWorkload
             throw new InvalidOperationException("The queue workload adapter must open two distinct public-store clients over shared backing.");
     }
 
-    private static RuntimeQueueDrainClient WinningClient(RuntimeQueueDrainClients clients, RuntimeSchedulerWorkClaim claim) =>
-        claim.OwnerId switch
-        {
-            "queue-contender-0" => clients.Primary,
-            "queue-contender-1" => clients.Secondary,
-            _ => throw new InvalidOperationException("The scheduler claim owner cannot be mapped to its originating public client.")
-        };
-
-    private static RuntimeQueueDrainClient LosingClient(RuntimeQueueDrainClients clients, RuntimeSchedulerWorkClaim claim) =>
-        ReferenceEquals(WinningClient(clients, claim), clients.Primary) ? clients.Secondary : clients.Primary;
-
     private static bool IsDistinctClient(RuntimeQueueDrainClient first, RuntimeQueueDrainClient second) =>
         !ReferenceEquals(first, second) && !ReferenceEquals(first.Queue, second.Queue) && !ReferenceEquals(first.Poison, second.Poison) && !ReferenceEquals(first.Claims, second.Claims);
 
@@ -361,6 +367,11 @@ public sealed class RuntimeQueueDrainWorkload
     private static bool ObservationsMatch(IReadOnlyDictionary<string, object> actual, IReadOnlyDictionary<string, object> expected) =>
         actual.Count == expected.Count && actual.All(pair => expected.TryGetValue(pair.Key, out var value) && JsonSerializer.Serialize(pair.Value, CanonicalJson) == JsonSerializer.Serialize(value, CanonicalJson));
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private sealed record QueueContentionWinner(
+        RuntimeSchedulerWorkClaim Claim,
+        RuntimeQueueDrainClient WinningClient,
+        RuntimeQueueDrainClient LosingClient);
 }
 
 /// <summary>Creates distinct public runtime-store clients over one adapter-owned backing.</summary>

@@ -944,8 +944,8 @@ compared only three work-item members and did not reread the unselected 112 work
 candidate compares every public work-item member, rereads all 4,096 items through the independently
 opened client, inspects the persisted single-winner result of every contention, adds a response-only
 final-seed rejection test, and compares the full poison record returned by `ListAsync`. The focused
-queue suite is **16/16**, the complete benchmark-harness test
-project is **230/230**, the benchmark project warnings-as-errors build is clean, both changed-code
+queue suite is **17/17**, the complete benchmark-harness test
+project is **231/231**, the benchmark project warnings-as-errors build is clean, both changed-code
 path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
 correctness checks; provider and restart evidence remain deliberately unclaimed.
 
@@ -961,6 +961,15 @@ and stale acknowledgements use the actual original winner, with exact takeover c
 adapter signature test now recursively permits only an explicit provider-neutral type set. The
 initial evidence PASS is retained as historical review evidence but is not treated as final-head
 approval.
+
+The first final-head pass over `8c1c27e..7a675dd` produced PASS verdicts on correctness and evidence
+but the scope/test-preservation reviewer found that the race discarded requester identity, allowing
+a cross-claimant owner grant to masquerade as the other client’s win. That reviewer also found that
+the semantic provider-neutrality check omitted inherited interfaces and base types. Both findings
+were accepted, superseding all verdicts on that head: each contention result now carries the actual
+requesting, winning, and losing client; the returned owner must equal that request’s owner; a
+cross-claimant-grant mutation fails closed; and the explicit type traversal includes inherited
+interfaces and base types (with only the records’ provider-neutral `IEquatable<T>` shape allowed).
 
 ## 8. Readiness audit
 
