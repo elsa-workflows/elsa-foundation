@@ -329,6 +329,26 @@ public sealed class OpenIddictGroundworkTokenDocumentCoreTests
         Assert.NotNull(serializationException.InnerException);
     }
 
+    [Fact]
+    public async Task Query_enumeration_translates_lease_disposal_failures()
+    {
+        var documents = new InMemoryDocumentStore(
+            OpenIddictGroundworkStorageManifest.Create(),
+            DocumentStoreAccess.Global);
+        var leaseFailure = new ScriptedQueryException();
+        var core = CreateCore(CreateAdmittedFactory(
+            new ScriptedSessionFactory(
+                documents,
+                new ScriptedBoundedDocumentStore(),
+                new ThrowingLease(leaseFailure))));
+
+        var exception = await Assert.ThrowsAsync<OpenIddictGroundworkProviderException>(() =>
+            ToListAsync(CallEnumerable(core, "ListAsync", 1, 0, CancellationToken.None)));
+
+        Assert.Equal("token.ListAsync.dispose", exception.Operation);
+        Assert.Same(leaseFailure, exception.InnerException);
+    }
+
     private static async Task<OpenIddictGroundworkToken> CreateTokenAsync(
         object core,
         string id,
@@ -446,7 +466,8 @@ public sealed class OpenIddictGroundworkTokenDocumentCoreTests
 
     private sealed class ScriptedSessionFactory(
         IDocumentStore documents,
-        IBoundedDocumentStore queries) : IGroundworkStoreSessionFactory
+        IBoundedDocumentStore queries,
+        IAsyncDisposable? lease = null) : IGroundworkStoreSessionFactory
     {
         public ValueTask<GroundworkStoreSession> CreateAsync(
             PersistenceAccessPolicy requiredPolicy,
@@ -459,7 +480,7 @@ public sealed class OpenIddictGroundworkTokenDocumentCoreTests
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(new GroundworkStoreSession(
                 documents.Access,
-                new GroundworkStoreSessionResources(documents, queries)));
+                new GroundworkStoreSessionResources(documents, queries, lease)));
         }
 
         public ValueTask<TResult> ExecutePrivilegedAsync<TResult>(
@@ -471,6 +492,11 @@ public sealed class OpenIddictGroundworkTokenDocumentCoreTests
             Func<GroundworkStoreSession, CancellationToken, ValueTask<TResult>> operation,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingLease(Exception exception) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ValueTask.FromException(exception);
     }
 
     private sealed class ScriptedBoundedDocumentStore(

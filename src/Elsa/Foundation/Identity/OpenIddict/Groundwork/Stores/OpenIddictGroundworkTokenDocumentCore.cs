@@ -326,55 +326,62 @@ internal sealed class OpenIddictGroundworkTokenDocumentCore(
         [EnumeratorCancellation] CancellationToken cancellationToken,
         bool singlePage)
     {
-        await using var session = await sessions.CreateAsync(cancellationToken);
+        var session = await sessions.CreateAsync(cancellationToken);
         var skip = query.Skip ?? 0;
         var remaining = query.Take;
-        while (true)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var take = singlePage
-                ? remaining
-                : remaining is null
-                    ? TraversalPageSize
-                    : Math.Min(TraversalPageSize, remaining.Value);
-            DocumentQueryResult page;
-            try
+            while (true)
             {
-                page = await session.BoundedDocumentStore.QueryAsync(
-                    query.Page(skip, take),
-                    cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                throw Translate(exception, operation);
-            }
-
-            foreach (var document in page.Documents)
-            {
-                OpenIddictGroundworkToken token;
+                cancellationToken.ThrowIfCancellationRequested();
+                var take = singlePage
+                    ? remaining
+                    : remaining is null
+                        ? TraversalPageSize
+                        : Math.Min(TraversalPageSize, remaining.Value);
+                DocumentQueryResult page;
                 try
                 {
-                    token = DeserializeRelationshipFree(document, operation);
+                    page = await session.BoundedDocumentStore.QueryAsync(
+                        query.Page(skip, take),
+                        cancellationToken);
                 }
                 catch (Exception exception)
                 {
                     throw Translate(exception, operation);
                 }
 
-                yield return token;
-            }
+                foreach (var document in page.Documents)
+                {
+                    OpenIddictGroundworkToken token;
+                    try
+                    {
+                        token = DeserializeRelationshipFree(document, operation);
+                    }
+                    catch (Exception exception)
+                    {
+                        throw Translate(exception, operation);
+                    }
 
-            skip += page.Documents.Count;
-            if (singlePage ||
-                page.Documents.Count == 0 ||
-                skip >= page.TotalCount ||
-                remaining is not null && page.Documents.Count >= remaining.Value)
-            {
-                yield break;
-            }
+                    yield return token;
+                }
 
-            if (remaining is not null)
-                remaining -= page.Documents.Count;
+                skip += page.Documents.Count;
+                if (singlePage ||
+                    page.Documents.Count == 0 ||
+                    skip >= page.TotalCount ||
+                    remaining is not null && page.Documents.Count >= remaining.Value)
+                {
+                    yield break;
+                }
+
+                if (remaining is not null)
+                    remaining -= page.Documents.Count;
+            }
+        }
+        finally
+        {
+            await OpenIddictGroundworkStoreSessionFactory.DisposeAsync(session, operation);
         }
     }
 

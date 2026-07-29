@@ -172,7 +172,7 @@ Container-free verification on the replay head:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --logger 'console;verbosity=minimal'
-# 56 passed
+# 58 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   -c Release --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests' \
@@ -180,7 +180,7 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
 # 4 passed
 ```
 
-The post-review candidate substantiates T009, T010, T018, and T019 on current
+The post-review candidate substantiates T009, T018, and T019 on current
 Elsa main.
 It does not close T006, T011-T013, T016-T017, T020-T022, any complete token or
 registry-store task, provider conformance, host acceptance, performance, or EF
@@ -197,7 +197,10 @@ The correctness review found that the capability probe bypassed manifest
 admission for a raw physical mutation, that authorization and token projection
 paths did not match the serialized canonical JSON, that package reporting was
 hard-coded to an obsolete preview, and that a Scope lease could be disposed
-outside the adapter exception boundary. The remediation:
+outside the adapter exception boundary. Re-verification then found that the
+token query iterator still had the same disposal gap and that Scope readiness
+was no longer preserved after moving session acquisition inside its mapped
+boundary. The remediation:
 
 - removed the false mutation proof and reopened T005/T006;
 - corrected authorization/token projections, indexes, and token ID tie-breaks,
@@ -205,19 +208,19 @@ outside the adapter exception boundary. The remediation:
 - now derives the reported Groundwork version from
   `Directory.Packages.props`;
 - moved Scope lease lifetime into the adapter boundary and added explicit
-  disposal exception/cancellation mapping tests; and
-- retained the token-core lease structure because its `await using` already
-  sits inside the mapped `try` boundary; the originating reviewer must verify
-  that disposition.
+  disposal exception/cancellation mapping tests;
+- preserves Scope readiness failures through its public store methods; and
+- gives the token query iterator the same explicit mapped-disposal boundary.
 
 The evidence review found that T005 was not reproducible, T010 did not exercise
 all descriptor fields and corrupt/future envelopes, T035/T040 had advanced
 without T006 or durable red-before-green evidence, the claimed 55-objective
 inventory command returned only 52 paths, and the #143 research note was stale.
-The remediation reopened T005, T035, and T040; expanded the codec matrix; fixed
-the inventory command to return exactly 55 paths including the three named
-shared-host module tests; and records #143 as delivered in the configured
-preview.95 family while keeping exact-family recertification open.
+The remediation reopened T005, T010, T035, and T040; retained the expanded codec
+matrix as candidate source without claiming its missing red-before-green
+evidence; fixed the inventory command to return exactly 55 paths including the
+three named shared-host module tests; and records #143 as delivered in the
+configured preview.95 family while keeping exact-family recertification open.
 
 The scope-preservation review additionally found that a cross-provider bounded
 mutation router introduced an unconsumed, high-blast prerequisite unrelated to
@@ -230,7 +233,7 @@ Root verification after those dispositions and the router revert:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --no-build --no-restore --logger 'console;verbosity=minimal'
-# 56 passed
+# 58 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   -c Release --no-restore --filter OpenIddictPersistenceArchitectureTests \

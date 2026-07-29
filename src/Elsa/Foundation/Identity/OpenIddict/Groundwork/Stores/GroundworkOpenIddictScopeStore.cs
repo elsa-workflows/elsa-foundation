@@ -522,6 +522,7 @@ public sealed class GroundworkOpenIddictScopeStore(
         exception is OperationCanceledException or OpenIddictExceptions.ConcurrencyException
             or OpenIddictGroundworkCapabilityException
             or OpenIddictGroundworkProviderException
+            or OpenIddictGroundworkReadinessException
             or OpenIddictGroundworkSerializationException
             ? exception
             : OpenIddictGroundworkFailureMapper.Translate(exception, operation);

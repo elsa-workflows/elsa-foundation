@@ -35,6 +35,21 @@ public sealed class OpenIddictGroundworkStoreSessionFactoryTests
     }
 
     [Fact]
+    public async Task Scope_store_preserves_readiness_from_session_acquisition()
+    {
+        var sessions = new StubSessionFactory();
+        var store = new GroundworkOpenIddictScopeStore(
+            new OpenIddictGroundworkStoreSessionFactory(
+                new GroundworkStoreSessionSource(),
+                sessions));
+
+        await Assert.ThrowsAsync<OpenIddictGroundworkReadinessException>(() =>
+            store.CountAsync(CancellationToken.None).AsTask());
+
+        Assert.Equal(0, sessions.OpenCount);
+    }
+
+    [Fact]
     public async Task Admitted_publication_opens_only_the_ordinary_global_session()
     {
         var source = new GroundworkStoreSessionSource();
