@@ -15,6 +15,7 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 public sealed class RuntimeRecurringScheduleSelectionWorkload
 {
     private const string AdvancedScheduleId = "schedule-due-0000";
+    private const int ProjectionPublicationIndex = 0;
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -57,16 +58,26 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         RequireDueSchedules(allDue, ExpectedDueSchedules(dueAt), "full finite due page");
         operations.Add("list-bounded-due-schedules");
 
-        var projections = await clients.Primary.ListByPublicationPageAsync(
-            new RecurringTriggerSchedulePublicationPageQuery(PublicationId(0), PageSize),
+        var firstProjectionPage = await LoadAndVerifyPublicationProjectionsAsync(
+            clients.Primary,
+            advancedOccurrence: null,
             cancellationToken);
-        RequireProjectionPage(projections, "publication projection page");
         operations.Add("load-publication-projections");
 
-        await RequireSingleAdvanceWinnerAsync(clients, AdvancedScheduleId, dueAt, advancedTo, cancellationToken);
+        var persistedAdvance = await RequireSingleAdvanceWinnerAsync(
+            clients,
+            AdvancedScheduleId,
+            dueAt,
+            advancedTo,
+            cancellationToken);
         operations.Add("advance-current-schedule");
 
-        if (await clients.Primary.TryAdvanceAsync(AdvancedScheduleId, dueAt, FixedNowUtc.AddHours(2), cancellationToken))
+        var staleAdvanceAccepted = await clients.Primary.TryAdvanceAsync(
+            AdvancedScheduleId,
+            dueAt,
+            FixedNowUtc.AddHours(2),
+            cancellationToken);
+        if (staleAdvanceAccepted)
             throw new InvalidOperationException("The recurring-schedule workload accepted a stale advance.");
         RequireAdvancedSchedule(await clients.Primary.FindAsync(AdvancedScheduleId, cancellationToken), AdvancedScheduleId, advancedTo, "post-stale-retry lookup");
         operations.Add("attempt-stale-advance");
@@ -78,10 +89,10 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         RequireAdvancedSchedule(reopenedTarget, AdvancedScheduleId, advancedTo, "reopened schedule lookup");
         var reopenedDue = await reopened.ListDueAsync(FixedNowUtc, DueSchedules, cancellationToken);
         RequireDueSchedules(reopenedDue, ExpectedDueSchedules(dueAt).Skip(1), "reopened due schedules");
-        var reopenedProjection = await reopened.ListByPublicationPageAsync(
-            new RecurringTriggerSchedulePublicationPageQuery(PublicationId(0), PageSize),
+        var reopenedFirstProjectionPage = await LoadAndVerifyPublicationProjectionsAsync(
+            reopened,
+            advancedTo,
             cancellationToken);
-        RequireProjectionPage(reopenedProjection, "reopened publication projection page");
         operations.Add("reopen-and-read-projection-state");
 
         if (!operations.SequenceEqual(scenario.OperationSequence, StringComparer.Ordinal))
@@ -89,15 +100,15 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
 
         var actualObservations = new SortedDictionary<string, object>(StringComparer.Ordinal)
         {
-            ["advancedScheduleId"] = AdvancedScheduleId,
-            ["dueScheduleIdentityDigest"] = Hash(JsonSerializer.Serialize(DueScheduleIds(), CanonicalJsonOptions)),
+            ["advancedScheduleId"] = persistedAdvance.ScheduleId,
+            ["dueScheduleIdentityDigest"] = Hash(JsonSerializer.Serialize(allDue.Select(schedule => schedule.ScheduleId), CanonicalJsonOptions)),
             ["firstPageCount"] = dueFirstPage.Count,
             ["inactivePublicationResultCount"] = allDue.Count(schedule => IsInactivePublication(schedule.PublicationId)),
-            ["loadedProjectionCount"] = projections.Items.Count,
+            ["loadedProjectionCount"] = firstProjectionPage.Items.Count,
             ["reopenedProjectionMatched"] = reopenedTarget!.NextOccurrence == advancedTo &&
                                            reopenedDue.Count == DueSchedules - 1 &&
-                                           reopenedProjection.Items.Count == PageSize,
-            ["staleAdvanceRejected"] = true
+                                           reopenedFirstProjectionPage.Items.Count == PageSize,
+            ["staleAdvanceRejected"] = !staleAdvanceAccepted
         };
         var expectedObservations = scenario.CreateExpectedObservations();
         if (!ObservationsMatch(actualObservations, expectedObservations))
@@ -142,9 +153,15 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
             var publicationId = PublicationId(publicationIndex);
             var schedules = SchedulesForPublication(publicationIndex, dueAt).ToArray();
             await store.PreparePublicationAsync(publicationId, schedules, cancellationToken);
-            if (!IsInactivePublication(publicationId))
-                await store.ActivatePublicationAsync(publicationId, replacedPublicationId: null, cancellationToken);
         }
+
+        for (var publicationIndex = 0; publicationIndex < ReplacementCandidatePublicationIndex; publicationIndex++)
+            await store.ActivatePublicationAsync(PublicationId(publicationIndex), replacedPublicationId: null, cancellationToken);
+
+        await store.ActivatePublicationAsync(
+            PublicationId(ReplacementCandidatePublicationIndex),
+            PublicationId(ReplacedPublicationIndex),
+            cancellationToken);
     }
 
     private static IEnumerable<RecurringTriggerSchedule> SchedulesForPublication(int publicationIndex, DateTimeOffset dueAt)
@@ -176,7 +193,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         }
     }
 
-    private static async ValueTask RequireSingleAdvanceWinnerAsync(
+    private static async ValueTask<RecurringTriggerSchedule> RequireSingleAdvanceWinnerAsync(
         RuntimeRecurringScheduleSelectionClients clients,
         string scheduleId,
         DateTimeOffset expectedOccurrence,
@@ -207,6 +224,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         var persisted = await clients.Primary.FindAsync(scheduleId, cancellationToken);
         RequireAdvancedSchedule(persisted, scheduleId, advancedOccurrence, "persisted contention winner");
         RequireAdvancedSchedule(await clients.Secondary.FindAsync(scheduleId, cancellationToken), scheduleId, advancedOccurrence, "secondary contention-winner lookup");
+        return persisted!;
     }
 
     private static void RequireIndependentClients(RuntimeRecurringScheduleSelectionClients? clients)
@@ -227,12 +245,65 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
             throw new InvalidOperationException($"The {operation} does not match the exact active, due, ordered recurring-schedule contract.");
     }
 
-    private static void RequireProjectionPage(RuntimeStorePage<RecurringTriggerSchedule>? page, string operation)
+    private static async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> LoadAndVerifyPublicationProjectionsAsync(
+        IRecurringTriggerScheduleStore store,
+        DateTimeOffset? advancedOccurrence,
+        CancellationToken cancellationToken)
     {
-        if (page is null || string.IsNullOrWhiteSpace(page.NextContinuationToken) || page.Items.Count != PageSize ||
-            page.Items.Any(schedule => schedule.PublicationId != PublicationId(0) || !schedule.IsActive) ||
-            !page.Items.SequenceEqual(ExpectedProjectionSchedules().Take(PageSize), RecurringScheduleComparer.Instance))
-            throw new InvalidOperationException($"The {operation} does not match the requested active publication projection state.");
+        RuntimeStorePage<RecurringTriggerSchedule>? firstProjectionPage = null;
+        for (var publicationIndex = 0; publicationIndex < PublicationCount; publicationIndex++)
+        {
+            var publicationId = PublicationId(publicationIndex);
+            var expected = ExpectedSchedulesForPublication(publicationIndex, advancedOccurrence).ToArray();
+            var observed = 0;
+            string? continuation = null;
+            var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+            do
+            {
+                var page = await store.ListByPublicationPageAsync(
+                    new RecurringTriggerSchedulePublicationPageQuery(publicationId, PageSize, continuation),
+                    cancellationToken);
+                var expectedItems = expected.Skip(observed).Take(PageSize).ToArray();
+                var expectsContinuation = observed + expectedItems.Length < expected.Length;
+                RequireProjectionPage(
+                    page,
+                    expectedItems,
+                    publicationId,
+                    expectsContinuation,
+                    $"publication projection page at offset {observed}");
+                if (publicationIndex == ProjectionPublicationIndex && observed == 0)
+                    firstProjectionPage = page;
+
+                observed += page.Items.Count;
+                continuation = page.NextContinuationToken;
+                if (continuation is not null && !seenContinuations.Add(continuation))
+                    throw new InvalidOperationException($"Publication '{publicationId}' repeated a continuation token.");
+            } while (continuation is not null);
+
+            if (observed != expected.Length)
+                throw new InvalidOperationException($"Publication '{publicationId}' did not expose its complete prepared projection.");
+        }
+
+        return firstProjectionPage
+            ?? throw new InvalidOperationException("The recurring-schedule workload did not observe the projection publication.");
+    }
+
+    private static void RequireProjectionPage(
+        RuntimeStorePage<RecurringTriggerSchedule>? page,
+        IReadOnlyList<RecurringTriggerSchedule> expected,
+        string publicationId,
+        bool expectsContinuation,
+        string operation)
+    {
+        if (page is null ||
+            page.Items.Count != expected.Count ||
+            page.Items.Any(schedule => schedule.PublicationId != publicationId) ||
+            !page.Items.SequenceEqual(expected, RecurringScheduleComparer.Instance) ||
+            expectsContinuation == string.IsNullOrWhiteSpace(page.NextContinuationToken))
+        {
+            throw new InvalidOperationException(
+                $"The {operation} does not match publication '{publicationId}' or its continuation boundary.");
+        }
     }
 
     private static void RequireAdvancedSchedule(RecurringTriggerSchedule? schedule, string expectedId, DateTimeOffset expectedNextOccurrence, string operation)
@@ -245,17 +316,24 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
             throw new InvalidOperationException($"The {operation} did not preserve the winning recurring-schedule transition.");
     }
 
-    private static IEnumerable<string> DueScheduleIds()
-    {
-        for (var index = 0; index < DueSchedules; index++)
-            yield return $"schedule-due-{index:D4}";
-    }
-
     private static IEnumerable<RecurringTriggerSchedule> ExpectedDueSchedules(DateTimeOffset dueAt) =>
         Enumerable.Range(0, DueSchedules).Select(index => ScheduleForNonProjectionIndex(index, dueAt) with { IsActive = true });
 
-    private static IReadOnlyList<RecurringTriggerSchedule> ExpectedProjectionSchedules() =>
-        SchedulesForPublication(0, FixedNowUtc).Select(schedule => schedule with { IsActive = true }).ToArray();
+    private static IEnumerable<RecurringTriggerSchedule> ExpectedSchedulesForPublication(
+        int publicationIndex,
+        DateTimeOffset? advancedOccurrence)
+    {
+        foreach (var schedule in SchedulesForPublication(publicationIndex, FixedNowUtc))
+        {
+            yield return schedule with
+            {
+                IsActive = !IsInactivePublication(schedule.PublicationId),
+                NextOccurrence = schedule.ScheduleId == AdvancedScheduleId && advancedOccurrence is not null
+                    ? advancedOccurrence.Value
+                    : schedule.NextOccurrence
+            };
+        }
+    }
 
     private static RecurringTriggerSchedule ScheduleForNonProjectionIndex(int globalIndex, DateTimeOffset dueAt)
     {
@@ -263,16 +341,24 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         return SchedulesForPublication(publicationIndex, dueAt).Single(schedule => schedule.ScheduleId == $"schedule-due-{globalIndex:D4}");
     }
 
+    private static int ReplacementCandidatePublicationIndex => PublicationCount - InactivePublications;
+    private static int ReplacedPublicationIndex => ReplacementCandidatePublicationIndex - 1;
     private static string PublicationId(int index) => $"publication-{index:D4}";
     private static bool IsInactivePublication(string? publicationId) =>
-        publicationId is not null &&
-        publicationId.StartsWith("publication-", StringComparison.Ordinal) &&
-        int.TryParse(
-            publicationId.AsSpan("publication-".Length),
-            System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var index) &&
-        index >= PublicationCount - InactivePublications;
+        TryParsePublicationIndex(publicationId, out var index) &&
+        (index == ReplacedPublicationIndex || index > ReplacementCandidatePublicationIndex);
+
+    private static bool TryParsePublicationIndex(string? publicationId, out int index)
+    {
+        index = default;
+        return publicationId is not null &&
+               publicationId.StartsWith("publication-", StringComparison.Ordinal) &&
+               int.TryParse(
+                   publicationId.AsSpan("publication-".Length),
+                   System.Globalization.NumberStyles.None,
+                   System.Globalization.CultureInfo.InvariantCulture,
+                   out index);
+    }
     private static int Int(string name) => (int)Scenario.Parameters[name];
     private static string String(string name) => (string)Scenario.Parameters[name];
     private static bool ObservationsMatch(IReadOnlyDictionary<string, object> actual, IReadOnlyDictionary<string, object> expected) =>

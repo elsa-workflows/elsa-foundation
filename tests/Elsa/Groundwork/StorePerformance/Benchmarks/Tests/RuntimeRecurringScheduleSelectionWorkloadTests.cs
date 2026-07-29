@@ -34,20 +34,30 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
                 .Distinct(StringComparer.Ordinal)
                 .Count());
         Assert.All(
-            adapter.Shared.Schedules.Values.Where(schedule => schedule.PublicationId is not null && StringComparer.Ordinal.Compare(schedule.PublicationId, "publication-0215") < 0),
-            schedule => Assert.True(schedule.IsActive));
+            adapter.Shared.Schedules.Values,
+            schedule => Assert.Equal(!IsExpectedInactivePublication(schedule.PublicationId), schedule.IsActive));
         Assert.Equal(
             RuntimeRecurringScheduleSelectionWorkload.DueSchedules - 1,
             adapter.Shared.Schedules.Values.Count(schedule =>
                 schedule.IsActive &&
                 schedule.NextOccurrence <= RuntimeRecurringScheduleSelectionWorkload.FixedNowUtc));
-        Assert.Equal(2, adapter.Shared.PublicationPageRequests.Count);
+        Assert.Equal(
+            (RuntimeRecurringScheduleSelectionWorkload.PublicationCount + 1) * 2,
+            adapter.Shared.PublicationPageRequests.Count);
         Assert.All(adapter.Shared.PublicationPageRequests, request =>
         {
-            Assert.Equal("publication-0000", request.PublicationId);
             Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PageSize, request.Limit);
-            Assert.Null(request.ContinuationToken);
         });
+        var requestsByPublication = adapter.Shared.PublicationPageRequests
+            .GroupBy(request => request.PublicationId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PublicationCount, requestsByPublication.Count);
+        Assert.Equal(4, requestsByPublication["publication-0000"].Length);
+        Assert.Equal(2, requestsByPublication["publication-0000"].Count(request => request.ContinuationToken is null));
+        Assert.Equal(2, requestsByPublication["publication-0000"].Count(request => request.ContinuationToken is not null));
+        Assert.All(
+            requestsByPublication.Where(pair => pair.Key != "publication-0000"),
+            pair => Assert.Equal(2, pair.Value.Length));
     }
 
     [Fact]
@@ -87,7 +97,10 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
     [InlineData(RecurringScheduleAdapterFault.WrongDueRecord)]
     [InlineData(RecurringScheduleAdapterFault.IgnorePublicationFilter)]
     [InlineData(RecurringScheduleAdapterFault.MissingPublicationContinuation)]
+    [InlineData(RecurringScheduleAdapterFault.IgnorePublicationContinuation)]
     [InlineData(RecurringScheduleAdapterFault.WrongProjectionRecord)]
+    [InlineData(RecurringScheduleAdapterFault.IgnoreReplacement)]
+    [InlineData(RecurringScheduleAdapterFault.DeactivateUnrelatedPublication)]
     [InlineData(RecurringScheduleAdapterFault.NonAtomicDualSuccess)]
     [InlineData(RecurringScheduleAdapterFault.ResponseOnlyAdvance)]
     [InlineData(RecurringScheduleAdapterFault.IgnoreExpectedOccurrence)]
@@ -121,6 +134,18 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             value.Contains("Ledger", StringComparison.OrdinalIgnoreCase) ||
             value.Contains("Manifest", StringComparison.OrdinalIgnoreCase) ||
             value.Contains("Physical", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsExpectedInactivePublication(string? publicationId)
+    {
+        Assert.NotNull(publicationId);
+        var index = int.Parse(
+            publicationId.AsSpan("publication-".Length),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture);
+        var replacementCandidate = RuntimeRecurringScheduleSelectionWorkload.PublicationCount -
+                                   RuntimeRecurringScheduleSelectionWorkload.InactivePublications;
+        return index == replacementCandidate - 1 || index > replacementCandidate;
     }
 
     private sealed class AtomicRecurringScheduleAdapter(RecurringScheduleAdapterFault fault = RecurringScheduleAdapterFault.None) : IRuntimeRecurringScheduleSelectionWorkloadAdapter
@@ -203,8 +228,10 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
                 if (fault == RecurringScheduleAdapterFault.IgnoreActivation)
                     return ValueTask.CompletedTask;
                 SetActive(publicationId, true);
-                if (replacedPublicationId is not null)
+                if (replacedPublicationId is not null && fault != RecurringScheduleAdapterFault.IgnoreReplacement)
                     SetActive(replacedPublicationId, false);
+                if (replacedPublicationId is not null && fault == RecurringScheduleAdapterFault.DeactivateUnrelatedPublication)
+                    SetActive("publication-0001", false);
                 return ValueTask.CompletedTask;
             }
         }
@@ -242,14 +269,21 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
                     .Where(schedule => fault == RecurringScheduleAdapterFault.IgnorePublicationFilter || schedule.PublicationId == query.PublicationId)
                     .OrderBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
                     .ToArray();
+                var offset = query.ContinuationToken is null || fault == RecurringScheduleAdapterFault.IgnorePublicationContinuation
+                    ? 0
+                    : ParseContinuation(query.ContinuationToken);
                 var schedules = allSchedules
+                    .Skip(offset)
                     .Take(query.Limit)
                     .Select(Copy)
                     .ToArray();
                 if (fault == RecurringScheduleAdapterFault.WrongProjectionRecord && schedules.Length > 0)
                     schedules[0] = schedules[0] with { StimulusHash = "sha256:wrong" };
-                var continuation = allSchedules.Length > schedules.Length && fault != RecurringScheduleAdapterFault.MissingPublicationContinuation
-                    ? "next"
+                var nextOffset = fault == RecurringScheduleAdapterFault.IgnorePublicationContinuation && query.ContinuationToken is not null
+                    ? query.Limit * 2
+                    : offset + schedules.Length;
+                var continuation = nextOffset < allSchedules.Length && fault != RecurringScheduleAdapterFault.MissingPublicationContinuation
+                    ? $"offset:{nextOffset}"
                     : null;
                 return new(new RuntimeStorePage<RecurringTriggerSchedule>(query, schedules, continuation));
             }
@@ -314,6 +348,21 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
                 backing.Schedules[schedule.ScheduleId] = schedule with { IsActive = active };
         }
 
+        private static int ParseContinuation(string continuationToken)
+        {
+            if (!continuationToken.StartsWith("offset:", StringComparison.Ordinal) ||
+                !int.TryParse(
+                    continuationToken.AsSpan("offset:".Length),
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var offset))
+            {
+                throw new InvalidOperationException("The test adapter received an invalid continuation.");
+            }
+
+            return offset;
+        }
+
         private static RecurringTriggerSchedule Copy(RecurringTriggerSchedule schedule) => schedule with { };
     }
 }
@@ -333,7 +382,10 @@ public enum RecurringScheduleAdapterFault
     WrongDueRecord,
     IgnorePublicationFilter,
     MissingPublicationContinuation,
+    IgnorePublicationContinuation,
     WrongProjectionRecord,
+    IgnoreReplacement,
+    DeactivateUnrelatedPublication,
     NonAtomicDualSuccess,
     ResponseOnlyAdvance,
     IgnoreExpectedOccurrence,
