@@ -615,6 +615,24 @@ rename and agent-guidance changes. The three reviewers re-inspected exact range
 and returned PASS; root revalidation again passed 53/53, 2/2, 285/285, and the zero-warning Release
 harness build.
 
+### Bookmark lookup correctness-runner review disposition
+
+Three adversarial read-only reviewers inspected the initial frozen range
+`6751087c613b150f4c435d11230dbde00eade37e..d3c1db47240407e0e21bf00f477dcaea8f41b738`
+on 2026-07-29. Each assumed the container-free checkpoint had green-washed its correctness or
+completion claims:
+
+| Axis | Confirmed finding and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The initial adapter accepted independent state-store and stimulus-index objects even though the production runtime requires the index to be implemented by the same store, so discarded writes plus a prerecorded index could pass. It also tested cross-scope isolation only from primary to secondary. At `312bd3cbf18266410e4d3e6fe5dbef100941108e`, each scope accepts one state-store object and derives the index from that same instance, rejects state-only/discarded-save adapters, probes isolation in both directions, and has selective asymmetric-leak tests that preserve local lookup while leaking only the opposite scope. The originating reviewer re-verified both fixes and found no new blocker. | PASS |
+| Evidence integrity | The reviewer independently matched workload ID/version/seed, semantic parameters, input fingerprint, result digest, operation sequence, and observations to the frozen Spec 094 source. After remediation, the unchanged zero cross-scope observation is emitted only after both directional probes pass. The PR metadata was corrected to the exact `312bd3cbf18266410e4d3e6fe5dbef100941108e` head with 12/12 tests, a zero-warning Release build, and a clean diff check; the originating reviewer re-verified the record. No provider, EF, timing, physical-form, native-plan, ledger, or verdict evidence is claimed. | PASS |
+| Scope/test preservation | The exact source delta remains limited to the provider-neutral runner, its focused tests, and the Runtime Core project reference. The public adapter contains no provider, connection, timing, manifest, ledger, matrix, or physical-form input. The same-instance and bidirectional-isolation fakes model only the confirmed correctness failures and do not advance a performance task. | PASS |
+
+Root verification at the remediated source head passed the focused workload suite **12/12**,
+the benchmark project Release build with **0 warnings/errors**, and `git diff --check`. No database
+container, provider suite, timing run, physical-form selection, coverage-ledger edit, or performance
+verdict was produced.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
