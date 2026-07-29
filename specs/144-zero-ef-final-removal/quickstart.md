@@ -178,6 +178,16 @@ Review `docs/reports/maps-v2-findings.md` and `docs/reports/maps-v1-findings.md`
 8. Verify remote `main` contains the merge SHA.
 9. Audit the immutable closure ledger for #629, #642, #643, #646, #647, #932, and every other parent-required Project 33 item; apply and verify all required final dispositions; then close #647 and #629 with the verified SHA/evidence.
 
+## Planning Checkpoint Review
+
+This record covers the Spec 144 planning PR only; it does not complete the implementation reviews in T089-T093.
+
+- Frozen range: base `6751087c613b150f4c435d11230dbde00eade37e`, initial candidate `c5aad84681f3dd6e0213f8c6c1c7c86eb19cad14`.
+- Correctness/mechanism reviewer `/root/review_elsa1079_correctness`: requested changes because solution-only restore could trust stale-but-present assets and T046/T066 assigned the frozen Identity oracle baseline/test twice. Disposition: `389b656db11bca3c3c6134616587a0a6bd7e0e07` added discovery-driven all-project restore receipts, binding/fixture requirements, and single T046 ownership. Originating-reviewer re-verification: PASS at `389b656db11bca3c3c6134616587a0a6bd7e0e07`; no new correctness blocker.
+- Evidence-integrity reviewer `/root/review_elsa1079_evidence`: requested changes for the same stale-assets fail-open, for incorrectly treating Groundwork #50/#25 completion as package capability, and for omitting required child/Project 33 items from parent closure. Disposition: `389b656db11bca3c3c6134616587a0a6bd7e0e07` separated #141/#143 package provenance from #50 performance and #25 completion evidence and added the immutable all-item closure ledger. Originating-reviewer re-verification: PASS at that head; all three findings resolved.
+- Scope/test-preservation reviewer `/root/review_elsa1079_scope`: requested changes because the plan allowed T029-T031 before the claimed final shared-file slice, then correctly rejected two partial sequencing fixes until the pre-T011 #646 coverage-ledger import appeared first in the declared order. Disposition: `389b656db11bca3c3c6134616587a0a6bd7e0e07`, `4a7b52ecb682ede4f6bfeca0ff4a3ed30ca80230`, and `519d9b4c098c500c7513afbb89c52baf75fc6ce9` define the prerequisite ledger import, gated host slice, and later solution/package slices in one strict order. Originating-reviewer re-verification: PASS at `519d9b4c098c500c7513afbb89c52baf75fc6ce9`; all 96 tasks remain sequential and well formed.
+- Root verification: `git diff --check` passed after each remediation; task inventory remained exactly T001-T096; no stale `specs/141-zero-ef-final-removal` path remained; no container, provider, or performance command was run.
+
 ## Implementation Evidence
 
 Populate during `speckit-implement`. No task is complete without a one-line evidence note and an immutable command/result, artifact, review, or merge identity.
