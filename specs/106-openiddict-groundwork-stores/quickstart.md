@@ -185,3 +185,66 @@ Elsa main.
 It does not close T006, T011-T013, T016-T017, T020-T022, any complete token or
 registry-store task, provider conformance, host acceptance, performance, or EF
 removal.
+
+## Exact-range review dispositions — 2026-07-29
+
+Three independent read-only reviewers examined the exact initial replay range
+`6751087c613b150f4c435d11230dbde00eade37e..901609c23` on correctness and
+mechanism, evidence integrity, and scope/test preservation. All three returned
+`BLOCK`; the candidate was not pushed as merge-ready.
+
+The correctness review found that the capability probe bypassed manifest
+admission for a raw physical mutation, that authorization and token projection
+paths did not match the serialized canonical JSON, that package reporting was
+hard-coded to an obsolete preview, and that a Scope lease could be disposed
+outside the adapter exception boundary. The remediation:
+
+- removed the false mutation proof and reopened T005/T006;
+- corrected authorization/token projections, indexes, and token ID tie-breaks,
+  and expanded manifest/codec tests across all four model descriptors;
+- now derives the reported Groundwork version from
+  `Directory.Packages.props`;
+- moved Scope lease lifetime into the adapter boundary and added explicit
+  disposal exception/cancellation mapping tests; and
+- retained the token-core lease structure because its `await using` already
+  sits inside the mapped `try` boundary; the originating reviewer must verify
+  that disposition.
+
+The evidence review found that T005 was not reproducible, T010 did not exercise
+all descriptor fields and corrupt/future envelopes, T035/T040 had advanced
+without T006 or durable red-before-green evidence, the claimed 55-objective
+inventory command returned only 52 paths, and the #143 research note was stale.
+The remediation reopened T005, T035, and T040; expanded the codec matrix; fixed
+the inventory command to return exactly 55 paths including the three named
+shared-host module tests; and records #143 as delivered in the configured
+preview.95 family while keeping exact-family recertification open.
+
+The scope-preservation review additionally found that a cross-provider bounded
+mutation router introduced an unconsumed, high-blast prerequisite unrelated to
+this checkpoint. That commit was reverted in full. It also confirmed the
+canonical JSON, package-version, T005/T006, and evidence inconsistencies above
+and found a ten-endpoint inventory mislabeled as nine; all were corrected.
+
+Root verification after those dispositions and the router revert:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --no-build --no-restore --logger 'console;verbosity=minimal'
+# 56 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
+  -c Release --no-restore --filter OpenIddictPersistenceArchitectureTests \
+  --logger 'console;verbosity=minimal'
+# 4 passed
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  -c Release --no-build --no-restore \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract' \
+  --logger 'console;verbosity=minimal'
+# 12 passed
+```
+
+These are container-free checks only. They do not claim mutation admission,
+four-provider conformance, T006, or merge approval. The remediated exact head
+must return to the same three reviewers, and any remaining sequencing blocker
+must stay open rather than being waived by this checkpoint.
