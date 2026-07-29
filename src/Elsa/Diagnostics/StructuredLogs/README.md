@@ -24,8 +24,9 @@ Malformed, expired, trimmed, wrong-scope, and wrong-stream cursors all return th
 `409 Conflict` response.
 
 `GroundworkStructuredLogStore` is the first-party durable adapter. It consumes Groundwork's specialized
-diagnostic-record contract, publishes wake hints only after durable append acknowledgement, serves bounded
-read-after pages in committed order, and preserves lifetime logical high-water independently of retention.
+diagnostic-record contract, returns the committed entry only after durable append acknowledgement, serves
+bounded read-after pages in committed order, and preserves lifetime logical high-water independently of
+retention. `StructuredLogSink` publishes the process-local wake hint from that committed result.
 - **Serialization helpers** (`public sealed`, branch-tested): `StructuredLogEntrySerializer` (wire JSON shape) and `StructuredLogSseFormatter` (SSE framing); `StructuredLogFilterBinder` (query-string → `StructuredLogFilter`, rejecting malformed input with `InvalidLogQueryException`).
 
 ## Options (`StructuredLogsOptions`)

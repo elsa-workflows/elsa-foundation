@@ -92,6 +92,15 @@ OTEL SSE stream still has no `Last-Event-ID` resume.
 compatibility implementations. #646 must finish the retained performance measurement before #647 deletes the
 EF diagnostics surface; this documentation does not claim that deletion or a performance verdict.
 
+Operators who still need that temporary path enable
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry`. It replaces
+`IOpenTelemetryStore` with `EfCoreOpenTelemetryStore`, disables generic EF command/query machinery, routes
+the diagnostics DbContext's logging to `NullLoggerFactory` to prevent capture feedback, and uses a singleton
+`IDbContextFactory<OpenTelemetryDbContext>`. The SQLite provider runs migrations before starting the bounded
+drain; graceful shell termination flushes that drain before the DbContext factory is disposed, with async
+store disposal as the fallback when shell terminators do not run. This retained path is not selected by the
+reference `Elsa.Server` composition.
+
 ## Deferred (kept behind contracts/options)
 
 - **gRPC ingestion** — `EnableGrpc` defaults to `false` and no gRPC route is mapped; the binding is host-specific. The option, `GrpcEndpointPath`, and `GrpcDisabledReason` are kept so a host can light it up later. (Source parity: elsa-core also ships gRPC disabled.)
