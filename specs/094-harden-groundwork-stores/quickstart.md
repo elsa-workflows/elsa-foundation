@@ -918,6 +918,35 @@ exact outbox stale-ack contract **4/4** across SQLite, SQL Server, PostgreSQL, a
 formatter checks and `git diff --check` are clean; the touched cancellation-crash test also
 normalizes a pre-existing seven-line initializer indentation defect without changing behavior.
 
+### Queue drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `queue-drain` v1.1 vector through
+`IWorkflowSchedulerWorkQueue`, `IWorkflowSchedulerWorkClaimInspection`, and
+`IWorkflowSchedulerPoisonStore` only. It enqueues the fixed 128 × 32 workload, then independently
+rereads every exact 32-item FIFO before reading the exact bounded first 16 workflow IDs and racing
+two independently-created queue clients for each selected head. Eight winning current claims are
+completed. Five claims expire and are reclaimed under higher
+fences; each old acknowledgement is attempted while its successor is still current and must return
+the public `Stale` outcome. Three current claims are acknowledged before matching poison records
+are written and read through the public poison contract. A third distinct client then verifies the
+advanced normal/poison queue heads, the still-current successor claims, and all three poison records.
+
+`completedItemCount = 8` deliberately describes only the normal-completion group. The three poison
+claims are also acknowledged before their poison records are written; they are represented by
+`poisonItemCount = 3`, not folded into that frozen normal-completion observation. This is
+shared-backing public-contract correctness only: it does not claim provider or process-restart
+durability, native-plan evidence, timing, EF comparison, a physical-form verdict, coverage-ledger
+evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification strengthened the worker result after finding that its initial enqueue check
+compared only three work-item members and did not reread the unselected 112 workflows. The accepted
+candidate compares every public work-item member, rereads all 4,096 items through the independently
+opened client, adds a response-only final-seed rejection test, and compares the full poison record
+returned by `ListAsync`. The focused queue suite is **14/14**, the complete benchmark-harness test
+project is **228/228**, the benchmark project warnings-as-errors build is clean, both changed-code
+path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
+correctness checks; provider and restart evidence remain deliberately unclaimed.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
