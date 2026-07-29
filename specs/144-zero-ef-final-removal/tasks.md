@@ -245,14 +245,14 @@ shared EF substrate deletion
 
 ### Shared-File Serialization
 
-The following tasks are strictly serialized and never delegated concurrently:
+The following shared-file slices execute in this strict order and are never delegated concurrently:
 
-1. T029 `shells.json`
-2. T030 `shells.Production.json`
-3. T031 host project references
-4. T051 `Elsa.Server.slnx`
-5. T052 `Directory.Packages.props` and central/project package references
-6. Any prerequisite #646 `coverage-ledger.json` import before T011
+1. Any prerequisite #646 `coverage-ledger.json` import before T011
+2. T029 `shells.json`
+3. T030 `shells.Production.json`
+4. T031 host project references
+5. T051 `Elsa.Server.slnx`
+6. T052 `Directory.Packages.props` and central/project package references
 
 ## Parallel Examples
 
