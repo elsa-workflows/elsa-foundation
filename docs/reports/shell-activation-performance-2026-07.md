@@ -173,8 +173,9 @@ Raw reports and samples are committed under
 [`docs/reports/evidence/092-workflow-executable-cache/final-2026-07-29/`](evidence/092-workflow-executable-cache/final-2026-07-29/).
 The hosted Ubuntu workflow in
 [`http-workflow-performance.yml`](../../.github/workflows/http-workflow-performance.yml)
-publishes the same deterministic synchronous workflow and enforces a 100 ms default-on warm p95
-regression ceiling on relevant pull requests.
+publishes the same deterministic synchronous workflow and enforces a 250 ms default-on warm p95
+regression ceiling on relevant pull requests. The broader threshold accounts for shared-runner storage
+and scheduling variance; the controlled local acceptance budget remains 50 ms.
 
 ## Subsequent recommendations
 
