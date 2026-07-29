@@ -8,13 +8,13 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         @"\bpublic\s+interface\s+(?<contract>I[A-Za-z0-9_]*(?:Store|Repository|Transport|Scanner|OwnershipService|WorkQueue|Writer))\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex RegistrationPattern = new(
-        @"\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add(?:Singleton|Scoped|Transient)\s*<(?<generic>[^>]+)>\s*\((?<factory>.*?)\)\s*;",
+        @"\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add(?:Keyed)?(?:Singleton|Scoped|Transient)\s*<(?<generic>[^>]+)>\s*\((?<factory>.*?)\)\s*;",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex RegistrationLikePattern = new(
         @"\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add[A-Za-z0-9_]*\s*(?:<[^;]+?>)?\s*\([^;]*?\)\s*;",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex FactoryImplementationPattern = new(
-        @"(?:new\s+|GetRequiredService<)\s*(?<implementation>(?:global::)?(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*)",
+        @"(?:new\s+|GetRequired(?:Keyed)?Service<)\s*(?<implementation>(?:global::)?(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ServiceDescriptorInvocationPattern = new(
         @"\b(?:new\s+)?ServiceDescriptor\s*(?:\.\s*[A-Za-z_][A-Za-z0-9_]*\s*(?:<(?<generic>[^>]+)>)?)?\s*\((?<arguments>.*?)\)\s*;",
@@ -42,7 +42,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["IBookmarkStateStore"] = ["BookmarkStateDocumentKind"],
-            ["IWorkflowExecutableStore"] = ["WorkflowExecutableDocumentKind"],
+            ["IWorkflowExecutableStore"] =
+                ["WorkflowExecutableDocumentKind", "WorkflowExecutableCoordinationDocumentKind"],
             ["IExecutableActivityTemplateStore"] =
                 ["ExecutableActivityTemplateDocumentKind", "ExecutableActivityTemplateHashClaimDocumentKind"],
             ["IWorkflowExecutableSourceReferenceStore"] = ["WorkflowExecutableSourceReferenceDocumentKind"],
@@ -248,6 +249,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             };
             if (string.IsNullOrWhiteSpace(implementation))
                 throw UnparseableRegistration(file, contract);
+            if (implementation == contract)
+                continue;
 
             if (!RegistrationStorageUnits.TryGetValue(contract, out var storageUnits))
             {

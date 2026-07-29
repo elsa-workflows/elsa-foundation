@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.DiagnosticRecords;
 using Groundwork.PostgreSql.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,22 +22,63 @@ public static class GroundworkPostgreSqlUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The PostgreSQL connection string the single document store opens.</param>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString) =>
+        services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            new WorkflowExecutableCacheOptions());
+
     /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
     public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
         bool autoApplyOnStartup = false) =>
-        services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(connectionString, autoApplyOnStartup);
+        services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers unified PostgreSQL persistence with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        return services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
+    }
 
     /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
     public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
         ShellFeatureContext context,
+        bool autoApplyOnStartup = false) =>
+        services.AddGroundworkPostgreSqlUnifiedPersistence(
+            connectionString,
+            context,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        ShellFeatureContext context,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup = false)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema(context);
-        return services.AddGroundworkPostgreSqlUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkPostgreSqlUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     /// <summary>
@@ -47,26 +89,44 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         this IServiceCollection services,
         string connectionString,
         bool autoApplyOnStartup = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
+        services.AddGroundworkPostgreSqlUnifiedPersistence<TDeploymentSource>(
+            connectionString,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
-        return services.AddGroundworkPostgreSqlUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkPostgreSqlUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     private static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistenceCore(
         this IServiceCollection services,
         string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddPostgreSqlGroundworkDocumentStore(connectionString, autoApplyOnStartup);
         services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
             _ => PostgreSqlDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => PostgreSqlDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
         services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
-        services.AddGroundworkUnifiedStoreFamilies();
+        services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowRunHealth(
             _ => new Npgsql.NpgsqlConnection(connectionString),
             GroundworkRunHealthDialect.PostgreSql);

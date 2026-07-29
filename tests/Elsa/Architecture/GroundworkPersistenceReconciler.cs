@@ -393,6 +393,7 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IWorkflowExecutableSourceReferenceStore", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableSourceReferenceWriter", "runtime-executable-source-reference", "WorkflowExecutableSourceReferenceDocumentKind"),
         Map("runtime", "IWorkflowExecutableStore", "runtime-workflow-executable", "WorkflowExecutableDocumentKind"),
+        Map("runtime", "IWorkflowExecutableStore", "runtime-workflow-executable", "WorkflowExecutableCoordinationDocumentKind"),
         Map("runtime", "IExecutableActivityTemplateStore", "runtime-workflow-executable", "ExecutableActivityTemplateDocumentKind"),
         Map("runtime", "IExecutableActivityTemplateStore", "runtime-workflow-executable", "ExecutableActivityTemplateHashClaimDocumentKind"),
         Map("runtime", "IExecutableActivityTemplateWriter", "runtime-workflow-executable", "ExecutableActivityTemplateDocumentKind"),

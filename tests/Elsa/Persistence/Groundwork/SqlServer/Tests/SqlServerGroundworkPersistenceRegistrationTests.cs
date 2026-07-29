@@ -19,6 +19,7 @@ using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Scoping;
@@ -43,6 +44,36 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     private const string RegistrationSecret = "sqlserver-registration-secret";
     private const string ConnectionString =
         $"Server=localhost,1433;Database=elsa;User Id=sa;Password={RegistrationSecret};TrustServerCertificate=True";
+
+    [Fact]
+    public void Runtime_feature_enables_the_bounded_executable_cache_by_default()
+    {
+        var services = new ServiceCollection();
+        new SqlServerGroundworkRuntimePersistenceShellFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<WorkflowExecutableCacheOptions>();
+        Assert.True(options.Enabled);
+        Assert.Equal(WorkflowExecutableCacheOptions.DefaultCapacity, options.Capacity);
+    }
+
+    [Theory]
+    [InlineData(false, 19)]
+    [InlineData(true, 23)]
+    public void Runtime_feature_threads_executable_cache_settings(bool enabled, int capacity)
+    {
+        var services = new ServiceCollection();
+        new SqlServerGroundworkRuntimePersistenceShellFeature
+        {
+            CacheWorkflowExecutables = enabled,
+            WorkflowExecutableCacheCapacity = capacity
+        }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<WorkflowExecutableCacheOptions>();
+        Assert.Equal(enabled, options.Enabled);
+        Assert.Equal(capacity, options.Capacity);
+    }
 
     [Fact]
     public void Runtime_feature_registers_builds_and_resolves_the_SQL_Server_startup_leaf()

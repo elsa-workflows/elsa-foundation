@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Workflows.Design.Api.Capabilities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api;
 

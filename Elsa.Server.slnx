@@ -478,6 +478,9 @@
   <Folder Name="/tests/Elsa/Persistence/Groundwork/Querying/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/Sqlite/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/">
     <Project Path="tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj" />
   </Folder>
@@ -512,6 +515,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Serialization/">
     <Project Path="tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Tasks/">
+    <Project Path="tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">

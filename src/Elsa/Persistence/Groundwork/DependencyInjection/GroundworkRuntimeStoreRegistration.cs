@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
 using Groundwork.Core.Transactions;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,8 +24,27 @@ namespace Elsa.Persistence.Groundwork.DependencyInjection;
 /// </summary>
 public static class GroundworkRuntimeStoreRegistration
 {
-    public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services)
+    /// <summary>Key used for the durable Groundwork executable-store backend behind optional decorators.</summary>
+    public const string WorkflowExecutableProviderKey = "Elsa.Persistence.Groundwork.WorkflowExecutableProvider";
+
+    /// <summary>Registers Groundwork runtime stores with the bounded executable cache enabled by default.</summary>
+    public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services) =>
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
+
+    /// <summary>Registers Groundwork runtime stores with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkRuntimeStores(
+        this IServiceCollection services,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+
+        var cacheOptions = new WorkflowExecutableCacheOptions
+        {
+            Enabled = workflowExecutableCacheOptions.Enabled,
+            Capacity = workflowExecutableCacheOptions.Capacity
+        };
+        cacheOptions.Validate();
+
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkWorkflowTestScopeStore));
         services.AddPersistenceCore();
         services.TryAddEnumerable(
@@ -35,7 +55,59 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IBookmarkStateStore>();
         services.AddScoped<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
-        services.AddScoped<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
+        services.RemoveAll<CachingWorkflowExecutableStore>();
+        services.RemoveAll<InvalidatingWorkflowExecutableStore>();
+        services.RemoveAll<WorkflowExecutableCacheOptions>();
+        services.AddSingleton(cacheOptions);
+        services.TryAddKeyedScoped<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>(
+            WorkflowExecutableProviderKey);
+        if (cacheOptions.Enabled)
+        {
+            services.RemoveAll<WorkflowExecutableCache>();
+            services.RemoveAll<GroundworkWorkflowExecutableCacheLoader>();
+            services.AddSingleton<WorkflowExecutableCache>();
+            services.AddSingleton<GroundworkWorkflowExecutableCacheLoader>();
+            services.AddScoped<CachingWorkflowExecutableStore>(serviceProvider =>
+            {
+                var provider = serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+                    WorkflowExecutableProviderKey);
+                var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+                if (context.AccessPolicy != PersistenceAccessPolicy.Ordinary || context.Scope is null)
+                    throw new InvalidOperationException(
+                        "The workflow executable cache adapter requires an ordinary persistence scope.");
+
+                var persistenceScope = context.Scope;
+                var loader = serviceProvider.GetRequiredService<GroundworkWorkflowExecutableCacheLoader>();
+                return new CachingWorkflowExecutableStore(
+                    provider,
+                    serviceProvider.GetRequiredService<WorkflowExecutableCache>(),
+                    persistenceScope.Value,
+                    (artifactId, cancellationToken) =>
+                        loader.LoadAsync(persistenceScope, artifactId, cancellationToken));
+            });
+            services.AddScoped<InvalidatingWorkflowExecutableStore>(serviceProvider =>
+            {
+                var provider = serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+                    WorkflowExecutableProviderKey);
+                var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+                return new InvalidatingWorkflowExecutableStore(
+                    provider,
+                    serviceProvider.GetRequiredService<WorkflowExecutableCache>(),
+                    context.Scope?.Value);
+            });
+            services.AddScoped<IWorkflowExecutableStore>(serviceProvider =>
+            {
+                var context = serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+                return context.AccessPolicy == PersistenceAccessPolicy.Ordinary && context.Scope is not null
+                    ? serviceProvider.GetRequiredService<CachingWorkflowExecutableStore>()
+                    : serviceProvider.GetRequiredService<InvalidatingWorkflowExecutableStore>();
+            });
+        }
+        else
+        {
+            services.AddScoped<IWorkflowExecutableStore>(serviceProvider =>
+                serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(WorkflowExecutableProviderKey));
+        }
         services.RemoveAll<IExecutableActivityTemplateStore>();
         services.AddScoped<IExecutableActivityTemplateStore, GroundworkExecutableActivityTemplateStore>();
         services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();

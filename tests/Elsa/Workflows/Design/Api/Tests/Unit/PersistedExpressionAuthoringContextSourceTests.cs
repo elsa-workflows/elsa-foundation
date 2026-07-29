@@ -1,7 +1,9 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Api;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -10,6 +12,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
@@ -18,6 +21,30 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class PersistedExpressionAuthoringContextSourceTests
 {
+    [Fact]
+    public void Service_provider_resolves_source_with_registered_draft_store()
+    {
+        var node = new ActivityNode("node", "activity", [], []);
+        var structure = new ScopeStructureService(node, node, node, Variable("inside"), Variable("hidden"));
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft",
+            WorkflowDefinitionId = "workflow",
+            State = new([], node, [], [], null),
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowDefinitionDraftStore>(new SingleDraftStore(draft));
+        services.AddSingleton<IActivityStructureService>(structure);
+        services.AddSingleton(new ScopedVariablePicker(new ScopedVariableResolver(structure)));
+        new WorkflowsDesignApiFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var source = provider.GetRequiredService<IExpressionAuthoringContextSource>();
+
+        Assert.NotNull(source);
+    }
+
     [Fact]
     public async Task Policy_only_change_invalidates_the_existing_context_revision()
     {
@@ -37,7 +64,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             symbolFilters: [new PolicySymbolFilter()]);
@@ -103,7 +130,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             Outputs = [new OutputDefinition("result", "result", new TypeReference("Int32"), null, "Result", null, false)]
         };
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             new SingleActivityVersionStore(activityVersion),
@@ -155,7 +182,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             symbolFilters: [new RemoveSymbolFilter("a")]);
@@ -200,7 +227,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             symbolFilters: [new KeepSymbolFilter("allowed")]);
@@ -235,7 +262,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         };
         var filter = new CountingSymbolFilter();
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             symbolFilters: [filter]);
@@ -270,7 +297,7 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             LastModifiedAt = DateTimeOffset.UnixEpoch
         };
         var source = new PersistedExpressionAuthoringContextSource(
-            new SingleDraftStore(draft),
+            [new SingleDraftStore(draft)],
             structure,
             new ScopedVariablePicker(new ScopedVariableResolver(structure)));
         var service = new ExpressionAuthoringContextService([source]);

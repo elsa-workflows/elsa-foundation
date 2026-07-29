@@ -254,6 +254,18 @@ public sealed class ArchitectureGuardTests
             $"{fileName} must not override unified activity-design persistence with EF Core.");
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_the_bounded_executable_cache(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+        var settings = Assert.IsType<JsonObject>(features["GroundworkUnifiedPersistenceSqlite"]);
+
+        Assert.True(settings["CacheWorkflowExecutables"]?.GetValue<bool>());
+        Assert.Equal(256, settings["WorkflowExecutableCacheCapacity"]?.GetValue<int>());
+    }
+
     [Fact]
     public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
     {
@@ -351,6 +363,45 @@ public sealed class ArchitectureGuardTests
             "typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly",
             program,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Server_exposes_distinct_root_liveness_and_readiness_paths()
+    {
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var endpoints = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Server",
+            "Readiness",
+            "ShellReadinessEndpointExtensions.cs"));
+
+        var live = endpoints.IndexOf("MapGet(\"/health/live\"", StringComparison.Ordinal);
+        var ready = endpoints.IndexOf("MapGet(\"/health/ready\"", StringComparison.Ordinal);
+        var health = program.IndexOf("MapShellReadiness()", StringComparison.Ordinal);
+        var shells = program.IndexOf("MapShells()", StringComparison.Ordinal);
+
+        Assert.True(live >= 0, "The reference server must expose GET /health/live at the process root.");
+        Assert.True(ready >= 0, "The reference server must expose GET /health/ready at the process root.");
+        Assert.NotEqual(live, ready);
+        Assert.True(health >= 0 && health < shells, "Health endpoints must be root-mapped independently of shell endpoints.");
+    }
+
+    [Fact]
+    public void Server_excludes_both_health_paths_from_cshells_resolution()
+    {
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var webRouting = Regex.Match(
+            program,
+            @"\.WithWebRouting\(options\s*=>\s*\{(?<body>.*?)\}\)",
+            RegexOptions.Singleline);
+
+        Assert.True(webRouting.Success, "The reference server must configure CShells web routing explicitly.");
+        var body = webRouting.Groups["body"].Value;
+        Assert.Contains("ExcludePaths", body, StringComparison.Ordinal);
+        Assert.Contains("/health/live", body, StringComparison.Ordinal);
+        Assert.Contains("/health/ready", body, StringComparison.Ordinal);
     }
 
     [Fact]

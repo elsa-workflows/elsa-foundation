@@ -10,7 +10,7 @@ public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.88";
-    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.94";
+    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.95";
     private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.86";
     private const string EarlierPublishedGroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";

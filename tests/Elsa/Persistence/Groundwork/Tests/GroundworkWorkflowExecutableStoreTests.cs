@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Persistence.Groundwork.Serialization;
@@ -191,6 +192,47 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Single(await store.ListAllAsync());
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Retention_Transitions_Do_Not_Rewrite_The_Executable_Document(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store =
+            new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var executableBefore = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-1");
+        var coordinationBefore = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1");
+
+        var lease = await store.TryAcquireRootWriteLeaseAsync(
+            "artifact-1",
+            "writer-1",
+            now.AddMinutes(1),
+            now);
+        Assert.NotNull(lease);
+        await store.ReleaseRootWriteLeaseAsync(lease!);
+
+        var executableAfter = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-1");
+        var coordinationAfter = await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1");
+
+        Assert.NotNull(executableBefore);
+        Assert.NotNull(executableAfter);
+        Assert.Equal(executableBefore!.Version, executableAfter!.Version);
+        Assert.NotNull(coordinationBefore);
+        Assert.NotNull(coordinationAfter);
+        Assert.True(coordinationAfter!.Version > coordinationBefore!.Version);
+    }
+
     // Regression for the N=128 EngineConcurrencyBenchmarks failure: the test bounded stores paged with an
     // offset continuation, so artifacts inserted between pages (sorting before the boundary) shifted
     // already-returned rows past the offset and the next page re-served them. The dependency-graph loader
@@ -251,11 +293,14 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         var competingStore = new GroundworkWorkflowExecutableStore(documentStore, GroundworkTestSerialization.Serializer);
         var interceptingStore = new InterceptingDocumentStore(documentStore)
         {
-            OnBeforeSave = async request =>
+            OnBeforeBegin = async scope =>
             {
-                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, request.DocumentKind);
-                Assert.Equal("artifact-1", request.Id);
-                Assert.Equal(0, request.ExpectedVersion);
+                Assert.Equal(
+                    [
+                        ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+                        ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind
+                    ],
+                    scope.Kinds);
                 await competingStore.SaveAsync(Executable("artifact-1", artifactVersion: "winner"));
             }
         };
@@ -265,6 +310,38 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
         var winner = await competingStore.FindAsync("artifact-1");
         Assert.Equal("winner", winner!.Identity.ArtifactVersion);
+    }
+
+    [Fact]
+    public async Task SaveAsync_Rolls_Back_The_Executable_When_Coordination_Creation_Fails()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        InterceptingDocumentStore? interceptingStore = null;
+        interceptingStore = new InterceptingDocumentStore(documentStore)
+        {
+            OnBeforeSave = request =>
+            {
+                Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, request.DocumentKind);
+                interceptingStore!.OnBeforeSave = coordinationRequest =>
+                    coordinationRequest.DocumentKind == ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind
+                        ? throw new InvalidOperationException("coordination write failed")
+                        : Task.CompletedTask;
+                return Task.CompletedTask;
+            }
+        };
+        IWorkflowExecutableStore store =
+            new GroundworkWorkflowExecutableStore(interceptingStore, GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.SaveAsync(Executable("artifact-1")).AsTask());
+
+        Assert.Equal("coordination write failed", exception.Message);
+        Assert.Null(await documentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-1"));
+        Assert.Null(await documentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1"));
     }
 
     [Theory]
@@ -290,6 +367,9 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await store.SaveAsync(Executable("artifact-1"));
         Assert.True(await store.DeleteAsync("artifact-1"));
         Assert.Null(await store.FindAsync("artifact-1"));
+        Assert.Null(await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1"));
         Assert.Empty(await store.ListAllAsync());
         Assert.False(await store.DeleteAsync("artifact-1"));
     }
@@ -391,6 +471,70 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.NotNull(await store.FindAsync("artifact-1"));
         Assert.True(await store.DeleteAsync(guard, now));
         Assert.Null(await store.FindAsync("artifact-1"));
+        Assert.Null(await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1"));
+    }
+
+    [Fact]
+    public async Task Legacy_Embedded_Lease_Is_Migrated_Once_Without_Rewriting_The_Executable()
+    {
+        await using var fixture = CreateStore("memory");
+        IWorkflowExecutableStore store =
+            new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var lease = (await store.TryAcquireRootWriteLeaseAsync(
+            "artifact-1",
+            "writer-1",
+            now.AddMinutes(1),
+            now))!;
+        var executable = (await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-1"))!;
+        var coordination = (await fixture.DocumentStore.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1"))!;
+
+        var executableJson = JsonNode.Parse(executable.ContentJson)!.AsObject();
+        var coordinationJson = JsonNode.Parse(coordination.ContentJson)!.AsObject();
+        executableJson["rootWriteLeases"] = coordinationJson["rootWriteLeases"]!.DeepClone();
+        executableJson["deletionGuard"] = coordinationJson["deletionGuard"]?.DeepClone();
+        var legacyWrite = await fixture.DocumentStore.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-1",
+            executable.SchemaVersion,
+            executableJson.ToJsonString(),
+            executable.Version));
+        Assert.Equal(DocumentStoreWriteStatus.Saved, legacyWrite.Status);
+        var coordinationDelete = await fixture.DocumentStore.DeleteAsync(new DeleteDocumentRequest(
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-1",
+            coordination.Version));
+        Assert.Equal(DocumentStoreWriteStatus.Deleted, coordinationDelete.Status);
+        var legacyVersion = legacyWrite.Document!.Version;
+
+        IWorkflowExecutableStore restarted =
+            new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var migratedLease = await restarted.TryAcquireRootWriteLeaseAsync(
+            "artifact-1",
+            "writer-1",
+            now.AddMinutes(2),
+            now);
+
+        Assert.NotNull(migratedLease);
+        Assert.Equal(lease.ConcurrencyToken, migratedLease!.ConcurrencyToken);
+        Assert.Equal(
+            legacyVersion,
+            (await fixture.DocumentStore.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+                "artifact-1"))!.Version);
+        Assert.Null(await restarted.TryBeginDeletionAsync(
+            "artifact-1",
+            "gc-1",
+            now.AddMinutes(1),
+            now));
     }
 
     [Theory]
@@ -874,7 +1018,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         public async Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
         {
             var envelope = await inner.LoadAsync(documentKind, id, cancellationToken);
-            if (documentKind != ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind || id != "artifact-1")
+            if (documentKind != ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind || id != "artifact-1")
                 return envelope;
 
             var loadNumber = Interlocked.Increment(ref _relevantLoadCount);

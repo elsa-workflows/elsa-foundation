@@ -174,6 +174,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ListBookmarksByStimulusTypeQuery = "list-by-stimulus-type";
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";
+    public const string WorkflowExecutableCoordinationDocumentKind = "workflowExecutableCoordination";
 
     /// <summary>Index used by <c>IWorkflowExecutableStore.ListAsync()</c> to enumerate every executable.</summary>
     public const string WorkflowExecutableByCollection = ByCollectionIndex;
@@ -687,6 +688,11 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow executable",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowExecutableCoordinationDocumentKind,
+                "Workflow executable coordination",
+                [],
+                []),
             Unit(
                 ExecutableActivityTemplateDocumentKind,
                 "Executable activity template",

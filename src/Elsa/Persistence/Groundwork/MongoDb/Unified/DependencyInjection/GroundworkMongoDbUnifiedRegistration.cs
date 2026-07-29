@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.DiagnosticRecords;
 using Groundwork.MongoDb.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +23,24 @@ public static class GroundworkMongoDbUnifiedRegistration
         services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
             databaseName,
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup);
+
+    /// <summary>Registers unified MongoDB persistence with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        return services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            databaseName,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
+    }
 
     /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
     public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
@@ -30,10 +48,30 @@ public static class GroundworkMongoDbUnifiedRegistration
         string connectionString,
         string databaseName,
         ShellFeatureContext context,
+        bool autoApplyOnStartup = false) =>
+        services.AddGroundworkMongoDbUnifiedPersistence(
+            connectionString,
+            databaseName,
+            context,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        ShellFeatureContext context,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup = false)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema(context);
-        return services.AddGroundworkMongoDbUnifiedPersistenceCore(connectionString, databaseName, autoApplyOnStartup);
+        return services.AddGroundworkMongoDbUnifiedPersistenceCore(
+            connectionString,
+            databaseName,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     /// <summary>
@@ -45,27 +83,48 @@ public static class GroundworkMongoDbUnifiedRegistration
         string connectionString,
         string databaseName,
         bool autoApplyOnStartup = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
+        services.AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
+            connectionString,
+            databaseName,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        string databaseName,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
-        return services.AddGroundworkMongoDbUnifiedPersistenceCore(connectionString, databaseName, autoApplyOnStartup);
+        return services.AddGroundworkMongoDbUnifiedPersistenceCore(
+            connectionString,
+            databaseName,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     private static IServiceCollection AddGroundworkMongoDbUnifiedPersistenceCore(
         this IServiceCollection services,
         string connectionString,
         string databaseName,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
         services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
             _ => MongoDbDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString, databaseName));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
         services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
-        return services.AddGroundworkUnifiedStoreFamilies();
+        return services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
     }
 }

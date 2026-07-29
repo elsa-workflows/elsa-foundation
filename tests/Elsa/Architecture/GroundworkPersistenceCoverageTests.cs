@@ -434,6 +434,27 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
+    public void Scanner_discovers_keyed_durable_registrations()
+    {
+        using var fixture = ScannerFixture.Create();
+        fixture.WriteRuntimeContract("public interface IBookmarkStateStore { }");
+        fixture.WriteRuntimeRegistration(
+            "DependencyInjection/KeyedRegistration.cs",
+            """
+            services.TryAddKeyedScoped<IBookmarkStateStore, GroundworkBookmarkStateStore>("groundwork");
+            services.AddScoped<IBookmarkStateStore>(
+                provider => provider.GetRequiredKeyedService<IBookmarkStateStore>("groundwork"));
+            """);
+        fixture.WriteRuntimeManifest("Unit(BookmarkStateDocumentKind, \"Bookmark\", [], [])");
+
+        var inventory = new GroundworkPersistenceInventoryScanner(fixture.Root).Scan();
+
+        var registration = Assert.Single(inventory.Registrations);
+        Assert.Equal("IBookmarkStateStore", registration.Contract);
+        Assert.Equal("GroundworkBookmarkStateStore", registration.Implementation);
+    }
+
+    [Fact]
     public void Scanner_fails_closed_when_a_durable_descriptor_is_added_indirectly()
     {
         using var fixture = ScannerFixture.Create();
