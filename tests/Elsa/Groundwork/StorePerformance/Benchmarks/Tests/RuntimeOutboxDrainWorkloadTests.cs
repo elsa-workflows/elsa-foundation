@@ -86,14 +86,14 @@ public sealed class RuntimeOutboxDrainWorkloadTests
     }
 
     [Theory]
-    [InlineData(OutboxFault.ReturnShiftedClaimTimes)]
-    [InlineData(OutboxFault.PersistShiftedClaimTimes)]
-    public async Task Claim_time_drift_reaches_exact_public_claim_validation(OutboxFault fault)
+    [InlineData(OutboxFault.ReturnShiftedClaimTimes, "exact bounded ordered current ownership")]
+    [InlineData(OutboxFault.PersistShiftedClaimTimes, "expected current claim after reopened retry")]
+    public async Task Claim_time_drift_reaches_its_public_state_boundary(OutboxFault fault, string expectedMessage)
     {
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new RuntimeOutboxDrainWorkload().ExecuteAsync(new OutboxAdapter(fault)).AsTask());
 
-        Assert.Contains("exact bounded ordered current ownership", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                 {
                     var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, request);
                     var persistedClaimItem = claim.Item;
-                    if (_fault is OutboxFault.ReturnShiftedClaimTimes or OutboxFault.PersistShiftedClaimTimes)
+                    if (_fault == OutboxFault.ReturnShiftedClaimTimes)
                     {
                         var shiftedRequest = new RuntimePostCommitOutboxClaimRequest(
                             request.OwnerId,
@@ -242,8 +242,17 @@ public sealed class RuntimeOutboxDrainWorkloadTests
                             request.WorkflowExecutionId,
                             request.IntentKind);
                         claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, shiftedRequest);
-                        if (_fault == OutboxFault.PersistShiftedClaimTimes)
-                            persistedClaimItem = claim.Item;
+                    }
+                    if (_fault == OutboxFault.PersistShiftedClaimTimes && request.OwnerId == "outbox-retry")
+                    {
+                        var shiftedRequest = new RuntimePostCommitOutboxClaimRequest(
+                            request.OwnerId,
+                            request.Now.AddSeconds(1),
+                            request.VisibilityTimeout,
+                            request.Limit,
+                            request.WorkflowExecutionId,
+                            request.IntentKind);
+                        persistedClaimItem = RuntimePostCommitOutboxClaimTransitions.Claim(item, shiftedRequest).Item;
                     }
                     if (_fault == OutboxFault.WrongReclaimFence && claim.FencingToken > 1)
                         claim = new RuntimePostCommitOutboxClaim(claim.Item, claim.OwnerId, claim.FencingToken - 1, claim.ClaimedAt, claim.VisibleAfter);

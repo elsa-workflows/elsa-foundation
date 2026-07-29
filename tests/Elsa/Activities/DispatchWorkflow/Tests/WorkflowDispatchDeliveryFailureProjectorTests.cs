@@ -119,7 +119,7 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, followUp.Status);
         Assert.Single(await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddSeconds(2), 10)));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() =>
             outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
                 claim,
                 failure,
@@ -251,7 +251,7 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
             Assert.Equal(
                 WorkflowDispatchLifecycle.ReadDeliveryIncidentId(initial.WorkflowDispatch),
                 WorkflowDispatchLifecycle.ReadDeliveryIncidentId(projection.WorkflowDispatch));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.CompleteClaimAsync(
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => outbox.CompleteClaimAsync(
                 new RuntimePostCommitOutboxClaimCompletion(
                     claim,
                     failure,
