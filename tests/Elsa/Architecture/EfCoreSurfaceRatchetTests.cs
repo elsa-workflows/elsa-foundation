@@ -91,6 +91,111 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_discovers_ef_projects_omitted_from_the_maintained_solution_and_follows_static_references()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("Elsa.Server.slnx", """
+            <Solution>
+              <Folder Name="/src/Consumer/"><Project Path="src/Consumer/Elsa.Consumer.csproj" /></Folder>
+            </Solution>
+            """);
+        fixture.Write("src/Consumer/Elsa.Consumer.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><ProjectReference Include="../Provider/Elsa.Provider.EFCore.csproj" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Provider/Elsa.Provider.EFCore.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Contains("src/Provider/Elsa.Provider.EFCore.csproj", snapshot.EfProjects);
+        Assert.Contains(
+            "src/Consumer/Elsa.Consumer.csproj -> src/Provider/Elsa.Provider.EFCore.csproj",
+            snapshot.DirectEfProjectReferences);
+        Assert.Contains(
+            "src/Consumer/Elsa.Consumer.csproj -> Microsoft.EntityFrameworkCore.Sqlite",
+            snapshot.TransitiveEfPackageConsumers);
+    }
+
+    [Fact]
+    public void Scanner_inventories_declared_direct_and_central_ef_package_inputs()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("Directory.Packages.props", """
+            <Project>
+              <ItemGroup><PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Consumer/Elsa.Consumer.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Contains(
+            "src/Consumer/Elsa.Consumer.csproj -> Microsoft.EntityFrameworkCore.Sqlite",
+            snapshot.DirectPackageReferences);
+        Assert.Contains(
+            "Directory.Packages.props -> Microsoft.EntityFrameworkCore.SqlServer",
+            snapshot.CentralPackageVersions);
+    }
+
+    [Fact]
+    public void Scanner_evaluates_imported_ef_package_references_for_the_importing_project()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("eng/ef-persistence.props", """
+            <Project>
+              <ItemGroup><PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Consumer/Elsa.Consumer.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="../../eng/ef-persistence.props" />
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Contains(
+            "src/Consumer/Elsa.Consumer.csproj -> Npgsql.EntityFrameworkCore.PostgreSQL",
+            snapshot.DirectPackageReferences);
+        Assert.Contains(
+            "eng/ef-persistence.props -> Npgsql.EntityFrameworkCore.PostgreSQL",
+            snapshot.SharedBuildPackageReferences);
+    }
+
+    [Fact]
+    public void Scanner_applies_conditional_ef_package_references_only_to_matching_projects()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("Directory.Build.props", """
+            <Project>
+              <ItemGroup Condition="'$(MSBuildProjectName)' == 'Elsa.Conditional'">
+                <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.Write("src/Conditional/Elsa.Conditional.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        fixture.Write("src/Unrelated/Elsa.Unrelated.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Contains(
+            "src/Conditional/Elsa.Conditional.csproj -> Microsoft.EntityFrameworkCore.InMemory",
+            snapshot.DirectPackageReferences);
+        Assert.DoesNotContain(
+            snapshot.DirectPackageReferences,
+            entry => entry.StartsWith("src/Unrelated/Elsa.Unrelated.csproj -> ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Baseline_comparison_reports_both_expansion_and_stale_entries()
     {
         var baseline = EmptySurface() with { EfProjects = ["removed.csproj"] };

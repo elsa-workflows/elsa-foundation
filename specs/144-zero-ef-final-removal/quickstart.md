@@ -190,4 +190,217 @@ This record covers the Spec 144 planning PR only; it does not complete the imple
 
 ## Implementation Evidence
 
-Populate during `speckit-implement`. No task is complete without a one-line evidence note and an immutable command/result, artifact, review, or merge identity.
+No task is complete without a one-line evidence note and an immutable command/result, artifact, review, or merge identity.
+
+### Phase 1 intake freeze
+
+#### T001 — authoritative state at intake
+
+Captured `2026-07-29T22:26:10Z` from the clean `codex/647-intake-freeze` worktree.
+
+| Surface | Verified state |
+|---|---|
+| Elsa remote `main` / intake head | `f769b516598eb807c9528e7c2e72085b346603e8` |
+| Groundwork remote `main` | `c48b5a1d04c2664211af1f14d403e3f0391846ca` |
+| Groundwork published family / Elsa consumed family | upstream `0.0.1-preview.99`; Elsa `Directory.Packages.props` pins all seven packages to `0.0.1-preview.95` |
+| Elsa issues / Project 33 | #629, #642, #643, #646, #647 are Open / In Progress; #932 is Open / Todo |
+| Elsa PR state | #1093 is Open / Draft / cleanly mergeable at `a86a08f6fbe48b680d9c6afc358cd0caf690a99a`; it remains a non-production foundation checkpoint pending its recorded owner gate |
+| Groundwork issues | #25, #50, #141 Open; #143 Closed |
+| Groundwork PR state | no open PR |
+| Frozen EF surface | baseline schema 1, SHA-256 `909ff9369a0d2e2defc6f717a87580458a80fdfa2038b279307b49419581f16f` |
+| Frozen Identity oracle | baseline SHA-256 `d1f114e701a9df7a66235255533de0306b75b3f08776953a8491f1c89613a7bc`; tree SHA-256 `f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c` |
+
+Evidence commands: `git ls-remote origin refs/heads/main`, `git rev-parse HEAD`, `rg -n 'Groundwork' Directory.Packages.props`, `gh issue view`, `gh pr list`, and `gh project item-list 33 --owner elsa-workflows --format json --limit 500`. No issue or project state was advanced.
+
+Evidence note T001: the table above freezes both remote heads, package-family drift, all required issue/PR states, and Project 33 states at the recorded timestamp.
+
+#### T002 — categorized EF surface
+
+`ef-removal-inventory.md` (SHA-256 `f1f27d6e36d3d1338129dcfd58b5c377118e4373e3ab6c34e756af7d8ab7332b`) binds baseline schema 1 and its SHA-256 to 308 entries across all 14 scanner categories. Its deterministic first-match classifier maps every entry exactly once: OpenTelemetry 54, Structured Logs 55, host/package 33, Identity oracle 31, OpenIddict 27, shared EF substrate 28, and test/oracle 80; `unknown` is zero. The inventory includes tools and the temporary benchmark-oracle dependency, records the deletion DAG, and exposes the current `EfFreeBoundaryViolations` category-model split for T063/T064.
+
+Evidence note T002: the checked-in classifier was rerun against `tests/Elsa/Architecture/Baselines/ef-core-surface.json` and returned `total: 308`, `unknown: 0`, with the exact family counts above.
+
+#### T003/T004 — method-level test retention
+
+`test-retention-ledger.md` (SHA-256 `37bdb12c656557da4e22d7fde25854e6219851ddcba7a60f9501b7f9be4cfd6b`) records 299 direct-token method rows from 40 xUnit-bearing files, nine support-only sources, and a disclosed 20-method token-free shared-fixture/host addendum. All 319 method dispositions are preliminary: 136 direct rows are `Preserve`, 128 are `Convert`, 35 are `RemovePending`, and every addendum row is `Convert`. No `RemovePending` row is architect-approved. A broad literal search also finds one surviving Groundwork-only negative assertion that names two already-retired EF feature aliases; the ledger records why it is outside the removal-affected denominator and assigns its audit to T054.
+
+Evidence note T003: independent re-enumeration of every Fact/Theory method in the 40 admitted files returned 299 identities, with zero source-to-ledger differences and zero path/line mismatches; the capture export SHA-256 is `cba7777a71b56e84540c21898d3974e66b0437384ed0146b6b68aa7708a6c311`.
+
+Evidence note T004: fixture tracing proved 10 `TokenEndpointFixture`, one `AspNetCoreIdentityFixture`, and nine `OpenIddictIdentityFixture` token-free methods reach EF; the strict addendum matcher returned 20.
+
+#### T005 — FR/SC evidence ownership
+
+| Requirements | Task and evidence owners |
+|---|---|
+| FR-001, FR-007 | T009-T017 prerequisite admission and `ef-removal-inventory.md`; T041-T052 dependency-ordered deletion |
+| FR-002-FR-005 | T006 and T018-T034; `contracts/reference-host-matrix.md`, unified-host resolution/readiness tests, and provider evidence |
+| FR-006 | T002-T004/T016; mechanical inventory plus direct-token/shared-reachability test ledger, including tools and temporary benchmark oracles |
+| FR-008 | T010/T044/T074/T078/T096; #643 evidence, OpenIddict removal, decision-map correction, and closure ledger |
+| FR-009-FR-011 | T003-T004/T014/T035-T040; method-level retention ledger, opened replacement evidence, and architect-approved removal rows |
+| FR-012-FR-013 | T041-T055/T063-T071; source/project/package/alias/initializer cleanup and permanent certification |
+| FR-014-FR-020 | T059-T071; omitted/imported/conditional/restored/stale/missing evidence fixtures, all-project restore receipt, absolute-zero guard, and baseline/oracle retirement |
+| FR-021 | T076/T081/T085; owning operational documentation, its validation command, final audit, and startup/schema-readiness evidence |
+| FR-022 | T032-T033/T057-T058/T069/T082-T087; complete build/test/pack/startup/provider/performance evidence |
+| FR-023-FR-024 | T072-T080; constitution, ADR-linked guidance, program records, operational docs, generated maps, and findings disposition |
+| FR-025 | T088-T093; three exact-range adversarial reviews, dispositions, and originating-reviewer re-verification |
+| FR-026-FR-028 | T078/T094-T096; Model B push/checks/merge/main-presence proof and immutable issue/Project 33 closure ledger |
+| SC-001 | T041-T055/T063-T071; zero category counts in the final certification |
+| SC-002 | T061/T063-T064/T068-T071; exact project/input/assets receipt binding for every discovered project |
+| SC-003 | T003-T004/T014/T035-T040/T057; 100% method-level dispositions and passing EF-independent replacements |
+| SC-004 | T009-T010/T012/T018-T034/T058/T086; four-provider all-lanes evidence |
+| SC-005 | T011/T087; accepted coverage-ledger verdicts bound to final fingerprints |
+| SC-006 | T059-T062/T069; all defined bypass fixtures pass |
+| SC-007 | T055/T057/T069/T082-T086; search, restore, build, test, pack, and startup audits |
+| SC-008 | T088-T093; no unresolved review blocker |
+| SC-009 | T094-T096; merge commit present on remote `main` before closure |
+| SC-010 | T072-T080/T096; governance, maps, issues, and Project 33 converge on the verified state |
+
+Audit disposition: the mapping found four weak assignments. T002 now explicitly includes tools and temporary benchmark oracles; T020 requires an exact negative readiness diagnostic; T021 rejects silent omission/in-memory/EF fallback; T054 explicitly covers aliases/initializers; and T076 requires a documentation validation command. No task cycle was introduced.
+
+Evidence note T005: all FR-001 through FR-028 and SC-001 through SC-010 appear exactly once in the grouped ownership table, and every audit gap was assigned to an explicit task before completion.
+
+#### T006 — reference-host declaration matrix
+
+`contracts/reference-host-matrix.md` (SHA-256 `cf79d5a216c6870425279bf193ebe546ce5f84e1074f7c202d972e3270d240d4`) now freezes the four maintained configuration declarations plus the absent SQL Server/MongoDB rows at the intake head. Default SQLite and the production overlay remain Not ready because Identity/OpenIddict retain EF. The baseline and Docker/PostgreSQL files are EF-free only by omission and make no all-lanes claim. The target rule names only existing unified provider/diagnostics/Identity/dashboard features and deliberately waits for #643 to catalog the exact OpenIddict Groundwork feature.
+
+Evidence note T006: every current row is marked Not ready, minimal, or not created; no declaration is presented as DI resolution, schema, startup, provider, or performance evidence.
+
+#### T007 — serialized shared-file ownership
+
+The #647 control-room root is the sole serializer. The admitted order is:
+
+1. prerequisite #646 mechanical `coverage-ledger.json` import before T011;
+2. T029 `shells.json`;
+3. T030 `shells.Production.json`;
+4. T031 `Elsa.Server.csproj`;
+5. T051 `Elsa.Server.slnx`;
+6. T052 `Directory.Packages.props` and remaining project package references.
+
+No Phase 1 worker may edit these files, and no later slice may advance past its prerequisite gate.
+
+Evidence note T007: the six-step serialization order above assigns one root owner and preserves the prerequisite coverage-ledger import before any #647 host/package shared-file edit.
+
+#### T008 — temporary ratchet verification
+
+- Initial exact test command failed closed as designed because the fresh worktree did not yet contain assets for the complete repository restore. The frozen Identity test passed; the EF-surface test refused to compare and named every missing project instead of reporting phantom shrinkage.
+- `dotnet restore Elsa.Server.slnx --force-evaluate` completed successfully. Existing restore warning: `NU1510` for `Microsoft.Extensions.DependencyInjection` in the architecture test project.
+- Rerun: `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~Frozen_identity_ef_oracle_matches_its_reviewed_content_fingerprint|FullyQualifiedName~Ef_core_surface_matches_the_reviewed_shrink_only_baseline"` — Passed 2, Failed 0, Skipped 0, duration 42 seconds. No database-server container or performance process ran.
+
+Evidence note T008: after the required complete solution restore, both the shrink-only surface ratchet and frozen Identity-oracle fingerprint passed on the intake head.
+
+#### T015 — worktree contamination check
+
+- #647 intake worktree started clean at `f769b5165`; only the explicit Spec 144 intake artifacts are being changed.
+- Elsa main checkout is clean at local `8d519d4eb` and 127 commits behind `origin/main`; it was not edited.
+- The historical Spec 144 planning worktree is clean at `6cdd887c1` on a gone branch; it was not edited.
+- Groundwork primary has unrelated branch state (`codex/diagnostic-stream-auto-apply` at `a2dc8a410`) and was treated as read-only.
+
+Evidence note T015: target, primary Elsa, historical planning, and Groundwork checkouts were inspected separately; no worker edit escaped the dedicated #647 worktree.
+
+#### T014/T016 — replacement audit and deletion DAG
+
+T014 opened all four candidate Groundwork replacement tests beside their original EF-backed
+methods. Three are partial and one is rejected: neither OpenTelemetry candidate covers the complete
+write/drain plus query objective, the structured-log complex-field candidate omits message and
+drain-lifecycle coverage, and the restart candidate does not exercise trim-to-zero or stale-cursor
+rejection. `test-retention-ledger.md` records the exact differences. No `RemovePending` row is
+admitted for removal.
+
+T016 is frozen in `ef-removal-inventory.md`: diagnostics, OpenIddict, and the Identity oracle are
+independent leaves gated by #642/#643/#646 evidence; the shared EF substrate follows all three;
+host/solution/package edits are serialized; and the permanent guard/baseline retirement comes only
+after actual absolute zero.
+
+Evidence note T014: all cited replacement pairs were opened; verdicts are Partial, Partial,
+Rejected, and Partial, with no proven objective-equivalent replacement and no approved removal.
+
+Evidence note T016: every scanner family has named gate IDs, earliest task IDs, and a dependency
+edge in the recorded DAG.
+
+### Phase 2 prerequisite admission — current blocking record
+
+This table records the exact intake status; it does **not** pass T009–T013 or admit an EF-family
+deletion:
+
+| Task / gate | Status at Elsa `f769b5165` | Retained evidence | Missing admission evidence |
+|---|---|---|---|
+| T009 / #642 diagnostics | **Pending** | #1048 merge `3cb79c3940e0d665a3156cea33d1e9550163f1ed`; #1072 merge `4a5f517f293b54c370a5d0073ce7424f685bb8c5`; #1098 merge `88717fa00eda7cf95fb6a00019ce68fa0504fd83` | Exact-preview.95 four-provider/grouped-reducer promotion, #646 verdict, and final test dispositions; Spec 139 T050–T055/T057 remain open. |
+| T010 / #643 OpenIddict | **Blocked** | Draft foundation PR #1093 at `a86a08f6fbe48b680d9c6afc358cd0caf690a99a`; frozen 145-member and 55-objective inventories | Public stores, production registration, four-provider black-box evidence, exact-range reviews, merge, and the still-open Groundwork #141 contract. |
+| T011 / #646 performance | **Blocked** | 35 coverage-ledger rows and historical `host-selection-all35` composition evidence | Zero `performanceVerdict` objects and zero performance-complete/ready rows; the ledger names preview.88 while Elsa consumes preview.95; diagnostics provider-evidence arrays are empty; #50 has no accepted immutable baseline. |
+| Frozen Identity oracle | **Freeze passes; deletion not admitted** | Baseline SHA `d1f114e701a9df7a66235255533de0306b75b3f08776953a8491f1c89613a7bc`; tree SHA `f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c` | The IAM #646 verdict and durable import must pass before the oracle can be removed. |
+| T012 / #932 dashboard | **Blocked** | Current source proves only SQLite/PostgreSQL dashboard dialects | SQL Server dialect, MongoDB aggregation, unified registration, host acceptance evidence, and final issue/Project disposition; no non-support amendment is ratified. |
+| T013 / Groundwork upstream | **Blocked** | #143 closed at `f8374a9807e820824e0f03bd4a6140606ac4233b`; #141 prerequisite PR #148 merged at `b5d59f1abb080d2ae2d2d1f1bd0505da11f79f80`; Groundwork main/preview.99 at `c48b5a1d04c2664211af1f14d403e3f0391846ca` | #141 remains open; #50 remains open without an accepted immutable baseline; parent #25 remains open; no separately named completion amendment exists. |
+
+Evidence note T009–T013: all five prerequisite tasks remain unchecked. Historical preview.86/.88
+evidence and partial package checkpoints are not exact-family admission evidence.
+
+### T018/T019 — #932 dashboard acceptance intake
+
+Audit head: Elsa `origin/main` `f769b516598eb807c9528e7c2e72085b346603e8`, 2026-07-30.
+
+- `GroundworkRunHealthDialect` contains exactly `Sqlite` and `PostgreSql`.
+  `GroundworkWorkflowRunHealthDataSource` and `GroundworkWorkflowPortfolioDataSource` use that
+  two-way relational dialect model; no MongoDB aggregate implementation exists.
+- SQLite and PostgreSQL unified registration add both dashboard data sources. SQL Server and
+  MongoDB unified registration add neither.
+- The sole concrete run-health provider test,
+  `SqliteAdapterPagesPastOneHundredExecutionsAndReturnsTheirIncidentsExactly`, is SQLite-only. It
+  persists 125 executions and one incident on `run-124`, then expects started count 125,
+  incident-bearing count 1, and incident count 1.
+- The companion concrete portfolio provider fixture,
+  `GroundworkSqliteReturnsTheCompleteIdenticalPortfolioFixture`, is also SQLite-only. It expects
+  base counts 105/50/30, 30 drafts, and non-null state for every draft.
+- The provider-neutral service oracle additionally expects, for 125 authorized runs, 100
+  succeeded, 25 failed, two incident-bearing runs, three incidents, one running run, and
+  deterministic top-failure counts 13/12. It is not SQL Server/MongoDB execution evidence.
+- #932 is Open / Project 33 Todo with no implementation PR. No SQL Server/MongoDB dialect,
+  deterministic aggregation, unified registration, or provider acceptance evidence is merged.
+
+Gate disposition: **Blocked**. T019's verification action is complete, but the #932 gate it records
+prevents T022–T026/T029–T034 from passing until #932 lands a real SQL Server dialect plus MongoDB
+aggregation and host-level acceptance evidence, or the program owner separately ratifies an
+explicit non-support amendment.
+
+Evidence note T018: every existing concrete and provider-neutral dashboard oracle was opened; the
+absence of SQL Server/MongoDB acceptance tests is recorded rather than converted into an inferred
+pass.
+
+Evidence note T019: current production source and unified registrations prove the #932 gap remains;
+the mandatory blocker is retained with its exact exit condition.
+
+### T035–T039 readiness audit — no conversion admitted
+
+The method ledger was grouped against current target fixtures before any EF-backed test was moved:
+
+| Conversion task | Rows | Current readiness |
+|---|---:|---|
+| T035 Identity | 57 | Groundwork store/manager candidates exist, but the 12 Groundwork HTTP rows still compose EF OpenIddict and the frozen Identity oracle remains load-bearing for #646. |
+| T036 OpenIddict | 38 | No Groundwork OpenIddict production source or target fixture exists at this head; blocked on #643. |
+| T037 diagnostics | 76 | Groundwork SQLite suites exist, but the four T014 objectives remain partial/rejected and four-provider promotion remains blocked on #642. |
+| T038 shared EF substrate | 26 | Current query/save/upsert/WAL/migration tests are EF-mechanism-specific or lack one-to-one Groundwork objective evidence; no removal classification is admitted. |
+| T039 Modularity/shared-host | 0 additional (20 disclosed rows already counted in T035/T036) | The shared-host trace must not create a duplicate method denominator; no removal is defensible. |
+
+The remaining 122 rows are permanent guard/current non-EF target evidence (59) and benchmark/oracle
+or protocol evidence (63). The #646 oracle rows remain frozen; protocol/integrity rows remain
+preserved. This audit authorizes no deletion or rehome and leaves T035–T039 unchecked.
+
+### T059/T060 — additive anti-bypass fixtures
+
+Four focused tests were added without changing the temporary baseline or scanner behavior:
+
+- an EF project explicitly omitted from `Elsa.Server.slnx` is still discovered, and its direct
+  project/static-transitive package edges are reported;
+- declared direct and central EF package inputs are both inventoried;
+- a real imported props file contributes its EF package to both the importing project and the
+  shared-build inventory;
+- a conditional EF package applies to the matching project and not an unrelated project.
+
+The existing Windows-style project-reference and shared-build package fixtures remain part of the
+same gate.
+
+Evidence note T059: the new omitted-solution test plus the existing Windows-reference test passed
+2/2 in Release; the scanner used raw repository project discovery rather than solution membership.
+
+Evidence note T060: the three new dependency-input tests passed within the 4/4 new-test run, and
+the existing Windows/static and shared-build fixtures passed 2/2; commands used `--no-restore`,
+build servers disabled, and no database-server container.

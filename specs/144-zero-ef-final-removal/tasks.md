@@ -24,14 +24,14 @@
 
 **Purpose**: Establish an authoritative, reviewable starting state before any deletion.
 
-- [ ] T001 Record current Elsa and Groundwork remote-main SHAs, consumed package version, issue states, PR states, and Project 33 states in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T002 Generate the categorized intake from `tests/Elsa/Architecture/Baselines/ef-core-surface.json` and record counts, exact owning families, and source head in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
-- [ ] T003 Inventory every test method in files directly referencing EF packages/types/registrations in `specs/144-zero-ef-final-removal/test-retention-ledger.md`
-- [ ] T004 Trace shared fixtures, host builders, and transitive test-project references and add token-free EF-reachable methods under a disclosed addendum in `specs/144-zero-ef-final-removal/test-retention-ledger.md`
-- [ ] T005 [P] Map FR-001 through FR-028 and SC-001 through SC-010 to tasks/evidence owners in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T006 [P] Record the current host feature matrix from `src/Apps/Elsa.Server/shells.json`, `src/Apps/Elsa.Server/shells.Production.json`, `src/Apps/Elsa.Server/shells.baseline.json`, and `docker/compose/elsa-server.shells.json` in `specs/144-zero-ef-final-removal/contracts/reference-host-matrix.md`
-- [ ] T007 Record the serialization owner/order for `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, and `specs/094-harden-groundwork-stores/coverage-ledger.json` in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T008 Run the current shrink-only and frozen-Identity-oracle architecture checks and record exact results in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T001 Record current Elsa and Groundwork remote-main SHAs, consumed package version, issue states, PR states, and Project 33 states in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T002 Generate the categorized intake from `tests/Elsa/Architecture/Baselines/ef-core-surface.json` and record counts, exact owning families, tools, temporary benchmark oracles, and source head in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
+- [x] T003 Inventory every test method in files directly referencing EF packages/types/registrations in `specs/144-zero-ef-final-removal/test-retention-ledger.md`
+- [x] T004 Trace shared fixtures, host builders, and transitive test-project references and add token-free EF-reachable methods under a disclosed addendum in `specs/144-zero-ef-final-removal/test-retention-ledger.md`
+- [x] T005 [P] Map FR-001 through FR-028 and SC-001 through SC-010 to tasks/evidence owners in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T006 [P] Record the current host feature matrix from `src/Apps/Elsa.Server/shells.json`, `src/Apps/Elsa.Server/shells.Production.json`, `src/Apps/Elsa.Server/shells.baseline.json`, and `docker/compose/elsa-server.shells.json` in `specs/144-zero-ef-final-removal/contracts/reference-host-matrix.md`
+- [x] T007 Record the serialization owner/order for `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, and `specs/094-harden-groundwork-stores/coverage-ledger.json` in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T008 Run the current shrink-only and frozen-Identity-oracle architecture checks and record exact results in `specs/144-zero-ef-final-removal/quickstart.md`
 
 ---
 
@@ -46,9 +46,9 @@
 - [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment, including #932's required final issue and Project 33 disposition; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T013 Record three independent upstream gates in `specs/144-zero-ef-final-removal/quickstart.md`: exact consumed-package provenance for merged #141/#143 APIs; accepted #50 performance evidence and final issue disposition; and Groundwork parent #25 completion (or a named, separately ratified #647/#629 amendment). Never infer #50/#25 completion from package contents or a partial checkpoint.
-- [ ] T014 [P] Open every test cited as replacement evidence in `specs/144-zero-ef-final-removal/test-retention-ledger.md` and correct or reject unsupported “covered by” claims
-- [ ] T015 [P] Verify `git status` in the #647 worktree and main checkout and record any unrelated/user-owned changes in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T016 Finalize the prerequisite/deletion DAG and per-family gate links in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
+- [x] T014 [P] Open every test cited as replacement evidence in `specs/144-zero-ef-final-removal/test-retention-ledger.md` and correct or reject unsupported “covered by” claims
+- [x] T015 [P] Verify `git status` in the #647 worktree and main checkout and record any unrelated/user-owned changes in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T016 Finalize the prerequisite/deletion DAG and per-family gate links in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
 - [ ] T017 Review the completed intake, test ledger, prerequisite table, and shared-file serialization plan before admitting any implementation story in `specs/144-zero-ef-final-removal/quickstart.md`
 
 **Checkpoint**: Every removal target and test objective is known; each EF family has explicit non-destructive admission gates.
@@ -65,10 +65,10 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [US1] Record #932's SQL Server/MongoDB dashboard acceptance tests and exact expected outcomes from `tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs` in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T019 [US1] Verify #932 has merged SQL Server/MongoDB dialect and deterministic aggregation evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs`; otherwise retain it as a blocking gate in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T020 [P] [US1] Add SQL Server and MongoDB unified-registration resolution tests in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
-- [ ] T021 [P] [US1] Add four-provider all-lanes/no-EF composition assertions in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
+- [x] T018 [US1] Record #932's SQL Server/MongoDB dashboard acceptance tests and exact expected outcomes from `tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs` in `specs/144-zero-ef-final-removal/quickstart.md`
+- [x] T019 [US1] Verify #932 has merged SQL Server/MongoDB dialect and deterministic aggregation evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs`; otherwise retain it as a blocking gate in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T020 [P] [US1] Add SQL Server and MongoDB unified-registration resolution tests, including an exact negative missing-capability/schema-readiness diagnostic, in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
+- [ ] T021 [P] [US1] Add four-provider all-lanes/no-EF composition assertions that reject silent feature omission or in-memory/EF fallback in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
 
 ### Implementation for User Story 1
 
@@ -120,7 +120,7 @@
 - [ ] T051 [US2] Remove deleted EF projects from `Elsa.Server.slnx` in the serialized shared-file slice
 - [ ] T052 [US2] Remove all EF central package versions and remaining direct EF package references from `Directory.Packages.props` and affected project files in the serialized shared-file slice
 - [ ] T053 [US2] Remove the EF logging/provider configuration residue from `src/Apps/Elsa.Server/appsettings.json`
-- [ ] T054 [US2] Audit `shells.baseline.json`, `docker/compose/elsa-server.shells.json`, samples, scripts, tools, and docs for silent feature omission or EF runtime configuration and correct the affected files
+- [ ] T054 [US2] Audit `shells.baseline.json`, `docker/compose/elsa-server.shells.json`, samples, scripts, tools, docs, EF aliases, and EF initializers for silent feature omission or EF runtime configuration and correct the affected files
 - [ ] T055 [US2] Run a repository-wide source/project/package/configuration search and reconcile every result against `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
 - [ ] T056 [US2] During each vertical deletion, regenerate and review the shrink-only `tests/Elsa/Architecture/Baselines/ef-core-surface.json` in the same commit, proving the diff only removes entries
 - [ ] T057 [US2] Run the complete container-free affected build/unit/architecture suites and record results in `specs/144-zero-ef-final-removal/quickstart.md`
@@ -138,8 +138,8 @@
 
 ### Tests for User Story 3
 
-- [ ] T059 [US3] Add omitted-project and Windows-style project-reference bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
-- [ ] T060 [US3] Add central/shared/imported/conditional/direct/static-transitive dependency bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+- [x] T059 [US3] Add omitted-project and Windows-style project-reference bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+- [x] T060 [US3] Add central/shared/imported/conditional/direct/static-transitive dependency bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T061 [US3] Add restored-transitive, missing-assets, stale-but-present assets/receipt, changed dependency-input, and project-set-mismatch fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T062 [US3] Add migration/context/registration/JSON/YAML host-configuration detection and comment-false-positive tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 
@@ -169,7 +169,7 @@
 - [ ] T073 [P] [US4] Mark the final state and retained evidence in `docs/program-goals/zero-ef-persistence.md`
 - [ ] T074 [P] [US4] Resolve the `ef-removal` decision and retain the delivery-lane/completion-gate distinction for OpenIddict in `docs/decision-maps/zero-ef-groundwork.md`
 - [ ] T075 [P] [US4] Update the final consequences/status and links in `docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md`
-- [ ] T076 [P] [US4] Document Groundwork schema validation and authorized apply for reference CI/CD/deployments in the owning operational documentation under `docs/`
+- [ ] T076 [P] [US4] Document Groundwork schema validation and authorized apply for reference CI/CD/deployments in the owning operational documentation under `docs/`, then run and record the owning documentation validation command
 - [ ] T077 [P] [US4] Update affected provider/host READMEs and `EXTENSION_POINTS.md` catalogs in the same work unit as their registration changes
 - [ ] T078 [US4] Prepare evidence-bound #647/#629 closure summaries and an immutable Project 33 closure ledger enumerating #629, #642, #643, #646, #647, #932, and every other parent-required item with required/actual final state, merge or amendment evidence, and verification timestamp; do not apply transitions before remote-main verification
 - [ ] T079 [US4] Refresh `docs/maps/` through the five authorized map scripts after implementation inputs settle
