@@ -822,13 +822,19 @@ Their findings and dispositions are:
 
 | Axis | Confirmed finding and disposition | Status |
 |---|---|---|
-| Correctness/mechanism | One-minute production execution leases could expire across 1,024 commits; the replacement validates every acquired lease, calls `EnsureCurrentAsync`, and requires a successful exact-token heartbeat before every accepted commit. | Re-verification pending |
-| Correctness/mechanism | Public page bounds and outbox order were normalized rather than proved. The replacement rejects over-limit pages (the public page model also rejects them), uses genuinely fabricated-member and ignored-limit faults, and compares returned outbox order without sorting. | Re-verification pending |
-| Correctness/mechanism | Equivalent replay did not reject a conflicting fingerprint. The replacement submits an altered request under the accepted commit ID and requires `RuntimeCheckpointReplayConflictException`; the fake retains canonical marker fingerprints and includes an acceptance fault. | Re-verification pending |
-| Correctness/mechanism | The reviewer asked the workload caller to acquire the executable root-write lease. The production checkpoint store owns that lease around its atomic write; caller acquisition would duplicate and potentially conflict with it. The fake now models and counts the same store-owned boundary and an unavailable-lease fault. This runner does not independently prove the provider-internal lease race; existing runtime/provider conformance remains authoritative. | Withdrawal requested |
-| Evidence integrity | The “fabricated member” fault repeated a real member. It now returns a unique plausible activity/value record absent from backing. | Re-verification pending |
-| Evidence integrity | The runner does not inject a valid-current-fence mid-commit failure or recreate storage after failure. That is a retained provider failure/restart gate, not evidence supplied by this shared-backing runner. | Accepted limitation |
+| Correctness/mechanism | One-minute production execution leases could expire across 1,024 commits; the replacement validates every acquired lease, calls `EnsureCurrentAsync`, and requires a successful exact-token heartbeat before every accepted commit. | PASS |
+| Correctness/mechanism | Public page bounds and outbox order were normalized rather than proved. The replacement rejects over-limit pages (the public page model also rejects them), uses genuinely fabricated-member and ignored-limit faults, and compares returned outbox order without sorting. | PASS |
+| Correctness/mechanism | Equivalent replay did not reject a conflicting fingerprint. The replacement submits an altered request under the accepted commit ID and requires `RuntimeCheckpointReplayConflictException`; the fake retains canonical marker fingerprints and includes an acceptance fault. | PASS |
+| Correctness/mechanism | The reviewer asked the workload caller to acquire the executable root-write lease. The production checkpoint store owns that lease around its atomic write; caller acquisition would duplicate and potentially conflict with it. The fake now models and counts the same store-owned boundary and an unavailable-lease fault. This runner does not independently prove the provider-internal lease race; existing runtime/provider conformance remains authoritative. The originating reviewer withdrew the blocker. | PASS |
+| Evidence integrity | The “fabricated member” fault repeated a real member. It now returns a unique plausible activity/value record absent from backing. | PASS |
+| Evidence integrity | The runner does not inject a valid-current-fence mid-commit failure or recreate storage after failure. That is a retained provider failure/restart gate, not evidence supplied by this shared-backing runner. | PASS |
 | Scope/test preservation | The reviewer found the delta additive, the 179-test initial suite preserved, and no project/package/provider/EF/container/ledger/task surface change. | PASS |
+
+The originating reviewers re-inspected exact replacement range
+`4b1eadeea42984f9ebcf3134c60f07134abec7cf..860c844d72ad35947df1dd3d6446c6fe25e7a012`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Their
+independent verification included the focused **35/35**, complete no-container **185/185**, exact
+digest recomputation, and clean exact-range diff.
 
 This checkpoint does not execute an EF comparator or provider matrix, start a database container,
 inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
