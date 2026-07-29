@@ -66,15 +66,16 @@
 - Provider-specific feature omissions: rejected for required reference-host features.
 - Mixed providers inside one reference host: rejected because it falsifies one-choice composition.
 
-## Decision 7: #932 is part of #647
+## Decision 7: #932 is a mandatory #647 completion gate, not an implicit source-work transfer
 
-**Decision**: Require SQL Server and MongoDB run-health/portfolio support before final host certification, unless the program owner ratifies an explicit non-support amendment with evidence.
+**Decision**: Require SQL Server and MongoDB run-health/portfolio support before final host certification, unless the program owner ratifies an explicit non-support amendment with evidence. #647 consumes #932's merged source/test evidence and performs the final all-lanes host integration; it does not silently assume ownership of #932's dialect/aggregation implementation.
 
 **Rationale**: SQLite/PostgreSQL already wire dashboard sources; SQL Server/MongoDB currently cannot. Closing #647 without parity would silently narrow the supported host shape.
 
 **Alternatives considered**:
 
-- Leave #932 as post-program debt: rejected by the ratified #647 issue body.
+- Leave #932 as post-program debt: rejected by the #647 completion-gate requirement.
+- Treat the final-removal spec as authorization to implement #932 source work: rejected; ownership must remain explicit on #932 or be separately assigned.
 
 ## Decision 8: OpenIddict is a separate delivery lane inside the same completion gate
 

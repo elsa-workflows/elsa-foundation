@@ -12,7 +12,7 @@ Complete issue #647 as the final dependency-ordered zero-EF lane after #642, #64
 
 **Language/Version**: .NET 10 (`net10.0`) and the repository-pinned current C# toolchain
 
-**Primary Dependencies**: Groundwork versioned preview family containing the final #50/#141/#143 capabilities; OpenIddict 7.5; ASP.NET Core Identity; Nuplane/CShells composition; Microsoft.Extensions abstractions. `Microsoft.EntityFrameworkCore*`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, and `OpenIddict.EntityFrameworkCore` are removal targets, not retained dependencies.
+**Primary Dependencies**: Groundwork versioned preview family containing the exact #50/#141/#143 capabilities required by the completion candidate; OpenIddict 7.5; ASP.NET Core Identity; Nuplane/CShells composition; Microsoft.Extensions abstractions. `Microsoft.EntityFrameworkCore*`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, and `OpenIddict.EntityFrameworkCore` are removal targets, not retained dependencies.
 
 **Storage**: Groundwork over SQLite, SQL Server, PostgreSQL, and a transaction-capable MongoDB topology; no production EF data migration because the product is greenfield
 
@@ -134,7 +134,7 @@ Research is consolidated in [research.md](research.md). The load-bearing decisio
 3. Inventory tests by direct reference and transitive/shared-host reachability, then use the Spec 093 ledger plus addendum pattern.
 4. Delete in the dependency order diagnostics → OpenIddict → Identity oracle → shared EF substrate → packages/configuration.
 5. Require one provider choice across every enabled lane; fail closed on absent capability/schema.
-6. Keep #932 inside the host exit gate.
+6. Keep #932 inside the host exit gate while retaining its dialect/aggregation source ownership as a separate issue; #647 consumes merged evidence and owns final reference-host integration.
 7. Preserve complete restored-graph evidence and reject missing/stale assets.
 8. Reconcile OpenIddict wording by distinguishing delivery ownership from program completion membership.
 9. Keep the temporary benchmark harness/oracles only until evidence import is complete, then remove them in the final slice.

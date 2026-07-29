@@ -45,7 +45,7 @@
 - [ ] T010 Verify #643 completes the 145-member OpenIddict ledger, production registration, four-provider black-box suite, exact-range reviews, and merge; record evidence in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment; record evidence in `specs/141-zero-ef-final-removal/quickstart.md`
-- [ ] T013 Verify the consumed Groundwork package contains the merged #50, #141, and #143 capabilities at an exact upstream SHA and record it in `specs/141-zero-ef-final-removal/quickstart.md`
+- [ ] T013 Verify the consumed Groundwork package contains the exact merged capabilities required from #50, #141, and #143 at an upstream SHA, without treating partial checkpoints as issue closure, and record it in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T014 [P] Open every test cited as replacement evidence in `specs/141-zero-ef-final-removal/test-retention-ledger.md` and correct or reject unsupported “covered by” claims
 - [ ] T015 [P] Verify `git status` in the #647 worktree and main checkout and record any unrelated/user-owned changes in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T016 Finalize the prerequisite/deletion DAG and per-family gate links in `specs/141-zero-ef-final-removal/ef-removal-inventory.md`
@@ -59,20 +59,22 @@
 
 **Goal**: One provider selection backs every enabled durable lane, including dashboard and OpenIddict, with fail-closed readiness.
 
+**Cross-issue boundary**: #932 owns the SQL Server/MongoDB dashboard dialect and aggregation delivery. #647 consumes its merged evidence as a mandatory gate; it does not declare that source work complete, substitute a local workaround, or close while #932 remains incomplete. The host-registration and all-lanes composition checks below remain #647 integration work.
+
 **Independent Test**: Compose each supported provider shape, resolve every enabled durable contract to Groundwork, resolve no EF implementation, and prove dashboard run-health/portfolio remains available.
 
 ### Tests for User Story 1
 
-- [ ] T018 [US1] Add SQL Server run-health/portfolio dialect tests in `tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs` and `tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioProviderTests.cs`
-- [ ] T019 [US1] Add MongoDB aggregation-shape and deterministic-result tests in `tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs` and `tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioProviderTests.cs`
+- [ ] T018 [US1] Record #932's SQL Server/MongoDB dashboard acceptance tests and exact expected outcomes from `tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs` in `specs/141-zero-ef-final-removal/quickstart.md`
+- [ ] T019 [US1] Verify #932 has merged SQL Server/MongoDB dialect and deterministic aggregation evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs`; otherwise retain it as a blocking gate in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T020 [P] [US1] Add SQL Server and MongoDB unified-registration resolution tests in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
 - [ ] T021 [P] [US1] Add four-provider all-lanes/no-EF composition assertions in `tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement the SQL Server dashboard relational dialect in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs`
-- [ ] T023 [US1] Implement MongoDB run-health aggregation in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs`
-- [ ] T024 [US1] Implement MongoDB workflow-portfolio aggregation in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs`
+- [ ] T022 [US1] Consume the merged #932 SQL Server dashboard dialect evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs` before enabling the SQL Server reference-host row in `specs/141-zero-ef-final-removal/contracts/reference-host-matrix.md`
+- [ ] T023 [US1] Consume the merged #932 MongoDB run-health aggregation evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowRunHealthDataSource.cs` before enabling the MongoDB reference-host row in `specs/141-zero-ef-final-removal/contracts/reference-host-matrix.md`
+- [ ] T024 [US1] Consume the merged #932 MongoDB workflow-portfolio aggregation evidence for `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/GroundworkWorkflowPortfolioDataSource.cs` before enabling the MongoDB reference-host row in `specs/141-zero-ef-final-removal/contracts/reference-host-matrix.md`
 - [ ] T025 [US1] Wire dashboard run-health/portfolio into `src/Elsa/Persistence/Groundwork/SqlServer/Unified/SqlServerGroundworkUnifiedPersistenceShellFeature.cs`
 - [ ] T026 [US1] Wire dashboard run-health/portfolio into `src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs`
 - [ ] T027 [US1] Update dashboard Groundwork feature registration/extension-point documentation in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/README.md` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/EXTENSION_POINTS.md`
@@ -187,7 +189,7 @@
 - [ ] T084 Run package/pack audits for every shipped project and prove no package dependency reintroduces EF; record results in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T085 Run maintained local SQLite reference-host startup/schema-readiness smoke tests and record results in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T086 [CONTAINER] Run the complete SQL Server/PostgreSQL/MongoDB provider and reference-host startup matrix on the frozen candidate and retain evidence under `docs/reports/evidence/141-zero-ef-final-removal/`
-- [ ] T087 [PERF] Verify every retained #646 artifact/verdict binds to the final package/manifest/input fingerprints and rerun only invalidated measurements on an idle machine
+- [ ] T087 [PERF] Verify every retained #646 artifact/verdict binds to the final package/manifest/input fingerprints in `specs/094-harden-groundwork-stores/coverage-ledger.json` and record invalidation/rerun evidence in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T088 Freeze base/head SHAs and candidate metadata for independent review in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T089 [P] Run an adversarial read-only correctness/mechanism reviewer on the exact T088 commit range and record findings in `specs/141-zero-ef-final-removal/quickstart.md`
 - [ ] T090 [P] Run an adversarial read-only evidence-integrity reviewer on the exact T088 commit range and record findings in `specs/141-zero-ef-final-removal/quickstart.md`
@@ -204,9 +206,9 @@
 
 ### Phase Dependencies
 
-- **Phase 1 (T001-T008)**: Starts immediately; T003/T004/T005/T006 can run in parallel.
+- **Phase 1 (T001-T008)**: Starts immediately; T005/T006 can run in parallel. T003 precedes T004 because both append to the same test-retention ledger.
 - **Phase 2 (T009-T017)**: Depends on Phase 1; each prerequisite may be verified independently, but T017 blocks deletion.
-- **US1 (T018-T034)**: Code/tests may begin after Phase 1; final host integration depends on #643 and #932 admission.
+- **US1 (T018-T034)**: #647-owned host integration tests may begin after Phase 1; enabling the SQL Server/MongoDB dashboard rows depends on #643 and #932 admission.
 - **US2 (T035-T058)**: Test conversions may begin after Phase 1; each deletion task depends on its explicit Phase-2 gate and replacement-test disposition.
 - **US3 (T059-T071)**: Fixture tests/scanner hardening may begin after Phase 1; baseline deletion waits until US2 reaches real zero.
 - **US4 (T072-T080)**: Drafting may begin after Phase 1; final wording/maps wait for the implemented result.
@@ -286,8 +288,8 @@ Root: T092 remediation, originating-reviewer T093 re-verification, and Model B l
 ### Container-Free First
 
 1. Complete Phase 1 and all container-free Phase 2 verification.
-2. Land upstream Groundwork #147/#148 and consume their released package in #643.
-3. Advance test ledgers, guard fixture tests, #932 source/unit work, and documentation without starting server containers.
+2. Verify merged Groundwork PRs #147/#148 are present in the exact published package family consumed by #643; do not treat either partial checkpoint as closure of Groundwork #50 or #141.
+3. Advance test ledgers, guard fixture tests, #932 evidence intake/final host integration, and documentation without starting server containers.
 4. Stop only when T033/T058/T086/T087 are the actual remaining gates.
 
 ### Incremental Delivery
