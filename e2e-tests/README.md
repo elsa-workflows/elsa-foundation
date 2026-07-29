@@ -7,14 +7,25 @@ exercise the real HTTP + persistence + runtime-pump path that unit/integration t
 
 ## Prerequisites
 
-Start the server from source (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
+Build the server, deploy the complete reference-composition schema to the fresh SQLite database, then start the
+server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
 
 ```bash
+dotnet build src/Apps/Elsa.Server/Elsa.Server.csproj
+dotnet tool run groundwork -- apply \
+  --manifest-assembly src/Apps/Elsa.Server/bin/Debug/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
+  --provider sqlite \
+  --connection 'Data Source=src/Apps/Elsa.Server/elsa-groundwork.db' \
+  --output json \
+  --safe
 dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj --launch-profile http
 ```
 
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
 everything the core flow needs (design + publishing + runtime APIs, identity, `GroundworkUnifiedPersistenceSqlite`).
+Run schema deployment while the server is stopped. The manifest assembly must come from the server output directory,
+where all feature assemblies needed by the complete deployment schema are colocated.
 
 ## Running these tests — READ THIS (agents included)
 
@@ -22,8 +33,9 @@ everything the core flow needs (design + publishing + runtime APIs, identity, `G
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
   (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Server/`; stop the server /
-  free port 5095 first). Old documents carry an older schema version a newer build refuses to read, which
-  surfaces as spurious `500`s on publish.
+  free port 5095 first), then re-run the Groundwork schema deployment command above before starting the server.
+  Old documents carry an older schema version a newer build refuses to read, which surfaces as spurious `500`s
+  on publish.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
   require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
@@ -51,10 +63,12 @@ candidates are flagged for future migration so coverage is never dropped before 
 | `fault-handling`, `persistence-querying` | true e2e | incident recording + instance query over the runtime |
 | `reusable-activities` | true e2e | authoring lifecycle + graph inlining at runtime |
 | `scheduling` | true e2e | hosted durable-timer / recurring-trigger pumps |
+| `runtime-alterations` | true e2e | durable plan admission, capture, hosted orchestration, checkpoint outcomes, replay and restart |
 | `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
 | `get-endpoints` | integration-candidate | GET status/shape contract; migrate to `WebApplicationFactory` |
 | `write-endpoints` | integration-candidate | CRUD status/shape contract; migrate to `WebApplicationFactory` |
+| `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 
 The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
 response shapes with little runtime behavior — the natural long-term home is an in-process `WebApplicationFactory`
@@ -83,7 +97,10 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
 | `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
+| `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
+| `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against the real SQLite server |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
+| `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`

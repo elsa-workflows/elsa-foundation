@@ -5,6 +5,7 @@ using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -13,10 +14,17 @@ namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 public static class GroundworkUnifiedStoreFamiliesRegistration
 {
     public static IServiceCollection AddGroundworkUnifiedStoreFamilies(this IServiceCollection services)
+        => services.AddGroundworkUnifiedStoreFamilies(
+            new WorkflowExecutableCacheOptions());
+
+    public static IServiceCollection AddGroundworkUnifiedStoreFamilies(
+        this IServiceCollection services,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions);
         services.AddGroundworkSecretsStore();
         services.AddGroundworkStudioPreferences();
         services.AddGroundworkDistributedRuntimeStores();

@@ -71,7 +71,11 @@ public sealed class DraftOriginator(
                     var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(acceptedDraft, token);
                     GroundworkEntityTimestamps.StampAdded(acceptedDraft, clock.UtcNow);
                     await context.SaveAsync(
-                        documents.ToSaveRequest(acceptedDraft, acceptedInput.Layout) with { ExpectedVersion = 0 },
+                        documents.ToSaveRequest(
+                            acceptedDraft,
+                            acceptedInput.Layout,
+                            acceptedInput.ActivityPresentation) with
+                        { ExpectedVersion = 0 },
                         token);
                     return new DraftOriginationResult(acceptedDraft, errors.ToArray());
                 },

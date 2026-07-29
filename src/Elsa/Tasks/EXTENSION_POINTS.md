@@ -22,6 +22,10 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature).
+- **Diagnostics:** startup-task execution emits activity `elsa.startup_task` and histogram
+  `elsa.startup_task.duration` from source/meter `Elsa.Tasks.Startup`. Dimensions are bounded to the
+  registered task type and `success`, `failed`, `cancelled`, or `skipped`; the skipped outcome is
+  determined at this seam because only the executor observes an unavailable single-node lock.
 - **Override:** `services.Replace(...)`.
 
 ### `ITopologicalTaskSorter` *(Core — `Elsa.Tasks.Core`)*

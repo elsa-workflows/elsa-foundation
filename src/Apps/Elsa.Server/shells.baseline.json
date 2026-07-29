@@ -37,14 +37,22 @@
           },
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
-          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Coalesced",
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkUnifiedPersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
+          },
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

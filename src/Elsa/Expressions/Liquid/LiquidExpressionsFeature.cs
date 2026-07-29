@@ -24,6 +24,7 @@ public class LiquidExpressionsFeature : IShellFeature
         services
             .AddScoped<IPortableExpressionHandler, PortableLiquidExpressionHandler>()
             .AddScoped<FluidParser>()
-            .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
+            .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>()
+            .AddSingleton<IExpressionToolingProvider, LiquidExpressionToolingProvider>();
     }
 }

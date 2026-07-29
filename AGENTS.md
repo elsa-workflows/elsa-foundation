@@ -175,7 +175,7 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/141-zero-ef-final-removal/plan.md
+For additional context about technologies, project structure, shell commands, contracts, and
+validation scenarios for the active work unit, read
+`specs/144-zero-ef-final-removal/plan.md`.
 <!-- SPECKIT END -->

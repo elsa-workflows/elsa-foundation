@@ -16,6 +16,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -24,6 +25,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -83,6 +85,119 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         Assert.True(result.WasCreated);
         Assert.NotNull(await _store.FindAsync(result.ArtifactId));
+    }
+
+    [Theory]
+    [InlineData(ExpressionDraftValidationState.Errors)]
+    [InlineData(ExpressionDraftValidationState.Unavailable)]
+    [InlineData(ExpressionDraftValidationState.Unauthorized)]
+    [InlineData(ExpressionDraftValidationState.Incompatible)]
+    [InlineData(ExpressionDraftValidationState.Stale)]
+    [InlineData(ExpressionDraftValidationState.Canceled)]
+    public async Task PublicationFailsClosedWhenFullDraftExpressionValidationIsNotValid(
+        ExpressionDraftValidationState state)
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                new FakeVersionStore(workflowVersion),
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            new FakeVersionStore(workflowVersion),
+            new StubExpressionValidator(new(state, [])));
+
+        var exception = await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.Equal(state, exception.State);
+        Assert.Equal($"expression-validation-{state.ToString().ToLowerInvariant()}", exception.Code);
+        Assert.Empty(await _store.ListAllAsync());
+    }
+
+    [Fact]
+    public async Task PublicationValidationFailurePreservesSafeDiagnosticsAndRedactsProviderOnlyMetadata()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var diagnostic = new Elsa.Expressions.Core.Models.ExpressionDiagnostic(
+            "JavaScript/Syntax",
+            Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Error,
+            "Unexpected token.",
+            "document-revision",
+            new(new(2, 3), new(2, 4)),
+            "write-one/inputs/Text",
+            ["private-symbol"]);
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                new FakeVersionStore(workflowVersion),
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            new FakeVersionStore(workflowVersion),
+            new StubExpressionValidator(new(ExpressionDraftValidationState.Errors, [diagnostic], "expression-syntax")));
+
+        var exception = await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.Equal(ExpressionDraftValidationState.Errors, exception.State);
+        Assert.Equal("expression-syntax", exception.Code);
+        var safe = Assert.Single(exception.Diagnostics);
+        Assert.Equal(diagnostic.Code, safe.Code);
+        Assert.Equal("Error", safe.Severity);
+        Assert.Equal(diagnostic.Message, safe.Message);
+        Assert.Equal(diagnostic.DocumentRevision, safe.DocumentRevision);
+        Assert.Equal(diagnostic.Range, safe.Range);
+        Assert.Equal(diagnostic.AuthoredPath, safe.AuthoredPath);
+        Assert.DoesNotContain("private-symbol", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PublicationFailsClosedWhenExpressionValidationIsNotComposed()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                versionStore,
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            versionStore,
+            configureExpressionValidator: false);
+
+        var exception = await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
+        Assert.Equal("expression-validation-unavailable", exception.Code);
+        Assert.Empty(exception.Diagnostics);
+        Assert.Empty(await _store.ListAllAsync());
+    }
+
+    [Fact]
+    public async Task PublicationMapsValidatorFaultToUnavailableAndFailsClosed()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                versionStore,
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            versionStore,
+            new ThrowingExpressionValidator());
+
+        var exception = await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
+        Assert.Equal("expression-validation-unavailable", exception.Code);
+        Assert.Empty(await _store.ListAllAsync());
     }
 
     [Fact]
@@ -400,6 +515,127 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var executable = await _store.FindAsync(view.ArtifactId);
         Assert.Equal(view.ArtifactHash, executable!.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public void ActivityPresentationSidecarMapsAuthoredIdsToExecutableIds()
+    {
+        var firstPlacement = new ExecutableNode(
+            "exec-shared-1",
+            "authored-shared",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        var secondPlacement = new ExecutableNode(
+            "exec-shared-2",
+            "authored-shared",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        var root = new ExecutableNode(
+            "exec-root",
+            "authored-root",
+            "Test.Activity",
+            "1.0.0",
+            new RuntimeActivityDescriptor(
+                "test",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            [new ExecutableChildSlot("Body", [firstPlacement, secondPlacement])]);
+        var executable = new WorkflowExecutable(
+            new("artifact-1", "definition-1", "version-1", "1.0.0", "hash-1"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>(),
+            new IncidentStrategyReference("Fault", "1"));
+
+        var presentation = WorkflowExecutableActivityPresentationSidecar.CopyFrom(
+            [
+                new ActivityPresentationRecord("authored-root", "Friendly root", "Historical copy."),
+                new ActivityPresentationRecord("authored-shared", "Friendly placement", "Repeated copy.")
+            ],
+            executable);
+
+        Assert.Collection(
+            presentation.OrderBy(record => record.ExecutableNodeId, StringComparer.Ordinal),
+            record =>
+            {
+                Assert.Equal("exec-root", record.ExecutableNodeId);
+                Assert.Equal("Friendly root", record.DisplayName);
+                Assert.Equal("Historical copy.", record.Description);
+            },
+            record =>
+            {
+                Assert.Equal("exec-shared-1", record.ExecutableNodeId);
+                Assert.Equal("Friendly placement", record.DisplayName);
+                Assert.Equal("Repeated copy.", record.Description);
+            },
+            record =>
+            {
+                Assert.Equal("exec-shared-2", record.ExecutableNodeId);
+                Assert.Equal("Friendly placement", record.DisplayName);
+                Assert.Equal("Repeated copy.", record.Description);
+            });
+    }
+
+    [Fact]
+    public async Task ActivityPresentationIsFrozenPerReferenceAndDoesNotChangeArtifactIdentity()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var firstLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = workflowVersion.Id,
+            ActivityPresentation =
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify buyer",
+                    "Send the confirmation after payment.")
+            ]
+        };
+        var secondLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = workflowVersion.Id,
+            ActivityPresentation =
+            [
+                new ActivityPresentationRecord(
+                    "write-one",
+                    "Notify warehouse",
+                    "Prepare the parcel.")
+            ]
+        };
+
+        var first = await Handler(workflowVersion, firstLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None);
+        var second = await Handler(workflowVersion, secondLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(
+                workflowVersion.Id,
+                PublicationAction.PublishSideBySide,
+                SlotName: "warehouse"), CancellationToken.None);
+
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.Equal(first.ArtifactHash, second.ArtifactHash);
+        var references = await _referenceStore.ListAllByArtifactAsync(first.ArtifactId);
+        Assert.Equal(2, references.Count);
+        Assert.Contains(
+            references,
+            reference => Assert.Single(reference.ActivityPresentation).DisplayName == "Notify buyer");
+        Assert.Contains(
+            references,
+            reference => Assert.Single(reference.ActivityPresentation).DisplayName == "Notify warehouse");
     }
 
     [Fact]
@@ -732,7 +968,9 @@ public sealed class PublishWorkflowRequestHandlerTests
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersionLayout? layout,
         IWorkflowExecutableCompiler compiler,
-        IWorkflowDefinitionVersionStore versionStore)
+        IWorkflowDefinitionVersionStore versionStore,
+        IExpressionDraftSemanticValidator? expressionValidator = null,
+        bool configureExpressionValidator = true)
     {
         var extractor = new WorkflowTriggerBindingExtractor([]);
         IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
@@ -759,7 +997,30 @@ public sealed class PublishWorkflowRequestHandlerTests
             TimeProvider.System,
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,
-            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)));
+            authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
+            expressionValidator: configureExpressionValidator
+                ? expressionValidator ?? StubExpressionValidator.Valid
+                : null);
+    }
+
+    private sealed class StubExpressionValidator(ExpressionDraftValidationResult result) : IExpressionDraftSemanticValidator
+    {
+        public static readonly StubExpressionValidator Valid = new(new(ExpressionDraftValidationState.Valid, []));
+
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(result);
+    }
+
+    private sealed class ThrowingExpressionValidator : IExpressionDraftSemanticValidator
+    {
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Validation provider failed.");
     }
 
     private static WorkflowPublicationPreflightPlan SnapshotPlan() =>

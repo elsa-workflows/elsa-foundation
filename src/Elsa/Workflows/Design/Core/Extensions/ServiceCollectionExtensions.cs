@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<ScopedVariableResolver>();
         services.TryAddScoped<ScopedVariablePicker>();
         services.TryAddScoped<ScopedVariableAuthoringContract>();
+        services.TryAddScoped<IExpressionAuthoringContextService, ExpressionAuthoringContextService>();
         return services;
     }
 }

@@ -359,6 +359,32 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_projects_frozen_activity_presentation_from_the_chosen_reference()
+    {
+        await ActivateAsync(Reference(
+            "published-presentation",
+            WorkflowExecutableReferenceScope.Published,
+            _now,
+            "1.0.0") with
+        {
+            ActivityPresentation =
+            [
+                new WorkflowExecutableActivityPresentationRecord(
+                    "root",
+                    "Notify buyer",
+                    "Send the confirmation after payment.")
+            ]
+        });
+
+        var detail = await _inspector.GetAsync("artifact-1");
+        var presentation = Assert.Single(detail!.ChosenReference!.ActivityPresentation);
+
+        Assert.Equal("root", presentation.ExecutableNodeId);
+        Assert.Equal("Notify buyer", presentation.DisplayName);
+        Assert.Equal("Send the confirmation after payment.", presentation.Description);
+    }
+
+    [Fact]
     public async Task Detail_rejects_explicit_retired_reference_without_substituting_live_layout()
     {
         await ActivateAsync(

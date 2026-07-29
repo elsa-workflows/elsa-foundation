@@ -17,7 +17,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
     IBoundedDocumentStore? boundedStore = null)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {
     private const int MaxTransitionAttempts = 16;
 
@@ -154,6 +154,29 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
         return result.Documents
             .Select(document => Deserialize(document).Item.WorkflowExecutionId)
             .ToArray();
+    }
+
+    public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
+        string workflowExecutionId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var claims = new List<RuntimeSchedulerWorkClaim>();
+        var query = new RuntimeSchedulerWorkQuery(workflowExecutionId);
+        do
+        {
+            var page = await QueryOrderedAsync(query, cancellationToken);
+            foreach (var document in page.Documents)
+            {
+                var envelope = Deserialize(document);
+                if (envelope.ClaimedAt is not null && envelope.VisibleAfter is { } visibleAfter && visibleAfter > now)
+                    claims.Add(NewClaim(envelope, document.Version));
+            }
+            query = new RuntimeSchedulerWorkQuery(workflowExecutionId, query.Limit, page.NextContinuation);
+        } while (query.ContinuationToken is not null);
+        return claims;
     }
 
     public async ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(

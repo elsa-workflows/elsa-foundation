@@ -9,6 +9,7 @@ using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
 using Elsa.Server.Boot;
+using Elsa.Server.Readiness;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -148,6 +149,14 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddNuplaneAdmin();
 builder.Services.Configure<ActivityAvailabilityOptions>(configuration.GetSection(ActivityAvailabilityOptions.SectionName));
+builder.Services
+    .AddOptions<ShellReadinessOptions>()
+    .Bind(configuration.GetSection(ShellReadinessOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.DefaultShellName), "A non-empty default shell name is required.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
+builder.Services.AddSingleton<DefaultShellWarmup>();
+builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 
 // ExtensionBuilder is a root-hosted subsystem (root singletons + a background build worker + management
 // endpoints mapped on the root route builder below), not a shell feature — its process-global state and
@@ -310,6 +319,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
+            options.ExcludePaths = ["/health/live", "/health/ready"];
         })
         .ConfigureAllShells(shell => shell
             .WithFeature<ModularityApiFeature>()
@@ -362,6 +372,7 @@ if (bootTimeline is not null)
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
+app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();

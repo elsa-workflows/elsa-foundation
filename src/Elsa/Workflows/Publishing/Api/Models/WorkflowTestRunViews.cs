@@ -12,8 +12,33 @@ public sealed record WorkflowTestRunView(
     string Status,
     string? CommandDispatchStatus,
     string? Reason,
-    DateTimeOffset? ExpiresAt)
+    DateTimeOffset? ExpiresAt,
+    IReadOnlyDictionary<string, string> Metadata)
 {
+    public WorkflowTestRunView(
+        string TestRunId,
+        string DefinitionId,
+        string DefinitionVersionId,
+        string? ArtifactId,
+        string? WorkflowExecutionId,
+        string Status,
+        string? CommandDispatchStatus,
+        string? Reason,
+        DateTimeOffset? ExpiresAt)
+        : this(
+            TestRunId,
+            DefinitionId,
+            DefinitionVersionId,
+            ArtifactId,
+            WorkflowExecutionId,
+            Status,
+            CommandDispatchStatus,
+            Reason,
+            ExpiresAt,
+            new Dictionary<string, string>())
+    {
+    }
+
     public static WorkflowTestRunView From(
         WorkflowTestRun testRun,
         WorkflowExecutionCommandDispatchStatus? commandDispatchStatus = null) =>
@@ -26,5 +51,6 @@ public sealed record WorkflowTestRunView(
             testRun.Status.ToString(),
             commandDispatchStatus?.ToString(),
             testRun.Reason,
-            testRun.ExpiresAt);
+            testRun.ExpiresAt,
+            testRun.Metadata);
 }

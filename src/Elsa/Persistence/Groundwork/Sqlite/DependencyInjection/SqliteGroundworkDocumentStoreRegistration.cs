@@ -26,7 +26,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
         this IServiceCollection services,
         string connectionString,
         bool autoApplyOnStartup = false,
-        bool skipInspectionWhenPlanUnchanged = false)
+        bool skipInspectionWhenPlanUnchanged = false,
+        SqliteGroundworkStoreCacheOptions? storeCacheOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -45,7 +46,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
             sp.GetService<ILogger<SqliteGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance,
             sp.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(),
-            skipInspectionWhenPlanUnchanged));
+            skipInspectionWhenPlanUnchanged,
+            storeCacheOptions));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

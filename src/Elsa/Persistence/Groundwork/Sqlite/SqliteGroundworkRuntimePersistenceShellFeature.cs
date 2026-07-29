@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
@@ -21,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
     DisplayName = "Groundwork SQLite Runtime Persistence",
     Description = "Backs the workflow runtime persistence seams with Groundwork over SQLite. Durable storage keeps checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
+public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
 {
     public const string DefaultConnectionString = "Data Source=elsa-groundwork-runtime.db";
 
@@ -44,13 +45,49 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeatu
         Category = "Persistence")]
     public bool SkipSchemaInspectionWhenPlanUnchanged { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    [ManifestSetting(
+        DisplayName = "Reuse access-bound stores",
+        Description = "Reuse immutable, access-bound Groundwork store adapters while each operation continues to own an independent SQLite connection. Enabled by default.",
+        Category = "Performance")]
+    public bool ReuseAccessBoundStores { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Access-bound store cache capacity",
+        Description = "Maximum number of tenant, scope, and privilege bindings retained by this shell. Old bindings are evicted safely when the bounded cache is full.",
+        Category = "Performance")]
+    public int AccessBoundStoreCacheCapacity { get; set; } =
+        SqliteGroundworkStoreCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 
         services.AddSqliteGroundworkDocumentStore(
-            connectionString, AutoApplySchemaOnStartup, SkipSchemaInspectionWhenPlanUnchanged);
+            connectionString,
+            AutoApplySchemaOnStartup,
+            SkipSchemaInspectionWhenPlanUnchanged,
+            new SqliteGroundworkStoreCacheOptions
+            {
+                Enabled = ReuseAccessBoundStores,
+                Capacity = AccessBoundStoreCacheCapacity
+            });
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions
+        {
+            Enabled = CacheWorkflowExecutables,
+            Capacity = WorkflowExecutableCacheCapacity
+        });
     }
 }

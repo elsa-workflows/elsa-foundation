@@ -14,5 +14,6 @@ public sealed record UpdateDefinition(
     string? OperationKey,
     string Id,
     WorkflowDefinitionStateView State,
-    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null
+    IReadOnlyCollection<WorkflowDefinitionLayoutRecordView>? Layout = null,
+    IReadOnlyCollection<ActivityPresentationRecordView>? ActivityPresentation = null
 ) : ICommand<WorkflowDefinitionDetailsView>;

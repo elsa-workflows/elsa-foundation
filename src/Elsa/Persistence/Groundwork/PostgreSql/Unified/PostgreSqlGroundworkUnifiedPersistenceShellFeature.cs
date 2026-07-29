@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
@@ -17,9 +18,9 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistencePostgreSql",
     DisplayName = "Groundwork PostgreSQL Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup; compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
+public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
     private readonly ShellFeatureContext _context;
 
@@ -37,13 +38,33 @@ public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellF
 
     [ManifestSetting(
         DisplayName = "Auto-apply schema on startup",
-        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Description = "When enabled, safe pending document-schema operations and missing diagnostic-record streams are applied automatically at startup instead of requiring Groundwork.Tool. Drift and destructive operations are never auto-applied.",
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
+        services.AddGroundworkPostgreSqlUnifiedPersistence(
+            connectionString,
+            _context,
+            new WorkflowExecutableCacheOptions
+            {
+                Enabled = CacheWorkflowExecutables,
+                Capacity = WorkflowExecutableCacheCapacity
+            },
+            AutoApplySchemaOnStartup);
     }
 }

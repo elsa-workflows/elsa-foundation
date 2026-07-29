@@ -40,6 +40,7 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         RuntimeCheckpointNames.ActivitySuspended,
         RuntimeCheckpointNames.ActivityCancelled,
         RuntimeCheckpointNames.BookmarkCreated,
+        RuntimeCheckpointNames.RuntimeAlterationJob,
     };
 
     public ValueTask<RuntimeCheckpointPersistenceDecision> DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)

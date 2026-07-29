@@ -14,6 +14,7 @@ using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -39,6 +40,36 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     private const string ConnectionString =
         $"mongodb://elsa:{RegistrationSecret}@localhost:27017/?replicaSet=rs0";
     private const string DatabaseName = "elsa_registration";
+
+    [Fact]
+    public void Runtime_feature_enables_the_bounded_executable_cache_by_default()
+    {
+        var services = new ServiceCollection();
+        new MongoDbGroundworkRuntimePersistenceShellFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<WorkflowExecutableCacheOptions>();
+        Assert.True(options.Enabled);
+        Assert.Equal(WorkflowExecutableCacheOptions.DefaultCapacity, options.Capacity);
+    }
+
+    [Theory]
+    [InlineData(false, 19)]
+    [InlineData(true, 23)]
+    public void Runtime_feature_threads_executable_cache_settings(bool enabled, int capacity)
+    {
+        var services = new ServiceCollection();
+        new MongoDbGroundworkRuntimePersistenceShellFeature
+        {
+            CacheWorkflowExecutables = enabled,
+            WorkflowExecutableCacheCapacity = capacity
+        }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<WorkflowExecutableCacheOptions>();
+        Assert.Equal(enabled, options.Enabled);
+        Assert.Equal(capacity, options.Capacity);
+    }
 
     [Fact]
     public void Runtime_feature_registers_a_replica_set_gated_startup_leaf_without_exposing_credentials()

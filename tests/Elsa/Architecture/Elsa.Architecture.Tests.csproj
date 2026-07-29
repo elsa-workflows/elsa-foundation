@@ -49,6 +49,9 @@
     <None Include="..\..\..\specs\092-domain-owned-apis\contracts\management-api.openapi.yaml"
           Link="Contracts\management-api.openapi.yaml"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\specs\141-runtime-alterations\contracts\runtime-alterations.openapi.yaml"
+          Link="Contracts\runtime-alterations.openapi.yaml"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

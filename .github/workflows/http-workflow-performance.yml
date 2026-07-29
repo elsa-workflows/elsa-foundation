@@ -1,0 +1,108 @@
+name: HTTP workflow performance
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/http-workflow-performance.yml
+      - Directory.Packages.props
+      - src/Elsa/Persistence/Groundwork/**
+      - src/Elsa/Workflows/Runtime/**
+      - tools/performance/**
+  workflow_dispatch:
+
+jobs:
+  sqlite-defaults:
+    name: SQLite defaults
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+
+      - name: Restore repository-local .NET tools
+        run: dotnet tool restore
+
+      - name: Build server
+        run: dotnet build src/Apps/Elsa.Server/Elsa.Server.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Deploy fresh SQLite schema
+        run: |
+          rm -f src/Apps/Elsa.Server/elsa-groundwork.db*
+          dotnet tool run groundwork -- apply \
+            --manifest-assembly src/Apps/Elsa.Server/bin/Release/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+            --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
+            --provider sqlite \
+            --connection 'Data Source=src/Apps/Elsa.Server/elsa-groundwork.db' \
+            --output json \
+            --safe
+
+      - name: Start server
+        run: |
+          cd src/Apps/Elsa.Server
+          ASPNETCORE_URLS=http://127.0.0.1:5095 \
+          ASPNETCORE_ENVIRONMENT=Development \
+          DOTNET_ENVIRONMENT=Development \
+          Logging__LogLevel__Default=Warning \
+          dotnet bin/Release/net10.0/Elsa.Server.dll > "$RUNNER_TEMP/elsa-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/elsa-server.pid"
+          for attempt in {1..240}; do
+            curl --silent --fail http://127.0.0.1:5095/health/ready >/dev/null && exit 0
+            sleep 0.25
+          done
+          cat "$RUNNER_TEMP/elsa-server.log"
+          exit 1
+
+      - name: Publish benchmark workflow
+        shell: pwsh
+        run: ./tools/performance/prepare-http-workflow.ps1
+
+      - name: Measure default-on warm path
+        run: |
+          mkdir -p artifacts/http-workflow-performance
+          bash tools/performance/measure-http-workflow.sh \
+            --url http://127.0.0.1:5095/workflows/http/performance-hello-world \
+            --expected-body 'Hello World!' \
+            --warmup 20 \
+            --requests 200 \
+            --concurrency 1 \
+            --policy default-on \
+            --segment-cap 256 \
+            --provider Groundwork-SQLite \
+            --groundwork-db src/Apps/Elsa.Server/elsa-groundwork.db \
+            --output-json artifacts/http-workflow-performance/report.json \
+            --output-markdown artifacts/http-workflow-performance/report.md \
+            --output-samples artifacts/http-workflow-performance/samples.txt \
+            --enforce-p95-ms 250
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/elsa-server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/elsa-server.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-workflow-performance-${{ github.run_id }}
+          path: |
+            artifacts/http-workflow-performance
+            ${{ runner.temp }}/elsa-server.log

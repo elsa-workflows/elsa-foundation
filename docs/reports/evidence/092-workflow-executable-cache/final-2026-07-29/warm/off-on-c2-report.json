@@ -1,0 +1,37 @@
+{
+  "timestampUtc": "2026-07-29T04:05:21Z",
+  "endpoint": {
+    "url": "http://127.0.0.1:17247/workflows/http/hello-world",
+    "expectedStatus": 200,
+    "tlsVerification": "enabled"
+  },
+  "configuration": {
+    "policy": "executable-cache-off-store-reuse-on",
+    "segmentCap": 256,
+    "provider": "Groundwork-SQLite",
+    "concurrency": 2
+  },
+  "samples": {
+    "warmup": 20,
+    "measured": 200
+  },
+  "latencyMs": {
+    "cold": 28.179,
+    "min": 20.544,
+    "mean": 26.171,
+    "p50": 25.053,
+    "p95": 32.898,
+    "p99": 34.992,
+    "max": 35.936
+  },
+  "physicalCheckpointCommits": {
+    "before": 2847,
+    "after": 3510,
+    "delta": 663
+  },
+  "environment": {
+    "gitRevision": "382301460ce34ada7f43a0946706680b6eeea563",
+    "dotnetVersion": "10.0.300",
+    "machine": "Darwin arm64"
+  }
+}

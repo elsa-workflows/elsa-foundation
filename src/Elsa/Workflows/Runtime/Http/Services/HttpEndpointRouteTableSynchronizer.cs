@@ -1,5 +1,8 @@
+using System.Diagnostics;
 using Elsa.Http.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
@@ -34,19 +37,53 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
 
     public async ValueTask RefreshAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = HttpRouteTableTelemetry.SuccessOutcome;
+        int? routeCount = null;
+        var gateAcquired = false;
+        using var activity = ObservationalTelemetryScope.Start(
+            HttpRouteTableTelemetry.GetActivitySource,
+            HttpRouteTableTelemetry.ActivityName);
+
         try
         {
+            await _gate.WaitAsync(cancellationToken);
+            gateAcquired = true;
             await using var scope = scopeFactory.CreateAsyncScope();
             var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
             var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
 
             var routes = await resolver.ResolveRoutesAsync(cancellationToken);
             await routeTable.Refresh(routes);
+            routeCount = routes.Count;
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = HttpRouteTableTelemetry.CancelledOutcome;
+            activity.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception)
+        {
+            outcome = HttpRouteTableTelemetry.FailedOutcome;
+            activity.SetStatus(ActivityStatusCode.Error);
+            throw;
         }
         finally
         {
-            _gate.Release();
+            if (gateAcquired)
+                _gate.Release();
+
+            var tags = new TagList { { HttpRouteTableTelemetry.OutcomeTag, outcome } };
+            activity.SetTag(HttpRouteTableTelemetry.OutcomeTag, outcome);
+            if (routeCount is not null)
+            {
+                activity.SetTag(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
+            }
+
+            activity.Observe(
+                HttpRouteTableTelemetry.GetDuration,
+                histogram => histogram.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
 

@@ -36,6 +36,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     [
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
@@ -63,9 +64,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private const string Wf = "wf-1";
 
     // Captures the exact (SchemaVersion, ContentJson) the real store bridge writes for a kind's canonical
-    // instance. The 12 direct-save kinds are captured at the SaveDocumentRequest boundary through a
-    // capturing store; the checkpoint marker is written only inside a full atomic commit, so it is driven
-    // through the writer against an in-memory store and read back.
+    // instance. Direct-save kinds are captured at the SaveDocumentRequest boundary through a capturing
+    // store; transactional and checkpoint documents are driven through an in-memory store and read back.
     public static async Task<(string SchemaVersion, string ContentJson)> CaptureAsync(string kind)
     {
         if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
@@ -115,6 +115,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkBookmarkStateStore(store, Serializer).SaveAsync(Bookmark());
                 break;
             case ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind:
+            case ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind:
                 await new GroundworkWorkflowExecutableStore(store, Serializer).SaveAsync(Executable());
                 break;
             case ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind:
@@ -202,6 +203,13 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkBookmarkStateStore(store, Serializer).FindAsync(Wf, "bm-1"))?.StimulusType,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind =>
             (await new GroundworkWorkflowExecutableStore(store, Serializer).FindAsync("artifact-1"))?.Identity.DefinitionId,
+        ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind =>
+            await new GroundworkWorkflowExecutableStore(store, Serializer)
+                .TryAcquireRootWriteLeaseAsync(
+                    "artifact-1",
+                    "fixture-writer",
+                    DateTimeOffset.UnixEpoch.AddMinutes(1),
+                    DateTimeOffset.UnixEpoch) is not null,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind =>
             (await new GroundworkExecutableActivityTemplateStore(store, Serializer, new RuntimeTestBoundedDocumentStore(store)).FindAsync("template-1"))?.TemplateHash,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind =>
@@ -271,6 +279,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     {
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind => "Http",
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => "definition-1",
+        ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind => true,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => "hash-template-1",
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind => "template-1",
         ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => "artifact-1",
@@ -507,7 +516,14 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         DeletedReason: null,
         Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))],
         PublicationId: "publication-1",
-        SlotId: "slot-default");
+        SlotId: "slot-default",
+        ActivityPresentation:
+        [
+            new WorkflowExecutableActivityPresentationRecord(
+                "root",
+                "Notify buyer",
+                "Send the order confirmation after payment.")
+        ]);
 
     private static ActivityExecutionState ActivityState() => new(
         Execution: new ActivityExecution("ae-1", Wf, "node-ae-1", "authored", "Elsa.Log", "1.0.0"),

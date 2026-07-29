@@ -78,13 +78,7 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Theory]
-    [InlineData(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesQuery)]
+    [MemberData(nameof(CursorPagedCompatibilityQueries))]
     public void CursorPagedCollectionQueries_Declare_Count_TerminalOperation(string documentKind, string queryIdentity)
     {
         // Regression: the workflow-instances list (GET /runtime/workflows/instances) projects a per-instance
@@ -103,6 +97,34 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(BoundedQueryResultOperation.Count, query.ResultOperations);
         Assert.True(query.SupportsTotalCount);
     }
+
+    [Theory]
+    [MemberData(nameof(CursorPagedCompatibilityQueries))]
+    public void CursorPagedCollectionQueries_Preserve_Implicit_First_Index_Predicate_Binding(
+        string documentKind,
+        string queryIdentity)
+    {
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
+        var query = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            q => q.Identity == queryIdentity);
+
+        Assert.Equal(
+            BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField,
+            query.PredicateBindingMode);
+    }
+
+    public static TheoryData<string, string> CursorPagedCompatibilityQueries => new()
+    {
+        { ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery },
+        { ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery },
+        { ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind, ElsaRuntimeStorageManifest.ListAllQuery },
+        { ElsaRuntimeStorageManifest.IncidentStateDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery },
+        { ElsaRuntimeStorageManifest.SchedulerPoisonDocumentKind, ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery },
+        { ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery },
+        { ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind, ElsaRuntimeStorageManifest.ListWorkflowDispatchesQuery }
+    };
 
     [Fact]
     public async Task Activity_execution_inspection_declares_ordered_cursor_summary_route()
@@ -1223,13 +1245,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     {
         var routes = ElsaGroundworkQueryRoutes.All;
 
-        Assert.Equal(30, routes.Count);
+        Assert.Equal(43, routes.Count);
         Assert.Equal(routes.Count, routes.Select(route => route.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             7,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead));
         Assert.Equal(
-            23,
+            36,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.BoundedRoute));
         Assert.All(routes, route => Assert.InRange(route.MaximumResultCount, 1, ElsaGroundworkQueryRoutes.MaximumResultCount));
         Assert.All(

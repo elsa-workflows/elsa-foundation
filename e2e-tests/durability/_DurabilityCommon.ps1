@@ -53,7 +53,15 @@ function Test-NodeSuspended {
 # --- server process lifecycle -------------------------------------------------
 
 function Get-ServerPid { param([int] $Port = 5095)
-    (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+        return (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+    }
+
+    if (Get-Command lsof -ErrorAction SilentlyContinue) {
+        return (& lsof '-nP' "-iTCP:$Port" '-sTCP:LISTEN' '-t' 2>$null | Select-Object -First 1)
+    }
+
+    throw "Cannot identify the process listening on port ${Port}: neither Get-NetTCPConnection nor lsof is available."
 }
 
 function Stop-ElsaServer {
@@ -83,8 +91,15 @@ function Start-ElsaServer {
     $env:ASPNETCORE_URLS = "http://localhost:$Port"
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     Write-Host "  [server] starting: dotnet <Elsa.Server.dll> (ASPNETCORE_URLS=$env:ASPNETCORE_URLS)"
-    Start-Process -FilePath "dotnet" -ArgumentList $dll `
-        -WorkingDirectory $projDir -RedirectStandardOutput $out -RedirectStandardError $err -WindowStyle Hidden | Out-Null
+    $start = @{
+        FilePath = 'dotnet'
+        ArgumentList = $dll
+        WorkingDirectory = $projDir
+        RedirectStandardOutput = $out
+        RedirectStandardError = $err
+    }
+    if ($env:OS -eq 'Windows_NT') { $start.WindowStyle = 'Hidden' }
+    Start-Process @start | Out-Null
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         try { if (Invoke-RestMethod "http://localhost:$Port/" -TimeoutSec 3) { Write-Host "  [server] healthy on $Port"; return $true } } catch {}

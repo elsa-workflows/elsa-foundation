@@ -454,26 +454,16 @@ public sealed class GraphActivityProvider(
                     "/outcomeMappings",
                     group.Key));
             }
-
-            if (group.Count() > 1)
-            {
-                diagnostics.Add(Diagnostic(
-                    "activity.graph.outcome-mapping-boundary-duplicate",
-                    $"Emitted public boundary outcome '{group.Key}' has more than one mapping.",
-                    subject,
-                    "/outcomeMappings",
-                    group.Key));
-            }
         }
 
         foreach (var outcome in emittedOutcomes)
         {
-            if (graph.OutcomeMappings.Count(x =>
-                    StringComparer.Ordinal.Equals(x.BoundaryOutcomeReferenceKey, outcome.ReferenceKey)) != 1)
+            if (!graph.OutcomeMappings.Any(x =>
+                    StringComparer.Ordinal.Equals(x.BoundaryOutcomeReferenceKey, outcome.ReferenceKey)))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.outcome-mapping-required",
-                    $"Emitted public boundary outcome '{outcome.ReferenceKey}' must have exactly one mapping.",
+                    $"Emitted public boundary outcome '{outcome.ReferenceKey}' must have at least one mapping.",
                     subject,
                     "/outcomeMappings",
                     outcome.ReferenceKey));

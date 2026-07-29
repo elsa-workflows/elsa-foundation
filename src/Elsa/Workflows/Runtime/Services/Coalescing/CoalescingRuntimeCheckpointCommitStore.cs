@@ -130,6 +130,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||
+        commit.StateChanges.AlterationJobTerminalChange is not null ||
         commit.StateChanges.WorkflowDispatches.Count > 0 ||
         commit.StateChanges.WorkflowDispatchCancellations.Count > 0;
 

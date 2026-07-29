@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -12,6 +13,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -37,7 +39,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
     IWorkflowTestScopeStore? testScopeStore = null,
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
-    IPersistenceAccessContextAccessor? accessContextAccessor = null)
+    IPersistenceAccessContextAccessor? accessContextAccessor = null,
+    IExpressionDraftSemanticValidator? expressionValidator = null)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
@@ -102,8 +105,30 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
         var testRunId = ShortIdentityGenerator.Generate(now);
+        ExpressionDraftValidationResult? versionValidation = null;
+        if (workflowVersionStore is null || expressionValidator is null)
+            return request.AcknowledgeUnavailableExpressionValidation
+                ? await StartVersionAsync()
+                : await RejectExpressionValidationAsync(testRunId, request.VersionId, request.VersionId, now, expiresAt, "Expression validation is unavailable. Set acknowledgeUnavailableExpressionValidation to proceed with this test run.", null, request.AcknowledgeUnavailableExpressionValidation, cancellationToken);
+        versionValidation = await ExpressionDraftSemanticValidation.ValidateSafelyAsync(
+            expressionValidator,
+            (await workflowVersionStore.GetWithDefinitionAsync(request.VersionId, cancellationToken)).State,
+            request.VersionId,
+            cancellationToken);
+        if (!CanProceed(versionValidation, request.AcknowledgeUnavailableExpressionValidation))
+            return await RejectExpressionValidationAsync(
+                testRunId,
+                request.VersionId,
+                request.VersionId,
+                now,
+                expiresAt,
+                RejectionReason(versionValidation.State),
+                versionValidation,
+                request.AcknowledgeUnavailableExpressionValidation,
+                cancellationToken);
+        return await StartVersionAsync();
 
-        return await StartAsync(
+        Task<WorkflowTestRunView> StartVersionAsync() => StartAsync(
             new WorkflowExecutableCompileRequest(
                 request.VersionId,
                 WorkflowExecutableReferenceScope.TestRun,
@@ -119,7 +144,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
             expiresAt,
             ToInputValues(request.Inputs),
             draftSnapshot: null,
+            versionValidation,
+            request.AcknowledgeUnavailableExpressionValidation,
             cancellationToken);
+
     }
 
     public async Task<WorkflowTestRunView> Handle(StartWorkflowDraftTestRun request, CancellationToken cancellationToken)
@@ -129,6 +157,31 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var testRunId = ShortIdentityGenerator.Generate(now);
         var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
         var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
+        ExpressionDraftValidationResult? validation = null;
+        if (expressionValidator is null)
+        {
+            if (!request.AcknowledgeUnavailableExpressionValidation)
+                return await RejectExpressionValidationAsync(testRunId, request.DefinitionId, sourceDefinitionVersionId, now, expiresAt, "Expression validation is unavailable. Set acknowledgeUnavailableExpressionValidation to proceed with this test run.", null, request.AcknowledgeUnavailableExpressionValidation, cancellationToken);
+        }
+        else
+        {
+            validation = await ExpressionDraftSemanticValidation.ValidateSafelyAsync(
+                expressionValidator,
+                request.State,
+                request.SnapshotId,
+                cancellationToken);
+            if (!CanProceed(validation, request.AcknowledgeUnavailableExpressionValidation))
+                return await RejectExpressionValidationAsync(
+                    testRunId,
+                    request.DefinitionId,
+                    sourceDefinitionVersionId,
+                    now,
+                    expiresAt,
+                    RejectionReason(validation.State),
+                    validation,
+                    request.AcknowledgeUnavailableExpressionValidation,
+                    cancellationToken);
+        }
 
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
@@ -148,6 +201,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     SourceKind: WorkflowExecutableSourceKinds.WorkflowDraftSnapshot,
                     SourceId: request.SnapshotId,
                     SourceVersion: artifactVersion)
+                {
+                    ActivityPresentation = request.ActivityPresentation
+                }
             },
             testRunId,
             fallbackDefinitionId: request.DefinitionId,
@@ -162,8 +218,21 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 State: request.State,
                 RequestedAt: now,
                 ExpiresAt: expiresAt),
+            validation,
+            request.AcknowledgeUnavailableExpressionValidation,
             cancellationToken);
     }
+
+    private static bool CanProceed(ExpressionDraftValidationResult validation, bool acknowledgeUnavailable) =>
+        validation.State == ExpressionDraftValidationState.Valid ||
+        validation.State == ExpressionDraftValidationState.Unavailable &&
+        acknowledgeUnavailable &&
+        validation.Diagnostics.All(diagnostic => diagnostic.Severity != ExpressionDiagnosticSeverity.Error);
+
+    private static string RejectionReason(ExpressionDraftValidationState state) =>
+        state == ExpressionDraftValidationState.Unavailable
+            ? "Expression validation is unavailable. Set acknowledgeUnavailableExpressionValidation to proceed with this test run."
+            : "Expression validation rejected this test run.";
 
     private async Task<WorkflowTestRunView> StartAsync(
         WorkflowExecutableCompileRequest compileRequest,
@@ -174,6 +243,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         DateTimeOffset expiresAt,
         IReadOnlyDictionary<string, object?> inputs,
         WorkflowTestRunDraftSnapshot? draftSnapshot,
+        ExpressionDraftValidationResult? expressionValidation,
+        bool unavailableValidationAcknowledged,
         CancellationToken cancellationToken)
     {
         WorkflowExecutable executable;
@@ -272,6 +343,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
             await runtimeScopeStore.CloseAsync(
                 new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow()),
                 cancellationToken);
+        var metadata = ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged);
+        metadata["runtime.artifactHash"] = executable.Identity.ArtifactHash;
+        metadata["runtime.sourceReferenceId"] = reference.SourceReferenceId;
         var testRun = new WorkflowTestRun(
             TestRunId: testRunId,
             DefinitionId: executable.Identity.DefinitionId,
@@ -283,11 +357,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             RequestedAt: now,
             ExpiresAt: expiresAt,
             Reason: dispatch.CommandDispatch.Reason,
-            Metadata: new Dictionary<string, string>
-            {
-                ["runtime.artifactHash"] = executable.Identity.ArtifactHash,
-                ["runtime.sourceReferenceId"] = reference.SourceReferenceId
-            });
+            Metadata: metadata);
 
         await testRunStore.SaveAsync(testRun, cancellationToken);
         return WorkflowTestRunView.From(testRun, dispatch.CommandDispatch.Status);
@@ -300,7 +370,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         DateTimeOffset now,
         DateTimeOffset expiresAt,
         string reason,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var rejected = new WorkflowTestRun(
             TestRunId: testRunId,
@@ -313,10 +384,47 @@ public sealed class StartWorkflowTestRunRequestHandler(
             RequestedAt: now,
             ExpiresAt: expiresAt,
             Reason: reason,
-            Metadata: new Dictionary<string, string>());
+            Metadata: metadata ?? new Dictionary<string, string>());
 
         await testRunStore.SaveAsync(rejected, cancellationToken);
         return WorkflowTestRunView.From(rejected);
+    }
+
+    private Task<WorkflowTestRunView> RejectExpressionValidationAsync(
+        string testRunId,
+        string definitionId,
+        string definitionVersionId,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        string reason,
+        ExpressionDraftValidationResult? validation,
+        bool unavailableAcknowledged,
+        CancellationToken cancellationToken)
+    {
+        var metadata = ExpressionValidationMetadata(validation, unavailableAcknowledged);
+        return RejectAsync(testRunId, definitionId, definitionVersionId, now, expiresAt, reason, cancellationToken, metadata);
+    }
+
+    private static Dictionary<string, string> ExpressionValidationMetadata(
+        ExpressionDraftValidationResult? validation,
+        bool unavailableAcknowledged)
+    {
+        var diagnostics = validation?.Diagnostics.Select(diagnostic => new
+        {
+            diagnostic.Code,
+            Severity = diagnostic.Severity.ToString(),
+            diagnostic.Message,
+            diagnostic.AuthoredPath,
+            diagnostic.Range
+        }) ?? [];
+        return new Dictionary<string, string>
+        {
+            ["expressionValidation.state"] = (validation?.State ?? ExpressionDraftValidationState.Unavailable).ToString(),
+            ["expressionValidation.code"] = validation?.Code ??
+                (validation is null ? "expression-validation-unavailable" : $"expression-validation-{validation.State.ToString().ToLowerInvariant()}"),
+            ["expressionValidation.unavailableAcknowledged"] = unavailableAcknowledged.ToString(),
+            ["expressionValidation.diagnostics"] = JsonSerializer.Serialize(diagnostics)
+        };
     }
 
     // Builds the expiring TestRun reference. Source identity comes from the compile source when present (draft
@@ -338,6 +446,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var authoredInputs = sourceState is not null && authoredInputsSidecar is not null
             ? authoredInputsSidecar.CopyFrom(sourceState)
             : [];
+        var activityPresentation = source?.ActivityPresentation.Count > 0
+            ? source.ActivityPresentation
+            : layout?.ActivityPresentation ?? [];
 
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
@@ -354,7 +465,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
             ExpiresAt: expiresAt,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
-            AuthoredInputs: authoredInputs);
+            AuthoredInputs: authoredInputs,
+            ActivityPresentation:
+                WorkflowExecutableActivityPresentationSidecar.CopyFrom(
+                    activityPresentation,
+                    executable));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

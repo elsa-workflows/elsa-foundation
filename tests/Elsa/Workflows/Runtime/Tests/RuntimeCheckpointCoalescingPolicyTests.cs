@@ -20,6 +20,7 @@ public sealed class RuntimeCheckpointCoalescingPolicyTests
     [InlineData(RuntimeCheckpointNames.ActivitySuspended)]
     [InlineData(RuntimeCheckpointNames.ActivityCancelled)]
     [InlineData(RuntimeCheckpointNames.BookmarkCreated)]
+    [InlineData(RuntimeCheckpointNames.RuntimeAlterationJob)]
     public async Task MandatoryBoundaryCheckpoints_FlushImmediately(string checkpointName)
     {
         var decision = await _policy.DecideAsync(NewCheckpoint(checkpointName));

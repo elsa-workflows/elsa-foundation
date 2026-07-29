@@ -51,7 +51,8 @@ public sealed class GroundworkCloneDraftFromVersionCommand(
                     copiedState,
                     [.. (sourceLayout?.Records ?? [])],
                     sourceVersionId,
-                    sourceVersion.TenantId);
+                    sourceVersion.TenantId,
+                    [.. (sourceLayout?.ActivityPresentation ?? [])]);
             },
             cancellationToken);
     }

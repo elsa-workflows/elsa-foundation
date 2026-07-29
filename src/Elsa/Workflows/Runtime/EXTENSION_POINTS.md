@@ -550,9 +550,10 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
-- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
-- **Usage:** stores and retrieves runtime-owned `WorkflowExecutable` artifacts. Publishing writes artifacts through this contract; Runtime execution reads artifacts through this contract and does not load Design-owned workflow state.
-- **Default implementation:** `InMemoryWorkflowExecutableStore` *(intra-domain demo default for the vertical slice; durable persistence remains future provider work)*.
+- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, unconditional `DeleteAsync(string artifactId, ...)`, guarded `DeleteAsync(WorkflowExecutableDeletionGuard, now, ...)`, root-write lease acquire/renew/release, deletion-guard begin/cancel, `FindAsync(string artifactId, ...)`, and `ListAsync(...)`.
+- **Usage:** stores and retrieves runtime-owned immutable `WorkflowExecutable` artifacts by content-addressed artifact ID. Publishing writes artifacts through this contract; runtime start, resume, and scheduler paths read them without loading Design-owned workflow state. Mutable source-reference publication, retirement, scope, and expiry checks remain outside this store and authoritative.
+- **Default implementation:** `InMemoryWorkflowExecutableStore` *(single-process default)*. Groundwork supplies `GroundworkWorkflowExecutableStore` as a keyed backend; SQLite reference features select a bounded `CachingWorkflowExecutableStore`, while PostgreSQL/distributed and legacy direct registrations preserve direct reads by default. The cache coalesces same-ID misses, retains only positive provider results, invalidates on save/unconditional delete and successful guarded delete, and never populates from `ListAsync`. Root-write lease and deletion-guard transitions pass through to the provider unchanged; custom providers can replace the keyed backend without a concrete dependency.
+- **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true` for SQLite and `false` for PostgreSQL/distributed features; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs. Cache state and mutation invalidation are process-local; PostgreSQL hosts must explicitly opt in with an accepted immutable-retention/invalidation policy.
 
 ### `IExecutableActivityTemplateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns immutable, content-addressed executable templates for reusable activity versions).
@@ -683,3 +684,25 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 - HTTP endpoint behaviour overrides: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.
+
+## Runtime alteration contracts
+
+| Contract | Ownership and use |
+|---|---|
+| `IWorkflowAlterationStore` | Single-owner durable plan/target/job storage. Its claim, seal, terminal, and paging operations preserve fenced at-least-once execution. |
+| `IWorkflowAlterationPayloadProtector` | Protects deferred envelope JSON with plan/tenant/request associated data. Durable hosts replace the development-only key material with a restart-stable retained key ring. |
+| `IWorkflowAlterationRegistry` | Singleton descriptor-only catalog. It returns stable kind/version/display metadata and never resolves handler instances. |
+| `IWorkflowAlterationPreflightHandler` | Scoped, trusted custom contribution registered through `AddWorkflowAlterationHandler<T>`. It validates its own payload and may only update projection/staging state. |
+| `IWorkflowAlterationProjectedState` | Per-job mutable in-memory view shared in envelope order. A handler can expose its staged logical state to later handlers without persistence. |
+| `IWorkflowAlterationStagingWorkspace` | Per-job collector for deterministic checkpoint-bound changes. Duplicate change keys fail preflight. |
+| `IWorkflowAlterationRuntimeCheckpointStagedChange` | Handler-owned change that applies through the Runtime alteration checkpoint builder after all preflights pass. |
+| `IWorkflowAlterationCheckpointWriter` | Single-owner atomic checkpoint collaborator. It persists terminal job evidence with workflow/activity/bookmark/value/scheduler/outbox changes and supports acknowledgement reconciliation. |
+| `IWorkflowAlterationHandlerResolver` | Scoped exact `(kind, schemaVersion)` resolver. Hosts do not replace it to choose a handler dynamically or infer a latest version. |
+
+Custom handlers are trusted code. They must use only stable envelope identity, must not serialize or log payloads,
+must return bounded safe failures, and must make their changes replay-safe under the deterministic job checkpoint.
+They must not use the alteration path to bypass activity ownership, authorization sealed at submission, workflow actor
+serialization, or Runtime's persistence/checkpoint boundary.
+
+The public envelope and persisted plan use only `kind`, `schemaVersion`, and protected JSON. Do not persist a CLR
+type name, assembly-qualified type, service key, or executable payload schema type as an alteration identity.

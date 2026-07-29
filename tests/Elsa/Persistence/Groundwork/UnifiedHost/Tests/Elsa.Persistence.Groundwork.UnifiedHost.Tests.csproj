@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />

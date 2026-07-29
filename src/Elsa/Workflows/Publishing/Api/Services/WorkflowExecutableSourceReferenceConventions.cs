@@ -34,6 +34,38 @@ public static class WorkflowExecutableLayoutSidecar
 }
 
 /// <summary>
+/// Projects authored activity presentation onto the flattened executable identities used by
+/// historical inspection. Presentation never participates in executable hashing.
+/// </summary>
+public static class WorkflowExecutableActivityPresentationSidecar
+{
+    public static IReadOnlyList<WorkflowExecutableActivityPresentationRecord> CopyFrom(
+        IEnumerable<ActivityPresentationRecord>? records,
+        WorkflowExecutable executable)
+    {
+        var byAuthoredId = executable.Nodes
+            .Append(executable.RootActivity)
+            .DistinctBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
+            .Where(node => !string.IsNullOrWhiteSpace(node.AuthoredActivityId))
+            .GroupBy(node => node.AuthoredActivityId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var result = new List<WorkflowExecutableActivityPresentationRecord>();
+        foreach (var record in ActivityPresentationRecord.NormalizeCollection(records))
+        {
+            if (!byAuthoredId.TryGetValue(record.NodeId, out var nodes))
+                continue;
+
+            result.AddRange(nodes.Select(node => new WorkflowExecutableActivityPresentationRecord(
+                node.ExecutableNodeId,
+                record.DisplayName,
+                record.Description)));
+        }
+
+        return result;
+    }
+}
+
+/// <summary>
 /// Projects authored input sources into the per-publish source-reference sidecar. The activity tree projection is
 /// shared with executable compilation so inputs nested in activity-owned structures are included as well as the root.
 /// </summary>

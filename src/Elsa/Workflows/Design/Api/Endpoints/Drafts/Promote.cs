@@ -42,6 +42,14 @@ internal sealed class Promote(ICommandSender commandSender, ILogger<Promote> log
         {
             ThrowError(exception.Message, 404);
         }
+        catch (WorkflowDefinitionVersionConflictException exception)
+        {
+            ThrowError(exception.Message, 409);
+        }
+        catch (WorkflowPromotionOperationConflictException exception)
+        {
+            ThrowError(exception.Message, 409);
+        }
         catch (ArgumentException exception)
         {
             ThrowError(exception, 400);

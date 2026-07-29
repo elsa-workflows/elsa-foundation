@@ -22,6 +22,7 @@ public static class ElsaRuntimeStorageManifest
     // These values are guarded by manifest and SQL Server route-admission tests.
     public const int RuntimeStatusProjectionLength = 32;
     public const int RuntimeExecutionIdProjectionLength = 128;
+    public const int RuntimeTenantProjectionLength = 256;
     public const int RuntimeCollectionProjectionLength = 128;
     public const int DurableTimerClaimOrderKeyProjectionLength = 84;
     public const int SchedulerWorkOrderKeyProjectionLength = 170;
@@ -81,6 +82,18 @@ public static class ElsaRuntimeStorageManifest
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
+    public const string WorkflowAlterationPlanIdField = "planId";
+    public const string WorkflowAlterationPlanTenantPartitionField = "tenantPartition";
+    public const string WorkflowAlterationPlanIdempotencyKeyHashField = "idempotencyKeyHash";
+    public const string WorkflowAlterationPlanTenantIdempotencyKeyField = "tenantIdempotencyKey";
+    public const string WorkflowAlterationPlanStatusField = "status";
+    public const string WorkflowAlterationPlanActiveOrderKeyField = "activeOrderKey";
+    public const string WorkflowAlterationJobIdField = "jobId";
+    public const string WorkflowAlterationJobPlanIdField = "planId";
+    public const string WorkflowAlterationJobCaptureOrdinalField = "captureOrdinal";
+    public const string WorkflowAlterationJobClaimableAtField = "claimableAt";
+    public const string WorkflowAlterationJobStatusField = "status";
+    public const string WorkflowAlterationJobCheckpointCommitIdField = "checkpointCommitId";
     public const string IncidentIdField = "incidentId";
     public const string CreatedAtField = "createdAt";
     public const string CollectionField = "collection";
@@ -161,6 +174,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ListBookmarksByStimulusTypeQuery = "list-by-stimulus-type";
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";
+    public const string WorkflowExecutableCoordinationDocumentKind = "workflowExecutableCoordination";
 
     /// <summary>Index used by <c>IWorkflowExecutableStore.ListAsync()</c> to enumerate every executable.</summary>
     public const string WorkflowExecutableByCollection = ByCollectionIndex;
@@ -293,12 +307,15 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutionStateCollection = "workflowExecutionState";
     public const string ListWorkflowExecutionsQuery = ListAllQuery;
     public const string PageWorkflowExecutionsQuery = "page-history";
+    public const string PageWorkflowExecutionsForAlterationCaptureQuery = "page-alteration-capture";
     public const string WorkflowExecutionHistoryOrderIndex = "by-history-order";
+    public const string WorkflowExecutionAlterationCaptureOrderIndex = "by-alteration-capture-tenant-and-execution";
     public const string PageFaultedWorkflowExecutionsForAttentionQuery = "page-faulted-for-attention";
     public const string WorkflowExecutionFaultedAttentionOrderIndex = "by-attention-fault-history";
     public const string WorkflowExecutionHistorySortTicksField = "historySortTicks";
     public const string WorkflowExecutionHistoryWorkflowExecutionIdField = "historyWorkflowExecutionId";
     public const string WorkflowExecutionHistoryTenantIdField = "historyTenantId";
+    public const string WorkflowExecutionHistoryAuthorityPartitionField = "historyAuthorityPartition";
     public const string WorkflowExecutionHistoryDefinitionIdField = "historyDefinitionId";
     public const string WorkflowExecutionHistoryStatusField = "historyStatus";
     public const string WorkflowExecutionHistoryRunKindField = "historyRunKind";
@@ -308,6 +325,34 @@ public static class ElsaRuntimeStorageManifest
         "by-collection-and-pinned-artifact";
     public const string PagePinnedExecutableArtifactIdsQuery =
         "page-pinned-executable-artifact-ids";
+
+    // Alteration plans are admitted once and retain the protected envelope, immutable selector, and
+    // sealed authority scope. Each captured target is represented by a separate job document so workers
+    // can claim and checkpoint them independently without contending on the plan document.
+    public const string WorkflowAlterationPlanDocumentKind = "workflowAlterationPlan";
+    public const string WorkflowAlterationPlanCollection = "workflowAlterationPlan";
+    public const string WorkflowAlterationPlanByCollection = ByCollectionIndex;
+    public const string WorkflowAlterationPlanByTenantAndIdempotency = "by-tenant-and-idempotency-key";
+    public const string WorkflowAlterationPlanByTenantAndStatus = "by-tenant-and-status";
+    public const string WorkflowAlterationPlanIdempotencyUniqueness = "unique-tenant-and-idempotency-key";
+    public const string ListWorkflowAlterationPlansQuery = ListAllQuery;
+    public const string FindWorkflowAlterationPlanByTenantAndIdempotencyQuery = "find-by-tenant-and-idempotency-key";
+    public const string PageActiveWorkflowAlterationPlansQuery = "page-active";
+    public const string PageActiveWorkflowAlterationPlansByTenantQuery = "page-active-by-tenant";
+
+    public const string WorkflowAlterationJobDocumentKind = "workflowAlterationJob";
+    public const string WorkflowAlterationJobByPlan = "by-plan-and-capture-ordinal";
+    public const string WorkflowAlterationJobByClaimability = "by-claimable-at";
+    public const string WorkflowAlterationJobByPlanAndClaimability = "by-plan-and-claimable-at";
+    public const string WorkflowAlterationJobByPlanStatusAndClaimability = "by-plan-status-and-claimable-at";
+    public const string PageWorkflowAlterationJobsByPlanQuery = "page-by-plan";
+    public const string ListClaimableWorkflowAlterationJobsQuery = "list-claimable";
+    public const string ListClaimableWorkflowAlterationJobsByPlanQuery = "list-claimable-by-plan";
+    public const string ListRunningClaimableWorkflowAlterationJobsByPlanQuery = "list-running-claimable-by-plan";
+    public const string ListPendingClaimableWorkflowAlterationJobsByPlanQuery = "list-pending-claimable-by-plan";
+    public const string ListPendingWorkflowAlterationJobsByPlanQuery = "list-pending-by-plan";
+    public const string CountWorkflowAlterationJobsByPlanAndStatusQuery = "count-by-plan-and-status";
+    public const string FindWorkflowAlterationJobByCheckpointCommitIdQuery = "find-by-checkpoint-commit-id";
     public const string WorkflowTestScopeDocumentKind = "workflowTestScope";
     public const string WorkflowTestScopeCollection = "workflowTestScope";
     public const string ListWorkflowTestScopesQuery = ListAllQuery;
@@ -532,6 +577,7 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public static StorageManifest CreatePhysicalized() =>
         ElsaGroundworkQueryRoutes.AddPhysicalRoutes(
+            WorkflowAlterationStoragePhysicalizer.AddRoutes(
             WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
             ExecutionLivenessStatePagingPhysicalizer.AddRoutes(
             ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
@@ -543,7 +589,7 @@ public static class ElsaRuntimeStorageManifest
                                     DueWorkStoragePhysicalizer.AddRoutes(
                                         SchedulerWorkStoragePhysicalizer.AddRoutes(
                                             EnableCompatibilityCollectionPaging(
-                                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create())))))))))))));
+                                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))))))))));
 
     private static StorageManifest EnableCompatibilityCollectionPaging(StorageManifest manifest) =>
         manifest with
@@ -611,7 +657,9 @@ public static class ElsaRuntimeStorageManifest
             query.SupportsDisjunction,
             supportsTotalCount: true,
             query.SortFields,
-            query.PredicateFields,
+            query.PredicateBindingMode == BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField
+                ? null
+                : query.PredicateFields,
             resultOperations,
             query.LatestPerKeyPath,
             query.ResidualPredicateFields);
@@ -640,6 +688,11 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow executable",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowExecutableCoordinationDocumentKind,
+                "Workflow executable coordination",
+                [],
+                []),
             Unit(
                 ExecutableActivityTemplateDocumentKind,
                 "Executable activity template",
@@ -709,6 +762,66 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow execution state",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowAlterationPlanDocumentKind,
+                "Workflow alteration plan",
+                [
+                    Keyword(WorkflowAlterationPlanByCollection, CollectionField),
+                    Keyword(WorkflowAlterationPlanByTenantAndIdempotency, WorkflowAlterationPlanTenantPartitionField),
+                    // One precomposed scalar preserves tenant-local uniqueness on providers whose
+                    // portable contract cannot materialize compound unique indexes.
+                    Keyword(WorkflowAlterationPlanIdempotencyUniqueness, WorkflowAlterationPlanTenantIdempotencyKeyField, isUnique: true),
+                    Keyword(WorkflowAlterationPlanStatusField, WorkflowAlterationPlanStatusField)
+                ],
+                [
+                    Query(ListWorkflowAlterationPlansQuery, WorkflowAlterationPlanByCollection),
+                    Query(FindWorkflowAlterationPlanByTenantAndIdempotencyQuery, WorkflowAlterationPlanByTenantAndIdempotency),
+                    Query(PageActiveWorkflowAlterationPlansQuery, WorkflowAlterationPlanStatusField)
+                ]),
+            Unit(
+                WorkflowAlterationJobDocumentKind,
+                "Workflow alteration job",
+                [
+                    ClaimableByPlanPlaceholder(WorkflowAlterationJobByPlan, WorkflowAlterationJobPlanIdField),
+                    DateTime(WorkflowAlterationJobByClaimability, WorkflowAlterationJobClaimableAtField),
+                    Keyword(WorkflowAlterationJobStatusField, WorkflowAlterationJobStatusField),
+                    Keyword(WorkflowAlterationJobCheckpointCommitIdField, WorkflowAlterationJobCheckpointCommitIdField)
+                ],
+                [
+                    Query(
+                        PageWorkflowAlterationJobsByPlanQuery,
+                        WorkflowAlterationJobByPlan,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
+                    Query(
+                        ListClaimableWorkflowAlterationJobsQuery,
+                        WorkflowAlterationJobByClaimability,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
+                    Query(
+                        ListClaimableWorkflowAlterationJobsByPlanQuery,
+                        WorkflowAlterationJobByPlan,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
+                    Query(
+                        ListRunningClaimableWorkflowAlterationJobsByPlanQuery,
+                        WorkflowAlterationJobByPlan,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
+                    Query(
+                        ListPendingClaimableWorkflowAlterationJobsByPlanQuery,
+                        WorkflowAlterationJobByPlan,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor),
+                    Query(ListPendingWorkflowAlterationJobsByPlanQuery, WorkflowAlterationJobByPlan),
+                    Query(CountWorkflowAlterationJobsByPlanAndStatusQuery, WorkflowAlterationJobByPlan),
+                    Query(FindWorkflowAlterationJobByCheckpointCommitIdQuery, WorkflowAlterationJobCheckpointCommitIdField)
+                ]),
             Unit(
                 WorkflowTestScopeDocumentKind,
                 "Workflow test scope",
@@ -973,6 +1086,16 @@ public static class ElsaRuntimeStorageManifest
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         IndexPhysicalizationPolicy.Optimized);
 
+    private static IndexDeclaration Keyword(string identity, string firstField, string secondField) => new(
+        identity,
+        [new IndexField(firstField), new IndexField(secondField)],
+        IndexValueKind.Keyword,
+        false,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        IndexPhysicalizationPolicy.Optimized);
+
     private static IndexDeclaration Number(string identity, string field) => new(
         identity,
         [new IndexField(field)],
@@ -997,6 +1120,16 @@ public static class ElsaRuntimeStorageManifest
         identity,
         [new IndexField(field)],
         IndexValueKind.DateTime,
+        false,
+        true,
+        MissingValueBehavior.Excluded,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+        IndexPhysicalizationPolicy.Optimized);
+
+    private static IndexDeclaration ClaimableByPlanPlaceholder(string identity, string planIdField) => new(
+        identity,
+        [new IndexField(planIdField)],
+        IndexValueKind.Keyword,
         false,
         true,
         MissingValueBehavior.Excluded,

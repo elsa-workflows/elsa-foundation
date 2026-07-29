@@ -100,6 +100,7 @@ public static class ElsaGroundworkQueryRoutes
 
         Primary("runtime-workflow-execution-state", "find-by-execution", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "primary.workflow-execution-state.execution.v1"),
         Route("runtime-workflow-execution-state", "query-page-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
+        Route("runtime-workflow-execution-state", "alteration-capture-page-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionAlterationCaptureRoute()),
         Route("runtime-workflow-execution-state", "page-faulted-for-attention-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), FaultedWorkflowExecutionAttentionRoute()),
         Route("runtime-workflow-execution-state", "list-pinned-artifact-ids-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Projection(),
             BoundedOrdered(
@@ -113,6 +114,117 @@ public static class ElsaGroundworkQueryRoutes
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
                 Equal(ElsaRuntimeStorageManifest.CollectionField))),
         Route("runtime-workflow-execution-state", "list-all-replaced-by-bounded-page", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
+
+        Route("runtime-workflow-alteration-plan", "list-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListWorkflowAlterationPlansQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanByCollection,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField],
+                Equal(ElsaRuntimeStorageManifest.CollectionField))),
+        Route("runtime-workflow-alteration-plan", "find-by-tenant-and-idempotency-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.FindWorkflowAlterationPlanByTenantAndIdempotencyQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndIdempotency,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField))),
+        Route("runtime-workflow-alteration-plan", "page-active-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
+                GreaterThan(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField))),
+        Route("runtime-workflow-alteration-plan", "page-active-by-tenant-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.PageActiveWorkflowAlterationPlansByTenantQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndStatus,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantPartitionField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationPlanStatusField),
+                GreaterThan(ElsaRuntimeStorageManifest.WorkflowAlterationPlanActiveOrderKeyField))),
+        Route("runtime-workflow-alteration-job", "page-by-plan-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlan,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobCaptureOrdinalField,
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField
+                ],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField))),
+        Route("runtime-workflow-alteration-job", "list-claimable-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobByClaimability,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField,
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField
+                ],
+                LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField))),
+        Route("runtime-workflow-alteration-job", "list-claimable-by-plan-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanAndClaimability,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField,
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField
+                ],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+                LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField))),
+        Route("runtime-workflow-alteration-job", "list-running-claimable-by-plan-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListRunningClaimableWorkflowAlterationJobsByPlanQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanStatusAndClaimability,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField,
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField
+                ],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField),
+                LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField))),
+        Route("runtime-workflow-alteration-job", "list-pending-claimable-by-plan-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListPendingClaimableWorkflowAlterationJobsByPlanQuery,
+                ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlanStatusAndClaimability,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField,
+                    ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField
+                ],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField),
+                LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowAlterationJobClaimableAtField))),
+        Route("runtime-workflow-alteration-job", "count-by-plan-and-status-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.CountWorkflowAlterationJobsByPlanAndStatusQuery,
+                "alteration_jobs_counts",
+                ElsaGroundworkQueryContinuation.None,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField))),
+        Route("runtime-workflow-alteration-job", "list-pending-by-plan-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListPendingWorkflowAlterationJobsByPlanQuery,
+                "alteration_jobs_counts",
+                ElsaGroundworkQueryContinuation.None,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobPlanIdField),
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobStatusField))),
+        Route("runtime-workflow-alteration-job", "find-by-checkpoint-commit-id-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.FindWorkflowAlterationJobByCheckpointCommitIdQuery,
+                "alteration_job_checkpoint",
+                ElsaGroundworkQueryContinuation.None,
+                [ElsaRuntimeStorageManifest.WorkflowAlterationJobIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowAlterationJobCheckpointCommitIdField))),
 
         Route("runtime-incident-state", "page-attention-by-status-bounded", ElsaRuntimeStorageManifest.IncidentStateDocumentKind, Documents(), BoundedOrdered(
             ElsaRuntimeStorageManifest.PageAttentionIncidentsByStatusQuery,
@@ -989,6 +1101,23 @@ public static class ElsaGroundworkQueryRoutes
             ],
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
             Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField));
+
+    private static ElsaGroundworkPhysicalQueryRoute WorkflowExecutionAlterationCaptureRoute() =>
+        BoundedOrdered(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutionsForAlterationCaptureQuery,
+            ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
+            ElsaGroundworkQueryContinuation.Cursor,
+            [ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField],
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryAuthorityPartitionField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryDefinitionIdField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindField),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryCorrelationIdField),
+            Equal(PhysicalDocumentFieldPaths.Id),
+            Equal(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+            GreaterThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField),
+            LessThanOrEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistorySortTicksField));
 
     private static ElsaGroundworkQueryRoute Primary(
         string coverageRow,

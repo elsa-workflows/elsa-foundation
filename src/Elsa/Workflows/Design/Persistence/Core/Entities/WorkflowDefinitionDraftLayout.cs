@@ -1,6 +1,7 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
@@ -21,6 +22,11 @@ public sealed class WorkflowDefinitionDraftLayout : TenantEntity, IWorkflowDefin
 
     IEnumerable<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records.AsEnumerable();
 
+    public ICollection<ActivityPresentationRecord> ActivityPresentation { get; set; } = [];
+
+    IEnumerable<IActivityPresentationRecord> IWorkflowDefinitionLayout.ActivityPresentation =>
+        ActivityPresentation.AsEnumerable();
+
     /// <summary>
     /// Creates a layout sibling for <paramref name="draftId"/> with a freshly generated id and the
     /// given (or empty) layout records. Single construction point for the four origination paths
@@ -29,10 +35,12 @@ public sealed class WorkflowDefinitionDraftLayout : TenantEntity, IWorkflowDefin
     public static WorkflowDefinitionDraftLayout CreateFor(
         IIdentityGenerator identityGenerator,
         string draftId,
-        IEnumerable<DesignMetadataRecord>? records = null) => new()
+        IEnumerable<DesignMetadataRecord>? records = null,
+        IEnumerable<ActivityPresentationRecord>? activityPresentation = null) => new()
     {
         Id = identityGenerator.Generate(),
         WorkflowDefinitionDraftId = draftId,
         Records = records is null ? [] : [.. records],
+        ActivityPresentation = activityPresentation is null ? [] : [.. activityPresentation],
     };
 }

@@ -24,4 +24,5 @@ public sealed record DraftOriginationInput(
     WorkflowDefinitionState State,
     IReadOnlyCollection<DesignMetadataRecord> Layout,
     string? SourceVersionId,
-    string? TenantId = null);
+    string? TenantId = null,
+    IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null);

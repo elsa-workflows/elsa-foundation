@@ -423,6 +423,45 @@ public sealed class GraphActivityProviderTests
         Assert.Equal(["Accepted", "Declined"], compilation.ExecutableRoot.ActivityContract!.Outcomes);
     }
 
+    [Fact]
+    public async Task Schema_two_compilation_allows_entry_outcomes_to_converge_at_one_boundary_outcome()
+    {
+        var manifest = CreateSchemaTwoManifest("""
+            [
+              { "sourceOutcomeReferenceKey": "approved", "boundaryOutcomeReferenceKey": "accepted" },
+              { "sourceOutcomeReferenceKey": "rejected", "boundaryOutcomeReferenceKey": "accepted" }
+            ]
+            """);
+        var request = new ActivityTemplateCompilationRequest(
+            "definition-1",
+            "activity-type-1",
+            "draft-1",
+            7,
+            "2.0.0",
+            OutcomeContract(("accepted", "Accepted")),
+            manifest,
+            [CreateDependency(
+                "graph-root",
+                "activity-ver-root",
+                "root-origin",
+                OutcomeContract(("approved", "Approved"), ("rejected", "Rejected")))],
+            "provider-fingerprint");
+
+        var compilation = await _provider.CompileAsync(request);
+
+        Assert.Empty(compilation.Diagnostics);
+        Assert.Equal(
+            new[]
+            {
+                new GraphActivityOutcomeMappingDescriptor("Approved", "Accepted"),
+                new GraphActivityOutcomeMappingDescriptor("Rejected", "Accepted")
+            },
+            Assert.IsType<GraphActivityOutcomeMappingDescriptor[]>(compilation.ExecutableRoot!.Descriptor.Payload
+                .GetProperty("outcomeMappings")
+                .Deserialize<GraphActivityOutcomeMappingDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+        Assert.Equal(["Accepted"], compilation.ExecutableRoot.ActivityContract!.Outcomes);
+    }
+
     [Theory]
     [InlineData(
         """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"}]""",
@@ -430,9 +469,6 @@ public sealed class GraphActivityProviderTests
     [InlineData(
         """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"declined"}]""",
         "activity.graph.outcome-mapping-source-duplicate")]
-    [InlineData(
-        """[{"sourceOutcomeReferenceKey":"approved","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"rejected","boundaryOutcomeReferenceKey":"accepted"}]""",
-        "activity.graph.outcome-mapping-boundary-duplicate")]
     [InlineData(
         """[{"sourceOutcomeReferenceKey":"missing","boundaryOutcomeReferenceKey":"accepted"},{"sourceOutcomeReferenceKey":"rejected","boundaryOutcomeReferenceKey":"declined"}]""",
         "activity.graph.outcome-mapping-source-unknown")]

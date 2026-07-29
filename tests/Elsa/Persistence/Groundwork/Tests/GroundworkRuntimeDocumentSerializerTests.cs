@@ -37,21 +37,26 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Equal("not-a-real-kind", exception.DocumentKind);
     }
 
-    [Theory]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
-    public void Version_4_Runtime_Kinds_Use_A_Clean_Baseline(string kind)
+    [Fact]
+    public void Workflow_Execution_State_Uses_A_Clean_V4_Baseline()
     {
-        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(kind));
-        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(kind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
     }
 
     [Fact]
-    public void WorkflowExecutable_Uses_A_Clean_V8_Baseline()
+    public void Workflow_Executable_Source_Reference_Uses_V5_With_A_V4_Read_Baseline()
     {
-        // v8 adds the exact incident strategy pinned by publication (#1015).
-        Assert.Equal(8, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
-        Assert.Equal(8, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(5, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+    }
+
+    [Fact]
+    public void WorkflowExecutable_Uses_A_Clean_V9_Baseline()
+    {
+        // v9 adds the exact operator-scheduling capability compiled for runtime alterations (#1016).
+        Assert.Equal(9, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
+        Assert.Equal(9, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }
 
     // --- Read path: current version round-trips ---

@@ -2,7 +2,7 @@
 
 **Branch**: `779-zero-ef-final-removal` | **Date**: 2026-07-26 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/141-zero-ef-final-removal/spec.md`
+**Input**: Feature specification from `specs/144-zero-ef-final-removal/spec.md`
 
 ## Summary
 
@@ -62,7 +62,7 @@ No constitutional violation is justified. The targeted §E2.5 amendment is a req
 ### Documentation (this feature)
 
 ```text
-specs/141-zero-ef-final-removal/
+specs/144-zero-ef-final-removal/
 ├── spec.md
 ├── plan.md
 ├── research.md

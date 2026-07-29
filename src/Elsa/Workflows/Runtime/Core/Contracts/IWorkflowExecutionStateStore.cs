@@ -33,6 +33,16 @@ public interface IWorkflowExecutionStateStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Scans alteration targets in immutable tenant-partition/execution-ID order. This is intentionally separate from
+    /// history paging: capture membership must not move when updated timestamps change between batches.
+    /// </summary>
+    ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(
+        WorkflowExecutionAlterationCaptureQuery query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<WorkflowExecutionAlterationCapturePage>(new NotSupportedException(
+            $"{GetType().Name} does not implement immutable alteration target capture."));
+
+    /// <summary>
     /// Returns the distinct executable artifact IDs pinned by retained workflow executions.
     /// </summary>
     /// <remarks>

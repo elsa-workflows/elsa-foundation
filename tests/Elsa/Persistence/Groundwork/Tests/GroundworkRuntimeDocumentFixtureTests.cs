@@ -16,7 +16,8 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
 /// shape changes without a version bump. The read-path test loads every supported generation; every kind
 /// except explicitly retained rolling windows supports only its clean current baseline. Executable activity
-/// templates retain v1-to-v2, while post-commit outbox documents retain v3-to-v4.
+/// templates retain v1-to-v2, Source References retain v4-to-v5, and post-commit outbox documents
+/// retain v3-to-v4.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
@@ -31,6 +32,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 var expected = pair.Key switch
                 {
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
+                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => 4,
                     ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
                     _ => pair.Value
                 };
@@ -39,41 +41,50 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Fact]
-    public void Dispatch_dependency_shapes_are_explicitly_versioned_at_v4()
+    public void Dispatch_dependency_shapes_are_explicitly_versioned()
     {
         Assert.Equal(
             4,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
         Assert.Equal(
-            8,
+            9,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
         Assert.Equal(
-            4,
+            5,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
     }
 
-    [Theory]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)]
-    [InlineData(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)]
-    public void Version_4_runtime_shapes_use_a_clean_contract(string documentKind)
+    [Fact]
+    public void Workflow_execution_state_uses_a_clean_v4_contract()
     {
-        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(documentKind));
-        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind));
+        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
     }
 
     [Fact]
-    public void Workflow_executable_declares_a_clean_v8_baseline()
+    public void Source_reference_v5_retains_v4_read_compatibility()
     {
-        // v8 adds the exact incident strategy pinned by publication (#1015).
+        Assert.Equal(5, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+    }
+
+    [Fact]
+    public void Workflow_executable_declares_a_clean_v9_baseline()
+    {
+        // v9 adds the exact operator-scheduling capability compiled for runtime alterations (#1016).
         Assert.Equal(
-            8,
+            9,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
         Assert.Equal(
-            8,
+            9,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind));
     }

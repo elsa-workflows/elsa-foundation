@@ -5,6 +5,8 @@ using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Capabilities;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -74,6 +76,54 @@ public sealed class DomainApiCapabilityRegistrationTests
     }
 
     [Fact]
+    public async Task Workflow_design_operational_source_advertises_expression_tooling_only_when_context_and_provider_are_composed()
+    {
+        var context = (IExpressionAuthoringContextService)RuntimeHelpers.GetUninitializedObject(typeof(ExpressionAuthoringContextService));
+        var provider = new StubExpressionToolingProvider();
+        var resolver = new StubExpressionToolingProviderResolver(provider);
+
+        Assert.DoesNotContain(
+            await new WorkflowDesignOperationalCapabilitySource(expressionTooling: context).GetCapabilitiesAsync(),
+            declaration => declaration.CapabilityId == "expressions.tooling.v1");
+        Assert.DoesNotContain(
+            await new WorkflowDesignOperationalCapabilitySource(expressionToolingProviders: [provider]).GetCapabilitiesAsync(),
+            declaration => declaration.CapabilityId == "expressions.tooling.v1");
+        Assert.DoesNotContain(
+            await new WorkflowDesignOperationalCapabilitySource(
+                expressionTooling: context,
+                expressionToolingProviders: [provider]).GetCapabilitiesAsync(),
+            declaration => declaration.CapabilityId == "expressions.tooling.v1");
+
+        var tooling = Assert.Single((await new WorkflowDesignOperationalCapabilitySource(
+            expressionTooling: context,
+            expressionToolingProviders: [provider],
+            expressionToolingResolver: resolver).GetCapabilitiesAsync()).Where(declaration => declaration.CapabilityId == "expressions.tooling.v1"));
+
+        Assert.Equal(
+            ["expression-tooling-completions", "expression-tooling-context", "expression-tooling-descriptors", "expression-tooling-hover", "expression-tooling-symbols", "expression-tooling-validate"],
+            tooling.Links.Select(link => link.Rel).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Workflow_design_capabilities_advertise_optional_promotion_version_operations()
+    {
+        var links = WorkflowDesignApiCapabilities.StaticDeclaration.Links;
+
+        Assert.Contains(links, link => link is
+        {
+            Rel: "workflow-draft-promote-version-preflight",
+            Href: "design/workflows/drafts/{draftId}/promotion-preflight",
+            Templated: true
+        });
+        Assert.Contains(links, link => link is
+        {
+            Rel: "workflow-draft-promote-exact-version",
+            Href: "design/workflows/drafts/{draftId}/promote",
+            Templated: true
+        });
+    }
+
+    [Fact]
     public async Task Runtime_operational_source_contributes_diagnostics_only_when_a_store_is_composed()
     {
         Assert.Empty(await new RuntimeOperationalCapabilitySource().GetCapabilitiesAsync());
@@ -90,6 +140,22 @@ public sealed class DomainApiCapabilityRegistrationTests
         public string Key => "test";
         public ValueTask<IReadOnlyList<ActivityInputOption>> GetOptionsAsync(ActivityInputOptionsContext context, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ActivityInputOption>>([]);
+    }
+
+    private sealed class StubExpressionToolingProvider : IExpressionToolingProvider
+    {
+        public string ExpressionType => "Test";
+        public ExpressionToolingContractVersion SupportedVersion => ExpressionToolingContractVersion.V1;
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(ExpressionToolingRequestScope scope, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> GetCompletionsAsync(ExpressionCompletionRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<ExpressionToolingOutcome<ExpressionHover>> GetHoverAsync(ExpressionHoverRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(ExpressionValidationRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class StubExpressionToolingProviderResolver(IExpressionToolingProvider provider) : IExpressionToolingProviderResolver
+    {
+        public IExpressionToolingProvider? Find(string expressionType) =>
+            StringComparer.Ordinal.Equals(expressionType, provider.ExpressionType) ? provider : null;
     }
 
     private sealed class StubDiagnosticsStore : IRuntimeDiagnosticsSettingsStore

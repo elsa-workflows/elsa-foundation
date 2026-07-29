@@ -1,0 +1,323 @@
+{
+  "generatedAtUtc": "2026-07-29T04:02:03.300059+00:00",
+  "provenance": {
+    "repositoryHeadAtMeasurement": "382301460ce34ada7f43a0946706680b6eeea563",
+    "dotnetVersion": "10.0.300",
+    "dotnetRuntimes": "Microsoft.AspNetCore.App 6.0.8 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 6.0.9 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 6.0.10 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 6.0.12 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 6.0.31 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.0-rc.2.22476.2 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.1 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.4 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.5 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.8 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 7.0.9 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.2 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.3 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.6 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.8 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 8.0.10 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.1 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.2 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.6 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.7 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 9.0.9 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 10.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 10.0.1 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.AspNetCore.App 10.0.8 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App];Microsoft.NETCore.App 6.0.8 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 6.0.9 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 6.0.10 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 6.0.12 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 6.0.31 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.0-rc.2.22472.3 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.1 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.4 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.5 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.8 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 7.0.9 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.2 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.3 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.6 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.8 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 8.0.10 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.1 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.2 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.6 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.7 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 9.0.9 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 10.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 10.0.1 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];Microsoft.NETCore.App 10.0.8 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App];",
+    "machine": "Darwin Sipkes-MacBook-Air.local 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:27:52 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8112 arm64",
+    "serverOutputSha256": "6bd8340bff2dca25fc4f79e3b928c681e1325ed9a96b4d4fcdeffaae4c105c8b",
+    "contentSha256": "72aa7f89c7c38eae652f9c581638172bfd87d786353d5b6561745e676547f71a",
+    "baselineSha256": "3416278cc1c53f9ecbaedd32f41ed110246292968d0e8ca6dcde53297ba9bbc8",
+    "expectedBodySha256": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+    "expectedBodyArtifact": "/private/tmp/elsa-625-final-382301460-cold20/expected-body",
+    "environment": "Development"
+  },
+  "request": {
+    "baseUrl": "http://127.0.0.1:17245",
+    "livenessPath": "/health/live",
+    "readinessPath": "/health/ready",
+    "workflowPath": "/workflows/http/hello-world",
+    "expectedShell": "default",
+    "expectedStatus": 200,
+    "boots": 20,
+    "startupTimeoutSeconds": 120,
+    "shutdownTimeoutSeconds": 30
+  },
+  "boots": [
+    {
+      "boot": 1,
+      "listening_ms": 436.771,
+      "activation_ms": 2134.362,
+      "shell_ready_ms": 2571.133,
+      "first_request_ms": 603.311,
+      "first_success_ms": 3174.445,
+      "shutdown_ms": 145.12,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 2,
+      "listening_ms": 429.425,
+      "activation_ms": 2113.172,
+      "shell_ready_ms": 2542.597,
+      "first_request_ms": 605.351,
+      "first_success_ms": 3147.947,
+      "shutdown_ms": 145.814,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 3,
+      "listening_ms": 434.286,
+      "activation_ms": 2017.078,
+      "shell_ready_ms": 2451.364,
+      "first_request_ms": 580.991,
+      "first_success_ms": 3032.355,
+      "shutdown_ms": 137.28,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 4,
+      "listening_ms": 333.831,
+      "activation_ms": 2098.314,
+      "shell_ready_ms": 2432.145,
+      "first_request_ms": 620.19,
+      "first_success_ms": 3052.334,
+      "shutdown_ms": 145.891,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 5,
+      "listening_ms": 438.53,
+      "activation_ms": 1909.72,
+      "shell_ready_ms": 2348.25,
+      "first_request_ms": 568.351,
+      "first_success_ms": 2916.601,
+      "shutdown_ms": 125.653,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 6,
+      "listening_ms": 443.034,
+      "activation_ms": 2005.423,
+      "shell_ready_ms": 2448.457,
+      "first_request_ms": 578.579,
+      "first_success_ms": 3027.036,
+      "shutdown_ms": 140.981,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 7,
+      "listening_ms": 333.933,
+      "activation_ms": 2117.763,
+      "shell_ready_ms": 2451.696,
+      "first_request_ms": 627.631,
+      "first_success_ms": 3079.327,
+      "shutdown_ms": 136.32,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 8,
+      "listening_ms": 441.332,
+      "activation_ms": 2027.493,
+      "shell_ready_ms": 2468.825,
+      "first_request_ms": 586.41,
+      "first_success_ms": 3055.235,
+      "shutdown_ms": 145.413,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 9,
+      "listening_ms": 415.84,
+      "activation_ms": 2151.126,
+      "shell_ready_ms": 2566.966,
+      "first_request_ms": 600.772,
+      "first_success_ms": 3167.738,
+      "shutdown_ms": 144.431,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 10,
+      "listening_ms": 432.488,
+      "activation_ms": 2015.451,
+      "shell_ready_ms": 2447.939,
+      "first_request_ms": 617.807,
+      "first_success_ms": 3065.746,
+      "shutdown_ms": 143.399,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 11,
+      "listening_ms": 433.312,
+      "activation_ms": 2018.365,
+      "shell_ready_ms": 2451.678,
+      "first_request_ms": 582.265,
+      "first_success_ms": 3033.943,
+      "shutdown_ms": 142.462,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 12,
+      "listening_ms": 335.26,
+      "activation_ms": 2112.345,
+      "shell_ready_ms": 2447.605,
+      "first_request_ms": 580.751,
+      "first_success_ms": 3028.356,
+      "shutdown_ms": 140.803,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 13,
+      "listening_ms": 429.404,
+      "activation_ms": 2032.02,
+      "shell_ready_ms": 2461.424,
+      "first_request_ms": 601.014,
+      "first_success_ms": 3062.438,
+      "shutdown_ms": 139.827,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 14,
+      "listening_ms": 441.2,
+      "activation_ms": 1996.635,
+      "shell_ready_ms": 2437.834,
+      "first_request_ms": 568.846,
+      "first_success_ms": 3006.681,
+      "shutdown_ms": 145.585,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 15,
+      "listening_ms": 427.668,
+      "activation_ms": 2024.325,
+      "shell_ready_ms": 2451.993,
+      "first_request_ms": 577.752,
+      "first_success_ms": 3029.745,
+      "shutdown_ms": 145.752,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 16,
+      "listening_ms": 421.309,
+      "activation_ms": 2025.71,
+      "shell_ready_ms": 2447.019,
+      "first_request_ms": 575.111,
+      "first_success_ms": 3022.13,
+      "shutdown_ms": 145.316,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 17,
+      "listening_ms": 418.129,
+      "activation_ms": 2003.409,
+      "shell_ready_ms": 2421.538,
+      "first_request_ms": 579.584,
+      "first_success_ms": 3001.122,
+      "shutdown_ms": 142.04,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 18,
+      "listening_ms": 439.01,
+      "activation_ms": 1931.828,
+      "shell_ready_ms": 2370.838,
+      "first_request_ms": 584.836,
+      "first_success_ms": 2955.674,
+      "shutdown_ms": 139.277,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 19,
+      "listening_ms": 436.684,
+      "activation_ms": 2016.526,
+      "shell_ready_ms": 2453.21,
+      "first_request_ms": 579.462,
+      "first_success_ms": 3032.672,
+      "shutdown_ms": 145.915,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    },
+    {
+      "boot": 20,
+      "listening_ms": 438.047,
+      "activation_ms": 2017.955,
+      "shell_ready_ms": 2456.002,
+      "first_request_ms": 663.104,
+      "first_success_ms": 3119.106,
+      "shutdown_ms": 204.238,
+      "status": "passed",
+      "log_path": null,
+      "logPath": null
+    }
+  ],
+  "aggregates": {
+    "listening_ms": {
+      "p50Ms": 432.488,
+      "p95Ms": 441.332,
+      "minMs": 333.831,
+      "maxMs": 443.034
+    },
+    "activation_ms": {
+      "p50Ms": 2018.365,
+      "p95Ms": 2134.362,
+      "minMs": 1909.72,
+      "maxMs": 2151.126
+    },
+    "shell_ready_ms": {
+      "p50Ms": 2451.364,
+      "p95Ms": 2566.966,
+      "minMs": 2348.25,
+      "maxMs": 2571.133
+    },
+    "first_request_ms": {
+      "p50Ms": 582.265,
+      "p95Ms": 627.631,
+      "minMs": 568.351,
+      "maxMs": 663.104
+    },
+    "first_success_ms": {
+      "p50Ms": 3032.672,
+      "p95Ms": 3167.738,
+      "minMs": 2916.601,
+      "maxMs": 3174.445
+    },
+    "shutdown_ms": {
+      "p50Ms": 143.399,
+      "p95Ms": 145.915,
+      "minMs": 125.653,
+      "maxMs": 204.238
+    }
+  },
+  "budgets": {
+    "shellReadyP95Ms": {
+      "configuredMs": null,
+      "actualMs": 2566.966,
+      "passed": null
+    },
+    "firstRequestP95Ms": {
+      "configuredMs": null,
+      "actualMs": 627.631,
+      "passed": null
+    },
+    "passed": null
+  },
+  "outcome": {
+    "status": "passed",
+    "failure": null
+  }
+}

@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.DiagnosticRecords;
 using Groundwork.SqlServer.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,17 +19,51 @@ public static class GroundworkSqlServerUnifiedRegistration
         this IServiceCollection services,
         string connectionString,
         bool autoApplyOnStartup = false) =>
-        services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(connectionString, autoApplyOnStartup);
+        services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers unified SQL Server persistence with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkSqlServerUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+        return services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
+    }
 
     /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
     public static IServiceCollection AddGroundworkSqlServerUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
         ShellFeatureContext context,
+        bool autoApplyOnStartup = false) =>
+        services.AddGroundworkSqlServerUnifiedPersistence(
+            connectionString,
+            context,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkSqlServerUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        ShellFeatureContext context,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup = false)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema(context);
-        return services.AddGroundworkSqlServerUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkSqlServerUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     /// <summary>
@@ -39,22 +74,43 @@ public static class GroundworkSqlServerUnifiedRegistration
         this IServiceCollection services,
         string connectionString,
         bool autoApplyOnStartup = false)
+        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
+        services.AddGroundworkSqlServerUnifiedPersistence<TDeploymentSource>(
+            connectionString,
+            new WorkflowExecutableCacheOptions(),
+            autoApplyOnStartup);
+
+    /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>
+    public static IServiceCollection AddGroundworkSqlServerUnifiedPersistence<TDeploymentSource>(
+        this IServiceCollection services,
+        string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        bool autoApplyOnStartup = false)
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
-        return services.AddGroundworkSqlServerUnifiedPersistenceCore(connectionString, autoApplyOnStartup);
+        return services.AddGroundworkSqlServerUnifiedPersistenceCore(
+            connectionString,
+            workflowExecutableCacheOptions,
+            autoApplyOnStartup);
     }
 
     private static IServiceCollection AddGroundworkSqlServerUnifiedPersistenceCore(
         this IServiceCollection services,
         string connectionString,
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
+            _ => SqlServerDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => SqlServerDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
-        return services.AddGroundworkUnifiedStoreFamilies();
+        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
+        return services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
     }
 }

@@ -9,6 +9,7 @@ public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStor
     {
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
+        state.EnsureSupersessionCompatible();
 
         var key = new ActivityExecutionStateKey(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
         return new(Save(key, state));

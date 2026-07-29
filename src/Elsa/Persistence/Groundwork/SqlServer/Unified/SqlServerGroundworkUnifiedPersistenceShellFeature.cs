@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
@@ -17,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceSqlServer",
     DisplayName = "Groundwork SQL Server Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. Apply schema through Groundwork.Tool before host startup.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
@@ -38,15 +39,35 @@ public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Auto-apply schema on startup",
-        Description = "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+        Description = "When enabled, safe pending document-schema operations and missing diagnostic-record streams are applied automatically at startup instead of requiring Groundwork.Tool. Drift and destructive operations are never auto-applied.",
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString)
             ? DefaultConnectionString
             : ConnectionString;
-        services.AddGroundworkSqlServerUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
+        services.AddGroundworkSqlServerUnifiedPersistence(
+            connectionString,
+            _context,
+            new WorkflowExecutableCacheOptions
+            {
+                Enabled = CacheWorkflowExecutables,
+                Capacity = WorkflowExecutableCacheCapacity
+            },
+            AutoApplySchemaOnStartup);
     }
 }

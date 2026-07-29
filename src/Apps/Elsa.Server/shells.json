@@ -66,7 +66,10 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkUnifiedPersistenceSqlite": {},
+          "GroundworkUnifiedPersistenceSqlite": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
+          },
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -159,7 +162,12 @@
           "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
-          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeScheduling": {},
           "WorkflowsRuntimeRecurringTriggers": {},

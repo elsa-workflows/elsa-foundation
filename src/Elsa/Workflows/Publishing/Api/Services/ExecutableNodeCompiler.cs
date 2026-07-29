@@ -27,9 +27,12 @@ public sealed class ExecutableNodeCompiler(
     IActivityStructureService activityStructureService,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    RuntimeOutputCaptureCompiler outputCaptureCompiler)
+    RuntimeOutputCaptureCompiler outputCaptureCompiler,
+    IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null)
 {
     private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
+        (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
@@ -109,14 +112,13 @@ public sealed class ExecutableNodeCompiler(
         var clrActivityType = ResolveClrActivityType(descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
 
-        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
-        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
-
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
+        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
+        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
@@ -260,7 +262,7 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables),
+            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables),
             structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
@@ -490,6 +492,8 @@ public sealed class ExecutableNodeCompiler(
     }
 
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
+        string parentActivityType,
+        string parentExecutableNodeId,
         IEnumerable<ActivityChildProjection> childSlots,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
@@ -497,9 +501,23 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables)
     {
         return childSlots
-            .Select(slot => new ExecutableChildSlot(
-                slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables)).ToArray()))
+            .Select(slot =>
+            {
+                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables)).ToArray();
+                var context = new OperatorActivitySchedulingCapabilityCompilationContext(
+                    parentActivityType,
+                    parentExecutableNodeId,
+                    slot.Name,
+                    children.Select(child => child.ExecutableNodeId).ToArray());
+                var capabilities = _operatorSchedulingCapabilityProviders
+                    .Select(provider => provider.TryDescribe(context, out var capability) ? capability : null)
+                    .Where(capability => capability is not null)
+                    .ToArray();
+                if (capabilities.Length > 1)
+                    throw new InvalidOperationException($"More than one operator-scheduling capability provider matched '{parentActivityType}' slot '{slot.Name}'.");
+
+                return new ExecutableChildSlot(slot.Name, children, capabilities.SingleOrDefault());
+            })
             .ToArray();
     }
 

@@ -17,7 +17,10 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 internal sealed record GroundworkWorkflowDefinitionDraftDocument(
     string Collection,
     WorkflowDefinitionDraft Entity,
-    IReadOnlyCollection<DesignMetadataRecord> Layout);
+    IReadOnlyCollection<DesignMetadataRecord> Layout)
+{
+    public IReadOnlyCollection<ActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     IDocumentStore store,
@@ -117,7 +120,8 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 
     public SaveDocumentRequest ToSaveRequest(
         WorkflowDefinitionDraft draft,
-        IReadOnlyCollection<DesignMetadataRecord> layout)
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        IReadOnlyCollection<ActivityPresentationRecord>? activityPresentation = null)
     {
         accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
         return GroundworkDesignSerialization.Execute(
@@ -131,7 +135,11 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
                 new GroundworkWorkflowDefinitionDraftDocument(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
                     draft,
-                    layout),
+                    layout)
+                {
+                    ActivityPresentation =
+                        ActivityPresentationRecord.NormalizeCollection(activityPresentation)
+                },
                 jsonOptions));
     }
 
@@ -150,7 +158,9 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
                 accessContextAccessor.Current.EnsureTenantScope(document.Entity.TenantId);
                 return document with
                 {
-                    Layout = document.Layout ?? []
+                    Layout = document.Layout ?? [],
+                    ActivityPresentation =
+                        ActivityPresentationRecord.NormalizeCollection(document.ActivityPresentation)
                 };
             }
 
@@ -160,7 +170,10 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
                     $"Document '{envelope.Id}' of kind '{WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind}' could not be deserialized as {nameof(WorkflowDefinitionDraft)}."));
 
             accessContextAccessor.Current.EnsureTenantScope(legacyDocument.Entity.TenantId);
-            return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, []);
+            return new GroundworkWorkflowDefinitionDraftDocument(
+                legacyDocument.Collection,
+                legacyDocument.Entity,
+                []);
         }
         catch (DesignPersistenceException)
         {

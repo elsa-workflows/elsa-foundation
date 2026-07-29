@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -34,6 +35,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowSchedulerWorkQueue? _schedulerWorkQueue;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
+    private readonly IWorkflowAlterationStore? _alterationStore;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -85,7 +87,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IActivityScopeCleanupStore? activityScopeCleanupStore = null,
         IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null,
         IWorkflowDispatchStore? workflowDispatchStore = null,
-        IWorkflowSchedulerWorkQueue? schedulerWorkQueue = null)
+        IWorkflowSchedulerWorkQueue? schedulerWorkQueue = null,
+        IWorkflowAlterationStore? alterationStore = null)
     {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -101,6 +104,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _rootWriteLeaseManager = rootWriteLeaseManager;
         _workflowDispatchStore = workflowDispatchStore;
         _schedulerWorkQueue = schedulerWorkQueue;
+        _alterationStore = alterationStore;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -234,6 +238,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ValidateOperationalStateChanges(commit);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
+        await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
@@ -251,6 +256,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await ApplyActivityScopeCleanupsAsync(commit.StateChanges.ActivityScopeCleanups, ct);
             await ApplyWorkflowDispatchChangesAsync(commit.StateChanges.WorkflowDispatches, ct);
             await ApplyWorkflowDispatchCancellationsAsync(commit.StateChanges.WorkflowDispatchCancellations, ct);
+            await ApplyAlterationJobTerminalChangeAsync(commit, ct);
 
             try
             {
@@ -297,6 +303,22 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (!result.Succeeded)
                 throw new RuntimeSchedulerWorkConsumeConflictException(item.WorkflowExecutionId, item.WorkItemId);
         }
+    }
+
+    private async ValueTask ValidateAlterationJobTerminalChangeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.AlterationJobTerminalChange is not { } change)
+            return;
+        if (_alterationStore is null)
+            throw new InvalidOperationException("A checkpoint carrying alteration-job terminal evidence requires an alteration store.");
+        await _alterationStore.ValidateTerminalJobChangeAsync(change, cancellationToken);
+    }
+
+    private async ValueTask ApplyAlterationJobTerminalChangeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.AlterationJobTerminalChange is not { } change)
+            return;
+        await _alterationStore!.ApplyTerminalJobChangeAsync(change, cancellationToken);
     }
 
     private void ValidateConsumedSchedulerWorkItems(RuntimeCheckpointCommit commit)

@@ -3,6 +3,7 @@ using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Groundwork.Documents.Store;
@@ -27,19 +28,37 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         WorkflowDefinition workflowDefinition,
         WorkflowDefinitionDraft draft,
         CancellationToken cancellationToken = default) =>
-        Execute(operationKey, workflowDefinition, draft, [], cancellationToken);
+        Execute(operationKey, workflowDefinition, draft, [], [], cancellationToken);
+
+    public Task<WorkflowDefinitionCreated> Execute(
+        DesignOperationKey operationKey,
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellationToken = default) =>
+        Execute(
+            operationKey,
+            workflowDefinition,
+            draft,
+            layout,
+            [],
+            cancellationToken);
 
     public async Task<WorkflowDefinitionCreated> Execute(
         DesignOperationKey operationKey,
         WorkflowDefinition workflowDefinition,
         WorkflowDefinitionDraft draft,
         IReadOnlyCollection<DesignMetadataRecord> layout,
+        IReadOnlyCollection<ActivityPresentationRecord> activityPresentation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         ArgumentNullException.ThrowIfNull(draft);
         ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(activityPresentation);
+        var normalizedPresentation =
+            ActivityPresentationRecord.NormalizeCollection(activityPresentation);
         accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
         accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
         if (!StringComparer.Ordinal.Equals(workflowDefinition.Id, draft.WorkflowDefinitionId))
@@ -61,7 +80,8 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
                 OperationKind,
                 "workflow definition draft",
                 () => payloadSerializer.Serialize(draft.State)),
-            layout.Select(ToMaterial).ToArray());
+            layout.Select(ToMaterial).ToArray(),
+            normalizedPresentation.Select(ToMaterial).ToArray());
 
         var now = clock.UtcNow;
         GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
@@ -80,7 +100,11 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
-        var draftSave = draftDocuments.ToSaveRequest(draft, layout.ToArray()) with { ExpectedVersion = 0 };
+        var draftSave = draftDocuments.ToSaveRequest(
+            draft,
+            layout.ToArray(),
+            normalizedPresentation) with
+        { ExpectedVersion = 0 };
         definitionSave = definitionSave with { ExpectedVersion = 0 };
 
         var result = await GroundworkDesignAtomicCommand.ExecuteAsync(
@@ -111,6 +135,9 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             record.Height,
             record.AdditionalProperties?.GetRawText());
 
+    private static ActivityPresentationMaterial ToMaterial(ActivityPresentationRecord record) =>
+        new(record.NodeId, record.DisplayName, record.Description);
+
     private sealed record CreateRequestMaterial(
         string Name,
         string? Description,
@@ -119,7 +146,8 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         bool IsSourceOwned,
         string? SourceVersionId,
         string StateJson,
-        IReadOnlyCollection<LayoutMaterial> Layout);
+        IReadOnlyCollection<LayoutMaterial> Layout,
+        IReadOnlyCollection<ActivityPresentationMaterial> ActivityPresentation);
 
     private sealed record LayoutMaterial(
         string NodeId,
@@ -128,4 +156,9 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
         double? Width,
         double? Height,
         string? AdditionalPropertiesJson);
+
+    private sealed record ActivityPresentationMaterial(
+        string NodeId,
+        string? DisplayName,
+        string? Description);
 }

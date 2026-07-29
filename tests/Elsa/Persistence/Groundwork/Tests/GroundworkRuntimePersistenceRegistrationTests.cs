@@ -27,6 +27,9 @@ namespace Elsa.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkRuntimePersistenceRegistrationTests
 {
+    private const string CacheTypeName =
+        "Elsa.Workflows.Runtime.Core.Services.CachingWorkflowExecutableStore";
+
     private static readonly Type[] LogicBearingRuntimeServiceTypes =
     [
         typeof(IGroundworkStorageManifestSource),
@@ -75,8 +78,20 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.All(LogicBearingRuntimeServiceTypes, serviceType =>
         {
-            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
-            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            var descriptors = services.Where(candidate => candidate.ServiceType == serviceType).ToArray();
+            if (serviceType == typeof(IWorkflowExecutableStore))
+            {
+                Assert.Equal(2, descriptors.Length);
+                var keyed = Assert.Single(descriptors, descriptor => descriptor.IsKeyedService);
+                Assert.Equal(GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey, keyed.ServiceKey);
+                Assert.Single(descriptors, descriptor => !descriptor.IsKeyedService);
+            }
+            else
+            {
+                Assert.Single(descriptors);
+            }
+
+            Assert.All(descriptors, descriptor => Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime));
         });
     }
 
@@ -189,7 +204,11 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        var selectedExecutableStore = provider.GetRequiredService<IWorkflowExecutableStore>();
+        Assert.Equal(CacheTypeName, selectedExecutableStore.GetType().FullName);
+        Assert.IsType<GroundworkWorkflowExecutableStore>(
+            provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+                GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
         Assert.IsType<GroundworkExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
@@ -303,7 +322,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkScopedDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkScopedDocumentStore>(provider.GetRequiredService<IBoundedDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<CachingWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
@@ -392,7 +413,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     }
 
     [Fact]
-    public async Task Sqlite_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
+    public async Task Sqlite_Uncached_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-session-open-{Guid.NewGuid():N}");
         var databasePath = Path.Combine(directory, "groundwork.db");
@@ -401,7 +422,11 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         try
         {
             var services = new ServiceCollection();
-            new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+            new SqliteGroundworkRuntimePersistenceShellFeature
+            {
+                ConnectionString = connectionString,
+                ReuseAccessBoundStores = false
+            }.ConfigureServices(services);
             await using var provider = services.BuildServiceProvider();
 
             await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
