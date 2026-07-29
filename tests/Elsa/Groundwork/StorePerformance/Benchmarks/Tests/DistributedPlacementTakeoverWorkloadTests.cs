@@ -72,6 +72,7 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
     [InlineData(PlacementAdapterFault.IgnoreOwnedListExpiry)]
     [InlineData(PlacementAdapterFault.DropNonCandidatePlacement)]
     [InlineData(PlacementAdapterFault.NonAtomicDualGrant)]
+    [InlineData(PlacementAdapterFault.CrossClaimantGrant)]
     [InlineData(PlacementAdapterFault.StaleReleaseClearsWinner)]
     public async Task Fails_closed_when_public_store_outcomes_drift(PlacementAdapterFault fault)
     {
@@ -250,6 +251,14 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
 
         private ExecutionPlacementClaimResult Result(ExecutionPlacementClaimOutcome outcome, ExecutionPlacementLease lease)
         {
+            if (fault == PlacementAdapterFault.CrossClaimantGrant &&
+                outcome == ExecutionPlacementClaimOutcome.Granted &&
+                lease.WorkflowExecutionId == "placement-expired-0001" &&
+                lease.PlacementToken == 2)
+            {
+                var wrongOwner = lease.OwnerId == "worker-beta" ? "worker-gamma" : "worker-beta";
+                return new(outcome, new ExecutionPlacementLease(lease.WorkflowExecutionId, wrongOwner, lease.PlacementToken, lease.AcquiredAt, lease.ExpiresAt));
+            }
             if (fault != PlacementAdapterFault.WrongClaimToken)
                 return new(outcome, lease);
             return new(outcome, new ExecutionPlacementLease(lease.WorkflowExecutionId, lease.OwnerId, lease.PlacementToken + 1, lease.AcquiredAt, lease.ExpiresAt));
@@ -276,5 +285,6 @@ public enum PlacementAdapterFault
     IgnoreOwnedListExpiry,
     DropNonCandidatePlacement,
     NonAtomicDualGrant,
+    CrossClaimantGrant,
     StaleReleaseClearsWinner
 }

@@ -666,8 +666,8 @@ identity/timestamps/tokens, dual contention grants, wrong ordering, an ignored q
 stale release of the takeover winner. These source-level probes do not establish provider-side
 query-plan boundedness or persistence across process/storage recreation.
 
-Root verification passed the focused workload suite **17/17**, the complete no-container benchmark
-suite **94/94**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
+Root verification passed the focused workload suite **18/18**, the complete no-container benchmark
+suite **95/95**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
 and `git diff --check`. This checkpoint
 does not execute an EF comparator or any provider matrix, start a database container, collect
 timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a performance
@@ -691,9 +691,9 @@ and returned:
 
 | Axis | Final exact-range verdict |
 |---|---|
-| Correctness/mechanism | PASS — the released-together wave requires one grant and one denial with the same winner/token, rereads the winner, rejects the dual-grant fake, and verifies the winner was one of the released claimants. The separate catalog-observed takeover keeps `currentOwner=worker-beta` and tokens `1,2,3` deterministic without normalizing the contention winner. Owner, expiry, order, and bound faults all fail closed. |
+| Correctness/mechanism | PASS — the released-together wave requires one grant and one denial with the same winner/token, binds the grant to the requesting claimant, rereads the winner, and rejects both dual-grant and cross-claimant-result fakes. The separate catalog-observed takeover keeps `currentOwner=worker-beta` and tokens `1,2,3` deterministic without normalizing the contention winner. Owner, expiry, order, and bound faults all fail closed. |
 | Evidence integrity | PASS — independently recomputed input/result digests remain `17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985` and `3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4`. Source, this checkpoint, and PR metadata consistently claim shared-backing/distinct-client visibility only and reserve persisted restart and native-plan evidence. |
-| Scope/test preservation | PASS — the exact delta remains four additive paths; the Runtime Distributed reference adds no EF/provider/container dependency, and tasks, coverage ledger, provider evidence, EF oracle, and existing tests are unchanged. The focused suite passed 17/17, the complete no-container benchmark suite 94/94, the warning-as-error Release build had 0 warnings/errors, and the exact-range diff check was clean. |
+| Scope/test preservation | PASS — the exact delta remains four additive paths; the Runtime Distributed reference adds no EF/provider/container dependency, and tasks, coverage ledger, provider evidence, EF oracle, and existing tests are unchanged. The focused suite passed 18/18, the complete no-container benchmark suite 95/95, the warning-as-error Release build had 0 warnings/errors, and the exact-range diff check was clean. |
 
 ## 8. Readiness audit
 

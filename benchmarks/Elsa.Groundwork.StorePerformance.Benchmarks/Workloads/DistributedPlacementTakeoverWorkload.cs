@@ -250,28 +250,29 @@ public sealed class DistributedPlacementTakeoverWorkload
             if (Interlocked.Increment(ref readyCount) == ConcurrentClaimants)
                 allReady.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
-            return await contender.Store.TryClaimAsync(
+            var result = await contender.Store.TryClaimAsync(
                 Claim(executionId, contender.Owner, now, duration),
                 now,
                 cancellationToken);
+            return (contender.Owner, Result: result);
         }).ToArray();
 
         await allReady.Task.WaitAsync(cancellationToken);
         release.TrySetResult();
         var results = await Task.WhenAll(attempts);
-        var winners = results.Where(result => result.Outcome == ExecutionPlacementClaimOutcome.Granted).ToArray();
-        var denials = results.Where(result => result.Outcome == ExecutionPlacementClaimOutcome.Denied).ToArray();
+        var winners = results.Where(attempt => attempt.Result.Outcome == ExecutionPlacementClaimOutcome.Granted).ToArray();
+        var denials = results.Where(attempt => attempt.Result.Outcome == ExecutionPlacementClaimOutcome.Denied).ToArray();
         if (winners.Length != 1 || denials.Length != ConcurrentClaimants - 1)
             throw new InvalidOperationException("The placement takeover contention wave did not converge to one granted winner and one denied contender.");
 
         var winner = winners[0];
         var denied = denials[0];
-        if (!contenders.Any(contender => contender.Owner == winner.Lease.OwnerId))
-            throw new InvalidOperationException("The placement takeover contention winner was not one of the released claimants.");
-        RequireLease(winner.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention winner");
-        RequireLease(denied.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention denial");
+        if (winner.Owner != winner.Result.Lease.OwnerId)
+            throw new InvalidOperationException("The placement takeover contention grant did not belong to the claimant that received it.");
+        RequireLease(winner.Result.Lease, executionId, winner.Owner, 2, now, now.Add(duration), "contention winner");
+        RequireLease(denied.Result.Lease, executionId, winner.Owner, 2, now, now.Add(duration), "contention denial");
         var persisted = await clients.Primary.FindAsync(executionId, cancellationToken);
-        RequireLease(persisted, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "persisted contention winner");
+        RequireLease(persisted, executionId, winner.Owner, 2, now, now.Add(duration), "persisted contention winner");
     }
 
     private static async ValueTask RequireEmptyOwnedListAsync(
