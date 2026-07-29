@@ -231,14 +231,11 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
 
         try
         {
-            var manifest = source.CreateManifest();
-            var routes = source.PhysicalTarget.Routes;
-            var provider = source.PhysicalTarget.Provider;
             var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
                 connectionString,
                 databaseName,
-                manifest,
-                provider,
+                source.CreateManifest(),
+                source.PhysicalTarget.Provider,
                 DocumentStoreAccess.Global,
                 source.CreateNamePolicy(),
                 options: new MongoDbPhysicalDocumentStoreOptions
@@ -258,18 +255,7 @@ public sealed class MongoDbGroundworkRuntimeAdmission : IMongoDbGroundworkRuntim
             {
                 ct.ThrowIfCancellationRequested();
                 var store = handle.CreateStore(access);
-                var boundedMutationStore = GroundworkBoundedDocumentMutationStoreRouter.CreateLazy(
-                    routes
-                        .Where(route => manifest.StorageUnits.Single(unit =>
-                            unit.Identity == route.StorageUnit).PhysicalStorage!.BoundedMutations.Count != 0)
-                        .Select(route =>
-                            KeyValuePair.Create<string, Func<IBoundedDocumentMutationStore>>(
-                                route.StorageUnit.Value,
-                                () => MongoDbPhysicalMutationRuntime.Create(store, manifest, route, provider))));
-                return ValueTask.FromResult(new GroundworkStoreSessionResources(
-                    store,
-                    store,
-                    boundedMutationStore));
+                return ValueTask.FromResult(new GroundworkStoreSessionResources(store, store));
             }, TransactionBoundary.CrossUnitAtomic, handle))
             {
                 await handle.DisposeAsync();

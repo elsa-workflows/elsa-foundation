@@ -110,18 +110,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                             KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                 route.StorageUnit.Value,
                                 () => planSets[route.StorageUnit.Value].Value.Bind(store))));
-                    var boundedMutationStore = GroundworkBoundedDocumentMutationStoreRouter.CreateLazy(
-                        routes
-                            .Where(route => manifest.StorageUnits.Single(unit =>
-                                unit.Identity == route.StorageUnit).PhysicalStorage!.BoundedMutations.Count != 0)
-                            .Select(route =>
-                                KeyValuePair.Create<string, Func<IBoundedDocumentMutationStore>>(
-                                    route.StorageUnit.Value,
-                                    () => SqlServerPhysicalMutationRuntime.Create(store, manifest, route, provider))));
-                    return ValueTask.FromResult(new GroundworkStoreSessionResources(
-                        store,
-                        boundedStore,
-                        boundedMutationStore));
+                    return ValueTask.FromResult(new GroundworkStoreSessionResources(store, boundedStore));
                 }, TransactionBoundary.CrossUnitAtomic))
                 {
                     _capabilityAdmission?.TrySet(composition.Capabilities);

@@ -233,19 +233,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                                 KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
                                     route.StorageUnit.Value,
                                     () => planSets[route.StorageUnit.Value].Value.Bind(store))));
-                        var boundedMutationStore = GroundworkBoundedDocumentMutationStoreRouter.CreateLazy(
-                            routes
-                                .Where(route => manifest.StorageUnits.Single(unit =>
-                                    unit.Identity == route.StorageUnit).PhysicalStorage!.BoundedMutations.Count != 0)
-                                .Select(route =>
-                                    KeyValuePair.Create<string, Func<IBoundedDocumentMutationStore>>(
-                                        route.StorageUnit.Value,
-                                        () => SqlitePhysicalMutationRuntime.Create(store, manifest, route, provider))));
-                        return new GroundworkStoreSessionResources(
-                            store,
-                            boundedStore,
-                            boundedMutationStore,
-                            connection);
+                        return new GroundworkStoreSessionResources(store, boundedStore, connection);
                     }
                     catch (OperationCanceledException)
                     {
