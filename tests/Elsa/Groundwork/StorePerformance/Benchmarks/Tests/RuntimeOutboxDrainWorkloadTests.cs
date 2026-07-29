@@ -1,0 +1,273 @@
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Xunit;
+
+namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
+
+public sealed class RuntimeOutboxDrainWorkloadTests
+{
+    [Fact]
+    public async Task Reproduces_the_frozen_outbox_contract_and_literal_golden_digest()
+    {
+        var adapter = new OutboxAdapter();
+        var result = await new RuntimeOutboxDrainWorkload().ExecuteAsync(adapter);
+
+        Assert.Equal(RuntimeOutboxDrainWorkload.ExpectedInputFingerprint, result.InputFingerprint);
+        Assert.Equal(RuntimeOutboxDrainWorkload.ExpectedResultDigest, result.ResultDigest);
+        Assert.Equal(ReproducibleWorkloadScenarioCatalog.Get(RuntimeOutboxDrainWorkload.WorkloadId).OperationSequence, result.ObservableOperations);
+        Assert.Equal(RuntimeOutboxDrainWorkload.OutboxEntryCount, adapter.Shared.Items.Count);
+        Assert.Equal(3, adapter.Opened.Count);
+        Assert.Equal(3, adapter.Opened.Distinct(ReferenceEqualityComparer.Instance).Count());
+        Assert.Equal(2, adapter.Shared.ContentionAttempts);
+        Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, adapter.Shared.PrimaryClaims.Count);
+        Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, adapter.Shared.PrimaryCompletions);
+        Assert.True(adapter.Shared.Events.LastIndexOf("complete-primary") < adapter.Shared.Events.IndexOf("reclaim-sentinel"));
+        Assert.True(adapter.Shared.Events.IndexOf("reclaim-sentinel") < adapter.Shared.Events.IndexOf("attempt-stale-sentinel-completion"));
+    }
+
+    [Theory]
+    [InlineData(OutboxFault.AliasInitialClients)]
+    [InlineData(OutboxFault.SeparateInitialBacking)]
+    [InlineData(OutboxFault.SameReopenedClient)]
+    [InlineData(OutboxFault.FreshReopenedBacking)]
+    [InlineData(OutboxFault.ResponseOnlySeed)]
+    [InlineData(OutboxFault.IgnoreDue)]
+    [InlineData(OutboxFault.IgnoreScope)]
+    [InlineData(OutboxFault.MissingSentinel)]
+    [InlineData(OutboxFault.WrongSentinelIdentity)]
+    [InlineData(OutboxFault.IgnoreLimit)]
+    [InlineData(OutboxFault.ReverseOrder)]
+    [InlineData(OutboxFault.DuplicateClaim)]
+    [InlineData(OutboxFault.WrongReclaimFence)]
+    [InlineData(OutboxFault.ReturnWrongOwner)]
+    [InlineData(OutboxFault.StaleAccepted)]
+    [InlineData(OutboxFault.ResponseOnlyCompletion)]
+    [InlineData(OutboxFault.EarlyRetry)]
+    [InlineData(OutboxFault.LateRetry)]
+    [InlineData(OutboxFault.WrongReread)]
+    public async Task Fails_closed_when_a_public_outbox_contract_surface_drifts(OutboxFault fault)
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RuntimeOutboxDrainWorkload().ExecuteAsync(new OutboxAdapter(fault)).AsTask());
+    }
+
+    [Fact]
+    public void Public_adapter_surface_contains_only_provider_neutral_runtime_contracts()
+    {
+        var types = new[] { typeof(IRuntimeOutboxDrainWorkloadAdapter), typeof(RuntimeOutboxDrainClients), typeof(RuntimeOutboxDrainClient) };
+        var surface = types.SelectMany(type => type.GetMembers(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly))
+            .Select(member => member.ToString()!)
+            .Append(typeof(IRuntimeOutboxDrainWorkloadAdapter).ToString());
+
+        Assert.DoesNotContain(surface, value =>
+            value.Contains("Provider", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("Connection", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("DocumentStore", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("Timing", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("Ledger", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed class OutboxAdapter(OutboxFault fault = OutboxFault.None) : IRuntimeOutboxDrainWorkloadAdapter
+    {
+        private readonly OutboxBacking _secondary = fault == OutboxFault.SeparateInitialBacking ? new() : null!;
+        public OutboxBacking Shared { get; } = new();
+        public List<OutboxPublicStore> Opened { get; } = [];
+
+        public ValueTask<RuntimeOutboxDrainClients> OpenIndependentClientsAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var primary = Open(Shared);
+            var secondary = fault == OutboxFault.AliasInitialClients ? primary : Open(fault == OutboxFault.SeparateInitialBacking ? _secondary : Shared);
+            return new(new RuntimeOutboxDrainClients(primary.Client, secondary.Client));
+        }
+
+        public ValueTask<RuntimeOutboxDrainClient> ReopenClientAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return new(fault == OutboxFault.SameReopenedClient ? Opened[0].Client : Open(fault == OutboxFault.FreshReopenedBacking ? new OutboxBacking() : Shared).Client);
+        }
+
+        private OutboxPublicStore Open(OutboxBacking backing)
+        {
+            var client = new OutboxPublicStore(backing, fault);
+            Opened.Add(client);
+            return client;
+        }
+    }
+
+    private sealed class OutboxBacking
+    {
+        public object Gate { get; } = new();
+        public Dictionary<string, RuntimePostCommitOutboxItem> Items { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Commits { get; } = new(StringComparer.Ordinal);
+        public List<RuntimePostCommitOutboxClaim> PrimaryClaims { get; } = [];
+        public int ContentionClaims { get; set; }
+        public int ContentionAttempts { get; set; }
+        public int PrimaryCompletions { get; set; }
+        public List<string> Events { get; } = [];
+    }
+
+    private sealed class OutboxPublicStore :
+        IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore, IPostCommitOutboxLookupStore
+    {
+        private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
+        private readonly OutboxBacking _backing;
+        private readonly OutboxFault _fault;
+        public RuntimeOutboxDrainClient Client { get; }
+
+        public OutboxPublicStore(OutboxBacking backing, OutboxFault fault)
+        {
+            _backing = backing;
+            _fault = fault;
+            Client = new RuntimeOutboxDrainClient(this, this, this, this);
+        }
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (decision.Mode != Immediate.Mode)
+                throw new InvalidOperationException("The fake only admits immediate public checkpoint commits.");
+            lock (_backing.Gate)
+            {
+                if (!_backing.Commits.Add(commit.CommitId))
+                    throw new InvalidOperationException("The fake received a duplicate seed commit.");
+                var ids = commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray();
+                if (_fault != OutboxFault.ResponseOnlySeed)
+                {
+                    foreach (var change in commit.StateChanges.PostCommitOutbox)
+                        _backing.Items.Add(change.State.OutboxItemId, change.State);
+                }
+                return new(new RuntimeCheckpointCommitStoreResult(ids));
+            }
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(RuntimePostCommitOutboxClaimRequest request, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_backing.Gate)
+            {
+                if (request.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
+                    _backing.ContentionAttempts++;
+                if (_fault == OutboxFault.MissingSentinel && request.WorkflowExecutionId == "outbox-drain-contention")
+                    return new((IReadOnlyCollection<RuntimePostCommitOutboxClaim>)Array.Empty<RuntimePostCommitOutboxClaim>());
+                var ignoresScope = _fault is OutboxFault.IgnoreScope or OutboxFault.WrongSentinelIdentity;
+                var eligibilityRequest = ignoresScope && request.WorkflowExecutionId is not null
+                    ? new RuntimePostCommitOutboxClaimRequest(request.OwnerId, request.Now, request.VisibilityTimeout, request.Limit, intentKind: request.IntentKind)
+                    : request;
+                IEnumerable<RuntimePostCommitOutboxItem> candidates = _backing.Items.Values.Where(item =>
+                    (ignoresScope || request.WorkflowExecutionId is null || item.Intent.WorkflowExecutionId == request.WorkflowExecutionId) &&
+                    (_fault == OutboxFault.IgnoreDue || RuntimePostCommitOutboxClaimTransitions.CanClaim(item, eligibilityRequest)));
+                if (_fault == OutboxFault.WrongSentinelIdentity && request.WorkflowExecutionId == "outbox-drain-contention")
+                    candidates = candidates.Where(item => item.OutboxItemId != "outbox-due-0032");
+                candidates = candidates.OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                    .ThenBy(item => item.RecordedAt)
+                    .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal);
+                if (_fault == OutboxFault.ReverseOrder)
+                    candidates = candidates.Reverse();
+                var selected = candidates.Take(_fault == OutboxFault.IgnoreLimit ? int.MaxValue : request.Limit).ToArray();
+                var claims = new List<RuntimePostCommitOutboxClaim>();
+                foreach (var item in selected)
+                {
+                    var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, request);
+                    if (_fault == OutboxFault.WrongReclaimFence && claim.FencingToken > 1)
+                        claim = new RuntimePostCommitOutboxClaim(claim.Item, claim.OwnerId, claim.FencingToken - 1, claim.ClaimedAt, claim.VisibleAfter);
+                    if (_fault == OutboxFault.ReturnWrongOwner)
+                        claim = new RuntimePostCommitOutboxClaim(claim.Item, "wrong-owner", claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter);
+                    if (_fault != OutboxFault.DuplicateClaim)
+                        _backing.Items[item.OutboxItemId] = claim.Item;
+                    if (item.Intent.WorkflowExecutionId == "outbox-drain-contention")
+                        _backing.ContentionClaims++;
+                    if (request.OwnerId == "outbox-primary")
+                    {
+                        _backing.PrimaryClaims.Add(claim);
+                        _backing.Events.Add("claim-primary");
+                    }
+                    else if (request.OwnerId == "outbox-sentinel-successor")
+                    {
+                        _backing.Events.Add("reclaim-sentinel");
+                    }
+                    claims.Add(claim);
+                }
+                return new((IReadOnlyCollection<RuntimePostCommitOutboxClaim>)claims);
+            }
+        }
+
+        public ValueTask RecordDeliveryResultAsync(
+            RuntimePostCommitOutboxClaim claim,
+            RuntimePostCommitOutboxDeliveryResult result,
+            CancellationToken cancellationToken = default) =>
+            CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(claim, result), cancellationToken);
+
+        public ValueTask CompleteClaimAsync(RuntimePostCommitOutboxClaimCompletion completion, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_backing.Gate)
+            {
+                if (completion.Claim.OwnerId == "outbox-primary")
+                {
+                    _backing.PrimaryCompletions++;
+                    _backing.Events.Add("complete-primary");
+                }
+                else if (completion.Claim.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
+                {
+                    _backing.Events.Add("attempt-stale-sentinel-completion");
+                }
+                var current = _backing.Items.GetValueOrDefault(completion.Claim.OutboxItemId)
+                    ?? throw new InvalidOperationException("Outbox item was not found.");
+                var stale = current.Status != RuntimePostCommitOutboxStatus.Delivering || current.DeliveringOwnerId != completion.Claim.OwnerId || current.DeliveryFencingToken != completion.Claim.FencingToken;
+                if (stale && _fault == OutboxFault.StaleAccepted)
+                    return ValueTask.CompletedTask;
+                var updated = RuntimePostCommitOutboxClaimTransitions.Complete(current, completion.Claim, completion.DeliveryResult);
+                if (_fault == OutboxFault.EarlyRetry && updated.Status == RuntimePostCommitOutboxStatus.FailedRetryable)
+                    updated = Copy(updated, availableAt: completion.DeliveryResult.RecordedAt);
+                if (_fault == OutboxFault.LateRetry && updated.Status == RuntimePostCommitOutboxStatus.FailedRetryable)
+                    updated = Copy(updated, availableAt: completion.DeliveryResult.RecordedAt.AddMinutes(2));
+                if (_fault != OutboxFault.ResponseOnlyCompletion)
+                    _backing.Items[updated.OutboxItemId] = updated;
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_backing.Gate)
+            {
+                var item = _backing.Items.GetValueOrDefault(outboxItemId);
+                if (item is not null && _fault == OutboxFault.WrongReread)
+                    item = Copy(item, deliveryFencingToken: item.DeliveryFencingToken + 1);
+                return new(item);
+            }
+        }
+
+        private static RuntimePostCommitOutboxItem Copy(RuntimePostCommitOutboxItem item, DateTimeOffset? availableAt = null, long? deliveryFencingToken = null) =>
+            new(item.OutboxItemId, item.Intent, item.Status, item.RecordedAt, availableAt ?? item.AvailableAt, item.RetryPolicy, item.DeliveryAttemptCount,
+                item.DeliveringOwnerId, item.DeliveryStartedAt, item.DeliveredAt, item.LastFailureMessage, item.Metadata,
+                deliveryFencingToken ?? item.DeliveryFencingToken, item.DeliveryVisibleAfter);
+    }
+}
+
+public enum OutboxFault
+{
+    None,
+    AliasInitialClients,
+    SeparateInitialBacking,
+    SameReopenedClient,
+    FreshReopenedBacking,
+    ResponseOnlySeed,
+    IgnoreDue,
+    IgnoreScope,
+    MissingSentinel,
+    WrongSentinelIdentity,
+    IgnoreLimit,
+    ReverseOrder,
+    DuplicateClaim,
+    WrongReclaimFence,
+    ReturnWrongOwner,
+    StaleAccepted,
+    ResponseOnlyCompletion,
+    EarlyRetry,
+    LateRetry,
+    WrongReread
+}

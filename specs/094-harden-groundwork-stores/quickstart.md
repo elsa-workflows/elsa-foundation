@@ -845,6 +845,28 @@ advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconcil
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
 stay in the #646 completion gate.
 
+### Outbox drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `outbox-drain` v1.1 vector through
+`IRuntimeCheckpointCommitStore`, `IRuntimePostCommitOutboxClaimStore`,
+`IRuntimePostCommitOutboxClaimCompletionStore`, and `IPostCommitOutboxLookupStore` only. It seeds
+all 1,024 pending records through public checkpoint commits (never the in-memory test insertion
+seam), claims the exact first 32 due identities in declared order, and uses a later scoped sentinel
+to release two independent claimants simultaneously without assuming which claimant wins. After
+the first 32 current claims are completed as 25 delivered and seven retryable; the retryables are
+absent immediately before, and exactly present at, their recorded retry time. Only then, after the
+sentinel visibility expires, the non-winning client reclaims that scoped sentinel under a higher
+fence. Completion using its original claim is rejected without changing the successor state. A third
+distinct client point-rereads every affected identity, status, owner, and fencing token.
+
+The focused fake matrix rejects aliased or split clients/backing, response-only checkpoint seed or
+completion, ignored due/scope/limit/order behavior, a missing or wrong scoped sentinel, duplicate
+current claims, wrong fence or owner, stale completion acceptance, premature/late retry visibility,
+and altered public rereads. The focused suite passed **21/21**. This is shared-backing
+public-contract correctness only: it does not claim
+provider or restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion; T100 remains unchecked.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
