@@ -191,7 +191,7 @@ public sealed class DistributedPlacementTakeoverWorkload
     private static void RequireIndependentClients(DistributedPlacementTakeoverClients? clients)
     {
         if (clients is null || clients.Primary is null || clients.Secondary is null || ReferenceEquals(clients.Primary, clients.Secondary))
-            throw new InvalidOperationException("The placement workload adapter must open two independent public-store clients over shared durable backing.");
+            throw new InvalidOperationException("The placement workload adapter must open two independent public-store clients over shared backing.");
     }
 
     private static void RequireActivePlacements(
@@ -266,6 +266,8 @@ public sealed class DistributedPlacementTakeoverWorkload
 
         var winner = winners[0];
         var denied = denials[0];
+        if (!contenders.Any(contender => contender.Owner == winner.Lease.OwnerId))
+            throw new InvalidOperationException("The placement takeover contention winner was not one of the released claimants.");
         RequireLease(winner.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention winner");
         RequireLease(denied.Lease, executionId, winner.Lease.OwnerId, 2, now, now.Add(duration), "contention denial");
         var persisted = await clients.Primary.FindAsync(executionId, cancellationToken);
@@ -340,7 +342,7 @@ public interface IDistributedPlacementTakeoverWorkloadAdapter
     ValueTask<IExecutionPlacementStore> ReopenClientAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>Two independently created public placement clients sharing one durable backing.</summary>
+/// <summary>Two independently created public placement clients sharing one backing.</summary>
 public sealed record DistributedPlacementTakeoverClients(IExecutionPlacementStore Primary, IExecutionPlacementStore Secondary);
 
 public sealed record DistributedPlacementTakeoverResult(
