@@ -633,6 +633,17 @@ the benchmark project Release build with **0 warnings/errors**, and `git diff --
 container, provider suite, timing run, physical-form selection, coverage-ledger edit, or performance
 verdict was produced.
 
+After Spec 144 landed on `main` as `ea4683674f8d3bc6961c99e7c0efda20ce819e6f`, merge commit
+`4c9c9e7044d66972860a77b7608708195943f48d` integrated that base without rebasing. The runner,
+tests, and project reference remained byte-identical to the passed `312bd3cbf18266410e4d3e6fe5dbef100941108e`
+source checkpoint; Spec 144 was base-only. Root revalidation at the integrated head again passed
+**12/12**, the zero-warning Release build, and exact-range `git diff --check`. Correctness/mechanism
+and scope/test-preservation reviewers returned PASS on exact range
+`ea4683674f8d3bc6961c99e7c0efda20ce819e6f..4c9c9e7044d66972860a77b7608708195943f48d`.
+The evidence reviewer confirmed the code and PR metadata but required this integration paragraph
+before its originating-reviewer record re-verification; merge remains forbidden until that verdict
+and the hosted checks pass.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
