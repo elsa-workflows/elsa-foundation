@@ -975,6 +975,15 @@ Secondary client unconditionally. That head was also superseded: every winner is
 through its actual losing/opposing client, and the focused fake requires exactly **16** such
 opposing-client inspections.
 
+The canonical three-axis review of `8c1c27e..51373f1` passed with no blocker, P1, or P2.
+Correctness/mechanism verified requester binding, actual-client propagation, opposing-client
+inspection, takeover/stale provenance, full claimed-item fidelity, poison/reopen behavior, and the
+frozen digest. Evidence integrity independently reran the focused suite (**17/17**) and confirmed
+that all observations and nonclaims are truthful. Scope/test preservation confirmed that the delta
+contains only this runner, its additive tests, and this quickstart; no frozen workload, shared
+serialized file, task, ledger, EF oracle, provider, production registration, package, solution, or
+shell changed, no test was removed or weakened, and T100 remains unchecked.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
