@@ -884,6 +884,8 @@ immediately when the first slot released. Their findings and dispositions are:
 | Correctness/mechanism | Primary, retry, successor, and reread checks admitted internally consistent but request-shifted claim timestamps. Exact checks now bind outer and persisted start/visibility times to each request's `Now` and timeout; isolated return-only and persisted-time faults fail closed. | PASS |
 | Correctness/mechanism | Any `InvalidOperationException` was counted as a stale-fence rejection. The public completion contract and transition now expose `RuntimePostCommitOutboxStaleClaimException`; the runner catches only that type, and an unrelated-failure fault proves other completion failures propagate. The runtime store contract test verifies the stale exception's presented and current ownership evidence. | PASS |
 | Evidence integrity | Retry-at executed at `10:01:01`, then successor reclaim moved semantic time backward to `10:01:00`. Successor reclaim now uses `retryAt`, one second after expiry, and the positive fake records every claim request time and requires monotonic chronology. | PASS |
+| Scope/test preservation | The typed stale exception initially broke exact-type assertions outside the first focused slices. Twelve stale-specific assertions across runtime, dispatch projection, Groundwork store/crash/redrive, and provider-conformance tests now require the stable type; genuinely unrelated and legacy-result failures retain `InvalidOperationException`. | PASS |
+| Evidence integrity | The first persisted-time fault shifted both the stored item and returned claim, so it failed at response validation instead of proving reopen detection. It now returns the genuine retry claim, persists only a shifted retry item, and must reach the reopened-retry current-claim error. | PASS |
 | Scope/test preservation | The additive delta is confined to the outbox runner/tests/evidence plus the minimal public stale-claim exception, completion-contract documentation, transition classification, and its runtime store contract assertion. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
 
 The originating evidence reviewer re-inspected final implementation range
@@ -904,6 +906,17 @@ closes them. Root reproduced focused **29/29**, complete container-free **214/21
 store contract **14/14**, and warning-as-error benchmark builds with **0 warnings / 0 errors**.
 The runtime store project reports one pre-existing xUnit analyzer warning in
 `RuntimeStartCommandSchedulingTests.cs`; the changed runtime contract test is clean.
+
+Correctness re-verification of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..1626c2c4086982d4531451aa3a80d7cbed84002f`
+found the exact-type preservation and persisted-fault isolation gaps recorded above. Final
+preservation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..5731d62521422609c9362d72f439fd132c816e0a`
+closes them. Root reproduced benchmark focused **29/29** and complete **214/214**, affected runtime
+classes **62/62**, dispatch projection **9/9**, Groundwork store/crash/redrive **72/72**, and the
+exact outbox stale-ack contract **4/4** across SQLite, SQL Server, PostgreSQL, and MongoDB. Changed-file
+formatter checks and `git diff --check` are clean; the touched cancellation-crash test also
+normalizes a pre-existing seven-line initializer indentation defect without changing behavior.
 
 ## 8. Readiness audit
 
