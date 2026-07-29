@@ -984,6 +984,68 @@ contains only this runner, its additive tests, and this quickstart; no frozen wo
 serialized file, task, ledger, EF oracle, provider, production registration, package, solution, or
 shell changed, no test was removed or weakened, and T100 remains unchecked.
 
+### Distributed command transport correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `command-send-lease-ack` v1.1 vector through
+`IExecutionCommandTransport` only. Two distinct public clients share adapter-selected backing and a
+third distinct client exercises reopen visibility. It sends 128 × 64 commands, with the two
+barrier-synchronised sends deliberately placed in a non-primary workflow so the primary golden
+batch remains `command-0000` through `command-0015`. Two concurrent leasers each request eight
+items; their returned requester/result tuples must union to the exact ordered 16-item batch. After
+31 seconds, successors re-lease the same batch under current tokens; stale first-generation
+acknowledgements are rejected before current acknowledgements succeed. The reopened client reports
+all 128 visible workflow IDs and exactly 8,176 pending commands.
+
+This is shared-backing public-contract correctness only. It does not claim provider or process
+restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification rejected the worker’s initial **12/12** result because send acknowledgements did
+not compare the full command/envelope shape, concurrent lease responses were hashed in client order
+without first establishing a canonical batch, each leaser’s eight-item bound was not enforced, and
+reopen checked only an aggregate count. The accepted candidate compares every public send/lease
+member, proves 8,192 unique transport identities and exact dedicated-stream sequences 63/64,
+requires each leaser’s ordered eight-item share before canonicalizing the cross-client union by
+sequence, verifies exact per-workflow reopen counts (48 for the acknowledged primary stream and 64
+for each other stream), and separately fails closed on response-only send, corrupt item/token/order,
+fabricated visible-list, and fabricated count behavior. The semantic adapter guard traverses
+inherited interfaces and base types against an explicit provider-neutral type set. The focused suite
+is **18/18**, the complete container-free benchmark-harness project is **249/249**, the benchmark
+warnings-as-errors build is clean, changed-code formatter checks pass, and `git diff --check` is
+clean.
+
+The initial three-axis review of `286f559..8322a48` passed evidence integrity and scope/test
+preservation, but correctness found that the first and successor lease generations used different
+owner IDs. A stale acknowledgement could therefore be rejected for owner mismatch even if the
+transport ignored its required lease token. The first remediation used one owner across both
+generations and added an `IgnoreLeaseToken` mutation. On the next exact-range review, correctness
+and evidence integrity passed, but scope/test preservation correctly rejected that shape because it
+erased the contract's cross-node takeover semantics; the same review also found that the semantic
+surface guard treated `IExecutionCommandTransport` as a terminal allowed type instead of traversing
+its public members.
+
+The accepted remediation preserves distinct client and generation owners. It first proves that the
+actual first-generation owner/token tuples are stale after takeover, then pairs each successor with
+the old token for the same transport item and attempts acknowledgement through the current
+successor owner. That second probe isolates token fencing from owner mismatch before the current
+token succeeds, and the `IgnoreLeaseToken` mutation must fail closed. The originating reviewer then
+found a replacement P1: those two probes still allowed a transport that ignored the owner while
+enforcing the token. The final candidate therefore also attempts each current token through its
+matched first-generation owner before current acknowledgement; the `IgnoreLeaseOwner` mutation
+must fail closed. Token and owner fencing are now isolated independently while the original stale
+tuple still proves their combined takeover boundary. The semantic surface guard now traverses
+`IExecutionCommandTransport` itself and explicitly permits only the provider-neutral types exposed
+by that public contract.
+
+The final code-bearing review of `286f559..9682f4961` passed correctness/mechanism with no blocker,
+P1, or P2. Evidence integrity and the originating scope reviewer agreed that the three stale
+combinations, both fencing mutations, takeover, and the semantic-surface fix were sound, but each
+reported one evidence-only P2: adding `IgnoreLeaseOwner` made the committed **17/17** and
+**248/248** test counts stale. Root had independently rerun the exact candidate at **18/18** focused
+and **249/249** complete-project, so this documentation-only disposition records those verified
+counts. No code, workload vector, task, ledger, provider, EF oracle, production registration,
+package, solution, or shell changed in the disposition.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
