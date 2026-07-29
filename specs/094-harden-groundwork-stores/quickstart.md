@@ -695,6 +695,46 @@ and returned:
 | Evidence integrity | PASS — independently recomputed input/result digests remain `17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985` and `3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4`. Source, this checkpoint, and PR metadata consistently claim shared-backing/distinct-client visibility only and reserve persisted restart and native-plan evidence. |
 | Scope/test preservation | PASS — the exact delta remains four additive paths; the Runtime Distributed reference adds no EF/provider/container dependency, and tasks, coverage ledger, provider evidence, EF oracle, and existing tests are unchanged. The focused suite passed 18/18, the complete no-container benchmark suite 95/95, the warning-as-error Release build had 0 warnings/errors, and the exact-range diff check was clean. |
 
+### Recurring schedule selection correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `recurring-schedule-selection` v1.1
+public-operation vector through `IRecurringTriggerScheduleStore`. It prepares exactly 2,048 schedules
+across 256 publications, performs one explicit predecessor-to-candidate publication activation while
+retaining exactly 41 inactive publications, and verifies every prepared schedule through bounded
+publication pages. The 64-schedule projection publication proves the 50+14 continuation boundary;
+every other publication is also traversed so a partial seed, ignored continuation, wrong publication
+filter, wrong activation state, or unrelated deactivation cannot pass.
+
+The active due set contains the exact 179 `schedule-due-*` identities at the frozen instant. Separate
+queries prove the cutoff, 50-item bound, complete deterministic order, and inactive-publication
+filter. Two distinct clients that first prove shared-backing visibility are released together against
+the same expected cursor; exactly one advance succeeds, both clients reread the stored transition,
+and a stale retry is rejected. A third distinct client verifies the advanced cursor, remaining due
+set, and all publication projections through the adapter's reopen boundary. This is shared-backing,
+distinct-client visibility only; it is not persisted process-restart or provider evidence.
+
+Three adversarial read-only reviewers rejected initial range
+`46dba90ac876ab44ccd8fbf7a92e8ef8b20935de..5d5d8414ff1a336e4c7162fac9465324063eee35`:
+
+| Axis | Confirmed finding and replacement disposition |
+|---|---|
+| Correctness/mechanism | The initial runner read only the first 50 projection records, never consumed the continuation, and could not detect loss of the 1,819 schedules not also observed by the due query. The replacement traverses all 256 publications and all 2,048 exact records, requires the 50+14 boundary, rejects missing/ignored/repeated continuations, and fails on partial backing. |
+| Correctness/mechanism | Every activation passed a null replacement, so the publication transition contract was not exercised. The replacement activates one prepared candidate with an explicit active predecessor, proves the exact final state before and after reopen, and rejects both ignored replacement and unrelated deactivation. |
+| Evidence integrity | `advancedScheduleId`, the due-identity digest, and stale-rejection evidence were emitted from expectations rather than the already-checked public results. The replacement derives them from the persisted advance, returned due records, and captured stale-attempt outcome. |
+| Scope/test preservation | The additive two-file implementation introduced no package, solution, shell, ledger, EF, provider, container, production-registration, or shared-configuration change. No scope remediation was required. |
+
+The originating reviewers re-inspected exact replacement range
+`46dba90ac876ab44ccd8fbf7a92e8ef8b20935de..f49fe079feab234d73ce39b79e713673fda89918`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Root
+verification passed the focused workload suite **23/23**, the complete no-container benchmark suite
+**118/118**, formatting verification, the warning-as-error Release build with **0 warnings/errors**,
+and `git diff --check`.
+
+This checkpoint does not run an EF comparator or provider matrix, start a database container,
+collect timing or native-plan evidence, select a physical form, edit the coverage ledger, issue a
+performance verdict, or advance T076/T093/T100. Groundwork #50 and the missing executable EF runtime
+comparator (or a separately ratified no-oracle policy) remain later admission gates.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
