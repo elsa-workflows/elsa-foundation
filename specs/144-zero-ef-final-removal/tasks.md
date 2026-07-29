@@ -44,8 +44,8 @@
 - [ ] T009 Verify #642 diagnostics four-provider/grouped-reducer/test-ledger evidence is merged and record its merge/artifact identities in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T010 Verify #643 completes the 145-member OpenIddict ledger, production registration, four-provider black-box suite, exact-range reviews, and merge; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T013 Verify the consumed Groundwork package contains the exact merged capabilities required from #50, #141, and #143 at an upstream SHA, without treating partial checkpoints as issue closure, and record it in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment, including #932's required final issue and Project 33 disposition; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T013 Record three independent upstream gates in `specs/144-zero-ef-final-removal/quickstart.md`: exact consumed-package provenance for merged #141/#143 APIs; accepted #50 performance evidence and final issue disposition; and Groundwork parent #25 completion (or a named, separately ratified #647/#629 amendment). Never infer #50/#25 completion from package contents or a partial checkpoint.
 - [ ] T014 [P] Open every test cited as replacement evidence in `specs/144-zero-ef-final-removal/test-retention-ledger.md` and correct or reject unsupported “covered by” claims
 - [ ] T015 [P] Verify `git status` in the #647 worktree and main checkout and record any unrelated/user-owned changes in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T016 Finalize the prerequisite/deletion DAG and per-family gate links in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
@@ -79,9 +79,9 @@
 - [ ] T026 [US1] Wire dashboard run-health/portfolio into `src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs`
 - [ ] T027 [US1] Update dashboard Groundwork feature registration/extension-point documentation in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/README.md` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/EXTENSION_POINTS.md`
 - [ ] T028 [US1] Update unified provider documentation to promise the complete dashboard-enabled matrix in `src/Elsa/Persistence/Groundwork/Unified/README.md` and `src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`
-- [ ] T029 [US1] After #643 merges, replace remaining Identity/OpenIddict EF host feature selection with Groundwork in `src/Apps/Elsa.Server/shells.json`
-- [ ] T030 [US1] Replace remaining production Identity/OpenIddict EF host feature selection with Groundwork while preserving seeded-admin configuration in `src/Apps/Elsa.Server/shells.Production.json`
-- [ ] T031 [US1] Remove host-only EF project/package references made obsolete by the Groundwork composition from `src/Apps/Elsa.Server/Elsa.Server.csproj`
+- [ ] T029 [US1] After T010, T012, T017, and T019-T028 pass, admit the sole earlier serialized #647 host slice and replace remaining Identity/OpenIddict EF host feature selection with Groundwork in `src/Apps/Elsa.Server/shells.json`
+- [ ] T030 [US1] In the same serialized host slice after T029, replace remaining production Identity/OpenIddict EF host feature selection with Groundwork while preserving seeded-admin configuration in `src/Apps/Elsa.Server/shells.Production.json`
+- [ ] T031 [US1] In the same serialized host slice after T030, remove host-only EF project/package references made obsolete by the Groundwork composition from `src/Apps/Elsa.Server/Elsa.Server.csproj`
 - [ ] T032 [US1] Run the container-free SQLite registration/composition/startup slice and record exact results in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T033 [US1] [CONTAINER] Run the SQL Server, PostgreSQL, and MongoDB dashboard-enabled host matrix and retain provider/version/topology/result evidence under `docs/reports/evidence/144-zero-ef-final-removal/`
 - [ ] T034 [US1] Reconcile the implemented host matrix against `specs/144-zero-ef-final-removal/contracts/reference-host-matrix.md` and record its verdict in `specs/144-zero-ef-final-removal/quickstart.md`
@@ -140,17 +140,17 @@
 
 - [ ] T059 [US3] Add omitted-project and Windows-style project-reference bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T060 [US3] Add central/shared/imported/conditional/direct/static-transitive dependency bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
-- [ ] T061 [US3] Add restored-transitive and missing/stale-assets fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+- [ ] T061 [US3] Add restored-transitive, missing-assets, stale-but-present assets/receipt, changed dependency-input, and project-set-mismatch fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T062 [US3] Add migration/context/registration/JSON/YAML host-configuration detection and comment-false-positive tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T063 [US3] Ensure `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` discovers every repository project independently of `Elsa.Server.slnx` and evaluates all contract categories
-- [ ] T064 [US3] Rewrite `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` so the production assertion requires every EF category and `ProjectsMissingAssets` to be empty
+- [ ] T063 [US3] Ensure `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` discovers every repository project independently of `Elsa.Server.slnx`, validates the all-project restore receipt's exact project/input/assets bindings, and evaluates all contract categories
+- [ ] T064 [US3] Rewrite `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` so the production assertion requires a valid current all-project restore receipt plus every EF category and `ProjectsMissingAssets` to be empty
 - [ ] T065 [US3] Remove baseline load/save/compare behavior and the `ELSA_UPDATE_EF_CORE_BASELINE` switch from `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` and `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
-- [ ] T066 [US3] Delete `tests/Elsa/Architecture/Baselines/ef-core-surface.json`, `tests/Elsa/Architecture/Baselines/frozen-aspnetcore-identity-ef-oracle.json`, and `tests/Elsa/Architecture/FrozenAspNetCoreIdentityEfOracleRatchetTests.cs`
+- [ ] T066 [US3] Delete `tests/Elsa/Architecture/Baselines/ef-core-surface.json` after T046 has already retired the frozen Identity oracle baseline/test in the same reviewed oracle-removal change
 - [ ] T067 [US3] Rewrite `tests/Elsa/Architecture/Baselines/README.md` as permanent absolute-zero guard documentation without an update path
-- [ ] T068 [US3] Run `dotnet restore Elsa.Server.slnx --force-evaluate` and prove every discovered project has current assets
+- [ ] T068 [US3] Add and run repository-owned Bash and PowerShell restore-driver entry points under `tools/architecture/` to independently discover and force-evaluate every repository project, write the exact project/input/assets restore receipt consumed by the guard, and prove its project set matches fresh scanner discovery
 - [ ] T069 [US3] Run the complete EF architecture guard and all bypass fixtures against the frozen candidate; record results in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T070 [US3] Run `dotnet nuget why` for every unexpected dependency found during certification and record the removed chain in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
 - [ ] T071 [US3] Record the exact-head absolute-zero certification and category counts in `specs/144-zero-ef-final-removal/quickstart.md`
@@ -171,7 +171,7 @@
 - [ ] T075 [P] [US4] Update the final consequences/status and links in `docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md`
 - [ ] T076 [P] [US4] Document Groundwork schema validation and authorized apply for reference CI/CD/deployments in the owning operational documentation under `docs/`
 - [ ] T077 [P] [US4] Update affected provider/host READMEs and `EXTENSION_POINTS.md` catalogs in the same work unit as their registration changes
-- [ ] T078 [US4] Prepare evidence-bound #647/#629 closure summaries and Project 33 transitions in `specs/144-zero-ef-final-removal/quickstart.md` without applying them before remote-main verification
+- [ ] T078 [US4] Prepare evidence-bound #647/#629 closure summaries and an immutable Project 33 closure ledger enumerating #629, #642, #643, #646, #647, #932, and every other parent-required item with required/actual final state, merge or amendment evidence, and verification timestamp; do not apply transitions before remote-main verification
 - [ ] T079 [US4] Refresh `docs/maps/` through the five authorized map scripts after implementation inputs settle
 - [ ] T080 [US4] Review and disposition `docs/reports/maps-v2-findings.md` and `docs/reports/maps-v1-findings.md`
 
@@ -198,7 +198,7 @@
 - [ ] T093 Have each originating reviewer re-verify its finding dispositions on the remediated exact range and record final verdicts in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T094 Verify `git status` in the #647 worktree and main checkout, stage only explicit paths, commit coherent work-unit checkpoints, push the organization branch, and record the pushed head in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T095 Mark the draft PR ready only after hosted checks and all local/evidence/review gates pass, merge with a merge commit, and record the PR/merge result in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T096 Verify remote `main` contains the merge SHA, then close #647, close #629, move their Project 33 items to Done, and retain the durable summary in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T096 Verify remote `main` contains the merge SHA, audit every row of the T078 closure ledger, apply/verify all required child issue and Project 33 final dispositions, then close #647 and #629 and retain the durable summary in `specs/144-zero-ef-final-removal/quickstart.md`
 
 ---
 
@@ -208,7 +208,7 @@
 
 - **Phase 1 (T001-T008)**: Starts immediately; T005/T006 can run in parallel. T003 precedes T004 because both append to the same test-retention ledger.
 - **Phase 2 (T009-T017)**: Depends on Phase 1; each prerequisite may be verified independently, but T017 blocks deletion.
-- **US1 (T018-T034)**: #647-owned host integration tests may begin after Phase 1; enabling the SQL Server/MongoDB dashboard rows depends on #643 and #932 admission.
+- **US1 (T018-T034)**: #647-owned host integration tests may begin after Phase 1; T029-T031 are one serialized host slice and cannot start until T010, T012, T017, and T019-T028 pass.
 - **US2 (T035-T058)**: Test conversions may begin after Phase 1; each deletion task depends on its explicit Phase-2 gate and replacement-test disposition.
 - **US3 (T059-T071)**: Fixture tests/scanner hardening may begin after Phase 1; baseline deletion waits until US2 reaches real zero.
 - **US4 (T072-T080)**: Drafting may begin after Phase 1; final wording/maps wait for the implemented result.

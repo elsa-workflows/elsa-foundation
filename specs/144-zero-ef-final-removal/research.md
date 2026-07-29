@@ -24,7 +24,7 @@
 
 ## Decision 3: Complete-graph certification must fail closed
 
-**Decision**: Discover every repository project independently of `Elsa.Server.slnx`, require current `project.assets.json` evidence for all of them after a forced evaluated restore, and inspect direct/static/restored/imported dependency surfaces.
+**Decision**: Discover every repository project independently of `Elsa.Server.slnx`, force an evaluated restore of that exact discovered set, and produce a restore receipt that binds the project-set identity, each project's dependency-affecting input closure, and each resulting `project.assets.json`. The permanent scanner recomputes those bindings and rejects missing, stale, changed, or unbound evidence before inspecting direct/static/restored/imported dependency surfaces.
 
 **Rationale**: A project can be omitted from the solution or acquire EF through imports, conditions, or transitive packages. Missing restore evidence is unknown, not zero.
 
@@ -100,7 +100,7 @@
 
 ## Decision 10: Serialize shared-file integration
 
-**Decision**: Only the final-removal integration lane edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or the coverage ledger at one time. Vertical lanes land provider code/evidence first.
+**Decision**: Only the final-removal integration lane edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or the coverage ledger at one time. Vertical lanes land provider code/evidence first. The host selection files and host project form one explicitly admitted earlier #647 slice after the intake review plus #643/#932 source gates; solution, central-package, and coverage-ledger edits remain later serialized slices.
 
 **Rationale**: These files are cross-lane merge and truth surfaces. Serialization prevents stale overwrites and keeps the package/host/evidence story coherent.
 

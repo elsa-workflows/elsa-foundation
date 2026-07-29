@@ -84,11 +84,23 @@ Apply one reviewed slice at a time:
 4. shared `Elsa.Persistence.EFCore{,.Sqlite}` and EF-only tests/tools;
 5. host/solution/package references and central versions.
 
-After each slice, regenerate the temporary baseline using a complete evaluated restore:
+After each slice, regenerate the temporary baseline using the repository-owned discovery-driven restore driver. It must independently discover every repository project, force-evaluate that exact set, and write a receipt binding the repository/worktree state, project-set fingerprint, dependency-affecting input hashes, and `project.assets.json` hashes:
 
 ```bash
-dotnet restore Elsa.Server.slnx --force-evaluate
+bash tools/architecture/restore-zero-ef-certification.sh --force-evaluate \
+  --receipt artifacts/zero-ef/restore-receipt.json
+```
 
+PowerShell uses the equivalent repository-owned entry point:
+
+```powershell
+tools/architecture/restore-zero-ef-certification.ps1 -ForceEvaluate `
+  -Receipt artifacts/zero-ef/restore-receipt.json
+```
+
+Then regenerate the temporary baseline:
+
+```bash
 ELSA_UPDATE_EF_CORE_BASELINE=1 \
   dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   --filter FullyQualifiedName~Ef_core_surface_matches_the_reviewed_shrink_only_baseline
@@ -109,13 +121,25 @@ After every real category is empty:
 Certification:
 
 ```bash
-dotnet restore Elsa.Server.slnx --force-evaluate
+bash tools/architecture/restore-zero-ef-certification.sh --force-evaluate \
+  --receipt artifacts/zero-ef/restore-receipt.json
+```
 
+Or on PowerShell:
+
+```powershell
+tools/architecture/restore-zero-ef-certification.ps1 -ForceEvaluate `
+  -Receipt artifacts/zero-ef/restore-receipt.json
+```
+
+Then run the guard:
+
+```bash
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   --filter FullyQualifiedName~Ef_core
 ```
 
-Expected: every category is empty and every discovered project has current restored assets.
+Expected: every category is empty; the scanner's fresh project discovery exactly matches the receipt; and every project/input/assets binding remains current. The isolated fixtures must also reject a stale-but-present assets file or receipt and a newly discovered project omitted from the receipt.
 
 When a transitive package remains:
 
@@ -152,7 +176,7 @@ Review `docs/reports/maps-v2-findings.md` and `docs/reports/maps-v1-findings.md`
 6. Mark the draft PR ready only when all checks and reviews pass.
 7. Merge with a merge commit.
 8. Verify remote `main` contains the merge SHA.
-9. Close #647, then #629, and update Project 33 with the verified SHA/evidence.
+9. Audit the immutable closure ledger for #629, #642, #643, #646, #647, #932, and every other parent-required Project 33 item; apply and verify all required final dispositions; then close #647 and #629 with the verified SHA/evidence.
 
 ## Implementation Evidence
 

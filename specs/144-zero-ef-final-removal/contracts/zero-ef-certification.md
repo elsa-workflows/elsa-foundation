@@ -10,9 +10,11 @@ The certifier MUST:
 
 1. Discover every `*.csproj` beneath the repository while excluding only generated/build-output directories.
 2. Evaluate dependency evidence for every discovered project, whether or not a solution references it.
-3. Refuse to pass if any discovered project lacks current restored assets.
-4. Inspect project XML, central/shared/imported build inputs, static project/package edges, and restored transitive packages.
-5. Scan source and maintained host configuration for EF projects, migrations, contexts, registrations, provider selection, and aliases.
+3. Restore the exact independently discovered project set with forced evaluation rather than relying on membership in `Elsa.Server.slnx`.
+4. Produce and retain a restore receipt that binds the repository/worktree state, exact project set, restore command/tool identity, each project's dependency-affecting project/import/central/config inputs, and each resulting `project.assets.json` content hash.
+5. Recompute and validate every receipt binding at certification time; refuse to pass for a missing project, missing receipt, missing assets file, stale-but-present assets, changed input, changed assets file, or project-set mismatch.
+6. Inspect project XML, central/shared/imported build inputs, static project/package edges, and restored transitive packages.
+7. Scan source and maintained host configuration for EF projects, migrations, contexts, registrations, provider selection, and aliases.
 
 ## Required empty categories
 
@@ -45,7 +47,7 @@ Package matching includes:
 
 - every category is empty;
 - every repository project has current restored evidence;
-- the scan ran against the same source/project state as the evaluated restore;
+- the scan ran against the same repository/worktree, discovered-project, dependency-input, and assets state recorded by the all-project restore receipt;
 - the repository head is recorded;
 - the permanent test has no baseline/update/allow-list path.
 
@@ -74,11 +76,13 @@ Isolated fixtures MUST prove detection of:
 6. A transitive EF project/package.
 7. A restored-only transitive EF package.
 8. A missing `project.assets.json`.
-9. An EF migration outside an `EFCore` folder.
-10. A `DbContext` outside an `EFCore` folder.
-11. An EF registration in source.
-12. An EF provider key in JSON/YAML host configuration.
-13. Comment/string-literal false positives being ignored where appropriate.
+9. A stale-but-present `project.assets.json` or restore receipt after a project/import/central dependency input changes.
+10. A receipt whose project set omits a newly discovered project.
+11. An EF migration outside an `EFCore` folder.
+12. A `DbContext` outside an `EFCore` folder.
+13. An EF registration in source.
+14. An EF provider key in JSON/YAML host configuration.
+15. Comment/string-literal false positives being ignored where appropriate.
 
 ## Retirement of temporary controls
 

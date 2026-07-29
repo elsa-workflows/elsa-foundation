@@ -107,19 +107,19 @@ As a program owner, I can audit why the zero-EF program closed, which evidence p
 - **FR-013**: The final repository's complete project graph MUST contain no direct or transitive package whose identity is `Microsoft.EntityFrameworkCore*`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `OpenIddict.EntityFrameworkCore`, or another provider package that introduces EF.
 - **FR-014**: The permanent architecture guard MUST scan every repository project rather than only projects reachable from a maintained solution.
 - **FR-015**: The permanent architecture guard MUST evaluate central, shared, imported, conditional, direct, static-transitive, and restored-transitive dependency surfaces.
-- **FR-016**: The permanent architecture guard MUST refuse certification when any repository project lacks current restored dependency evidence.
+- **FR-016**: The permanent architecture guard MUST refuse certification when any repository project lacks current restored dependency evidence or when the discovered project set, dependency-affecting inputs, or assets do not match a discovery-driven all-project restore receipt.
 - **FR-017**: The permanent architecture guard MUST assert absolute emptiness for every former ratchet category and report exact offending paths or dependency consumers.
 - **FR-018**: The temporary shrink-only baseline and its update switch MUST be removed after the real repository reaches absolute zero; no mutable allow-list may remain.
 - **FR-019**: The frozen ASP.NET Core Identity EF oracle baseline and its ratchet test MUST be removed only in the same reviewed change that removes the oracle after its final gate.
-- **FR-020**: The zero-EF guard MUST include isolated tests proving that project omission, imported dependencies, missing assets, source registrations, contexts, migrations, and host configuration cannot bypass it.
+- **FR-020**: The zero-EF guard MUST include isolated tests proving that project omission, imported dependencies, missing assets, stale-but-present assets/restore receipts, source registrations, contexts, migrations, and host configuration cannot bypass it.
 - **FR-021**: Groundwork schema validation and authorized application for reference deployments MUST be documented as the supported operational workflow.
 - **FR-022**: Repository-wide build, test, package, startup, provider-conformance, and performance evidence required by issue #647 MUST pass before the work unit is declared complete.
 - **FR-023**: The constitution, ADR-linked guidance, program goal, decision map, host documentation, feature documentation, extension-point catalogs, and generated architecture maps MUST describe the final Groundwork-only state without duplicating canonical explanations.
 - **FR-024**: Generated maps MUST be refreshed from reviewed current inputs, and their findings MUST be reviewed before merge.
 - **FR-025**: Three independent adversarial reviewers MUST inspect the exact final commit range on correctness/mechanism, evidence integrity, and scope/test preservation; confirmed findings MUST be remediated and re-verified before merge.
 - **FR-026**: The change MUST land through the repository's organization-branch workflow using a merge commit, and remote `main` MUST be verified to contain the result before issue closure.
-- **FR-027**: Issues #647 and #629 and their Project 33 items MUST remain open or incomplete until every acceptance criterion is proven on remote `main`.
-- **FR-028**: Closure records for #647 and #629 MUST identify the merge SHA and link the retained correctness, provider, performance, test-retention, dependency-audit, and review evidence.
+- **FR-027**: Issues #647 and #629 and every Project 33 item required by the program MUST remain open or incomplete until every acceptance criterion is proven on remote `main`.
+- **FR-028**: Closure records for #647 and #629 MUST identify the merge SHA; link the retained correctness, provider, performance, test-retention, dependency-audit, and review evidence; and include an immutable closure ledger for every required child issue and Project 33 item.
 
 ### Key Entities
 
@@ -134,11 +134,11 @@ As a program owner, I can audit why the zero-EF program closed, which evidence p
 ### Measurable Outcomes
 
 - **SC-001**: Every category in the current EF surface scoreboard reaches exactly zero: EF projects, direct package references, central package versions, shared build references, direct EF project references, static transitive project consumers, restored transitive package consumers, migrations, contexts, registrations, and host configurations.
-- **SC-002**: 100% of repository projects have current restored dependency evidence when zero-EF certification runs; certification fails if even one project is missing evidence.
+- **SC-002**: 100% of repository projects have dependency evidence bound to the current discovery-driven all-project restore receipt when zero-EF certification runs; certification fails if even one project, dependency input, or assets file is missing, stale, changed, or unbound.
 - **SC-003**: 100% of tests affected by EF removal have a reviewed ledger disposition, and 100% of still-valid behavioral objectives have named passing EF-independent evidence.
 - **SC-004**: All four mandatory provider compositions pass the required correctness, tenancy, restart/recovery, diagnostics, Identity, OpenIddict, dashboard-enabled host, and schema-readiness gates.
 - **SC-005**: Every coverage-ledger row required by the zero-EF program has an accepted performance verdict or a separately ratified workload-specific amendment with retained evidence.
-- **SC-006**: Synthetic guard tests detect 100% of the defined bypass classes: omitted projects, direct packages, transitive packages, imported/conditional dependencies, missing assets, migrations, contexts, registrations, and host configuration.
+- **SC-006**: Synthetic guard tests detect 100% of the defined bypass classes: omitted projects, direct packages, transitive packages, imported/conditional dependencies, missing assets, stale-but-present assets/restore receipts, migrations, contexts, registrations, and host configuration.
 - **SC-007**: Repository search, complete restore, build, test, package, and maintained reference-host startup audits report zero EF dependencies or runtime registrations.
 - **SC-008**: Three independent exact-range reviews report no unresolved blocker, and every confirmed finding has a recorded disposition and successful re-verification.
 - **SC-009**: Remote `main` contains the reviewed merge commit before #647 closes, and #629 closes only after all six program completion conditions remain true on that remote head.

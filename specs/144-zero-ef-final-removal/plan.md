@@ -12,7 +12,7 @@ Complete issue #647 as the final dependency-ordered zero-EF lane after #642, #64
 
 **Language/Version**: .NET 10 (`net10.0`) and the repository-pinned current C# toolchain
 
-**Primary Dependencies**: Groundwork versioned preview family containing the exact #50/#141/#143 capabilities required by the completion candidate; OpenIddict 7.5; ASP.NET Core Identity; Nuplane/CShells composition; Microsoft.Extensions abstractions. `Microsoft.EntityFrameworkCore*`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, and `OpenIddict.EntityFrameworkCore` are removal targets, not retained dependencies.
+**Primary Dependencies**: Groundwork versioned preview family containing the exact merged package APIs required from #141/#143; separately accepted Groundwork #50 performance evidence and completed Groundwork parent #25 (or a named, ratified amendment); OpenIddict 7.5; ASP.NET Core Identity; Nuplane/CShells composition; Microsoft.Extensions abstractions. `Microsoft.EntityFrameworkCore*`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, and `OpenIddict.EntityFrameworkCore` are removal targets, not retained dependencies.
 
 **Storage**: Groundwork over SQLite, SQL Server, PostgreSQL, and a transaction-capable MongoDB topology; no production EF data migration because the product is greenfield
 
@@ -32,7 +32,7 @@ Complete issue #647 as the final dependency-ordered zero-EF lane after #642, #64
 - Existing test subjects/objectives survive; deletion requires recorded architect approval.
 - The permanent guard scans every project and refuses incomplete restore evidence.
 - Only one lane at a time edits `Directory.Packages.props`, `Elsa.Server.slnx`, `shells*.json`, or `coverage-ledger.json`.
-- Shared files are changed only in the final serialized integration slice.
+- Shared files are changed only in explicitly admitted, serialized #647 integration slices. The T029-T031 host slice is the sole earlier exception: it starts only after the intake review and its #643/#932 source prerequisites pass; package/solution/coverage-ledger edits remain later slices.
 - No compatibility repository or production EF data migration is created.
 
 **Scale/Scope**: Current intake spans 8 EF projects, 24 direct package references, 9 central versions, 19 direct EF project references, 22 static transitive project consumers, 57 static transitive package consumers, 103 restored EF package consumers, 11 migration files, 11 `DbContext` files, 41 registration occurrences, and 3 host-configuration occurrences. The guard covers every source, test, benchmark, tool, and app project in the repository, including projects omitted from `Elsa.Server.slnx`.
@@ -135,10 +135,10 @@ Research is consolidated in [research.md](research.md). The load-bearing decisio
 4. Delete in the dependency order diagnostics → OpenIddict → Identity oracle → shared EF substrate → packages/configuration.
 5. Require one provider choice across every enabled lane; fail closed on absent capability/schema.
 6. Keep #932 inside the host exit gate while retaining its dialect/aggregation source ownership as a separate issue; #647 consumes merged evidence and owns final reference-host integration.
-7. Preserve complete restored-graph evidence and reject missing/stale assets.
+7. Preserve complete restored-graph evidence using a discovery-driven all-project restore receipt that binds the exact project set, dependency-affecting inputs, and assets; reject missing, stale, or unbound assets.
 8. Reconcile OpenIddict wording by distinguishing delivery ownership from program completion membership.
 9. Keep the temporary benchmark harness/oracles only until evidence import is complete, then remove them in the final slice.
-10. Serialize all shared package/solution/host/coverage-ledger edits.
+10. Serialize all shared package/solution/host/coverage-ledger edits; admit T029-T031 as a single #647-owned host slice only after T010, T012, T017, and T019-T028 pass.
 
 ## Phase 1: Design & Contracts
 
@@ -152,8 +152,8 @@ Research is consolidated in [research.md](research.md). The load-bearing decisio
 ## Delivery Sequence
 
 1. **Intake freeze**: record current `origin/main`, ratchet counts, exact file/project/test inventory, prerequisite issue/PR/package heads, and shared-file serialization owner.
-2. **Prerequisite admission**: verify #642, #643, #646, and #932 evidence is on remote `main`; reject deletion if any retained oracle still has a consumer.
-3. **Host parity**: compose and test SQLite, SQL Server, PostgreSQL, and MongoDB with dashboard and all enabled durable features over one Groundwork provider.
+2. **Prerequisite admission**: verify #642, #643, #646, and #932 evidence is on remote `main`; independently verify Groundwork #50 performance evidence, #141/#143 package provenance, and parent #25 completion; reject deletion if any retained oracle still has a consumer.
+3. **Host parity**: after the intake review and #643/#932 gates pass, admit the serialized T029-T031 host slice, then compose and test SQLite, SQL Server, PostgreSQL, and MongoDB with dashboard and all enabled durable features over one Groundwork provider.
 4. **Test preservation**: complete the direct-token inventory and shared-host addendum; convert/rehost valid objectives and record architect dispositions.
 5. **Vertical deletion**: remove diagnostics EF, OpenIddict EF, and Identity EF oracle families only after their gates; shrink the temporary baseline in the same commits.
 6. **Shared substrate deletion**: remove `Elsa.Persistence.EFCore{,.Sqlite}`, EF-only tests/tools, solution entries, host settings, and package versions after all dependents are gone.

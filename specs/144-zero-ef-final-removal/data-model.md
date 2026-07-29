@@ -93,7 +93,10 @@ Represents the permanent architecture result.
 | Field | Meaning |
 |---|---|
 | `RepositoryHead` | Exact tested commit |
-| `RestoreHead` | Exact project/input state used for evaluated restore |
+| `RestoreHead` | Exact repository head and worktree state used for evaluated restore |
+| `RestoreReceipt` | Immutable command/tool identity plus the exact discovered project-set fingerprint |
+| `ProjectInputBindings` | Per-project hashes for dependency-affecting project/import/central/config inputs |
+| `AssetsBindings` | Per-project `project.assets.json` path and content hash produced by the restore |
 | `ProjectCount` | Number of repository projects discovered independently of solutions |
 | `ProjectsMissingAssets` | Must be empty |
 | `Categories` | Every former ratchet category and its entries |
@@ -104,7 +107,7 @@ Represents the permanent architecture result.
 
 `Uncertified` → `RestoreComplete` → `Scanned` → `Pass`
 
-Any missing asset, nonempty category, changed project input after restore, or omitted project returns the result to `Uncertified`/`Fail`.
+Any missing asset, nonempty category, changed project/input/assets binding after restore, receipt mismatch, or omitted project returns the result to `Uncertified`/`Fail`.
 
 ## 6. Review Record
 
@@ -130,9 +133,10 @@ Any missing asset, nonempty category, changed project input after restore, or om
 | `PerformanceVerdicts` | Coverage-ledger/report references |
 | `TestLedger` | Final preservation/removal ledger |
 | `Reviews` | Exact-range review records |
-| `ProjectStatus` | Project 33 state after verification |
+| `ProjectClosureLedger` | Every required child issue/Project 33 item, required final state, merge or amendment evidence, verification timestamp, and actual final state |
 
 **Validation rules**:
 
 - Closure is invalid before `MergeSha` is verified on remote `main`.
 - #629 closure requires all six program completion conditions, not merely #647 source deletion.
+- The Project closure ledger must cover #629, #642, #643, #646, #647, and #932 (including any ratified #932 amendment disposition) and may not omit another item identified as required by the parent issue or Project 33.
