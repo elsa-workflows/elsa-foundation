@@ -984,6 +984,36 @@ contains only this runner, its additive tests, and this quickstart; no frozen wo
 serialized file, task, ledger, EF oracle, provider, production registration, package, solution, or
 shell changed, no test was removed or weakened, and T100 remains unchecked.
 
+### Distributed command transport correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `command-send-lease-ack` v1.1 vector through
+`IExecutionCommandTransport` only. Two distinct public clients share adapter-selected backing and a
+third distinct client exercises reopen visibility. It sends 128 × 64 commands, with the two
+barrier-synchronised sends deliberately placed in a non-primary workflow so the primary golden
+batch remains `command-0000` through `command-0015`. Two concurrent leasers each request eight
+items; their returned requester/result tuples must union to the exact ordered 16-item batch. After
+31 seconds, successors re-lease the same batch under current tokens; stale first-generation
+acknowledgements are rejected before current acknowledgements succeed. The reopened client reports
+all 128 visible workflow IDs and exactly 8,176 pending commands.
+
+This is shared-backing public-contract correctness only. It does not claim provider or process
+restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification rejected the worker’s initial **12/12** result because send acknowledgements did
+not compare the full command/envelope shape, concurrent lease responses were hashed in client order
+without first establishing a canonical batch, each leaser’s eight-item bound was not enforced, and
+reopen checked only an aggregate count. The accepted candidate compares every public send/lease
+member, proves 8,192 unique transport identities and exact dedicated-stream sequences 63/64,
+requires each leaser’s ordered eight-item share before canonicalizing the cross-client union by
+sequence, verifies exact per-workflow reopen counts (48 for the acknowledged primary stream and 64
+for each other stream), and separately fails closed on response-only send, corrupt item/token/order,
+fabricated visible-list, and fabricated count behavior. The semantic adapter guard traverses
+inherited interfaces and base types against an explicit provider-neutral type set. The focused suite
+is **16/16**, the complete container-free benchmark-harness project is **247/247**, the benchmark
+warnings-as-errors build is clean, changed-code formatter checks pass, and `git diff --check` is
+clean.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
