@@ -5,8 +5,10 @@
 .DESCRIPTION
     Binds a WriteLine's `text` input to a JavaScript expression that throws. Evaluating the binding faults the
     invoke work item; with the default NoopRuntimeDomainRetryPolicy (DoNotRetry) it is poisoned immediately and the
-    PoisonedSchedulerWorkIncidentObserver records a Critical/Blocking incident (failureType SchedulerWorkPoisoned),
-    faulting the workflow. Asserts that incident is observable via GET .../instances/{id} (incidents[]).
+    PoisonedSchedulerWorkIncidentObserver records a Critical/Blocking incident (failureType SchedulerWorkPoisoned)
+    with resolutionOutcome WaitForIntervention - the instance parks (stays non-Completed) awaiting intervention
+    rather than transitioning to a terminal Faulted status. Asserts the incident is observable via
+    GET .../instances/{id} (incidents[]) and the instance did not complete.
 
     NOTE: the retry COUNT before poisoning is not exercisable here - the reference server composes the default
     zero-retry policy, so a "N retries then incident" assertion is out of reach without a custom retry policy.
@@ -43,9 +45,12 @@ $poisoned = $incidents | Where-Object { $_.failureType -eq 'SchedulerWorkPoisone
 $blocking = $poisoned | Where-Object { $_.isBlocking -or $_.status -eq 'Blocking' }
 
 Write-Host ""
-Write-Host ("incidents: " + (($incidents | ForEach-Object { $_.failureType }) -join ', '))
-if ($inst.instance.status -eq 'Faulted' -and $poisoned -and $blocking) {
-    Write-Host "SUCCESS - the throwing binding poisoned the work item; a blocking SchedulerWorkPoisoned incident is observable and the workflow Faulted." -ForegroundColor Green
+Write-Host ("status: {0}  incidents: {1}" -f $inst.instance.status, (($incidents | ForEach-Object { $_.failureType }) -join ', '))
+# The poisoned work item records a Critical/Blocking SchedulerWorkPoisoned incident with resolutionOutcome
+# WaitForIntervention: the instance parks (stays non-Completed) awaiting intervention rather than transitioning to
+# a terminal Faulted status. We assert the blocking incident is observable and the instance did NOT complete.
+if ($inst.instance.status -ne 'Completed' -and $poisoned -and $blocking) {
+    Write-Host ("SUCCESS - the throwing binding poisoned the work item; a blocking SchedulerWorkPoisoned incident is observable and the instance parked for intervention (status '{0}', not Completed)." -f $inst.instance.status) -ForegroundColor Green
 } else {
     Write-Host ("FAIL - status '{0}', poisoned incident present={1}, blocking={2}" -f $inst.instance.status, [bool]$poisoned, [bool]$blocking) -ForegroundColor Red
     exit 1

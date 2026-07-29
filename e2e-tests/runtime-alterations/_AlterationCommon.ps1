@@ -253,9 +253,10 @@ function New-AlterationSchedulableWaiter {
 function Assert-AlterationResponseIsRedacted {
     param([Parameter(Mandatory)][string] $Content, [Parameter(Mandatory)][string[]] $Secrets)
     foreach ($secret in $Secrets) {
-        if ($Content.Contains($secret, [StringComparison]::Ordinal)) { throw "Alteration read leaked protected material '$secret'." }
+        # .IndexOf(string, StringComparison) is PS 5.1 (Windows PowerShell) compatible; the 2-arg .Contains overload is pwsh-7+ only.
+        if ($Content.IndexOf($secret, [StringComparison]::Ordinal) -ge 0) { throw "Alteration read leaked protected material '$secret'." }
     }
     foreach ($forbidden in @('"payload"', '"idempotencyKey"', '"ciphertext"', '"handlerType"')) {
-        if ($Content.Contains($forbidden, [StringComparison]::OrdinalIgnoreCase)) { throw "Alteration read leaked forbidden field $forbidden." }
+        if ($Content.IndexOf($forbidden, [StringComparison]::OrdinalIgnoreCase) -ge 0) { throw "Alteration read leaked forbidden field $forbidden." }
     }
 }
