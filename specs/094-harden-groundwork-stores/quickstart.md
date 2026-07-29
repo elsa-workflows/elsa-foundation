@@ -750,7 +750,7 @@ extensions. It validates the exact stimulus result as 20+11, the complete type l
 the alternate-hash record, every 48-record publication projection in both scopes, and every live
 Published executable-source reference at the frozen instant. Returned bindings are correlated
 with returned source references by publication, artifact, and tenant facts. Both directions of
-logical-scope isolation are probed. All six digest observations are then derived from those
+logical-scope isolation are probed. All six observations are then derived from those
 validated public-store results rather than copied from the seed plan.
 
 Before freezing the candidate, root review found that the initial fault harness injected binding
