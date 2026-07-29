@@ -645,6 +645,29 @@ before its originating-reviewer record re-verification, then returned PASS at re
 `eab814884191446aa2009933d8eb9825d3eacef9`. Merge remains forbidden until all three reviewers
 confirm the final record-only head and the hosted checks pass.
 
+### Placement takeover correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `placement-takeover` v1.1 public-operation
+vector through `IExecutionPlacementStore`. Two independently opened clients share adapter-owned
+durable backing; a third, distinct reopened client must observe the takeover winner. The runner
+binds the complete 512-execution input universe, verifies 256 live placements and 256 unplaced
+identities, exercises current-owner renewal and foreign-owner denial, advances past expiry, grants
+the takeover with monotonic tokens `1,2,3`, rejects the stale release, and reproduces the ratified
+input fingerprint and result digest.
+
+The bounded owner-list route is probed at both 64 and 256 rows. This is deliberate: a single
+256-row query over exactly 256 live rows could not distinguish a correctly bounded provider route
+from one that ignored `Take`. Fault-injectable tests also reject missing active writes, aliased or
+separate client backing, a non-durable reopen, incorrect lease identity/timestamps/tokens, wrong
+ordering, an ignored query limit, and stale release of the takeover winner.
+
+Root verification passed the focused workload suite **14/14**, the benchmark project
+warning-as-error Release build with **0 warnings/errors**, and `git diff --check`. This checkpoint
+does not execute an EF comparator or any provider matrix, start a database container, collect
+timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a performance
+verdict, or advance T076/T093/T100. Groundwork #50 and the missing real EF placement comparator (or
+a separately ratified no-oracle policy) remain later admission gates.
+
 ## 8. Readiness audit
 
 Before a lane is declared ready:
