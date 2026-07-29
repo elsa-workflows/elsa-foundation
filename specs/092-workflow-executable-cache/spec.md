@@ -86,6 +86,8 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **FR-014**: Provider-neutral tests MUST cover save/find/delete, concurrency, cancellation, null/failure retry, eviction, listing, disabled behavior, and telemetry; provider-backed tests MUST cover registration and restart behavior.
 - **FR-015**: The combined spec 091/092 reference lane MUST satisfy first-after-ready p95 ≤750 ms and 200-request warm p95 ≤50 ms without restoring unconditional Groundwork rematerialization.
 - **FR-016**: Root-write lease and deletion-guard acquisition, renewal, release, and cancellation operations MUST delegate directly to the provider so cache decoration preserves the executable-retention safety contract.
+- **FR-017**: SQLite runtime composition MUST reuse a bounded set of immutable access-bound store adapters by default while every operation retains its own pooled connection and transaction; operators MUST be able to disable reuse and configure a positive capacity.
+- **FR-018**: Durable executable retention coordination MUST be stored separately from the large immutable executable payload, with atomic create/delete behavior and lazy migration from the legacy embedded coordination fields.
 
 ### Key Entities
 
@@ -104,11 +106,12 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **SC-004**: Every cache path emits the required bounded telemetry and no artifact/workflow identifier appears as a metric dimension.
 - **SC-005**: On the frozen reference lane, the first workflow request after readiness is ≤750 ms p95 and 200 warm requests are ≤50 ms p95.
 - **SC-006**: Existing runtime, provider, workflow HTTP, shell lifecycle/isolation, and architecture suites pass without removed coverage.
+- **SC-007**: The final 2x2 executable-cache/store-reuse lane identifies the decisive knob, and provider-backed tests preserve executable save, load, lease, guard, migration, and deletion behavior.
 
 ## Assumptions
 
 - Executable artifact IDs are immutable/content-addressed; mutation creates a new ID.
 - The durable executable provider remains the source of truth; this feature caches only positive immutable lookups.
 - A default capacity of 256 executable artifacts is a conservative bounded starting point and is tunable per runtime composition.
-- Cache state is intentionally process-local and is not distributed between nodes. SQLite reference features enable it by default; PostgreSQL/distributed and legacy direct registrations default to direct provider reads until a host explicitly accepts immutable-artifact retention or supplies distributed invalidation.
-- This work remains `none/free-flow`; it closes an evidence-backed runtime performance follow-up rather than creating a new program-goal bucket.
+- Cache state is intentionally process-local and is not distributed between nodes. Built-in Groundwork runtime and unified features enable it by default because artifact IDs are content-addressed and mutable source-reference selection remains authoritative. Operators that require coordinated eager eviction can disable it until distributed invalidation lands.
+- This work belongs to the existing `first-request-cold-start-readiness` program-goal bucket; it closes an evidence-backed runtime performance follow-up without creating a new bucket.

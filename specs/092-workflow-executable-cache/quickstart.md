@@ -18,7 +18,8 @@ dotnet test tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj --no-restor
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore
 ```
 
-Also run the affected Groundwork SQLite/PostgreSQL registration and HTTP integration lanes identified by the final diff.
+Also run the affected Groundwork SQLite/PostgreSQL/MongoDB/SQL Server runtime and unified
+registration lanes plus the HTTP integration lanes identified by the final diff.
 
 ## Performance acceptance
 
@@ -32,7 +33,12 @@ Required p95 budgets:
 
 Preserve raw reports and exact repository/binary/data provenance in `docs/reports/shell-activation-performance-2026-07.md`.
 
-The reference SQLite server compositions enable executable caching by default with capacity `256`.
-For a causal comparison, change only
+Built-in Groundwork runtime and unified features enable executable caching by default with capacity `256`.
+For a causal executable-cache comparison, change only
 `CShells:Shells:default:Features:GroundworkUnifiedPersistenceSqlite:CacheWorkflowExecutables`
+to `false`, restart from the same frozen database, and rerun the identical command.
+
+SQLite features also enable access-bound store reuse by default with capacity `256`. For the
+decisive store-materialization comparison, change only
+`CShells:Shells:default:Features:GroundworkUnifiedPersistenceSqlite:ReuseAccessBoundStores`
 to `false`, restart from the same frozen database, and rerun the identical command.

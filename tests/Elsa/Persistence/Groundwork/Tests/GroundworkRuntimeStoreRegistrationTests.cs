@@ -313,6 +313,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
+#pragma warning disable GW0004 // This test decorator intentionally implements the complete compatibility surface.
     private sealed class CountingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
         private int _loadCount;
@@ -351,6 +352,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
     }
+#pragma warning restore GW0004
 
     private sealed class ReplacementWorkflowExecutableStore : IWorkflowExecutableStore
     {

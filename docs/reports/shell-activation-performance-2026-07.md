@@ -2,7 +2,10 @@
 
 ## Status
 
-Implementation baseline for [spec 091](../../specs/091-lazy-shell-activation/spec.md) and [issue #624](https://github.com/elsa-workflows/elsa-foundation/issues/624). The optimized repeated-run evidence will replace the preliminary table before the work unit closes.
+Final implementation and acceptance evidence for [spec 091](../../specs/091-lazy-shell-activation/spec.md),
+[spec 092](../../specs/092-workflow-executable-cache/spec.md),
+[issue #624](https://github.com/elsa-workflows/elsa-foundation/issues/624), and
+[issue #625](https://github.com/elsa-workflows/elsa-foundation/issues/625).
 
 ## Preliminary baseline
 
@@ -111,7 +114,7 @@ Cache behavior and safety:
 - concurrent misses for one ID share a provider load, while cancelling one waiter does not cancel the shared load;
 - deterministic least-recently-used eviction keeps resident entries within the configured capacity;
 - save/delete invalidate rather than admitting the caller's object, preserving the provider's idempotent-save authority;
-- cache state is shared across request scopes inside one shell service provider, isolated by authorized persistence scope, and starts empty after shell replacement or process restart; SQLite enables it by default, while PostgreSQL/distributed features require explicit opt-in because invalidation is node-local;
+- cache state is shared across request scopes inside one shell service provider, isolated by authorized persistence scope, and starts empty after shell replacement or process restart; all built-in Groundwork runtime and unified provider features enable it by default, while operators that cannot accept node-local immutable retention can disable it;
 - metrics expose only bounded hit/miss, eviction-reason, and provider-load outcome/duration dimensions.
 
 ## Operator knobs and rollback
@@ -119,29 +122,64 @@ Cache behavior and safety:
 - `Elsa:Readiness:WarmDefaultShell=false` restores request-triggered lazy activation; readiness stays observational and returns unavailable until another request activates the shell.
 - `Elsa:Readiness:DefaultShellName` selects the single shell observed and prepared by the root host. Other shells remain lazy and isolated.
 - SQLite runtime and unified features expose `SkipSchemaInspectionWhenPlanUnchanged`. It defaults to `false`, preserving per-boot out-of-band drift detection. Enabling it trades that inspection for a single applied-plan fingerprint read when the composed plan is unchanged.
-- Durable Groundwork runtime and unified features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell). SQLite features default caching to `true`; PostgreSQL/distributed and legacy direct registrations default to direct reads until a host explicitly accepts immutable-artifact retention or supplies cross-node invalidation. Set caching to `false` for immediate rollback; capacity must be positive only while enabled.
+- Durable Groundwork runtime and unified features expose `CacheWorkflowExecutables` (default `true`) and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell). Set caching to `false` for immediate rollback; capacity must be positive only while enabled. Artifact IDs are content-addressed and mutable source-reference selection remains authoritative, but invalidation is node-local until issue #636 adds a distributed invalidation protocol.
+- SQLite runtime and unified features additionally expose `ReuseAccessBoundStores` (default `true`) and `AccessBoundStoreCacheCapacity` (default `256` access bindings per shell). The cache retains immutable access binding and compiled-route adapters only; each operation still owns an independent pooled connection and transaction. Set reuse to `false` to restore per-operation store materialization.
 - Missing or changed admission fingerprints always execute the full schema inspection/application path regardless of the skip setting.
 
-## Current-main integration evidence
+## Final exact-revision evidence
 
-After merging current main into the work branch, the Release server built with zero errors and the deterministic cache, SQLite, PostgreSQL, unified-host, readiness, architecture, and HTTP integration lanes passed. The build reports 31 obsolescence warnings from unchanged current-main Groundwork and publishing sources; this PR introduces no warnings in its diff. The reference server configurations explicitly enable `GroundworkUnifiedPersistenceSqlite.CacheWorkflowExecutables` with capacity `256`.
+The final Release server was measured at implementation revision
+`382301460ce34ada7f43a0946706680b6eeea563` with Groundwork `0.0.1-preview.95`.
+The server output closure SHA-256 was
+`6bd8340bff2dca25fc4f79e3b928c681e1325ed9a96b4d4fcdeffaae4c105c8b`.
+Every measured request returned HTTP 200 with the exact body `Hello World!`.
 
-A fresh local SQLite fixture published `GET /workflows/http/hello-world` (HTTP 200, exact body `Hello World!`) as definition `12FOt8yTb5f`, artifact `artifact-f6655508d471`. Cache-on/off 200-request diagnostics were then run from equivalent low-row-count snapshots. Those samples were collected while unrelated host processes consumed more than three CPU cores, so they are retained only as regression attribution—not acceptance evidence:
+Twenty isolated boots copied the same frozen SQLite baseline before starting the process:
 
-| Setting | Warm p95 | Result |
-|---|---:|---|
-| cache off | 1,793.517 ms | fails 50 ms budget |
-| cache on (default) | 2,440.520 ms | fails 50 ms budget |
+| Milestone | p50 | p95 | Budget |
+|---|---:|---:|---:|
+| Listening | 432.488 ms | 441.332 ms | diagnostic |
+| Shell ready | 2,451.364 ms | 2,566.966 ms | ≤30 s |
+| First workflow request after ready | 582.265 ms | 627.631 ms | ≤750 ms |
+| First success from launch | 3,032.672 ms | 3,167.738 ms | diagnostic |
 
-The run confirms that executable caching alone is insufficient on the integrated current-main runtime and that the machine was not quiet enough for a causal wall-clock conclusion. A macOS sample attributed substantial time to GC/allocation and SQLite-backed durable execution while the run count grew. The required quiet-host 20-boot and 200-request lanes therefore remain open; no PR should claim the 50 ms gate from these contaminated samples.
+The controlled warm lane used four independent copies of one frozen database and measured
+20 warmups plus 200 requests per configuration:
 
-Raw diagnostic reports and samples are retained under
-[`docs/reports/evidence/092-workflow-executable-cache/current-main-contaminated-2026-07-28/`](evidence/092-workflow-executable-cache/current-main-contaminated-2026-07-28/).
+| Executable cache | Reusable SQLite stores | Concurrency | p50 | p95 | Result |
+|---|---|---:|---:|---:|---|
+| on | on | 1 | 30.081 ms | 40.723 ms | passes 50 ms |
+| off | on | 1 | 28.755 ms | 40.126 ms | passes 50 ms |
+| on | off | 1 | 60.866 ms | 120.487 ms | fails 50 ms |
+| off | off | 1 | 61.386 ms | 75.959 ms | fails 50 ms |
+| on | on | 2 | 24.643 ms | 32.515 ms | passes 50 ms |
+| off | on | 2 | 25.053 ms | 32.898 ms | passes 50 ms |
+| on | off | 2 | 67.449 ms | 74.405 ms | fails 50 ms |
+| off | off | 2 | 69.655 ms | 76.189 ms | fails 50 ms |
+
+The CPU trace and factorial result identify repeated SQLite/Groundwork store construction,
+schema-target validation, and route-plan binding as the hot-path cost. Groundwork now accepts the
+exact startup-admitted physical target instead of rebuilding and deserializing applied schema state
+for every operation. Elsa compiles route plan sets once and retains a bounded set of immutable
+access-bound store adapters. This is a broader persistence-runtime optimization: HTTP starts,
+direct starts, bookmark resumes, dispatched children, scheduler turns, and other Groundwork-backed
+runtime operations use the same store-session seam.
+
+Executable caching remains enabled by default even though its toggle is neutral for this tiny,
+already-warmed artifact. Its value grows with executable size, number of first-per-artifact loads,
+and materialization complexity; it is not the dominant cost in this particular micro-workflow.
+
+Raw reports and samples are committed under
+[`docs/reports/evidence/092-workflow-executable-cache/final-2026-07-29/`](evidence/092-workflow-executable-cache/final-2026-07-29/).
+The hosted Ubuntu workflow in
+[`http-workflow-performance.yml`](../../.github/workflows/http-workflow-performance.yml)
+publishes the same deterministic synchronous workflow and enforces a 100 ms default-on warm p95
+regression ceiling on relevant pull requests.
 
 ## Subsequent recommendations
 
-1. Keep the final 20-boot first-after-ready and 200-request warm lanes as the merge gate; do not infer success from cache unit tests alone.
-2. [Issue #636](https://github.com/elsa-workflows/elsa-foundation/issues/636) owns distinct-key load backpressure, cache-lifetime cancellation, distributed invalidation, gauges, and heap evidence before considering PostgreSQL default-on or weighted admission.
+1. Keep the committed local factorial and hosted default-on lane as regression evidence; do not infer performance from cache unit tests alone.
+2. [Issue #636](https://github.com/elsa-workflows/elsa-foundation/issues/636) owns distinct-key load backpressure, cache-lifetime cancellation, distributed invalidation, gauges, and heap evidence before considering weighted admission or larger capacities.
 3. [Issue #637](https://github.com/elsa-workflows/elsa-foundation/issues/637) owns route matching at representative high route counts before replacing the current precompiled immutable snapshot. The existing route layer is already cached and persistence-free on requests.
 4. Keep the cache process-local. A distributed executable-object cache would reintroduce serialization and coordination without evidence of a cross-node bottleneck.
 5. Revisit negative caching only with an explicit short expiry and publication invalidation contract; retaining not-found results indefinitely would hide newly durable artifacts.

@@ -22,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
     DisplayName = "Groundwork SQLite Runtime Persistence",
     Description = "Backs the workflow runtime persistence seams with Groundwork over SQLite. Durable storage keeps checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
+public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
 {
     public const string DefaultConnectionString = "Data Source=elsa-groundwork-runtime.db";
 
@@ -70,7 +70,7 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeatu
     public int AccessBoundStoreCacheCapacity { get; set; } =
         SqliteGroundworkStoreCacheOptions.DefaultCapacity;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 

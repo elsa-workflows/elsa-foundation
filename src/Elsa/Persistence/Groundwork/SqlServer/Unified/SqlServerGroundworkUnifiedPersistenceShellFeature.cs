@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
@@ -42,11 +43,31 @@ public class SqlServerGroundworkUnifiedPersistenceShellFeature : IShellFeature
         Category = "Persistence")]
     public bool AutoApplySchemaOnStartup { get; set; } = true;
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString)
             ? DefaultConnectionString
             : ConnectionString;
-        services.AddGroundworkSqlServerUnifiedPersistence(connectionString, _context, AutoApplySchemaOnStartup);
+        services.AddGroundworkSqlServerUnifiedPersistence(
+            connectionString,
+            _context,
+            new WorkflowExecutableCacheOptions
+            {
+                Enabled = CacheWorkflowExecutables,
+                Capacity = WorkflowExecutableCacheCapacity
+            },
+            AutoApplySchemaOnStartup);
     }
 }

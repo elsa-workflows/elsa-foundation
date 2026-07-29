@@ -10,7 +10,7 @@
 
 - [x] T001 Mark GitHub issue #625 in progress and link the spec 091 formal-review evidence that makes it a merge prerequisite
 - [x] T002 Record the 200-request warm p95, first-after-ready p95, and rematerialization comparison in `docs/reports/shell-activation-performance-2026-07.md`
-- [x] T003 Confirm the durable-store registration and all SQLite/PostgreSQL runtime/unified composition call sites
+- [x] T003 Confirm the durable-store registration and all SQLite/PostgreSQL/MongoDB/SQL Server runtime/unified composition call sites
 
 ## Phase 2: Foundational Tests
 
@@ -51,7 +51,7 @@
 
 - [x] T015 [US2] Complete locked bounded LRU admission/promotion/eviction in `WorkflowExecutableCache.cs` and provider-authoritative mutation/invalidation semantics in its store adapters
 - [x] T016 [US2] Register the concrete Groundwork store, optional cache adapter, independently scoped miss loader, and privileged/global invalidation adapter in the shared Groundwork runtime-store registration
-- [x] T017 [US2] Thread enabled/capacity settings through SQLite/PostgreSQL runtime and unified provider features without changing custom or in-memory stores
+- [x] T017 [US2] Thread enabled/capacity settings through SQLite/PostgreSQL/MongoDB/SQL Server runtime and unified provider features without changing custom or in-memory stores
 
 ## Phase 5: User Story 3 - Observable and Configurable Operation (Priority: P3)
 
@@ -63,27 +63,35 @@
 - [x] T019 [US3] Document knobs, defaults, provider scope, route-cache relationship, and rollback in `contracts/executable-cache.md` and the shared performance report
 - [x] T020 [US3] Run focused Runtime and Groundwork behavior/registration tests with all required branches green
 
-## Phase 6: Combined Performance and Delivery
+## Phase 6: Measured Groundwork/SQLite Residual
 
-- [ ] T021 Build a warning-free Release server and run the final 20-boot frozen-data lane
-- [ ] T022 Run the final 200-request warm lane and verify first-after-ready ≤750 ms p95 and warm ≤50 ms p95
-- [ ] T023 Update raw provenance, results, residual costs, and follow-up recommendations in `docs/reports/shell-activation-performance-2026-07.md`
-- [x] T024 Run every affected solution test lane plus full `Elsa.Server.slnx` build
-- [x] T025 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
-- [ ] T026 Complete both task lists, run `speckit-analyze`, and resolve all critical/high cross-artifact findings
-- [ ] T027 Push the branch, open one PR with `Closes #624` and `Closes #625`, converge required automated reviews and CI, and merge without bypassing protections
-- [ ] T028 Audit main, both issue states, and the merged benchmark/documentation artifacts
+- [x] T021 Add fixture, atomicity, lease/guard, delete, and lazy legacy-migration tests for a compact executable coordination document
+- [x] T022 Split mutable executable coordination state from the immutable executable payload in `GroundworkWorkflowExecutableStore`
+- [x] T023 Add equality, bounded-capacity, disabled-mode, connection-ownership, and feature-setting tests for reusable SQLite access-bound stores
+- [x] T024 Use the exact admitted physical target, compile route plans once, and expose default-on `ReuseAccessBoundStores` / `AccessBoundStoreCacheCapacity`
+
+## Phase 7: Combined Performance and Delivery
+
+- [x] T025 Build the Release server with no branch-introduced warnings and run the final 20-boot frozen-data lane
+- [x] T026 Run the final 2x2 200-request warm lanes and verify first-after-ready ≤750 ms p95 and default-on warm ≤50 ms p95
+- [x] T027 Update raw provenance, results, residual costs, and follow-up recommendations in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T028 Run every affected solution test lane plus full `Elsa.Server.slnx` build
+- [x] T029 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
+- [x] T030 Complete both task lists, run `speckit-analyze`, and resolve all critical/high cross-artifact findings
+- [ ] T031 Push the branch, open one PR with `Closes #624` and `Closes #625`, converge required automated reviews and CI, and merge without bypassing protections
+- [ ] T032 Audit main, both issue states, and the merged benchmark/documentation artifacts
 
 ## Dependencies and Execution Order
 
 - T001-T003 establish tracking and evidence.
 - T004-T006 block story implementation.
 - US1 supplies lookup/coalescing; US2 adds lifecycle and provider composition; US3 completes operations.
-- T021-T028 require all stories and also close spec 091's remaining review/delivery tasks.
+- T021-T024 follow from the measured residual after executable caching and block final evidence.
+- T025-T032 require all stories and the measured-residual phase, and also close spec 091's remaining review/delivery tasks.
 
 ## Commit Discipline
 
 - Commit the work-unit documents separately from implementation.
 - Preserve RED evidence before each implementation slice.
-- Keep cache core, provider composition, and final evidence as reviewable commits.
+- Keep cache core, measured Groundwork/SQLite residual, provider composition, and final evidence as reviewable commits.
 - Do not merge while either spec's performance budget or required review findings remain open.

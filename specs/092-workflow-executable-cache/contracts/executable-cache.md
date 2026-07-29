@@ -17,7 +17,7 @@ Mutable workflow-definition and source-reference lookup remains outside this com
 
 | Setting | Default | Contract |
 |---|---:|---|
-| `CacheWorkflowExecutables` | `true` for SQLite reference features; `false` for PostgreSQL/distributed and legacy direct registrations | When false, use the provider directly. PostgreSQL hosts opt in only with an accepted immutable-retention/invalidation policy. |
+| `CacheWorkflowExecutables` | `true` | When false, use the provider directly. Disable on nodes that cannot accept process-local immutable-artifact retention. |
 | `WorkflowExecutableCacheCapacity` | `256` | Must be positive when caching is enabled; maximum resident entry count. |
 
 Disabling caching is the rollback path. Cache state is shared by scoped store adapters within one
@@ -26,10 +26,11 @@ generation or process restart begins empty.
 
 The cache is local to one shell service provider. Content-addressed IDs cannot be replaced with
 different content, and mutable source references are checked before artifact lookup. A delete
-evicts the node on which it is executed; another opted-in node may retain that immutable artifact
-until local eviction/restart, so PostgreSQL features remain disabled by default. Privileged/global
-reads bypass shared values. Successful privileged scoped mutations invalidate their partition;
-global and cross-scope mutations invalidate that artifact across every resident local partition.
+evicts the node on which it is executed; another node may retain that immutable artifact until
+local eviction/restart. Operators that require coordinated eager eviction can disable the cache
+until issue #636 supplies a distributed invalidation protocol. Privileged/global reads bypass
+shared values. Successful privileged scoped mutations invalidate their partition; global and
+cross-scope mutations invalidate that artifact across every resident local partition.
 
 ## Telemetry
 

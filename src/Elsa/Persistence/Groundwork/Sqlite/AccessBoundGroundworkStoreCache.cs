@@ -7,7 +7,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
 /// Retains a bounded set of immutable access-bound store adapters. Eviction only drops the cache reference;
 /// operations already using an entry remain valid because the underlying reusable store owns no open connection.
 /// </summary>
-internal sealed class AccessBoundGroundworkStoreCache<T>(
+public sealed class AccessBoundGroundworkStoreCache<T>(
     int capacity,
     Func<DocumentStoreAccess, T> create)
 {
@@ -35,7 +35,7 @@ internal sealed class AccessBoundGroundworkStoreCache<T>(
         return entry.Value;
     }
 
-    internal int Count => entries.Count;
+    public int Count => entries.Count;
 
     private void Trim()
     {

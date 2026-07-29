@@ -42,7 +42,8 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["IBookmarkStateStore"] = ["BookmarkStateDocumentKind"],
-            ["IWorkflowExecutableStore"] = ["WorkflowExecutableDocumentKind"],
+            ["IWorkflowExecutableStore"] =
+                ["WorkflowExecutableDocumentKind", "WorkflowExecutableCoordinationDocumentKind"],
             ["IExecutableActivityTemplateStore"] =
                 ["ExecutableActivityTemplateDocumentKind", "ExecutableActivityTemplateHashClaimDocumentKind"],
             ["IWorkflowExecutableSourceReferenceStore"] = ["WorkflowExecutableSourceReferenceDocumentKind"],

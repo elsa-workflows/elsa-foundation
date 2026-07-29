@@ -54,7 +54,7 @@ public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
         Category = "Performance")]
     public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
         services.AddGroundworkPostgreSqlUnifiedPersistence(

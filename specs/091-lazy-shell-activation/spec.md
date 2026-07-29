@@ -128,4 +128,4 @@ As a workflow client, I receive a fast response after the server declares itself
 - Empty but successfully initialized route tables are ready; readiness does not execute a user workflow or require one to exist.
 - The existing shell registry provides stampede-safe activation for one shell name and remains the authority for active generations.
 - Exact internal feature-composition timing may remain coarse while the shell framework is an external dependency; owned provider, task, reconciliation, and route phases must still be measured honestly.
-- This work remains `none/free-flow` in the program-goal registry because it completes the explicitly tracked performance follow-up rather than creating a new architecture program.
+- This work belongs to the existing `first-request-cold-start-readiness` program-goal bucket; it does not create a new architecture program.

@@ -22,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.PostgreSql;
     DisplayName = "Groundwork PostgreSQL Runtime Persistence",
     Description = "Backs the workflow runtime persistence seams with Groundwork over PostgreSQL. Durable storage keeps checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellFeature
+public class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellFeature
 {
     public const string DefaultConnectionString = "Host=localhost;Port=5432;Database=elsa;Username=postgres;Password=postgres";
 
@@ -51,7 +51,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellF
         Category = "Performance")]
     public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 

@@ -14,11 +14,11 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 
 **Primary Dependencies**: `IWorkflowExecutableStore`, Microsoft dependency injection/options, `System.Diagnostics.Metrics`, Groundwork runtime stores
 
-**Storage**: Provider-local in-memory bounded cache in front of existing durable Groundwork stores; no new persistent schema
+**Storage**: Provider-local in-memory bounded caches in front of existing durable Groundwork stores; one compact executable-coordination document kind separates mutable lease/guard state from the immutable executable payload
 
 **Testing**: xUnit provider-neutral behavior/telemetry tests, Groundwork registration/restart tests, existing runtime/HTTP/lifecycle suites, frozen HTTP benchmark
 
-**Target Platform**: Every .NET host using a durable workflow-executable store; initial composition in SQLite and PostgreSQL Groundwork runtime/unified providers
+**Target Platform**: Every .NET host using a durable workflow-executable store; built-in composition in SQLite, PostgreSQL, MongoDB, and SQL Server Groundwork runtime/unified providers
 
 **Project Type**: Modular .NET runtime foundation
 
@@ -26,7 +26,7 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 
 **Constraints**: Bounded memory; no stale values after successful delete; no negative/failure retention; no stampede; no mutable source-reference caching; bounded telemetry cardinality
 
-**Scale/Scope**: One reusable decorator/options/telemetry surface, Groundwork composition for four durable-provider features, focused and provider-backed tests, final combined benchmark
+**Scale/Scope**: One reusable executable-cache decorator/options/telemetry surface, eight Groundwork runtime/unified provider features, one SQLite-only bounded store-adapter cache, compact executable coordination persistence, focused/provider-backed tests, and a final combined benchmark
 
 ## Constitution Check
 
@@ -65,7 +65,23 @@ Save and unconditional delete delegate first and then invalidate the key. Save c
 
 ### Composition and controls
 
-`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` as a keyed scoped backend and selects either it or a scoped cache adapter as the unkeyed runtime store. When enabled, singleton `WorkflowExecutableCache` and `GroundworkWorkflowExecutableCacheLoader` services provide cross-request reuse without extending request-scoped store lifetimes. Privileged/global reads bypass shared values; successful privileged scoped mutations invalidate their partition, while global/across-scope mutations invalidate the artifact in every resident partition. Original overloads remain compatible and direct-read capable; additive overloads accept `WorkflowExecutableCacheOptions`. Runtime and unified provider features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default 256). SQLite reference features enable caching; PostgreSQL/distributed features default it off until a host explicitly accepts process-local immutable-artifact retention or supplies distributed invalidation. Invalid enabled capacities fail options validation during composition.
+`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` as a keyed scoped backend and selects either it or a scoped cache adapter as the unkeyed runtime store. When enabled, singleton `WorkflowExecutableCache` and `GroundworkWorkflowExecutableCacheLoader` services provide cross-request reuse without extending request-scoped store lifetimes. Privileged/global reads bypass shared values; successful privileged scoped mutations invalidate their partition, while global/across-scope mutations invalidate the artifact in every resident partition. Original overloads remain compatible and direct-read capable; additive overloads accept `WorkflowExecutableCacheOptions`. Runtime and unified provider features expose default-on `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default 256). Artifact IDs are content-addressed and mutable source-reference selection remains authoritative; operators that require coordinated eager eviction can disable the process-local cache until distributed invalidation lands. Invalid enabled capacities fail options validation during composition.
+
+### Measured Groundwork/SQLite residual
+
+The first executable-cache lane showed that tiny warmed artifacts were not the dominant residual.
+CPU attribution identified repeated store construction, applied-schema-state deserialization, and
+route-plan binding on every Groundwork operation. Groundwork `0.0.1-preview.95` accepts the exact
+startup-admitted physical target and exposes a concurrent per-operation SQLite store whose
+connections remain independently owned. Elsa compiles route plan sets once and retains a bounded
+set of immutable access-bound adapters. SQLite runtime/unified features expose default-on
+`ReuseAccessBoundStores` and `AccessBoundStoreCacheCapacity` (default 256); disabling reuse restores
+fresh per-operation materialization.
+
+Mutable root-write lease and deletion-guard fields move into a compact
+`WorkflowExecutableCoordinationDocumentKind` record instead of rewriting the large immutable
+executable JSON. Save/delete update payload and coordination documents atomically. Reads lazily
+migrate legacy embedded coordination fields without rewriting the executable payload.
 
 ### Evidence
 
@@ -94,10 +110,10 @@ src/Elsa/Workflows/Runtime/Core/
 src/Elsa/Persistence/Groundwork/
 ├── DependencyInjection/GroundworkRuntimeStoreRegistration.cs
 ├── Stores/GroundworkWorkflowExecutableCacheLoader.cs
-├── Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs
-├── PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs
-├── Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs
-└── PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs
+├── Stores/GroundworkWorkflowExecutableStore.cs
+├── Sqlite/AccessBoundGroundworkStoreCache.cs
+├── Sqlite/SqliteGroundworkDocumentStoreInitializer.cs
+└── {Sqlite,PostgreSql,MongoDb,SqlServer}/...Runtime|Unified...ShellFeature.cs
 
 tests/Elsa/Workflows/Runtime/Tests/
 └── CachingWorkflowExecutableStoreTests.cs
@@ -110,7 +126,11 @@ tests/Elsa/Persistence/Groundwork/Tests/
 
 ## Post-Design Constitution Re-check
 
-The design adds no package, schema, public replacement contract, cross-shell singleton, Runtime → Design dependency, or high-cardinality metric. Provider authority and source-reference resolution remain unchanged. All gates remain passing with the same provisional configuration-classification note.
+The design adds no public replacement contract, cross-shell singleton, Runtime → Design dependency,
+or high-cardinality metric. The compact coordination schema is owned by the existing executable
+store contract and preserves provider authority, atomicity, and lazy legacy migration. Groundwork
+`0.0.1-preview.95` supplies the exact-target/concurrent-store primitive. All gates remain passing
+with the same provisional configuration-classification note.
 
 ## Complexity Tracking
 
