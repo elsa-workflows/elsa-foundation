@@ -45,7 +45,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     private readonly SqliteGroundworkAdmissionStampStore stampStore = new();
     private readonly SqliteGroundworkStoreCacheOptions storeCacheOptions =
         ValidateStoreCacheOptions(storeCacheOptions);
-    private bool initialized;
+    private volatile bool initialized;
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
     public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
