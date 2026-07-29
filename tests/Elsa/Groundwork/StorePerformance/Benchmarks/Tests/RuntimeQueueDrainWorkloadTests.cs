@@ -24,6 +24,7 @@ public sealed class RuntimeQueueDrainWorkloadTests
         Assert.Equal(5, adapter.Shared.StaleAcknowledgements);
         Assert.Equal(5, adapter.Shared.IndependentSuccessorTakeovers);
         Assert.Equal(5, adapter.Shared.OriginalWinnerStaleAcknowledgements);
+        Assert.Equal(RuntimeQueueDrainWorkload.BatchSize, adapter.Shared.OpposingClientInitialInspections);
         Assert.Equal(RuntimeQueueDrainWorkload.BatchSize * RuntimeQueueDrainWorkload.ConcurrentClaimants, adapter.Shared.ContentionAttempts);
     }
 
@@ -130,6 +131,7 @@ public sealed class RuntimeQueueDrainWorkloadTests
         public int ActiveSuccessorsAtStaleAcknowledgement { get; set; }
         public int IndependentSuccessorTakeovers { get; set; }
         public int OriginalWinnerStaleAcknowledgements { get; set; }
+        public int OpposingClientInitialInspections { get; set; }
         public int QueueItemCount => Queue.ListPendingWorkflowExecutionIdsAsync(RuntimeStorePageRequest.MaximumLimit).Result
             .Sum(id => Queue.ListAsync(new RuntimeSchedulerWorkQuery(id, RuntimeStorePageRequest.MaximumLimit)).Result.Items.Count);
     }
@@ -254,6 +256,12 @@ public sealed class RuntimeQueueDrainWorkloadTests
         public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(string workflowExecutionId, DateTimeOffset now, CancellationToken cancellationToken = default)
         {
             var claims = await _backing.Queue.ListActiveClaimsAsync(workflowExecutionId, now, cancellationToken);
+            if (claims.Count == 1 && claims.Single().OwnerId.StartsWith("queue-contender-", StringComparison.Ordinal) &&
+                _backing.InitialWinnerClientIndexes.TryGetValue(workflowExecutionId, out var initialWinner) &&
+                initialWinner != _clientIndex)
+            {
+                _backing.OpposingClientInitialInspections++;
+            }
             if (_fault == QueueFault.DuplicateActiveClaimInspection && claims.Count == 1 &&
                 claims.Single().OwnerId.StartsWith("queue-contender-", StringComparison.Ordinal))
             {

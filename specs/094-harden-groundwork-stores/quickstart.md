@@ -970,6 +970,10 @@ were accepted, superseding all verdicts on that head: each contention result now
 requesting, winning, and losing client; the returned owner must equal that request’s owner; a
 cross-claimant-grant mutation fails closed; and the explicit type traversal includes inherited
 interfaces and base types (with only the records’ provider-neutral `IEquatable<T>` shape allowed).
+Root’s post-freeze audit then found that initial persisted ownership inspection still used the
+Secondary client unconditionally. That head was also superseded: every winner is now inspected
+through its actual losing/opposing client, and the focused fake requires exactly **16** such
+opposing-client inspections.
 
 ## 8. Readiness audit
 

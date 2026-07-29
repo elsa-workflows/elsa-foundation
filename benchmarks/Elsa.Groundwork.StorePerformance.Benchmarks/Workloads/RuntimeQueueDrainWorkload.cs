@@ -56,7 +56,7 @@ public sealed class RuntimeQueueDrainWorkload
         var contentionWinners = await ClaimContentionAsync(clients, expectedWorkflowIds, FixedNowUtc, PrimaryVisibility, "queue-contender", cancellationToken);
         var initialClaims = contentionWinners.Select(winner => winner.Claim).ToArray();
         RequireExactClaims(contentionWinners, expectedWorkflowIds, "queue-contender", expectedFence: 1, FixedNowUtc, PrimaryVisibility);
-        await RequireExactActiveClaimsAsync(clients.Secondary.Claims, initialClaims, FixedNowUtc, "contention", cancellationToken);
+        await RequireExactContentionClaimsAsync(contentionWinners, FixedNowUtc, cancellationToken);
         operations.Add("claim-bounded-batch");
 
         var normalWinners = contentionWinners.Take(BatchSize - RetryableItems - PoisonItems).ToArray();
@@ -264,6 +264,22 @@ public sealed class RuntimeQueueDrainWorkload
             RequireExactClaim(actual, claim.Item, claim.OwnerId, claim.FencingToken, claim.ClaimedAt, claim.VisibleAfter - claim.ClaimedAt);
             if (actual.Revision != claim.Revision)
                 throw new InvalidOperationException($"The public queue claim inspection did not preserve the exact successor revision after {operation}.");
+        }
+    }
+
+    private static async ValueTask RequireExactContentionClaimsAsync(
+        IReadOnlyCollection<QueueContentionWinner> winners,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        foreach (var winner in winners)
+        {
+            await RequireExactActiveClaimsAsync(
+                winner.LosingClient.Claims,
+                [winner.Claim],
+                now,
+                "contention",
+                cancellationToken);
         }
     }
 
