@@ -121,7 +121,7 @@ Container-free verification on the replay head:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --logger 'console;verbosity=minimal'
-# 58 passed
+# 31 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   -c Release --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests' \
@@ -184,7 +184,7 @@ Root verification after those dispositions and the router revert:
 ```bash
 dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
   -c Release --no-build --no-restore --logger 'console;verbosity=minimal'
-# 58 passed
+# 31 passed
 
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
   -c Release --no-restore --filter OpenIddictPersistenceArchitectureTests \
