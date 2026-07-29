@@ -43,7 +43,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellF
         DisplayName = "Cache workflow executables",
         Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
         Category = "Performance")]
-    public bool CacheWorkflowExecutables { get; set; }
+    public bool CacheWorkflowExecutables { get; set; } = true;
 
     [ManifestSetting(
         DisplayName = "Workflow executable cache capacity",

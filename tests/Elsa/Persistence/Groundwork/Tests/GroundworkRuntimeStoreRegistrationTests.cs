@@ -21,7 +21,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
     private const string CacheTypeName = "Elsa.Workflows.Runtime.Core.Services.CachingWorkflowExecutableStore";
 
     [Fact]
-    public void OriginalParameterlessRegistrationOverload_IsPreservedWithDirectProviderBehavior()
+    public void OriginalParameterlessRegistrationOverload_IsPreservedWithCacheEnabledByDefault()
     {
         var method = typeof(GroundworkRuntimeStoreRegistration).GetMethod(
             nameof(GroundworkRuntimeStoreRegistration.AddGroundworkRuntimeStores),
@@ -31,7 +31,9 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         var services = NewServices();
         services.AddGroundworkRuntimeStores();
         using var provider = services.BuildServiceProvider();
-        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.Equal(
+            CacheTypeName,
+            provider.GetRequiredService<IWorkflowExecutableStore>().GetType().FullName);
     }
 
     [Fact]

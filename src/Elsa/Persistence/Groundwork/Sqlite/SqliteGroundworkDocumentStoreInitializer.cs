@@ -36,10 +36,15 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     GroundworkStoreSessionSource sessionSource,
     ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
     GroundworkProviderCapabilityAdmission? capabilityAdmission = null,
-    bool skipInspectionWhenPlanUnchanged = false) : IHostedService, IShellInitializer
+    bool skipInspectionWhenPlanUnchanged = false,
+    SqliteGroundworkStoreCacheOptions? storeCacheOptions = null) : IHostedService, IShellInitializer
 {
+    private static readonly SqliteConnectionPragmaOptions OperationConnectionPragmas =
+        SqliteConnectionPragmaOptions.Default with { WriteAheadLogging = false };
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private readonly SqliteGroundworkAdmissionStampStore stampStore = new();
+    private readonly SqliteGroundworkStoreCacheOptions storeCacheOptions =
+        ValidateStoreCacheOptions(storeCacheOptions);
     private bool initialized;
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
@@ -92,10 +97,11 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     SqliteGroundworkCapabilities.PhysicalNames,
                     cancellationToken);
 
-            // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply.
-            // A bare SqliteConnection here would create (and forever admit) the database in rollback-journal
-            // mode: journal_mode is a persistent per-database property, and this initializer's connections are
-            // the first to touch the file.
+            // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply
+            // whenever admission actually touches the database. Keep the connection unopened here: a rejected
+            // no-auto-apply admission must remain side-effect free and must not create an empty database file.
+            // Successful admission opens this connection before operation sessions disable the persistent WAL
+            // pragma, so the database is still admitted in WAL mode exactly once.
             await using var inspectionConnection = SqliteConnectionFactory.Create(connectionString);
 
             // Skip-if-current fast path (spec 133): a matching applied-plan stamp proves the composed plan
@@ -161,20 +167,59 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     route => new Lazy<RelationalPhysicalQueryPlanSet>(
                         () => SqlitePhysicalQueryRuntime.CompilePlanSet(manifest, route, provider)),
                     StringComparer.Ordinal);
-                if (sessionSource.TrySetAdmitted(async (access, ct) =>
+                GroundworkStoreSessionResources CreateResources(DocumentStoreAccess access)
+                {
+                    // Admission establishes WAL once. Reusable stores keep immutable compiled routes and
+                    // access binding while each operation still owns an independent pooled connection.
+                    var store = SqlitePhysicalDocumentStore.CreateConcurrent(
+                        connectionString,
+                        manifest,
+                        source.PhysicalTarget,
+                        access,
+                        OperationConnectionPragmas);
+                    var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
+                        routes.Select(route =>
+                            KeyValuePair.Create<string, Func<IBoundedDocumentStore>>(
+                                route.StorageUnit.Value,
+                                () => planSets[route.StorageUnit.Value].Value.Bind(store))));
+                    return new GroundworkStoreSessionResources(store, boundedStore);
+                }
+
+                var stores = new AccessBoundGroundworkStoreCache<GroundworkStoreSessionResources>(
+                    this.storeCacheOptions.Capacity,
+                    CreateResources);
+                Func<
+                    DocumentStoreAccess,
+                    CancellationToken,
+                    ValueTask<GroundworkStoreSessionResources>> openSession =
+                    this.storeCacheOptions.Enabled
+                        ? (access, ct) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            return ValueTask.FromResult(stores.GetOrCreate(access));
+                        }
+                        : OpenUncachedSessionAsync;
+                if (sessionSource.TrySetAdmitted(openSession, TransactionBoundary.CrossUnitAtomic))
+                {
+                    capabilityAdmission?.TrySet(capabilities);
+                }
+
+                async ValueTask<GroundworkStoreSessionResources> OpenUncachedSessionAsync(
+                    DocumentStoreAccess access,
+                    CancellationToken ct)
                 {
                     ct.ThrowIfCancellationRequested();
                     SqliteConnection? connection = null;
                     try
                     {
-                        // Every store session must open through the pragma factory: journal_mode=WAL persists
-                        // per-database, but synchronous=NORMAL and busy_timeout are per-connection.
-                        connection = SqliteConnectionFactory.Create(connectionString);
+                        connection = SqliteConnectionFactory.Create(
+                            connectionString,
+                            OperationConnectionPragmas);
                         await connection.OpenAsync(ct);
                         var store = new SqlitePhysicalDocumentStore(
                             connection,
                             manifest,
-                            routes,
+                            source.PhysicalTarget,
                             access);
                         var boundedStore = GroundworkBoundedDocumentStoreRouter.CreateLazy(
                             routes.Select(route =>
@@ -194,9 +239,6 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                             SqliteGroundworkPersistenceOperation.OpenSession,
                             await DisposeAfterFailureAsync(connection, exception));
                     }
-                }, TransactionBoundary.CrossUnitAtomic))
-                {
-                    capabilityAdmission?.TrySet(capabilities);
                 }
             }
 
@@ -240,6 +282,18 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     Stopwatch.GetElapsedTime(started).TotalMilliseconds,
                     new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome)));
         }
+    }
+
+    private static SqliteGroundworkStoreCacheOptions ValidateStoreCacheOptions(
+        SqliteGroundworkStoreCacheOptions? options)
+    {
+        options ??= new();
+        options.Validate();
+        return new()
+        {
+            Enabled = options.Enabled,
+            Capacity = options.Capacity
+        };
     }
 
     private static async ValueTask<Exception> DisposeAfterFailureAsync(

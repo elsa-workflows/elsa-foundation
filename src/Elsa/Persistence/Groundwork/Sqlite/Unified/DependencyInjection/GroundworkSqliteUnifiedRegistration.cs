@@ -27,7 +27,7 @@ public static class GroundworkSqliteUnifiedRegistration
         string connectionString) =>
         services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false });
+            new WorkflowExecutableCacheOptions());
 
     /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
@@ -37,7 +37,7 @@ public static class GroundworkSqliteUnifiedRegistration
         bool skipInspectionWhenPlanUnchanged = false) =>
         services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup,
             skipInspectionWhenPlanUnchanged);
 
@@ -67,7 +67,7 @@ public static class GroundworkSqliteUnifiedRegistration
         services.AddGroundworkSqliteUnifiedPersistence(
             connectionString,
             context,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup,
             skipInspectionWhenPlanUnchanged);
 
@@ -78,7 +78,8 @@ public static class GroundworkSqliteUnifiedRegistration
         ShellFeatureContext context,
         WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup = false,
-        bool skipInspectionWhenPlanUnchanged = false)
+        bool skipInspectionWhenPlanUnchanged = false,
+        SqliteGroundworkStoreCacheOptions? storeCacheOptions = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema(context);
@@ -86,7 +87,8 @@ public static class GroundworkSqliteUnifiedRegistration
             connectionString,
             workflowExecutableCacheOptions,
             autoApplyOnStartup,
-            skipInspectionWhenPlanUnchanged);
+            skipInspectionWhenPlanUnchanged,
+            storeCacheOptions);
     }
 
     /// <summary>
@@ -101,7 +103,7 @@ public static class GroundworkSqliteUnifiedRegistration
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
         services.AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup,
             skipInspectionWhenPlanUnchanged);
 
@@ -128,13 +130,17 @@ public static class GroundworkSqliteUnifiedRegistration
         string connectionString,
         WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup,
-        bool skipInspectionWhenPlanUnchanged)
+        bool skipInspectionWhenPlanUnchanged,
+        SqliteGroundworkStoreCacheOptions? storeCacheOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddSqliteGroundworkDocumentStore(
-            connectionString, autoApplyOnStartup, skipInspectionWhenPlanUnchanged);
+            connectionString,
+            autoApplyOnStartup,
+            skipInspectionWhenPlanUnchanged,
+            storeCacheOptions);
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);

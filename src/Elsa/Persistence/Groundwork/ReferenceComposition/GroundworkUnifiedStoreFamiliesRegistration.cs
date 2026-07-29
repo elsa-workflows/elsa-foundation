@@ -15,7 +15,7 @@ public static class GroundworkUnifiedStoreFamiliesRegistration
 {
     public static IServiceCollection AddGroundworkUnifiedStoreFamilies(this IServiceCollection services)
         => services.AddGroundworkUnifiedStoreFamilies(
-            new WorkflowExecutableCacheOptions { Enabled = false });
+            new WorkflowExecutableCacheOptions());
 
     public static IServiceCollection AddGroundworkUnifiedStoreFamilies(
         this IServiceCollection services,

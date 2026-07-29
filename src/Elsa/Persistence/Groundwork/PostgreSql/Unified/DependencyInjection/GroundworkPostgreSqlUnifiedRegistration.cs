@@ -27,7 +27,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         string connectionString) =>
         services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false });
+            new WorkflowExecutableCacheOptions());
 
     /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
     public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
@@ -36,7 +36,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         bool autoApplyOnStartup = false) =>
         services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup);
 
     /// <summary>Registers unified PostgreSQL persistence with explicit executable-cache options.</summary>
@@ -62,7 +62,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         services.AddGroundworkPostgreSqlUnifiedPersistence(
             connectionString,
             context,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup);
 
     /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
@@ -92,7 +92,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
         services.AddGroundworkPostgreSqlUnifiedPersistence<TDeploymentSource>(
             connectionString,
-            new WorkflowExecutableCacheOptions { Enabled = false },
+            new WorkflowExecutableCacheOptions(),
             autoApplyOnStartup);
 
     /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>

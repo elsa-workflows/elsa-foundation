@@ -27,9 +27,9 @@ public static class GroundworkRuntimeStoreRegistration
     /// <summary>Key used for the durable Groundwork executable-store backend behind optional decorators.</summary>
     public const string WorkflowExecutableProviderKey = "Elsa.Persistence.Groundwork.WorkflowExecutableProvider";
 
-    /// <summary>Registers Groundwork runtime stores with direct executable-provider reads for compatibility.</summary>
+    /// <summary>Registers Groundwork runtime stores with the bounded executable cache enabled by default.</summary>
     public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services) =>
-        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions { Enabled = false });
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
 
     /// <summary>Registers Groundwork runtime stores with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkRuntimeStores(

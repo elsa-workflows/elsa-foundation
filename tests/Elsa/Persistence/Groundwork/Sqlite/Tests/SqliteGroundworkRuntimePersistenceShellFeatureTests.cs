@@ -28,6 +28,19 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
     }
 
     [Fact]
+    public void AccessBoundStoreCacheSettings_ArePublicManifestSettings_WithBoundedDefaults()
+    {
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature();
+
+        Assert.True(feature.ReuseAccessBoundStores);
+        Assert.Equal(
+            SqliteGroundworkStoreCacheOptions.DefaultCapacity,
+            feature.AccessBoundStoreCacheCapacity);
+        AssertManifestSetting(feature, nameof(feature.ReuseAccessBoundStores));
+        AssertManifestSetting(feature, nameof(feature.AccessBoundStoreCacheCapacity));
+    }
+
+    [Fact]
     public void DisabledExecutableCacheSetting_IsThreadedToRuntimeRegistration()
     {
         var feature = new SqliteGroundworkRuntimePersistenceShellFeature

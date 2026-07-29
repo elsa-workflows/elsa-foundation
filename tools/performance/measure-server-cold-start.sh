@@ -17,6 +17,7 @@ Required:
   --expected-status CODE        Expected workflow HTTP status.
   --expected-body TEXT          Exact expected workflow response body.
   --boots COUNT                 Positive number of isolated boots.
+  --environment NAME            Host environment (default: Production).
 
 Reports and limits:
   --output-json PATH            JSON report path (default: artifacts directory/report.json).
@@ -52,6 +53,7 @@ workflow_path=""
 expected_status=""
 expected_body=""
 boots=""
+runtime_environment="Production"
 output_json=""
 output_markdown=""
 artifacts_dir=""
@@ -75,6 +77,7 @@ while (($# > 0)); do
     --expected-status) require_value "$@"; expected_status="$2"; shift 2 ;;
     --expected-body) require_value "$@"; expected_body="$2"; shift 2 ;;
     --boots) require_value "$@"; boots="$2"; shift 2 ;;
+    --environment) require_value "$@"; runtime_environment="$2"; shift 2 ;;
     --output-json) require_value "$@"; output_json="$2"; shift 2 ;;
     --output-markdown) require_value "$@"; output_markdown="$2"; shift 2 ;;
     --artifacts-dir) require_value "$@"; artifacts_dir="$2"; shift 2 ;;
@@ -98,6 +101,7 @@ done
 [[ -n "$expected_status" ]] || die_usage "--expected-status is required"
 [[ -n "$expected_body" ]] || die_usage "--expected-body is required"
 [[ "$boots" =~ ^[1-9][0-9]*$ ]] || die_usage "--boots must be a positive integer"
+[[ "$runtime_environment" =~ ^[A-Za-z0-9._-]+$ ]] || die_usage "--environment contains unsupported characters"
 [[ "$startup_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die_usage "--startup-timeout-seconds must be a positive integer"
 [[ "$shutdown_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die_usage "--shutdown-timeout-seconds must be a positive integer"
 [[ "$expected_status" =~ ^[1-5][0-9][0-9]$ ]] || die_usage "--expected-status must be a three-digit HTTP status"
@@ -334,14 +338,14 @@ write_report() {
     "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
     "$expected_body_hash" "$expected_body_file" "$base_url" "$liveness_path" "$readiness_path" \
     "$workflow_path" "$expected_shell" "$expected_status" "$boots" \
-    "$startup_timeout_seconds" "$shutdown_timeout_seconds" "$ready_budget_ms" "$workflow_budget_ms" \
+    "$runtime_environment" "$startup_timeout_seconds" "$shutdown_timeout_seconds" "$ready_budget_ms" "$workflow_budget_ms" \
     "$failure_boot" "$failure_category" "$failure_message" "$failure_log" <<'PY'
 import csv, datetime, json, math, pathlib, sys
 
 (tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash,
  content_hash, baseline_hash, expected_body_hash, expected_body_artifact, base_url,
  liveness_path, readiness_path, workflow_path, expected_shell, expected_status, requested_boots,
- startup_timeout, shutdown_timeout, ready_budget, workflow_budget, failure_boot,
+ runtime_environment, startup_timeout, shutdown_timeout, ready_budget, workflow_budget, failure_boot,
  failure_category, failure_message, failure_log) = sys.argv[1:]
 
 metric_keys = (
@@ -444,7 +448,7 @@ report = {
         "baselineSha256": baseline_hash,
         "expectedBodySha256": expected_body_hash,
         "expectedBodyArtifact": expected_body_artifact,
-        "environment": "Production",
+        "environment": runtime_environment,
     },
     "request": {
         "baseUrl": base_url,
@@ -554,7 +558,7 @@ for ((boot=1; boot<=boots; boot++)); do
   trap 'launch_interrupted_status=143' TERM
   (
     cd "$work_dir"
-    exec python3 - "$base_url" "$server_dll" "$session_ready_file" <<'PY'
+    exec python3 - "$base_url" "$server_dll" "$session_ready_file" "$runtime_environment" <<'PY'
 import os, pathlib, sys, time
 test_delay = os.environ.get("_ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS")
 test_marker = os.environ.get("_ELSA_PERF_TEST_PRE_SESSION_MARKER")
@@ -568,7 +572,8 @@ environment = os.environ.copy()
 environment.pop("_ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS", None)
 environment.pop("_ELSA_PERF_TEST_PRE_SESSION_MARKER", None)
 environment["ASPNETCORE_URLS"] = sys.argv[1]
-environment["DOTNET_ENVIRONMENT"] = "Production"
+environment["DOTNET_ENVIRONMENT"] = sys.argv[4]
+environment["ASPNETCORE_ENVIRONMENT"] = sys.argv[4]
 os.execvpe("dotnet", ["dotnet", sys.argv[2]], environment)
 PY
   ) >"$log_file" 2>&1 &

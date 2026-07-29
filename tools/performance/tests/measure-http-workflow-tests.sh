@@ -13,6 +13,10 @@ if ! grep -q -- '--output-samples PATH.*one numeric ms value per line' "$help_ou
   printf '%s\n' 'FAIL: help does not document --output-samples PATH.' >&2
   exit 1
 fi
+if ! grep -q -- '--concurrency COUNT.*default: 1' "$help_output"; then
+  printf '%s\n' 'FAIL: help does not document --concurrency COUNT.' >&2
+  exit 1
+fi
 
 missing_value_output="$temporary_directory/missing-value-output"
 set +e
@@ -41,6 +45,10 @@ while (($# > 0)); do
 done
 
 count=0
+while ! mkdir "$FAKE_CURL_COUNTER.lock" 2>/dev/null; do
+  sleep 0.01
+done
+trap 'rmdir "$FAKE_CURL_COUNTER.lock"' EXIT
 if [[ -f "$FAKE_CURL_COUNTER" ]]; then
   count="$(<"$FAKE_CURL_COUNTER")"
 fi
@@ -86,6 +94,25 @@ if [[ "$(wc -l <"$samples_path" | tr -d ' ')" -ne 3 ]]; then
 fi
 if ! jq -e '.samples == {warmup: 2, measured: 3} and .latencyMs == {cold: 901, min: 10, mean: 20, p50: 20, p95: 30, p99: 30, max: 30}' "$json_output" >/dev/null; then
   printf '%s\n' 'FAIL: report aggregates were not computed from the persisted warm samples.' >&2
+  exit 1
+fi
+
+rm -f "$FAKE_CURL_COUNTER"
+parallel_samples_path="$temporary_directory/parallel-samples.txt"
+bash "$subject" \
+  --url http://127.0.0.1:7243/workflows/http/hello-world \
+  --expected-body 'Hello World!' \
+  --warmup 0 \
+  --requests 4 \
+  --concurrency 2 \
+  --output-samples "$parallel_samples_path" >"$temporary_directory/parallel-report.json"
+if ! jq -e '.configuration.concurrency == 2 and .samples == {warmup: 0, measured: 4}' \
+  "$temporary_directory/parallel-report.json" >/dev/null; then
+  printf '%s\n' 'FAIL: concurrent invocation did not record its concurrency and sample count.' >&2
+  exit 1
+fi
+if [[ "$(wc -l <"$parallel_samples_path" | tr -d ' ')" -ne 4 ]]; then
+  printf '%s\n' 'FAIL: concurrent sample output count did not match --requests.' >&2
   exit 1
 fi
 

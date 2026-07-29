@@ -60,6 +60,19 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
         Category = "Performance")]
     public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
 
+    [ManifestSetting(
+        DisplayName = "Reuse access-bound stores",
+        Description = "Reuse immutable, access-bound Groundwork store adapters while each operation continues to own an independent SQLite connection. Enabled by default.",
+        Category = "Performance")]
+    public bool ReuseAccessBoundStores { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Access-bound store cache capacity",
+        Description = "Maximum number of tenant, scope, and privilege bindings retained by this shell. Old bindings are evicted safely when the bounded cache is full.",
+        Category = "Performance")]
+    public int AccessBoundStoreCacheCapacity { get; set; } =
+        SqliteGroundworkStoreCacheOptions.DefaultCapacity;
+
     public void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
@@ -72,6 +85,11 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
                 Capacity = WorkflowExecutableCacheCapacity
             },
             AutoApplySchemaOnStartup,
-            SkipSchemaInspectionWhenPlanUnchanged);
+            SkipSchemaInspectionWhenPlanUnchanged,
+            new SqliteGroundworkStoreCacheOptions
+            {
+                Enabled = ReuseAccessBoundStores,
+                Capacity = AccessBoundStoreCacheCapacity
+            });
     }
 }

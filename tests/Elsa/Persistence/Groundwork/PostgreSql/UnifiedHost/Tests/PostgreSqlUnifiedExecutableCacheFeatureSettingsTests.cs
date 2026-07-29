@@ -24,13 +24,13 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
     }
 
     [Fact]
-    public void OriginalConnectionStringRegistrationOverloadPreservesDirectReadBehavior()
+    public void OriginalConnectionStringRegistrationOverloadEnablesBoundedCacheByDefault()
     {
         var services = new ServiceCollection();
         services.AddGroundworkPostgreSqlUnifiedPersistence("Host=localhost;Database=elsa");
         using var provider = services.BuildServiceProvider();
 
-        Assert.False(provider.GetRequiredService<WorkflowExecutableCacheOptions>().Enabled);
+        Assert.True(provider.GetRequiredService<WorkflowExecutableCacheOptions>().Enabled);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
     {
         var feature = NewFeature();
 
-        AssertSetting(feature, EnabledProperty, false);
+        AssertSetting(feature, EnabledProperty, true);
         AssertSetting(feature, CapacityProperty, 256);
     }
 

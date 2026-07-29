@@ -27,6 +27,9 @@ namespace Elsa.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkRuntimePersistenceRegistrationTests
 {
+    private const string CacheTypeName =
+        "Elsa.Workflows.Runtime.Core.Services.CachingWorkflowExecutableStore";
+
     private static readonly Type[] LogicBearingRuntimeServiceTypes =
     [
         typeof(IGroundworkStorageManifestSource),
@@ -202,9 +205,10 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         var selectedExecutableStore = provider.GetRequiredService<IWorkflowExecutableStore>();
-        Assert.IsType<GroundworkWorkflowExecutableStore>(selectedExecutableStore);
-        Assert.Same(selectedExecutableStore, provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
-            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
+        Assert.Equal(CacheTypeName, selectedExecutableStore.GetType().FullName);
+        Assert.IsType<GroundworkWorkflowExecutableStore>(
+            provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+                GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
         Assert.IsType<GroundworkExecutableActivityTemplateStore>(provider.GetRequiredService<IExecutableActivityTemplateStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
@@ -409,7 +413,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     }
 
     [Fact]
-    public async Task Sqlite_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
+    public async Task Sqlite_Uncached_Session_Open_Wraps_Provider_Failure_And_Cleans_Up()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-session-open-{Guid.NewGuid():N}");
         var databasePath = Path.Combine(directory, "groundwork.db");
@@ -418,7 +422,11 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         try
         {
             var services = new ServiceCollection();
-            new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
+            new SqliteGroundworkRuntimePersistenceShellFeature
+            {
+                ConnectionString = connectionString,
+                ReuseAccessBoundStores = false
+            }.ConfigureServices(services);
             await using var provider = services.BuildServiceProvider();
 
             await provider.ApplySqliteGroundworkSchemaAsync(connectionString);

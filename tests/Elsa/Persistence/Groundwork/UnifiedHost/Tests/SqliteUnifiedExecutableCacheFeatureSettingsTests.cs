@@ -12,6 +12,8 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 {
     private const string EnabledProperty = "CacheWorkflowExecutables";
     private const string CapacityProperty = "WorkflowExecutableCacheCapacity";
+    private const string StoreReuseProperty = "ReuseAccessBoundStores";
+    private const string StoreCapacityProperty = "AccessBoundStoreCacheCapacity";
 
     [Fact]
     public void OriginalConnectionStringRegistrationOverloadIsPreserved()
@@ -24,13 +26,13 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
     }
 
     [Fact]
-    public void OriginalConnectionStringRegistrationOverloadPreservesDirectReadBehavior()
+    public void OriginalConnectionStringRegistrationOverloadEnablesBoundedCacheByDefault()
     {
         var services = new ServiceCollection();
         services.AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:");
         using var provider = services.BuildServiceProvider();
 
-        Assert.False(provider.GetRequiredService<WorkflowExecutableCacheOptions>().Enabled);
+        Assert.True(provider.GetRequiredService<WorkflowExecutableCacheOptions>().Enabled);
     }
 
     [Fact]
@@ -52,6 +54,8 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 
         AssertSetting(feature, EnabledProperty, true);
         AssertSetting(feature, CapacityProperty, 256);
+        AssertSetting(feature, StoreReuseProperty, true);
+        AssertSetting(feature, StoreCapacityProperty, 256);
     }
 
     [Fact]

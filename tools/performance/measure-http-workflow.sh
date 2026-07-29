@@ -16,6 +16,7 @@ Required:
 Options:
   --warmup COUNT              Warm-up requests before measurement (default: 20).
   --requests COUNT            Warm requests to measure (default: 200).
+  --concurrency COUNT         Concurrent measured requests (default: 1).
   --expected-status CODE      Exact HTTP status expected (default: 200).
   --policy LABEL              Policy label recorded in the report.
   --segment-cap COUNT         Coalesced segment cap recorded in the report.
@@ -34,6 +35,7 @@ url=""
 expected_body=""
 warmup=20
 requests=200
+concurrency=1
 expected_status=200
 policy="unspecified"
 segment_cap=""
@@ -51,6 +53,7 @@ while (($# > 0)); do
     --expected-body) expected_body="${2:?--expected-body requires a value}"; shift 2 ;;
     --warmup) warmup="${2:?--warmup requires a value}"; shift 2 ;;
     --requests) requests="${2:?--requests requires a value}"; shift 2 ;;
+    --concurrency) concurrency="${2:?--concurrency requires a value}"; shift 2 ;;
     --expected-status) expected_status="${2:?--expected-status requires a value}"; shift 2 ;;
     --policy) policy="${2:?--policy requires a value}"; shift 2 ;;
     --segment-cap) segment_cap="${2:?--segment-cap requires a value}"; shift 2 ;;
@@ -78,8 +81,8 @@ if [[ -z "$url" || -z "$expected_body" ]]; then
   exit 2
 fi
 
-if ! [[ "$warmup" =~ ^[0-9]+$ && "$requests" =~ ^[1-9][0-9]*$ && "$expected_status" =~ ^[1-5][0-9][0-9]$ ]]; then
-  printf '%s\n' '--warmup must be non-negative, --requests positive, and --expected-status a three-digit HTTP status.' >&2
+if ! [[ "$warmup" =~ ^[0-9]+$ && "$requests" =~ ^[1-9][0-9]*$ && "$concurrency" =~ ^[1-9][0-9]*$ && "$expected_status" =~ ^[1-5][0-9][0-9]$ ]]; then
+  printf '%s\n' '--warmup must be non-negative, --requests and --concurrency positive, and --expected-status a three-digit HTTP status.' >&2
   exit 2
 fi
 
@@ -114,14 +117,14 @@ fi
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 expected_file="$temporary_directory/expected-body"
-body_file="$temporary_directory/response-body"
 cold_file="$temporary_directory/cold-ms"
 warm_file="$temporary_directory/warm-ms"
 printf '%s' "$expected_body" > "$expected_file"
 
 measure_request() {
   local destination="${1:-}"
-  local measurement status seconds milliseconds
+  local body_file measurement status seconds milliseconds
+  body_file="$temporary_directory/response-body-${BASHPID}-${RANDOM}"
   local curl_options=(--silent --show-error --output "$body_file" --write-out '%{http_code} %{time_total}')
   if [[ "$insecure" == true ]]; then
     curl_options+=(--insecure)
@@ -138,6 +141,7 @@ measure_request() {
     printf '%s\n' 'Response body did not match --expected-body.' >&2
     exit 1
   fi
+  rm -f "$body_file"
 
   if [[ -n "$destination" ]]; then
     milliseconds="$(awk -v seconds="$seconds" 'BEGIN { printf "%.3f", seconds * 1000 }')"
@@ -169,8 +173,21 @@ measure_request "$cold_file"
 for ((request = 0; request < warmup; request++)); do
   measure_request
 done
+measured_directory="$temporary_directory/measured"
+mkdir -p "$measured_directory"
+for ((batch_start = 0; batch_start < requests; batch_start += concurrency)); do
+  pids=()
+  for ((offset = 0; offset < concurrency && batch_start + offset < requests; offset++)); do
+    request=$((batch_start + offset))
+    measure_request "$measured_directory/$request" &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    wait "$pid"
+  done
+done
 for ((request = 0; request < requests; request++)); do
-  measure_request "$warm_file"
+  cat "$measured_directory/$request" >> "$warm_file"
 done
 
 sorted_file="$temporary_directory/warm-sorted-ms"
@@ -213,6 +230,7 @@ json_report="$(jq -n \
   --argjson expectedStatus "$expected_status" \
   --argjson warmup "$warmup" \
   --argjson requests "$requests" \
+  --argjson concurrency "$concurrency" \
   --argjson coldMs "$cold_ms" \
   --argjson minimumMs "$minimum_ms" \
   --argjson averageMs "$average_ms" \
@@ -223,11 +241,11 @@ json_report="$(jq -n \
   --arg commitsBefore "$commits_before" \
   --arg commitsAfter "$commits_after" \
   --arg commitDelta "$commit_delta" \
-  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
+  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider, concurrency: $concurrency}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
 
-markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s` (TLS verification: `%s`)\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
+markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s` (TLS verification: `%s`)\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured at concurrency %s\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
   "$timestamp_utc" "$url" "$(if [[ "$insecure" == true ]]; then printf disabled; else printf enabled; fi)" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$requests" \
-  "$cold_ms" "$minimum_ms" "$average_ms" "$p50_ms" "$p95_ms" "$p99_ms" "$maximum_ms" \
+  "$concurrency" "$cold_ms" "$minimum_ms" "$average_ms" "$p50_ms" "$p95_ms" "$p99_ms" "$maximum_ms" \
   "${commit_delta:-not measured}" "$machine" "$dotnet_version" "$git_revision")"
 
 if [[ -n "$output_json" ]]; then

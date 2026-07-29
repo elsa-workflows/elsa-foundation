@@ -69,7 +69,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         Assert.NotNull(selectedExecutableDescriptor.ImplementationFactory);
         var cacheOptions = Assert.IsType<WorkflowExecutableCacheOptions>(
             Assert.Single(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableCacheOptions)).ImplementationInstance);
-        Assert.False(cacheOptions.Enabled);
+        Assert.True(cacheOptions.Enabled);
         var providerDescriptor = Assert.Single(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutableStore)
             && descriptor.ServiceKey?.Equals(GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey) == true);
@@ -103,7 +103,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     {
         var feature = new PostgreSqlGroundworkRuntimePersistenceShellFeature();
 
-        AssertSetting(feature, CacheEnabledProperty, expectedDefault: false);
+        AssertSetting(feature, CacheEnabledProperty, expectedDefault: true);
         AssertSetting(feature, CacheCapacityProperty, expectedDefault: 256);
     }
 

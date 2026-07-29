@@ -2,7 +2,9 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -10,8 +12,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
 /// Groundwork-backed executable artifact store. Retention-root writers and garbage collection
-/// coordinate through provider CAS over the artifact envelope, so a root and physical deletion can
-/// never both win the same race.
+/// coordinate through provider CAS over a small artifact-keyed coordination document, so retention
+/// transitions never rewrite or deserialize the immutable executable payload on the hot path.
 /// </summary>
 public sealed class GroundworkWorkflowExecutableStore(
     IDocumentStore store,
@@ -32,24 +34,62 @@ public sealed class GroundworkWorkflowExecutableStore(
             executable,
             new Dictionary<string, RootWriteLeaseDocument>(StringComparer.Ordinal),
             null);
-        var (schemaVersion, content) = Serializer.Serialize(DocumentKind, document);
-
-        // Artifacts are immutable. Create-only persistence also prevents a concurrent first retention
-        // transition from being overwritten by the old find-then-unconditional-save race.
-        var result = await Store.SaveAsync(
-            new SaveDocumentRequest(DocumentKind, executable.Identity.ArtifactId, schemaVersion, content, ExpectedVersion: 0),
-            cancellationToken);
-        if (result.Status is DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.ConcurrencyConflict)
+        var coordination = EmptyCoordination();
+        var result = await TryCreateAsync(executable.Identity.ArtifactId, document, coordination, cancellationToken);
+        if (result == DocumentStoreWriteStatus.Saved)
             return;
+        if (result == DocumentStoreWriteStatus.ConcurrencyConflict)
+        {
+            // A pre-coordination artifact may already exist after an upgrade. Preserve immutable
+            // create-only semantics and lazily establish the small coordination record.
+            await LoadCoordinationEnvelopeAsync(executable.Identity.ArtifactId, cancellationToken);
+            return;
+        }
 
-        throw new InvalidOperationException($"Groundwork rejected workflow executable artifact '{executable.Identity.ArtifactId}' with status '{result.Status}'.");
+        throw new InvalidOperationException(
+            $"Groundwork rejected workflow executable artifact '{executable.Identity.ArtifactId}' with status '{result}'.");
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-        var result = await DeleteDocumentAsync(artifactId, cancellationToken);
-        return result.Status == DocumentStoreWriteStatus.Deleted;
+
+        while (true)
+        {
+            await using var unitOfWork = await BeginCoordinationUnitOfWorkAsync(cancellationToken);
+            var executable = await unitOfWork.LoadAsync(DocumentKind, artifactId, cancellationToken);
+            if (executable is null)
+                return false;
+            var coordination = await unitOfWork.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                artifactId,
+                cancellationToken);
+
+            var executableDeletion = await unitOfWork.DeleteAsync(
+                new DeleteDocumentRequest(DocumentKind, artifactId, executable.Version),
+                cancellationToken);
+            if (executableDeletion.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                continue;
+            if (executableDeletion.Status != DocumentStoreWriteStatus.Deleted)
+                return false;
+
+            if (coordination is not null)
+            {
+                var coordinationDeletion = await unitOfWork.DeleteAsync(
+                    new DeleteDocumentRequest(
+                        ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                        artifactId,
+                        coordination.Version),
+                    cancellationToken);
+                if (coordinationDeletion.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                    continue;
+                if (coordinationDeletion.Status != DocumentStoreWriteStatus.Deleted)
+                    return false;
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return true;
+        }
     }
 
     public async ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
@@ -63,7 +103,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(artifactId, cancellationToken);
+            var loaded = await LoadCoordinationEnvelopeAsync(artifactId, cancellationToken);
             if (loaded is null)
                 return null;
 
@@ -80,7 +120,7 @@ public sealed class GroundworkWorkflowExecutableStore(
             var state = new RootWriteLeaseDocument(leaseId, NewFencingToken(), expiresAt);
             leases.Add(leaseId, state);
             var updated = document with { RootWriteLeases = leases, DeletionGuard = null };
-            var result = await SaveEnvelopeAsync(artifactId, updated, envelope.Version, cancellationToken);
+            var result = await SaveCoordinationEnvelopeAsync(artifactId, updated, envelope.Version, cancellationToken);
             if (result.Status == DocumentStoreWriteStatus.Saved)
                 return ToLease(artifactId, state);
             if (result.Status == DocumentStoreWriteStatus.NotFound)
@@ -99,7 +139,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(lease.ArtifactId, cancellationToken);
+            var loaded = await LoadCoordinationEnvelopeAsync(lease.ArtifactId, cancellationToken);
             if (loaded is null)
                 return false;
 
@@ -111,7 +151,7 @@ public sealed class GroundworkWorkflowExecutableStore(
                 return false;
 
             leases[lease.LeaseId] = current with { ExpiresAt = expiresAt };
-            var result = await SaveEnvelopeAsync(
+            var result = await SaveCoordinationEnvelopeAsync(
                 lease.ArtifactId,
                 document with { RootWriteLeases = leases, DeletionGuard = null },
                 envelope.Version,
@@ -133,7 +173,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(lease.ArtifactId, cancellationToken);
+            var loaded = await LoadCoordinationEnvelopeAsync(lease.ArtifactId, cancellationToken);
             if (loaded is null)
                 return;
 
@@ -143,7 +183,7 @@ public sealed class GroundworkWorkflowExecutableStore(
                 return;
 
             leases.Remove(lease.LeaseId);
-            var result = await SaveEnvelopeAsync(
+            var result = await SaveCoordinationEnvelopeAsync(
                 lease.ArtifactId,
                 document with { RootWriteLeases = leases },
                 envelope.Version,
@@ -164,7 +204,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(artifactId, cancellationToken);
+            var loaded = await LoadCoordinationEnvelopeAsync(artifactId, cancellationToken);
             if (loaded is null)
                 return null;
 
@@ -183,7 +223,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
             var state = new DeletionGuardDocument(operationId, NewFencingToken(), expiresAt);
             var updated = document with { RootWriteLeases = leases, DeletionGuard = state };
-            var result = await SaveEnvelopeAsync(artifactId, updated, envelope.Version, cancellationToken);
+            var result = await SaveCoordinationEnvelopeAsync(artifactId, updated, envelope.Version, cancellationToken);
             if (result.Status == DocumentStoreWriteStatus.Saved)
                 return ToGuard(artifactId, state);
             if (result.Status == DocumentStoreWriteStatus.NotFound)
@@ -201,7 +241,7 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(guard.ArtifactId, cancellationToken);
+            var loaded = await LoadCoordinationEnvelopeAsync(guard.ArtifactId, cancellationToken);
             if (loaded is null)
                 return false;
 
@@ -209,7 +249,7 @@ public sealed class GroundworkWorkflowExecutableStore(
             if (!Matches(document.DeletionGuard, guard))
                 return false;
 
-            var result = await SaveEnvelopeAsync(
+            var result = await SaveCoordinationEnvelopeAsync(
                 guard.ArtifactId,
                 document with { DeletionGuard = null },
                 envelope.Version,
@@ -232,23 +272,44 @@ public sealed class GroundworkWorkflowExecutableStore(
 
         while (true)
         {
-            var loaded = await LoadEnvelopeAsync(guard.ArtifactId, cancellationToken);
-            if (loaded is null)
+            await using var unitOfWork = await BeginCoordinationUnitOfWorkAsync(cancellationToken);
+            var coordinationEnvelope = await unitOfWork.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                guard.ArtifactId,
+                cancellationToken);
+            if (coordinationEnvelope is null)
                 return false;
-
-            var (envelope, document) = loaded.Value;
+            var document = Serializer.Deserialize<CoordinationDocument>(coordinationEnvelope);
             if (!Matches(document.DeletionGuard, guard) || !IsLive(document.DeletionGuard, now))
                 return false;
             if (LiveLeases(document, now).Count != 0)
                 return false;
 
-            var result = await Store.DeleteAsync(
-                new DeleteDocumentRequest(DocumentKind, guard.ArtifactId, ExpectedVersion: envelope.Version),
-                cancellationToken);
-            if (result.Status == DocumentStoreWriteStatus.Deleted)
-                return true;
-            if (result.Status == DocumentStoreWriteStatus.NotFound)
+            var executableEnvelope = await unitOfWork.LoadAsync(DocumentKind, guard.ArtifactId, cancellationToken);
+            if (executableEnvelope is null)
                 return false;
+
+            var executableDeletion = await unitOfWork.DeleteAsync(
+                new DeleteDocumentRequest(DocumentKind, guard.ArtifactId, executableEnvelope.Version),
+                cancellationToken);
+            if (executableDeletion.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                continue;
+            if (executableDeletion.Status != DocumentStoreWriteStatus.Deleted)
+                return false;
+
+            var coordinationDeletion = await unitOfWork.DeleteAsync(
+                new DeleteDocumentRequest(
+                    ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                    guard.ArtifactId,
+                    coordinationEnvelope.Version),
+                cancellationToken);
+            if (coordinationDeletion.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                continue;
+            if (coordinationDeletion.Status != DocumentStoreWriteStatus.Deleted)
+                return false;
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return true;
         }
     }
 
@@ -314,30 +375,133 @@ public sealed class GroundworkWorkflowExecutableStore(
     private static DocumentQueryClause Equal(string fieldPath, string value) =>
         DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
-    private async ValueTask<(DocumentEnvelope Envelope, ExecutableDocument Document)?> LoadEnvelopeAsync(
+    private async ValueTask<DocumentStoreWriteStatus> TryCreateAsync(
+        string artifactId,
+        ExecutableDocument executable,
+        CoordinationDocument coordination,
+        CancellationToken cancellationToken)
+    {
+        await using var unitOfWork = await BeginCoordinationUnitOfWorkAsync(cancellationToken);
+        var executableResult = await SaveDocumentAsync(
+            unitOfWork,
+            DocumentKind,
+            artifactId,
+            executable,
+            expectedVersion: 0,
+            cancellationToken);
+        if (executableResult.Status != DocumentStoreWriteStatus.Saved)
+            return executableResult.Status;
+
+        var coordinationResult = await SaveDocumentAsync(
+            unitOfWork,
+            ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            artifactId,
+            coordination,
+            expectedVersion: 0,
+            cancellationToken);
+        if (coordinationResult.Status != DocumentStoreWriteStatus.Saved)
+            return coordinationResult.Status;
+
+        await unitOfWork.CommitAsync(cancellationToken);
+        return DocumentStoreWriteStatus.Saved;
+    }
+
+    private async ValueTask<(DocumentEnvelope Envelope, CoordinationDocument Document)?> LoadCoordinationEnvelopeAsync(
         string artifactId,
         CancellationToken cancellationToken)
     {
-        var envelope = await Store.LoadAsync(DocumentKind, artifactId, cancellationToken);
-        return envelope is null ? null : (envelope, Serializer.Deserialize<ExecutableDocument>(envelope));
+        while (true)
+        {
+            var envelope = await Store.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                artifactId,
+                cancellationToken);
+            if (envelope is not null)
+                return (envelope, Serializer.Deserialize<CoordinationDocument>(envelope));
+
+            await using var unitOfWork = await BeginCoordinationUnitOfWorkAsync(cancellationToken);
+            var coordinationEnvelope = await unitOfWork.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                artifactId,
+                cancellationToken);
+            if (coordinationEnvelope is not null)
+                return (coordinationEnvelope, Serializer.Deserialize<CoordinationDocument>(coordinationEnvelope));
+
+            var executableEnvelope = await unitOfWork.LoadAsync(DocumentKind, artifactId, cancellationToken);
+            if (executableEnvelope is null)
+                return null;
+
+            // Version 9 executable documents may carry the pre-coordination lease/guard fields. Copy
+            // them once, with their fencing tokens intact, so an in-flight retention transition
+            // survives upgrade. The immutable executable is deliberately left untouched.
+            var legacy = Serializer.Deserialize<ExecutableDocument>(executableEnvelope);
+            var coordination = new CoordinationDocument(CopyLeases(legacy), legacy.DeletionGuard);
+            var result = await SaveDocumentAsync(
+                unitOfWork,
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                artifactId,
+                coordination,
+                expectedVersion: 0,
+                cancellationToken);
+            if (result.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
+                continue;
+            if (result.Status != DocumentStoreWriteStatus.Saved)
+                return null;
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            var created = result.Document ?? await Store.LoadAsync(
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                artifactId,
+                cancellationToken);
+            if (created is not null)
+                return (created, coordination);
+        }
     }
 
-    private Task<DocumentStoreWriteResult> SaveEnvelopeAsync(
+    private Task<DocumentStoreWriteResult> SaveCoordinationEnvelopeAsync(
         string artifactId,
-        ExecutableDocument document,
+        CoordinationDocument document,
         long expectedVersion,
         CancellationToken cancellationToken)
     {
-        var (schemaVersion, content) = Serializer.Serialize(DocumentKind, document);
+        var documentKind = ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind;
+        var (schemaVersion, content) = Serializer.Serialize(documentKind, document);
         return Store.SaveAsync(
-            new SaveDocumentRequest(DocumentKind, artifactId, schemaVersion, content, ExpectedVersion: expectedVersion),
+            new SaveDocumentRequest(documentKind, artifactId, schemaVersion, content, ExpectedVersion: expectedVersion),
             cancellationToken);
     }
+
+    private async Task<IDocumentUnitOfWork> BeginCoordinationUnitOfWorkAsync(CancellationToken cancellationToken) =>
+        await Store.BeginAsync(
+            DocumentCommitScope.Of(
+                DocumentKind,
+                ElsaRuntimeStorageManifest.WorkflowExecutableCoordinationDocumentKind),
+            cancellationToken);
+
+    private Task<DocumentStoreWriteResult> SaveDocumentAsync(
+        IDocumentUnitOfWork unitOfWork,
+        string documentKind,
+        string id,
+        object document,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var (schemaVersion, content) = Serializer.Serialize(documentKind, document);
+        return unitOfWork.SaveAsync(
+            new SaveDocumentRequest(documentKind, id, schemaVersion, content, expectedVersion),
+            cancellationToken);
+    }
+
+    private static CoordinationDocument EmptyCoordination() =>
+        new(new Dictionary<string, RootWriteLeaseDocument>(StringComparer.Ordinal), null);
 
     private static Dictionary<string, RootWriteLeaseDocument> CopyLeases(ExecutableDocument document) =>
         new(document.RootWriteLeases ?? new Dictionary<string, RootWriteLeaseDocument>(), StringComparer.Ordinal);
 
-    private static Dictionary<string, RootWriteLeaseDocument> LiveLeases(ExecutableDocument document, DateTimeOffset now) =>
+    private static Dictionary<string, RootWriteLeaseDocument> CopyLeases(CoordinationDocument document) =>
+        new(document.RootWriteLeases ?? new Dictionary<string, RootWriteLeaseDocument>(), StringComparer.Ordinal);
+
+    private static Dictionary<string, RootWriteLeaseDocument> LiveLeases(CoordinationDocument document, DateTimeOffset now) =>
         CopyLeases(document)
             .Where(x => x.Value.ExpiresAt > now)
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
@@ -374,6 +538,10 @@ public sealed class GroundworkWorkflowExecutableStore(
     private sealed record ExecutableDocument(
         string Collection,
         WorkflowExecutable Executable,
+        Dictionary<string, RootWriteLeaseDocument>? RootWriteLeases,
+        DeletionGuardDocument? DeletionGuard);
+
+    private sealed record CoordinationDocument(
         Dictionary<string, RootWriteLeaseDocument>? RootWriteLeases,
         DeletionGuardDocument? DeletionGuard);
 
