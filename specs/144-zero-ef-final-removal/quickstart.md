@@ -357,6 +357,31 @@ Evidence note T068: both repository-owned entry points force-restored all 246 in
 discovered projects and produced identical project-set, input, and assets identities. No database
 server container, provider suite, or performance run was started.
 
+##### PR #1104 additive-slice exact-range review
+
+This review checkpoint covers
+`f769b516598eb807c9528e7c2e72085b346603e8..1066ef6ffb5269519aa4618f9090c15123df1d32`.
+It reviews the intake-freeze and additive restore-certification slice only; it does not complete the
+final implementation review tasks T088–T093.
+
+- Correctness/mechanism reviewer `/root/review_1104_correctness`: **PASS**. Originating finding
+  disposition: **resolved**. The reviewer verified the Windows PowerShell 5.1-compatible API
+  replacements, clean-worktree byte preservation, atomic receipt replacement, exact driver
+  allow-list, and forged-driver fixture. Static inspection found no remaining 5.1/.NET Framework
+  incompatibility; no native Windows PowerShell 5.1 transcript was available, so that environment
+  execution is not claimed.
+- Evidence-integrity reviewer `/root/review_1104_evidence`: **PASS**. The reviewer independently
+  reproduced both receipt hashes; verified the clean head, SDK, 246/251 counts, project/input
+  fingerprints, every input blob, and cross-driver project/assets tuples; and confirmed that the
+  receipts certify implementation head `469945261`, not the later documentation-only head. Raw
+  full-run logs were not retained, so historical execution is not claimed to be independently
+  replayable from artifacts alone.
+- Scope/test-preservation reviewer `/root/review_1104_scope`: **PASS**. Originating finding
+  disposition: **resolved**. The reviewer proved that no alternate path, case variant, or hash-only
+  route bypasses the two-entry driver allow-list and opened the covering substitution fixture.
+  Bash's exact canonical case policy can fail closed under a Windows alias but cannot greenwash.
+  A Windows-only case-alias integration fixture remains a non-blocking coverage suggestion.
+
 #### T015 — worktree contamination check
 
 - #647 intake worktree started clean at `f769b5165`; only the explicit Spec 144 intake artifacts are being changed.
