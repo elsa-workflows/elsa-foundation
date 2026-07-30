@@ -15,18 +15,21 @@ Restore and build the new adapter package, then run focused capability probes fo
 
 Expected: every required public capability succeeds. A missing or non-public capability blocks the feature and is linked to an upstream Groundwork work item.
 
-Partial execution status: the exact configured package/tool family passed 6/6
-focused probes. The probe applies the public parameterless OpenIddict manifest
-through a real SQLite `GroundworkProviderDriver`, saves and reloads a global
-token document across distinct clients, and executes the declared token-reference
-route with provider-native plan evidence. The adapter test project passed 14/14
-for its current codec/manifest/failure/registration scaffold, and the focused
-architecture boundary passed 4/4.
+Historical preparation status on 2026-07-25: the exact configured package/tool
+family then passed 6/6 focused probes. The probe applied the public
+parameterless OpenIddict manifest through a real SQLite
+`GroundworkProviderDriver`, saved and reloaded a global token document across
+distinct clients, and executed the declared token-reference route with
+provider-native plan evidence. The adapter test project then passed 14/14 for
+its codec/manifest/failure/declaration scaffold, and the focused architecture
+boundary passed 4/4.
 
-T005 remains open. The current probe does not yet execute naming/fingerprint
-transformation, multivalue routes, bounded mutation/count/cancellation/native
-plans, CAS, UoW, or CLI readiness. SQL Server, PostgreSQL, MongoDB, topology,
-restart, and full native-query/mutation evidence remain T006.
+The current probe additionally exercises naming/fingerprint transformation,
+multivalue routes, expected-version CAS, UoW, CLI, and runtime readiness. T005
+remains open because no manifest-admitted bounded mutation proves exact matched
+count, cancellation, and a provider-native mutation plan. SQL Server,
+PostgreSQL, MongoDB, topology, restart, the #141 relationship guards, and full
+native-query/mutation evidence remain T006.
 
 ## 2. Run direct adapter and registration tests
 
@@ -165,10 +168,14 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
 
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   -c Release \
-  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract' \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_manifest_level_non_mutation_capabilities_execute_the_same_storage_contract' \
   --logger 'console;verbosity=minimal'
 # 12 passed
 ```
+
+Those counts bind merge head `fdd649481a0f6bd3e033b44a0e39adbac7be57e5`
+before the later review remediation. They are retained as historical
+current-main integration evidence, not mislabeled as the final candidate run.
 
 `git diff --check origin/main...HEAD` also passed before this evidence-only
 update. The candidate remains a draft until three new adversarial reviewers
@@ -203,11 +210,13 @@ retained foundation remediation:
 The evidence review found that T005 was not reproducible, T010 did not exercise
 all descriptor fields and corrupt/future envelopes, T035/T040 had advanced
 without T006 or durable red-before-green evidence, the claimed 55-objective
-inventory command returned only 52 paths, and the #143 research note was stale.
+inventory command returned only 52 matching objective lines, and the #143
+research note was stale.
 The remediation reopened T005, T010, T035, and T040; retained the expanded codec
 matrix as candidate source without claiming its missing red-before-green
-evidence; fixed the inventory command to return exactly 55 paths including the
-three named shared-host module tests; and records #143 as delivered in the
+evidence; fixed the inventory command to return exactly 55 matching objective
+lines across ten source paths, including the three named shared-host module
+tests; and records #143 as delivered in the
 configured preview.95 family while keeping exact-family recertification open.
 
 The scope-preservation review additionally found that a cross-provider bounded
@@ -233,7 +242,7 @@ dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
 
 dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
   -c Release --no-build --no-restore \
-  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract' \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_manifest_level_non_mutation_capabilities_execute_the_same_storage_contract' \
   --logger 'console;verbosity=minimal'
 # 12 passed
 ```

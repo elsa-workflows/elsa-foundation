@@ -4,7 +4,7 @@ using Elsa.Persistence.Groundwork;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests;
 
-public sealed class OpenIddictGroundworkRegistrationTests
+public sealed class OpenIddictGroundworkStorageDeclarationTests
 {
     [Fact]
     public void Groundwork_deployment_source_is_public_and_parameterless()
@@ -15,7 +15,7 @@ public sealed class OpenIddictGroundworkRegistrationTests
     }
 
     [Fact]
-    public async Task Deployment_source_declares_the_four_openiddict_store_families()
+    public async Task Deployment_source_declares_four_openiddict_storage_units()
     {
         var declaration = await new OpenIddictGroundworkStorageManifestSource().CreateDeclarationAsync();
 

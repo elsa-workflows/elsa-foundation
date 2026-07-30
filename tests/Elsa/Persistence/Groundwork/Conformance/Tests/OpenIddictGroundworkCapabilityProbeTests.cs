@@ -432,7 +432,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
     [InlineData("sqlserver")]
     [InlineData("postgresql")]
     [InlineData("mongodb")]
-    public async Task Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract(string providerKey)
+    public async Task Four_provider_manifest_level_non_mutation_capabilities_execute_the_same_storage_contract(string providerKey)
     {
         await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
         await driver.InitializeAsync();

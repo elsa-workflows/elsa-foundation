@@ -574,7 +574,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
             var isPredicate = dataset.PredicateFields.Contains(value.Field);
             return
             $"CASE WHEN value <= @matchingCardinality THEN " +
-            $"{NativeMatchingExpression(value, index, varies)} " +
+            $"{NativeMatchingExpression(value, index, varies && dataset.MatchingCardinality > 1)} " +
             $"ELSE {(varies || !isPredicate ? NativeNoiseExpression(value.Kind, index) : $"@noise{index}")} END";
         }));
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
