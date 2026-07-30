@@ -1,6 +1,10 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -10,54 +14,56 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// email lookups resolve through the declared index rather than a scan.
 /// </summary>
 public sealed class GroundworkUserStore(
-    GroundworkIdentityRowStore rows,
+    IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null,
     GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null,
     IIdentityEmailUniquenessPolicy? emailUniquenessPolicy = null) : IUserStore, IRevisionAwareUserStore
 {
     private const int AmbiguousEmailTake = 2;
 
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkIdentityAuthorityAggregateCoordinator _aggregates =
-        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForRows(rows);
+        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForDirectStore(store);
     private readonly IIdentityEmailUniquenessPolicy _emailUniquenessPolicy =
         emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique;
 
-    public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public async ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : Map(row));
+        return envelope is null ? null : Map(envelope);
     }
 
-    public ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public async ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<UserRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
+        return envelope is null ? null : new IamRevisionedRecord<UserRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
     }
 
-    public ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default)
+    public async ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var matches = rows.Query(
-            IdentityStorageManifest.IdentityUserDocumentKind,
-            new GroundworkIdentityRowQuery(
-                IdentityStorageManifest.NormalizedEmailKeyField,
-                GroundworkIdentityRowComparison.Equal,
-                ScopedLookupKey(tenantId, email)!,
-                IdentityV2StorageManifest.IdField,
-                Take: AmbiguousEmailTake,
-                ExpectedIndex: IdentityV2StorageManifest.UserByNormalizedEmailIndex),
-            cancellationToken);
-        return ValueTask.FromResult(matches.Count == 1 ? Map(matches[0]) : null);
+        var envelopes = (await BoundedStore.QueryAsync(
+            IdentityBoundedDocumentQueryPager.CreatePageQuery(
+                IdentityStorageManifest.IdentityUserDocumentKind,
+                IdentityStorageManifest.FindUserByNormalizedEmailQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    IdentityStorageManifest.NormalizedEmailKeyField,
+                    ScopedLookupKey(tenantId, email)!))],
+                AmbiguousEmailTake),
+            cancellationToken)).Documents;
+
+        return envelopes.Count == 1 ? Map(envelopes[0]) : null;
     }
 
     public async ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default)
@@ -74,17 +80,19 @@ public sealed class GroundworkUserStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(UserRecord user, long? expectedVersion, CancellationToken cancellationToken)
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(UserRecord user, long? expectedVersion, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(user);
         accessContextAccessor.EnsureCurrentScope(user.TenantId);
 
         var documentId = IdentityCompositeDocumentId.From(user.TenantId, user.Id);
-        var existing = rows.Read(
+        var existing = await store.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             documentId,
             cancellationToken);
-        var existingDocument = existing is null ? null : GroundworkIdentityDocumentRows.Deserialize<IdentityUserDocument>(existing);
+        var existingDocument = existing is null
+            ? null
+            : JsonSerializer.Deserialize<IdentityUserDocument>(existing.ContentJson, IdentityGroundworkJson.Options);
 
         var document = new IdentityUserDocument(
             user.TenantId,
@@ -108,6 +116,9 @@ public sealed class GroundworkUserStore(
     private static string? ScopedLookupKey(string tenantId, string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : IdentityDocumentId.From(tenantId, value);
 
-    private static UserRecord Map(GroundworkIdentityRow row) =>
-        GroundworkIdentityDocumentRows.Deserialize<IdentityUserDocument>(row).User;
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Identity user queries require an admitted bounded document-store runtime.");
+
+    private static UserRecord Map(DocumentEnvelope envelope) =>
+        JsonSerializer.Deserialize<IdentityUserDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.User;
 }

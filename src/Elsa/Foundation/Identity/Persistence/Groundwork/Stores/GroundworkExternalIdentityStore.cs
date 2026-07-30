@@ -1,7 +1,11 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Groundwork.Store;
+using Elsa.Persistence.Groundwork;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -12,71 +16,53 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// through the declared index.
 /// </summary>
 public sealed class GroundworkExternalIdentityStore(
-    GroundworkIdentityRowStore rows,
+    IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
+    IBoundedDocumentStore? boundedStore = null,
+    GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore
 {
+    private const int MaxRelationshipMaterialization = 100_000;
+
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
-        relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
+        relationshipCoordinator ?? new GroundworkIdentityAuthorityRelationshipCoordinator(store);
 
-    public ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
+    public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, providerSubject),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : Map(row));
+        return envelope is null ? null : Map(envelope);
     }
 
-    public ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
+    public async ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, providerSubject),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<ExternalIdentityRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
+        return envelope is null ? null : new IamRevisionedRecord<ExternalIdentityRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
     }
 
-    public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var envelopes = await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
+            BoundedStore,
             IdentityStorageManifest.ExternalLoginDocumentKind,
-            new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.ListUserLoginsQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 IdentityStorageManifest.UserLookupKeyField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityDocumentId.From(tenantId, userId),
-                IdentityV2StorageManifest.IdField,
-                Take: IdentityStorageManifest.MaxAggregateRelationshipEntries,
-                ExpectedIndex: IdentityV2StorageManifest.LoginByUserIndex),
+                IdentityDocumentId.From(tenantId, userId)))],
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedExternalIdentityStore>(result.TotalCount);
-        return ValueTask.FromResult<IReadOnlyList<ExternalIdentityRecord>>(result.Rows.Select(Map).ToArray());
-    }
-
-    public ValueTask<IamPage<ExternalIdentityRecord>> ListForUserPageAsync(
-        string tenantId,
-        string userId,
-        IamPageRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
-            IdentityStorageManifest.ExternalLoginDocumentKind,
-            new GroundworkIdentityRowQuery(
-                IdentityStorageManifest.UserLookupKeyField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityDocumentId.From(tenantId, userId),
-                IdentityV2StorageManifest.IdField,
-                Take: request.Take,
-                Skip: request.Skip,
-                ExpectedIndex: IdentityV2StorageManifest.LoginByUserIndex),
-            cancellationToken);
-        return ValueTask.FromResult(new IamPage<ExternalIdentityRecord>(result.Rows.Select(Map).ToArray(), result.TotalCount));
+        return envelopes.Select(Map).ToArray();
     }
 
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
@@ -86,7 +72,7 @@ public sealed class GroundworkExternalIdentityStore(
             expectedVersion: null,
             enforceExpectedVersion: false,
             cancellationToken);
-        if (!result.Succeeded)
+        if (result.Status is not DocumentStoreWriteStatus.Saved)
         {
             throw new InvalidOperationException(
                 $"Groundwork external-identity save returned {result.Status}; use the revision-aware contract for an explicit owner rebind.");
@@ -98,23 +84,11 @@ public sealed class GroundworkExternalIdentityStore(
         if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
             return GroundworkIamRevisionMapper.InvalidRevision();
 
-        // The relationship coordinator must load both owners before it can stage an atomic rebind.
-        // Preserve the revision contract's missing-login result before that owner validation runs.
-        if (expectedVersion is > 0 &&
-            await FindBySubjectWithRevisionAsync(
-                externalIdentity.TenantId,
-                externalIdentity.Provider,
-                externalIdentity.ProviderSubject,
-                cancellationToken) is null)
-        {
-            return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-        }
-
         var result = await SaveCoreAsync(externalIdentity, expectedVersion, enforceExpectedVersion: true, cancellationToken);
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
         ExternalIdentityRecord externalIdentity,
         long? expectedVersion,
         bool enforceExpectedVersion,
@@ -144,6 +118,9 @@ public sealed class GroundworkExternalIdentityStore(
             cancellationToken);
     }
 
-    private static ExternalIdentityRecord Map(GroundworkIdentityRow row) =>
-        GroundworkIdentityDocumentRows.Deserialize<IdentityExternalLoginDocument>(row).ExternalIdentity;
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("External identity queries require an admitted bounded document-store runtime.");
+
+    private static ExternalIdentityRecord Map(DocumentEnvelope envelope) =>
+        JsonSerializer.Deserialize<IdentityExternalLoginDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.ExternalIdentity;
 }

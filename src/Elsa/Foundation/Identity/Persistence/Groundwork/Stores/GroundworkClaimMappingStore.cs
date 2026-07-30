@@ -1,7 +1,12 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -10,54 +15,31 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// <c>tenantId:provider:ruleId</c> document id and listed through a provider lookup projection.
 /// </summary>
 public sealed class GroundworkClaimMappingStore(
-    GroundworkIdentityRowStore rows,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
+    IDocumentStore store,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null) : IClaimMappingStore, IRevisionAwareClaimMappingStore
 {
-    public ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(
-        string tenantId,
-        string provider,
-        CancellationToken cancellationToken = default)
-    {
-        accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
-            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-            new GroundworkIdentityRowQuery(
-                IdentityStorageManifest.ProviderLookupKeyField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityDocumentId.From(tenantId, provider),
-                IdentityStorageManifest.ClaimMappingOrderField,
-                Take: IdentityStorageManifest.MaxMaterializedListEntries,
-                ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
-            cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.TotalCount);
-        return ValueTask.FromResult<IReadOnlyList<ClaimMappingRule>>(result.Rows
-            .Select(Map)
-            .ToArray());
-    }
+    private const int MaxMaterialization = 100_000;
 
-    public ValueTask<IamPage<ClaimMappingRule>> ListForProviderPageAsync(
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
+
+    public async ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(
         string tenantId,
         string provider,
-        IamPageRequest request,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var envelopes = await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
+            BoundedStore,
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-            new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.ListClaimMappingsByProviderQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 IdentityStorageManifest.ProviderLookupKeyField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityDocumentId.From(tenantId, provider),
-                IdentityStorageManifest.ClaimMappingOrderField,
-                Take: request.Take,
-                Skip: request.Skip,
-                ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
+                IdentityDocumentId.From(tenantId, provider)))],
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxMaterialization,
             cancellationToken);
-        return ValueTask.FromResult(new IamPage<ClaimMappingRule>(
-            result.Rows
-                .Select(Map)
-                .ToArray(),
-            result.TotalCount));
+        return envelopes.Select(Map).OrderBy(rule => rule.Order).ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default)
@@ -65,19 +47,19 @@ public sealed class GroundworkClaimMappingStore(
         await SaveCoreAsync(rule, expectedVersion: null, cancellationToken);
     }
 
-    public ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(
+    public async ValueTask<IamRevisionedRecord<ClaimMappingRule>?> FindWithRevisionAsync(
         string tenantId,
         string provider,
         string ruleId,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, ruleId),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<ClaimMappingRule>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
+        return envelope is null ? null : new IamRevisionedRecord<ClaimMappingRule>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
     }
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
@@ -92,7 +74,7 @@ public sealed class GroundworkClaimMappingStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
         ClaimMappingRule rule,
         long? expectedVersion,
         CancellationToken cancellationToken)
@@ -106,20 +88,22 @@ public sealed class GroundworkClaimMappingStore(
             IdentityCompositeDocumentId.Normalize(rule.Id),
             IdentityDocumentId.From(rule.TenantId, rule.Provider),
             rule);
-        return ValueTask.FromResult(rows.Save(
-            GroundworkIdentityDocumentRows.Write(
+        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
+        return await store.SaveAsync(
+            new SaveDocumentRequest(
                 IdentityStorageManifest.IdentityClaimMappingDocumentKind,
                 IdentityCompositeDocumentId.From(rule.TenantId, rule.Provider, rule.Id),
-                document,
-                expectedVersion,
-                new Dictionary<string, object?>(StringComparer.Ordinal)
-                {
-                    [IdentityStorageManifest.ProviderLookupKeyField] = document.ProviderLookupKey,
-                    [IdentityStorageManifest.ClaimMappingOrderField] = rule.Order
-                }),
-            cancellationToken));
+                IdentityStorageManifest.SchemaVersion,
+                content,
+                expectedVersion),
+            cancellationToken);
     }
 
-    private static ClaimMappingRule Map(GroundworkIdentityRow row) =>
-        GroundworkIdentityDocumentRows.Deserialize<IdentityClaimMappingDocument>(row).Rule;
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Claim mapping queries require an admitted bounded document-store runtime.");
+
+    private static ClaimMappingRule Map(DocumentEnvelope envelope) =>
+        JsonSerializer.Deserialize<IdentityClaimMappingDocument>(
+            envelope.ContentJson,
+            IdentityGroundworkJson.Options)!.Rule;
 }

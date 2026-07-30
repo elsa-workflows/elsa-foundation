@@ -1,6 +1,11 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -10,70 +15,53 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// listed through the declared index.
 /// </summary>
 public sealed class GroundworkRoleStore(
-    GroundworkIdentityRowStore rows,
+    IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
+    IBoundedDocumentStore? boundedStore = null,
+    GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleStore, IRevisionAwareRoleStore
 {
+    private const int MaxRelationshipMaterialization = 100_000;
+
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkIdentityAuthorityAggregateCoordinator _aggregates =
-        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForRows(rows);
+        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForDirectStore(store);
 
-    public ValueTask<RoleRecord?> FindAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)
+    public async ValueTask<RoleRecord?> FindAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, roleId),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : Map(row));
+        return envelope is null ? null : Map(envelope);
     }
 
-    public ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)
+    public async ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var row = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, roleId),
             cancellationToken);
 
-        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<RoleRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
+        return envelope is null ? null : new IamRevisionedRecord<RoleRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
     }
 
-    public ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var envelopes = await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
+            BoundedStore,
             IdentityStorageManifest.IdentityRoleDocumentKind,
-            new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.ListRolesByTenantQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 IdentityStorageManifest.TenantIdField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityCompositeDocumentId.Normalize(tenantId),
-                IdentityV2StorageManifest.IdField,
-                Take: IdentityStorageManifest.MaxMaterializedListEntries,
-                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
+                IdentityCompositeDocumentId.Normalize(tenantId)))],
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedRoleStore>(result.TotalCount);
-        return ValueTask.FromResult<IReadOnlyList<RoleRecord>>(result.Rows.Select(Map).ToArray());
-    }
-
-    public ValueTask<IamPage<RoleRecord>> ListPageAsync(
-        string tenantId,
-        IamPageRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
-            IdentityStorageManifest.IdentityRoleDocumentKind,
-            new GroundworkIdentityRowQuery(
-                IdentityStorageManifest.TenantIdField,
-                GroundworkIdentityRowComparison.Equal,
-                IdentityCompositeDocumentId.Normalize(tenantId),
-                IdentityV2StorageManifest.IdField,
-                Take: request.Take,
-                Skip: request.Skip,
-                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
-            cancellationToken);
-        return ValueTask.FromResult(new IamPage<RoleRecord>(result.Rows.Select(Map).ToArray(), result.TotalCount));
+        return envelopes.Select(Map).ToArray();
     }
 
     public async ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default)
@@ -90,17 +78,19 @@ public sealed class GroundworkRoleStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(RoleRecord role, long? expectedVersion, CancellationToken cancellationToken)
+    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(RoleRecord role, long? expectedVersion, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(role);
         accessContextAccessor.EnsureCurrentScope(role.TenantId);
 
         var documentId = IdentityCompositeDocumentId.From(role.TenantId, role.Id);
-        var existing = rows.Read(
+        var existing = await store.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             documentId,
             cancellationToken);
-        var existingDocument = existing is null ? null : GroundworkIdentityDocumentRows.Deserialize<IdentityRoleDocument>(existing);
+        var existingDocument = existing is null
+            ? null
+            : JsonSerializer.Deserialize<IdentityRoleDocument>(existing.ContentJson, IdentityGroundworkJson.Options);
 
         var document = new IdentityRoleDocument(
             IdentityCompositeDocumentId.Normalize(role.TenantId),
@@ -113,10 +103,13 @@ public sealed class GroundworkRoleStore(
         return result.WriteResult;
     }
 
-    private static RoleRecord Map(GroundworkIdentityRow row) =>
-        GroundworkIdentityDocumentRows.Deserialize<IdentityRoleDocument>(row).Role;
+    private static RoleRecord Map(DocumentEnvelope envelope) =>
+        JsonSerializer.Deserialize<IdentityRoleDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.Role;
 
     private static string? ScopedLookupKey(string tenantId, string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : IdentityDocumentId.From(tenantId, value);
+
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Identity role queries require an admitted bounded document-store runtime.");
 
 }

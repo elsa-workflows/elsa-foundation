@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Reflection;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;

@@ -1,28 +1,33 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Groundwork.Store;
+using Elsa.Persistence.Groundwork;
+using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Identity;
-using System.Security.Claims;
-using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 
 public sealed class GroundworkIdentityRoleStore(
-    GroundworkIdentityRowStore rows,
+    IDocumentStore store,
     IPersistenceAccessContextAccessor accessContextAccessor,
+    IBoundedDocumentStore? boundedStore = null,
     GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null,
     GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleClaimStore<IdentityRole>
 {
     private const int SingleResultTake = 1;
-    private const int MaxRelationshipMaterialization = IdentityStorageManifest.MaxAggregateRelationshipEntries;
+    private const int MaxRelationshipMaterialization = 100_000;
 
+    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
-        relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
+        relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForDirectStore(store);
     private readonly GroundworkIdentityAuthorityAggregateCoordinator _aggregates =
-        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForRows(rows);
+        aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForDirectStore(store);
 
     public void Dispose()
     {
@@ -78,7 +83,7 @@ public sealed class GroundworkIdentityRoleStore(
 
     public async Task<IdentityRole?> FindByIdAsync(string roleId, CancellationToken cancellationToken)
     {
-        var envelope = rows.Read(
+        var envelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             RoleDocumentId(CurrentTenantId(), roleId),
             cancellationToken);
@@ -88,7 +93,7 @@ public sealed class GroundworkIdentityRoleStore(
     public async Task<IdentityRole?> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
     {
         var tenantId = CurrentTenantId();
-        var envelope = First(
+        var envelope = await FirstAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityStorageManifest.FindRoleByNormalizedNameQuery,
             (IdentityStorageManifest.NormalizedRoleNameKeyField, ScopedLookupKey(tenantId, normalizedRoleName)!),
@@ -104,7 +109,7 @@ public sealed class GroundworkIdentityRoleStore(
 
     public async Task<IList<Claim>> GetClaimsAsync(IdentityRole role, CancellationToken cancellationToken)
     {
-        var envelopes = Query(
+        var envelopes = await QueryAsync(
             IdentityStorageManifest.RoleClaimDocumentKind,
             IdentityStorageManifest.ListRoleClaimsQuery,
             (IdentityStorageManifest.RoleLookupKeyField, RoleLookupKey(CurrentTenantId(), role.Id)),
@@ -128,7 +133,7 @@ public sealed class GroundworkIdentityRoleStore(
         var result = await _relationships.SaveRoleClaimAsync(
             CurrentTenantId(), role.Id, roleVersion, document, cancellationToken);
         ApplyRevisionStamp(role, result);
-        if (!result.Succeeded)
+        if (result.Status is not DocumentStoreWriteStatus.Saved)
             throw new InvalidOperationException($"Groundwork Identity role-claim add returned {result.Status}.");
     }
 
@@ -142,7 +147,7 @@ public sealed class GroundworkIdentityRoleStore(
         var result = await _relationships.DeleteRoleClaimAsync(
             CurrentTenantId(), role.Id, roleVersion, document, cancellationToken);
         ApplyRevisionStamp(role, result);
-        if (!result.Succeeded)
+        if (result.Status is not DocumentStoreWriteStatus.Saved)
             throw new InvalidOperationException($"Groundwork Identity role-claim remove returned {result.Status}.");
     }
 
@@ -153,7 +158,7 @@ public sealed class GroundworkIdentityRoleStore(
     {
         var tenantId = CurrentTenantId();
         var documentId = RoleDocumentId(tenantId, role.Id);
-        var existingEnvelope = rows.Read(
+        var existingEnvelope = await store.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             documentId,
             cancellationToken);
@@ -176,40 +181,59 @@ public sealed class GroundworkIdentityRoleStore(
         return result;
     }
 
-    private GroundworkIdentityRow? First(
+    private async Task SaveAsync<TDocument>(
+        string documentKind,
+        string id,
+        TDocument document,
+        CancellationToken cancellationToken)
+    {
+        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
+        await store.SaveAsync(
+            new SaveDocumentRequest(documentKind, id, IdentityStorageManifest.SchemaVersion, content),
+            cancellationToken);
+    }
+
+    private async Task DeleteAsync(string documentKind, string id, CancellationToken cancellationToken) =>
+        await store.DeleteAsync(new DeleteDocumentRequest(documentKind, id), cancellationToken);
+
+    private async Task<DocumentEnvelope?> FirstAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
         CancellationToken cancellationToken) =>
-        Query(documentKind, queryIdentity, comparison, SingleResultTake, cancellationToken, includeVersions: true).FirstOrDefault();
+        (await QueryPageAsync(documentKind, queryIdentity, comparison, SingleResultTake, cancellationToken)).FirstOrDefault();
 
-    private IReadOnlyList<GroundworkIdentityRow> Query(
+    private async Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
-        CancellationToken cancellationToken) =>
-        Query(documentKind, queryIdentity, comparison, MaxRelationshipMaterialization, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        return await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
+            BoundedStore,
+            documentKind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
+            cancellationToken);
+    }
 
-    private IReadOnlyList<GroundworkIdentityRow> Query(
+    private async Task<IReadOnlyList<DocumentEnvelope>> QueryPageAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
         int take,
-        CancellationToken cancellationToken,
-        bool includeVersions = false) =>
-        rows.Query(
-            documentKind,
-            new GroundworkIdentityRowQuery(
-                comparison.Field,
-                GroundworkIdentityRowComparison.Equal,
-                comparison.Value,
-                IdentityV2StorageManifest.IdField,
-                Take: take,
-                IncludeVersions: includeVersions,
-                ExpectedIndex: IdentityV2StorageManifest.IndexForQuery(queryIdentity)),
-            cancellationToken);
+        CancellationToken cancellationToken) =>
+        (await BoundedStore.QueryAsync(
+            IdentityBoundedDocumentQueryPager.CreatePageQuery(
+                documentKind,
+                queryIdentity,
+                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
+                take),
+            cancellationToken)).Documents;
 
-    private static IdentityRole MapRole(GroundworkIdentityRow envelope)
+    private static IdentityRole MapRole(DocumentEnvelope envelope)
     {
         var document = Deserialize<IdentityRoleDocument>(envelope);
         var role = AspNetCoreIdentityAuthorityMapper.ToRole(document);
@@ -217,20 +241,20 @@ public sealed class GroundworkIdentityRoleStore(
         return role;
     }
 
-    private static Claim MapRoleClaim(GroundworkIdentityRow envelope)
+    private static Claim MapRoleClaim(DocumentEnvelope envelope)
     {
         var document = Deserialize<IdentityRoleClaimDocument>(envelope);
         return new Claim(document.ClaimType, document.ClaimValue ?? string.Empty);
     }
 
-    private static TDocument Deserialize<TDocument>(GroundworkIdentityRow row) =>
-        JsonSerializer.Deserialize<TDocument>(row.CanonicalJson, IdentityGroundworkJson.Options)!;
+    private static TDocument Deserialize<TDocument>(DocumentEnvelope envelope) =>
+        JsonSerializer.Deserialize<TDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!;
 
-    private static IdentityResult ToIdentityResult(GroundworkIdentityWriteResult result) =>
+    private static IdentityResult ToIdentityResult(DocumentStoreWriteResult result) =>
         result.Status switch
         {
-            _ when result.Succeeded => IdentityResult.Success,
-            WriteOutcomeStatus.ConcurrencyConflict => IdentityResult.Failed(new IdentityErrorDescriber().ConcurrencyFailure()),
+            DocumentStoreWriteStatus.Saved or DocumentStoreWriteStatus.Deleted => IdentityResult.Success,
+            DocumentStoreWriteStatus.ConcurrencyConflict => IdentityResult.Failed(new IdentityErrorDescriber().ConcurrencyFailure()),
             _ => IdentityResult.Failed(new IdentityError
             {
                 Code = $"GroundworkIdentity{result.Status}",
@@ -257,12 +281,12 @@ public sealed class GroundworkIdentityRoleStore(
         return false;
     }
 
-    private static void ApplyRevisionStamp(IdentityRole role, GroundworkIdentityWriteResult result)
+    private static void ApplyRevisionStamp(IdentityRole role, DocumentStoreWriteResult result)
     {
-        if (result.Succeeded && result.Row is not null)
+        if (result.Status == DocumentStoreWriteStatus.Saved && result.Document is not null)
         {
-            var document = Deserialize<IdentityRoleDocument>(result.Row);
-            role.ConcurrencyStamp = IdentityRevisionStamp.FromRole(document.TenantId, role.Id, result.Row.Version).ToString();
+            var document = Deserialize<IdentityRoleDocument>(result.Document);
+            role.ConcurrencyStamp = IdentityRevisionStamp.FromRole(document.TenantId, role.Id, result.Document.Version).ToString();
         }
     }
 
@@ -282,6 +306,9 @@ public sealed class GroundworkIdentityRoleStore(
 
     private string CurrentTenantId() =>
         accessContextAccessor.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
+
+    private IBoundedDocumentStore BoundedStore => _boundedStore
+        ?? throw new InvalidOperationException("Groundwork ASP.NET Core Identity role queries require a bounded document-store runtime.");
 
     private static string RoleDocumentId(string tenantId, string roleId) =>
         IdentityCompositeDocumentId.From(tenantId, roleId);
