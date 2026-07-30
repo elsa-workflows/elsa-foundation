@@ -511,6 +511,16 @@ build with **0 warnings / 0 errors**. No provider suite, database-server contain
 capture, timing run, performance verdict, workload JSON, package pin, coverage-ledger row, or EF
 oracle changed. T069 and T100 remain unchecked.
 
+Three adversarial read-only reviewers inspected the exact code-bearing range
+`878b7a8d3a6e00da73cf4c1c95e3ce84f08a31a4..93410d4ab`. Each assumed the
+checkpoint had green-washed its admission and evidence claims:
+
+| Axis | Verification and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The reviewer traced matrix creation, direct-plan execution, process measurement, artifact creation, comparison, and gating. The empty exact-key mapping blocks both proposed profiles and arbitrary identities before any provider or child side effect; a forged complete comparison cannot bypass it. The reviewer ran the IAM suite and the broader comparison selection with no failure. | PASS |
+| Evidence integrity | The reviewer reproduced **17/17**, **266/266**, and the zero-warning Release build; verified that the adversarial artifact test mutates manifest-bound files outside the guarded writer and reaches comparison; and confirmed that the mapping remains empty and every nonclaim above is accurate. | PASS |
+| Scope/test preservation | The reviewer confirmed the seven-path additive range changes no provider host, project graph, EF oracle, package, solution, shell, workload JSON, coverage ledger, task checkbox, or existing test objective. Both the lane worktree and primary checkout were clean. | PASS |
+
 ### #646 reproducible workload contract-vector checkpoint
 
 The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
