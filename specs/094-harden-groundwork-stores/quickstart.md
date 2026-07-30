@@ -487,6 +487,40 @@ JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 
+### #646 IAM target-profile admission checkpoint
+
+The executable IAM benchmark target remains deliberately unavailable until the program owner
+ratifies the exact EF and Groundwork adapter/form mapping. The harness keeps that decision separate
+from the immutable workload's candidate physical forms through an exact
+`(workload ID, workload version, adapter, physical form)` admission key. Its authoritative IAM
+mapping set is empty.
+
+The two proposed identities
+`ef-aspnetcore-identity / ef-identity-relational-schema` and
+`groundwork-aspnetcore-identity / entity-type-specific-physical-tables-current-identity-shape`,
+plus arbitrary identities, fail closed with
+`iam.adapter-form.ratification-required`. Enforcement occurs before matrix creation can fall
+through to the physical-form allowlist, before adapter preparation or provider access, before a
+matrix child can launch, and before the artifact writer creates its output directory. Comparison
+also rejects adversarial manifest-bound artifacts whose request identities were forged outside the
+normal writer, and the gate rejects a directly constructed complete comparison.
+
+Root verification passed the focused admission/comparison selection **17/17**, the complete
+container-free benchmark-harness project **266/266**, and the Release harness warnings-as-errors
+build with **0 warnings / 0 errors**. No provider suite, database-server container, native-plan
+capture, timing run, performance verdict, workload JSON, package pin, coverage-ledger row, or EF
+oracle changed. T069 and T100 remain unchecked.
+
+Three adversarial read-only reviewers inspected the exact code-bearing range
+`878b7a8d3a6e00da73cf4c1c95e3ce84f08a31a4..93410d4ab`. Each assumed the
+checkpoint had green-washed its admission and evidence claims:
+
+| Axis | Verification and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The reviewer traced matrix creation, direct-plan execution, process measurement, artifact creation, comparison, and gating. The empty exact-key mapping blocks both proposed profiles and arbitrary identities before any provider or child side effect; a forged complete comparison cannot bypass it. The reviewer ran the IAM suite and the broader comparison selection with no failure. | PASS |
+| Evidence integrity | The reviewer reproduced **17/17**, **266/266**, and the zero-warning Release build; verified that the adversarial artifact test mutates manifest-bound files outside the guarded writer and reaches comparison; and confirmed that the mapping remains empty and every nonclaim above is accurate. | PASS |
+| Scope/test preservation | The reviewer confirmed the seven-path additive range changes no provider host, project graph, EF oracle, package, solution, shell, workload JSON, coverage ledger, task checkbox, or existing test objective. Both the lane worktree and primary checkout were clean. | PASS |
+
 ### #646 reproducible workload contract-vector checkpoint
 
 The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
