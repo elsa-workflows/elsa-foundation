@@ -236,7 +236,9 @@ if ($projects.Count -eq 0) {
 }
 
 $initialProjects = [string[]]$projects
-foreach ($path in $initialProjects) {
+for ($projectIndex = 0; $projectIndex -lt $initialProjects.Count; $projectIndex++) {
+    $path = $initialProjects[$projectIndex]
+    Write-Output "Restoring project $($projectIndex + 1)/$($initialProjects.Count): $path"
     $projectPath = Join-Path $RepoRoot $path
     $restoreLog = [System.IO.Path]::GetTempFileName()
     try {

@@ -172,7 +172,11 @@ unset IFS
 
 printf '%s\n' "${project_paths[@]}" > "$tmp_dir/initial-projects.txt"
 
+project_count="${#project_paths[@]}"
+project_index=0
 while IFS= read -r relative; do
+  project_index=$((project_index + 1))
+  printf 'Restoring project %d/%d: %s\n' "$project_index" "$project_count" "$relative"
   project="$repo_root/$relative"
   restore_log="$tmp_dir/restore.log"
   if ! dotnet restore "$project" --force-evaluate --configfile "$repo_root/NuGet.config" >"$restore_log" 2>&1; then
