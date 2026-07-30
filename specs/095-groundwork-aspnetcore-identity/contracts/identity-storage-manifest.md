@@ -39,6 +39,20 @@
 - All route fields are physical columns/fields. No provider extracts predicates from opaque JSON during request execution.
 - SQL Server string/binary lengths and compound index byte budgets are checked at composition time.
 
+### Issue #1106 Cursor Amendment
+
+- The twelve scale-bearing list/relationship routes use cursor paging and terminate their physical
+  indexes with the provider identity lookup-key column.
+- An exhaustive framework/Elsa list result is assembled only by following the opaque continuation
+  returned by that same admitted route. The traversal has explicit page-count and forward-progress
+  guards and preserves cancellation between and during pages.
+- Repeated, malformed, cross-route, cross-scope, or non-advancing continuations fail closed.
+- Exact/deterministic-ID loads, normalized user-name/email/role first-page lookups, and the ordered
+  64-record expired mutation-receipt cleanup do not become cursor traversals.
+- The amendment changes the manifest/schema/composition identity and invalidates active use of
+  every earlier provider-evidence generation. Earlier generations remain immutable historical
+  records.
+
 ## Required Capabilities
 
 - physical entity tables;
@@ -70,20 +84,24 @@ Every participant is loaded by exact ID inside the unit of work. Pre-transaction
 
 ## Native Evidence
 
-The production native-plan denominator is exactly 10 live scale-bearing routes: normalized user name,
-normalized email, normalized role name, tenant role listing, claims by user, users by claim, claims by role,
-roles by user, users by role, and external logins by user. External-login subject lookup, token lookup, and
-membership lookup use deterministic primary IDs and therefore do not declare secondary bounded routes.
+The #1106 native-plan denominator is exactly twelve physical route/index definitions: normalized
+user name, normalized email, normalized role name, tenant role listing, claim mappings by provider,
+claims by user, users by claim, claims by role, roles by user, users by role, external logins by
+user, and expired mutation receipts. Eight are exhaustive continuation identities. The three
+normalized lookups and the ordered 64-record receipt cleanup remain one-request consumers but still
+require cursor-declared physical indexes so their provider order uses the lookup-key tail.
+External-login subject lookup, token lookup, and membership lookup use deterministic primary IDs and
+therefore do not declare secondary bounded routes.
 
 For each provider, evidence records:
 
 - package/provider/topology identity;
 - manifest and resolved-name fingerprint;
 - physical table/index identities;
-- native plan or winning-plan evidence for all 10 live scale-bearing routes;
+- native plan or winning-plan evidence for all twelve cursor-declared physical routes;
 - candidate/materialized counts proving scope/predicate/order/limit execute before materialization;
 - unique-race winner/conflict digest;
 - dispose/reopen and process-restart digest;
 - sanitized diagnostics with no connection secret or credential value.
 
-Partial provider evidence cannot advance #644/spec 094 authority rows to ready.
+Partial provider evidence cannot advance #1106/#646/spec 094 authority rows to ready.

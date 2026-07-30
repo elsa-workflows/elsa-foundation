@@ -176,3 +176,35 @@ Groundwork `0.0.1-preview.60` has no hard upstream blocker for this design. It s
 - `tests/Elsa/Persistence/Groundwork/Testing/`
 - Historical: Groundwork source commit `093cc124ce5d021fa750b7c0a156a7c6c5bedf3a` released as `0.0.1-preview.56`; this includes the explicit manifest-type loader remediation from Groundwork PR #86.
 - Current dependency: Groundwork `0.0.1-preview.60`, including the generic version-aware codec contract from Groundwork PR #88, provider-native ordered query explanations from Groundwork PR #89, and preview.60 schema admission/apply behavior. The release commit must be recorded from the published package provenance rather than inferred here.
+
+## R14 — Cursor Paging For Wide Scale-Bearing Identity Routes
+
+**Decision**: Issue #1106 converts all twelve scale-bearing Identity routes from offset paging to
+cursor paging. Each route's physical index carries Groundwork's provider identity lookup-key tail.
+Every exhaustive framework or Elsa reader follows a shared finite continuation protocol with
+explicit page-count, token-progress, and cancellation guards.
+
+**Rationale**: Groundwork `0.0.1-preview.100` certifies the complete provider-applied order. The
+current non-unique offset routes require the comparison-key identity tail. On SQL Server the current
+scope and lookup projection plus that tail require 2,406 bytes, above the 1,700-byte index-key
+limit. The cursor lookup-key form requires 1,088 bytes and preserves deterministic total order
+without weakening the provider contract.
+
+**Alternatives considered**:
+
+- Append the comparison-key tail and special-case SQL Server: rejected because the schema is
+  physically inadmissible and provider-specific domain behavior is forbidden.
+- Keep offsets and lower field bounds only for SQL Server: rejected because it changes accepted
+  Identity values and makes public behavior provider-dependent.
+- Client-evaluate or query the whole kind: rejected by FR-012 and the
+  `IDENTITY-UNBOUNDED-QUERY` architecture gate.
+- Narrow list results to the first page: rejected because it changes the required ASP.NET Core
+  Identity contract.
+
+**Preserved operations**: exact/deterministic-ID loads, normalized user-name/email/role first-page
+lookups, and ordered 64-record mutation-receipt expiry cleanup retain their existing bounded shapes.
+
+**Evidence rule**: preview.60 and later pre-amendment evidence remains historical. The first current
+generation must bind the exact final Groundwork package family, source tree, manifest version,
+composition/target fingerprints, complete public result digest, and all four native-provider plan
+sets. #646 alone owns live EF equality and timing.

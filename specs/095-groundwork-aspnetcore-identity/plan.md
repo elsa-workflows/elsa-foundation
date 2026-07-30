@@ -1,6 +1,6 @@
 # Implementation Plan: Groundwork ASP.NET Core Identity
 
-**Branch**: `codex/095-groundwork-aspnetcore-identity` | **Date**: 2026-07-15 | **Spec**: [spec.md](spec.md)
+**Branch**: `codex/1106-identity-cursor-recertification` | **Date**: 2026-07-30 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/095-groundwork-aspnetcore-identity/spec.md`
 
@@ -10,11 +10,17 @@ Deliver issue #644 as one explicit ASP.NET Core Identity Groundwork provider fea
 
 The unit lands red-first contract tests, a shared four-provider correctness/restart implementation, concurrent seeding, bounded native plans, and a correctness workload contract for #646. T083-T085 retain accepted preview.60 exact-candidate provider evidence for all four supported topologies. The unit removes the current activation-order-dependent dual authority but retains the behaviorally frozen EF implementation as a selectable, never-coenabled input for #646. "Frozen" forbids new EF behavior, schema, migrations, packages, dependency edges, and test objectives. The checked-in EF contract baseline is deliberately non-executed; only #646 may produce live EF/Groundwork equality evidence. Issue #647 deletes the EF implementation only after #646 accepts the performance verdict.
 
+Issue #1106 adds a ratified follow-up boundary: replace the twelve scale-bearing Identity offset
+routes with cursor routes using the provider identity lookup-key tail, migrate every exhaustive
+reader through one guarded finite continuation mechanism, preserve direct first-page and receipt
+cleanup paths, and publish a fresh exact-family four-provider generation before #646 measures the
+Identity workload.
+
 ## Technical Context
 
 **Language/Version**: C# on .NET 10 (`net10.0`; SDK-default C# language version)
 
-**Primary Dependencies**: ASP.NET Core Identity 10.0.8 shared framework; Groundwork Core/Documents/SQLite/SQL Server/PostgreSQL/MongoDB `0.0.1-preview.60`; CShells lifecycle/features; Microsoft.Extensions.DependencyInjection
+**Primary Dependencies**: ASP.NET Core Identity 10.0.8 shared framework; Groundwork Core/Documents/SQLite/SQL Server/PostgreSQL/MongoDB `0.0.1-preview.100` or its exact #141 successor family; CShells lifecycle/features; Microsoft.Extensions.DependencyInjection
 
 **Storage**: Host-selected Groundwork physical entity tables on SQLite, SQL Server, PostgreSQL, or transaction-capable MongoDB; deployment-owned schema lifecycle through Groundwork Tool
 
@@ -28,7 +34,7 @@ The unit lands red-first contract tests, a shared four-provider correctness/rest
 
 **Constraints**: Provider-neutral Identity abstractions remain Groundwork-free; revision-aware IAM evolution is additive and compatibility-preserving; exactly one active identity authority; no general `IQueryable`, passkey, or protected-personal-data capability claim; no client evaluation/load-all; runtime startup never applies schema; EF behavior/schema/dependencies are frozen and EF is never coenabled with Groundwork; OpenIddict remains out of scope
 
-**Scale/Scope**: Full required ASP.NET Core Identity user/role capability set; twelve explicit physical units at Identity manifest version `1.0.4`—seven entity tables plus dedicated document tables for primary-ID-only user tokens, tenant memberships, and name/email reservations; exactly 10 live application routes plus one bounded expiry-maintenance route; 100 independent-client race iterations per representative transition; 100,000-record bounded-query acceptance; four real providers; close/reopen and process restart
+**Scale/Scope**: Full required ASP.NET Core Identity user/role capability set; twelve explicit physical units; twelve scale-bearing routes amended to cursor paging plus unchanged exact/direct and bounded expiry-maintenance operations; 100 independent-client race iterations per representative transition; 100,000-record bounded-query acceptance; four real providers; close/reopen and process restart
 
 ## Constitution Check
 
@@ -51,6 +57,9 @@ The unit lands red-first contract tests, a shared four-provider correctness/rest
 | Elsa §E6 naming | PASS | New Elsa-owned types stay within the component budget and use `...Store`, `...Source`, `...Coordinator`, or provider prefixes consistently. External Identity names remain exempt. |
 | Groundwork-neutral core boundary | PASS | `Elsa.Foundation.Identity.Abstractions` gains no Groundwork/project/package reference. The optional provider-neutral tenant binding uses `Elsa.Persistence.Core`, not Groundwork. |
 | Greenfield/data migration boundary | PASS | Golden fixtures and manifests may be replaced without data conversion; no compatibility migration or runtime auto-upgrade is created. |
+| Issue #1106 finite continuation | PASS | Cursor paging is a provider-neutral Groundwork route shape; exhaustive readers remain bounded and the architecture guard admits only the reviewed mechanism. |
+| SQL Server key budget | PASS | The lookup-key tail fits the 1,700-byte index-key limit; the incompatible comparison-key offset tail is removed rather than worked around. |
+| Evidence immutability | PASS | Historical generations remain immutable; a new exact source/package/manifest generation is required before current-family claims. |
 
 ### Post-Design Recheck
 
@@ -133,3 +142,7 @@ No constitution violations or unratified patterns are required.
 5. **Seeder and highest seam**: split schema application from seeding, make concurrent startup idempotent and secret-safe, then pass login/cookie/claims/lockout/protected-endpoint scenarios.
 6. **Four-provider and handoff evidence**: pass SQLite, SQL Server, PostgreSQL, and MongoDB replica-set correctness/reopen/restart/native-plan matrices, update spec 094 authority rows without claiming incomplete gates, and publish the #646 correctness workload.
 7. **Review and landing**: run independent requirement/test-objective review, full solution/build/pack/architecture checks, Model B draft PR, required CI, merge, and verify `main`. The EF oracle stays frozen for #646/#647.
+8. **Issue #1106 cursor recertification**: freeze the twelve-route/readers denominator, write
+   red manifest/pager/guard tests, replace offset routes and exhaustive readers, preserve direct
+   bounded operations, repeat the full public catalog/native-plan/schema matrix on the final exact
+   Groundwork family, and land through a separately reviewed Model B PR.

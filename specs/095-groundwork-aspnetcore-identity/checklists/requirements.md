@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Groundwork ASP.NET Core Identity
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-07-15
+**Created**: 2026-07-15; issue #1106 amendment validated 2026-07-30
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -34,3 +34,6 @@
 - Groundwork, the four mandatory providers, the temporary EF oracle, removal scope, and issue dependencies are retained because they are ratified product constraints, not unselected implementation design.
 - OpenIddict is explicitly excluded so #644 remains an independently deliverable authority seam for specification 094 boundary 6.
 - Validation iteration 2 passed all checklist items after separating #644 correctness delivery from #646 performance timing and #647 final EF deletion; no clarification markers were required.
+- Issue #1106 validation passed after freezing the cursor-route denominator, finite traversal
+  behavior, unchanged direct operations, evidence invalidation rule, and #646 nonclaims. No new
+  clarification marker is required because the program owner ratified the amendment on 2026-07-30.

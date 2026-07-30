@@ -200,8 +200,49 @@ description: "Dependency-ordered implementation tasks for authoritative Groundwo
 - [X] T085 Remediate every blocking independent-review, CI, provider, schema, security, architecture, or correctness finding in its owning file, including the 25-objective/15-capability exact catalog, deterministic physical failure injection, mutation receipts and cleanup, real 100,000-record native routes, highest-seam HTTP coverage, four-provider schema parity/read-only hashes, preview.60 generic-codec/native-query-explain/schema-admission adoption behind the Elsa marker, coverage/evidence reconciliation, and generated-map refresh; then repeat T083-T084
 - [X] T086 Commit the exact reviewed candidate with a useful message; verify `.specify/feature.json` selects spec 095, artifacts bind the clean tested code candidate, the post-candidate delta contains only evidence/Markdown ratification records, tasks/checklists are consistent, and the worktree is clean
 - [X] T087 Push `codex/095-groundwork-aspnetcore-identity`, open a Model B draft PR linked to #644/#629, and include exact provider/schema/restart/test-objective evidence plus explicit #646/#647 remaining gates
-- [ ] T088 Obtain every required GitHub check, resolve all actionable review findings, rerun affected local gates, promote the draft only after exact-head review, and record the candidate commit/check results
-- [ ] T089 Merge the approved PR, verify remote `main` contains the reviewed result, update issue #644 with the merge/evidence and #646 handoff, and return the control room to the next zero-EF dependency without marking the overall program complete
+- [X] T088 Obtain every required GitHub check, resolve all actionable review findings, rerun affected local gates, promote the draft only after exact-head review, and record the candidate commit/check results — Evidence: PR #694 completed Build & test, both CodeQL languages, Groundwork fast gates, GitGuardian, and CLA successfully on reviewed head `34b40e852b7b583c893473763c20df9aa92ad2b9`.
+- [X] T089 Merge the approved PR, verify remote `main` contains the reviewed result, update issue #644 with the merge/evidence and #646 handoff, and return the control room to the next zero-EF dependency without marking the overall program complete — Evidence: PR #694 merged as `ebe813bc718477cdc474dc4678d22809aea49f06`, that merge is an ancestor of current remote `main`, and #644/Project 33 are closed/Done while #646 remains open.
+
+---
+
+## Phase 8: Issue #1106 Cursor Paging And Exact-Family Recertification
+
+**Goal**: Replace the twelve SQL-Server-inadmissible scale-bearing offset routes with finite cursor
+routes while preserving the complete public Identity contract and publishing one fresh
+four-provider exact-family generation.
+
+**Independent Test**: Populate every affected route beyond one page, enumerate through framework
+and Elsa stores, and prove exact ordered results, bounded provider requests, continuation
+fail-closed behavior, unchanged direct operations, SQL Server key admission, and four-provider
+native execution.
+
+### Ratification And Red Contracts
+
+- [X] T090 Freeze the exact twelve route/index identities, every exhaustive reader/test double, every unchanged direct first-page/receipt-cleanup operation, the #646 ratification link, and historical-evidence boundary in `specs/095-groundwork-aspnetcore-identity/quickstart.md` — Evidence: the #1106 baseline records all twelve physical declarations, eight exhaustive identities/ten call paths, three direct lookups, one 64-record cleanup path, two continuation-aware test doubles, the 2,406-byte offset versus 1,088-byte cursor calculation, and the immutable preview.60 evidence boundary at Elsa base `1b9c617c`.
+- [ ] T091 [P] [US5] Write failing offset-rejection, cursor lookup-tail, shared-index compatibility, manifest-version, and SQL Server 1,700-byte key-budget tests in `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityStorageManifestTests.cs`
+- [ ] T092 [P] [US5] Write failing exact-page, page-plus-one, multi-page, cancellation, repeated-token, cross-route-token, and non-advancing-token tests for the reviewed finite traversal mechanism in `tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/BoundedIdentityContinuationTests.cs`
+- [ ] T093 [P] [US5] Write failing complete-result/no-duplicate/no-omission tests for every affected framework and Elsa reader in `tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/AspNetCoreIdentityRelationshipContractTests.cs` and `tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/IdentityGroundworkStoreTests.cs`
+- [ ] T094 [P] [US5] Write failing architecture/evidence tests proving arbitrary `QueryAllAsync`, offset/skip traversal, stale manifest generations, and hand-edited current evidence remain rejected in `tests/Elsa/Architecture/AspNetCoreIdentityMutationGuardTests.cs` and the Spec 095 provider-evidence validator tests
+
+### Cursor Manifest And Readers
+
+- [ ] T095 [US5] Convert the frozen twelve scale-bearing route/index declarations to cursor paging with the provider identity lookup-key tail and advance the Identity manifest/schema identity in `src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs`
+- [ ] T096 [US5] Implement one guarded finite continuation traversal with page-count, token-progress, route/scope/order binding, and cancellation preservation in the owning Identity/Groundwork paging helper under `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/`
+- [ ] T097 [US5] Migrate every exhaustive ASP.NET Core Identity claim/login/role reader to T096 without changing public ordering or materializing an unbounded provider result in `src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Stores/`
+- [ ] T098 [US5] Migrate affected Elsa IAM readers and all shared-host/test doubles to T096-compatible continuation behavior in `src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/` and their owning test fixtures
+- [ ] T099 [US5] Preserve and directly test normalized user-name/email/role first-page lookups, deterministic-ID loads, and ordered 64-record expired-receipt cleanup in the owning Identity store and manifest tests
+- [ ] T100 [US5] Update manifest contracts, composition/schema golden identities, add a versioned successor provider-evidence schema/validator, and preserve historical-generation wording without editing `provider-evidence.schema.json` or old evidence artifacts in `specs/095-groundwork-aspnetcore-identity/contracts/`, `tests/Elsa/Persistence/Groundwork/Conformance/Tests/`, and Spec 095 evidence metadata
+
+### Exact-Family Verification, Review, And Landing
+
+- [ ] T101 [US5] Run the focused manifest, continuation, framework-store, Elsa-adapter, architecture, composition, and SQLite reopen suites; record exact counts and confirmed failed-attempt dispositions in `specs/095-groundwork-aspnetcore-identity/quickstart.md`
+- [ ] T102 [US5] After serialized package-family integration, merge current remote `main` without rebasing and prove the exact Groundwork package/tool/source/manifest tuple composes offline for SQLite, SQL Server, PostgreSQL, and MongoDB
+- [ ] T103 [US5] Run four-provider schema validate/plan/status/apply/read-only parity and native-plan evidence for every amended route, including SQL Server key-width and MongoDB canonical-type coverage
+- [ ] T104 [US5] Run the complete retained 25-objective/15-capability public catalog, close/reopen, restart, failure-window, and exact-result-digest matrix on all four providers
+- [ ] T105 [US5] Publish one atomic sanitized Spec 095 provider-evidence generation from the exact tested candidate, validate its schema/content digests, mark all older generations historical, and update #646 handoff metadata without timing, form selection, or performance-verdict claims
+- [ ] T106 [US5] Run Release build/test/pack, format/diff, EF-free-boundary and frozen-oracle ratchets, and the narrowest relevant generated-map refresh; record evidence and nonclaims
+- [ ] T107 [US5] Freeze the exact candidate, run three adversarial exact-range reviews on correctness/mechanism, evidence integrity, and scope/test preservation, remediate confirmed findings, and record reviewer re-verification/dispositions in `specs/095-groundwork-aspnetcore-identity/quickstart.md`
+- [ ] T108 [US5] Push a Model B draft PR linked to #1106/#646/#629, pass hosted checks, promote and merge by merge commit, verify remote-main containment, close #1106 with the merge SHA, and synchronize Project 33 without closing #646/#629
 
 ---
 
@@ -216,6 +257,10 @@ description: "Dependency-ordered implementation tasks for authoritative Groundwo
 - **US3 (T056–T068)** fixture generalization may begin after Foundation, but accepted provider evidence depends on US1 and US2 semantics.
 - **US4 (T069–T080)** seeder tests may begin after Foundation; final highest-seam and #646 handoff depend on US1–US3.
 - **Polish/Landing (T081–T089)** depends on all four stories and exact reviewed evidence.
+- **Issue #1106 (T090–T108)** starts from current remote `main`, depends on the ratified
+  preview.100 cursor contract, and publishes provider evidence only after the serialized final
+  package-family integration. T090–T101 may proceed without editing shared package/solution/shell or
+  coverage-ledger files.
 
 ### User Story Dependencies
 
@@ -227,6 +272,10 @@ description: "Dependency-ordered implementation tasks for authoritative Groundwo
 ### Critical Path
 
 `T001–T017 -> T018–T038 -> T039–T055 -> T056–T068 -> T069–T080 -> T081–T089`
+
+Issue #1106 follow-up:
+
+`T090 -> (T091 || T092 || T093 || T094) -> T095 -> T096 -> (T097 || T098 || T099) -> T100 -> T101 -> T102 -> (T103 || T104) -> T105 -> T106 -> T107 -> T108`
 
 ## Parallel Opportunities
 
@@ -284,6 +333,8 @@ Integrator: T056–T057, T062–T068 shared fixture/plans/evidence
 4. Land/review four-provider evidence.
 5. Land/review seeding/highest seam/#646 handoff.
 6. Land one Model B PR for #644 only after all boundaries are integrated and green.
+7. Land the separately ratified #1106 cursor amendment only after exact-family four-provider
+   recertification; do not fold its evidence into #646 timing or #647 deletion claims.
 
 ### Agent Handoff Rule
 

@@ -4,6 +4,64 @@ This guide is the executable evidence path for #644. The current candidate targe
 
 > **Evidence status:** Preview.60 provider evidence is accepted for committed candidate `211ab4816b41c153d795c93fc3f72c872ecb4875` (tree `35b19f8b4f37dc4e80dffae8046aa7fb59b306e1`) under immutable generation `1d58175a573d490644823b9242c53fdaf6dd95e8f8378c8db686d8c06f176ba7`. The dated preview.55-preview.59 material below remains historical provenance only. The checked-in EF contract baseline is non-executed; live EF/Groundwork equality and timing remain owned by #646.
 
+## Issue #1106 Cursor-Recertification Baseline
+
+Program-owner ratification is recorded on #646 in the 2026-07-30 comment that created follow-up
+issue #1106. The implementation base is Elsa remote `main`
+`1b9c617c1f6c517f1286ce4149eaeeeb28d5b466`; Groundwork remote `main`
+`eacb3209e3710834cd78c49e65d4bc763b746769` published package family
+`0.0.1-preview.100`.
+
+Current source declares Identity manifest `1.0.6`. All twelve physical route/index definitions below
+use offset paging and must become cursor-declared so their provider indexes use
+`id_lookup_key`. The consumer shape remains deliberately split:
+
+| Index | Query identity | Consumer after amendment |
+| --- | --- | --- |
+| `identity-user-by-normalized-name` | `find-user-by-normalized-name` | one direct page, take 1 |
+| `identity-user-by-normalized-email` | `find-user-by-normalized-email` | one direct ambiguity page, take 2 |
+| `identity-role-by-normalized-name` | `find-role-by-normalized-name` | one direct page, take 1 |
+| `identity-role-by-tenant` | `list-roles-by-tenant` | exhaustive continuation |
+| `identity-claim-mapping-by-provider` | `list-claim-mappings-by-provider` | exhaustive continuation |
+| `identity-user-claim-by-user` | `list-user-claims` | exhaustive continuation |
+| `identity-user-claim-by-claim` | `find-users-by-claim` | exhaustive continuation |
+| `identity-role-claim-by-role` | `list-role-claims` | exhaustive continuation |
+| `identity-login-by-user` | `list-user-logins` | exhaustive continuation through two public stores |
+| `identity-user-role-by-user` | `list-user-roles` | exhaustive continuation |
+| `identity-user-role-by-role` | `list-role-users` | exhaustive continuation |
+| `identity-mutation-receipt-by-expiry` | `list-expired-mutation-receipts` | one ordered cleanup page, take 64 |
+
+The eight exhaustive route identities are implemented by ten production call paths:
+
+- `GroundworkRoleStore.ListAsync`;
+- `GroundworkClaimMappingStore.ListForProviderAsync`;
+- `GroundworkExternalIdentityStore.ListForUserAsync`;
+- the shared framework-user traversal used by user claims, users-for-claim, user roles, role users,
+  and framework user logins;
+- `GroundworkIdentityRoleStore` role-claim traversal.
+
+Two bounded-store test doubles in `AspNetCoreIdentityConcurrencyContractTests` and
+`AspNetCoreIdentityHighestSeamTests` must honor and advance real continuations. The expiry-only fake
+in `AspNetCoreIdentityReconciliationTests` stays single-page. The strongest existing scale contract,
+`FoundationBoundedQueryContractTests.Iam_claim_mapping_pages_are_complete_deterministic_and_bounded`,
+must change from offsets `0/512` to the returned continuation; equivalent page-plus-one coverage is
+required for the other seven exhaustive identities.
+
+The SQL Server key calculation is the admission reason, not a performance assertion:
+
+- offset form: storage scope 256 bytes + current lookup projection 800 bytes +
+  `id_comparison_key` 1,350 bytes = 2,406 bytes, which exceeds 1,700;
+- cursor form: storage scope 256 bytes + current lookup projection 800 bytes +
+  `id_lookup_key` 32 bytes = 1,088 bytes.
+
+The historical `provider-evidence.schema.json` remains locked to preview.60 / manifest 1.0.4 and is
+not edited in place. #1106 creates a versioned successor schema/generation for the final exact
+package family. Payload fixtures under `Fixtures/v1/` remain unchanged because paging/index
+physicalization does not alter canonical Identity document JSON.
+
+No provider evidence, timing, physical-form selection, coverage-ledger verdict, or EF-oracle state
+is advanced by this baseline.
+
 ## 1. Establish The Exact Baseline
 
 ```bash
