@@ -176,6 +176,28 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Comparison_rejects_forged_complete_iam_artifacts_without_a_ratified_adapter_form_mapping()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.ForgeWorkloadIdentity(
+            "iam-normalized-lookup-update",
+            "1.1.0",
+            "ef-aspnetcore-identity",
+            "ef-identity-relational-schema",
+            "groundwork-aspnetcore-identity",
+            "entity-type-specific-physical-tables-current-identity-shape");
+
+        var result = fixture.Compare(
+            "sqlite/ef-aspnetcore-identity/ef-identity-relational-schema",
+            "sqlite/groundwork-aspnetcore-identity/entity-type-specific-physical-tables-current-identity-shape");
+
+        Assert.False(result.Complete);
+        Assert.Contains("iam.adapter-form.ratification-required", result.BlockReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Comparison_rejects_direct_artifacts_outside_the_frozen_physical_forms()
     {
         using var fixture = ArtifactFixture.Create();
@@ -492,6 +514,33 @@ internal sealed class ArtifactFixture : IDisposable
             Write(adapter, form, ProcessKind.Measured, index, operations.Where(operation => omitFromRun is not { } omitted || omitted.Run != index || omitted.Operation != operation).ToArray(), alternateInputOnRun == index ? new string('e', 64) : null, transform, commitSha, processorCount, timestampUtc, evidencePlanContentSha, routeTransform, omitNativeRoute, evidenceDocumentAdapter, hostFingerprintSha256, evidenceDocumentInputFingerprint, observedProviderVersion, rawPlanReferenceOwner, workloadId);
     }
     public void Bind() => ArtifactStore.WriteManifest(Directory);
+    public void ForgeWorkloadIdentity(
+        string workloadId,
+        string workloadVersion,
+        string oracleAdapter,
+        string oraclePhysicalForm,
+        string targetAdapter,
+        string targetPhysicalForm)
+    {
+        var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[workloadId];
+        foreach (var path in System.IO.Directory.EnumerateFiles(Directory, "*.process.json").ToArray())
+        {
+            var artifact = JsonSerializer.Deserialize<ProcessArtifact>(File.ReadAllBytes(path), ArtifactStore.JsonOptions)!;
+            var request = artifact.Request with
+            {
+                WorkloadId = workloadId,
+                WorkloadVersion = workloadVersion,
+                Adapter = artifact.Request.Adapter == "ef" ? oracleAdapter : targetAdapter,
+                PhysicalForm = artifact.Request.Adapter == "ef" ? oraclePhysicalForm : targetPhysicalForm,
+                Seed = workload.Input.Seed,
+                InputFingerprintSha256 = workload.Input.FingerprintSha256
+            };
+            var forgedPath = ArtifactStore.PathFor(Directory, request);
+            File.Move(path, forgedPath);
+            File.WriteAllText(forgedPath, JsonSerializer.Serialize(artifact with { Request = request }, ArtifactStore.JsonOptions));
+        }
+        Bind();
+    }
     public ComparisonResult Compare(string oracle = "sqlite/ef/document-type-specific-tables", string target = "sqlite/groundwork/document-type-specific-tables") =>
         Comparison.Compare(Directory, oracle, target, WorkloadCatalog.Load(Repository.Root()));
     public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -157,7 +158,7 @@ public sealed class WorkflowDispatchRedriveTests
         var fixture = await CreateFailureAsync();
         await fixture.RedriveStore.RedriveAsync(new(fixture.Identity.DispatchId, "request-1", RedriveAt));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => fixture.Store.RecordDeliveryResultAsync(
             fixture.FinalClaim,
             new RuntimePostCommitOutboxDeliveryResult(
                 fixture.DeadLetter.OutboxItemId,

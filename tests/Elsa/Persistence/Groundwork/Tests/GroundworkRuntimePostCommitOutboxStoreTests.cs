@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
@@ -462,7 +463,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
 
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, second.Item.Status);
         Assert.Equal(first.FencingToken + 1, second.FencingToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(async () =>
             await store.RecordDeliveryResultAsync(
                 first,
                 new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(2))));
@@ -682,7 +683,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         var followUpId = new WorkflowDispatchIdentity("parent-wait", "activity-wait").WaitFailureResumeOutboxItemId(0);
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await recoveredOutbox.FindAsync(followUpId))!.Status);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() =>
             recoveredOutbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
                 claim,
                 failure,

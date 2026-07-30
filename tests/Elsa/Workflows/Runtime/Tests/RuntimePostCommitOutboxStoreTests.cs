@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -91,10 +92,16 @@ public sealed class RuntimePostCommitOutboxStoreTests
         var delivered = new RuntimePostCommitOutboxDeliveryResult(
             "outbox-1", RuntimePostCommitOutboxStatus.Delivered, _now.AddSeconds(12));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() =>
             store.RecordDeliveryResultAsync(first, delivered).AsTask());
         await store.RecordDeliveryResultAsync(second, delivered);
 
+        Assert.Equal("outbox-1", exception.OutboxItemId);
+        Assert.Equal("worker-1", exception.PresentedOwnerId);
+        Assert.Equal(1, exception.PresentedFencingToken);
+        Assert.Equal("worker-2", exception.CurrentOwnerId);
+        Assert.Equal(2, exception.CurrentFencingToken);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, exception.CurrentStatus);
         Assert.Equal(2, second.FencingToken);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), 10)));
     }

@@ -190,7 +190,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, Assert.Single(result.Items).RequestedDeliveryResultStatus);
         Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => store.RecordDeliveryResultAsync(
             staleClaim,
             new RuntimePostCommitOutboxDeliveryResult(
                 "outbox-1",
