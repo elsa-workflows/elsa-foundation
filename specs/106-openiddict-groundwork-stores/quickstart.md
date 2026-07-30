@@ -298,7 +298,10 @@ dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence
 # 12 passed
 ```
 
-The evidence and scope reviewers must re-verify these dispositions on the final
-record-only head before the draft can become merge-ready. The nonclaims remain:
-no admitted mutation, public OpenIddict store, replacement registration,
-four-provider store conformance, performance verdict, or EF removal is present.
+The evidence-integrity and scope/test-preservation reviewers independently
+re-verified the dispositions on record-only head
+`9583cd3a5bd4a510f7e1b677b6c80a10209293e9` and both returned `PASS`. Together
+with the originating correctness reviewer's `PASS` on the remediated code head,
+all three axes are green. The nonclaims remain: no admitted mutation, public
+OpenIddict store, replacement registration, four-provider store conformance,
+performance verdict, or EF removal is present.
