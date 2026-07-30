@@ -251,3 +251,54 @@ These are container-free checks only. They do not claim mutation admission,
 four-provider conformance, T006, or merge approval. The remediated exact head
 must return to the same three reviewers, and any remaining sequencing blocker
 must stay open rather than being waived by this checkpoint.
+
+## Ratified-checkpoint review cycle — 2026-07-30
+
+The correctness reviewer blocked the ratified checkpoint because the manifest
+still advertised two semantically invalid prune mutations before T005/T006 and
+because a persisted record could omit its concurrency token and receive a new
+random value on every read. Commit
+`87e618acd63781cd5e85477acdbda407e252cee8` removed every prune declaration,
+made the concurrency token required and nonblank on save and load, and added
+missing/null/blank regressions. The same reviewer re-verified both dispositions
+and returned `PASS`.
+
+The evidence reviewer blocked stale final-head counts, present-tense capability
+nonclaims contradicted by the current probe, and test names that overstated
+storage declarations as store registration/public contract evidence. The
+scope/test-preservation reviewer confirmed the stale count and also found an
+unrelated PostgreSQL fixture change outside the approved checkpoint. Commit
+`5d9e26d4e722dac6f10eb15ee9ef3fc2dbab309d`:
+
+- time-scopes the historical 6/14/32 results and records the current probe's
+  actual coverage and remaining T005/T006 gaps;
+- renames the declaration and four-provider manifest-level tests so they cannot
+  be cited as store-registration or public-store-contract proof;
+- describes the 55-item ledger correctly as matching objective lines across ten
+  source paths; and
+- restores the PostgreSQL provider test fixture to current `main`.
+
+Root then ran the exact code/test head:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --no-build --no-restore --logger 'console;verbosity=minimal'
+# 35 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
+  -c Release --no-build --no-restore \
+  --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests|FullyQualifiedName~ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments' \
+  --logger 'console;verbosity=minimal'
+# 5 passed
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  -c Release --no-build --no-restore \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_manifest_level_non_mutation_capabilities_execute_the_same_storage_contract' \
+  --logger 'console;verbosity=minimal'
+# 12 passed
+```
+
+The evidence and scope reviewers must re-verify these dispositions on the final
+record-only head before the draft can become merge-ready. The nonclaims remain:
+no admitted mutation, public OpenIddict store, replacement registration,
+four-provider store conformance, performance verdict, or EF removal is present.
