@@ -87,6 +87,7 @@ assets_admit_root_nuget_config() {
       (.[0] | type == "string" and length > 0)
   ' "$assets_path" >/dev/null 2>&1 || return 1
   config_path="$(jq -er '.project.restore.configFilePaths[0]' "$assets_path" 2>/dev/null)" || return 1
+  [ "$(basename "$config_path")" = 'NuGet.config' ] || return 1
   if [[ "$config_path" = /* ]]; then
     candidate="$config_path"
   else

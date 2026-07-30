@@ -348,6 +348,29 @@ public sealed class EfCoreSurfaceRatchetTests
         var changedDriver = new EfCoreSurfaceScanner(driverFixture.Repository.Path)
             .ValidateRestoreReceipt(driverFixture.ReceiptPath, driverFixture.RepositoryState);
         Assert.Contains(changedDriver.Failures, failure => failure.Code == "ZERO_EF_RECEIPT_DRIVER_MISMATCH");
+
+        using var substitutedDriverFixture = CreateRestoreReceiptFixture();
+        var currentReceipt = CreateReceipt(
+            substitutedDriverFixture.Repository.Path,
+            substitutedDriverFixture.RepositoryState);
+        WriteReceipt(
+            substitutedDriverFixture.Repository,
+            currentReceipt with
+            {
+                Restore = currentReceipt.Restore! with
+                {
+                    DriverPath = "NuGet.config",
+                    DriverSha256 = HashFile(Path.Combine(
+                        substitutedDriverFixture.Repository.Path,
+                        "NuGet.config"))
+                }
+            });
+        var substitutedDriver = new EfCoreSurfaceScanner(substitutedDriverFixture.Repository.Path)
+            .ValidateRestoreReceipt(
+                substitutedDriverFixture.ReceiptPath,
+                substitutedDriverFixture.RepositoryState);
+        Assert.Contains(substitutedDriver.Failures, failure =>
+            failure.Code == "ZERO_EF_RECEIPT_DRIVER_MISMATCH");
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+#requires -Version 5.1
+
 [CmdletBinding()]
 param(
     [switch]$ForceEvaluate,
@@ -49,12 +51,26 @@ function Get-Sha256Text([string]$Text) {
     return Get-Sha256Bytes ([System.Text.UTF8Encoding]::new($false).GetBytes($Text))
 }
 
+function Get-PathStringComparison {
+    if ($env:OS -eq 'Windows_NT') {
+        return [System.StringComparison]::OrdinalIgnoreCase
+    }
+    return [System.StringComparison]::Ordinal
+}
+
 function Convert-ToRepoRelative([string]$Path) {
     $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $relative = [System.IO.Path]::GetRelativePath($RepoRoot, $fullPath)
-    if ($relative -eq '..' -or $relative.StartsWith("..$([System.IO.Path]::DirectorySeparatorChar)", [System.StringComparison]::Ordinal)) {
+    $comparison = Get-PathStringComparison
+    if ($fullPath.Equals($RepoRoot, $comparison)) {
+        return '.'
+    }
+    $rootPrefix = $RepoRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $fullPath.StartsWith($rootPrefix, $comparison)) {
         Stop-Driver 'discovery returned a path outside the repository.'
     }
+    $relative = $fullPath.Substring($rootPrefix.Length)
     if ($relative.IndexOfAny([char[]]"`r`n`t") -ge 0) {
         Stop-Driver 'receipt paths may not contain control characters.'
     }
@@ -110,15 +126,11 @@ function Sort-OrdinalUnique([string[]]$Values) {
 function Get-GitStatusBytes {
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = 'git'
+    $info.WorkingDirectory = $RepoRoot
     $info.UseShellExecute = $false
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
-    $info.ArgumentList.Add('-C')
-    $info.ArgumentList.Add($RepoRoot)
-    $info.ArgumentList.Add('status')
-    $info.ArgumentList.Add('--porcelain=v1')
-    $info.ArgumentList.Add('-z')
-    $info.ArgumentList.Add('--untracked-files=all')
+    $info.Arguments = 'status --porcelain=v1 -z --untracked-files=all'
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $info
     [void]$process.Start()
@@ -169,22 +181,36 @@ function Test-AssetsAdmitRootNuGetConfig([object]$Assets, [string]$AssetsPath) {
     if (-not [System.IO.File]::Exists($candidate)) {
         return $false
     }
-    if ($candidate.Equals($NuGetConfig, [System.StringComparison]::Ordinal)) {
-        return $true
+    return $candidate.Equals($NuGetConfig, (Get-PathStringComparison))
+}
+
+function Move-ReceiptAtomically([string]$Source, [string]$Destination) {
+    if ([System.IO.File]::Exists($Destination)) {
+        Replace-ExistingReceipt $Source $Destination
+        return
     }
-    # NuGet can report the conventional Config spelling on a case-insensitive
-    # filesystem even though the checked-out root file is NuGet.config. Enumerate
-    # the actual entry before admitting that case-only alias; a case-sensitive
-    # filesystem cannot pass this branch for a different file.
-    $candidateDirectory = Split-Path -Parent $candidate
-    $candidateName = Split-Path -Leaf $candidate
-    foreach ($entry in [System.IO.Directory]::EnumerateFiles($candidateDirectory)) {
-        if ([System.StringComparer]::OrdinalIgnoreCase.Equals([System.IO.Path]::GetFileName($entry), $candidateName) -and
-            $entry.Equals($NuGetConfig, [System.StringComparison]::Ordinal)) {
-            return $true
+    try {
+        [System.IO.File]::Move($Source, $Destination)
+    }
+    catch [System.IO.IOException] {
+        if (-not [System.IO.File]::Exists($Destination)) {
+            throw
+        }
+        Replace-ExistingReceipt $Source $Destination
+    }
+}
+
+function Replace-ExistingReceipt([string]$Source, [string]$Destination) {
+    $backupPath = Join-Path (Split-Path -Parent $Destination) (
+        '.zero-ef-restore-receipt.' + [Guid]::NewGuid().ToString('N') + '.bak')
+    try {
+        [System.IO.File]::Replace($Source, $Destination, $backupPath)
+    }
+    finally {
+        if ([System.IO.File]::Exists($backupPath)) {
+            Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
         }
     }
-    return $false
 }
 
 if ($SelfCheck) {
@@ -322,12 +348,7 @@ foreach ($path in $projects) {
     catch {
         Stop-Driver "project.assets.json does not identify its restored project for '$path'."
     }
-    $comparison = if ($IsWindows -or $env:OS -eq 'Windows_NT') {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
+    $comparison = Get-PathStringComparison
     if ($null -eq $resolvedRestoreProjectPath -or -not $resolvedRestoreProjectPath.Equals([System.IO.Path]::GetFullPath($projectPath), $comparison)) {
         Stop-Driver "project.assets.json does not bind to discovered project '$path'."
     }
@@ -398,7 +419,7 @@ try {
         $temporaryReceiptPath,
         (($receiptDocument | ConvertTo-Json -Depth 12) + "`n"),
         [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::Move($temporaryReceiptPath, $receiptPath, $true)
+    Move-ReceiptAtomically $temporaryReceiptPath $receiptPath
 }
 finally {
     if ([System.IO.File]::Exists($temporaryReceiptPath)) {

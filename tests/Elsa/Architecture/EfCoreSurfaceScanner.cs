@@ -246,6 +246,12 @@ internal static class EfCoreSurfaceBaseline
 
 internal sealed class EfCoreSurfaceScanner
 {
+    private static readonly HashSet<string> RestoreDriverPaths = new(StringComparer.Ordinal)
+    {
+        "tools/architecture/restore-zero-ef-certification.sh",
+        "tools/architecture/restore-zero-ef-certification.ps1"
+    };
+
     private static readonly JsonSerializerOptions ReceiptJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -728,12 +734,13 @@ internal sealed class EfCoreSurfaceScanner
 
     private void ValidateDriverBinding(RestoreReceiptRestore restore, ICollection<RestoreReceiptFailure> failures)
     {
-        if (!IsSafeRepositoryPath(restore.DriverPath))
+        if (!IsSafeRepositoryPath(restore.DriverPath) ||
+            !RestoreDriverPaths.Contains(restore.DriverPath!))
         {
             failures.Add(Failure(
                 "ZERO_EF_RECEIPT_DRIVER_MISMATCH",
                 restore.DriverPath ?? "restore.driverPath",
-                "The restore driver path is not a repository-relative path.",
+                "The restore driver path is not an approved repository-owned certification entry point.",
                 "Regenerate the receipt with the repository-owned restore driver."));
             return;
         }
@@ -836,7 +843,7 @@ internal sealed class EfCoreSurfaceScanner
         var assetsMetadata = ReadAssetsRestoreMetadata(assetsPath);
         if (assetsMetadata is null ||
             assetsMetadata.ConfigFilePaths.Count != 1 ||
-            !string.Equals(assetsMetadata.ConfigFilePaths[0], "NuGet.config", StringComparison.Ordinal))
+            !string.Equals(assetsMetadata.ConfigFilePaths[0], "NuGet.config", PathComparison))
         {
             failures.Add(Failure(
                 "ZERO_EF_RECEIPT_ASSETS_CONFIG_MISMATCH",
@@ -1570,6 +1577,10 @@ internal sealed class EfCoreSurfaceScanner
     private static StringComparer PathComparer => OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
+
+    private static StringComparison PathComparison => OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
 
     private sealed record ProjectInfo(
         string FullPath,
