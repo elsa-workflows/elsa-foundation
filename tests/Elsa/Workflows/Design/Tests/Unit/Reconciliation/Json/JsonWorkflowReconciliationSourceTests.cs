@@ -94,7 +94,7 @@ public sealed class JsonWorkflowReconciliationSourceTests
     [Fact]
     public void Reader_NullDeserialization_Throws()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"catalog-{Guid.NewGuid():N}.json");
+        var path = Path.Join(Path.GetTempPath(), $"catalog-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, "null");
         try
         {
