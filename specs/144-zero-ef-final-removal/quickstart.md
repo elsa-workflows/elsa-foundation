@@ -294,22 +294,31 @@ The additive certification slice landed as three implementation checkpoints on d
 `052ea6e99896cab0a06375b35c1073164098a9b8` added the typed receipt validator and bypass
 fixtures; `36c36910c034fadfb2fc1a0b027e5fbd838017aa` added sanitized `n/246` driver progress;
 and `f7bcbd5795d2413a7855c53afb54e9d8270c8951` fixed clean-worktree byte hashing and added
-the PowerShell self-check. The temporary shrink-only baseline assertion and its update switch
-remain intact; T064–T067 are not claimed.
+the PowerShell self-check. Exact-range review then found two blockers: the PowerShell entry point
+used APIs unavailable to Windows PowerShell 5.1, and the scanner trusted any safe repository file
+whose path/hash a receipt claimed as its restore driver. Commit
+`469945261af6c2f9142e795a829d0920ecb2a036` restricts driver identity to the two repository-owned
+entry points, aligns config-path case handling with the host filesystem, adds a forged-driver
+fixture, and replaces the incompatible PowerShell APIs. The temporary shrink-only baseline
+assertion and its update switch remain intact; T064–T067 are not claimed.
 
 Container-free test evidence:
 
 - `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore --filter "FullyQualifiedName~receipt" -m:1 --disable-build-servers` — Passed 6, Failed 0, Skipped 0.
 - `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-build --no-restore --filter "FullyQualifiedName~Elsa.Architecture.Tests.EfCoreSurfaceRatchetTests" --disable-build-servers` — Passed 43, Failed 0, Skipped 0.
 - Bash parser plus NDJSON assembly self-check passed; PowerShell parser/help plus the explicit empty-byte SHA-256 self-check passed.
-- Disposable one-project forced-restore smoke runs proved both drivers emit the same project/input/assets identities. A second PowerShell smoke bound an actually clean worktree to the canonical empty SHA-256 before the repository-wide rerun.
+- A disposable clean one-project forced-restore smoke ran each driver twice against the same receipt
+  path. It proved project/input/assets emission and existing-receipt replacement. The first
+  remediated PowerShell repeat exposed that `File.Replace(..., $null)` did not preserve a null
+  backup path through PowerShell binding; the final implementation uses a same-directory temporary
+  backup with guaranteed cleanup and passed both repeated runs.
 
 Repository-wide forced-restore evidence:
 
 | Driver | Exact head | Result | Receipt SHA-256 |
 |---|---|---|---|
-| Bash | `36c36910c034fadfb2fc1a0b027e5fbd838017aa` | 246/246; C# scanner `isValid=True`; clean worktree | `837ec9651399cf1c8e2fb874e4f074ec8b28cd28931398ac303db36a9db0f0d6` |
-| PowerShell | `f7bcbd5795d2413a7855c53afb54e9d8270c8951` | 246/246; C# scanner `isValid=True`; clean worktree | `f9f28ef5ae45cdb04b0891779d05ad56cc5467ce976dfeb728a9ef87fb5008af` |
+| Bash | `469945261af6c2f9142e795a829d0920ecb2a036` | 246/246; C# scanner `isValid=True`, zero failures; clean worktree | `173a137024e22c89b81027c2a35f33f327c6500d0ddbad57c2825513d646f431` |
+| PowerShell | `469945261af6c2f9142e795a829d0920ecb2a036` | 246/246; C# scanner `isValid=True`, zero failures; clean worktree | `59152c99d1ab72f1371230a1e767e6db47d112be6b6a4b21e39ea545c1275b2f` |
 
 Both receipts use SDK `10.0.300`, bind worktree-status SHA-256
 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`,
@@ -325,6 +334,18 @@ Honest failure disclosure and disposition:
 - The first detached Bash launch was reaped by the command host before driver execution: empty log, no receipt, clean worktree. A persistent lightweight parent session corrected the launch mechanism.
 - The first persistent Bash attempt was intentionally terminated after proving that its empty log could not satisfy the required monitor workflow. Both drivers then gained sanitized per-project progress; the subsequent Bash run passed.
 - The first repository-wide PowerShell run restored 246/246 but emitted no receipt because an empty clean-worktree byte array was unrolled to `null`, making `ComputeHash(null)` ambiguous. `f7bcbd579` preserves empty byte arrays, handles `null` defensively, adds the canonical empty-hash self-check, and passed both the clean fixture and the full rerun.
+- The correctness reviewer proved that `$IsWindows`, `Path.GetRelativePath`,
+  `ProcessStartInfo.ArgumentList`, and the three-argument overwrite form of `File.Move` were not a
+  valid Windows PowerShell 5.1 contract. `469945261` removes all four dependencies, declares
+  `#requires -Version 5.1`, and passed parser/help/self-check plus the repeated clean-repository
+  smoke. Native Windows 5.1 execution remains the originating reviewer's re-verification concern.
+- The scope reviewer forged an otherwise hash-correct receipt that named `NuGet.config` as the
+  restore driver. `469945261` adds an exact two-entry driver allow-list and a covering rejection
+  fixture; the complete 43-test ratchet class passes.
+- The first repeated PowerShell smoke after those changes reached receipt replacement and failed
+  because a null backup argument was rebound as an empty path. The same commit's final tree uses a
+  unique same-directory backup path, removes it in `finally`, and passed two consecutive real
+  replacements. No failed run produced accepted evidence.
 
 Evidence note T061: stale/missing/changed/unbound receipt and assets cases, restored-transitive
 evidence, and project-set drift are covered by the green 43-test ratchet class.
