@@ -136,6 +136,44 @@ It does not close T006, T011-T013, T016-T017, T020-T022, any complete token or
 registry-store task, provider conformance, host acceptance, performance, or EF
 removal.
 
+## Ratified source checkpoint on current main — 2026-07-30
+
+The program owner approved this replay as a narrow, source-only pre-T005/T006
+checkpoint in [issue #643](https://github.com/elsa-workflows/elsa-foundation/issues/643#issuecomment-5135949258).
+The approval does not authorize public OpenIddict stores, production
+registration, provider-conformance claims, or EF removal. Those remain sequenced
+behind the exact-family T005/T006 admission work.
+
+To preserve the repository's merge-only history, current
+`origin/main` (`1b9c617c1f6c517f1286ce4149eaeeeb28d5b466`) was merged into
+the replay branch as `fdd649481a0f6bd3e033b44a0e39adbac7be57e5`; the branch
+was not rebased. The merge resolved `Elsa.Server.slnx` automatically and did
+not broaden the approved source boundary.
+
+Root re-ran the focused gates on that current-main merge:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj \
+  -c Release --logger 'console;verbosity=minimal'
+# 32 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
+  -c Release \
+  --filter 'FullyQualifiedName~OpenIddictPersistenceArchitectureTests|FullyQualifiedName~ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments' \
+  --logger 'console;verbosity=minimal'
+# 5 passed
+
+dotnet test tests/Elsa/Persistence/Groundwork/Conformance/Tests/Elsa.Persistence.Groundwork.Conformance.Tests.csproj \
+  -c Release \
+  --filter 'FullyQualifiedName~OpenIddictGroundworkCapabilityProbeTests&FullyQualifiedName!~Four_provider_non_mutation_capabilities_execute_the_same_openiddict_contract' \
+  --logger 'console;verbosity=minimal'
+# 12 passed
+```
+
+`git diff --check origin/main...HEAD` also passed before this evidence-only
+update. The candidate remains a draft until three new adversarial reviewers
+inspect the final exact range and all confirmed findings are resolved.
+
 ## Exact-range review dispositions — 2026-07-29
 
 Three independent read-only reviewers examined the exact initial replay range
