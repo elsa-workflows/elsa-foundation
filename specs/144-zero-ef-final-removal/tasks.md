@@ -140,17 +140,20 @@
 
 - [x] T059 [US3] Add omitted-project and Windows-style project-reference bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [x] T060 [US3] Add central/shared/imported/conditional/direct/static-transitive dependency bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
-- [ ] T061 [US3] Add restored-transitive, missing-assets, stale-but-present assets/receipt, changed dependency-input, and project-set-mismatch fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+- [x] T061 [US3] Add restored-transitive, missing-assets, stale-but-present assets/receipt, changed dependency-input, and project-set-mismatch fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+  - Evidence: the receipt-focused run passed 6/6 and the complete `EfCoreSurfaceRatchetTests` class passed 43/43 at the recorded T061/T063/T068 checkpoint.
 - [ ] T062 [US3] Add migration/context/registration/JSON/YAML host-configuration detection and comment-false-positive tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T063 [US3] Ensure `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` discovers every repository project independently of `Elsa.Server.slnx`, validates the all-project restore receipt's exact project/input/assets bindings, and evaluates all contract categories
+- [x] T063 [US3] Ensure `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` discovers every repository project independently of `Elsa.Server.slnx`, validates the all-project restore receipt's exact project/input/assets bindings, and evaluates all contract categories
+  - Evidence: fresh discovery found 246 projects; both real receipts bound that set, 251 inputs, and all assets; the C# scanner returned `isValid=True`, and `Categories()` now exposes all 14 contract categories.
 - [ ] T064 [US3] Rewrite `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` so the production assertion requires a valid current all-project restore receipt plus every EF category and `ProjectsMissingAssets` to be empty
 - [ ] T065 [US3] Remove baseline load/save/compare behavior and the `ELSA_UPDATE_EF_CORE_BASELINE` switch from `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` and `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T066 [US3] Delete `tests/Elsa/Architecture/Baselines/ef-core-surface.json` after T046 has already retired the frozen Identity oracle baseline/test in the same reviewed oracle-removal change
 - [ ] T067 [US3] Rewrite `tests/Elsa/Architecture/Baselines/README.md` as permanent absolute-zero guard documentation without an update path
-- [ ] T068 [US3] Add and run repository-owned Bash and PowerShell restore-driver entry points under `tools/architecture/` to independently discover and force-evaluate every repository project, write the exact project/input/assets restore receipt consumed by the guard, and prove its project set matches fresh scanner discovery
+- [x] T068 [US3] Add and run repository-owned Bash and PowerShell restore-driver entry points under `tools/architecture/` to independently discover and force-evaluate every repository project, write the exact project/input/assets restore receipt consumed by the guard, and prove its project set matches fresh scanner discovery
+  - Evidence: Bash and PowerShell each completed 246/246 forced restores on clean exact heads; their project-set, input, and 246 assets identities match exactly, with receipt hashes and failure dispositions retained in `quickstart.md`.
 - [ ] T069 [US3] Run the complete EF architecture guard and all bypass fixtures against the frozen candidate; record results in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T070 [US3] Run `dotnet nuget why` for every unexpected dependency found during certification and record the removed chain in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
 - [ ] T071 [US3] Record the exact-head absolute-zero certification and category counts in `specs/144-zero-ef-final-removal/quickstart.md`

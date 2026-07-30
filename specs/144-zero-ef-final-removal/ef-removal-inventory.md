@@ -178,16 +178,19 @@ scanner entries **and** no unaccounted temporary oracle/tool consumer.
 
 ## Scanner reconciliation and required final response
 
-`EfCoreSurfaceSnapshot` has all 14 fields serialized by the baseline. Its `Categories()` method,
-however, exposes only 13: `EfFreeBoundaryViolations` is omitted. The current dedicated
-`Core_and_groundwork_projects_are_ef_free_now` test still fails an actual boundary violation, so
-this is not an intake false-pass. It is a category-model split that T063/T064 must remove or make
-explicit in the permanent absolute-zero certification report: the final guard must prove that this
-category, along with every listed category and receipt validity, is empty.
+`EfCoreSurfaceSnapshot` has all 14 fields serialized by the baseline. T063 reconciled the intake
+category-model split by adding `EfFreeBoundaryViolations` to `Categories()` and proving the
+baseline comparator now reports an expansion in that category. The existing dedicated
+`Core_and_groundwork_projects_are_ef_free_now` test remains in place. T064 is still open and must
+make the production assertion require a valid current receipt plus an empty value for every
+category; no temporary baseline/update behavior was retired early.
 
-`ProjectsMissingAssets: []` at intake proves only that the old scanner found files. T063–T068 must
-make current dependency evidence receipt-bound; a stale-but-present assets file or a project missing
-from a discovery-driven receipt is invalid, not zero.
+`ProjectsMissingAssets: []` at intake proved only that the old scanner found files. T061/T063/T068
+now make dependency evidence receipt-bound and reject stale assets, changed dependency inputs,
+driver/tool/worktree drift, copied assets identities, non-canonical NuGet configuration, and
+project-set omission. Bash and PowerShell independently restored the same 246-project set and
+produced matching project/input/assets identities; T064/T071 still own the permanent production
+assertion and final exact-head zero certification.
 
 No baseline field is currently stale or missing relative to the scanner record. The older
 program-brief counts of 21 direct project edges, 34 static transitive project consumers, and 59

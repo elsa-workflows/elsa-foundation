@@ -216,7 +216,7 @@ Evidence note T001: the table above freezes both remote heads, package-family dr
 
 #### T002 — categorized EF surface
 
-`ef-removal-inventory.md` (SHA-256 `f1f27d6e36d3d1338129dcfd58b5c377118e4373e3ab6c34e756af7d8ab7332b`) binds baseline schema 1 and its SHA-256 to 308 entries across all 14 scanner categories. Its deterministic first-match classifier maps every entry exactly once: OpenTelemetry 54, Structured Logs 55, host/package 33, Identity oracle 31, OpenIddict 27, shared EF substrate 28, and test/oracle 80; `unknown` is zero. The inventory includes tools and the temporary benchmark-oracle dependency, records the deletion DAG, and exposes the current `EfFreeBoundaryViolations` category-model split for T063/T064.
+`ef-removal-inventory.md` (SHA-256 `777473fb1e1ccca9b58eb3a37fc4a3fc819801f14bf98b99ca839afe3ecfee9d`) binds baseline schema 1 and its SHA-256 to 308 entries across all 14 scanner categories. Its deterministic first-match classifier maps every entry exactly once: OpenTelemetry 54, Structured Logs 55, host/package 33, Identity oracle 31, OpenIddict 27, shared EF substrate 28, and test/oracle 80; `unknown` is zero. The inventory includes tools and the temporary benchmark-oracle dependency, records the deletion DAG, and records T063's reconciliation of `EfFreeBoundaryViolations` into the common category map while leaving T064's production-assertion switch open.
 
 Evidence note T002: the checked-in classifier was rerun against `tests/Elsa/Architecture/Baselines/ef-core-surface.json` and returned `total: 308`, `unknown: 0`, with the exact family counts above.
 
@@ -287,6 +287,54 @@ Evidence note T007: the six-step serialization order above assigns one root owne
 - Rerun: `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~Frozen_identity_ef_oracle_matches_its_reviewed_content_fingerprint|FullyQualifiedName~Ef_core_surface_matches_the_reviewed_shrink_only_baseline"` — Passed 2, Failed 0, Skipped 0, duration 42 seconds. No database-server container or performance process ran.
 
 Evidence note T008: after the required complete solution restore, both the shrink-only surface ratchet and frozen Identity-oracle fingerprint passed on the intake head.
+
+#### T061/T063/T068 — fail-closed all-project restore receipts
+
+The additive certification slice landed as three implementation checkpoints on draft PR #1104:
+`052ea6e99896cab0a06375b35c1073164098a9b8` added the typed receipt validator and bypass
+fixtures; `36c36910c034fadfb2fc1a0b027e5fbd838017aa` added sanitized `n/246` driver progress;
+and `f7bcbd5795d2413a7855c53afb54e9d8270c8951` fixed clean-worktree byte hashing and added
+the PowerShell self-check. The temporary shrink-only baseline assertion and its update switch
+remain intact; T064–T067 are not claimed.
+
+Container-free test evidence:
+
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore --filter "FullyQualifiedName~receipt" -m:1 --disable-build-servers` — Passed 6, Failed 0, Skipped 0.
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-build --no-restore --filter "FullyQualifiedName~Elsa.Architecture.Tests.EfCoreSurfaceRatchetTests" --disable-build-servers` — Passed 43, Failed 0, Skipped 0.
+- Bash parser plus NDJSON assembly self-check passed; PowerShell parser/help plus the explicit empty-byte SHA-256 self-check passed.
+- Disposable one-project forced-restore smoke runs proved both drivers emit the same project/input/assets identities. A second PowerShell smoke bound an actually clean worktree to the canonical empty SHA-256 before the repository-wide rerun.
+
+Repository-wide forced-restore evidence:
+
+| Driver | Exact head | Result | Receipt SHA-256 |
+|---|---|---|---|
+| Bash | `36c36910c034fadfb2fc1a0b027e5fbd838017aa` | 246/246; C# scanner `isValid=True`; clean worktree | `837ec9651399cf1c8e2fb874e4f074ec8b28cd28931398ac303db36a9db0f0d6` |
+| PowerShell | `f7bcbd5795d2413a7855c53afb54e9d8270c8951` | 246/246; C# scanner `isValid=True`; clean worktree | `f9f28ef5ae45cdb04b0891779d05ad56cc5467ce976dfeb728a9ef87fb5008af` |
+
+Both receipts use SDK `10.0.300`, bind worktree-status SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`,
+and contain 246 unique projects plus 251 dependency-affecting inputs. Their project-set SHA-256 is
+`72f350c264727cb46d2d603b2d14f331f2ddd44ed556dd7eaa00db3fb91afdda`;
+their input fingerprint is
+`65b006f239a5e0c12c9fe5e3bce89dfc0b45e0ff6e4a32571e8cb2a65085c458`.
+A tuple comparison over every `(project path, assets SHA-256)` returned exact equality for all
+246 projects. Fresh independent filesystem discovery also returned 246 projects.
+
+Honest failure disclosure and disposition:
+
+- The first detached Bash launch was reaped by the command host before driver execution: empty log, no receipt, clean worktree. A persistent lightweight parent session corrected the launch mechanism.
+- The first persistent Bash attempt was intentionally terminated after proving that its empty log could not satisfy the required monitor workflow. Both drivers then gained sanitized per-project progress; the subsequent Bash run passed.
+- The first repository-wide PowerShell run restored 246/246 but emitted no receipt because an empty clean-worktree byte array was unrolled to `null`, making `ComputeHash(null)` ambiguous. `f7bcbd579` preserves empty byte arrays, handles `null` defensively, adds the canonical empty-hash self-check, and passed both the clean fixture and the full rerun.
+
+Evidence note T061: stale/missing/changed/unbound receipt and assets cases, restored-transitive
+evidence, and project-set drift are covered by the green 43-test ratchet class.
+
+Evidence note T063: scanner discovery is solution-independent; all 14 categories are exposed; and
+the real Bash and PowerShell receipts each returned `isValid=True` under the scanner.
+
+Evidence note T068: both repository-owned entry points force-restored all 246 independently
+discovered projects and produced identical project-set, input, and assets identities. No database
+server container, provider suite, or performance run was started.
 
 #### T015 — worktree contamination check
 
