@@ -46,6 +46,11 @@ public static class GateEvaluator
 {
     public static GateResult Evaluate(GatePolicy policy, ComparisonResult comparison)
     {
+        if (BenchmarkAdapterAdmission.TryGetComparisonBlockedReason(comparison, out var adapterBlockedReason))
+            return Blocked(
+                policy,
+                comparison,
+                $"Workload '{comparison.WorkloadId}' adapter/form is blocked from benchmark gating: {adapterBlockedReason}.");
         if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(
                 comparison.WorkloadId,
                 out var blockedReason))

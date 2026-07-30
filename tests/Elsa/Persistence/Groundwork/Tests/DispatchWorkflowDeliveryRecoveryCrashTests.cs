@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -38,7 +39,7 @@ public sealed class DispatchWorkflowDeliveryRecoveryCrashTests
             1,
             intentKind: DispatchWorkflowConstants.ResumeParentIntentKind)));
         Assert.True(recoveredClaim.FencingToken > firstClaim.FencingToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => afterCrash.Outbox.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => afterCrash.Outbox.RecordDeliveryResultAsync(
             firstClaim,
             new RuntimePostCommitOutboxDeliveryResult(followUpId, RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(3))).AsTask());
 
@@ -75,7 +76,7 @@ public sealed class DispatchWorkflowDeliveryRecoveryCrashTests
             afterConsumptionCrash.Workflows,
             afterConsumptionCrash.Activities,
             afterConsumptionCrash.Bookmarks).HandleAsync(postConsumptionClaim.Item.Intent);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => afterConsumptionCrash.Outbox.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => afterConsumptionCrash.Outbox.RecordDeliveryResultAsync(
             recoveredClaim,
             new RuntimePostCommitOutboxDeliveryResult(followUpId, RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(5))).AsTask());
         await afterConsumptionCrash.Outbox.RecordDeliveryResultAsync(
@@ -117,7 +118,7 @@ public sealed class DispatchWorkflowDeliveryRecoveryCrashTests
         var admission = await afterClaimCrash.Dispatches.TryAdmitAsync(seed.Dispatch.DispatchId, Now.AddMinutes(3));
         Assert.Equal(WorkflowDispatchAdmissionDisposition.Admitted, admission.Disposition);
         Assert.Equal(seed.Identity.ChildWorkflowExecutionId, admission.Record.ChildWorkflowExecutionId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => afterClaimCrash.Outbox.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => afterClaimCrash.Outbox.RecordDeliveryResultAsync(
             firstClaim,
             new RuntimePostCommitOutboxDeliveryResult(seed.Start.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now.AddMinutes(3))).AsTask());
         await afterClaimCrash.Outbox.RecordDeliveryResultAsync(

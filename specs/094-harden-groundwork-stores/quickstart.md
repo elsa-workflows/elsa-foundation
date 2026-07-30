@@ -487,6 +487,40 @@ JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 
+### #646 IAM target-profile admission checkpoint
+
+The executable IAM benchmark target remains deliberately unavailable until the program owner
+ratifies the exact EF and Groundwork adapter/form mapping. The harness keeps that decision separate
+from the immutable workload's candidate physical forms through an exact
+`(workload ID, workload version, adapter, physical form)` admission key. Its authoritative IAM
+mapping set is empty.
+
+The two proposed identities
+`ef-aspnetcore-identity / ef-identity-relational-schema` and
+`groundwork-aspnetcore-identity / entity-type-specific-physical-tables-current-identity-shape`,
+plus arbitrary identities, fail closed with
+`iam.adapter-form.ratification-required`. Enforcement occurs before matrix creation can fall
+through to the physical-form allowlist, before adapter preparation or provider access, before a
+matrix child can launch, and before the artifact writer creates its output directory. Comparison
+also rejects adversarial manifest-bound artifacts whose request identities were forged outside the
+normal writer, and the gate rejects a directly constructed complete comparison.
+
+Root verification passed the focused admission/comparison selection **17/17**, the complete
+container-free benchmark-harness project **266/266**, and the Release harness warnings-as-errors
+build with **0 warnings / 0 errors**. No provider suite, database-server container, native-plan
+capture, timing run, performance verdict, workload JSON, package pin, coverage-ledger row, or EF
+oracle changed. T069 and T100 remain unchecked.
+
+Three adversarial read-only reviewers inspected the exact code-bearing range
+`878b7a8d3a6e00da73cf4c1c95e3ce84f08a31a4..93410d4ab`. Each assumed the
+checkpoint had green-washed its admission and evidence claims:
+
+| Axis | Verification and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The reviewer traced matrix creation, direct-plan execution, process measurement, artifact creation, comparison, and gating. The empty exact-key mapping blocks both proposed profiles and arbitrary identities before any provider or child side effect; a forged complete comparison cannot bypass it. The reviewer ran the IAM suite and the broader comparison selection with no failure. | PASS |
+| Evidence integrity | The reviewer reproduced **17/17**, **266/266**, and the zero-warning Release build; verified that the adversarial artifact test mutates manifest-bound files outside the guarded writer and reaches comparison; and confirmed that the mapping remains empty and every nonclaim above is accurate. | PASS |
+| Scope/test preservation | The reviewer confirmed the seven-path additive range changes no provider host, project graph, EF oracle, package, solution, shell, workload JSON, coverage ledger, task checkbox, or existing test objective. Both the lane worktree and primary checkout were clean. | PASS |
+
 ### #646 reproducible workload contract-vector checkpoint
 
 The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
@@ -614,6 +648,437 @@ rename and agent-guidance changes. The three reviewers re-inspected exact range
 `23300c68cca7840af5c8b7b4ceaa32e4c8c105af..b5f762cda5e2c0ec2523267173206ceb5f8d986c`
 and returned PASS; root revalidation again passed 53/53, 2/2, 285/285, and the zero-warning Release
 harness build.
+
+### Bookmark lookup correctness-runner review disposition
+
+Three adversarial read-only reviewers inspected the initial frozen range
+`6751087c613b150f4c435d11230dbde00eade37e..d3c1db47240407e0e21bf00f477dcaea8f41b738`
+on 2026-07-29. Each assumed the container-free checkpoint had green-washed its correctness or
+completion claims:
+
+| Axis | Confirmed finding and disposition | Verdict |
+|---|---|---|
+| Correctness/mechanism | The initial adapter accepted independent state-store and stimulus-index objects even though the production runtime requires the index to be implemented by the same store, so discarded writes plus a prerecorded index could pass. It also tested cross-scope isolation only from primary to secondary. At `312bd3cbf18266410e4d3e6fe5dbef100941108e`, each scope accepts one state-store object and derives the index from that same instance, rejects state-only/discarded-save adapters, probes isolation in both directions, and has selective asymmetric-leak tests that preserve local lookup while leaking only the opposite scope. The originating reviewer re-verified both fixes and found no new blocker. | PASS |
+| Evidence integrity | The reviewer independently matched workload ID/version/seed, semantic parameters, input fingerprint, result digest, operation sequence, and observations to the frozen Spec 094 source. After remediation, the unchanged zero cross-scope observation is emitted only after both directional probes pass. The PR metadata was corrected to the exact `312bd3cbf18266410e4d3e6fe5dbef100941108e` head with 12/12 tests, a zero-warning Release build, and a clean diff check; the originating reviewer re-verified the record. No provider, EF, timing, physical-form, native-plan, ledger, or verdict evidence is claimed. | PASS |
+| Scope/test preservation | The exact source delta remains limited to the provider-neutral runner, its focused tests, and the Runtime Core project reference. The public adapter contains no provider, connection, timing, manifest, ledger, matrix, or physical-form input. The same-instance and bidirectional-isolation fakes model only the confirmed correctness failures and do not advance a performance task. | PASS |
+
+Root verification at the remediated source head passed the focused workload suite **12/12**,
+the benchmark project Release build with **0 warnings/errors**, and `git diff --check`. No database
+container, provider suite, timing run, physical-form selection, coverage-ledger edit, or performance
+verdict was produced.
+
+After Spec 144 landed on `main` as `ea4683674f8d3bc6961c99e7c0efda20ce819e6f`, merge commit
+`4c9c9e7044d66972860a77b7608708195943f48d` integrated that base without rebasing. The runner,
+tests, and project reference remained byte-identical to the passed `312bd3cbf18266410e4d3e6fe5dbef100941108e`
+source checkpoint; Spec 144 was base-only. Root revalidation at the integrated head again passed
+**12/12**, the zero-warning Release build, and exact-range `git diff --check`. Correctness/mechanism
+and scope/test-preservation reviewers returned PASS on exact range
+`ea4683674f8d3bc6961c99e7c0efda20ce819e6f..4c9c9e7044d66972860a77b7608708195943f48d`.
+The evidence reviewer confirmed the code and PR metadata but required this integration paragraph
+before its originating-reviewer record re-verification, then returned PASS at record head
+`eab814884191446aa2009933d8eb9825d3eacef9`. Merge remains forbidden until all three reviewers
+confirm the final record-only head and the hosted checks pass.
+
+### Placement takeover correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `placement-takeover` v1.1 public-operation
+vector through `IExecutionPlacementStore`. Two independently opened clients share adapter-supplied
+backing; a third, distinct client opened through the adapter's reopen boundary must observe the
+takeover winner. The runner
+binds the complete 512-execution input universe, verifies 256 live placements and 256 unplaced
+identities, exercises current-owner renewal and foreign-owner denial, advances past expiry, grants
+one winner under a two-client released-together contention wave, performs the catalog-observed
+takeover with monotonic tokens `1,2,3`, rejects the stale release, and reproduces the ratified input
+fingerprint and result digest.
+
+The bounded owner-list route is probed at both 64 and 256 rows. This is deliberate: a single
+256-row query over exactly 256 live rows could not detect an implementation that ignored `Take` in
+its observable API result. Additional post-expiry probes reject ignored owner and live-lease
+filters. Fault-injectable tests also reject missing active writes, aliased or separate client
+backing, missing state at the distinct-client reopen boundary, incorrect lease
+identity/timestamps/tokens, dual contention grants, wrong ordering, an ignored query limit, and
+stale release of the takeover winner. These source-level probes do not establish provider-side
+query-plan boundedness or persistence across process/storage recreation.
+
+Root verification passed the focused workload suite **18/18**, the complete no-container benchmark
+suite **95/95**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
+and `git diff --check`. This checkpoint
+does not execute an EF comparator or any provider matrix, start a database container, collect
+timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a performance
+verdict, or advance T076/T093/T100. Groundwork #50 and the missing real EF placement comparator (or
+a separately ratified no-oracle policy) remain later admission gates.
+
+Three adversarial read-only reviewers rejected initial range
+`cc9c76a8503c3f2313511ff6a9238193dd46f5fd..a9e55b43f7a6437c2fa3b78d1808276f8f6a88d5`:
+
+| Axis | Confirmed finding and replacement disposition |
+|---|---|
+| Correctness/mechanism | `concurrentClaimants` was only compared with literal `2`; every store call was sequential, so a non-atomic claim implementation could pass. The replacement releases two independent-client contenders together against one expired lease, requires exactly one grant and one denial carrying the same winner/token, rereads the winner, and includes a deterministic dual-grant fake in which both contenders read expiry before either writes. |
+| Correctness/mechanism | The initial owner-list data contained only live `worker-alpha` leases, so ignored owner/expiry predicates were invisible. Post-expiry probes now require no remaining alpha lease and no lease for an unused owner; selective ignored-owner and ignored-expiry fakes must fail. The existing 64/256 probes continue to cover observable ordering and `Take`. |
+| Evidence integrity | The checkpoint called a shared in-memory dictionary “durable backing” and described a new wrapper as durable reopen evidence. The replacement describes only adapter-supplied shared backing and distinct-client reopen visibility, and explicitly reserves persisted restart evidence for later real-provider admission. |
+| Evidence integrity | The checkpoint implied the API-level 64/256 probe proved provider-side bounded execution. The replacement limits the claim to detecting an ignored `Take` in observable results and explicitly reserves native query-plan boundedness for later provider evidence. |
+| Scope/test preservation | The reviewers confirmed the four-path additive scope, provider-neutral adapter surface, unchanged EF oracle/ledger/tasks, and absence of new EF/provider/container dependencies. No scope remediation was required beyond correcting the durability claim and executing the frozen concurrency parameter. |
+
+The same originating reviewers re-inspected exact replacement range
+`cc9c76a8503c3f2313511ff6a9238193dd46f5fd..64bc9d6d7d164a9572c57e26f2beb2aa9cddfd19`
+and returned:
+
+| Axis | Final exact-range verdict |
+|---|---|
+| Correctness/mechanism | PASS — the released-together wave requires one grant and one denial with the same winner/token, binds the grant to the requesting claimant, rereads the winner, and rejects both dual-grant and persisted cross-claimant-winner fakes. The latter would pass winner/denial/re-read agreement alone because it stores and returns the same wrong contender, but fails the requester/result binding. The separate catalog-observed takeover keeps `currentOwner=worker-beta` and tokens `1,2,3` deterministic without normalizing the contention winner. Owner, expiry, order, and bound faults all fail closed. |
+| Evidence integrity | PASS — independently recomputed input/result digests remain `17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985` and `3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4`. Source, this checkpoint, and PR metadata consistently claim shared-backing/distinct-client visibility only and reserve persisted restart and native-plan evidence. |
+| Scope/test preservation | PASS — the exact delta remains four additive paths; the Runtime Distributed reference adds no EF/provider/container dependency, and tasks, coverage ledger, provider evidence, EF oracle, and existing tests are unchanged. The focused suite passed 18/18, the complete no-container benchmark suite 95/95, the warning-as-error Release build had 0 warnings/errors, and the exact-range diff check was clean. |
+
+### Recurring schedule selection correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `recurring-schedule-selection` v1.1
+public-operation vector through `IRecurringTriggerScheduleStore`. It prepares exactly 2,048 schedules
+across 256 publications, performs one explicit predecessor-to-candidate publication activation while
+retaining exactly 41 inactive publications, and verifies every prepared schedule through bounded
+publication pages. The 64-schedule projection publication proves the 50+14 continuation boundary;
+every other publication is also traversed so a partial seed, ignored continuation, wrong publication
+filter, wrong activation state, or unrelated deactivation cannot pass.
+
+The active due set contains the exact 179 `schedule-due-*` identities at the frozen instant. Separate
+queries prove the cutoff, 50-item bound, complete deterministic order, and inactive-publication
+filter. Two distinct clients that first prove shared-backing visibility are released together against
+the same expected cursor; exactly one advance succeeds, both clients reread the stored transition,
+and a stale retry is rejected. A third distinct client verifies the advanced cursor, remaining due
+set, and all publication projections through the adapter's reopen boundary. This is shared-backing,
+distinct-client visibility only; it is not persisted process-restart or provider evidence.
+
+Three adversarial read-only reviewers rejected initial range
+`46dba90ac876ab44ccd8fbf7a92e8ef8b20935de..5d5d8414ff1a336e4c7162fac9465324063eee35`:
+
+| Axis | Confirmed finding and replacement disposition |
+|---|---|
+| Correctness/mechanism | The initial runner read only the first 50 projection records, never consumed the continuation, and could not detect loss of the 1,819 schedules not also observed by the due query. The replacement traverses all 256 publications and all 2,048 exact records, requires the 50+14 boundary, rejects missing/ignored/repeated continuations, and fails on partial backing. |
+| Correctness/mechanism | Every activation passed a null replacement, so the publication transition contract was not exercised. The replacement activates one prepared candidate with an explicit active predecessor, proves the exact final state before and after reopen, and rejects both ignored replacement and unrelated deactivation. |
+| Evidence integrity | `advancedScheduleId`, the due-identity digest, and stale-rejection evidence were emitted from expectations rather than the already-checked public results. The replacement derives them from the persisted advance, returned due records, and captured stale-attempt outcome. |
+| Scope/test preservation | The additive two-file implementation introduced no package, solution, shell, ledger, EF, provider, container, production-registration, or shared-configuration change. No scope remediation was required. |
+
+The originating reviewers re-inspected exact replacement range
+`46dba90ac876ab44ccd8fbf7a92e8ef8b20935de..f49fe079feab234d73ce39b79e713673fda89918`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Root
+verification passed the focused workload suite **23/23**, the complete no-container benchmark suite
+**118/118**, formatting verification, the warning-as-error Release build with **0 warnings/errors**,
+and `git diff --check`.
+
+This checkpoint does not run an EF comparator or provider matrix, start a database container,
+collect timing or native-plan evidence, select a physical form, edit the coverage ledger, issue a
+performance verdict, or advance T076/T093/T100. Groundwork #50 and the missing executable EF runtime
+comparator (or a separately ratified no-oracle policy) remain later admission gates.
+
+### Trigger-binding stimulus lookup correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `trigger-binding-stimulus-lookup` v1.1
+vector through `IWorkflowTriggerBindingStore` and
+`IWorkflowExecutableSourceReferenceStore`. Two host-selected logical scopes each prepare all 96
+publications and all 4,608 bindings, matching the established two-scope interpretation of
+`tenantCount: 2`. Publication activation includes one explicit predecessor replacement. The primary
+scope retains exactly 31 active exact matches, 17 inactive replacement records, one active
+same-type/different-hash distractor, and one active different-type/same-hash distractor.
+
+The runner deliberately traverses opaque continuations rather than using list-all convenience
+extensions. It validates the exact stimulus result as 20+11, the complete type lookup including
+the alternate-hash record, every 48-record publication projection in both scopes, and every live
+Published executable-source reference at the frozen instant. Returned bindings are correlated
+with returned source references by publication, artifact, and tenant facts. Both directions of
+logical-scope isolation are probed. All six observations are then derived from those
+validated public-store results rather than copied from the seed plan.
+
+Before freezing the candidate, root review found that the initial fault harness injected binding
+and source leakage only into the secondary scope even though the runner probed both directions. The
+final harness adds the reverse-direction faults and explicit missing-prepared-binding and
+discarded-source-save cases. Together with activation, replacement, predicate, projection,
+pagination, ordering, count, source-live/scope/time, source-fact, and public-surface faults, the
+focused suite contains 29 injected failure modes plus three positive/surface cases.
+
+Three adversarial read-only reviewers inspected exact range
+`88717fa00eda7cf95fb6a00019ce68fa0504fd83..8223e55b220b80990de59bf589ada6c8da7f0551`
+and returned:
+
+| Axis | Final exact-range verdict |
+|---|---|
+| Correctness/mechanism | PASS — the frozen vector, public production routes, activation/replacement state, full bounded traversals, returned-data correlations, observation digest, and 29 fault modes are coherent. The reviewer independently reran 32/32 focused cases. |
+| Evidence integrity | PASS — the literal input fingerprint `4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc` and result digest `00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a` reproduce, and no seed expectation manufactures a reported observation. No provider, EF, timing, native-plan, physical-form, persistence, ledger, verdict, or task evidence is claimed. |
+| Scope/test preservation | PASS — the effective delta is exactly the provider-neutral runner and its tests, adds no project/package/host/solution/shell/ledger/generated dependency, preserves all existing tests, and introduces no hidden EF or provider dependency. |
+
+Root verification on the integrated head passed the focused suite **32/32**, the complete
+no-container benchmark suite **150/150**, and the warning-as-error build with **0 warnings/errors**.
+`dotnet format` verification passed for the benchmark test project, and the exact checkpoint passed
+`git diff --check`. The benchmark project's whole-project information-severity formatter remains
+blocked by 16 pre-existing whitespace findings in unchanged
+`Workloads/IamNormalizedLookupWorkload.cs`; this checkpoint does not claim that broader formatter
+gate.
+
+This correctness runner does not execute an EF comparator or provider matrix, start a database
+container, collect timing or native-plan evidence, select a physical form, edit the coverage
+ledger, issue a performance verdict, or advance a Spec 094 task. Those remain later #646 admission
+and measurement responsibilities.
+
+### Checkpoint commit correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `checkpoint-commit` v1.1 vector through
+public runtime contracts only. Two independently created clients share adapter-supplied backing,
+and a third distinct client exercises the reopen boundary. The runner seeds one immutable executable,
+acquires and publicly validates current ownership fences for 128 executions, heartbeats the relevant
+fence before each commit, and submits all 1,024 immediate checkpoint
+bundles: each bundle contains one workflow-execution update, four activity changes, three inline
+durable-value changes carrying the exact 512-byte deterministic payload, and two post-commit outbox
+items materialized through the production `RuntimePostCommitOutboxItems` helper.
+
+Accepted checkpoint identities and their digest are derived from returned outbox acknowledgements.
+The runner then rereads every workflow, all 4,096 activities through three-item continuation pages,
+all 3,072 durable values through two-item continuation pages, and all 2,048 outbox items through the
+exact 16-item per-execution bound. An equivalent replay through the second client must preserve the
+same 16 logical outbox items, and a conflicting request under the accepted commit ID must expose the
+public replay-conflict exception. Returned pages must honor their three-/two-item bounds, and outbox
+items must retain deterministic delivery order. After the second ownership client supersedes the selected execution,
+two distinct stale commits are released together through the two commit clients; both outcomes and
+both retries must reject the old fence, and a complete public reread must expose no stale workflow,
+activity, value, outbox, or replay-marker effect. The third client repeats the full public reread.
+This is shared-backing distinct-client visibility, not process/storage restart evidence.
+
+Root verification passed the focused workload suite **35/35**, the complete no-container benchmark
+suite **185/185**, the benchmark project warning-as-error Release build with **0 warnings/errors**,
+path-restricted formatting, and `git diff --check`. The focused fake matrix rejects aliased clients
+or component instances, split or fresh backing, response-only executable writes, unavailable
+store-owned executable root leases, expired or unrefreshable execution leases, missing or synthetic
+acknowledgements, dropped workflow/activity/value/outbox state, malformed or over-limit continuation
+behavior, fabricated page members, altered returned identities/payload/accounting facts, reordered
+outbox work, equivalent replay duplication, conflicting replay acceptance, stale acceptance, partial
+stale mutation, and leaked replay markers.
+
+Three adversarial read-only reviewers inspected initial frozen range
+`4b1eadeea42984f9ebcf3134c60f07134abec7cf..ce67cfd61460fd8f6fb6131bfd3d33b9bfc9adcc`.
+Their findings and dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | One-minute production execution leases could expire across 1,024 commits; the replacement validates every acquired lease, calls `EnsureCurrentAsync`, and requires a successful exact-token heartbeat before every accepted commit. | PASS |
+| Correctness/mechanism | Public page bounds and outbox order were normalized rather than proved. The replacement rejects over-limit pages (the public page model also rejects them), uses genuinely fabricated-member and ignored-limit faults, and compares returned outbox order without sorting. | PASS |
+| Correctness/mechanism | Equivalent replay did not reject a conflicting fingerprint. The replacement submits an altered request under the accepted commit ID and requires `RuntimeCheckpointReplayConflictException`; the fake retains canonical marker fingerprints and includes an acceptance fault. | PASS |
+| Correctness/mechanism | The reviewer asked the workload caller to acquire the executable root-write lease. The production checkpoint store owns that lease around its atomic write; caller acquisition would duplicate and potentially conflict with it. The fake now models and counts the same store-owned boundary and an unavailable-lease fault. This runner does not independently prove the provider-internal lease race; existing runtime/provider conformance remains authoritative. The originating reviewer withdrew the blocker. | PASS |
+| Evidence integrity | The “fabricated member” fault repeated a real member. It now returns a unique plausible activity/value record absent from backing. | PASS |
+| Evidence integrity | The runner does not inject a valid-current-fence mid-commit failure or recreate storage after failure. That is a retained provider failure/restart gate, not evidence supplied by this shared-backing runner. | PASS |
+| Scope/test preservation | The reviewer found the delta additive, the 179-test initial suite preserved, and no project/package/provider/EF/container/ledger/task surface change. | PASS |
+
+The originating reviewers re-inspected exact replacement range
+`4b1eadeea42984f9ebcf3134c60f07134abec7cf..860c844d72ad35947df1dd3d6446c6fe25e7a012`
+and returned PASS on correctness/mechanism, evidence integrity, and scope/test preservation. Their
+independent verification included the focused **35/35**, exact digest recomputation, and clean
+exact-range diff; the scope reviewer also reran the complete no-container **185/185** result recorded
+by root above.
+
+This checkpoint does not execute an EF comparator or provider matrix, start a database container,
+inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
+collect timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a
+performance verdict, independently prove provider-internal executable root-lease exclusion, or
+advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconciliation, real EF
+comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
+stay in the #646 completion gate.
+
+### Outbox drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `outbox-drain` v1.1 vector through
+`IRuntimeCheckpointCommitStore`, `IRuntimePostCommitOutboxClaimStore`,
+`IRuntimePostCommitOutboxClaimCompletionStore`, and `IPostCommitOutboxLookupStore` only. It seeds
+all 1,024 pending records through public checkpoint commits (never the in-memory test insertion
+seam), claims the exact first 32 due identities in declared order, and uses a later scoped sentinel
+to release two independent claimants simultaneously without assuming which claimant wins. After
+the first 32 current claims are completed as 25 delivered and seven retryable; the retryables are
+absent immediately before, and exactly present at, their recorded retry time. Only then, after the
+sentinel visibility expires, the non-winning client reclaims that scoped sentinel under a higher
+fence. Completion using its original claim is rejected without changing the successor state. A third
+distinct client point-rereads every affected identity, status, owner, and fencing token.
+
+The focused fake matrix rejects aliased or split clients/backing, response-only checkpoint seed or
+completion, ignored due/scope/limit/order behavior, a missing or wrong scoped sentinel, duplicate
+current claims, wrong fence or owner (including sentinel-only owner/state fabrication), stale
+completion acceptance, premature/late retry visibility, and altered public reread fences or
+delivered identities. It also rejects return-only or persisted claim-time drift and distinguishes the
+stable stale-claim exception from an unrelated completion failure. The focused suite passed
+**29/29**. This is shared-backing
+public-contract correctness only: it does not claim
+provider or restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion; T100 remains unchecked.
+
+Three adversarial read-only reviewers inspected initial frozen range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..3534f5047adf92978d42fef46a23336e959f5153`.
+The review runtime admitted two workers concurrently; the scope/test-preservation review started
+immediately when the first slot released. Their findings and dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The exact public-contract flow, deterministic result digest, scoped two-client contention, retry timing, stale-fence rejection, and distinct shared-backing reopen were internally consistent with the production transition contracts. | PASS |
+| Evidence integrity | The contention sentinel checked count, identity, and fence but did not prove the winning public owner or exact item/claim state. `RequireContentionClaim` now admits only either declared contender and requires exact claim/item owner, fence, claim time, visibility, and Delivering state. Sentinel-only wrong-owner and wrong-state faults cover the boundary. | PASS |
+| Evidence integrity | The first wrong-state fault persisted its fabricated Pending response, so it failed on a second claim rather than exact-state validation. The fake now persists the genuine transition and fabricates only the response; the dedicated test reaches the exact-current-claim error and proves exactly one backing claim. | PASS |
+| Evidence integrity | Delivered reopen reads did not compare the returned identity or cleared lifecycle state, allowing one unrelated delivered record to answer every lookup. They now require exact identity, Delivered status, cleared availability/owner/start/visibility/failure, one attempt, exact completion time, and the accepted fence. A return-only wrong-identity fault proves that check while the dedicated test verifies unchanged backing. The production model rejects construction of Delivered records with owner/start/visibility, so those explicit defensive assertions cannot be paired with a legal stale-owner fixture. | PASS |
+| Correctness/mechanism | Primary, retry, successor, and reread checks admitted internally consistent but request-shifted claim timestamps. Exact checks now bind outer and persisted start/visibility times to each request's `Now` and timeout; isolated return-only and persisted-time faults fail closed. | PASS |
+| Correctness/mechanism | Any `InvalidOperationException` was counted as a stale-fence rejection. The public completion contract and transition now expose `RuntimePostCommitOutboxStaleClaimException`; the runner catches only that type, and an unrelated-failure fault proves other completion failures propagate. The runtime store contract test verifies the stale exception's presented and current ownership evidence. | PASS |
+| Evidence integrity | Retry-at executed at `10:01:01`, then successor reclaim moved semantic time backward to `10:01:00`. Successor reclaim now uses `retryAt`, one second after expiry, and the positive fake records every claim request time and requires monotonic chronology. | PASS |
+| Scope/test preservation | The typed stale exception initially broke exact-type assertions outside the first focused slices. Twelve stale-specific assertions across runtime, dispatch projection, Groundwork store/crash/redrive, and provider-conformance tests now require the stable type; genuinely unrelated and legacy-result failures retain `InvalidOperationException`. | PASS |
+| Evidence integrity | The first persisted-time fault shifted both the stored item and returned claim, so it failed at response validation instead of proving reopen detection. It now returns the genuine retry claim, persists only a shifted retry item, and must reach the reopened-retry current-claim error. | PASS |
+| Scope/test preservation | The additive delta is confined to the outbox runner/tests/evidence plus the minimal public stale-claim exception, completion-contract documentation, transition classification, and its runtime store contract assertion. It does not change projects, packages, providers, EF surfaces, containers, the coverage ledger, or Spec 094 task state. | PASS |
+
+The originating evidence reviewer re-inspected final implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..53048926f07590f730a39cce85c8dab7d90da89f`,
+independently reproduced focused **26/26**, and returned PASS with no remaining blocker, P1, or P2.
+Root independently reproduced focused **26/26**, complete container-free **211/211**, and
+warning-as-error builds with **0 warnings / 0 errors**. Exact changed-file formatter checks and
+`git diff --check` are clean. The project-wide formatter also reports a pre-existing whitespace
+defect in `IamNormalizedLookupWorkload.cs`, which is outside this exact range and was not rewritten
+in this checkpoint.
+
+A later record-complete review of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..0088dd409413ce40df254d6ac79383399247b0fe`
+found the claim-time, exception-classification, and chronology gaps recorded above. Final
+implementation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..4b93bbf9eed28925dbdd4e410b71b83fd8111e26`
+closes them. Root reproduced focused **29/29**, complete container-free **214/214**, the runtime
+store contract **14/14**, and warning-as-error benchmark builds with **0 warnings / 0 errors**.
+The runtime store project reports one pre-existing xUnit analyzer warning in
+`RuntimeStartCommandSchedulingTests.cs`; the changed runtime contract test is clean.
+
+Correctness re-verification of
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..1626c2c4086982d4531451aa3a80d7cbed84002f`
+found the exact-type preservation and persisted-fault isolation gaps recorded above. Final
+preservation range
+`52081ccf8d0adc6ac23e9899f0123e4d6ee1933b..5731d62521422609c9362d72f439fd132c816e0a`
+closes them. Root reproduced benchmark focused **29/29** and complete **214/214**, affected runtime
+classes **62/62**, dispatch projection **9/9**, Groundwork store/crash/redrive **72/72**, and the
+exact outbox stale-ack contract **4/4** across SQLite, SQL Server, PostgreSQL, and MongoDB. Changed-file
+formatter checks and `git diff --check` are clean; the touched cancellation-crash test also
+normalizes a pre-existing seven-line initializer indentation defect without changing behavior.
+
+### Queue drain correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `queue-drain` v1.1 vector through
+`IWorkflowSchedulerWorkQueue`, `IWorkflowSchedulerWorkClaimInspection`, and
+`IWorkflowSchedulerPoisonStore` only. It enqueues the fixed 128 × 32 workload, then independently
+rereads every exact 32-item FIFO before reading the exact bounded first 16 workflow IDs and racing
+two independently-created queue clients for each selected head. Eight winning current claims are
+accepted only after claim inspection proves one exact active owner per workflow, then completed.
+Five claims expire and are reclaimed under higher
+fences; each old acknowledgement is attempted while its successor is still current and must return
+the public `Stale` outcome. Three current claims are acknowledged before matching poison records
+are written and read through the public poison contract. A third distinct client then verifies the
+advanced normal/poison queue heads, the still-current successor claims, and all three poison records.
+
+`completedItemCount = 8` deliberately describes only the normal-completion group. The three poison
+claims are also acknowledged before their poison records are written; they are represented by
+`poisonItemCount = 3`, not folded into that frozen normal-completion observation. This is
+shared-backing public-contract correctness only: it does not claim provider or process-restart
+durability, native-plan evidence, timing, EF comparison, a physical-form verdict, coverage-ledger
+evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification strengthened the worker result after finding that its initial enqueue check
+compared only three work-item members and did not reread the unselected 112 workflows. The accepted
+candidate compares every public work-item member, rereads all 4,096 items through the independently
+opened client, inspects the persisted single-winner result of every contention, adds a response-only
+final-seed rejection test, and compares the full poison record returned by `ListAsync`. The focused
+queue suite is **17/17**, the complete benchmark-harness test
+project is **231/231**, the benchmark project warnings-as-errors build is clean, both changed-code
+path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
+correctness checks; provider and restart evidence remain deliberately unclaimed.
+
+The three initial adversarial reviews examined `8c1c27e..8b3cb89f`. Evidence integrity passed, but
+correctness requested changes because the runner trusted returned contention claims without first
+inspecting persisted active ownership, compared only claim-item IDs, and did not bind retry takeover
+and stale acknowledgement to the losing and original-winning clients respectively. Scope/test
+preservation confirmed the delta was additive and contained, but requested a fail-closed duplicate
+active-claim mutation and replacement of the lexical provider-neutrality assertion. All findings
+were accepted: persisted single-winner inspection and its mutation test were added; every claimed
+work-item member is compared with a corrupted-item mutation; retries use the actual losing client
+and stale acknowledgements use the actual original winner, with exact takeover counters; and the
+adapter signature test now recursively permits only an explicit provider-neutral type set. The
+initial evidence PASS is retained as historical review evidence but is not treated as final-head
+approval.
+
+The first final-head pass over `8c1c27e..7a675dd` produced PASS verdicts on correctness and evidence
+but the scope/test-preservation reviewer found that the race discarded requester identity, allowing
+a cross-claimant owner grant to masquerade as the other client’s win. That reviewer also found that
+the semantic provider-neutrality check omitted inherited interfaces and base types. Both findings
+were accepted, superseding all verdicts on that head: each contention result now carries the actual
+requesting, winning, and losing client; the returned owner must equal that request’s owner; a
+cross-claimant-grant mutation fails closed; and the explicit type traversal includes inherited
+interfaces and base types (with only the records’ provider-neutral `IEquatable<T>` shape allowed).
+Root’s post-freeze audit then found that initial persisted ownership inspection still used the
+Secondary client unconditionally. That head was also superseded: every winner is now inspected
+through its actual losing/opposing client, and the focused fake requires exactly **16** such
+opposing-client inspections.
+
+The canonical three-axis review of `8c1c27e..51373f1` passed with no blocker, P1, or P2.
+Correctness/mechanism verified requester binding, actual-client propagation, opposing-client
+inspection, takeover/stale provenance, full claimed-item fidelity, poison/reopen behavior, and the
+frozen digest. Evidence integrity independently reran the focused suite (**17/17**) and confirmed
+that all observations and nonclaims are truthful. Scope/test preservation confirmed that the delta
+contains only this runner, its additive tests, and this quickstart; no frozen workload, shared
+serialized file, task, ledger, EF oracle, provider, production registration, package, solution, or
+shell changed, no test was removed or weakened, and T100 remains unchecked.
+
+### Distributed command transport correctness-runner checkpoint
+
+The container-free #646 checkpoint executes the frozen `command-send-lease-ack` v1.1 vector through
+`IExecutionCommandTransport` only. Two distinct public clients share adapter-selected backing and a
+third distinct client exercises reopen visibility. It sends 128 × 64 commands, with the two
+barrier-synchronised sends deliberately placed in a non-primary workflow so the primary golden
+batch remains `command-0000` through `command-0015`. Two concurrent leasers each request eight
+items; their returned requester/result tuples must union to the exact ordered 16-item batch. After
+31 seconds, successors re-lease the same batch under current tokens; stale first-generation
+acknowledgements are rejected before current acknowledgements succeed. The reopened client reports
+all 128 visible workflow IDs and exactly 8,176 pending commands.
+
+This is shared-backing public-contract correctness only. It does not claim provider or process
+restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
+coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked.
+
+Root verification rejected the worker’s initial **12/12** result because send acknowledgements did
+not compare the full command/envelope shape, concurrent lease responses were hashed in client order
+without first establishing a canonical batch, each leaser’s eight-item bound was not enforced, and
+reopen checked only an aggregate count. The accepted candidate compares every public send/lease
+member, proves 8,192 unique transport identities and exact dedicated-stream sequences 63/64,
+requires each leaser’s ordered eight-item share before canonicalizing the cross-client union by
+sequence, verifies exact per-workflow reopen counts (48 for the acknowledged primary stream and 64
+for each other stream), and separately fails closed on response-only send, corrupt item/token/order,
+fabricated visible-list, and fabricated count behavior. The semantic adapter guard traverses
+inherited interfaces and base types against an explicit provider-neutral type set. The focused suite
+is **18/18**, the complete container-free benchmark-harness project is **249/249**, the benchmark
+warnings-as-errors build is clean, changed-code formatter checks pass, and `git diff --check` is
+clean.
+
+The initial three-axis review of `286f559..8322a48` passed evidence integrity and scope/test
+preservation, but correctness found that the first and successor lease generations used different
+owner IDs. A stale acknowledgement could therefore be rejected for owner mismatch even if the
+transport ignored its required lease token. The first remediation used one owner across both
+generations and added an `IgnoreLeaseToken` mutation. On the next exact-range review, correctness
+and evidence integrity passed, but scope/test preservation correctly rejected that shape because it
+erased the contract's cross-node takeover semantics; the same review also found that the semantic
+surface guard treated `IExecutionCommandTransport` as a terminal allowed type instead of traversing
+its public members.
+
+The accepted remediation preserves distinct client and generation owners. It first proves that the
+actual first-generation owner/token tuples are stale after takeover, then pairs each successor with
+the old token for the same transport item and attempts acknowledgement through the current
+successor owner. That second probe isolates token fencing from owner mismatch before the current
+token succeeds, and the `IgnoreLeaseToken` mutation must fail closed. The originating reviewer then
+found a replacement P1: those two probes still allowed a transport that ignored the owner while
+enforcing the token. The final candidate therefore also attempts each current token through its
+matched first-generation owner before current acknowledgement; the `IgnoreLeaseOwner` mutation
+must fail closed. Token and owner fencing are now isolated independently while the original stale
+tuple still proves their combined takeover boundary. The semantic surface guard now traverses
+`IExecutionCommandTransport` itself and explicitly permits only the provider-neutral types exposed
+by that public contract.
+
+The final code-bearing review of `286f559..9682f4961` passed correctness/mechanism with no blocker,
+P1, or P2. Evidence integrity and the originating scope reviewer agreed that the three stale
+combinations, both fencing mutations, takeover, and the semantic-surface fix were sound, but each
+reported one evidence-only P2: adding `IgnoreLeaseOwner` made the committed **17/17** and
+**248/248** test counts stale. Root had independently rerun the exact candidate at **18/18** focused
+and **249/249** complete-project, so this documentation-only disposition records those verified
+counts. No code, workload vector, task, ledger, provider, EF oracle, production registration,
+package, solution, or shell changed in the disposition.
 
 ## 8. Readiness audit
 

@@ -30,6 +30,9 @@
     <Compile Remove="Git/**/*" />
     <EmbeddedResource Remove="Git/**/*" />
     <None Remove="Git/**/*" />
+    <Compile Remove="Json/**/*" />
+    <EmbeddedResource Remove="Json/**/*" />
+    <None Remove="Json/**/*" />
   </ItemGroup>
 
 </Project>

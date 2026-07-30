@@ -20,6 +20,14 @@ public static class ArtifactStore
 
     public static void Write(string outputDirectory, ProcessArtifact artifact)
     {
+        if (BenchmarkAdapterAdmission.TryGetBlockedReason(
+                artifact.Request.WorkloadId,
+                artifact.Request.WorkloadVersion,
+                artifact.Request.Adapter,
+                artifact.Request.PhysicalForm,
+                out var adapterBlockedReason))
+            throw new PerformanceContractException(
+                $"Workload '{artifact.Request.WorkloadId}/{artifact.Request.WorkloadVersion}' adapter/form is blocked from artifact creation: {adapterBlockedReason}.");
         ArtifactSafety.ValidateRequest(artifact.Request);
         ArtifactSafety.Validate(artifact);
         Directory.CreateDirectory(outputDirectory);
@@ -325,6 +333,7 @@ public sealed record MatrixPlan(PerformanceWorkload Workload, BenchmarkProtocol 
     public static MatrixPlan Create(PerformanceWorkload workload, MatrixRequest request)
     {
         BenchmarkAdmissionGuard.RequireReady(workload);
+        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Adapter, request.PhysicalForm);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
             workload.Input.Seed != request.Seed ||
@@ -522,8 +531,18 @@ public static class Comparison
         if (!catalog.Workloads.TryGetValue(anchor.WorkloadId, out var workload) ||
             workload.Version != anchor.WorkloadVersion ||
             workload.Input.Seed != anchor.Seed ||
-            workload.Input.FingerprintSha256 != anchor.InputFingerprintSha256 ||
-            !workload.RequiredProviders.Contains(anchor.Provider, StringComparer.Ordinal) ||
+            workload.Input.FingerprintSha256 != anchor.InputFingerprintSha256)
+            return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/version/input contract.");
+        if (BenchmarkAdapterAdmission.TryGetBlockedReason(
+                workload.Id,
+                workload.Version,
+                anchor.Adapter,
+                anchor.PhysicalForm,
+                out var adapterBlockedReason))
+            return TargetValidation.Invalid(
+                anchor,
+                $"Workload '{workload.Id}' adapter/form is blocked from benchmark comparison: {adapterBlockedReason}.");
+        if (!workload.RequiredProviders.Contains(anchor.Provider, StringComparer.Ordinal) ||
             !workload.PhysicalFormsFor646.Contains(anchor.PhysicalForm, StringComparer.Ordinal))
             return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/provider/form contract.");
         if (BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var blockedReason))

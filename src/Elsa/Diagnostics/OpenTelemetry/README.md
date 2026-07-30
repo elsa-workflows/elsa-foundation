@@ -3,7 +3,7 @@
 Collects OpenTelemetry signals — traces, metrics, and logs — pushed by the host's OTLP exporter over **OTLP/HTTP protobuf**, normalizes them into a queryable diagnostics store, and exposes them to Elsa Studio over HTTP query endpoints and a Server-Sent Events (SSE) live stream. It is a **server** shell feature. Storage, ingestion, redaction, and the live feed are each isolated behind separate `.Core` contracts so a durable backend or external transport can replace one role without touching the rest.
 
 Feature name (manifest / appsettings key): **`DiagnosticsOpenTelemetry`**.
-SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`**.
+The current first-party durable/reference-host composition feature is **`DiagnosticsGroundworkPersistence`**. `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remains temporarily for comparison, oracle, and compatibility work; it has not been removed.
 
 ## What this feature provides
 
@@ -13,7 +13,7 @@ SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSql
   - **`IOtlpRequestAuthenticator`** — scoped request authentication and trusted source-context construction. A host can replace the default API-key/loopback implementation with per-source credential validation and authoritative workspace/application/environment claims.
   - **`OtlpHttpIngestionHandler`** — the single public OTLP/HTTP request handler shared by the explicit ASP.NET Core route mapper and the FastEndpoints receiver.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
-  - **`EfCoreOpenTelemetryStore`** → `IOpenTelemetryStore` (via `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`) — durable EF Core-backed history for resources, traces, spans, metric instruments, metric points, and logs. It uses the same non-blocking write pattern as Structured Logs persistence: ingestion enqueues batches onto a bounded channel, a startup task starts the async drain loop after migrations, and retention pruning keeps high-volume tables bounded by the configured capacities. It also marks resources seen synchronously before enqueueing.
+  - **`GroundworkOpenTelemetryStore`** → `IOpenTelemetryStore` (via the aggregate `DiagnosticsGroundworkPersistence` feature) — the active first-party durable history adapter for resources, traces, spans, metric instruments, metric points, and logs. The aggregate installs the concrete Groundwork OpenTelemetry feature, replaces the default store, and contributes its diagnostic-record streams and document schema to the combined Groundwork deployment manifest.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
   - **`OpenTelemetryRedactor`** → `IOpenTelemetryRedactor` — strips sensitive attribute values (by name) and masks sensitive text patterns (by regex) on ingestion.
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
@@ -56,7 +56,7 @@ Frames use typed `event:` names with a `data:` JSON line:
 - **`event: log`** — an OTLP log record.
 - **`event: dropped`** — `data:` carries the dropped-items summary (`signalType`, `count`, `reason`); emitted in-band when a slow consumer's bounded queue overflowed (backpressure), so the client learns of loss without a side channel.
 
-Unlike the Structured Logs stream, OpenTelemetry stream items carry **no monotonic sequence/id**, so the OTEL stream offers **no `Last-Event-ID` resume** — a reconnecting client simply resumes the live tail. (Durable, resumable history is a persistence follow-up; see _Deferred_.)
+Unlike the Structured Logs stream, OpenTelemetry stream items carry **no monotonic sequence/id**, so the OTEL SSE stream offers **no `Last-Event-ID` resume** — a reconnecting client simply resumes the live tail. Durable Groundwork query/history does not change that live-stream contract.
 
 ## Redaction
 
@@ -73,22 +73,33 @@ Both lists are surfaced through options so a host can extend or replace them.
 
 Contributor completion participates in OTLP ingestion acknowledgement. A contributor that promises durable handoff must return only after its own durable store has accepted the batch. If a contributor throws or observes cancellation, later contributors are not called, the diagnostics store and live feed are not updated, and the exception reaches the ingestion endpoint; therefore the endpoint does not report the batch as accepted. Once a durable contributor has accepted a batch, its independent background processing can be unavailable without requiring the original sender to resubmit it.
 
-The contribution contract itself does not provide persistence, retries, de-duplication, or an outbox. Those semantics belong to each contributor. In particular, `IOpenTelemetryLiveFeed` remains a volatile UI tail, and the EF Core diagnostics store's bounded channel is diagnostics retention rather than a durable downstream-delivery guarantee.
+The contribution contract itself does not provide persistence, retries, de-duplication, or an outbox. Those semantics belong to each contributor. In particular, `IOpenTelemetryLiveFeed` remains a volatile UI tail; durable Groundwork history affects query/history endpoints, not the one-way live feed.
 
-## EFCore SQLite persistence
+## Groundwork persistence
 
-Enable `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry` to replace the default in-memory store with durable SQLite-backed history. The persistence feature:
+Without a persistence feature, `InMemoryOpenTelemetryStore` remains the default. The reference `Elsa.Server`
+composition selects `DiagnosticsGroundworkPersistence` alongside the diagnostics domain features. That aggregate
+atomically installs the two concrete Groundwork persistence features; the OpenTelemetry feature replaces
+`IOpenTelemetryStore` with `GroundworkOpenTelemetryStore`, contributes its immutable signal streams, and joins
+the shared document schema in Groundwork's deployment manifest.
 
-- registers `EfCoreOpenTelemetryStore` as the active `IOpenTelemetryStore` replacement;
-- disables generic EF command/query machinery because this is a diagnostics store, not a read-model domain;
-- routes this DbContext's EF logging to `NullLoggerFactory` to avoid diagnostics feedback loops;
-- uses `IDbContextFactory<OpenTelemetryDbContext>` as a singleton to avoid captive dependencies from the singleton store;
-- runs migrations from the SQLite provider package and starts the drain loop through `StartOpenTelemetryDrainingStartupTask`;
-- flushes the channel through `StopOpenTelemetryDrainingShellTerminator` during graceful shell
-  termination, after task producers stop and before the shell provider disposes the DbContext
-  factory. Async store disposal remains the bounded fallback when terminators do not run.
+The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storage backend; persistence affects
+query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the
+OTEL SSE stream still has no `Last-Event-ID` resume.
 
-The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storage backend; persistence affects query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the OTEL SSE stream still has no `Last-Event-ID` resume.
+`Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remain intact as temporary comparison, oracle, and
+compatibility implementations. #646 must finish the retained performance measurement before #647 deletes the
+EF diagnostics surface; this documentation does not claim that deletion or a performance verdict.
+
+Operators who still need that temporary path enable
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry`. It replaces
+`IOpenTelemetryStore` with `EfCoreOpenTelemetryStore`, disables generic EF command/query machinery, routes
+the diagnostics DbContext's logging to `NullLoggerFactory` to prevent capture feedback, and uses a singleton
+`IDbContextFactory<OpenTelemetryDbContext>`. The SQLite provider runs migrations before starting the bounded
+drain; graceful shell termination flushes that drain before the DbContext factory is disposed, with async
+store disposal as the fallback when shell terminators do not run. This retained path is not selected by the
+reference `Elsa.Server` composition.
 
 ## Deferred (kept behind contracts/options)
 
@@ -103,7 +114,7 @@ This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Its n
 
 ## Replacing the defaults
 
-All store/feed/ingestor/redactor/registry/provider contracts are overridable, while `IOpenTelemetryIngestionContributor` is additive — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped extension is replacing `IOpenTelemetryStore` with `EfCoreOpenTelemetryStore` while leaving ingestion, redaction, transport, and the UI unchanged.
+All store/feed/ingestor/redactor/registry/provider contracts are overridable, while `IOpenTelemetryIngestionContributor` is additive — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped durable replacement is `GroundworkOpenTelemetryStore`; it leaves ingestion, redaction, transport, and the UI unchanged.
 
 ## Owned exception surface
 

@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
@@ -165,7 +166,7 @@ public sealed class GroundworkWorkflowDispatchRedriveTests
             new RuntimePostCommitOutboxClaimRequest("new-owner", requestedAt, TimeSpan.FromMinutes(1), 1)));
 
         Assert.True(newClaim.FencingToken > seed.Claim.FencingToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => seed.Outbox.RecordDeliveryResultAsync(
+        await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => seed.Outbox.RecordDeliveryResultAsync(
             seed.Claim,
             new RuntimePostCommitOutboxDeliveryResult(
                 seed.Start.OutboxItemId,
