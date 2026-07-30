@@ -487,6 +487,30 @@ JSON/XML credential rejection described above. Unit fixtures use synthetic
 plans only to exercise the protocol; this checkpoint still has no executable timing adapter and
 therefore retains or claims no production plan, measurement, or verdict.
 
+### #646 IAM target-profile admission checkpoint
+
+The executable IAM benchmark target remains deliberately unavailable until the program owner
+ratifies the exact EF and Groundwork adapter/form mapping. The harness keeps that decision separate
+from the immutable workload's candidate physical forms through an exact
+`(workload ID, workload version, adapter, physical form)` admission key. Its authoritative IAM
+mapping set is empty.
+
+The two proposed identities
+`ef-aspnetcore-identity / ef-identity-relational-schema` and
+`groundwork-aspnetcore-identity / entity-type-specific-physical-tables-current-identity-shape`,
+plus arbitrary identities, fail closed with
+`iam.adapter-form.ratification-required`. Enforcement occurs before matrix creation can fall
+through to the physical-form allowlist, before adapter preparation or provider access, before a
+matrix child can launch, and before the artifact writer creates its output directory. Comparison
+also rejects adversarial manifest-bound artifacts whose request identities were forged outside the
+normal writer, and the gate rejects a directly constructed complete comparison.
+
+Root verification passed the focused admission/comparison selection **17/17**, the complete
+container-free benchmark-harness project **266/266**, and the Release harness warnings-as-errors
+build with **0 warnings / 0 errors**. No provider suite, database-server container, native-plan
+capture, timing run, performance verdict, workload JSON, package pin, coverage-ledger row, or EF
+oracle changed. T069 and T100 remain unchecked.
+
 ### #646 reproducible workload contract-vector checkpoint
 
 The program owner ratified new v1.1.0 successors for the ten non-Identity, non-Secret workloads on
