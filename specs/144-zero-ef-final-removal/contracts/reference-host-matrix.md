@@ -55,3 +55,39 @@ Each matrix row links:
 ## Evidence safety
 
 Retain provider/version/topology identifiers, commits, fingerprints, and result digests. Never retain connection values, credentials, tokens, or secrets.
+
+## Intake freeze: current configuration declarations
+
+**Recorded Elsa source head**: `f769b516598eb807c9528e7c2e72085b346603e8` (`origin/main`)
+
+This is an intake record of feature declarations in the maintained composition files. It is
+not feature-resolution, schema-readiness, startup, provider-conformance, or performance
+evidence. A row remains **Not ready** until the required resolution and readiness evidence
+is retained under this contract.
+
+| Composition source | Selected provider feature | Diagnostics persistence | ASP.NET Core Identity persistence | OpenIddict persistence | Dashboard | Current status and blocking reason |
+|---|---|---|---|---|---|---|
+| `src/Apps/Elsa.Server/shells.json` | `GroundworkUnifiedPersistenceSqlite` | `DiagnosticsGroundworkPersistence` | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (EF) | `FoundationIdentityOpenIddict` (currently EF-backed) | `WorkflowsDashboard` declared | **Not ready** — Identity and OpenIddict retain EF; this declaration does not yet prove all-lanes resolution or schema readiness. |
+| `src/Apps/Elsa.Server/shells.Production.json` (overlay) | Inherited from the base composition | Inherited from the base composition | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (EF) | `FoundationIdentityOpenIddict` (currently EF-backed) | Inherited from the base composition | **Not ready** — the production overlay retains EF selections. Future replacement must preserve its seeded-admin configuration without retaining EF. |
+| `src/Apps/Elsa.Server/shells.baseline.json` | `GroundworkUnifiedPersistenceSqlite` | Absent | Absent | Absent | Absent | **Minimal, not an all-lanes reference host** — it is EF-free by scope, but it omits diagnostics, ASP.NET Core Identity persistence, OpenIddict persistence, and dashboard. |
+| `docker/compose/elsa-server.shells.json` | `GroundworkUnifiedPersistencePostgreSql` | Absent while diagnostics front-end features are enabled | Absent | Absent | Absent | **Not ready** — the PostgreSQL demo omits mandatory diagnostics persistence, Identity, OpenIddict, and dashboard lanes. Its current explanation of diagnostics omission is not compatible with this final reference-host contract. |
+| SQL Server reference composition | No maintained configuration row at this head | — | — | — | — | **Not created or admitted** — requires #932 evidence and the #647 SQL Server integration/readiness gates. |
+| MongoDB reference composition | No maintained configuration row at this head | — | — | — | — | **Not created or admitted** — requires #932 evidence and the #647 MongoDB integration/readiness gates. |
+
+The PostgreSQL demo also omits parts of the broader default runtime/design composition. The
+omissions above are the mandatory durable lanes that prevent it from serving as a final
+reference-host result.
+
+## Target-row admission rule
+
+A future target row must select exactly one existing unified provider feature:
+`GroundworkUnifiedPersistenceSqlite`, `GroundworkUnifiedPersistenceSqlServer`,
+`GroundworkUnifiedPersistencePostgreSql`, or `GroundworkUnifiedPersistenceMongoDb`; include
+`DiagnosticsGroundworkPersistence`, `FoundationIdentityAspNetCoreIdentityGroundwork`, and
+`WorkflowsDashboard`; and use the exact OpenIddict Groundwork feature delivered and cataloged
+by #643. This contract deliberately does not invent that future OpenIddict feature identifier.
+
+Feature presence alone never makes a row ready or passing. The row must additionally retain
+the feature-resolution, no-EF, schema-readiness, provider-conformance, dashboard, and
+performance evidence required above; an absent capability or schema must instead produce the
+explicit readiness failure required by Composition assertion 6.
