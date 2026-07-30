@@ -64,7 +64,7 @@ public sealed class JsonWorkflowReconciliationSourceTests
     public void Reader_MissingFile_ThrowsInvalidWorkflowCatalogJson()
     {
         var reader = new JsonWorkflowCatalogReader(new ThrowingSerializer(), NullLogger<JsonWorkflowCatalogReader>.Instance);
-        var missing = Path.Combine(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}.json");
+        var missing = Path.Join(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}.json");
 
         var ex = Assert.Throws<InvalidWorkflowCatalogJsonException>(() => reader.Read(missing, CancellationToken.None));
         Assert.Equal(missing, ex.FilePath);
