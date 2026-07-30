@@ -12,8 +12,8 @@ issue #1106. The implementation base is Elsa remote `main`
 `eacb3209e3710834cd78c49e65d4bc763b746769` published package family
 `0.0.1-preview.100`.
 
-Current source declares Identity manifest `1.0.6`. All twelve physical route/index definitions below
-use offset paging and must become cursor-declared so their provider indexes use
+At intake, source declared Identity manifest `1.0.6`. All twelve physical route/index definitions below
+used offset paging and had to become cursor-declared so their provider indexes use
 `id_lookup_key`. The consumer shape remains deliberately split:
 
 | Index | Query identity | Consumer after amendment |
@@ -61,6 +61,69 @@ physicalization does not alter canonical Identity document JSON.
 
 No provider evidence, timing, physical-form selection, coverage-ledger verdict, or EF-oracle state
 is advanced by this baseline.
+
+### Container-free implementation checkpoint — 2026-07-30
+
+The code candidate advances the Identity manifest to `1.0.7`, declares ascending
+cursor paging and the provider identity lookup-key tail on all twelve routes,
+and routes all eight exhaustive identities/ten production call paths through
+`IdentityBoundedDocumentQueryPager`. Direct normalized lookups, deterministic
+loads, and the single ordered take-64 receipt cleanup remain single bounded
+requests with no supplied continuation.
+
+The pager follows only opaque provider continuations under the same
+route/clauses/declared order. It rejects oversized pages, repeated or empty
+tokens, duplicate storage identities, continuation without progress, and
+materialization/page-limit overflow while preserving cancellation. Root review
+found and fixed one portability defect in the worker candidate: valid
+underfilled provider pages could exceed a page limit derived from requested
+page size. The final bound now uses one distinct document as the portable
+progress unit; explicit underfilled-page and empty-token regressions were added.
+
+Root container-free verification:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj \
+  -c Release --filter FullyQualifiedName~BoundedIdentityContinuationTests \
+  --logger 'console;verbosity=minimal'
+# 17 passed
+
+dotnet test tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj \
+  -c Release --filter FullyQualifiedName~IdentityStorageManifestTests \
+  --logger 'console;verbosity=minimal'
+# 27 passed
+
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj \
+  -c Release --filter FullyQualifiedName~AspNetCoreIdentityMutationGuardTests \
+  --logger 'console;verbosity=minimal'
+# 7 passed
+
+dotnet test tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj \
+  -c Release --no-build \
+  --filter FullyQualifiedName~Public_framework_relationship_readers_return_every_page_plus_one_record_exactly_once \
+  --logger 'console;verbosity=minimal'
+# 1 passed
+
+dotnet test tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj \
+  -c Release --no-build \
+  --filter FullyQualifiedName~Public_elsa_list_readers_return_every_page_plus_one_record_exactly_once \
+  --logger 'console;verbosity=minimal'
+# 1 passed
+
+dotnet test tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj \
+  -c Release --no-build --no-restore --logger 'console;verbosity=normal'
+# 151 passed
+
+dotnet test tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj \
+  -c Release --no-build --no-restore --logger 'console;verbosity=normal'
+# 76 passed
+```
+
+This checkpoint completes T091-T093 and T095-T099 only. The evidence-generation ratchet half
+of T094, the versioned evidence successor (T100), full focused suites, exact
+package-family four-provider certification, evidence publication, independent
+review, and Model-B landing remain open. No historical provider artifact,
+coverage-ledger verdict, timing result, or EF oracle changed.
 
 ## 1. Establish The Exact Baseline
 

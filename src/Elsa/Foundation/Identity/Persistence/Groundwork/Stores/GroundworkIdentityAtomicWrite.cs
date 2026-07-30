@@ -180,14 +180,13 @@ public sealed class GroundworkIdentityAtomicWrite
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var query = new DocumentQuery(
+        var query = IdentityBoundedDocumentQueryPager.CreatePageQuery(
             IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
             IdentityStorageManifest.ListExpiredMutationReceiptsQuery,
             [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
                 IdentityStorageManifest.MutationReceiptExpiresAtField,
                 now.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)))],
-            [new DocumentQueryOrder(IdentityStorageManifest.MutationReceiptExpiresAtField)],
-            take: ReceiptCleanupBatchSize);
+            ReceiptCleanupBatchSize);
         var expired = await boundedStore.QueryAsync(query, cancellationToken);
         foreach (var envelope in expired.Documents.Take(ReceiptCleanupBatchSize))
         {

@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -29,20 +29,17 @@ public sealed class GroundworkClaimMappingStore(
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+        var envelopes = await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
             BoundedStore,
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             IdentityStorageManifest.ListClaimMappingsByProviderQuery,
             [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 IdentityStorageManifest.ProviderLookupKeyField,
                 IdentityDocumentId.From(tenantId, provider)))],
-            cancellationToken,
-            MaxMaterialization);
-        return documents
-            .Select(Map)
-            .OrderBy(rule => rule.Order)
-            .ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxMaterialization,
+            cancellationToken);
+        return envelopes.Select(Map).OrderBy(rule => rule.Order).ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default)

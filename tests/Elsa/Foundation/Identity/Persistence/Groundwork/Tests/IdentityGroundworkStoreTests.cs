@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Core.Scoping;
@@ -185,6 +188,83 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Public_elsa_list_readers_return_every_page_plus_one_record_exactly_once()
+    {
+        const int pagePlusOne = 513;
+        const string tenantId = "tenant-1";
+        const string provider = "cursor-provider";
+        var documents = IdentityGroundworkFixtures.NewDocumentStore();
+        var expectedRoleIds = new HashSet<string>(StringComparer.Ordinal);
+        var expectedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+        var expectedSubjects = new HashSet<string>(StringComparer.Ordinal);
+
+        // Seed more than one public-reader page, then exercise only the public Elsa stores below.
+        // Mutation/relationship writer coverage remains in the dedicated store contract tests.
+        for (var index = 0; index < pagePlusOne; index++)
+        {
+            var suffix = index.ToString("D4");
+            var roleId = $"cursor-role-{suffix}";
+            var ruleId = $"cursor-rule-{suffix}";
+            var subject = $"cursor-subject-{suffix}";
+            var role = IdentityGroundworkFixtures.Role() with { Id = roleId, Name = $"Cursor Role {suffix}" };
+            var rule = IdentityGroundworkFixtures.ClaimMappingRule() with
+            {
+                Id = ruleId,
+                Provider = provider,
+                Order = index
+            };
+            var externalIdentity = IdentityGroundworkFixtures.ExternalIdentity() with
+            {
+                Provider = provider,
+                ProviderSubject = subject,
+                UserId = "cursor-user"
+            };
+
+            expectedRoleIds.Add(roleId);
+            expectedRuleIds.Add(ruleId);
+            expectedSubjects.Add(subject);
+
+            await SaveAsync(
+                documents,
+                IdentityStorageManifest.IdentityRoleDocumentKind,
+                IdentityCompositeDocumentId.From(tenantId, roleId),
+                new IdentityRoleDocument(
+                    tenantId,
+                    roleId,
+                    role.Name.ToUpperInvariant(),
+                    IdentityDocumentId.From(tenantId, role.Name.ToUpperInvariant()),
+                    role));
+            await SaveAsync(
+                documents,
+                IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+                IdentityCompositeDocumentId.From(tenantId, provider, ruleId),
+                new IdentityClaimMappingDocument(
+                    tenantId,
+                    provider,
+                    ruleId,
+                    IdentityDocumentId.From(tenantId, provider),
+                    rule));
+            await SaveAsync(
+                documents,
+                IdentityStorageManifest.ExternalLoginDocumentKind,
+                IdentityCompositeDocumentId.From(tenantId, provider, subject),
+                new IdentityExternalLoginDocument(
+                    tenantId,
+                    "cursor-user",
+                    provider,
+                    subject,
+                    IdentityDocumentId.From(tenantId, provider, subject),
+                    null,
+                    externalIdentity,
+                    IdentityDocumentId.From(tenantId, "cursor-user")));
+        }
+
+        AssertExactSet(expectedRoleIds, (await IdentityGroundworkFixtures.RoleStore(documents).ListAsync(tenantId)).Select(role => role.Id));
+        AssertExactSet(expectedRuleIds, (await IdentityGroundworkFixtures.ClaimMappingStore(documents).ListForProviderAsync(tenantId, provider)).Select(rule => rule.Id));
+        AssertExactSet(expectedSubjects, (await IdentityGroundworkFixtures.ExternalIdentityStore(documents).ListForUserAsync(tenantId, "cursor-user")).Select(identity => identity.ProviderSubject));
+    }
+
+    [Fact]
     public async Task Application_Save_Is_An_Upsert()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
@@ -265,6 +345,34 @@ public sealed class IdentityGroundworkStoreTests
 
         Assert.Contains("privileged global", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, documentStore.CallCount);
+    }
+
+    private static async Task SaveAsync<TDocument>(
+        InMemoryDocumentStore documents,
+        string documentKind,
+        string id,
+        TDocument document)
+    {
+        var result = await documents.SaveAsync(
+            new SaveDocumentRequest(
+                documentKind,
+                id,
+                IdentityStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(document, IdentityGroundworkJson.Options),
+                0),
+            CancellationToken.None);
+        Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+    }
+
+    private static void AssertExactSet(IEnumerable<string> expected, IEnumerable<string?> actual)
+    {
+        var expectedValues = expected.ToArray();
+        var actualValues = actual.Select(value => Assert.IsType<string>(value)).ToArray();
+        Assert.Equal(expectedValues.Length, actualValues.Length);
+        Assert.Equal(actualValues.Length, actualValues.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(
+            expectedValues.OrderBy(value => value, StringComparer.Ordinal),
+            actualValues.OrderBy(value => value, StringComparer.Ordinal));
     }
 
     private sealed class ThrowingDocumentStore : IDocumentStore

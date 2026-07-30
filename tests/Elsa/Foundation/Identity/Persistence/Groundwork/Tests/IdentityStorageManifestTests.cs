@@ -53,7 +53,7 @@ public sealed class IdentityStorageManifestTests
     [Fact]
     public void Manifest_declares_the_exact_identity_authority_units()
     {
-        Assert.Equal("1.0.6", IdentityStorageManifest.SchemaVersion);
+        Assert.Equal("1.0.7", IdentityStorageManifest.SchemaVersion);
         var actual = IdentityStorageManifest.Create()
             .StorageUnits
             .Select(unit => unit.Identity.Value)
@@ -292,6 +292,53 @@ public sealed class IdentityStorageManifestTests
                     declaredKeyBytes <= IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes,
                     $"Physical index '{index.LogicalName}' declares {declaredKeyBytes} SQL Server key bytes.");
             }
+        }
+    }
+
+    [Fact]
+    public async Task Every_identity_bounded_route_uses_cursor_paging_and_the_lookup_key_tail()
+    {
+        var declaration = await new IdentityGroundworkStorageManifestSource()
+            .CreateDeclarationAsync(CancellationToken.None);
+        var envelope = new DocumentEnvelopeDefinition();
+
+        var routes = declaration.Manifest.StorageUnits
+            .SelectMany(unit => unit.PhysicalStorage!.BoundedQueries.Select(route => (Unit: unit, Route: route)))
+            .ToArray();
+
+        Assert.Equal(ExpectedBoundedQueries.Length, routes.Length);
+        Assert.All(routes, entry =>
+        {
+            Assert.Equal(QueryPagingSupport.Cursor, entry.Route.PagingSupport);
+            Assert.NotEmpty(entry.Route.SortFields);
+
+            var table = ExplicitTableDefinition(entry.Unit.PhysicalStorage!.Policy);
+            var index = Assert.Single(table.Indexes, candidate => candidate.LogicalName == entry.Route.IndexIdentity);
+            Assert.Equal(envelope.IdLookupKeyColumn, index.Columns[^1].ColumnLogicalName);
+        });
+    }
+
+    [Fact]
+    public void Direct_lookups_and_receipt_cleanup_remain_single_bounded_requests()
+    {
+        var directRoutes = new[]
+        {
+            IdentityStorageManifest.FindUserByNormalizedNameQuery,
+            IdentityStorageManifest.FindUserByNormalizedEmailQuery,
+            IdentityStorageManifest.FindRoleByNormalizedNameQuery,
+            IdentityStorageManifest.ListExpiredMutationReceiptsQuery
+        };
+
+        foreach (var route in directRoutes)
+        {
+            var query = IdentityBoundedDocumentQueryPager.CreatePageQuery(
+                IdentityStorageManifest.IdentityUserDocumentKind,
+                route,
+                [],
+                take: route == IdentityStorageManifest.ListExpiredMutationReceiptsQuery ? 64 : 1);
+            Assert.Null(query.Skip);
+            Assert.Null(query.Continuation);
+            Assert.Equal(route == IdentityStorageManifest.ListExpiredMutationReceiptsQuery ? 64 : 1, query.Take);
         }
     }
 

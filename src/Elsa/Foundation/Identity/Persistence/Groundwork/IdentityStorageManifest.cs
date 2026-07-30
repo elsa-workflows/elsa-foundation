@@ -5,6 +5,7 @@ using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Physicalization;
 using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 
@@ -21,7 +22,7 @@ public static class IdentityStorageManifest
     private const string AdditiveIndexVersionSuffix = "-v2";
 
     public const int MaxAggregateRelationshipEntries = 512;
-    public const string SchemaVersion = "1.0.6";
+    public const string SchemaVersion = "1.0.7";
     public const int ProjectedLookupColumnLength = 400;
     public const int SqlServerStorageScopeKeyBytes = 256;
     public const int SqlServerDocumentIdentityLookupKeyBytes = 32;
@@ -346,7 +347,7 @@ public static class IdentityStorageManifest
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        QuerySortSupport.None,
+        QuerySortSupport.Ascending,
         QueryPagingSupport.Cursor);
 
     private static PortableQueryDeclaration ExpiredReceiptQuery(string indexName) => new(
@@ -355,6 +356,28 @@ public static class IdentityStorageManifest
         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
         QuerySortSupport.Ascending,
         QueryPagingSupport.Cursor);
+    /// <summary>
+    /// Returns the declared deterministic order for an Identity bounded route. Cursor continuations
+    /// bind this order (and the inherited storage scope) into Groundwork's opaque token, so callers
+    /// cannot accidentally resume a route under a different physical order.
+    /// </summary>
+    public static IReadOnlyList<DocumentQueryOrder> GetDeclaredOrder(string queryIdentity) =>
+        queryIdentity switch
+        {
+            FindUserByNormalizedNameQuery => [new DocumentQueryOrder(NormalizedUserNameKeyField)],
+            FindUserByNormalizedEmailQuery => [new DocumentQueryOrder(NormalizedEmailKeyField)],
+            FindRoleByNormalizedNameQuery => [new DocumentQueryOrder(NormalizedRoleNameKeyField)],
+            ListRolesByTenantQuery => [new DocumentQueryOrder(TenantIdField)],
+            ListClaimMappingsByProviderQuery => [new DocumentQueryOrder(ProviderLookupKeyField)],
+            ListUserClaimsQuery => [new DocumentQueryOrder(UserLookupKeyField)],
+            FindUsersByClaimQuery => [new DocumentQueryOrder(ClaimKeyField)],
+            ListRoleClaimsQuery => [new DocumentQueryOrder(RoleLookupKeyField)],
+            ListUserLoginsQuery => [new DocumentQueryOrder(UserLookupKeyField)],
+            ListUserRolesQuery => [new DocumentQueryOrder(UserLookupKeyField)],
+            ListRoleUsersQuery => [new DocumentQueryOrder(RoleLookupKeyField)],
+            ListExpiredMutationReceiptsQuery => [new DocumentQueryOrder(MutationReceiptExpiresAtField)],
+            _ => throw new ArgumentOutOfRangeException(nameof(queryIdentity), queryIdentity, "Unknown Identity bounded query route.")
+        };
 
     private static IndexDeclaration Keyword(string identity, params string[] fields) => new(
         identity,

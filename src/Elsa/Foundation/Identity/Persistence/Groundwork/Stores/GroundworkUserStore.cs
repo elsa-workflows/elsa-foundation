@@ -54,18 +54,13 @@ public sealed class GroundworkUserStore(
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
         var envelopes = (await BoundedStore.QueryAsync(
-            new DocumentQuery(
+            IdentityBoundedDocumentQueryPager.CreatePageQuery(
                 IdentityStorageManifest.IdentityUserDocumentKind,
                 IdentityStorageManifest.FindUserByNormalizedEmailQuery,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                     IdentityStorageManifest.NormalizedEmailKeyField,
                     ScopedLookupKey(tenantId, email)!))],
-                [],
-                null,
-                AmbiguousEmailTake,
-                null,
-                null,
-                BoundedQueryResultOperation.Documents),
+                AmbiguousEmailTake),
             cancellationToken)).Documents;
 
         return envelopes.Count == 1 ? Map(envelopes[0]) : null;

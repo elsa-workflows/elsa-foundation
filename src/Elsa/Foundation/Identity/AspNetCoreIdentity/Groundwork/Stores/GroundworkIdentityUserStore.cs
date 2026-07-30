@@ -5,7 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -416,7 +416,7 @@ public sealed partial class GroundworkIdentityUserStore(
         (string Field, string Value) comparison,
         int take,
         CancellationToken cancellationToken) =>
-        await QueryPageAsync(documentKind, queryIdentity, comparison, null, continuation: null, take, cancellationToken);
+        await QueryPageAsync(documentKind, queryIdentity, comparison, null, take, cancellationToken);
 
     private async Task EnsureUserExistsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
@@ -441,38 +441,40 @@ public sealed partial class GroundworkIdentityUserStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         (string Field, string Value)? secondComparison,
-        CancellationToken cancellationToken) =>
-        await BoundedDocumentQueryPager.QueryAllAsync(
+        CancellationToken cancellationToken)
+    {
+        var clauses = secondComparison is { } second
+            ? new[]
+            {
+                DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value)),
+                DocumentQueryClause.Of(DocumentQueryComparison.Equal(second.Field, second.Value))
+            }
+            : [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))];
+        return await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
             BoundedStore,
             documentKind,
             queryIdentity,
-            secondComparison is { } second
-                ? [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value)), DocumentQueryClause.Of(DocumentQueryComparison.Equal(second.Field, second.Value))]
-                : [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
-            cancellationToken,
-            MaxRelationshipMaterialization);
+            clauses,
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
+            cancellationToken);
+    }
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryPageAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
         (string Field, string Value)? secondComparison,
-        string? continuation,
         int take,
         CancellationToken cancellationToken) =>
         (await BoundedStore.QueryAsync(
-            new DocumentQuery(
+            IdentityBoundedDocumentQueryPager.CreatePageQuery(
                 documentKind,
                 queryIdentity,
                 secondComparison is { } second
                     ? [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value)), DocumentQueryClause.Of(DocumentQueryComparison.Equal(second.Field, second.Value))]
                     : [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
-                [],
-                null,
-                take,
-                continuation,
-                null,
-                BoundedQueryResultOperation.Documents),
+                take),
             cancellationToken)).Documents;
 
     private AspNetCoreIdentityUser? MapUserInScope(DocumentEnvelope envelope, string tenantId)

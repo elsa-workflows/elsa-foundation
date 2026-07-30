@@ -5,7 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -201,39 +201,36 @@ public sealed class GroundworkIdentityRoleStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         CancellationToken cancellationToken) =>
-        (await QueryPageAsync(documentKind, queryIdentity, comparison, continuation: null, SingleResultTake, cancellationToken)).FirstOrDefault();
+        (await QueryPageAsync(documentKind, queryIdentity, comparison, SingleResultTake, cancellationToken)).FirstOrDefault();
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
-        CancellationToken cancellationToken) =>
-        await BoundedDocumentQueryPager.QueryAllAsync(
+        CancellationToken cancellationToken)
+    {
+        return await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
             BoundedStore,
             documentKind,
             queryIdentity,
             [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
-            cancellationToken,
-            MaxRelationshipMaterialization);
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
+            cancellationToken);
+    }
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryPageAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
-        string? continuation,
         int take,
         CancellationToken cancellationToken) =>
         (await BoundedStore.QueryAsync(
-            new DocumentQuery(
+            IdentityBoundedDocumentQueryPager.CreatePageQuery(
                 documentKind,
                 queryIdentity,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
-                [],
-                null,
-                take,
-                continuation,
-                null,
-                BoundedQueryResultOperation.Documents),
+                take),
             cancellationToken)).Documents;
 
     private static IdentityRole MapRole(DocumentEnvelope envelope)

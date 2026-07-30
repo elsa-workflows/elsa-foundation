@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -52,16 +52,17 @@ public sealed class GroundworkExternalIdentityStore(
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+        var envelopes = await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(
             BoundedStore,
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityStorageManifest.ListUserLoginsQuery,
             [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                 IdentityStorageManifest.UserLookupKeyField,
                 IdentityDocumentId.From(tenantId, userId)))],
-            cancellationToken,
-            MaxRelationshipMaterialization);
-        return documents.Select(Map).ToArray();
+            ElsaGroundworkQueryRoutes.MaximumResultCount,
+            MaxRelationshipMaterialization,
+            cancellationToken);
+        return envelopes.Select(Map).ToArray();
     }
 
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
