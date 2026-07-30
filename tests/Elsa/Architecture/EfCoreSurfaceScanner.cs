@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -35,11 +38,75 @@ internal sealed record EfCoreSurfaceSnapshot(
             [nameof(MigrationFiles)] = MigrationFiles,
             [nameof(DbContextFiles)] = DbContextFiles,
             [nameof(RegistrationFiles)] = RegistrationFiles,
-            [nameof(HostConfigurationFiles)] = HostConfigurationFiles
+            [nameof(HostConfigurationFiles)] = HostConfigurationFiles,
+            [nameof(EfFreeBoundaryViolations)] = EfFreeBoundaryViolations
         };
 
     public IReadOnlyList<string> FindEfFreeBoundaryViolations() => EfFreeBoundaryViolations;
 }
+
+internal sealed record RestoreReceiptRepository(
+    string? GitHead,
+    string? WorktreeStatusSha256);
+
+internal sealed record RestoreReceiptRestore(
+    int DriverProtocolVersion,
+    string? DriverPath,
+    string? DriverSha256,
+    IReadOnlyList<string>? CommandTemplate,
+    string? DotnetSdkVersion);
+
+internal sealed record RestoreReceiptDiscovery(
+    int RulesVersion,
+    IReadOnlyList<string>? ExcludedDirectoryNames,
+    IReadOnlyList<string>? Projects,
+    string? ProjectSetSha256);
+
+internal sealed record RestoreReceiptInputEntry(string? Path, string? Sha256);
+
+internal sealed record RestoreReceiptInputs(
+    int RulesVersion,
+    IReadOnlyList<RestoreReceiptInputEntry>? Entries,
+    string? FingerprintSha256);
+
+internal sealed record RestoreReceiptAssets(
+    string? Path,
+    string? Sha256,
+    string? RestoreProjectPath);
+
+internal sealed record RestoreReceiptProject(
+    string? Path,
+    string? InputFingerprintSha256,
+    RestoreReceiptAssets? Assets);
+
+internal sealed record RestoreReceiptDocument(
+    int SchemaVersion,
+    string? Kind,
+    RestoreReceiptRepository? Repository,
+    RestoreReceiptRestore? Restore,
+    RestoreReceiptDiscovery? Discovery,
+    RestoreReceiptInputs? Inputs,
+    IReadOnlyList<RestoreReceiptProject>? Projects);
+
+internal sealed record RestoreReceiptRepositoryState(
+    string? GitHead,
+    string? WorktreeStatusSha256,
+    string? DotnetSdkVersion);
+
+internal sealed record RestoreReceiptFailure(
+    string Code,
+    string Subject,
+    string Detail,
+    string Remediation);
+
+internal sealed record RestoreReceiptValidationResult(IReadOnlyList<RestoreReceiptFailure> Failures)
+{
+    public bool IsValid => Failures.Count == 0;
+}
+
+internal sealed record EfCoreCertificationSnapshot(
+    EfCoreSurfaceSnapshot Surface,
+    RestoreReceiptValidationResult RestoreReceipt);
 
 internal sealed record EfCoreSurfaceBaselineDocument(
     int SchemaVersion,
@@ -179,6 +246,11 @@ internal static class EfCoreSurfaceBaseline
 
 internal sealed class EfCoreSurfaceScanner
 {
+    private static readonly JsonSerializerOptions ReceiptJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private static readonly Regex DbContextDeclarationPattern = new(
         @"\b(?:class|record(?:\s+class)?)\s+(?:\w*DbContext\b|\w+(?:\s*\([^;{]*\))?\s*:\s*(?:global::)?(?:\w+\.)*\w*(?:DbContext|DbContextBase)(?:\s*<|\b))",
         RegexOptions.Compiled);
@@ -212,6 +284,131 @@ internal sealed class EfCoreSurfaceScanner
     private readonly string _repoRoot;
 
     public EfCoreSurfaceScanner(string repoRoot) => _repoRoot = Path.GetFullPath(repoRoot);
+
+    public RestoreReceiptValidationResult ValidateRestoreReceipt(string receiptPath) =>
+        ValidateRestoreReceipt(receiptPath, ReadRepositoryState());
+
+    internal RestoreReceiptValidationResult ValidateRestoreReceipt(
+        string receiptPath,
+        RestoreReceiptRepositoryState repositoryState)
+    {
+        var failures = new List<RestoreReceiptFailure>();
+        var resolvedReceiptPath = ResolveRepositoryPath(receiptPath);
+        if (resolvedReceiptPath is null)
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                "<outside-repository>",
+                "The receipt path must remain within the repository.",
+                "Write the all-project restore receipt beneath artifacts/zero-ef/."));
+            return ValidationResult(failures);
+        }
+
+        if (!File.Exists(resolvedReceiptPath))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MISSING",
+                SafeRelativePath(resolvedReceiptPath),
+                "The all-project restore receipt is missing.",
+                "Run tools/architecture/restore-zero-ef-certification for this worktree."));
+            return ValidationResult(failures);
+        }
+
+        RestoreReceiptDocument? receipt;
+        try
+        {
+            receipt = JsonSerializer.Deserialize<RestoreReceiptDocument>(
+                File.ReadAllText(resolvedReceiptPath),
+                ReceiptJsonOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                SafeRelativePath(resolvedReceiptPath),
+                "The receipt cannot be read as valid JSON.",
+                "Regenerate the all-project restore receipt."));
+            return ValidationResult(failures);
+        }
+
+        if (receipt is null)
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                SafeRelativePath(resolvedReceiptPath),
+                "The receipt is empty.",
+                "Regenerate the all-project restore receipt."));
+            return ValidationResult(failures);
+        }
+
+        ValidateReceiptShape(receipt, resolvedReceiptPath, failures);
+        if (failures.Count != 0)
+            return ValidationResult(failures);
+
+        var discovery = receipt.Discovery!;
+        var inputs = receipt.Inputs!;
+        var receiptProjects = discovery.Projects!;
+        var receiptInputs = inputs.Entries!;
+
+        ValidateRepositoryAndToolBinding(receipt.Repository!, receipt.Restore!, repositoryState, failures);
+        ValidateDriverBinding(receipt.Restore!, failures);
+
+        var currentProjects = DiscoverProjectPaths()
+            .Select(Relative)
+            .ToArray();
+        var receiptProjectSet = receiptProjects.ToHashSet(StringComparer.Ordinal);
+        var currentProjectSet = currentProjects.ToHashSet(StringComparer.Ordinal);
+        if (!receiptProjectSet.SetEquals(currentProjectSet))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_PROJECT_SET_MISMATCH",
+                "projects",
+                ProjectSetDifference(receiptProjectSet, currentProjectSet),
+                "Run the all-project restore driver after reconciling every repository project."));
+        }
+
+        var currentInputs = DiscoverInputUniverse()
+            .Select(path => new RestoreReceiptInputEntry(Relative(path), ComputeSha256(path)))
+            .ToArray();
+        ValidateInputUniverse(receiptInputs, currentInputs, failures);
+
+        var receiptProjectRecords = receipt.Projects!
+            .GroupBy(project => project.Path!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+        foreach (var project in currentProjects)
+        {
+            if (!receiptProjectRecords.TryGetValue(project, out var projectReceipt))
+            {
+                failures.Add(Failure(
+                    "ZERO_EF_RECEIPT_UNBOUND_PROJECT",
+                    project,
+                    "The discovered project has no receipt binding.",
+                    "Run the all-project restore driver."));
+                continue;
+            }
+
+            ValidateProjectBinding(project, projectReceipt, inputs.FingerprintSha256!, failures);
+        }
+
+        foreach (var project in receiptProjectRecords.Keys.Except(currentProjectSet, StringComparer.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_UNBOUND_PROJECT",
+                project,
+                "The receipt binds a project that is no longer discovered.",
+                "Regenerate the all-project restore receipt."));
+        }
+
+        return ValidationResult(failures);
+    }
+
+    public EfCoreCertificationSnapshot ScanForCertification(string receiptPath) =>
+        new(Scan(), ValidateRestoreReceipt(receiptPath));
+
+    internal EfCoreCertificationSnapshot ScanForCertification(
+        string receiptPath,
+        RestoreReceiptRepositoryState repositoryState) =>
+        new(Scan(), ValidateRestoreReceipt(receiptPath, repositoryState));
 
     public EfCoreSurfaceSnapshot Scan()
     {
@@ -319,11 +516,7 @@ internal sealed class EfCoreSurfaceScanner
 
     private ProjectInfo[] LoadProjects()
     {
-        var paths = Directory.EnumerateFiles(_repoRoot, "*.csproj", SearchOption.AllDirectories)
-            .Where(path => !IsIgnored(path))
-            .Select(Path.GetFullPath)
-            .Order(PathComparer)
-            .ToArray();
+        var paths = DiscoverProjectPaths();
 
         return paths.Select(path =>
         {
@@ -353,6 +546,499 @@ internal sealed class EfCoreSurfaceScanner
                 .ToArray();
             return new ProjectInfo(path, Relative(path), name, packages, references, assets.ResolvedPackages, hasAssets);
         }).ToArray();
+    }
+
+    private string[] DiscoverProjectPaths() =>
+        Directory.EnumerateFiles(_repoRoot, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsIgnored(path))
+            .Select(Path.GetFullPath)
+            .Order(PathComparer)
+            .ToArray();
+
+    private string[] DiscoverInputUniverse() =>
+        Directory.EnumerateFiles(_repoRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !IsIgnored(path))
+            .Where(IsDependencyInput)
+            .Select(Path.GetFullPath)
+            .Order(PathComparer)
+            .ToArray();
+
+    private static bool IsDependencyInput(string path)
+    {
+        var name = Path.GetFileName(path);
+        return path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+               path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) ||
+               path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase) ||
+               path.EndsWith(".rsp", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("NuGet.config", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("global.json", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("packages.lock.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ValidateReceiptShape(
+        RestoreReceiptDocument receipt,
+        string receiptPath,
+        ICollection<RestoreReceiptFailure> failures)
+    {
+        if (receipt.SchemaVersion != 1 ||
+            !string.Equals(receipt.Kind, "elsa-zero-ef-all-project-restore", StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_SCHEMA_UNSUPPORTED",
+                SafeRelativePath(receiptPath),
+                $"Expected schemaVersion 1 and kind 'elsa-zero-ef-all-project-restore', received schemaVersion {receipt.SchemaVersion}.",
+                "Regenerate the receipt with the repository-owned restore driver."));
+        }
+
+        if (receipt.Repository is null ||
+            receipt.Restore is null ||
+            receipt.Discovery is null ||
+            receipt.Inputs is null ||
+            receipt.Projects is null ||
+            receipt.Discovery.Projects is null ||
+            receipt.Inputs.Entries is null ||
+            receipt.Inputs.Entries?.Any(entry => entry is null) == true ||
+            receipt.Projects.Any(project => project is null) ||
+            receipt.Restore.DriverProtocolVersion != 1 ||
+            string.IsNullOrWhiteSpace(receipt.Restore.DriverPath) ||
+            !IsSha256(receipt.Restore.DriverSha256) ||
+            receipt.Restore.CommandTemplate is null ||
+            !receipt.Restore.CommandTemplate.SequenceEqual(
+                ["dotnet", "restore", "<project>", "--force-evaluate", "--configfile", "NuGet.config"],
+                StringComparer.Ordinal) ||
+            string.IsNullOrWhiteSpace(receipt.Restore.DotnetSdkVersion) ||
+            receipt.Discovery.RulesVersion != 1 ||
+            receipt.Inputs.RulesVersion != 1 ||
+            !IsSha256(receipt.Repository?.WorktreeStatusSha256) ||
+            string.IsNullOrWhiteSpace(receipt.Repository?.GitHead) ||
+            !IsSha256(receipt.Discovery.ProjectSetSha256) ||
+            !IsSha256(receipt.Inputs.FingerprintSha256))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                SafeRelativePath(receiptPath),
+                "A required receipt field is missing or invalid.",
+                "Regenerate the all-project restore receipt."));
+            return;
+        }
+
+        if (!MatchesExactly(
+                receipt.Discovery.ExcludedDirectoryNames,
+                [".git", "bin", "obj"]))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                "discovery.excludedDirectoryNames",
+                "The receipt does not use the required all-project discovery exclusions.",
+                "Regenerate the receipt with the repository-owned restore driver."));
+        }
+
+        ValidateUniqueSafePaths(receipt.Discovery.Projects, "discovery.projects", failures);
+        ValidateUniqueSafePaths(receipt.Inputs.Entries?.Select(entry => entry.Path), "inputs.entries", failures);
+        ValidateUniqueSafePaths(receipt.Projects.Select(project => project.Path), "projects", failures);
+
+        foreach (var entry in receipt.Inputs.Entries ?? [])
+        {
+            if (!IsSha256(entry.Sha256))
+            {
+                failures.Add(Failure(
+                    "ZERO_EF_RECEIPT_MALFORMED",
+                    entry.Path ?? "inputs.entries",
+                    "An input hash is missing or invalid.",
+                    "Regenerate the all-project restore receipt."));
+            }
+        }
+
+        if (!(receipt.Inputs.Entries ?? []).Any(entry =>
+                string.Equals(entry.Path, "NuGet.config", StringComparison.Ordinal)))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                "inputs.entries",
+                "The canonical NuGet.config restore input is not bound by the receipt.",
+                "Regenerate the all-project restore receipt."));
+        }
+
+        foreach (var project in receipt.Projects)
+        {
+            if (!IsSha256(project.InputFingerprintSha256) ||
+                project.Assets is null ||
+                !IsSafeRepositoryPath(project.Assets.Path) ||
+                !IsSha256(project.Assets.Sha256) ||
+                !IsSafeRepositoryPath(project.Assets.RestoreProjectPath))
+            {
+                failures.Add(Failure(
+                    "ZERO_EF_RECEIPT_MALFORMED",
+                    project.Path ?? "projects",
+                    "A project binding is missing a valid input or assets identity.",
+                    "Regenerate the all-project restore receipt."));
+            }
+        }
+
+        var projectFingerprint = Fingerprint(receipt.Discovery.Projects ?? []);
+        if (!string.Equals(projectFingerprint, receipt.Discovery.ProjectSetSha256, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                "discovery.projectSetSha256",
+                "The receipt project-set fingerprint does not bind its listed projects.",
+                "Regenerate the all-project restore receipt."));
+        }
+
+        var inputFingerprint = Fingerprint((receipt.Inputs.Entries ?? [])
+            .Select(entry => $"{entry.Path}\t{entry.Sha256}"));
+        if (!string.Equals(inputFingerprint, receipt.Inputs.FingerprintSha256, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                "inputs.fingerprintSha256",
+                "The receipt input fingerprint does not bind its listed inputs.",
+                "Regenerate the all-project restore receipt."));
+        }
+    }
+
+    private void ValidateRepositoryAndToolBinding(
+        RestoreReceiptRepository receipt,
+        RestoreReceiptRestore restore,
+        RestoreReceiptRepositoryState current,
+        ICollection<RestoreReceiptFailure> failures)
+    {
+        if (string.IsNullOrWhiteSpace(current.GitHead) ||
+            string.IsNullOrWhiteSpace(current.WorktreeStatusSha256) ||
+            !string.Equals(receipt.GitHead, current.GitHead, StringComparison.Ordinal) ||
+            !string.Equals(receipt.WorktreeStatusSha256, current.WorktreeStatusSha256, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_WORKTREE_MISMATCH",
+                "repository",
+                "The current git head or worktree status differs from the receipt.",
+                "Run the all-project restore driver in the current worktree."));
+        }
+
+        if (string.IsNullOrWhiteSpace(current.DotnetSdkVersion) ||
+            !string.Equals(restore.DotnetSdkVersion, current.DotnetSdkVersion, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_TOOL_MISMATCH",
+                "restore.dotnetSdkVersion",
+                "The current dotnet SDK version differs from the receipt.",
+                "Run the all-project restore driver with the current SDK."));
+        }
+    }
+
+    private void ValidateDriverBinding(RestoreReceiptRestore restore, ICollection<RestoreReceiptFailure> failures)
+    {
+        if (!IsSafeRepositoryPath(restore.DriverPath))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_DRIVER_MISMATCH",
+                restore.DriverPath ?? "restore.driverPath",
+                "The restore driver path is not a repository-relative path.",
+                "Regenerate the receipt with the repository-owned restore driver."));
+            return;
+        }
+
+        var relativeDriverPath = restore.DriverPath!;
+        var driverPath = Path.Combine(_repoRoot, relativeDriverPath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(driverPath) || !string.Equals(ComputeSha256(driverPath), restore.DriverSha256, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_DRIVER_MISMATCH",
+                relativeDriverPath,
+                "The recorded restore driver is missing or has changed.",
+                "Regenerate the receipt with the current repository-owned restore driver."));
+        }
+    }
+
+    private void ValidateInputUniverse(
+        IReadOnlyList<RestoreReceiptInputEntry> receiptInputs,
+        IReadOnlyList<RestoreReceiptInputEntry> currentInputs,
+        ICollection<RestoreReceiptFailure> failures)
+    {
+        var receiptByPath = receiptInputs.ToDictionary(entry => entry.Path!, StringComparer.Ordinal);
+        var currentByPath = currentInputs.ToDictionary(entry => entry.Path!, StringComparer.Ordinal);
+        var receiptPaths = receiptByPath.Keys.ToHashSet(StringComparer.Ordinal);
+        var currentPaths = currentByPath.Keys.ToHashSet(StringComparer.Ordinal);
+        if (!receiptPaths.SetEquals(currentPaths))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_INPUT_UNIVERSE_MISMATCH",
+                "inputs",
+                ProjectSetDifference(receiptPaths, currentPaths),
+                "Run the all-project restore driver after reconciling dependency inputs."));
+        }
+
+        foreach (var path in receiptPaths.Intersect(currentPaths, StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            if (!string.Equals(receiptByPath[path].Sha256, currentByPath[path].Sha256, StringComparison.Ordinal))
+            {
+                failures.Add(Failure(
+                    "ZERO_EF_RECEIPT_INPUT_HASH_MISMATCH",
+                    path,
+                    "The dependency input content hash differs from the receipt.",
+                    "Run the all-project restore driver."));
+            }
+        }
+    }
+
+    private void ValidateProjectBinding(
+        string project,
+        RestoreReceiptProject receipt,
+        string expectedInputFingerprint,
+        ICollection<RestoreReceiptFailure> failures)
+    {
+        if (!string.Equals(receipt.InputFingerprintSha256, expectedInputFingerprint, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_INPUT_HASH_MISMATCH",
+                project,
+                "The project does not bind the receipt input-universe fingerprint.",
+                "Run the all-project restore driver."));
+        }
+
+        var projectDirectory = Path.GetDirectoryName(project)?.Replace(Path.DirectorySeparatorChar, '/');
+        var expectedAssetsPath = string.IsNullOrEmpty(projectDirectory)
+            ? "obj/project.assets.json"
+            : $"{projectDirectory}/obj/project.assets.json";
+        var assets = receipt.Assets!;
+        if (!string.Equals(assets.Path, expectedAssetsPath, StringComparison.Ordinal) ||
+            !string.Equals(assets.RestoreProjectPath, project, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_ASSETS_PROJECT_IDENTITY_MISMATCH",
+                project,
+                "The receipt assets binding does not belong to the project.",
+                "Run the all-project restore driver."));
+            return;
+        }
+
+        var assetsPath = Path.Combine(_repoRoot, assets.Path!.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(assetsPath))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_ASSETS_MISSING",
+                assets.Path,
+                "The project.assets.json file is missing.",
+                "Run the all-project restore driver."));
+            return;
+        }
+
+        if (!string.Equals(ComputeSha256(assetsPath), assets.Sha256, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_ASSETS_HASH_MISMATCH",
+                assets.Path,
+                "The project.assets.json content hash differs from the receipt.",
+                "Run the all-project restore driver."));
+            return;
+        }
+
+        var assetsMetadata = ReadAssetsRestoreMetadata(assetsPath);
+        if (assetsMetadata is null ||
+            assetsMetadata.ConfigFilePaths.Count != 1 ||
+            !string.Equals(assetsMetadata.ConfigFilePaths[0], "NuGet.config", StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_ASSETS_CONFIG_MISMATCH",
+                assets.Path,
+                "The assets restore configFilePaths does not bind exactly the repository NuGet.config.",
+                "Run the all-project restore driver with the canonical NuGet.config."));
+        }
+
+        if (!string.Equals(assetsMetadata?.RestoreProjectPath, project, StringComparison.Ordinal))
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_ASSETS_PROJECT_IDENTITY_MISMATCH",
+                assets.Path,
+                "The assets restore-project identity does not match the bound project.",
+                "Run the all-project restore driver."));
+        }
+    }
+
+    private AssetsRestoreMetadata? ReadAssetsRestoreMetadata(string assetsPath)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(assetsPath));
+            if (!document.RootElement.TryGetProperty("project", out var project) ||
+                !project.TryGetProperty("restore", out var restore))
+                return null;
+            var identity = restore.TryGetProperty("projectUniqueName", out var uniqueName) &&
+                           uniqueName.ValueKind == JsonValueKind.String
+                ? uniqueName.GetString()
+                : restore.TryGetProperty("projectPath", out var projectPath) &&
+                  projectPath.ValueKind == JsonValueKind.String
+                    ? projectPath.GetString()
+                    : null;
+            if (!restore.TryGetProperty("configFilePaths", out var configPaths) ||
+                configPaths.ValueKind != JsonValueKind.Array)
+                return null;
+            var configPathElements = configPaths.EnumerateArray().ToArray();
+            if (configPathElements.Any(path =>
+                    path.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(path.GetString())))
+                return null;
+            var configFilePaths = configPathElements
+                .Select(path => path.GetString()!)
+                .Select(path => ToSafeRepositoryPath(path, Path.GetDirectoryName(assetsPath)))
+                .ToArray();
+            if (configFilePaths.Any(path => path is null))
+                return null;
+            return new(
+                ToSafeRepositoryPath(identity, Path.GetDirectoryName(assetsPath)),
+                configFilePaths.Select(path => path!).ToArray());
+        }
+        catch (Exception exception) when (exception is
+               JsonException or
+               InvalidOperationException or
+               IOException or
+               UnauthorizedAccessException or
+               ArgumentException or
+               NotSupportedException or
+               PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private sealed record AssetsRestoreMetadata(
+        string? RestoreProjectPath,
+        IReadOnlyList<string> ConfigFilePaths);
+
+    private RestoreReceiptRepositoryState ReadRepositoryState()
+    {
+        var head = TryRunCommand("git", "rev-parse", "HEAD");
+        var status = TryRunCommandBytes("git", "status", "--porcelain=v1", "-z", "--untracked-files=all");
+        var dotnetSdkVersion = TryRunCommand("dotnet", "--version");
+        return new(
+            head is null ? null : head.Trim(),
+            status is null ? null : ComputeSha256(status),
+            dotnetSdkVersion is null ? null : dotnetSdkVersion.Trim());
+    }
+
+    private string? TryRunCommand(string fileName, params string[] arguments)
+    {
+        var output = TryRunCommandBytes(fileName, arguments);
+        return output is null ? null : Encoding.UTF8.GetString(output);
+    }
+
+    private byte[]? TryRunCommandBytes(string fileName, params string[] arguments)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo(fileName)
+            {
+                WorkingDirectory = _repoRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            foreach (var argument in arguments)
+                startInfo.ArgumentList.Add(argument);
+            using var process = Process.Start(startInfo);
+            if (process is null)
+                return null;
+            using var output = new MemoryStream();
+            var outputTask = process.StandardOutput.BaseStream.CopyToAsync(output);
+            var errorTask = process.StandardError.ReadToEndAsync();
+            Task.WaitAll(outputTask, errorTask);
+            process.WaitForExit();
+            return process.ExitCode == 0 ? output.ToArray() : null;
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static RestoreReceiptFailure Failure(string code, string subject, string detail, string remediation) =>
+        new(code, subject, detail, remediation);
+
+    private static RestoreReceiptValidationResult ValidationResult(IEnumerable<RestoreReceiptFailure> failures) =>
+        new(failures
+            .OrderBy(failure => failure.Code, StringComparer.Ordinal)
+            .ThenBy(failure => failure.Subject, StringComparer.Ordinal)
+            .ThenBy(failure => failure.Detail, StringComparer.Ordinal)
+            .ToArray());
+
+    private static bool MatchesExactly(IReadOnlyList<string>? actual, IReadOnlyList<string> expected) =>
+        actual is not null && actual.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal);
+
+    private static void ValidateUniqueSafePaths(
+        IEnumerable<string?>? paths,
+        string subject,
+        ICollection<RestoreReceiptFailure> failures)
+    {
+        var values = paths?.ToArray() ?? [];
+        if (values.Any(path => !IsSafeRepositoryPath(path)) ||
+            values.OfType<string>().Distinct(StringComparer.Ordinal).Count() != values.Length)
+        {
+            failures.Add(Failure(
+                "ZERO_EF_RECEIPT_MALFORMED",
+                subject,
+                "Receipt paths must be unique, repository-relative, and normalized with '/'.",
+                "Regenerate the all-project restore receipt."));
+        }
+    }
+
+    private static bool IsSafeRepositoryPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        !Path.IsPathRooted(path) &&
+        !path.Contains('\\') &&
+        !path.Contains(':') &&
+        path.Split('/').All(segment => !string.IsNullOrEmpty(segment) && segment is not "." and not "..");
+
+    private string? ToSafeRepositoryPath(string? path, string? relativeDirectory = null)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+        var fullPath = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(relativeDirectory ?? _repoRoot, path));
+        if (!IsWithinRepository(fullPath))
+            return null;
+        var relative = Relative(fullPath);
+        return IsSafeRepositoryPath(relative) ? relative : null;
+    }
+
+    private string SafeRelativePath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        return IsWithinRepository(fullPath) ? Relative(fullPath) : "<outside-repository>";
+    }
+
+    private string? ResolveRepositoryPath(string path)
+    {
+        try
+        {
+            var fullPath = Path.IsPathRooted(path)
+                ? Path.GetFullPath(path)
+                : Path.GetFullPath(Path.Combine(_repoRoot, path));
+            return IsWithinRepository(fullPath) ? fullPath : null;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(character =>
+            character is >= '0' and <= '9' || character is >= 'a' and <= 'f');
+
+    private static string ComputeSha256(string path) => ComputeSha256(File.ReadAllBytes(path));
+
+    private static string ComputeSha256(byte[] value) =>
+        Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+
+    private static string Fingerprint(IEnumerable<string> entries) =>
+        ComputeSha256(Encoding.UTF8.GetBytes(string.Join("\n", entries.Order(StringComparer.Ordinal)) + "\n"));
+
+    private static string ProjectSetDifference(IReadOnlySet<string> receipt, IReadOnlySet<string> current)
+    {
+        var missingFromReceipt = current.Except(receipt, StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var receiptOnly = receipt.Except(current, StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        return $"missing-from-receipt=[{string.Join(", ", missingFromReceipt)}]; receipt-only=[{string.Join(", ", receiptOnly)}]";
     }
 
     private IEnumerable<string> FindProtectedProviderNeutralityViolations(
