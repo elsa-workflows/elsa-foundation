@@ -263,6 +263,7 @@
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj" />
+    <Project Path="src/Elsa/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/Validations/">
     <Project Path="src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
