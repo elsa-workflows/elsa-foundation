@@ -17,6 +17,7 @@ public static class OpenIddictGroundworkRecordSerializer
     {
         ArgumentNullException.ThrowIfNull(record);
         ValidateIdentity(record.Id);
+        ValidateConcurrencyToken(record.ConcurrencyToken);
 
         try
         {
@@ -49,6 +50,7 @@ public static class OpenIddictGroundworkRecordSerializer
                 throw new OpenIddictGroundworkSerializationException(
                     $"OpenIddict record identity '{record.Id}' does not match envelope identity '{envelope.Id}'.");
             }
+            ValidateConcurrencyToken(record.ConcurrencyToken);
 
             record.PersistenceVersion = envelope.Version;
             return record;
@@ -79,5 +81,12 @@ public static class OpenIddictGroundworkRecordSerializer
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new OpenIddictGroundworkSerializationException("An OpenIddict Groundwork record identity is required.");
+    }
+
+    private static void ValidateConcurrencyToken(string concurrencyToken)
+    {
+        if (string.IsNullOrWhiteSpace(concurrencyToken))
+            throw new OpenIddictGroundworkSerializationException(
+                "An OpenIddict Groundwork record concurrency token is required.");
     }
 }

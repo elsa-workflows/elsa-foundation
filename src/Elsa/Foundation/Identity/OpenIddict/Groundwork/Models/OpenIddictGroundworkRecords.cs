@@ -8,6 +8,7 @@ public abstract class OpenIddictGroundworkRecord
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
+    [JsonRequired]
     public string ConcurrencyToken { get; set; } = Guid.NewGuid().ToString("N");
 
     /// <summary>

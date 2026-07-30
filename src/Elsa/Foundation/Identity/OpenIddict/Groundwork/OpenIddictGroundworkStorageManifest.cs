@@ -31,9 +31,6 @@ public static class OpenIddictGroundworkStorageManifest
     public const string FindScopeByResourceQuery = "find-scope-by-resource";
     public const string FindTokenByReferenceIdQuery = "find-token-by-reference-id";
     public const string FindTokenBySubjectQuery = "find-token-by-subject";
-    public const string PruneAuthorizationsMutation = "prune-openiddict-authorizations";
-    public const string PruneTokensMutation = "prune-openiddict-tokens";
-
     public static IReadOnlyList<GroundworkStorageRouteRequirement> BoundedRoutes { get; } =
     [
         Route(OpenIddictGroundworkJson.ApplicationDocumentKind, FindApplicationByClientIdQuery),
@@ -67,13 +64,12 @@ public static class OpenIddictGroundworkStorageManifest
                 [ClientIdQuery, ApplicationRedirectUriQuery, ApplicationPostLogoutRedirectUriQuery]),
             Unit(OpenIddictGroundworkJson.AuthorizationDocumentKind, "OpenIddict authorization", CreateAuthorizationDefinition(),
                 [AuthorizationSubjectIndex, AuthorizationScopeIndex],
-                [AuthorizationSubjectQuery, AuthorizationScopeQuery],
-                [PruneAuthorizations]),
+                [AuthorizationSubjectQuery, AuthorizationScopeQuery]),
             Unit(OpenIddictGroundworkJson.ScopeDocumentKind, "OpenIddict scope", CreateScopeDefinition(),
                 [ScopeNameIndex, ScopeResourceIndex],
                 [ScopeNameQuery, ScopeResourceQuery]),
             Unit(OpenIddictGroundworkJson.TokenDocumentKind, "OpenIddict token", CreateTokenDefinition(),
-                [TokenReferenceIndex, TokenSubjectIndex], [TokenReferenceQuery, TokenSubjectQuery], [PruneTokens])
+                [TokenReferenceIndex, TokenSubjectIndex], [TokenReferenceQuery, TokenSubjectQuery])
         ],
         new HashSet<string> { "optimistic-concurrency", "global-openiddict-stores" },
         []);
@@ -159,18 +155,12 @@ public static class OpenIddictGroundworkStorageManifest
         CollectionQuery(FindScopeByResourceQuery, ScopeResourceIndex);
     private static readonly BoundedQueryDeclaration TokenReferenceQuery = PointQuery(FindTokenByReferenceIdQuery, TokenReferenceIndex);
     private static readonly BoundedQueryDeclaration TokenSubjectQuery = RangeQuery(FindTokenBySubjectQuery, TokenSubjectIndex);
-    private static readonly BoundedMutationDeclaration PruneAuthorizations = new(
-        PruneAuthorizationsMutation, AuthorizationSubjectQuery.Identity, BoundedMutationAction.Delete());
-    private static readonly BoundedMutationDeclaration PruneTokens = new(
-        PruneTokensMutation, TokenSubjectQuery.Identity, BoundedMutationAction.Delete());
-
     private static StorageUnit Unit(
         string identity,
         string displayName,
         PhysicalTableDefinition definition,
         IReadOnlyCollection<LogicalIndexDeclaration> indexes,
-        IReadOnlyCollection<BoundedQueryDeclaration> queries,
-        IReadOnlyCollection<BoundedMutationDeclaration>? mutations = null) =>
+        IReadOnlyCollection<BoundedQueryDeclaration> queries) =>
         StorageUnit.Create(
             new StorageUnitIdentity(identity),
             displayName,
@@ -184,8 +174,7 @@ public static class OpenIddictGroundworkStorageManifest
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 indexes.ToArray(),
-                queries.ToArray(),
-                boundedMutations: mutations?.ToArray() ?? []));
+                queries.ToArray()));
 
     private static GroundworkStorageRouteRequirement Route(string storageUnit, string routeIdentity) => new(
         new StorageUnitIdentity(storageUnit),

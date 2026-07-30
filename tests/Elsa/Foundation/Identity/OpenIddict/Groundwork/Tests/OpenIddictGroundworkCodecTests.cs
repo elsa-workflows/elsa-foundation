@@ -207,6 +207,19 @@ public sealed class OpenIddictGroundworkCodecTests
             "v1",
             "{\"id\":\"record-b\",\"concurrencyToken\":\"opaque\"}",
             1);
+        var missingConcurrencyToken = Envelope(documentKind, "record-a", "v1", "{\"id\":\"record-a\"}", 1);
+        var nullConcurrencyToken = Envelope(
+            documentKind,
+            "record-a",
+            "v1",
+            "{\"id\":\"record-a\",\"concurrencyToken\":null}",
+            1);
+        var blankConcurrencyToken = Envelope(
+            documentKind,
+            "record-a",
+            "v1",
+            "{\"id\":\"record-a\",\"concurrencyToken\":\"   \"}",
+            1);
 
         Assert.IsType<global::Groundwork.Documents.Serialization.DocumentSchemaVersionException>(
             Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
@@ -217,6 +230,28 @@ public sealed class OpenIddictGroundworkCodecTests
             OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(wrongKind)).InnerException);
         Assert.Null(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
             OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(wrongIdentity)).InnerException);
+        Assert.NotNull(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(missingConcurrencyToken)).InnerException);
+        Assert.Null(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(nullConcurrencyToken)).InnerException);
+        Assert.Null(Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
+            OpenIddictGroundworkRecordSerializer.Deserialize<TRecord>(blankConcurrencyToken)).InnerException);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Save_rejects_a_missing_or_blank_concurrency_token(string? concurrencyToken)
+    {
+        var record = new OpenIddictGroundworkApplication
+        {
+            Id = "application-a",
+            ConcurrencyToken = concurrencyToken!
+        };
+
+        Assert.Throws<OpenIddictGroundworkSerializationException>(() =>
+            OpenIddictGroundworkRecordSerializer.CreateSaveRequest(record));
     }
 
     private static void AssertRecordRoundTrip<TRecord>(TRecord record, Action<TRecord> assert)
