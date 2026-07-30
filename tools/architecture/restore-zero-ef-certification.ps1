@@ -2,6 +2,7 @@
 param(
     [switch]$ForceEvaluate,
     [string]$Receipt,
+    [switch]$SelfCheck,
     [switch]$Help
 )
 
@@ -17,6 +18,7 @@ $ExcludedDirectoryNames = @('.git', 'bin', 'obj')
 
 function Show-Usage {
     Write-Output 'Usage: restore-zero-ef-certification.ps1 -ForceEvaluate -Receipt PATH'
+    Write-Output '       restore-zero-ef-certification.ps1 -SelfCheck'
     Write-Output ''
     Write-Output 'Discovers every repository project independently of solution membership, restores each'
     Write-Output 'project with -ForceEvaluate, and writes a fail-closed zero-EF certification receipt.'
@@ -31,9 +33,12 @@ function Get-Sha256File([string]$Path) {
 }
 
 function Get-Sha256Bytes([byte[]]$Bytes) {
+    if ($null -eq $Bytes) {
+        $Bytes = [byte[]]::new(0)
+    }
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
-        return ([System.BitConverter]::ToString($hasher.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant()
+        return ([System.BitConverter]::ToString($hasher.ComputeHash([byte[]]$Bytes))).Replace('-', '').ToLowerInvariant()
     }
     finally {
         $hasher.Dispose()
@@ -124,7 +129,7 @@ function Get-GitStatusBytes {
     if ($process.ExitCode -ne 0) {
         Stop-Driver 'could not read repository worktree status.'
     }
-    return $bytes.ToArray()
+    return ,$bytes.ToArray()
 }
 
 function Resolve-AssetsProjectPath([string]$AssetsPath, [string]$RestoreProjectPath) {
@@ -180,6 +185,18 @@ function Test-AssetsAdmitRootNuGetConfig([object]$Assets, [string]$AssetsPath) {
         }
     }
     return $false
+}
+
+if ($SelfCheck) {
+    $emptyBytes = [byte[]]::new(0)
+    $emptyHash = Get-Sha256Bytes -Bytes $emptyBytes
+    if (-not $emptyHash.Equals(
+            'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+            [System.StringComparison]::Ordinal)) {
+        Stop-Driver 'empty-byte SHA-256 self-check failed.'
+    }
+    Write-Output 'PowerShell restore-driver self-check passed.'
+    exit 0
 }
 
 if ($Help) {
