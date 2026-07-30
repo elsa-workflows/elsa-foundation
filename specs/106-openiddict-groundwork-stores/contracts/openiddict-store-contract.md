@@ -19,7 +19,7 @@ The concrete package implements OpenIddict 7.5 application, authorization, scope
 - Offset pages have explicit finite count/offset validation and stable id ordering.
 - Stale update/delete maps to the OpenIddict concurrency failure; successful update rotates the opaque concurrency value.
 - Named operations use declared bounded routes. Unsupported shapes fail before provider I/O.
-- Generic query/projection delegate overloads admit only a declared restricted translation. Any other delegate fails immediately with the same documented capability outcome on every provider; it never receives a general queryable collection or materialized full result.
+- Generic query/projection delegate overloads admit only a declared restricted translation. The current manifest declares no generic translation route, so all twelve generic overloads fail immediately with capability code `ELSA-OIDC-GW-001`, before the delegate is invoked or provider work starts; they never receive a general queryable collection or materialized full result.
 - Refresh redemption/revocation, dependent deletion, prune, and bulk revoke preserve their declared atomic/failure/recovery outcomes and exact affected count.
 
 ## External Registration Contract
@@ -29,7 +29,7 @@ One feature registration replaces all four OpenIddict Core store implementations
 ## Error Contract
 
 - Expected stale external writes surface OpenIddict's concurrency outcome.
-- Unsupported generic delegates surface a stable capability outcome.
+- Unsupported generic delegates surface `ELSA-OIDC-GW-001` with the adapter operation identity.
 - Missing schema/capability/topology blocks readiness before token-serving traffic.
 - Provider/serialization failures are translated to documented feature-scoped failures with context and preserved inner cause.
 - Cancellation propagates unchanged.

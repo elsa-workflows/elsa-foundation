@@ -13,7 +13,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// shells.json, and a shared context means a single model snapshot + migration chain. With EF Core's
 /// pending-model-changes check, running the identity feature <em>without</em> OpenIddict against a snapshot
 /// that includes OpenIddict entities would fault <c>MigrateAsync</c> (and vice versa). Separate contexts with
-/// separate history tables (<see cref="OpenIddictIdentityDefaults.MigrationsHistoryTable"/>) let each feature
+/// separate history tables (<see cref="OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable"/>) let each feature
 /// own and evolve its schema without knowing about the other — no backwards dependency, no migration drift.
 /// </remarks>
 public class OpenIddictIdentityDbContext(DbContextOptions<OpenIddictIdentityDbContext> options) : DbContext(options)

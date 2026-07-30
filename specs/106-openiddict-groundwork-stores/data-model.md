@@ -11,7 +11,7 @@ The following records belong only to `Elsa.Foundation.Identity.OpenIddict.Ground
 | Identity/concurrency | id, opaque concurrency value | Primary identity; CAS update/delete. |
 | Client configuration | application/client/consent types, client id/secret | Unique client-id route. |
 | Presentation/keys | display name(s), JSON Web Key Set | Round-trip only unless a named query proves a projection. |
-| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Linked multivalue routes only after preview.76 public capability proof; otherwise block the corresponding route. |
+| Collections | permissions, requirements, redirect URIs, post-logout redirect URIs | Linked multivalue routes only after exact-head public capability proof; otherwise block the corresponding route. |
 | Metadata | properties, settings | Canonical JSON round-trip. |
 
 ## 2. Authorization Record

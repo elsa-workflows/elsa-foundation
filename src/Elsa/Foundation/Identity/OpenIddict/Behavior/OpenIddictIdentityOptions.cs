@@ -16,11 +16,7 @@ public sealed class OpenIddictIdentityOptions
 
     public TimeSpan RefreshTokenLifetime { get; set; } = TimeSpan.FromDays(14);
 
-    /// <summary>
-    /// When set, tokens are backed by an EF in-memory database and signed/encrypted with ephemeral
-    /// per-process keys, so a fresh checkout can issue and validate tokens without any configuration.
-    /// Issued tokens do not survive a restart.
-    /// </summary>
+    /// <summary>Enables ephemeral signing material for local development or demonstrations.</summary>
     public bool IsDevelopmentOrDemo { get; set; }
 
     /// <summary>
@@ -42,15 +38,15 @@ public sealed class OpenIddictIdentityOptions
     /// </summary>
     public string? EncryptionKey { get; set; }
 
-    /// <summary>Sqlite connection string for the OpenIddict token store. Defaults to the shared identity database file.</summary>
+    /// <summary>
+    /// Transitional durable-store connection string retained for callers of the frozen store-oracle
+    /// registration. Provider-neutral behavior does not consume this value.
+    /// </summary>
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// Whether the token-store schema is migrated automatically at startup. Default <c>true</c> so a fresh
-    /// deployment (and dev/demo) works with no extra step. Set to <c>false</c> for controlled multi-instance
-    /// deployments that apply EF Core migrations out-of-band, which avoids concurrent <c>MigrateAsync</c>
-    /// races when several instances start at once. Ignored for the in-memory dev/demo store, which is always
-    /// ensure-created.
+    /// Transitional startup-schema switch retained for callers of the frozen store-oracle registration.
+    /// Provider-neutral behavior does not consume this value.
     /// </summary>
     public bool AutoMigrate { get; set; } = true;
 
