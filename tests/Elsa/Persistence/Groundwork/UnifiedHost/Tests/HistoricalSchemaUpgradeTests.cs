@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Text;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
 using Groundwork.Sqlite;
@@ -29,6 +30,10 @@ public sealed class HistoricalSchemaUpgradeTests
 {
     private const string HistoricalElsaCommit = "ca818b649d85c5167e2222c0ec534e215153d473";
     private const string HistoricalProviderContractVersion = "1.0.0";
+    private const string DarwinUnicodeIdentityAlgorithm =
+        "groundwork-unicode-ordinal-ignore-case-v1-3206f759667cb9cc764ec243dfb3d322a39970184efab619e80163c36d86818f";
+    private const string LinuxNobleUnicodeIdentityAlgorithm =
+        "groundwork-unicode-ordinal-ignore-case-v1-124ca0d0d2b045d7be0e6aea8f07f74fbc0428a13c53a47d8a7d41db71b5ec5f";
     private static readonly DateTimeOffset PlanningTime = DateTimeOffset.Parse("2026-07-31T00:00:00Z");
     private static readonly string[] ExpectedVersionedIndexes =
     [
@@ -83,13 +88,20 @@ public sealed class HistoricalSchemaUpgradeTests
         "workflowExecutionState/by-collection-and-pinned-artifact-v2"
     ];
 
-    public static TheoryData<string, string> Providers => new()
+    public static TheoryData<string, string> Providers
     {
-        { "sqlite", "afab9a4a6cc6842d1658ddbb46fa8a8cbd64bf3e8e8e4a9a166922b2c06790e2" },
-        { "sql-server", "a7fe88ba0b6d467092fe484cd4be88a79787f6794d51ea9ed5dbae9c27223ee5" },
-        { "postgresql", "e51b1c3480e2f78c3b70efcff7b6fdfa86acb4904f0453253de6884b5745a0c6" },
-        { "mongodb", "61c380a25bbb33ceef1ebee062022fba3390b16f73268d72ed0c2b4a4ab4e1e6" }
-    };
+        get
+        {
+            var family = CurrentFixtureFamily();
+            return new TheoryData<string, string>
+            {
+                { "sqlite", family.CompressedDigests["sqlite"] },
+                { "sql-server", family.CompressedDigests["sql-server"] },
+                { "postgresql", family.CompressedDigests["postgresql"] },
+                { "mongodb", family.CompressedDigests["mongodb"] }
+            };
+        }
+    }
 
     [Theory]
     [MemberData(nameof(Providers))]
@@ -296,8 +308,34 @@ public sealed class HistoricalSchemaUpgradeTests
             "Fixtures",
             "schema-evolution",
             "preview.95",
+            CurrentFixtureFamily().RelativeDirectory,
             $"{provider}-applied-state.json.gz");
     }
+
+    private static FixtureFamily CurrentFixtureFamily() =>
+        PortableStringComparison.UnicodeOrdinalIgnoreCaseAlgorithmId switch
+        {
+            DarwinUnicodeIdentityAlgorithm => new FixtureFamily(
+                string.Empty,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlite"] = "afab9a4a6cc6842d1658ddbb46fa8a8cbd64bf3e8e8e4a9a166922b2c06790e2",
+                    ["sql-server"] = "a7fe88ba0b6d467092fe484cd4be88a79787f6794d51ea9ed5dbae9c27223ee5",
+                    ["postgresql"] = "e51b1c3480e2f78c3b70efcff7b6fdfa86acb4904f0453253de6884b5745a0c6",
+                    ["mongodb"] = "61c380a25bbb33ceef1ebee062022fba3390b16f73268d72ed0c2b4a4ab4e1e6"
+                }),
+            LinuxNobleUnicodeIdentityAlgorithm => new FixtureFamily(
+                "unicode-identity-124ca0d0d2b0",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlite"] = "71d1fffe9d597bec07303ae6ade808e22adcd0f631c05cfdb30f98bc3e82778e",
+                    ["sql-server"] = "bf92b166a648f7d5c874772142811e4430dc1624e46953a8ccb33ebf81e214ab",
+                    ["postgresql"] = "da57998276ff80d3bd9c00dba8a49394d971d236873b4883e071ab2e36b34570",
+                    ["mongodb"] = "8738474157f07102d7c6a73e72816dce787e5fe67a7e0388dc976c8321aa42dc"
+                }),
+            var algorithm => throw new InvalidOperationException(
+                $"No immutable preview.95 fixture family exists for Unicode identity algorithm '{algorithm}'.")
+        };
 
     private static string ReadGzip(string path)
     {
@@ -309,4 +347,8 @@ public sealed class HistoricalSchemaUpgradeTests
 
     private static string Digest(byte[] value) =>
         Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+
+    private sealed record FixtureFamily(
+        string RelativeDirectory,
+        IReadOnlyDictionary<string, string> CompressedDigests);
 }
