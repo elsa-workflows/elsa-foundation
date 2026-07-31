@@ -24,6 +24,21 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!--
+    Static analysis. The repository had no .editorconfig and no analyzer settings
+    at all, so its (genuinely good) style consistency was held up by code review
+    alone. The root .editorconfig codifies conventions the code already follows.
+
+    Everything is warnings-only on purpose: no TreatWarningsAsErrors here, so
+    turning analysis on cannot wedge the build. Promoting rules to errors is a
+    deliberate follow-up once the tree is clean under them.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
   <!-- Shared NuGet package metadata for the publishable Elsa.* libraries. -->
   <PropertyGroup>
     <Authors>Elsa Workflows</Authors>
