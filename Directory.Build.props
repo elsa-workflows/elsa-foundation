@@ -4,9 +4,17 @@
     Shared build settings for every project in the repository.
 
     Properties set here are imported before each project's own body, so any
-    project can still override them locally — e.g.
-    src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a Roslyn
-    source generator and pins its own TargetFramework/ImplicitUsings.
+    project can still override them locally. Two projects deliberately keep
+    their own copies rather than inheriting:
+
+      - src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a
+        Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
+
+      - src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore sits
+        inside the frozen EF oracle that FrozenAspNetCoreIdentityEfOracleRatchetTests
+        fingerprints for specs/144-zero-ef-final-removal. No change to that tree
+        — including its .csproj — is permitted before the approved removal work
+        unit, so it is left byte-for-byte alone.
 
     Still deliberately absent: Version. CI injects /p:Version.
   -->
