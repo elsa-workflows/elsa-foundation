@@ -19,6 +19,11 @@ public sealed class PublishingGroundworkLifetimeTests
     public void Groundwork_consumers_are_scoped_and_do_not_cross_request_scopes()
     {
         var services = new ServiceCollection();
+        // spec 145: the auth-free engine services (projection preparer/activator, snapshot review, policy
+        // resolver/preflight, publication stores) moved to the WorkflowsPublishing engine feature, which the
+        // Api feature pulls in via DependsOn at shell composition. This test invokes ConfigureServices directly
+        // (bypassing DependsOn), so it composes both features to assert the same lifetimes it always has.
+        new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddGroundworkPublishingStores();
         services.AddScoped<IDocumentStore>(_ => new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
