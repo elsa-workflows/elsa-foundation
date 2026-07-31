@@ -43,8 +43,8 @@ temporary_root="$(mktemp -d "${TMPDIR:-/tmp}/elsa-preview95-replay.XXXXXX")"
 detached_tree="$temporary_root/source"
 generated_directory="$temporary_root/generated"
 detached_harness="$detached_tree/tools/Preview95SchemaFixtureReproducer"
-container_nuget="$temporary_root/nuget"
-container_cli_home="$temporary_root/dotnet-home"
+isolated_nuget="$temporary_root/nuget"
+isolated_cli_home="$temporary_root/dotnet-home"
 
 cleanup() {
   git -C "$repository_root" worktree remove --force "$detached_tree" >/dev/null 2>&1 || true
@@ -78,32 +78,34 @@ mkdir -p "$detached_harness"
 cp "$harness_source" "$detached_harness/Program.cs"
 cp "$harness_project" "$detached_harness/Preview95SchemaFixtureReproducer.csproj"
 
-mkdir -p "$generated_directory"
+mkdir -p "$generated_directory" "$isolated_nuget" "$isolated_cli_home"
 if [[ "$runtime" == "host" ]]; then
-  dotnet restore "$detached_harness/Preview95SchemaFixtureReproducer.csproj" --force-evaluate
-  dotnet tool restore --tool-manifest "$detached_tree/.config/dotnet-tools.json"
-  dotnet run \
+  DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
+    dotnet restore "$detached_harness/Preview95SchemaFixtureReproducer.csproj" --force-evaluate --no-cache
+  DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
+    dotnet tool restore --tool-manifest "$detached_tree/.config/dotnet-tools.json" --no-cache
+  DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
+    dotnet run \
     --project "$detached_harness/Preview95SchemaFixtureReproducer.csproj" \
     --no-restore \
     -- "$generated_directory"
-  global_packages="$(dotnet nuget locals global-packages --list | sed 's/^global-packages: //')"
+  global_packages="$isolated_nuget"
 else
-  mkdir -p "$container_nuget" "$container_cli_home"
   docker run --rm \
     --user "$(id -u):$(id -g)" \
     -e DOTNET_CLI_HOME=/tmp/dotnet-home \
     -e NUGET_PACKAGES=/tmp/nuget \
     -v "$detached_tree:/src" \
     -v "$generated_directory:/output" \
-    -v "$container_nuget:/tmp/nuget" \
-    -v "$container_cli_home:/tmp/dotnet-home" \
+    -v "$isolated_nuget:/tmp/nuget" \
+    -v "$isolated_cli_home:/tmp/dotnet-home" \
     -w /src \
     "$linux_noble_image" \
     bash -lc \
-    'dotnet restore tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --force-evaluate &&
-     dotnet tool restore --tool-manifest .config/dotnet-tools.json &&
+    'dotnet restore tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --force-evaluate --no-cache &&
+     dotnet tool restore --tool-manifest .config/dotnet-tools.json --no-cache &&
      dotnet run --project tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --no-restore -- /output'
-  global_packages="$container_nuget"
+  global_packages="$isolated_nuget"
 fi
 
 for package in "${packages[@]}" Groundwork.Tool; do
@@ -123,6 +125,11 @@ unicode_algorithm="$(
     "$generated_directory/sqlite-applied-state.json" \
     | sort -u
 )"
+if [[ "$runtime" == "linux-noble" && "$unicode_algorithm" != "$linux_noble_unicode_algorithm" ]]; then
+  echo "Pinned Ubuntu Noble emitted unexpected Unicode identity algorithm '$unicode_algorithm'." >&2
+  exit 1
+fi
+
 case "$unicode_algorithm" in
   "$darwin_unicode_algorithm")
     selected_fixture_directory="$fixture_directory"

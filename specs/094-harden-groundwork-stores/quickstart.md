@@ -202,9 +202,13 @@ original paths, and a second immutable Noble family lives under
 `Fixtures/schema-evolution/preview.95/unicode-identity-124ca0d0d2b0/`. The test selects a family only
 for one of the two exact reviewed algorithm identities and throws for every unknown identity; it
 does not normalize, substitute, or weaken Groundwork's runtime fingerprint. The clean replay command
-now accepts `--runtime host` or `--runtime linux-noble`; Noble execution uses the digest-pinned
+uses the host runtime when invoked without arguments and accepts `--runtime linux-noble` for the
+container replay; Noble execution uses the digest-pinned
 `mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664`
-image and the same exact Elsa/package/tool/upstream-source tuple as the Darwin replay.
+image and the same exact Elsa/package/tool/upstream-source tuple as the Darwin replay. Both modes
+restore packages and tools into fresh replay-local caches with cache reuse disabled. The pinned
+Noble mode additionally requires the generated identity to equal the exact Noble algorithm before
+selecting any fixture family.
 
 At implementation head `cba61a1e00537082198c9c3e8132e645737b6183`, root reproduced the complete
 Noble replay and exact canonical hashes for SQLite `80e1fde0…`, SQL Server `a38f2233…`,
