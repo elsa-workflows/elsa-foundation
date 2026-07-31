@@ -31,6 +31,9 @@
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
+    <!-- spec 145: the split publish engine DependsOn the Events feature (host assembly); the stock-shell
+         composition test must be able to discover it. -->
+    <ProjectReference Include="..\..\..\src\Elsa\Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Mediator\Elsa.Mediator.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
