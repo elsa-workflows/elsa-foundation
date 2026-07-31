@@ -119,6 +119,36 @@ public sealed class HistoricalSchemaUpgradeTests
         Assert.DoesNotContain(plan.Diagnostics, diagnostic =>
             diagnostic.Code is "GW-SCHEMA-003" or "GW-SCHEMA-004" or "GW-SCHEMA-006");
 
+        var historicalIndexIdentities = historical.AppliedOperations
+            .Where(operation => operation.Kind == PhysicalSchemaOperationKind.CreatePhysicalIndex)
+            .Select(operation => $"{operation.StorageUnit!.Value}/{operation.SubjectIdentity}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var currentIndexIdentities = current.Routes
+            .SelectMany(route => route.Indexes.Select(index => $"{route.StorageUnit.Value}/{index.Identity}"))
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.All(
+            historicalIndexIdentities,
+            identity => Assert.Contains(identity, currentIndexIdentities));
+
+        PhysicalSchemaOperationKind[] additiveOperationKinds =
+        [
+            PhysicalSchemaOperationKind.CreatePrimaryStorage,
+            PhysicalSchemaOperationKind.CreateLinkedStorage,
+            PhysicalSchemaOperationKind.CreateCollectionElementStorage,
+            PhysicalSchemaOperationKind.CreatePhysicalEntityStorage,
+            PhysicalSchemaOperationKind.AddProjectedColumn,
+            PhysicalSchemaOperationKind.FinalizeProjectedColumn,
+            PhysicalSchemaOperationKind.CreatePhysicalIndex,
+            PhysicalSchemaOperationKind.BackfillCanonicalJson,
+            PhysicalSchemaOperationKind.ApplyProviderDefinition,
+            PhysicalSchemaOperationKind.ValidatePhysicalSchema,
+            PhysicalSchemaOperationKind.RecordAppliedState
+        ];
+        Assert.All(
+            plan.Operations,
+            operation => Assert.Contains(operation.Kind, additiveOperationKinds));
+
         var versionedIndexes = plan.Operations
             .OfType<CreatePhysicalIndexOperation>()
             .Where(operation => operation.SubjectIdentity.EndsWith("-v2", StringComparison.Ordinal))

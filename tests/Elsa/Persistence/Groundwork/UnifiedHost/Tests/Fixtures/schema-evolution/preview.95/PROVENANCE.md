@@ -20,3 +20,18 @@ empty-history plan was completed with exact operation fingerprints, serialized c
 gzip-compressed without modifying the canonical payload. `HistoricalSchemaUpgradeTests` pins the
 compressed SHA-256 of every file before deserialization and exercises the preview.102 additive
 diff against all four histories.
+
+The source claim is independently replayable; it is not inferred from those fixture hashes.
+Run `bash tools/evidence/replay-preview95-schema-fixtures.sh`. The replay:
+
+1. creates a detached worktree at the exact Elsa commit and verifies its Git tree;
+2. verifies all seven Groundwork package pins plus `Groundwork.Tool` are preview.95;
+3. verifies the restored package nuspecs all bind to Groundwork commit
+   `d297147e0cd6b018d70b1f7d61fef771e32b022f`;
+4. injects only the committed reproduction harness into that detached source tree; and
+5. regenerates the canonical applied-state JSON and compares its SHA-256 with the decompressed
+   committed fixtures for every provider.
+
+The gzip containers retain their original capture metadata, so the replay compares canonical
+payload bytes rather than attempting to reproduce filename and timestamp fields in the gzip
+headers.

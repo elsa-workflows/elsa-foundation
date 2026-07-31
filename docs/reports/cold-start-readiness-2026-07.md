@@ -86,7 +86,7 @@ transition but **not a paired `Initializing`** for the first lazy activation, so
 **Proposed upstream CShells hook:** an opt-in `IShellInitializerObserver` (or reuse the `IShellLifecycleSubscriber`
 shape) invoked around each `InitializeAsync` with the initializer's concrete type + phase + order + duration. That
 single seam makes per-initializer attribution host-observable with no host reflection and no per-feature edits.
-Until it lands, unit 2 sizing uses: the whole activation wall (this instrument) + the deterministic 922-op count +
+Until it lands, unit 2 sizing uses: the whole activation wall (this instrument) + the deterministic 963-op count +
 targeted timing added inside the specific initializers under investigation.
 
 ## Reproduction
