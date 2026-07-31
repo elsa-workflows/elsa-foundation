@@ -1,0 +1,1496 @@
+{
+  "schema": "elsa.activity-contract-surface/1",
+  "activities": [
+    {
+      "alias": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "version": "1.0.0",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Outcome",
+          "name": "Outcome",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "version": "1.0.0",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "CanStartWorkflow",
+          "name": "CanStartWorkflow",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": true,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.bpmn.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "bpmn",
+        "supportsScopedVariables": true,
+        "slots": [
+          {
+            "cardinality": "many",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Activities",
+            "labelProperty": null,
+            "name": "Bpmn.Activities",
+            "property": "activities",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
+      "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
+      "version": "1.0.0",
+      "category": "Runtime",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "CancelChildOnParentCancellation",
+          "name": "CancelChildOnParentCancellation",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": true,
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        },
+        {
+          "key": "CorrelationId",
+          "name": "CorrelationId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Inputs",
+          "name": "Inputs",
+          "type": "System.Text.Json.JsonElement",
+          "collectionKind": "Dictionary",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "WaitForCompletion",
+          "name": "WaitForCompletion",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": false,
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        },
+        {
+          "key": "WorkflowDefinitionId",
+          "name": "WorkflowDefinitionId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": "dropdown",
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": {
+            "optionsProvider": {
+              "dependsOn": [],
+              "key": "DispatchWorkflow.WorkflowDefinitions"
+            }
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "key": "ChildWorkflowExecutionId",
+          "name": "ChildWorkflowExecutionId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "Result",
+          "name": "Result",
+          "type": "Elsa.Activities.DispatchWorkflow.Runtime.Models.DispatchWorkflowResult",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Cancelled",
+          "Completed",
+          "DispatchFailed",
+          "Dispatched",
+          "Faulted"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Do.Activities.Do",
+      "activityTypeKey": "Elsa.Activities.Do.Activities.Do",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Condition",
+          "name": "Condition",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.do.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Body",
+            "labelProperty": null,
+            "name": "Do.Body",
+            "property": "body",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.Flowchart.Activities.Flowchart",
+      "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+      "version": "1.0.0",
+      "category": "Flowchart",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Break",
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.flowchart.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "flowchart",
+        "supportsScopedVariables": true,
+        "slots": [
+          {
+            "cardinality": "many",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Activities",
+            "labelProperty": null,
+            "name": "Flowchart.Activities",
+            "property": "activities",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.For.Activities.For",
+      "activityTypeKey": "Elsa.Activities.For.Activities.For",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "End",
+          "name": "End",
+          "type": "Int32",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "EndInclusive",
+          "name": "EndInclusive",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Start",
+          "name": "Start",
+          "type": "Int32",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Step",
+          "name": "Step",
+          "type": "Int32",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": 1,
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.for.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Body",
+            "labelProperty": null,
+            "name": "For.Body",
+            "property": "body",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.ForEach.Activities.ForEach",
+      "activityTypeKey": "Elsa.Activities.ForEach.Activities.ForEach",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Collection",
+          "name": "Collection",
+          "type": "Object",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.foreach.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Body",
+            "labelProperty": null,
+            "name": "ForEach.Body",
+            "property": "body",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
+      "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
+      "version": "1.0.0",
+      "category": "Runtime",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Http.Activities.HttpEndpoint",
+      "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
+      "version": "1.0.0",
+      "category": "Http",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Authorize",
+          "name": "Authorize",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "CanStartWorkflow",
+          "name": "CanStartWorkflow",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Path",
+          "name": "Path",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Policy",
+          "name": "Policy",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "RequestSizeLimit",
+          "name": "RequestSizeLimit",
+          "type": "Int64?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "RequestTimeout",
+          "name": "RequestTimeout",
+          "type": "TimeSpan?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "ResponseMode",
+          "name": "ResponseMode",
+          "type": "Elsa.Http.Core.ResponseMode",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "SupportedMethods",
+          "name": "SupportedMethods",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": "checklist",
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              }
+            ]
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "key": "ParsedContent",
+          "name": "ParsedContent",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "Request",
+          "name": "Request",
+          "type": "Elsa.Activities.Http.Models.HttpRequestModel",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "RouteData",
+          "name": "RouteData",
+          "type": "String",
+          "collectionKind": "Dictionary",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Http.Activities.SendHttpRequest",
+      "activityTypeKey": "Elsa.Activities.Http.Activities.SendHttpRequest",
+      "version": "1.0.0",
+      "category": "Http",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Content",
+          "name": "Content",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "ContentType",
+          "name": "ContentType",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": "text/plain",
+          "defaultSyntax": "Literal",
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "text/plain",
+                "value": "text/plain"
+              },
+              {
+                "label": "application/json",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "key": "ExpectedStatusCodes",
+          "name": "ExpectedStatusCodes",
+          "type": "Int32",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Method",
+          "name": "Method",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "GET",
+          "defaultSyntax": "Literal",
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              }
+            ]
+          }
+        },
+        {
+          "key": "RequestHeaders",
+          "name": "RequestHeaders",
+          "type": "String",
+          "collectionKind": "Dictionary",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Timeout",
+          "name": "Timeout",
+          "type": "TimeSpan?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Url",
+          "name": "Url",
+          "type": "System.Uri",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "ResponseBody",
+          "name": "ResponseBody",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": "FormattedContent"
+        },
+        {
+          "key": "ResponseHeaders",
+          "name": "ResponseHeaders",
+          "type": "System.String[]",
+          "collectionKind": "Dictionary",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "StatusCode",
+          "name": "StatusCode",
+          "type": "Int32?",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done",
+          "Failed",
+          "Timeout"
+        ],
+        "dynamic": {
+          "kind": "valuePerItem",
+          "source": "ExpectedStatusCodes",
+          "unmatched": "Unmatched status code"
+        }
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+      "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+      "version": "1.0.0",
+      "category": "Http",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Body",
+          "name": "Body",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "ContentType",
+          "name": "ContentType",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Headers",
+          "name": "Headers",
+          "type": "System.String[]",
+          "collectionKind": "Dictionary",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "StatusCode",
+          "name": "StatusCode",
+          "type": "Int32",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": 200,
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "Body",
+          "name": "Body",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "ContentType",
+          "name": "ContentType",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "Headers",
+          "name": "Headers",
+          "type": "System.String[]",
+          "collectionKind": "Dictionary",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        },
+        {
+          "key": "StatusCode",
+          "name": "StatusCode",
+          "type": "Int32",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.If.Activities.If",
+      "activityTypeKey": "Elsa.Activities.If.Activities.If",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Condition",
+          "name": "Condition",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Break",
+          "False",
+          "True"
+        ],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.if.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Else",
+            "labelProperty": null,
+            "name": "If.Else",
+            "property": "else",
+            "slotNameTemplate": null
+          },
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Then",
+            "labelProperty": null,
+            "name": "If.Then",
+            "property": "then",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.Parallel.Activities.Parallel",
+      "activityTypeKey": "Elsa.Activities.Parallel.Activities.Parallel",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.parallel.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": "activity",
+            "collectionProperty": "branches",
+            "displayName": "Branches",
+            "labelProperty": "name",
+            "name": "Parallel.Branch",
+            "property": "branches",
+            "slotNameTemplate": "Parallel.Branch[{name}]"
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.Break",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Break",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.Event",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Event",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "CanStartWorkflow",
+          "name": "CanStartWorkflow",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": true,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "CorrelationId",
+          "name": "CorrelationId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "EventName",
+          "name": "EventName",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "Result",
+          "name": "EventName",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": true,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.Fault",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Fault",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "message",
+          "name": "Message",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.Inline",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Expression",
+          "name": "Expression",
+          "type": "Object",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.PublishEvent",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.PublishEvent",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "CorrelationId",
+          "name": "CorrelationId",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "EventName",
+          "name": "EventName",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "Payload",
+          "name": "Payload",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.ReadLine",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.ReadLine",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [
+        {
+          "key": "Result",
+          "name": "Line",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "text",
+          "name": "Text",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Primitives.Activities.WriteLines",
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLines",
+      "version": "1.0.0",
+      "category": "Primitives",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Lines",
+          "name": "Lines",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Scheduling.Activities.Cron",
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Cron",
+      "version": "1.0.0",
+      "category": "Scheduling",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Expression",
+          "name": "Expression",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "Result",
+          "name": "Expression",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Scheduling.Activities.Delay",
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Delay",
+      "version": "1.0.0",
+      "category": "Scheduling",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Duration",
+          "name": "Duration",
+          "type": "TimeSpan",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "00:00:00",
+          "defaultSyntax": "Literal",
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Scheduling.Activities.Timer",
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Timer",
+      "version": "1.0.0",
+      "category": "Scheduling",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Interval",
+          "name": "Interval",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "Result",
+          "name": "Interval",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Scripting.Activities.RunJavaScript",
+      "activityTypeKey": "Elsa.Activities.Scripting.Activities.RunJavaScript",
+      "version": "1.0.0",
+      "category": "Scripting",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "arguments",
+          "name": "Arguments",
+          "type": "System.Text.Json.JsonElement",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": "{}",
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "script",
+          "name": "Script",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "key": "result",
+          "name": "Value",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        }
+      ],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
+      "alias": "Elsa.Activities.Sequence.Activities.Sequence",
+      "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+      "version": "1.0.0",
+      "category": "Sequence",
+      "executionType": "Action",
+      "inputs": [],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Break",
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.sequence.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "sequence",
+        "supportsScopedVariables": true,
+        "slots": [
+          {
+            "cardinality": "many",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Activities",
+            "labelProperty": null,
+            "name": "Sequence.Activities",
+            "property": "activities",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.Switch.Activities.Switch",
+      "activityTypeKey": "Elsa.Activities.Switch.Activities.Switch",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Value",
+          "name": "Value",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Break",
+          "Default"
+        ],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.switch.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": "activity",
+            "collectionProperty": "cases",
+            "displayName": "Cases",
+            "labelProperty": "match",
+            "name": "Switch.Case",
+            "property": "cases",
+            "slotNameTemplate": "Switch.Case[{match}]"
+          },
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Default",
+            "labelProperty": null,
+            "name": "Switch.Default",
+            "property": "default",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    },
+    {
+      "alias": "Elsa.Activities.While.Activities.While",
+      "activityTypeKey": "Elsa.Activities.While.Activities.While",
+      "version": "1.0.0",
+      "category": "Control Flow",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Condition",
+          "name": "Condition",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": {
+        "kind": "elsa.while.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "generic",
+        "supportsScopedVariables": false,
+        "slots": [
+          {
+            "cardinality": "single",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Body",
+            "labelProperty": null,
+            "name": "While.Body",
+            "property": "body",
+            "slotNameTemplate": null
+          }
+        ]
+      }
+    }
+  ]
+}
