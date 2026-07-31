@@ -83,9 +83,9 @@ public sealed class StimulusRouter : IStimulusRouter
             ? Array.Empty<string>()
             : await SnapshotWaitingExecutionsAsync(request, now, cancellationToken);
 
-        // 2. Start a new instance for every matching published trigger (E3-1). A request targeting one existing
-        //    execution (a local publish) never starts: a start would create a different execution than the target.
-        var starts = request.Mode == StimulusRoutingMode.ResumeOnly || request.TargetWorkflowExecutionId is not null
+        // 2. Start a new instance for every matching published trigger (E3-1). A targeted request is ResumeOnly by
+        //    construction, so it is already excluded here — no separate start-suppression rule is needed.
+        var starts = request.Mode == StimulusRoutingMode.ResumeOnly
             ? []
             : await StartMatchingTriggersAsync(request, dispatchMetadata, cancellationToken);
 

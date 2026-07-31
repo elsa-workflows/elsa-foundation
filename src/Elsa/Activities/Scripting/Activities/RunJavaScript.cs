@@ -44,10 +44,6 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
     /// </summary>
     public const string PossibleOutcomesInputKey = "possibleOutcomes";
 
-    // The module deliberately does not reference Elsa.Workflows.Runtime.Core (where ActivityOutcomes lives), so the
-    // default completion outcome is spelled out here — the same literal ActivityTransition.Complete defaults to.
-    private const string DoneOutcome = "Done";
-
     /// <summary>The stable activity type key, resolved by the runtime's CLR activity constructor.</summary>
     public const string ActivityType = "Elsa.RunJavaScript";
 
@@ -74,20 +70,24 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 Script,
                 Arguments,
                 context.CancellationToken));
-        return ActivityTransition.Complete(new RunJavaScriptResult(result), SelectOutcome(result));
+        var completion = new RunJavaScriptResult(result);
+
+        // With no authored ports there is nothing to route on, so the activity keeps Complete's own default
+        // outcome rather than restating it here.
+        return PossibleOutcomes is { Count: > 0 } outcomes
+            ? ActivityTransition.Complete(completion, SelectOutcome(result, outcomes))
+            : ActivityTransition.Complete(completion);
     }
 
     /// <summary>
-    /// Maps the script's return value onto one of the authored ports. Only a JSON string or number can name a port
-    /// (the same restriction <c>ActivityValueOutcomes</c> places on its source items); anything else — an object, an
-    /// array, null, or a name that is not in the list — is <see cref="UnmatchedOutcome"/>. The comparison is ordinal:
-    /// an outcome port is an identifier, not display text.
+    /// Maps the script's return value onto one of the authored ports. Only a JSON string or number can name a port —
+    /// the same restriction the publish compiler applies when it pins the ports from the authored list, and it reads
+    /// a number the same way (raw text), so the two always agree. Anything else — an object, an array, null, or a
+    /// name not in the list — is <see cref="UnmatchedOutcome"/>. The comparison is ordinal: an outcome port is an
+    /// identifier, not display text.
     /// </summary>
-    private string SelectOutcome(JsonElement? result)
+    private static string SelectOutcome(JsonElement? result, ICollection<string> outcomes)
     {
-        if (PossibleOutcomes is not { Count: > 0 } outcomes)
-            return DoneOutcome;
-
         var selected = result switch
         {
             { ValueKind: JsonValueKind.String } value => value.GetString(),

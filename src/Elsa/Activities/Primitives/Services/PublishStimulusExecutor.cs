@@ -45,15 +45,16 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
         // target id, which the router uses to narrow the fan-in. The target is read from the intent — the runtime's
         // own record of which execution committed the send — never from the (activity-authored) payload, so an
         // activity cannot redirect a local publish at someone else's instance.
+        var localTarget = payload.IsLocalEvent ? intent.WorkflowExecutionId : null;
         var request = new StimulusDispatchRequest(
             stimulusType: payload.StimulusType,
             stimulusHash: payload.StimulusHash,
             input: payload.Payload,
             correlationId: payload.CorrelationId,
-            mode: payload.IsLocalEvent ? StimulusRoutingMode.ResumeOnly : StimulusRoutingMode.StartAndResume,
+            mode: localTarget is null ? StimulusRoutingMode.StartAndResume : StimulusRoutingMode.ResumeOnly,
             idempotencyKey: intent.IdempotencyKey,
             requestedBy: PublishStimulusConstants.RequestedBy,
-            targetWorkflowExecutionId: payload.IsLocalEvent ? intent.WorkflowExecutionId : null);
+            targetWorkflowExecutionId: localTarget);
 
         try
         {

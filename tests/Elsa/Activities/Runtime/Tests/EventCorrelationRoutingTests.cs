@@ -125,13 +125,18 @@ public sealed class EventCorrelationRoutingTests
         Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(siblingHarness));
     }
 
-    /// <summary>A targeted request never starts, so pairing it with StartOnly is rejected at construction.</summary>
-    [Fact]
-    public void TargetedRequest_CannotBeCombinedWithStartOnlyRouting() =>
+    /// <summary>
+    /// Targeting one execution requires ResumeOnly. Enforcing it at construction is what lets the router keep a
+    /// single start-suppression rule (the mode) instead of a second one keyed on the target.
+    /// </summary>
+    [Theory]
+    [InlineData(StimulusRoutingMode.StartOnly)]
+    [InlineData(StimulusRoutingMode.StartAndResume)]
+    public void TargetedRequest_RequiresResumeOnlyRouting(StimulusRoutingMode mode) =>
         Assert.Throws<ArgumentException>(() => new StimulusDispatchRequest(
             EventStimulus.StimulusType,
             EventStimulus.Hash(EventName),
-            mode: StimulusRoutingMode.StartOnly,
+            mode: mode,
             targetWorkflowExecutionId: "wfexec-local"));
 
     private static WorkflowExecutionHarness NewHarness(

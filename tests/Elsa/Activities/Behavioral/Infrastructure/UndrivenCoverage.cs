@@ -30,6 +30,7 @@ public static class UndrivenCoverage
 
     private static readonly Dictionary<(string Activity, string Member), string> Reasons = new()
     {
+        [(DispatchWorkflowActivity, "WorkflowDefinitionId")] = DispatchLifecycleReason,
         [(DispatchWorkflowActivity, "Dispatched")] = DispatchLifecycleReason,
         [(DispatchWorkflowActivity, "ChildWorkflowExecutionId")] = DispatchLifecycleReason,
         [(DispatchWorkflowActivity, "Completed")] = DispatchLifecycleReason,

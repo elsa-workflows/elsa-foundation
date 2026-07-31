@@ -52,6 +52,7 @@ compare observation against the declared contract in both directions —
 - every declared outcome was reached;
 - every observed outcome is declared;
 - every declared output was populated with a non-null value;
+- every required input faults cleanly when absent;
 - every shipped activity has a drive, and no drive threw.
 
 The assertions run from a collection fixture because they are cross-drive: "every declared outcome of
@@ -84,7 +85,21 @@ and adding an outcome the activity would still never emit would make the contrac
 recorded in the drive as terminal-by-contract. The real fix, if wanted, belongs in how the catalog treats
 an activity with no declared outcomes — a studio/catalog decision, not an activity one.
 
-### F3 — an unbound `JsonElement` input cannot be defaulted
+### F3 — requiredness is enforced at admission, not mid-run (no defect)
+
+`verified-by-run`
+
+All eight drivable required inputs are enforced — but not where the drive first looked for them. Omitting one does
+not fault the activity; the value-flow guard **rejects the start command outright** with
+`VF-ACT-004: Input '<key>' on executable node '<node>' does not accept null or absence`, before the activity is
+ever constructed.
+
+Worth recording because the first version of this drive looked only for a committed activity fault, saw none, and
+would have reported all nine required inputs as unenforced — a fabricated defect. The drive now accepts either
+depth (admission rejection or mid-run fault) and requires the rejection to *name the input*, so an unrelated
+failure cannot be mistaken for enforcement.
+
+### F4 — an unbound `JsonElement` input cannot be defaulted
 
 `verified-by-run`
 

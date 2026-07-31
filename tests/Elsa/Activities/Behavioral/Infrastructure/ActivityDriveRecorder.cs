@@ -62,12 +62,34 @@ public sealed class ActivityDriveRecorder
     }
 
     /// <summary>
-    /// Records that omitting a required input faulted the activity rather than silently completing or hanging.
-    /// The caller passes the run so the fault is read from committed state, not from a caught exception type.
+    /// Records that omitting a required input faulted rather than being silently tolerated, reading the outcome from
+    /// committed state: either the activity/workflow ended Faulted, or the value-flow guard refused the start
+    /// command before the activity ran.
     /// </summary>
-    public void RecordRequiredInputFault(Type activityType, string inputKey, WorkflowExecutionRun run, string executableNodeId)
+    /// <param name="admissionRejection">
+    /// The rejection thrown when the runtime refuses to admit the run at all. Requiredness is enforced at two
+    /// different depths — <c>VF-ACT-004</c> rejects a null/absent binding at command admission, while an activity
+    /// that validates in its own body faults mid-run — and both keep the contract. Only the rejection's mention of
+    /// the input counts, so an unrelated failure cannot be mistaken for enforcement.
+    /// </param>
+    public void RecordRequiredInputFault(
+        Type activityType,
+        string inputKey,
+        WorkflowExecutionRun? run,
+        string executableNodeId,
+        Exception? admissionRejection = null)
     {
         _driven.TryAdd(activityType, 0);
+
+        if (admissionRejection is not null)
+        {
+            if (admissionRejection.ToString().Contains(inputKey, StringComparison.Ordinal))
+                _requiredInputFaults.TryAdd((activityType, inputKey), 0);
+            return;
+        }
+
+        if (run is null)
+            return;
 
         var faulted = run.States(executableNodeId)
             .Any(state => state.Status == ActivityExecutionStatus.Faulted || state.Fault is not null);

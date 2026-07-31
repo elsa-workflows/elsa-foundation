@@ -57,7 +57,7 @@ public static class Nodes
                 JsonSerializer.SerializeToElement(structurePayload)));
 
     /// <summary>Binds every entry as an inline literal, inferring the value-type alias from the CLR value.</summary>
-    public static IReadOnlyDictionary<string, RuntimeInputBinding> Literals(IReadOnlyDictionary<string, object?>? inputs)
+    private static IReadOnlyDictionary<string, RuntimeInputBinding> Literals(IReadOnlyDictionary<string, object?>? inputs)
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         if (inputs is null)
@@ -69,7 +69,7 @@ public static class Nodes
         return bindings;
     }
 
-    public static RuntimeInputBinding Literal(string key, object? value)
+    private static RuntimeInputBinding Literal(string key, object? value)
     {
         var type = new ValueTypeDescriptor(Alias(value));
         var envelope = value is null

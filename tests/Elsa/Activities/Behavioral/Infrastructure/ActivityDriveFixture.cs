@@ -45,6 +45,13 @@ public sealed class ActivityDriveFixture : IAsyncLifetime
     /// <summary>The exception a drive threw, or null when it completed.</summary>
     public Exception? FailureFor(Type activityType) => _failures.GetValueOrDefault(activityType);
 
+    /// <summary>
+    /// Every drive failure, keyed by the drive's declared activity type. Surfaced in full rather than only per
+    /// shipped activity: a drive that spans activities (so its key is not itself a shipped activity) would
+    /// otherwise be able to throw without any assertion noticing.
+    /// </summary>
+    public IReadOnlyDictionary<Type, Exception> Failures => _failures;
+
     public async Task InitializeAsync()
     {
         foreach (var drive in Drives)

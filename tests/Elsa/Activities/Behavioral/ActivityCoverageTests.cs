@@ -89,6 +89,29 @@ public sealed class ActivityOutputPopulationTests(ActivityDriveFixture fixture) 
     }
 }
 
+/// <summary>
+/// The fourth assertion of the brief: a required input that is absent must fault cleanly, rather than the activity
+/// completing as if nothing were wrong. A required input nothing enforces is a contract the runtime does not keep.
+/// </summary>
+public sealed class RequiredInputEnforcementTests(ActivityDriveFixture fixture) : ActivityDriveTestBase(fixture)
+{
+    public static TheoryData<string, string> RequiredInputs =>
+        ActivityMemberPairs(ActivityContractInventory.RequiredInputs, UndrivenCoverage.ReasonFor);
+
+    [Theory]
+    [MemberData(nameof(RequiredInputs))]
+    public void Every_required_input_faults_cleanly_when_absent(string activityTypeName, string inputKey)
+    {
+        var activityType = Activity(activityTypeName);
+
+        Assert.True(
+            Recorder.ObservedRequiredInputFault(activityType, inputKey),
+            $"'{activityTypeName}' declares input '{inputKey}' as required, but running the activity without it did " +
+            "not fault: the run completed or was abandoned instead. A required input nothing enforces is a contract " +
+            "the runtime does not keep — either enforce it, or drop the requiredness from the contract.");
+    }
+}
+
 /// <summary>Coverage of the drives themselves: every shipped activity has one, and none of them threw.</summary>
 public sealed class ActivityDriveHealthTests(ActivityDriveFixture fixture) : ActivityDriveTestBase(fixture)
 {
@@ -113,6 +136,22 @@ public sealed class ActivityDriveHealthTests(ActivityDriveFixture fixture) : Act
         var failure = Fixture.FailureFor(Activity(activityTypeName));
 
         Assert.True(failure is null, $"The drive for '{activityTypeName}' threw: {failure}");
+    }
+
+    /// <summary>
+    /// Catches a drive that threw but whose key is not a shipped activity — <c>No_drive_faulted</c> enumerates
+    /// shipped activities only, so a cross-activity drive could otherwise fail silently and leave its coverage
+    /// looking merely "not yet reached".
+    /// </summary>
+    [Fact]
+    public void No_drive_failed_unattributed()
+    {
+        var unattributed = Fixture.Failures
+            .Where(entry => ActivityContractInventory.Activities.All(activity => activity != entry.Key))
+            .Select(entry => $"{entry.Key.Name}: {entry.Value}")
+            .ToArray();
+
+        Assert.True(unattributed.Length == 0, string.Join(Environment.NewLine, unattributed));
     }
 
     /// <summary>Guards the reflection sweep itself: an empty inventory would make every assertion above vacuous.</summary>

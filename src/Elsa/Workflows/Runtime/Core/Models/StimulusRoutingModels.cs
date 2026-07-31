@@ -57,8 +57,10 @@ public sealed class StimulusDispatchRequest
             throw new ArgumentException("Typed stimulus provider ID cannot be blank.", nameof(providerId));
         if (targetWorkflowExecutionId is not null && string.IsNullOrWhiteSpace(targetWorkflowExecutionId))
             throw new ArgumentException("Target workflow execution id cannot be blank when provided.", nameof(targetWorkflowExecutionId));
-        if (targetWorkflowExecutionId is not null && mode == StimulusRoutingMode.StartOnly)
-            throw new ArgumentException("A target workflow execution id cannot be combined with StartOnly routing: a start creates a new execution.", nameof(targetWorkflowExecutionId));
+        if (targetWorkflowExecutionId is not null && mode != StimulusRoutingMode.ResumeOnly)
+            throw new ArgumentException(
+                $"Targeting workflow execution '{targetWorkflowExecutionId}' requires {nameof(StimulusRoutingMode.ResumeOnly)} routing: a start would create a different execution than the target.",
+                nameof(targetWorkflowExecutionId));
 
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
@@ -137,9 +139,13 @@ public sealed class StimulusDispatchRequest
 
     /// <summary>
     /// When set, delivery is confined to this one workflow execution: the router narrows the resume fan-in to
-    /// bookmarks owned by it and starts nothing. This is the routing shape a <b>local</b> publish needs
+    /// bookmarks owned by it. This is the routing shape a <b>local</b> publish needs
     /// (<c>PublishEvent.IsLocalEvent</c>, #1117) — an event the publishing instance raises for itself, which must
     /// not wake siblings or start new instances. Null (the default) keeps the broadcast fan-out.
+    /// <para>
+    /// Setting this requires <see cref="StimulusRoutingMode.ResumeOnly"/>, so "targeted" needs no separate
+    /// start-suppression rule anywhere downstream: the mode already carries it.
+    /// </para>
     /// </summary>
     public string? TargetWorkflowExecutionId { get; }
 
