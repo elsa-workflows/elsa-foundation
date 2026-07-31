@@ -83,7 +83,10 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             Assert.Collection(
                 policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-sort").Columns,
                 scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
-                sort => Assert.Equal("sort_key", sort.ColumnLogicalName));
+                sort => Assert.Equal("sort_key", sort.ColumnLogicalName),
+                identity => Assert.Equal(
+                    new DocumentEnvelopeDefinition().IdComparisonKeyColumn,
+                    identity.ColumnLogicalName));
         });
     }
 

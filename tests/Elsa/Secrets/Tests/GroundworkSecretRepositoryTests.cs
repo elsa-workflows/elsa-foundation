@@ -264,7 +264,10 @@ public sealed class GroundworkSecretRepositoryTests
             scope => Assert.Equal(new DocumentEnvelopeDefinition().StorageScopeColumn, scope.ColumnLogicalName),
             tenant => Assert.Equal(SecretsStorageManifest.TenantIdField, tenant.ColumnLogicalName),
             status => Assert.Equal(SecretsStorageManifest.StatusField, status.ColumnLogicalName),
-            name => Assert.Equal(SecretsStorageManifest.NormalizedNameField, name.ColumnLogicalName));
+            name => Assert.Equal(SecretsStorageManifest.NormalizedNameField, name.ColumnLogicalName),
+            identity => Assert.Equal(
+                new DocumentEnvelopeDefinition().IdComparisonKeyColumn,
+                identity.ColumnLogicalName));
         Assert.Equal(
             SecretNameConstraints.MaximumLength,
             policy.Definition.ProjectedColumns.Single(column =>

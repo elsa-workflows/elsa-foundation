@@ -637,7 +637,8 @@ public sealed class ElsaRuntimeStorageManifestTests
             physical.Indexes,
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex &&
-                index.Columns.Count == 4);
+                index.Columns.Count == 5 &&
+                index.Columns[^1].ColumnLogicalName == new DocumentEnvelopeDefinition().IdComparisonKeyColumn);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -135,8 +136,9 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
                 first.AddSeconds(index)));
         }
 
+        var recordingQueries = new RecordingBoundedDocumentStore(providers.DocumentQueries);
         var reduced = new GroundworkOpenTelemetryStore(
-            providers,
+            providers with { DocumentQueries = recordingQueries },
             Options.Create(new OpenTelemetryDiagnosticsOptions
             {
                 ResourceCapacity = 2,
@@ -155,6 +157,12 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
         Assert.Equal(
             ["resource-g", "resource-f"],
             (await reduced.QueryResourcesAsync(new() { Take = 20 })).Items.Select(x => x.Id));
+        var retentionQueries = recordingQueries.Queries.Where(query =>
+            query.QueryIdentity is
+                OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery or
+                OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery);
+        Assert.DoesNotContain(retentionQueries, query => query.Skip is not null);
+        Assert.Contains(retentionQueries, query => query.Continuation is not null);
     }
 
     [Fact]
@@ -255,4 +263,28 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
 
     private static MetricInstrument Instrument(string id, string resourceId) =>
         new(id, resourceId, "orders.duration", "ms", null, MetricKind.Gauge, new Dictionary<string, string?>());
+
+    private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Queries { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            Queries.Add(query);
+            return inner.QueryAsync(query, cancellationToken);
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.CountAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+    }
 }

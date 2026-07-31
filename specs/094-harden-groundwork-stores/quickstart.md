@@ -54,8 +54,10 @@ Pre-freeze verification restored the exact package/tool family and passed:
   (133/133);
 - the focused runtime/IAM-secrets/Identity evidence contract slice (9 passed, four publication-only
   tests explicitly skipped without opt-in); and
-- offline resolution of the full reference manifest for SQLite, PostgreSQL, SQL Server, and MongoDB,
-  each with status `ready` and zero diagnostics.
+- offline resolution of the reference composition through
+  `GroundworkAllFeaturesWithIdentityDeploymentSchema` for SQLite, PostgreSQL, SQL Server, and MongoDB,
+  each with status `ready` and zero diagnostics. This preparation check did not include the diagnostics
+  manifest sources.
 
 The first preview.102 Identity resolution exposed twelve `GW-PHYSICAL-025` diagnostics: every
 non-unique scale-bearing offset route lacked the provider identity ordering tail. Offset's
@@ -65,6 +67,45 @@ bytes at the widest route), migrates exhaustive callers to the bounded continuat
 the 100,000-document materialization ceiling, and adds direct resolver, ordered-index, pager-limit,
 and source-policy regression tests. No historical Identity evidence was rewritten; preview.102 still
 requires a fresh exact-source four-provider generation.
+
+Hosted CI against the initial frozen candidate
+`a462a17ac9546bb5b85894591554f06ccf8ca27d` then exposed the diagnostics omission above. Preview.102
+rejected eight OpenTelemetry catalog routes because their non-unique scale-bearing physical indexes
+lacked provider-applied identity ordering tails. Adding offset tails would have exceeded SQL Server's
+1,700-byte key limit on the widest catalog indexes. The replacement makes those scale-bearing routes
+cursor-paged, appends the fixed-width `id_lookup_key` tail with the exact declared sort direction, and
+changes catalog-capacity cleanup from offset skipping to bounded continuation traversal. A direct
+regression proves cleanup sends no `Skip` and advances through a non-null continuation. The same CI run
+also exposed three stale test expectations for already-correct preview.102 offset tails in Activities
+Design temporal management, runtime pinned-artifact history, and Secrets; those assertions now pin the
+new `id_comparison_key` column explicitly.
+
+Root verification of that remediation passed the complete OpenTelemetry Groundwork suite (76/76), the
+Unified Host schema-activation class (8/8), the three formerly stale focused tests (1/1 each), and a
+Release build of `Elsa.Server.csproj` with zero errors. Offline validation of the complete
+`GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema` returned `ready` with zero diagnostics
+for all four mandatory providers:
+
+| Provider | Physical target fingerprint | Diagnostic-record fingerprint |
+|---|---|---|
+| SQLite | `c63f59ee2587a499513ec75127d96f097ec9527d8673e4e89b0a59c395fb2c1f` | `ce5aaec3513730e4e7135c918e6bde3ead7abef2b0d8e74570474d6778f3900c` |
+| PostgreSQL | `277ed6f01c20a6dd8abd51f6a549bdaf8802992e9e687b36369058815c2125f3` | `0871bade20996939a899577ec7d867c38c2196d4910929e4c75e8828d005d539` |
+| SQL Server | `73b740c4eb3589c78af82779e3e2defa578de9a22617122407b1b857369fa28d` | `fafcd1ffb25323089aaa0b6ea538dc0c9f1a3481549eee57da3a0dd85bbbc7ec` |
+| MongoDB | `a1ec0c1a99b313967bbd5d01b981222ed49f6f8d319ae0175b80c12c7a1dada7` | `d08a1e3696cd3d5c66331ad8bd5258990bf2ceb770c534f8c23d5ffc86180508` |
+
+The first adversarial exact-range review cycle inspected
+`ca818b649d85c5167e2222c0ec534e215153d473..a462a17ac9546bb5b85894591554f06ccf8ca27d`
+on correctness/mechanism, evidence integrity, and scope/test preservation. Its confirmed findings and
+dispositions were:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The bounded exhaustive pager could loop when a provider returned an empty page with a fresh continuation. It now rejects that impossible shape, with a two-token regression proving the guard. The originating reviewer re-verified the fix. | PASS |
+| Evidence integrity | The preview evidence importer admitted a dirty source checkout. It now rejects tracked, staged, and untracked dirt, retaining only the exact validated destination-generation recovery exception. The originating reviewer re-verified the focused importer/guard suite. | PASS |
+| Scope/test preservation | The source scanner could miss a forbidden direct query call when an allowed pager call appeared on the same line. It now removes only the qualified allowed invocation before scanning the remainder; a mixed-line regression proves the direct call is still reported. The generated dependency maps were refreshed from the clean remediated source and the originating reviewer re-verified both dispositions. | PASS |
+
+These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
+coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
 **2026-07-25 preview.88 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.88` release built from Groundwork merge
