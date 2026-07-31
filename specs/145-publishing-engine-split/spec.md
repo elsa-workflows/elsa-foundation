@@ -18,7 +18,7 @@ A shell composer who is building a runtime-only node wants the full publishing c
 
 **Why this priority**: This is the core reason for the split and the thing that unblocks the CatalogActivation feature (PR2) — a runtime node must obtain the publish engine as a composable unit separate from the transport.
 
-**Independent Test**: Compose a shell that enables the engine feature (`WorkflowsPublishing`) and does **not** enable the API feature; resolve the publish command handler and the executable compiler from DI; publish a version in-process via the command; assert a live Published executable is produced and no publish HTTP endpoint is mounted.
+**Independent Test**: Compose a shell that enables the engine feature (`WorkflowsPublishing`) and does **not** enable the API feature; at the unit level resolve the publish command handler + executable compiler from DI, and assert no publish HTTP endpoint is mounted and `IActivityPublishingAuthorizationContext` is absent. The behavioural check — publish a version in-process and produce a live Published executable — is validated via `quickstart.md` (integration-flavoured, §2.23.6).
 
 **Acceptance Scenarios**:
 
@@ -38,7 +38,7 @@ Every current consumer of the publishing API (Studio, integrators, existing test
 **Acceptance Scenarios**:
 
 1. **Given** the API feature enabled, **When** the publish endpoint is called, **Then** the outcome is identical to the pre-split behaviour.
-2. **Given** the existing publishing unit/registration tests, **When** they run against the refactored code, **Then** they pass without any modification to the test cases themselves.
+2. **Given** the existing publishing unit/registration tests, **When** they run against the refactored code, **Then** their assertions pass unchanged; the only permitted change (§2.21.1) is test *wiring* — the registration test composes the `DependsOn`-activated engine feature alongside the API feature.
 
 ---
 
@@ -48,11 +48,11 @@ A feature author auditing the publishing domain expects the `.Api` feature to co
 
 **Why this priority**: Correct layering is the durable value of the split; it makes the domain legible and prevents the API feature from re-accumulating logic.
 
-**Independent Test**: Inspect the API feature's registration: it adds only FastEndpoints endpoints + API-capability registrations on top of `base.ConfigureServices`; the orchestration handler and every engine collaborator resolve from the engine feature, not the API feature.
+**Independent Test**: Inspect the API feature's registration: beyond `base.ConfigureServices` (its `FastEndpointsFeatureBase` transport base) it adds only endpoints, API capabilities, the HttpContext authorization context, and activity-draft services; the workflow-publish orchestration handler and every workflow-publish engine collaborator resolve from the `DependsOn`-activated engine feature, not the API feature.
 
 **Acceptance Scenarios**:
 
-1. **Given** the refactored API feature, **When** its `ConfigureServices` is reviewed, **Then** it registers only endpoints + API capabilities and delegates all engine registration to the base engine feature.
+1. **Given** the refactored API feature, **When** its `ConfigureServices` is reviewed, **Then** it registers only endpoints, API capabilities, the HttpContext authorization context, and activity-draft services — with all workflow-publish engine registration coming from the `DependsOn`-activated engine feature.
 2. **Given** a publish endpoint, **When** it handles a request, **Then** it only sends a mediator command and contains no orchestration logic.
 
 ---
