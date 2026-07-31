@@ -1,0 +1,50 @@
+{
+  "artifactKind": "sanitized-vstest-results",
+  "results": [
+    {
+      "duration": "00:00:02.7688324",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:02.1465498",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:05.6216641",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.3170966",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: Sqlite)"
+    }
+  ],
+  "run": {
+    "counters": {
+      "aborted": 0,
+      "completed": 0,
+      "disconnected": 0,
+      "error": 0,
+      "executed": 4,
+      "failed": 0,
+      "inProgress": 0,
+      "inconclusive": 0,
+      "notExecuted": 0,
+      "notRunnable": 0,
+      "passed": 4,
+      "passedButRunAborted": 0,
+      "pending": 0,
+      "timeout": 0,
+      "total": 4,
+      "warning": 0
+    },
+    "elapsed": null,
+    "outcome": "Completed"
+  },
+  "sanitization": "Retains every test name, outcome, duration, run counters, outcome, and elapsed interval; removes run/test identifiers, host names, local paths, timestamps, stdout, container identifiers, and provider bootstrap output.",
+  "schemaVersion": 1,
+  "sourceTrxSha256": "54f6fae8ef5572cb02a415aa7778294a2d8f34415561c3ee9c84a80a37b31ed2"
+}

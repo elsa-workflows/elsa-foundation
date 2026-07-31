@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "sanitized-dotnet-package-resolution",
+  "command": "dotnet list tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj package --include-transitive --format json",
+  "framework": "net10.0",
+  "packages": [
+    {
+      "id": "Groundwork.Core",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.DiagnosticRecords",
+      "requestedVersion": "0.0.1-preview.102",
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.DiagnosticRecords.Relational",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Documents",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Materialization",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.MongoDb",
+      "requestedVersion": "0.0.1-preview.102",
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Operational",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Operational.Relational",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.PostgreSql",
+      "requestedVersion": "0.0.1-preview.102",
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Provider.Relational",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Relational",
+      "requestedVersion": null,
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.SqlServer",
+      "requestedVersion": "0.0.1-preview.102",
+      "resolvedVersion": "0.0.1-preview.102"
+    },
+    {
+      "id": "Groundwork.Sqlite",
+      "requestedVersion": "0.0.1-preview.102",
+      "resolvedVersion": "0.0.1-preview.102"
+    }
+  ]
+}

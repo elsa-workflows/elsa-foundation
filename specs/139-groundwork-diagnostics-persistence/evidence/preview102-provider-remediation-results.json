@@ -17,6 +17,14 @@
   },
   "groundworkPackageVersion": "0.0.1-preview.102",
   "groundworkToolOutput": "Groundwork.Tool 0.0.1-preview.102",
+  "groundworkToolOutputArtifact": {
+    "path": "preview102-provider-remediation/groundwork-tool-version.txt",
+    "sha256": "1ff826cea831dac35161bce397c8b80b29870e28b2880a14b736680956d949ea"
+  },
+  "groundworkPackageResolutionArtifact": {
+    "path": "preview102-provider-remediation/groundwork-package-resolution.json",
+    "sha256": "2397aa7bdad3786581ade40ccbb37dbfab4102e220dfdeae9090ab3f1cc246db"
+  },
   "resolvedGroundworkLibraries": [
     "Groundwork.Core/0.0.1-preview.102",
     "Groundwork.DiagnosticRecords/0.0.1-preview.102",
@@ -75,7 +83,8 @@
       "skipped": 0,
       "total": 78,
       "durationSeconds": 5,
-      "trxSha256": "2cf4e82d6c131289f2c1180aa8c79642fcb846baa84cb36edc9071f1890cca7a"
+      "retainedResultArtifact": "preview102-provider-remediation/adapter-results.json",
+      "retainedResultArtifactSha256": "5ee5c75d9958544a06b16202b04c2d022b614f64dd881bb2a5b7f659f6af1e70"
     },
     {
       "purpose": "Deterministic equivalent-winner acceptance and divergent-winner rejection",
@@ -85,7 +94,8 @@
       "skipped": 0,
       "total": 2,
       "durationMilliseconds": 856,
-      "trxSha256": "19f7bff159274a83d33d3f63f2a0d6b0574fe16887f0cd5d22727840e61017d5"
+      "retainedResultArtifact": "preview102-provider-remediation/conflict-results.json",
+      "retainedResultArtifactSha256": "8c83057727da5378c43d8350394ede6cfdc6e856c21a0963ecaa9a9571011c63"
     },
     {
       "purpose": "Real four-provider operation-identity and concurrent-writer theory",
@@ -101,7 +111,9 @@
         "postgresql",
         "mongodb"
       ],
-      "trxSha256": "54f6fae8ef5572cb02a415aa7778294a2d8f34415561c3ee9c84a80a37b31ed2"
+      "claimBoundary": "This result proves the public concurrent-write behavior on every provider. It does not prove that any provider returned ConcurrencyConflict or entered the adapter reconciliation branch.",
+      "retainedResultArtifact": "preview102-provider-remediation/concurrent-writer-results.json",
+      "retainedResultArtifactSha256": "13b731f2e533b44277aeb5ee31166d2c0aff0df83738c0811ebf6e75b426df96"
     },
     {
       "purpose": "Provider-dependent diagnostics persistence, scope, native-plan, and lifecycle slice",
@@ -111,9 +123,10 @@
       "skipped": 0,
       "total": 54,
       "durationSeconds": 164,
-      "trxSha256": "3377082602a3153bd6bac23c2ec9ca1d49e2d6806ec1c19c502d7283385c2f7b"
+      "retainedResultArtifact": "preview102-provider-remediation/provider-slice-results.json",
+      "retainedResultArtifactSha256": "563e355a3203c658de0f89f589cb1f9628eb8ed6617a965fb3da98cd802cacef"
     }
   ],
-  "reviewBoundary": "The initial exact-range correctness review blocked a nonempty-only provider-order assertion; implementation head 6e1b4e1a now compares every provider-applied field identifier, direction, and identity-tie-break marker to the admitted plan order. The initial evidence review blocked unretained preview.102 counts; this manifest retains the exact clean implementation head, source/configuration hashes, package/tool resolution, provider topology, commands, totals, skips, and temporary TRX digests for re-verification.",
+  "reviewBoundary": "The initial exact-range correctness review blocked a nonempty-only provider-order assertion; implementation head 6e1b4e1a now compares every provider-applied field identifier, direction, and identity-tie-break marker to the admitted plan order. The initial evidence review blocked unretained preview.102 counts and then rejected hashes of disposable TRX files. The evidence commit now retains sanitized result artifacts containing every test name/outcome/duration and summary counter, plus sanitized package resolution and actual tool output. Host names, paths, timestamps, run/test identifiers, stdout, container identifiers, and provider bootstrap output are deliberately excluded.",
   "evidenceBoundary": "This focused manifest certifies only preview.102 catalog conflict reconciliation, exact cursor-native page/order evidence, the complete 78-test OpenTelemetry adapter regression, the four-provider concurrent-writer theory, and the 54-case provider-dependent diagnostics slice. It is not #646 performance evidence, diagnostics EF deletion evidence, T057 promotion evidence, or authorization to close #642."
 }

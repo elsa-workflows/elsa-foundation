@@ -1,0 +1,420 @@
+{
+  "artifactKind": "sanitized-vstest-results",
+  "results": [
+    {
+      "duration": "00:00:00.0121032",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Equivalent_attribute_insertion_orders_produce_one_payload_and_append_fingerprint"
+    },
+    {
+      "duration": "00:00:00.0148464",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Every_immutable_signal_round_trips_without_losing_domain_fields"
+    },
+    {
+      "duration": "00:00:00.0187800",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Missing_required_domain_values_and_null_attributes_fail_before_append"
+    },
+    {
+      "duration": "00:00:00.0152864",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Null_and_duplicate_persisted_attribute_keys_are_visible_payload_failures"
+    },
+    {
+      "duration": "00:00:00.0963253",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Optional_query_fields_are_absent_instead_of_becoming_empty_filter_values"
+    },
+    {
+      "duration": "00:00:00.0462102",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Record_fields_cover_bounded_query_identity_order_and_filter_values"
+    },
+    {
+      "duration": "00:00:00.0158428",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Span_event_and_link_order_is_preserved_as_meaningful_payload_order"
+    },
+    {
+      "duration": "00:00:00.0018373",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Trace_set_fields_are_canonical_when_input_enumeration_order_changes"
+    },
+    {
+      "duration": "00:00:00.0047767",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CanonicalRecordSerializerTests.Wrong_kind_and_malformed_payloads_are_visible_as_record_payload_failures"
+    },
+    {
+      "duration": "00:00:00.0007754",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Catalog_payload_exposes_top_level_fields_required_for_bounded_retention_and_queries"
+    },
+    {
+      "duration": "00:00:00.1602525",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Instrument_document_preserves_explicit_retry_time_tie_breaker_and_revision"
+    },
+    {
+      "duration": "00:00:00.0011898",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Missing_required_domain_values_and_null_attributes_fail_before_save"
+    },
+    {
+      "duration": "00:00:00.0095108",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Negative_expected_revision_is_rejected_before_a_document_request_is_created"
+    },
+    {
+      "duration": "00:00:00.0005576",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Null_and_duplicate_persisted_attribute_keys_are_visible_payload_failures"
+    },
+    {
+      "duration": "00:00:00.0092763",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Resource_document_is_canonical_keyed_and_restart_stable"
+    },
+    {
+      "duration": "00:00:00.0011272",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.CatalogDocumentSerializerTests.Wrong_kind_schema_identity_and_malformed_json_fail_without_fallback"
+    },
+    {
+      "duration": "00:00:00.7812599",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Case_equivalent_catalog_ids_update_one_authoritative_entry"
+    },
+    {
+      "duration": "00:00:00.2812379",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Catalog_upserts_and_capacity_keep_the_newest_entries"
+    },
+    {
+      "duration": "00:00:00.1301270",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Divergent_catalog_winner_remains_a_conflict_and_is_not_overwritten"
+    },
+    {
+      "duration": "00:00:00.2992986",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Equal_last_seen_values_use_the_stable_retention_tie_breaker"
+    },
+    {
+      "duration": "00:00:00.2499588",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Equivalent_catalog_winner_reconciles_an_ambiguous_concurrency_conflict_without_rewriting"
+    },
+    {
+      "duration": "00:00:00.5617734",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Lowered_catalog_capacity_removes_all_preexisting_overflow_in_bounded_pages"
+    },
+    {
+      "duration": "00:00:00.2927834",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Resource_and_instrument_capacities_are_enforced_independently"
+    },
+    {
+      "duration": "00:00:00.2745110",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Status_filter_keeps_last_seen_order_before_applying_take"
+    },
+    {
+      "duration": "00:00:00.1575869",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Zero_catalog_capacities_remove_every_current_entry"
+    },
+    {
+      "duration": "00:00:00.2211943",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Case_equivalent_instrument_ids_collapse_while_retaining_both_points"
+    },
+    {
+      "duration": "00:00:00.1690983",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Instrument_name_filters_use_the_name_captured_with_each_historical_point"
+    },
+    {
+      "duration": "00:00:00.0566370",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Invalid_ranges_are_rejected_before_provider_io"
+    },
+    {
+      "duration": "00:00:00.1948071",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Metric_and_log_service_name_filters_follow_the_durable_resource_catalog"
+    },
+    {
+      "duration": "00:00:00.1622500",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Oversized_catalog_only_batch_is_rejected_without_mutation"
+    },
+    {
+      "duration": "00:00:00.1615307",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Repeated_trace_records_merge_to_one_summary_across_durable_batches"
+    },
+    {
+      "duration": "00:00:00.3046117",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Resource_and_trace_filters_execute_through_declared_provider_routes"
+    },
+    {
+      "duration": "00:00:01.8953480",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Signal_retention_keeps_the_exact_newest_window_for_every_stream"
+    },
+    {
+      "duration": "00:00:00.2705537",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Tied_signal_times_use_the_domain_identity_tie_breakers"
+    },
+    {
+      "duration": "00:00:00.2492713",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Trace_detail_does_not_silently_truncate_at_the_per_query_limit"
+    },
+    {
+      "duration": "00:00:00.2252908",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Trace_detail_uses_exact_trace_lookup_and_pages_every_related_record"
+    },
+    {
+      "duration": "00:00:00.4630580",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Trace_metric_and_log_queries_apply_exact_filters_with_inclusive_ranges_and_stable_ties"
+    },
+    {
+      "duration": "00:00:00.1544532",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Trace_query_take_is_bounded_by_the_grouped_profile_limit"
+    },
+    {
+      "duration": "00:00:00.1538349",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Trace_take_selects_the_newest_window_and_returns_it_in_ascending_order"
+    },
+    {
+      "duration": "00:00:00.2280066",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryQueryConformanceTests.Zero_signal_capacities_remove_signal_records_without_suppressing_catalogs"
+    },
+    {
+      "duration": "00:00:01.2124067",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryRestartTests.Exact_catalog_and_immutable_counts_survive_store_restart"
+    },
+    {
+      "duration": "00:00:00.0002649",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Binding_rejects_diagnostic_identifiers_over_sixty_four_bytes"
+    },
+    {
+      "duration": "00:00:00.0005483",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Binding_rejects_identifiers_outside_the_portable_diagnostic_domain(tenantId: \"tenant\", scopeId: \" scope\")"
+    },
+    {
+      "duration": "00:00:00.0001660",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Binding_rejects_identifiers_outside_the_portable_diagnostic_domain(tenantId: \"tenant\", scopeId: \"scope \")"
+    },
+    {
+      "duration": "00:00:00.0000233",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Binding_rejects_identifiers_outside_the_portable_diagnostic_domain(tenantId: \"t\u00e9nant\", scopeId: \"scope\")"
+    },
+    {
+      "duration": "00:00:00.2390547",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Cancellation_after_one_committed_stream_records_partial_progress_and_retry_resumes"
+    },
+    {
+      "duration": "00:00:00.0739957",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Canonical_payload_failures_are_translated_but_caller_argument_failures_remain_argument_exceptions"
+    },
+    {
+      "duration": "00:00:00.0727555",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Capture_before_explicit_lifecycle_start_is_rejected"
+    },
+    {
+      "duration": "00:00:00.2387395",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Capture_marks_sources_only_when_the_drain_accepts_the_batch"
+    },
+    {
+      "duration": "00:00:00.1981196",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Capture_write_returns_before_provider_io_completes"
+    },
+    {
+      "duration": "00:00:00.1810669",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Catalog_writes_use_physical_entities_and_unfiltered_declared_routes"
+    },
+    {
+      "duration": "00:00:00.5048565",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Catalogs_are_part_of_the_batch_fingerprint_and_instrument_time_is_retry_stable"
+    },
+    {
+      "duration": "00:00:00.2272505",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Concurrent_same_batch_writers_converge_through_capture_ledger_cas"
+    },
+    {
+      "duration": "00:00:00.0832780",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Disposal_before_start_is_terminal_without_retention_io"
+    },
+    {
+      "duration": "00:00:00.0741281",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Document_session_must_match_the_explicit_tenant_scope_and_source_binding"
+    },
+    {
+      "duration": "00:00:00.9604378",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Expired_pending_stream_attempt_fails_explicitly_after_restart_without_duplicate_or_late_progress"
+    },
+    {
+      "duration": "00:00:00.5259648",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Final_retention_replays_the_same_operation_after_acknowledgement_loss"
+    },
+    {
+      "duration": "00:00:00.3341373",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Graceful_stop_applies_final_signal_retention_and_reports_durable_deletions"
+    },
+    {
+      "duration": "00:00:00.4309669",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Identical_independent_captures_do_not_collapse"
+    },
+    {
+      "duration": "00:00:00.0402914",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Lifecycle_stop_before_start_is_terminal_without_retention_io"
+    },
+    {
+      "duration": "00:00:00.0639104",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Malformed_capture_ledger_is_reported_as_provider_neutral_corrupt_data"
+    },
+    {
+      "duration": "00:00:00.0552802",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Malformed_catalog_payload_is_reported_as_provider_neutral_corrupt_data"
+    },
+    {
+      "duration": "00:00:00.1079189",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Null_capture_stream_attempt_is_reported_as_provider_neutral_corrupt_data"
+    },
+    {
+      "duration": "00:00:00.2280487",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Oversized_normalized_stream_batch_is_rejected_before_ledger_or_record_mutation"
+    },
+    {
+      "duration": "00:00:00.2510464",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Partial_multi_stream_retry_after_restart_reuses_batch_identity_and_does_not_duplicate_records"
+    },
+    {
+      "duration": "00:00:00.1244662",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Provider_invalid_normalized_record_is_rejected_before_ledger_or_record_mutation"
+    },
+    {
+      "duration": "00:00:00.0985131",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Query_and_diagnostics_provider_failures_are_translated_at_the_public_boundary"
+    },
+    {
+      "duration": "00:00:00.1996796",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Reusing_batch_identity_for_different_canonical_input_fails_without_mutation"
+    },
+    {
+      "duration": "00:00:00.0767338",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Supported_case_insensitive_record_reads_reach_the_bounded_provider_route"
+    },
+    {
+      "duration": "00:00:00.0006952",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Tenant_scope_and_source_are_all_part_of_non_aliasable_stream_identity"
+    },
+    {
+      "duration": "00:00:00.0781755",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryStoreTests.Trace_capacity_above_the_grouped_union_contract_fails_before_provider_work"
+    },
+    {
+      "duration": "00:00:00.0029887",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryGroundworkStorageSchemaTests.Every_declared_physical_index_is_within_sql_server_key_width_limits"
+    },
+    {
+      "duration": "00:00:00.0211902",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryGroundworkStorageSchemaTests.Schema_declares_explicit_streams_physical_catalog_entities_indexes_and_capture_ledger"
+    },
+    {
+      "duration": "00:00:00.3165742",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryGroundworkStorageSchemaTests.Schema_resolves_compiles_and_passes_the_sql_server_physical_store_validator_without_io"
+    },
+    {
+      "duration": "00:00:00.0107011",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryRecordStreamDefinitionTests.Canonical_record_fields_are_fully_declared_by_the_corresponding_stream"
+    },
+    {
+      "duration": "00:00:00.0099018",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryRecordStreamDefinitionTests.Definitions_declare_the_portable_unicode_range_order_membership_and_latest_query_contract"
+    },
+    {
+      "duration": "00:00:00.0044220",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryRecordStreamDefinitionTests.Every_immutable_signal_has_a_valid_bounded_distinct_stream_definition"
+    },
+    {
+      "duration": "00:00:00.0032505",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.OpenTelemetryRecordStreamDefinitionTests.Unicode_query_fields_remain_valid_raw_ordinal_values"
+    }
+  ],
+  "run": {
+    "counters": {
+      "aborted": 0,
+      "completed": 0,
+      "disconnected": 0,
+      "error": 0,
+      "executed": 78,
+      "failed": 0,
+      "inProgress": 0,
+      "inconclusive": 0,
+      "notExecuted": 0,
+      "notRunnable": 0,
+      "passed": 78,
+      "passedButRunAborted": 0,
+      "pending": 0,
+      "timeout": 0,
+      "total": 78,
+      "warning": 0
+    },
+    "elapsed": null,
+    "outcome": "Completed"
+  },
+  "sanitization": "Retains every test name, outcome, duration, run counters, outcome, and elapsed interval; removes run/test identifiers, host names, local paths, timestamps, stdout, container identifiers, and provider bootstrap output.",
+  "schemaVersion": 1,
+  "sourceTrxSha256": "2cf4e82d6c131289f2c1180aa8c79642fcb846baa84cb36edc9071f1890cca7a"
+}

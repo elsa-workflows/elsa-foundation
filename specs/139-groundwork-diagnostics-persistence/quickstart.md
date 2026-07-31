@@ -441,7 +441,9 @@ implementation head `6e1b4e1a43740c36cbce724d3d5d5d2b9b37fdc0`. The retained
 [preview.102 evidence manifest](evidence/preview102-provider-remediation-results.json)
 binds the implementation tree, configuration and source hashes, resolved
 package/tool family, provider topology, exact commands, totals, skips, and
-temporary TRX digests:
+retained sanitized result artifacts. The following is abbreviated rerun
+guidance, not the count-producing command receipt; the manifest retains the
+full commands including result capture:
 
 ```bash
 dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj \
@@ -463,8 +465,11 @@ dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistenc
 ```
 
 The exact real-provider concurrent-writer theory passed 4/4 across SQLite, SQL
-Server, PostgreSQL, and MongoDB. The complete 54-case rerun then passed with
-zero failures or skips.
+Server, PostgreSQL, and MongoDB, proving the public concurrent-write behavior.
+It does not prove that any provider returned `ConcurrencyConflict` or entered
+the new reconciliation branch; that branch is proven by the two deterministic
+fault-injection tests. The complete 54-case rerun then passed with zero failures
+or skips.
 
 The initial exact-range review blocked this checkpoint twice. Correctness found
 that the provider-order assertion required only a nonempty sequence, so a
@@ -472,9 +477,12 @@ reversed or incomplete cursor order could pass. Implementation head `6e1b4e1a`
 now compares every provider-applied field identifier, direction, and
 identity-tie-break marker to the admitted plan. Evidence integrity found that
 the preview.102 counts and four-provider claim existed only in prose; the
-hash-bound manifest above now retains their exact-source receipt. Both
-originating reviewers must re-verify the final evidence commit before this
-draft can be promoted.
+hash-bound manifest above now retains their exact-source receipt. A second
+evidence review rejected hashes whose TRX preimages remained only under
+`/tmp`; the final receipt retains sanitized artifacts with every test
+name/outcome/duration and summary counter, along with the sanitized package
+resolution and actual tool output. Both originating reviewers must re-verify
+the final evidence commit before this draft can be promoted.
 
 This checkpoint repairs current-family correctness and native-plan evidence
 only. It does not import a #646 performance verdict, delete either diagnostics
