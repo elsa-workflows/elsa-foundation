@@ -1162,18 +1162,40 @@ public sealed class GroundworkOpenTelemetryStore :
         SaveDocumentRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _stores.Documents.SaveAsync(request, cancellationToken);
+        var candidate = request;
+        var result = await _stores.Documents.SaveAsync(candidate, cancellationToken);
         if (result.Status is DocumentStoreWriteStatus.IdentityConflict &&
             !string.IsNullOrWhiteSpace(result.AuthoritativeId))
         {
+            candidate = request with { Id = result.AuthoritativeId };
             result = await _stores.Documents.SaveAsync(
-                request with { Id = result.AuthoritativeId },
+                candidate,
                 cancellationToken);
+        }
+
+        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict &&
+            await CatalogAlreadyMatchesAsync(candidate, cancellationToken))
+        {
+            return;
         }
 
         if (result.Status is not DocumentStoreWriteStatus.Saved)
             throw new InvalidOperationException(
                 $"The OpenTelemetry catalog write for '{request.DocumentKind}/{request.Id}' returned {result.Status}.");
+    }
+
+    private async Task<bool> CatalogAlreadyMatchesAsync(
+        SaveDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var retained = await _stores.Documents.LoadAsync(
+            request.DocumentKind,
+            request.Id,
+            cancellationToken);
+        return retained is not null &&
+               StringComparer.Ordinal.Equals(retained.DocumentKind, request.DocumentKind) &&
+               StringComparer.Ordinal.Equals(retained.SchemaVersion, request.SchemaVersion) &&
+               StringComparer.Ordinal.Equals(retained.ContentJson, request.ContentJson);
     }
 
     /// <summary>

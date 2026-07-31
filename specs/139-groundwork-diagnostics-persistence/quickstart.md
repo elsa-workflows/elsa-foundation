@@ -417,6 +417,56 @@ and returned **PASS**. `git diff --check` is clean; the auxiliary documentation 
 after a targeted restore, with existing Groundwork migration warnings and no container or provider
 execution.
 
+## Preview.102 provider remediation checkpoint (2026-07-31)
+
+The preview.102 import changed cursor paging evidence in two truthful ways.
+Provider-native page plans request one lookahead row (`Take + 1`) so the runtime
+can emit a continuation while returning at most `Take`, and cursor-only
+retention routes reject the former offset-capacity probe. The current
+`DiagnosticsBoundedExecutionTests` therefore require an exact native `Page`
+command, its one-row lookahead, and provider-applied order. Capacity evidence
+inspects the production first cursor page at the real 1,000-row retention
+bound.
+
+The same recertification exposed one nondeterministic PostgreSQL catalog race.
+Groundwork's unconditional upsert may report `ConcurrencyConflict` when a
+concurrent equivalent writer wins. The adapter now reads back that winner and
+accepts it only when document kind, schema version, and canonical content are
+byte-exact. A divergent winner is still translated as unavailable and is not
+retried or overwritten.
+
+Root verification on branch base Elsa `d16590059a897e83c7098ab20c4909c97602b9c4`
+and Groundwork package family `0.0.1-preview.102`:
+
+```bash
+dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj \
+  --no-restore \
+  --filter 'FullyQualifiedName~Equivalent_catalog_winner_reconciles_an_ambiguous_concurrency_conflict_without_rewriting|FullyQualifiedName~Divergent_catalog_winner_remains_a_conflict_and_is_not_overwritten' \
+  --logger 'console;verbosity=minimal'
+# 2 passed
+
+dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj \
+  --no-build \
+  --logger 'console;verbosity=minimal'
+# 78 passed
+
+dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj \
+  --no-restore \
+  --filter 'FullyQualifiedName~DiagnosticsGroundworkProviderConformanceTests|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests|FullyQualifiedName~DiagnosticsBoundedExecutionTests|FullyQualifiedName~DiagnosticsProviderLifecycleSmokeTests' \
+  --logger 'console;verbosity=minimal'
+# 54 passed
+```
+
+Before the deterministic remediation, the isolated PostgreSQL concurrent-writer
+case passed 3/3; after remediation the exact real-provider theory passed 4/4
+across SQLite, SQL Server, PostgreSQL, and MongoDB. The complete 54-case rerun
+then passed with zero failures or skips.
+
+This checkpoint repairs current-family correctness and native-plan evidence
+only. It does not import a #646 performance verdict, delete either diagnostics
+EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
+or authorize #642 closure.
+
 ## Final dependency audit
 
 ```bash
