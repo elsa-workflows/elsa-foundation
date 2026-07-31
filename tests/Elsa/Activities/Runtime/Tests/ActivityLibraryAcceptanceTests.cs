@@ -51,7 +51,7 @@ public sealed class ActivityLibraryAcceptanceTests
         new()
         {
             { typeof(Break), typeof(ActivityUnit), [] },
-            { typeof(Fault), typeof(ActivityUnit), ["message"] },
+            { typeof(Fault), typeof(ActivityUnit), ["category", "code", "faultType", "message"] },
             { typeof(Inline), typeof(object), [nameof(Inline.Expression)] },
             { typeof(ReadLine), typeof(ReadLineResult), [] },
             { typeof(WriteLines), typeof(ActivityUnit), [nameof(WriteLines.Lines)] },

@@ -48,6 +48,14 @@ public sealed class PublishEvent(IPublishStimulusStager stager) : Activity<Activ
     [ActivityInput(Key = nameof(Payload))]
     public JsonElement? Payload { get; set; }
 
+    /// <summary>
+    /// When true the event is scoped to the publishing instance (Elsa 3's <c>IsLocalEvent</c>, #1117): only
+    /// same-name <see cref="Event"/> waits inside this workflow execution resume, and no published message-start
+    /// trigger fires. Defaults to false — the broadcast send described above.
+    /// </summary>
+    [ActivityInput(Key = nameof(IsLocalEvent))]
+    public bool IsLocalEvent { get; set; }
+
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
     {
         var eventName = EventName?.Trim();
@@ -60,7 +68,8 @@ public sealed class PublishEvent(IPublishStimulusStager stager) : Activity<Activ
             context.InvocationId,
             eventName,
             correlationId,
-            Payload));
+            Payload,
+            IsLocalEvent));
 
         return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
     }

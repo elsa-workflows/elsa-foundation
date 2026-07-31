@@ -13,28 +13,75 @@ using Xunit;
 namespace Elsa.Activities.Design.Api.Tests;
 
 /// <summary>
-/// Covers the built-in engine-intrinsic authoring descriptors (#929): Set Variable and Set Output must be
-/// offered by the authoring catalog so the designer palette has a way to assign variables and outputs.
+/// Covers the built-in engine-intrinsic authoring descriptors: Set Variable and Set Output give the designer
+/// palette a way to assign variables and outputs (#929), and Finish / Set Correlation Id / Set Instance Name are
+/// the discoverable replacements for Elsa 3's <c>Finish</c>/<c>Complete</c>, <c>Correlate</c> and <c>SetName</c>
+/// activities (#1113). The remaining four engine intrinsic kinds are deliberately not published.
 /// </summary>
 public sealed class IntrinsicAuthoringCatalogTests
 {
     private readonly IntrinsicAuthoringDescriptorProvider _provider = new();
 
     [Fact]
-    public void Provider_surfaces_set_variable_and_set_output_under_primitives()
+    public void Provider_surfaces_the_author_facing_intrinsics_under_primitives()
     {
         var descriptors = _provider.GetDescriptors();
 
-        Assert.Equal(2, descriptors.Count);
+        Assert.Equal(
+            ["Set", "SetOutput", "SetCorrelationId", "SetInstanceName", "Finish"],
+            descriptors.Select(descriptor => descriptor.Intrinsic!.Kind));
         Assert.All(descriptors, descriptor =>
         {
             Assert.Equal("Primitives", descriptor.Category);
             Assert.True(descriptor.Available);
             Assert.NotNull(descriptor.Intrinsic);
             Assert.Equal("intrinsic", descriptor.AuthoringTemplate.NodeId);
-            Assert.Contains(descriptor.Ports, port => port.Name == "Done");
             Assert.Empty(descriptor.Outputs);
         });
+
+        // Every descriptor but Finish continues the graph; Finish terminates the run and so has no outgoing port.
+        Assert.All(
+            descriptors.Where(descriptor => descriptor.Intrinsic!.Kind != "Finish"),
+            descriptor => Assert.Contains(descriptor.Ports, port => port.Name == "Done"));
+    }
+
+    /// <summary>
+    /// Merge/Reduce execute identically to Set today, and Control/Return are compiler seams with no Elsa 3
+    /// counterpart: all four stay authorable via the builder and REST API but are withheld from the palette.
+    /// This pins that decision so re-adding one is a deliberate edit rather than a drift.
+    /// </summary>
+    [Theory]
+    [InlineData("Merge")]
+    [InlineData("Reduce")]
+    [InlineData("Control")]
+    [InlineData("Return")]
+    public void Provider_withholds_the_engine_internal_intrinsics(string kind) =>
+        Assert.DoesNotContain(_provider.GetDescriptors(), descriptor => descriptor.Intrinsic!.Kind == kind);
+
+    /// <summary>#1113: each of these replaces a first-class Elsa 3 activity, so each must be discoverable.</summary>
+    [Theory]
+    [InlineData("Elsa.SetCorrelationId", "elsa.intrinsic.set-correlation-id@1", "SetCorrelationId", "value")]
+    [InlineData("Elsa.SetInstanceName", "elsa.intrinsic.set-instance-name@1", "SetInstanceName", "value")]
+    [InlineData("Elsa.Finish", "elsa.intrinsic.finish@1", "Finish", "outcome")]
+    public void Elsa3_replacement_intrinsics_author_the_matching_engine_node(
+        string activityTypeKey,
+        string versionId,
+        string intrinsicKind,
+        string inputKey)
+    {
+        var descriptor = Single(activityTypeKey);
+
+        Assert.Equal(versionId, descriptor.ActivityVersionId);
+        Assert.Equal(versionId, descriptor.AuthoringTemplate.ActivityVersionId);
+        Assert.Equal(intrinsicKind, descriptor.Intrinsic!.Kind);
+        Assert.Equal(inputKey, descriptor.Intrinsic.ValueInputKey);
+        Assert.Null(descriptor.Intrinsic.VariableInputKey);
+        Assert.Null(descriptor.Intrinsic.OutputNameInputKey);
+
+        var input = Assert.Single(descriptor.Inputs);
+        Assert.Equal(inputKey, input.ReferenceKey);
+        Assert.True(input.IsRequired);
+        Assert.Equal("String", input.Type);
     }
 
     [Fact]
@@ -90,6 +137,9 @@ public sealed class IntrinsicAuthoringCatalogTests
 
         Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetVariable");
         Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetOutput");
+        Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetCorrelationId");
+        Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetInstanceName");
+        Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.Finish");
     }
 
     private ActivityAuthoringDescriptorView Single(string activityTypeKey) =>

@@ -40,14 +40,20 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
 
         // A nonblank correlation narrows only the resume fan-in to same-name Event waits that retained the same
         // authored value (#1001). It does not filter published-trigger starts; null correlation remains broadcast.
+        //
+        // A local publish (#1117) instead confines delivery to the publishing execution: ResumeOnly plus the
+        // target id, which the router uses to narrow the fan-in. The target is read from the intent — the runtime's
+        // own record of which execution committed the send — never from the (activity-authored) payload, so an
+        // activity cannot redirect a local publish at someone else's instance.
         var request = new StimulusDispatchRequest(
             stimulusType: payload.StimulusType,
             stimulusHash: payload.StimulusHash,
             input: payload.Payload,
             correlationId: payload.CorrelationId,
-            mode: StimulusRoutingMode.StartAndResume,
+            mode: payload.IsLocalEvent ? StimulusRoutingMode.ResumeOnly : StimulusRoutingMode.StartAndResume,
             idempotencyKey: intent.IdempotencyKey,
-            requestedBy: PublishStimulusConstants.RequestedBy);
+            requestedBy: PublishStimulusConstants.RequestedBy,
+            targetWorkflowExecutionId: payload.IsLocalEvent ? intent.WorkflowExecutionId : null);
 
         try
         {

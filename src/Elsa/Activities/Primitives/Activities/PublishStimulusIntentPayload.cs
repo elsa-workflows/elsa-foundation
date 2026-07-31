@@ -14,4 +14,9 @@ public sealed record PublishStimulusIntentPayload(
     [property: JsonPropertyName("stimulusHash")] string StimulusHash,
     [property: JsonPropertyName("eventName")] string EventName,
     [property: JsonPropertyName("correlationId")] string? CorrelationId,
-    [property: JsonPropertyName("payload")] JsonElement? Payload);
+    [property: JsonPropertyName("payload")] JsonElement? Payload,
+    /// <summary>
+    /// True when the send was authored as a local event: the executor then targets the publishing execution
+    /// (read from the intent, never from this payload) instead of routing StartAndResume broadcast.
+    /// </summary>
+    [property: JsonPropertyName("isLocalEvent")] bool IsLocalEvent = false);

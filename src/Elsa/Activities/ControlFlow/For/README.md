@@ -30,6 +30,14 @@ The range is described by three integer inputs plus a flag:
 - **`Step`** — the amount each pass advances by. Defaults to `1` when the argument is not wired up. A
   **positive** step counts up; a **negative** step counts down.
 
+> **Porting from Elsa 3 — this default is deliberately different (#1117).** Elsa 3's equivalent flag is
+> `OuterBoundInclusive` and it defaults to **`true`** (closed `[Start, End]`); Elsa 4's `EndInclusive`
+> defaults to **`false`** (half-open `[Start, End)`). A graph ported member-for-member therefore runs
+> **one fewer iteration** unless `EndInclusive` is explicitly set. The divergence is intentional: the
+> half-open convention is what the member name reads as, what the rest of the module assumes, and what
+> `for (i = start; i < end; i += step)` means. Set `EndInclusive` to `true` on a ported loop, or
+> subtract one from `End`.
+
 Boundary rules:
 
 - **Step direction must agree with the range direction.** A step that points away from the end (e.g. a

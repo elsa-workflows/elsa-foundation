@@ -371,12 +371,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         {
             var faultedState = executionState with
             {
-                Fault = new NormalizedActivityFault(
-                    returnedFault.Code,
-                    typeof(ActivityFault).FullName!,
-                    returnedFault.Message,
-                    sanitizedStackTrace: null,
-                    returnedFault.IsRetryable)
+                Fault = returnedFault.ToNormalized()
             };
             await RecordFaultAsync(
                 serviceProvider,

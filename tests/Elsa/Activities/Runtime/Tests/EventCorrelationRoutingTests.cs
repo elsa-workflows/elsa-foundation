@@ -75,6 +75,65 @@ public sealed class EventCorrelationRoutingTests
         Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(nonMatchingHarness));
     }
 
+    /// <summary>
+    /// A local publish (<c>PublishEvent.IsLocalEvent</c>, #1117) delivers only inside the publishing execution.
+    /// The two waits here carry no correlation at all — under a broadcast publish both would resume — so the
+    /// single resume proves the target filter, not correlation, did the scoping.
+    /// </summary>
+    [Fact]
+    public async Task Route_TargetedAtOneExecution_ResumesOnlyThatExecutionsWait()
+    {
+        var localIdentity = Identity("local");
+        var siblingIdentity = Identity("sibling");
+        await using var localHarness = NewHarness(localIdentity, "wfexec-local", "actexec-local");
+        await using var siblingHarness = NewHarness(siblingIdentity, "wfexec-sibling", "actexec-sibling");
+
+        await localHarness.RunAsync(NewEventExecutable(localIdentity, correlationId: null));
+        await siblingHarness.RunAsync(NewEventExecutable(siblingIdentity, correlationId: null));
+
+        var sharedBookmarks = new InMemoryBookmarkStateStore();
+        await sharedBookmarks.SaveAsync(await ReadBookmarkAsync(localHarness));
+        await sharedBookmarks.SaveAsync(await ReadBookmarkAsync(siblingHarness));
+        var resumeDispatcher = new HarnessBookmarkResumeDispatcher(new Dictionary<string, IBookmarkResumeDispatcher>
+        {
+            [localHarness.ExecutionId] = localHarness.Services.GetRequiredService<IBookmarkResumeDispatcher>(),
+            [siblingHarness.ExecutionId] = siblingHarness.Services.GetRequiredService<IBookmarkResumeDispatcher>()
+        });
+        var router = new StimulusRouter(
+            new InMemoryWorkflowTriggerBindingStore(),
+            new GlobalBookmarkStimulusLookup(sharedBookmarks),
+            new UnexpectedStartDispatcher(),
+            resumeDispatcher,
+            new InMemoryStimulusStartDeduplicator());
+
+        var result = await router.RouteAsync(new StimulusDispatchRequest(
+            EventStimulus.StimulusType,
+            EventStimulus.Hash(EventName),
+            input: JsonSerializer.SerializeToElement(new EventReceived(EventName)),
+            mode: StimulusRoutingMode.ResumeOnly,
+            payloadType: new ValueTypeDescriptor(
+                TypeAliasConvention.CanonicalAlias(typeof(EventReceived)),
+                schemaVersion: 1),
+            providerId: PublishEvent.ActivityType,
+            targetWorkflowExecutionId: localHarness.ExecutionId));
+
+        Assert.Equal(1, result.ResumedCount);
+        Assert.Equal(localHarness.ExecutionId, Assert.Single(result.Resumes).WorkflowExecutionId);
+        Assert.Empty(await BookmarksAsync(localHarness));
+        Assert.Single(await BookmarksAsync(siblingHarness));
+        Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(localHarness));
+        Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(siblingHarness));
+    }
+
+    /// <summary>A targeted request never starts, so pairing it with StartOnly is rejected at construction.</summary>
+    [Fact]
+    public void TargetedRequest_CannotBeCombinedWithStartOnlyRouting() =>
+        Assert.Throws<ArgumentException>(() => new StimulusDispatchRequest(
+            EventStimulus.StimulusType,
+            EventStimulus.Hash(EventName),
+            mode: StimulusRoutingMode.StartOnly,
+            targetWorkflowExecutionId: "wfexec-local"));
+
     private static WorkflowExecutionHarness NewHarness(
         WorkflowExecutableIdentity identity,
         string workflowExecutionId,
@@ -84,7 +143,7 @@ public sealed class EventCorrelationRoutingTests
     private static WorkflowExecutableIdentity Identity(string suffix) =>
         new($"artifact-{suffix}", $"definition-{suffix}", $"version-{suffix}", "1.0.0", $"sha256:{suffix}");
 
-    private static WorkflowExecutable NewEventExecutable(WorkflowExecutableIdentity identity, string correlationId)
+    private static WorkflowExecutable NewEventExecutable(WorkflowExecutableIdentity identity, string? correlationId)
     {
         const string executableNodeId = "node-event";
         var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(executableNodeId, Event.ResumeTargetId);
@@ -120,9 +179,17 @@ public sealed class EventCorrelationRoutingTests
     private static async Task<WorkflowExecutionStatus?> WorkflowStatusAsync(WorkflowExecutionHarness harness) =>
         (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(harness.ExecutionId))?.Status;
 
-    private static ExecutableNode EventNode(string correlationId)
+    private static ExecutableNode EventNode(string? correlationId)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(Event.EventName)] = Literal(nameof(Event.EventName), EventName),
+            [nameof(Event.CanStartWorkflow)] = Literal(nameof(Event.CanStartWorkflow), false)
+        };
+        if (correlationId is not null)
+            inputBindings[nameof(Event.CorrelationId)] = Literal(nameof(Event.CorrelationId), correlationId);
+
         return new ExecutableNode(
             executableNodeId: "node-event",
             authoredActivityId: "authored-node-event",
@@ -130,12 +197,7 @@ public sealed class EventCorrelationRoutingTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                [nameof(Event.EventName)] = Literal(nameof(Event.EventName), EventName),
-                [nameof(Event.CorrelationId)] = Literal(nameof(Event.CorrelationId), correlationId),
-                [nameof(Event.CanStartWorkflow)] = Literal(nameof(Event.CanStartWorkflow), false)
-            },
+            inputBindings: inputBindings,
             metadata: new Dictionary<string, string>());
     }
 

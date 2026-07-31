@@ -1013,6 +1013,42 @@
       "executionType": "Action",
       "inputs": [
         {
+          "key": "category",
+          "name": "Category",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "code",
+          "name": "Code",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "faultType",
+          "name": "FaultType",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
           "key": "message",
           "name": "Message",
           "type": "String",
@@ -1086,6 +1122,18 @@
           "type": "String",
           "collectionKind": "Single",
           "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
+          "key": "IsLocalEvent",
+          "name": "IsLocalEvent",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
@@ -1324,6 +1372,18 @@
           "uiSpecifications": null
         },
         {
+          "key": "possibleOutcomes",
+          "name": "PossibleOutcomes",
+          "type": "String",
+          "collectionKind": "List",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
           "key": "script",
           "name": "Script",
           "type": "String",
@@ -1348,9 +1408,13 @@
         }
       ],
       "outcomes": {
-        "declared": false,
+        "declared": true,
         "ports": [],
-        "dynamic": null
+        "dynamic": {
+          "kind": "valuePerItem",
+          "source": "possibleOutcomes",
+          "unmatched": "Unmatched"
+        }
       },
       "structure": null
     },

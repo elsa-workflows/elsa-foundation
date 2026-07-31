@@ -437,12 +437,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             var fault = resolvedContinuation.Fault!;
             var faultedParentState = currentParentState with
             {
-                Fault = new NormalizedActivityFault(
-                    fault.Code,
-                    typeof(ActivityFault).FullName!,
-                    fault.Message,
-                    sanitizedStackTrace: null,
-                    fault.IsRetryable)
+                Fault = fault.ToNormalized()
             };
             var exception = new ActivityTransitionFaultException(fault);
             var request = NewFaultIncidentRecordRequest(

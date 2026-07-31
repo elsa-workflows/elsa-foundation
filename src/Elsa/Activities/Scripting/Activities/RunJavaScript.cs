@@ -18,9 +18,36 @@ namespace Elsa.Activities.Scripting.Activities;
 /// Constructor parameters are services; workflow data is hydrated into the ordinary properties below before
 /// execution. The evaluator applies its configured timeout, statement, recursion, and cancellation limits.
 /// </para>
+/// <para>
+/// <b>Outcomes (#1114).</b> Authoring <see cref="PossibleOutcomes"/> turns the activity into a branch point: each
+/// listed name becomes an outcome port, and the script <em>routes by returning</em> — its return value, read as a
+/// string, selects the matching port, or <c>Unmatched</c> when it names none of them. This is the same mechanism
+/// <c>SendHttpRequest.ExpectedStatusCodes</c> uses, and it is deliberately chosen over Elsa 3's host-injected
+/// <c>setOutcome()</c>: the sandbox stays closed and side-effect-free, the routing decision stays a pure function
+/// of the script's value, and the ports remain statically inspectable at publish time.
+/// </para>
+/// <para>
+/// Elsa 3's <c>setOutcomes()</c> (plural) has no counterpart — an Elsa 4 completion carries exactly one outcome.
+/// <see cref="RunJavaScriptResult.Value"/> is populated in every case, including <c>Unmatched</c>.
+/// </para>
 /// </remarks>
+[ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = RunJavaScript.UnmatchedOutcome)]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>
 {
+    /// <summary>The outcome taken when <see cref="PossibleOutcomes"/> is authored but the script names none of them.</summary>
+    public const string UnmatchedOutcome = "Unmatched";
+
+    /// <summary>
+    /// The contract key of <see cref="PossibleOutcomes"/>. <c>ActivityValueOutcomes</c> resolves its source by
+    /// contract key (that is how the publish compiler looks up the authored binding), not by property name, so the
+    /// two must be spelled from the same constant.
+    /// </summary>
+    public const string PossibleOutcomesInputKey = "possibleOutcomes";
+
+    // The module deliberately does not reference Elsa.Workflows.Runtime.Core (where ActivityOutcomes lives), so the
+    // default completion outcome is spelled out here — the same literal ActivityTransition.Complete defaults to.
+    private const string DoneOutcome = "Done";
+
     /// <summary>The stable activity type key, resolved by the runtime's CLR activity constructor.</summary>
     public const string ActivityType = "Elsa.RunJavaScript";
 
@@ -32,6 +59,13 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
     [ActivityInput(Key = "arguments", DefaultValue = "{}")]
     public JsonElement Arguments { get; set; } = JsonSerializer.SerializeToElement(new { });
 
+    /// <summary>
+    /// The outcome names the script may route to. Each authored name becomes an outcome port on this node; leaving
+    /// it empty keeps the single implicit <c>Done</c> completion.
+    /// </summary>
+    [ActivityInput(Key = PossibleOutcomesInputKey)]
+    public ICollection<string>? PossibleOutcomes { get; set; }
+
     protected override async ValueTask<ActivityTransition<RunJavaScriptResult>> ExecuteAsync(ActivityExecutionContext context)
     {
         var result = string.IsNullOrWhiteSpace(Script)
@@ -40,7 +74,30 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 Script,
                 Arguments,
                 context.CancellationToken));
-        return ActivityTransition.Complete(new RunJavaScriptResult(result));
+        return ActivityTransition.Complete(new RunJavaScriptResult(result), SelectOutcome(result));
+    }
+
+    /// <summary>
+    /// Maps the script's return value onto one of the authored ports. Only a JSON string or number can name a port
+    /// (the same restriction <c>ActivityValueOutcomes</c> places on its source items); anything else — an object, an
+    /// array, null, or a name that is not in the list — is <see cref="UnmatchedOutcome"/>. The comparison is ordinal:
+    /// an outcome port is an identifier, not display text.
+    /// </summary>
+    private string SelectOutcome(JsonElement? result)
+    {
+        if (PossibleOutcomes is not { Count: > 0 } outcomes)
+            return DoneOutcome;
+
+        var selected = result switch
+        {
+            { ValueKind: JsonValueKind.String } value => value.GetString(),
+            { ValueKind: JsonValueKind.Number } value => value.GetRawText(),
+            _ => null
+        };
+
+        return selected is not null && outcomes.Contains(selected, StringComparer.Ordinal)
+            ? selected
+            : UnmatchedOutcome;
     }
 }
 

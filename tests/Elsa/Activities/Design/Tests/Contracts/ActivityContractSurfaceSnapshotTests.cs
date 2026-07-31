@@ -150,6 +150,9 @@ public sealed class ActivityContractSurfaceSnapshotTests
     private static IReadOnlyList<Assembly> ActivityAssemblies { get; } =
         ActivityAnchors.Select(anchor => anchor.Assembly).Distinct().ToArray();
 
+    /// <summary>The same assembly set, for sibling contract guards that read attributes through a normal load.</summary>
+    public static IReadOnlyList<Assembly> ShippedActivityAssemblies => ActivityAssemblies;
+
     private static string BaselinePath => Path.Combine(ContractsDirectory, "activity-contract-surface.baseline.json");
 
     private static string ActualPath => Path.Combine(ContractsDirectory, "activity-contract-surface.actual.json");
