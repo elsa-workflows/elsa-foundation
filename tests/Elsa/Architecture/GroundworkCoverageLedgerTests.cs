@@ -9,8 +9,8 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.102";
-    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.102";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.103";
+    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.103";
     private const string Prior88GroundworkVersion = "0.0.1-preview.88";
     private const string Prior86GroundworkVersion = "0.0.1-preview.86";
     private const string Prior81GroundworkVersion = "0.0.1-preview.81";
@@ -139,7 +139,7 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview102_checkpoint_fence_evidence_awaits_mechanical_import()
+    public void Preview103_checkpoint_fence_evidence_awaits_mechanical_import()
     {
         var entries = Entries(ReadLedger()).ToArray();
         Assert.DoesNotContain(
@@ -192,7 +192,7 @@ public sealed class GroundworkCoverageLedgerTests
         {
             ["elsaCommit"] = new string('a', 40),
             ["elsaTree"] = new string('b', 40),
-            ["runIdentity"] = "runtime-checkpoint-fence-preview102"
+            ["runIdentity"] = "runtime-checkpoint-fence-preview103"
         };
         WriteEvidenceArtifacts([record]);
         Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
