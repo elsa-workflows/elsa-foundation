@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -20,7 +21,6 @@ public sealed class GroundworkExternalIdentityStore(
     IBoundedDocumentStore? boundedStore = null,
     GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore
 {
-    private const int RelationshipPageSize = 512;
     private const int MaxRelationshipMaterialization = 100_000;
 
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -52,30 +52,16 @@ public sealed class GroundworkExternalIdentityStore(
     public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var externalIdentities = new List<ExternalIdentityRecord>();
-        for (var skip = 0; ; skip += RelationshipPageSize)
-        {
-            var page = (await BoundedStore.QueryAsync(
-                new DocumentQuery(
-                    IdentityStorageManifest.ExternalLoginDocumentKind,
-                    IdentityStorageManifest.ListUserLoginsQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        IdentityStorageManifest.UserLookupKeyField,
-                        IdentityDocumentId.From(tenantId, userId)))],
-                    [],
-                    skip,
-                    RelationshipPageSize,
-                    null,
-                    null,
-                    BoundedQueryResultOperation.Documents),
-                cancellationToken)).Documents;
-
-            externalIdentities.AddRange(page.Select(Map));
-            if (page.Count < RelationshipPageSize)
-                return externalIdentities;
-            if (externalIdentities.Count >= MaxRelationshipMaterialization)
-                throw new InvalidOperationException("Groundwork Identity external-login listing exceeded the bounded relationship materialization limit.");
-        }
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            IdentityStorageManifest.ExternalLoginDocumentKind,
+            IdentityStorageManifest.ListUserLoginsQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                IdentityStorageManifest.UserLookupKeyField,
+                IdentityDocumentId.From(tenantId, userId)))],
+            cancellationToken,
+            MaxRelationshipMaterialization);
+        return documents.Select(Map).ToArray();
     }
 
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)

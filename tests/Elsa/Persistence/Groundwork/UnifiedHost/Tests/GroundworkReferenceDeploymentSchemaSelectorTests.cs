@@ -16,8 +16,14 @@ using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
+using Groundwork.Core.Capabilities;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Scoping;
 using Groundwork.DiagnosticRecords;
+using Groundwork.Documents.Scoping;
+using Groundwork.SqlServer;
+using Groundwork.SqlServer.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -93,6 +99,27 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
             ]));
 
         Assert.Equal(typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema), selected);
+    }
+
+    [Fact]
+    public void Complete_reference_schema_passes_the_sql_server_physical_store_validator_without_io()
+    {
+        var manifest = new GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema().CreateManifest();
+        var resolution = PhysicalStorageResolver.Resolve(
+            manifest,
+            PhysicalNamePolicy.Identity,
+            SqlServerGroundworkCapabilities.PhysicalNames);
+        Assert.True(resolution.IsValid, string.Join("; ", resolution.Diagnostics.Select(x => x.Message)));
+        var compilation = ExecutableStorageRouteCompiler.Compile(resolution.Definitions);
+        Assert.True(compilation.IsValid, string.Join("; ", compilation.Diagnostics.Select(x => x.Message)));
+
+        var store = new SqlServerPhysicalDocumentStore(
+            "Server=localhost;Database=groundwork;Integrated Security=true;Encrypt=False",
+            manifest,
+            compilation.Routes,
+            DocumentStoreAccess.Scoped(new StorageScope("sql-server-reference-validator")));
+
+        Assert.Equal(new StorageScope("sql-server-reference-validator"), store.Access.Scope);
     }
 
     [Fact]

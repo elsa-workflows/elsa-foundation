@@ -88,8 +88,12 @@ public static class BoundedDocumentQueryPager
         string documentKind,
         string queryIdentity,
         IReadOnlyList<DocumentQueryClause> clauses,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? maximumDocumentCount = null)
     {
+        if (maximumDocumentCount is < 1)
+            throw new ArgumentOutOfRangeException(nameof(maximumDocumentCount));
+
         var documents = new List<DocumentEnvelope>();
         var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
         string? continuation = null;
@@ -109,11 +113,26 @@ public static class BoundedDocumentQueryPager
                 throw new InvalidOperationException(
                     $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
             }
+            if (result.Documents.Count == 0 && result.NextContinuation is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider returned a continuation after an empty page.");
+            }
 
             documents.AddRange(result.Documents);
+            if (maximumDocumentCount is { } maximum && documents.Count > maximum)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' exceeded the bounded materialization limit of {maximum} documents.");
+            }
 
             if (result.NextContinuation is null)
                 break;
+            if (maximumDocumentCount is { } continuationMaximum && documents.Count >= continuationMaximum)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' exceeded the bounded materialization limit of {continuationMaximum} documents.");
+            }
             if (!seenContinuations.Add(result.NextContinuation))
             {
                 throw new InvalidOperationException(

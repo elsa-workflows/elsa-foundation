@@ -242,7 +242,8 @@ public sealed class GroundworkSecretRepositoryTests
             storage.BoundedQueries,
             candidate => candidate.Identity == SecretsStorageManifest.ListFilteredQuery);
         Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
-        Assert.Equal(SecretsStorageManifest.SecretFilteredListIndex, query.IndexIdentity);
+        var v2IndexIdentity = $"{SecretsStorageManifest.SecretFilteredListIndex}-v2";
+        Assert.Equal(v2IndexIdentity, query.IndexIdentity);
         Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
         Assert.True(query.SupportsDisjunction);
         Assert.True(query.SupportsTotalCount);
@@ -256,9 +257,21 @@ public sealed class GroundworkSecretRepositoryTests
             field =>
                 field.Path == SecretsStorageManifest.StatusField &&
                 field.Operations.SetEquals([PortableQueryOperation.Equal]));
-        var filteredPhysicalIndex = Assert.Single(
+        var legacyPhysicalIndex = Assert.Single(
             policy.Definition.Indexes,
             index => index.LogicalName == SecretsStorageManifest.SecretFilteredListIndex);
+        var filteredPhysicalIndex = Assert.Single(
+            policy.Definition.Indexes,
+            index => index.LogicalName == v2IndexIdentity);
+        Assert.False(storage.LogicalIndexes.Single(index =>
+            index.Identity == SecretsStorageManifest.SecretFilteredListIndex).IsUnique);
+        Assert.False(legacyPhysicalIndex.IsUnique);
+        Assert.True(storage.LogicalIndexes.Single(index =>
+            index.Identity == v2IndexIdentity).IsUnique);
+        Assert.True(filteredPhysicalIndex.IsUnique);
+        Assert.Equal(
+            legacyPhysicalIndex.Columns.Select(column => column.ColumnLogicalName),
+            filteredPhysicalIndex.Columns.Select(column => column.ColumnLogicalName));
         Assert.Collection(
             filteredPhysicalIndex.Columns,
             scope => Assert.Equal(new DocumentEnvelopeDefinition().StorageScopeColumn, scope.ColumnLogicalName),

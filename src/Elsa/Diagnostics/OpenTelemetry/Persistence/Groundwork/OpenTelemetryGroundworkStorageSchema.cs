@@ -14,6 +14,7 @@ public static class OpenTelemetryGroundworkStorageSchema
 {
     public const string SchemaVersion = "1.0.0";
     public const string OperationLedgerKind = "openTelemetryCaptureOperation";
+    private const string AdditiveIndexVersionSuffix = "-v2";
 
     public const string ByResourceStatusIndex = "by-resource-status";
     public const string ByResourceServiceIndex = "by-resource-service";
@@ -131,7 +132,33 @@ public static class OpenTelemetryGroundworkStorageSchema
         LogicalIndexDeclaration[] logicalIndexes,
         BoundedQueryDeclaration[] queries)
     {
-        var indexes = logicalIndexes.Select(PhysicalIndex).ToArray();
+        var changedIndexes = logicalIndexes
+            .Where(index => queries.Any(query =>
+                query.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing &&
+                StringComparer.Ordinal.Equals(query.IndexIdentity, index.Identity)))
+            .Select(index => index.Identity)
+            .ToHashSet(StringComparer.Ordinal);
+        var versionedLogicalIndexes = logicalIndexes
+            .SelectMany(index => changedIndexes.Contains(index.Identity)
+                ? new[] { index, CloneLogicalIndex(index, V2(index.Identity)) }
+                : [index])
+            .ToArray();
+        var versionedQueries = queries
+            .Select(query => changedIndexes.Contains(query.IndexIdentity)
+                ? CloneQuery(query, V2(query.IndexIdentity))
+                : query)
+            .ToArray();
+        var indexes = logicalIndexes
+            .SelectMany(index => changedIndexes.Contains(index.Identity)
+                ? new[]
+                {
+                    LegacyPhysicalIndex(index),
+                    PhysicalIndex(
+                        CloneLogicalIndex(index, V2(index.Identity)),
+                        versionedQueries)
+                }
+                : [LegacyPhysicalIndex(index)])
+            .ToArray();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             tableName,
             columns,
@@ -145,8 +172,8 @@ public static class OpenTelemetryGroundworkStorageSchema
             PhysicalStorage = new(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
-                logicalIndexes,
-                queries)
+                versionedLogicalIndexes,
+                versionedQueries)
         };
     }
 
@@ -253,7 +280,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         sortable ? QuerySortSupport.Both : QuerySortSupport.None,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true,
         sortFields: sortable
@@ -265,7 +292,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         ByRetentionIndex,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Descending,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true,
         sortFields:
@@ -336,7 +363,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         ByRetentionIndex,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Descending,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true,
         sortFields:
@@ -367,7 +394,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         ByResourceServiceIndex,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.Descending,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true,
         sortFields:
@@ -394,21 +421,113 @@ public static class OpenTelemetryGroundworkStorageSchema
                 new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
         ]);
 
-    private static PhysicalIndexDefinition PhysicalIndex(LogicalIndexDeclaration index)
+    private static PhysicalIndexDefinition PhysicalIndex(
+        LogicalIndexDeclaration index,
+        IReadOnlyCollection<BoundedQueryDeclaration> queries)
+    {
+        var paths = index.Fields.Select(field => Path(field.Path)).ToArray();
+        var scaleBearingQueries = queries
+            .Where(query =>
+                query.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing &&
+                StringComparer.Ordinal.Equals(query.IndexIdentity, index.Identity))
+            .ToArray();
+        var fieldDirections = scaleBearingQueries
+            .Select(query => index.Fields.Select(field =>
+                    query.SortFields
+                        .SingleOrDefault(sort => StringComparer.Ordinal.Equals(sort.Path, field.Path))
+                        ?.Direction ?? PhysicalSortDirection.Ascending)
+                .ToArray())
+            .DistinctBy(directions => string.Join(",", directions.Select(direction => (int)direction)))
+            .ToArray();
+        if (fieldDirections.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"OpenTelemetry catalog index '{index.Identity}' cannot serve conflicting scale-bearing sort shapes.");
+        }
+
+        var providerTieBreakPaging = scaleBearingQueries
+            .Select(query => query.PagingSupport)
+            .Distinct()
+            .ToArray();
+        if (providerTieBreakPaging.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"OpenTelemetry catalog index '{index.Identity}' cannot mix cursor and offset provider identity tie-breaks.");
+        }
+
+        var columns = new List<PhysicalIndexColumnDefinition>
+        {
+            new("storage_scope", 0)
+        };
+        columns.AddRange(paths.Select((path, position) =>
+            new PhysicalIndexColumnDefinition(
+                path,
+                position + 1,
+                fieldDirections.SingleOrDefault()?[position] ?? PhysicalSortDirection.Ascending)));
+        if (!index.IsUnique && providerTieBreakPaging.Length == 1)
+        {
+            var envelope = new DocumentEnvelopeDefinition();
+            columns.Add(new PhysicalIndexColumnDefinition(
+                providerTieBreakPaging[0] == QueryPagingSupport.Cursor
+                    ? envelope.IdLookupKeyColumn
+                    : envelope.IdComparisonKeyColumn,
+                columns.Count,
+                PhysicalSortDirection.Ascending));
+        }
+
+        return new(
+            index.Identity,
+            columns);
+    }
+
+    private static PhysicalIndexDefinition LegacyPhysicalIndex(LogicalIndexDeclaration index)
     {
         var paths = index.Fields.Select(field => Path(field.Path)).ToArray();
         return new(
             index.Identity,
-            new[] { new PhysicalIndexColumnDefinition("storage_scope", 0) }
-                .Concat(paths.Select((path, position) =>
+            [
+                new PhysicalIndexColumnDefinition("storage_scope", 0),
+                .. paths.Select((path, position) =>
                     new PhysicalIndexColumnDefinition(
                         path,
                         position + 1,
                         index.Identity == ByResourceServiceIndex && position > 0
                             ? PhysicalSortDirection.Descending
-                            : PhysicalSortDirection.Ascending)))
-                .ToArray());
+                            : PhysicalSortDirection.Ascending))
+            ]);
     }
+
+    private static LogicalIndexDeclaration CloneLogicalIndex(
+        LogicalIndexDeclaration index,
+        string identity) =>
+        new(
+            identity,
+            index.Fields,
+            index.ValueKind,
+            index.IsUnique,
+            index.MissingValueBehavior);
+
+    private static BoundedQueryDeclaration CloneQuery(
+        BoundedQueryDeclaration query,
+        string indexIdentity) =>
+        new(
+            query.Identity,
+            indexIdentity,
+            query.Operations,
+            query.SortSupport,
+            query.PagingSupport,
+            query.ExecutionClass,
+            query.SupportsDisjunction,
+            query.SupportsTotalCount,
+            query.SortFields,
+            query.PredicateBindingMode == BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField
+                ? null
+                : query.PredicateFields,
+            query.ResultOperations,
+            query.LatestPerKeyPath,
+            query.ResidualPredicateFields);
+
+    private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";
 
     private static string Path(string path) => path.TrimStart('/');
 }

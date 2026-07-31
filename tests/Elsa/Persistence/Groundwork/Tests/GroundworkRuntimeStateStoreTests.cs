@@ -809,7 +809,10 @@ public sealed class GroundworkRuntimeStateStoreTests
                 "a" => "b",
                 _ => "a"
             };
-            return Task.FromResult(new DocumentQueryResult([], 0, next));
+            return Task.FromResult(new DocumentQueryResult(
+                [new DocumentEnvelope("test", $"doc-{_queryCount}", "1", 1, "{}", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)],
+                _queryCount,
+                next));
         }
     }
 

@@ -33,6 +33,68 @@ public sealed class AspNetCoreIdentityMutationGuardTests
         Assert.Equal(expectedLine, diagnostic.Line);
     }
 
+    [Fact]
+    public void Reviewed_bounded_cursor_pager_is_the_only_QueryAllAsync_surface_allowed()
+    {
+        using var fixture = new TemporaryDirectory();
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/ReviewedPager.cs",
+            """
+            namespace Injected;
+
+            public sealed class ReviewedPager
+            {
+                public Task LoadAsync() =>
+                    BoundedDocumentQueryPager.QueryAllAsync();
+            }
+            """);
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnboundedPager.cs",
+            """
+            namespace Injected;
+
+            public sealed class UnboundedPager
+            {
+                public Task LoadAsync() =>
+                    QueryAllAsync();
+            }
+            """);
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/MixedPager.cs",
+            """
+            namespace Injected;
+
+            public sealed class MixedPager
+            {
+                public async Task LoadAsync()
+                {
+                    await BoundedDocumentQueryPager.QueryAllAsync(); await store.QueryAllAsync();
+                }
+            }
+            """);
+
+        var diagnostics = AspNetCoreIdentityMutationScanner.Scan(fixture.Path);
+
+        Assert.Collection(
+            diagnostics,
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/MixedPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(7, diagnostic.Line);
+            },
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnboundedPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(6, diagnostic.Line);
+            });
+    }
+
     public static TheoryData<string, string, string, int> MutationCases => new()
     {
         {
@@ -236,8 +298,9 @@ internal static partial class AspNetCoreIdentityMutationScanner
                     "Identity user/role authority documents have exactly one canonical definition.");
             }
 
+            var codeWithoutReviewedPager = ReviewedBoundedPagerRegex().Replace(code, string.Empty);
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
-                UnboundedQueryRegex().IsMatch(code))
+                UnboundedQueryRegex().IsMatch(codeWithoutReviewedPager))
             {
                 Add(diagnostics, "IDENTITY-UNBOUNDED-QUERY", relativePath, lineNumber,
                     "Groundwork Identity may use only declared, finite bounded-query routes.");
@@ -278,6 +341,9 @@ internal static partial class AspNetCoreIdentityMutationScanner
 
     [GeneratedRegex(@"\b(?:LoadAllAsync|QueryAllAsync)\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex UnboundedQueryRegex();
+
+    [GeneratedRegex(@"\bBoundedDocumentQueryPager\.QueryAllAsync\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex ReviewedBoundedPagerRegex();
 
     [GeneratedRegex(@"\b(?:Add|TryAdd|Replace)Scoped\s*<\s*(?:IUserStore\s*<\s*AspNetCoreIdentityUser\s*>|IRoleStore\s*<\s*IdentityRole\s*>)", RegexOptions.CultureInvariant)]
     private static partial Regex DuplicateAuthorityRegistrationRegex();

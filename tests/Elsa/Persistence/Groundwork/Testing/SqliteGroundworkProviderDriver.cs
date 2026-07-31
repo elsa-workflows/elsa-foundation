@@ -91,8 +91,23 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        DeleteDatabaseFiles();
+        await ResetPhysicalStorageCoreAsync(cancellationToken);
         var source = await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);
+        await ApplyPhysicalSchemaCoreAsync(source, cancellationToken);
+    }
+
+    protected override ValueTask ResetPhysicalStorageCoreAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        DeleteDatabaseFiles();
+        return ValueTask.CompletedTask;
+    }
+
+    protected override async ValueTask ApplyPhysicalSchemaCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
         await using (var connection = new SqliteConnection(RequireConnectionString().ConnectionString))
         {
             var applied = await PhysicalSchemaApplication.ApplyAsync(
@@ -397,8 +412,8 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
 
     private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
     {
-        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
-            throw new InvalidOperationException($"SQLite physical schema application was not accepted: {result.Outcome}.");
+        if (result.Outcome is not (PhysicalSchemaApplicationOutcome.Applied or PhysicalSchemaApplicationOutcome.NoChanges))
+            throw new InvalidOperationException($"SQLite physical schema application did not complete: {result.Outcome}.");
     }
 
     private Task<SqliteDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>

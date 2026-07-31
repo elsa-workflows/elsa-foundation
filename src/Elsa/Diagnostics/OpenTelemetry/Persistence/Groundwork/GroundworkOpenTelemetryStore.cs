@@ -1162,13 +1162,21 @@ public sealed class GroundworkOpenTelemetryStore :
         SaveDocumentRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _stores.Documents.SaveAsync(request, cancellationToken);
+        var candidate = request;
+        var result = await _stores.Documents.SaveAsync(candidate, cancellationToken);
         if (result.Status is DocumentStoreWriteStatus.IdentityConflict &&
             !string.IsNullOrWhiteSpace(result.AuthoritativeId))
         {
+            candidate = request with { Id = result.AuthoritativeId };
             result = await _stores.Documents.SaveAsync(
-                request with { Id = result.AuthoritativeId },
+                candidate,
                 cancellationToken);
+        }
+
+        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict &&
+            await CatalogAlreadyMatchesAsync(candidate, cancellationToken))
+        {
+            return;
         }
 
         if (result.Status is not DocumentStoreWriteStatus.Saved)
@@ -1176,9 +1184,23 @@ public sealed class GroundworkOpenTelemetryStore :
                 $"The OpenTelemetry catalog write for '{request.DocumentKind}/{request.Id}' returned {result.Status}.");
     }
 
+    private async Task<bool> CatalogAlreadyMatchesAsync(
+        SaveDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var retained = await _stores.Documents.LoadAsync(
+            request.DocumentKind,
+            request.Id,
+            cancellationToken);
+        return retained is not null &&
+               StringComparer.Ordinal.Equals(retained.DocumentKind, request.DocumentKind) &&
+               StringComparer.Ordinal.Equals(retained.SchemaVersion, request.SchemaVersion) &&
+               StringComparer.Ordinal.Equals(retained.ContentJson, request.ContentJson);
+    }
+
     /// <summary>
-    /// Repeatedly deletes one bounded page beyond the retained prefix. Re-querying the same offset after each
-    /// page also converges when a host lowers its configured capacity after a restart.
+    /// Walks the retained prefix, then deletes every cursor page beyond it. Capturing each continuation before
+    /// deleting its page keeps cleanup stable when a host lowers its configured capacity after a restart.
     /// </summary>
     private async Task EnforceCatalogCapacityAsync(
         string documentKind,
@@ -1186,13 +1208,26 @@ public sealed class GroundworkOpenTelemetryStore :
         int capacity,
         CancellationToken cancellationToken)
     {
+        var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        var retained = 0;
+        while (retained < capacity)
+        {
+            var requested = Math.Min(capacity - retained, CatalogRetentionPageSize);
+            var retainedPage = await QueryPageAsync(requested, continuation);
+            retained += retainedPage.Documents.Count;
+            if (retainedPage.NextContinuation is null)
+                return;
+
+            continuation = RequireFreshContinuation(retainedPage.NextContinuation);
+        }
+
         while (true)
         {
-            var page = await _stores.DocumentQueries.QueryAsync(new DocumentQuery(
-                documentKind,
-                queryIdentity,
-                skip: capacity,
-                take: CatalogRetentionPageSize), cancellationToken);
+            var page = await QueryPageAsync(CatalogRetentionPageSize, continuation);
+            var nextContinuation = page.NextContinuation is null
+                ? null
+                : RequireFreshContinuation(page.NextContinuation);
             if (page.Documents.Count == 0)
                 return;
 
@@ -1205,6 +1240,40 @@ public sealed class GroundworkOpenTelemetryStore :
                     throw new InvalidOperationException(
                         $"The OpenTelemetry catalog retention delete for '{documentKind}/{envelope.Id}' returned {result.Status}.");
             }
+
+            if (nextContinuation is null)
+                return;
+            continuation = nextContinuation;
+        }
+
+        async Task<DocumentQueryResult> QueryPageAsync(int take, string? cursor)
+        {
+            var page = await _stores.DocumentQueries.QueryAsync(new DocumentQuery(
+                documentKind,
+                queryIdentity,
+                take: take,
+                continuation: cursor), cancellationToken);
+            if (page.Documents.Count > take)
+            {
+                throw new InvalidOperationException(
+                    $"The OpenTelemetry catalog retention query '{queryIdentity}' exceeded its requested page size.");
+            }
+            if (page.Documents.Count == 0 && page.NextContinuation is not null)
+            {
+                throw new InvalidOperationException(
+                    $"The OpenTelemetry catalog retention query '{queryIdentity}' returned a continuation after an empty page.");
+            }
+            return page;
+        }
+
+        string RequireFreshContinuation(string value)
+        {
+            if (!seenContinuations.Add(value))
+            {
+                throw new InvalidOperationException(
+                    $"The OpenTelemetry catalog retention query '{queryIdentity}' repeated a continuation.");
+            }
+            return value;
         }
     }
 

@@ -59,11 +59,11 @@
 - Provider-native cascades: rejected; not a portable public contract.
 - Read-then-mutate bulk loops: rejected; not bounded or interruption-safe.
 
-## Decision 6: Preview.76 public capability verification is a blocking prerequisite
+## Decision 6: Exact-head public capability verification is a blocking prerequisite
 
-**Decision**: Before implementation, verify an exact public `0.0.1-preview.76` package/tool family and executable probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native mutation plans, and four-provider CAS/UoW.
+**Decision**: Before production implementation, verify the exact Groundwork package/tool family configured on the reviewed head and execute probes for codec admission, physical entity definitions, schema CLI/readiness, typed compound/multivalue/range routes, bounded mutation with native plans, and four-provider CAS/UoW.
 
-**Rationale**: The audit worktree pinned preview.72 when this prerequisite was recorded; a local or historical capability claim cannot establish the public integration contract. The repository now consumes preview.76, but linked multivalue projections remain permitted only after that public family proves the declaration/execution surface.
+**Rationale**: A local or historical capability claim cannot establish the public integration contract. Any package/tool change requires a fresh exact-head probe; linked multivalue projections remain unavailable to production code until that public family proves the declaration/execution surface.
 
 **Alternatives considered**:
 
@@ -80,6 +80,34 @@
 
 - Delete EF first: rejected; removes the oracle before correctness/performance evidence exists.
 - Keep EF as an optional in-repository provider: rejected by ADR 0042 and repository-wide zero-EF target.
+
+## Decision 8: Keep newly proven mutation gaps upstream
+
+**Decision**: Groundwork
+[#141](https://github.com/valence-works/groundwork/issues/141) owns fenced
+cross-unit relationship guards for dependent cleanup and prune. Groundwork
+[#143](https://github.com/valence-works/groundwork/issues/143) delivered the
+manifest-fixed same-unit assignment action whose result is the exact matched
+count and is available in Elsa's configured preview.95 family. Operations that
+require #143 remain blocked until current-family recertification closes T006.
+Application/authorization/token operations requiring #141 remain blocked until
+its public contracts are implemented, published, imported, and recertified on
+all four providers.
+
+**Rationale**: Oracle re-verification found that the former prune transition
+shape was semantically unequal. OpenIddict prune reads related records under
+one atomic decision, while token revoke assigns `revoked` to every match,
+including already-revoked, null, and extension-defined statuses. A finite
+transition list or query-then-update loop cannot preserve those contracts.
+
+**Alternatives considered**:
+
+- Enumerate known status values: rejected because OpenIddict status is an
+  open-world string and matched-count semantics include every value.
+- Query then update/delete records one by one: rejected because it introduces
+  N+1 I/O, TOCTOU, client evaluation, and non-durable count/replay semantics.
+- Narrow the OpenIddict contract: rejected because these members are inside the
+  zero-EF completion gate.
 
 ## Evidence Baseline
 

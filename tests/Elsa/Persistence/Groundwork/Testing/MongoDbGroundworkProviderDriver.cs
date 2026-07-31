@@ -181,13 +181,27 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken)
     {
-        using var client = new MongoClient(RequiredConnectionString());
-        await client.DropDatabaseAsync(_databaseName, cancellationToken);
+        await ResetPhysicalStorageCoreAsync(cancellationToken);
         var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
             RequiredConnectionString(),
             _databaseName,
             cancellationToken);
         var source = await CreatePhysicalSchemaSourceAsync(manifestSources, topology, cancellationToken);
+        await ApplyPhysicalSchemaCoreAsync(source, cancellationToken);
+    }
+
+    protected override async ValueTask ResetPhysicalStorageCoreAsync(CancellationToken cancellationToken)
+    {
+        using var client = new MongoClient(RequiredConnectionString());
+        await client.DropDatabaseAsync(_databaseName, cancellationToken);
+    }
+
+    protected override async ValueTask ApplyPhysicalSchemaCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        using var client = new MongoClient(RequiredConnectionString());
         var executor = new MongoDbPhysicalSchemaExecutor(client.GetDatabase(_databaseName));
         var applied = await PhysicalSchemaApplication.ApplyAsync(
             source.PhysicalTarget,
@@ -945,8 +959,8 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
 
     private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
     {
-        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
-            throw new InvalidOperationException($"MongoDB physical schema application was not accepted: {result.Outcome}.");
+        if (result.Outcome is not (PhysicalSchemaApplicationOutcome.Applied or PhysicalSchemaApplicationOutcome.NoChanges))
+            throw new InvalidOperationException($"MongoDB physical schema application did not complete: {result.Outcome}.");
     }
 
 }

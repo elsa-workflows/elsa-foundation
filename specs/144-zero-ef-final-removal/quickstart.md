@@ -498,3 +498,29 @@ Evidence note T059: the new omitted-solution test plus the existing Windows-refe
 Evidence note T060: the three new dependency-input tests passed within the 4/4 new-test run, and
 the existing Windows/static and shared-build fixtures passed 2/2; commands used `--no-restore`,
 build servers disabled, and no database-server container.
+
+### 2026-07-31 preview.102 prerequisite checkpoint
+
+Groundwork merge `68e7c344163c199024aed00ccdcaa2deb51ef5bb` published the coherent
+`0.0.1-preview.102` package/tool family. The serialized Elsa integration aligns all seven packages,
+the tool manifest, and the Spec 094 current-family guard to that release. This family includes the
+provider-applied ordering-tail work from PR #154, the provider-internal SQLite materialization proof
+from PR #155, and the immutable physical-form baseline registry/control plane from PR #156.
+
+This checkpoint is prerequisite preparation, not deletion admission: the preview.102 four-provider
+evidence generation has not yet been published or mechanically imported; Groundwork #50, #25, and
+#141 remain open because their remaining controlled matrices and provider obligations have not
+passed; T009–T013 and T017 remain unchecked; no coverage-ledger status, performance verdict, EF
+bucket, issue state, or Project 33 completion state advances.
+
+### 2026-07-31 preview.103 prerequisite checkpoint
+
+Groundwork merge `b9ba0249eed0a00da9b6d37575f39383c22ae2c9` published
+`0.0.1-preview.103`, adding the MongoDB fixed-assignment and transition selector-mirror reopen repair
+from PR #157. The serialized Elsa integration aligns the seven package pins, tool manifest, Spec 094
+current-family ratchet, and current-version guards. Preview.102 remains an immutable no-generation
+checkpoint; preview.103 provider publication and tuple-keyed mechanical import are still required.
+
+This alignment does not admit EF deletion: it advances no provider-evidence status or performance
+verdict, leaves Groundwork #50 and Elsa #642/#643/#646/#647 open, and does not change any EF ratchet
+bucket or Project 33 completion state.

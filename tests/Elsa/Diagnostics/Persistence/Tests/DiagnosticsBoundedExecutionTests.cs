@@ -252,8 +252,8 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
         yield return ("instrument-history", new(CatalogDocuments.InstrumentKind, OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery, take: 7), false);
         yield return ("resource-count", new(CatalogDocuments.ResourceKind, OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery, take: 0), true);
         yield return ("instrument-count", new(CatalogDocuments.InstrumentKind, OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery, take: 0), true);
-        yield return ("resource-capacity-selection", new(CatalogDocuments.ResourceKind, OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery, skip: 7, take: 1_000), false);
-        yield return ("instrument-capacity-selection", new(CatalogDocuments.InstrumentKind, OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery, skip: 7, take: 1_000), false);
+        yield return ("resource-capacity-selection", new(CatalogDocuments.ResourceKind, OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery, take: 1_000), false);
+        yield return ("instrument-capacity-selection", new(CatalogDocuments.InstrumentKind, OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery, take: 1_000), false);
     }
 
     private static void AssertNativeDiagnosticPlan(
@@ -289,6 +289,20 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
         if (route.IsCount)
             Assert.Contains(explanation.Commands, command => command.Kind == PhysicalDocumentQueryCommandKind.Count);
         else
-            Assert.Contains(explanation.Commands, command => command.ProviderAppliedMaximumRows == query.Take);
+        {
+            var page = Assert.Single(
+                explanation.Commands,
+                command => command.Kind == PhysicalDocumentQueryCommandKind.Page);
+            Assert.Equal(checked(query.Take + 1), page.ProviderAppliedMaximumRows);
+            Assert.Equal(
+                explanation.Plan.Order.Select(order => (
+                    FieldIdentifier: order.Field.Identifier,
+                    order.Direction,
+                    order.IsIdentityTieBreak)),
+                page.ProviderAppliedOrder.Select(order => (
+                    order.FieldIdentifier,
+                    order.Direction,
+                    order.IsIdentityTieBreak)));
+        }
     }
 }

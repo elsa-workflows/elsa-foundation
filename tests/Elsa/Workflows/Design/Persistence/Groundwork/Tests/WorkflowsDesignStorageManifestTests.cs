@@ -121,6 +121,27 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
+    public void Search_reuses_the_name_v2_index_without_a_duplicate_mongodb_key_shape()
+    {
+        var unit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(candidate =>
+            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var search = Assert.Single(storage.BoundedQueries, query =>
+            query.Identity == WorkflowsDesignStorageManifest.SearchDefinitionsQuery);
+
+        Assert.Equal("definition-by-name-v2", search.IndexIdentity);
+        Assert.DoesNotContain(storage.LogicalIndexes, index =>
+            index.Identity == "definition-by-search-v2");
+        Assert.DoesNotContain(table.Indexes, index =>
+            index.LogicalName == "definition-by-search-v2");
+        Assert.Contains(storage.LogicalIndexes, index =>
+            index.Identity == "definition-by-search" && !index.IsUnique);
+        Assert.Contains(table.Indexes, index =>
+            index.LogicalName == "definition-by-search" && !index.IsUnique);
+    }
+
+    [Fact]
     public void Exact_version_route_enforces_uniqueness_on_definition_and_semver_sort_key_only()
     {
         var versionUnit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(unit =>
@@ -142,6 +163,26 @@ public sealed class WorkflowsDesignStorageManifestTests
         Assert.Equal(
             ["storage_scope", "definition_id", "sem_ver_sort_key"],
             physicalIndex.Columns.Select(column => column.ColumnLogicalName));
+    }
+
+    [Fact]
+    public void Offset_routes_use_unique_entity_identity_tuples_without_the_wide_provider_comparison_key()
+    {
+        var comparisonKey = new DocumentEnvelopeDefinition().IdComparisonKeyColumn;
+        foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
+        {
+            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+            foreach (var route in storage.BoundedQueries.Where(route =>
+                         route.PagingSupport == QueryPagingSupport.Offset))
+            {
+                Assert.True(storage.LogicalIndexes.Single(index => index.Identity == route.IndexIdentity).IsUnique);
+                var physical = table.Indexes.Single(index => index.LogicalName == route.IndexIdentity);
+                Assert.True(physical.IsUnique);
+                Assert.DoesNotContain(physical.Columns, column =>
+                    column.ColumnLogicalName == comparisonKey);
+            }
+        }
     }
 
     [Fact]

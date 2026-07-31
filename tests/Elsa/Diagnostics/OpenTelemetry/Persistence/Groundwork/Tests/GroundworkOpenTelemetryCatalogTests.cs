@@ -1,5 +1,9 @@
+using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -39,6 +43,82 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
         var afterUpsert = await store.QueryResourcesAsync(new() { Take = 20 });
         Assert.Equal(["resource-b", "resource-c"], afterUpsert.Items.Select(x => x.Id));
         Assert.Equal("orders-refreshed", afterUpsert.Items.First().ServiceName);
+    }
+
+    [Fact]
+    public async Task Equivalent_catalog_winner_reconciles_an_ambiguous_concurrency_conflict_without_rewriting()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var commands = new CatalogConflictDocumentCommands(
+            providers.Documents,
+            commitBeforeConflict: true);
+        var store = new GroundworkOpenTelemetryStore(
+            providers with { Documents = commands },
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                ResourceCapacity = 2,
+                MetricInstrumentCapacity = 2,
+                MaxQuerySize = 20
+            }),
+            _fixture.Binding);
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+
+        await store.WriteDurablyAsync(Batch(
+            Resource("resource-a", time),
+            Instrument("instrument-a", "resource-a"),
+            time));
+
+        Assert.Equal(1, commands.ConflictCount);
+        Assert.Equal(1, commands.ResourceSaveCount);
+        Assert.Equal("resource-a", Assert.Single(
+            (await store.QueryResourcesAsync(new() { Take = 20 })).Items).Id);
+    }
+
+    [Fact]
+    public async Task Divergent_catalog_winner_remains_a_conflict_and_is_not_overwritten()
+    {
+        var providers = await _fixture.CreateProvidersAsync();
+        var initial = new GroundworkOpenTelemetryStore(
+            providers,
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                ResourceCapacity = 2,
+                MetricInstrumentCapacity = 2,
+                MaxQuerySize = 20
+            }),
+            _fixture.Binding);
+        var time = new DateTimeOffset(2026, 7, 19, 12, 0, 0, TimeSpan.Zero);
+        await initial.WriteDurablyAsync(Batch(
+            Resource("resource-a", time),
+            Instrument("instrument-a", "resource-a"),
+            time));
+
+        var commands = new CatalogConflictDocumentCommands(
+            providers.Documents,
+            commitBeforeConflict: false);
+        var conflicting = new GroundworkOpenTelemetryStore(
+            providers with { Documents = commands },
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                ResourceCapacity = 2,
+                MetricInstrumentCapacity = 2,
+                MaxQuerySize = 20
+            }),
+            _fixture.Binding);
+        var changed = Resource("resource-a", time.AddSeconds(1)) with
+        {
+            ServiceName = "orders-changed"
+        };
+
+        await Assert.ThrowsAsync<OpenTelemetryPersistenceUnavailableException>(async () =>
+            await conflicting.WriteDurablyAsync(Batch(
+                changed,
+                Instrument("instrument-a", "resource-a"),
+                time.AddSeconds(1))));
+
+        Assert.Equal(1, commands.ConflictCount);
+        Assert.Equal("orders", Assert.Single(
+            (await initial.QueryResourcesAsync(new() { Take = 20 })).Items).ServiceName);
     }
 
     [Fact]
@@ -135,8 +215,9 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
                 first.AddSeconds(index)));
         }
 
+        var recordingQueries = new RecordingBoundedDocumentStore(providers.DocumentQueries);
         var reduced = new GroundworkOpenTelemetryStore(
-            providers,
+            providers with { DocumentQueries = recordingQueries },
             Options.Create(new OpenTelemetryDiagnosticsOptions
             {
                 ResourceCapacity = 2,
@@ -155,6 +236,12 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
         Assert.Equal(
             ["resource-g", "resource-f"],
             (await reduced.QueryResourcesAsync(new() { Take = 20 })).Items.Select(x => x.Id));
+        var retentionQueries = recordingQueries.Queries.Where(query =>
+            query.QueryIdentity is
+                OpenTelemetryGroundworkStorageSchema.ResourcesByLastSeenQuery or
+                OpenTelemetryGroundworkStorageSchema.InstrumentsByLastSeenQuery);
+        Assert.DoesNotContain(retentionQueries, query => query.Skip is not null);
+        Assert.Contains(retentionQueries, query => query.Continuation is not null);
     }
 
     [Fact]
@@ -255,4 +342,72 @@ public sealed class GroundworkOpenTelemetryCatalogTests : IAsyncLifetime
 
     private static MetricInstrument Instrument(string id, string resourceId) =>
         new(id, resourceId, "orders.duration", "ms", null, MetricKind.Gauge, new Dictionary<string, string?>());
+
+    private sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner) : IBoundedDocumentStore
+    {
+        public List<DocumentQuery> Queries { get; } = [];
+
+        public Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            Queries.Add(query);
+            return inner.QueryAsync(query, cancellationToken);
+        }
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.CountAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+    }
+
+    private sealed class CatalogConflictDocumentCommands(
+        IGroundworkOpenTelemetryDocumentCommands inner,
+        bool commitBeforeConflict) : IGroundworkOpenTelemetryDocumentCommands
+    {
+        private int _injected;
+
+        public int ConflictCount { get; private set; }
+        public int ResourceSaveCount { get; private set; }
+        public DocumentStoreAccess Access => inner.Access;
+
+        public async Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!StringComparer.Ordinal.Equals(request.DocumentKind, CatalogDocuments.ResourceKind))
+                return await inner.SaveAsync(request, cancellationToken);
+
+            ResourceSaveCount++;
+            if (Interlocked.CompareExchange(ref _injected, 1, 0) != 0)
+                return await inner.SaveAsync(request, cancellationToken);
+
+            if (commitBeforeConflict)
+            {
+                var result = await inner.SaveAsync(request, cancellationToken);
+                if (result.Status is not DocumentStoreWriteStatus.Saved)
+                    return result;
+            }
+
+            ConflictCount++;
+            return DocumentStoreWriteResult.ConcurrencyConflict;
+        }
+
+        public Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) =>
+            inner.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(
+            DeleteDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+    }
 }

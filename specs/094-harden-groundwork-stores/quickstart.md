@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.88` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.103` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.88`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.103`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,7 +18,7 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.88`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.103`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
@@ -27,9 +27,291 @@ The original checkpoint/fence attachment and its unversioned evidence paths reta
 `0.0.1-preview.80` four-provider slice as immutable historical provenance. The later
 `0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
 versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
-lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The current
-`0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and is imported mechanically by tuple. All rows remain below
+lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The latest retained
+`0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and was imported mechanically by tuple. The
+`preview.102` generation was never published. The current `preview.103` generation remains intentionally absent until the exact clean-source four-provider publisher
+and mechanical importer complete. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
+
+**2026-07-31 preview.103 integration preparation**: Groundwork merge
+`b9ba0249eed0a00da9b6d37575f39383c22ae2c9` published the coherent
+`0.0.1-preview.103` package/tool family through
+[Groundwork PR #157](https://github.com/valence-works/Groundwork/pull/157). The patch repairs MongoDB
+fixed-assignment and transition selector-mirror persistence across shared documents, dedicated document
+tables, and physical entity tables, including reopen durability. This serialized Elsa checkpoint aligns
+the repository package/tool family and current-version guards only. It imports no provider evidence,
+advances no coverage-ledger status, records no performance verdict, and completes no Spec 094 task.
+
+The upstream `Publish NuGet Packages` run
+[`30618297992`](https://github.com/valence-works/Groundwork/actions/runs/30618297992) passed for the
+exact merge SHA and its feed log names the `preview.103` packages. Root restored the complete
+`Elsa.Server.slnx` graph with `--force-evaluate`, restored `Groundwork.Tool 0.0.1-preview.103`, and
+verified the following container-free gates serially:
+
+- current ledger/importer architecture guards: **88/88**;
+- focused current-version conformance: **7 passed / 1 publication-only skip / 0 failed**;
+- benchmark protocol and comparison-integrity guards: **266/266**;
+- SQLite design target/package/tool version gate: **1/1**.
+
+An initial parallel test attempt shared transitive build outputs and hit `GenerateDepsFile` file locks;
+it supplied no accepted result. The serial reruns above supersede it. No database-server container,
+provider-evidence publisher, mechanical importer, or benchmark timing process ran during this
+alignment.
+
+After freezing candidate `5f56c34cac44c65cffec81f9959c34eb07db7e30`, root also passed the
+complete architecture suite **351/351** and the OpenIddict Groundwork unit/manifest suite **36/36**
+against the same implementation and package graph.
+
+Three read-only reviewers were briefed adversarially to assume green-washing and inspected exact
+range
+`77d6109f6a4dac1f6b3994635e17e5a2342ab045..5f56c34cac44c65cffec81f9959c34eb07db7e30`:
+
+| Axis | Verdict and disposition |
+|---|---|
+| Correctness/mechanism | **PASS** — all seven packages, the tool, current-version guards, and generated package/dependency maps coherently resolve `preview.103`; no production API/schema behavior changed and remaining `preview.102` references are historical. |
+| Evidence integrity | **PASS** — upstream PR #157, merge SHA, and publisher run provenance are valid; the ledger contains zero `preview.103` records, immutable historical attachments are unchanged, and no status/verdict claim advances. |
+| Scope/test preservation | **PASS** — ledger content other than `groundworkVersion` is unchanged, status counts remain 30 implemented / 4 externally blocked / 1 planned, performance-verdict count remains zero, and no task, EF ratchet, historical evidence, issue, or Project state changed. |
+
+Requested Luna reviewer capacity was unavailable; all three reviews used the documented GPT-5.6
+Terra High fallback. No finding required source remediation. The final record/map commits were
+separately re-verified as documentation-only before merge.
+
+**2026-07-31 preview.102 integration preparation**: the seven Groundwork packages and
+`Groundwork.Tool` align to the public `0.0.1-preview.102` release built from Groundwork merge
+`68e7c344163c199024aed00ccdcaa2deb51ef5bb`. This exact family includes the provider-applied
+ordering-tail work from PR #154, the provider-internal SQLite materialization proof from PR #155,
+and the immutable physical-form baseline registry/control plane from PR #156. The latter two are
+reviewed checkpoints inside Groundwork #141 and #50, not completion of either issue: ordinary
+fence/prune and non-SQLite relationship evidence remain for #141, while #50 still requires the
+controlled four-provider synchronized-contention matrix, reviewed population and activation of the
+registry, and final physical-form reports. This preparation imports no provider evidence, advances
+no coverage-ledger status, records no performance verdict, and completes no Spec 094 task.
+
+Pre-freeze verification restored the exact package/tool family and passed:
+
+- the complete Release solution build (zero errors; existing warnings retained);
+- the complete architecture suite (348/348);
+- benchmark protocol/integrity tests (266/266);
+- Activities Design Groundwork (72/72), SQLite design conformance (57/57), Identity persistence
+  Groundwork (74/74), Groundwork querying (108/108), and ASP.NET Core Identity Groundwork
+  (133/133);
+- the focused runtime/IAM-secrets/Identity evidence contract slice (9 passed, four publication-only
+  tests explicitly skipped without opt-in); and
+- offline resolution of the reference composition through
+  `GroundworkAllFeaturesWithIdentityDeploymentSchema` for SQLite, PostgreSQL, SQL Server, and MongoDB,
+  each with status `ready` and zero diagnostics. This preparation check did not include the diagnostics
+  manifest sources.
+
+The first preview.102 Identity resolution exposed twelve `GW-PHYSICAL-025` diagnostics: every
+non-unique scale-bearing offset route lacked the provider identity ordering tail. Offset's
+`id_comparison_key` would make the widest SQL Server key 2,406 bytes, beyond the 1,700-byte limit.
+The remediated shape uses cursor paging and the fixed-width envelope `id_lookup_key` tail (1,088
+bytes at the widest route), migrates exhaustive callers to the bounded continuation pager, preserves
+the 100,000-document materialization ceiling, and adds direct resolver, ordered-index, pager-limit,
+and source-policy regression tests. No historical Identity evidence was rewritten; preview.102 still
+requires a fresh exact-source four-provider generation.
+
+Hosted CI against the initial frozen candidate
+`a462a17ac9546bb5b85894591554f06ccf8ca27d` then exposed the diagnostics omission above. Preview.102
+rejected eight OpenTelemetry catalog routes because their non-unique scale-bearing physical indexes
+lacked provider-applied identity ordering tails. Adding offset tails would have exceeded SQL Server's
+1,700-byte key limit on the widest catalog indexes. The replacement makes those scale-bearing routes
+cursor-paged, appends the fixed-width `id_lookup_key` tail with the exact declared sort direction, and
+changes catalog-capacity cleanup from offset skipping to bounded continuation traversal. A direct
+regression proves cleanup sends no `Skip` and advances through a non-null continuation. The same CI run
+also exposed three stale test expectations around preview.102 offset tails in Activities Design
+temporal management, runtime pinned-artifact history, and Secrets. The first remediation updated
+those assertions to the new `id_comparison_key` shape; the later exact-range correctness review below
+proved that resolver-green shape was not SQL Server-deployable and superseded it with bounded unique
+tuples plus a provider-native validator.
+
+Root verification of that remediation passed the complete OpenTelemetry Groundwork suite (76/76), the
+Unified Host schema-activation class (8/8), the three formerly stale focused tests (1/1 each), and a
+Release build of `Elsa.Server.csproj` with zero errors. Offline validation of the complete
+`GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema` returned `ready` with zero diagnostics
+for all four mandatory providers:
+
+| Provider | Physical target fingerprint | Diagnostic-record fingerprint |
+|---|---|---|
+| SQLite | `c63f59ee2587a499513ec75127d96f097ec9527d8673e4e89b0a59c395fb2c1f` | `ce5aaec3513730e4e7135c918e6bde3ead7abef2b0d8e74570474d6778f3900c` |
+| PostgreSQL | `277ed6f01c20a6dd8abd51f6a549bdaf8802992e9e687b36369058815c2125f3` | `0871bade20996939a899577ec7d867c38c2196d4910929e4c75e8828d005d539` |
+| SQL Server | `73b740c4eb3589c78af82779e3e2defa578de9a22617122407b1b857369fa28d` | `fafcd1ffb25323089aaa0b6ea538dc0c9f1a3481549eee57da3a0dd85bbbc7ec` |
+| MongoDB | `a1ec0c1a99b313967bbd5d01b981222ed49f6f8d319ae0175b80c12c7a1dada7` | `d08a1e3696cd3d5c66331ad8bd5258990bf2ceb770c534f8c23d5ffc86180508` |
+
+The first adversarial exact-range review cycle inspected
+`ca818b649d85c5167e2222c0ec534e215153d473..a462a17ac9546bb5b85894591554f06ccf8ca27d`
+on correctness/mechanism, evidence integrity, and scope/test preservation. Its confirmed findings and
+dispositions were:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The bounded exhaustive pager could loop when a provider returned an empty page with a fresh continuation. It now rejects that impossible shape, with a two-token regression proving the guard. The originating reviewer re-verified the fix. | PASS |
+| Evidence integrity | The preview evidence importer admitted a dirty source checkout. It now rejects tracked, staged, and untracked dirt, retaining only the exact validated destination-generation recovery exception. The originating reviewer re-verified the focused importer/guard suite. | PASS |
+| Scope/test preservation | The source scanner could miss a forbidden direct query call when an allowed pager call appeared on the same line. It now removes only the qualified allowed invocation before scanning the remainder; a mixed-line regression proves the direct call is still reported. The generated dependency maps were refreshed from the clean remediated source and the originating reviewer re-verified both dispositions. | PASS |
+
+The next exact-range review inspected
+`ca818b649d85c5167e2222c0ec534e215153d473..8566416c2ef5b94774df39462189de4f8003aecc`.
+Evidence-integrity and scope/test-preservation reviewers returned PASS, but correctness/mechanism
+blocked the candidate: offline resolution did not execute SQL Server's provider-native 1,700-byte
+index-key validator, and 31 non-point offset indexes outside OpenTelemetry still carried the
+1,350-byte `id_comparison_key` tail. The widest examples reached 2,374 bytes.
+
+The remediation adds a permanent no-I/O construction test over the complete
+`GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema`; constructing
+`SqlServerPhysicalDocumentStore` invokes the real provider validator for every compiled route.
+The initially failing `activity-definition-by-category` index reported 2,374 bytes. The corrected
+manifests remove the redundant provider tail only where a bounded tuple has a storage-enforced
+identity:
+
+- Activities and Workflow Design list indexes include the projected entity ID used as the document
+  ID and are now unique composites;
+- reusable Activities routes retain their business-key order and add the projected entity ID as
+  their final unique component;
+- temporal management routes use `(sort key, valid-from)` or
+  `(valid-to, resource ID, valid-from)`, preserving public offset semantics while distinguishing
+  retained revisions;
+- Secrets reuses the already-enforced `(tenant, normalized name)` uniqueness with status added; and
+- the pinned-artifact route includes the workflow execution ID used as the runtime document ID.
+
+The immutable preview.95 fixtures then caught a proposed runtime shortcut before freeze. Marking the
+existing collection, artifact-ID, and execution-ID projections required would have changed their
+historical nullable definitions and produced `GW-SCHEMA-003` on every provider. The final form keeps
+those projections and the legacy non-unique index byte-for-byte, adds a unique `-v2` index, and adds
+explicit `IS NOT NULL` residual predicates for the artifact and execution IDs. That combination is
+additive, preserves the public offset/latest-per-key contract, and lets SQL Server legally use the
+provider-generated filtered index hint. The exact historical planner passes 4/4 and the isolated SQL
+Server B7 native route passes 1/1 on this form.
+
+OpenIddict has one deliberately different disposition. Its earlier authorization compound index
+would require a 2,048-byte SQL Server key, above the 1,700-byte limit. The immutable preview.95
+fixtures contain no OpenIddict state, and Spec 106 defines this unreleased adapter as greenfield with
+no data-migration obligation, so the impossible unmaterialized authorization declaration is removed
+instead of preserved. The current subject route uses the bounded
+`subject + id_lookup_key` cursor form; the safe token legacy compound index remains alongside its v2
+route. Any manually materialized old authorization schema is not auto-upgradeable and is outside this
+greenfield contract. OpenIddict manifest tests pass 36/36 and its complete four-provider capability
+probe passes 16/16.
+
+The provider-native full-reference validator now passes. Root verification also passed Activities
+Design Groundwork **74/74**, temporal projections **12/12**, Workflow Design Groundwork **97/97**,
+Secrets **88/88**, runtime Groundwork **739/739**, and Unified Host **70/70**. The SQLite cold-start
+schema-operation baseline is **963**, and the continuation-cycle fixture now returns non-empty pages
+so it exercises the repeated-token guard rather than the earlier empty-page guard. The complete
+conformance project passes **239 passed / 18 intentionally skipped / 0 failed (257 total)**, including
+both enabled SQLite acceptance-scale native-plan suites. The design baseline retains the accepted
+preview.81 fingerprints and pins preview.102's still-unaccepted drift as target
+`8e475dc3097262805b2913ba9ecab8f4447129c1d5525b0e81aea3aff2b04b97` and plan
+`81b67c2ff3588bea311e2098286e7ee93b3be6c94c502560f2953837b96e9535`; its exact focused test
+passes 1/1 without enabling evidence output. The full architecture suite passes **351/351** and the
+Release reference-server build succeeds with **0 errors** (24 pre-existing legacy/obsolete API
+warnings).
+
+### Preview.102 package/schema-alignment review disposition
+
+Three adversarial read-only reviewers inspected the exact initial frozen range
+`ca818b649d85c5167e2222c0ec534e215153d473..af54125de82af0ea64d9fc1a271d43a688344cb0`
+on correctness/mechanism, evidence integrity, and scope/test preservation. The reviewers were
+briefed to assume the implementation had green-washed its evidence. Confirmed findings and final
+dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The historical planner checked only the expected `-v2` creates. It now derives every preview.95 `CreatePhysicalIndex` identity from each immutable applied state, requires the current provider target to retain the complete set, and allow-lists only the known additive/validation operation kinds so a future destructive kind fails closed. The focused planner passes **4/4**; the originating reviewer re-inspected the remediation and returned PASS. | PASS |
+| Evidence integrity | Fixture hashes and prose did not independently prove that the payloads came from the claimed Elsa/package source. The new replay creates a detached `ca818b649…` worktree, verifies tree `82433ec…`, all seven preview.95 packages plus `Groundwork.Tool`, every package's Groundwork commit `d297147…`, regenerates the four canonical applied states through an isolated production-composition reproducer, and compares their decompressed SHA-256 values. Root ran the complete replay successfully. | PASS |
+| Evidence integrity | The first replay trusted mutable caller fixture/harness files. It now rejects tracked, staged, or untracked candidate-worktree dirt before reading or copying those bytes. Root proved the dirty rejection, committed the guard, reran the complete clean replay on `d5b3b8b84f8769d4cd31699c4839246d1dc601dd`, and the originating reviewer returned PASS. | PASS |
+| Evidence integrity | The cold-start report retained one stale 922-operation sentence while the executable baseline and current report outcome were 963. The sentence now says 963; the reviewer found no remaining contradiction. | PASS |
+| Scope/test preservation | The final source changes made the generated map manifest stale. Root ran the authorized full map generator; `5bf66b775fa169f082fffbc9f7314ecbb47376f3` refreshes the input fingerprint and the truthful 1,159→1,160 direct-reference delta from the UnifiedHost ProcessProbe edge. The originating reviewer re-inspected the generated files and returned PASS. | PASS |
+| Scope/test preservation | No test was removed or skipped, OpenIddict remains explicitly greenfield/excluded from the historical fixture, the coverage ledger changes only its package-family label, and no row, performance verdict, provider evidence, or Spec 094 task advances. The affected architecture guards passed **95/95**. | PASS |
+
+Correctness and evidence reviewers confirmed their final PASS on
+`ca818b649d85c5167e2222c0ec534e215153d473..d5b3b8b84f8769d4cd31699c4839246d1dc601dd`.
+The scope/test-preservation reviewer confirmed final PASS on
+`ca818b649d85c5167e2222c0ec534e215153d473..5bf66b775fa169f082fffbc9f7314ecbb47376f3`.
+The later quickstart-only commit records these already-completed dispositions and changes no
+implementation, fixture, package, generated map, ledger, task, or test.
+
+Hosted Linux CI on the reviewed `f304e4b1d1beb97a01af01744115b0df846de11f` head then found a
+cross-runtime evidence defect that the macOS verification could not expose. The immutable
+preview.95 applied states carry Groundwork's exact runtime Unicode identity algorithm. Darwin
+produces
+`groundwork-unicode-ordinal-ignore-case-v1-3206f759667cb9cc764ec243dfb3d322a39970184efab619e80163c36d86818f`;
+Ubuntu Noble produces
+`groundwork-unicode-ordinal-ignore-case-v1-124ca0d0d2b045d7be0e6aea8f07f74fbc0428a13c53a47d8a7d41db71b5ec5f`.
+The original fixture family contained only the Darwin identity, so the production planner correctly
+rejected it on Linux rather than silently accepting a comparison policy from another runtime.
+
+The remediation preserves that fail-closed boundary. The Darwin fixtures remain immutable at their
+original paths, and a second immutable Noble family lives under
+`Fixtures/schema-evolution/preview.95/unicode-identity-124ca0d0d2b0/`. The test selects a family only
+for one of the two exact reviewed algorithm identities and throws for every unknown identity; it
+does not normalize, substitute, or weaken Groundwork's runtime fingerprint. The clean replay command
+uses the host runtime when invoked without arguments and accepts `--runtime linux-noble` for the
+container replay; Noble execution uses the digest-pinned
+`mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664`
+image and the same exact Elsa/package/tool/upstream-source tuple as the Darwin replay. Both modes
+restore packages and tools into fresh replay-local caches with cache reuse disabled. The pinned
+Noble mode additionally requires the generated identity to equal the exact Noble algorithm before
+selecting any fixture family.
+
+At implementation head `cba61a1e00537082198c9c3e8132e645737b6183`, root reproduced the complete
+Noble replay and exact canonical hashes for SQLite `80e1fde0…`, SQL Server `a38f2233…`,
+PostgreSQL `35762019…`, and MongoDB `a232f105…`. An independent verifier archived that exact clean
+commit, confirmed the pinned image digest and Noble algorithm/family selection, and passed the
+focused historical planner **4/4** in the disposable Linux checkout. Root independently passed the
+same planner **4/4** on Darwin and the real four-provider historical physical-upgrade test **4/4**
+in 3m56s. The SDK emitted its existing workload-verification advisory during the container restore;
+the focused Linux test itself emitted no warning. These results supersede the Linux-hosted failure
+without converting it into a provider-evidence or performance claim.
+
+The replacement three-axis review inspected exact range
+`ca818b649d85c5167e2222c0ec534e215153d473..1f2f6ea4fd10761a242198bd71f4844caa683d09`.
+All earlier verdicts are historical and superseded for this cross-runtime remediation.
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The first Noble mode would have accepted either known algorithm and could have mislabeled an unexpected Darwin result as Noble. It now requires the exact Noble algorithm before fixture selection. The first cache-bypass remediation also used unsupported `--no-cache`; both restore surfaces now use their verified `--no-http-cache` option. The originating reviewer passed script syntax, strict invalid-argument cases, CLI option checks, and the focused historical planner **4/4** on the replacement head. | PASS |
+| Evidence integrity | The first host replay inherited global NuGet/tool caches, so matching nuspec metadata did not independently exclude substituted cached binaries. Host and Noble now use fresh replay-local package/CLI homes with HTTP-cache reuse disabled. The reviewer recomputed all eight compressed hashes, inspected the algorithm identities in every payload, verified source/package/tool/upstream tuples and the Noble image digest, scanned for sensitive material, and found the corrected invocation, provenance, counts, and nonclaims truthful. | PASS |
+| Scope/test preservation | The new Noble family is additive and leaves all Darwin fixtures immutable. No test was removed or skipped; the ledger changes only its package-family label, and no task, provider evidence, performance verdict, or status advances. Focused architecture guards passed **95/95**. The final generated map manifest is fresh and follows the last map input. | PASS |
+
+Root then reran both complete clean replays at `1f2f6ea4`: host/Darwin and digest-pinned Noble each
+restored into isolated caches and reproduced all four canonical fixture payloads. The lane and main
+worktrees were clean, and remote `main` remained the reviewed base `ca818b649…`.
+
+Hosted checks on the later record-sealed head
+`9ff56e9eb79178f9765a71632bafe8596e6034e7` proved the cross-runtime fixture remediation:
+Unified Host passed **70/70** on Linux. The same Build & test job then exposed two independent
+integration defects. First, the EF surface ratchet scans every repository project and correctly
+refused an incomplete restore because `tools/evidence/Preview95SchemaFixtureReproducer.csproj` was
+not a member of the restored `Elsa.Server.slnx`; the solution now restores that evidence tool rather
+than weakening or excluding it from the scanner. Second, the SQLite Identity reopen test still
+adapted the legacy `IDocumentStore` API and attempted to resolve a new physical `-v2` route through
+that legacy surface. The reopen and concurrency tests now initialize the real Identity physical
+schema, open physical provider clients, and require the provider's `BoundedDocumentStore`. Their
+duplicated legacy query adapters were deleted. The link/delete race also no longer treats every
+`InvalidOperationException` as a valid loser: it accepts only the documented missing-user,
+`NotFound`, or `ConcurrencyConflict` outcomes.
+
+Root verification of the replacement passed the EF surface ratchet **1/1**, the SQLite reopen test
+**1/1**, the 100-iteration SQLite Identity race **1/1**, the complete ASP.NET Core Identity
+Groundwork suite **133/133**, and the complete architecture suite **351/351**. The evidence tool is
+present in `dotnet sln Elsa.Server.slnx list`, restores through that solution, and builds in Release
+with **0 errors**; its ten warnings are pre-existing obsolete-API warnings in referenced production
+source projects, not warnings introduced by the tool or this integration fix. Exact changed-file
+format checks and `git diff --check` pass. The replay harness and immutable fixtures did not change,
+so the already-recorded clean Darwin/Noble fixture replays remain the applicable evidence.
+
+Three adversarial read-only reviewers inspected exact replacement range
+`ca818b649d85c5167e2222c0ec534e215153d473..025206262d426849995a72d63e571d68225490d9`.
+They were briefed to assume the hosted-CI remediation and its evidence had been green-washed.
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | Solution restore now covers the evidence tool without excluding it from the all-project EF scanner. Both SQLite tests physicalize the production Identity manifest, open distinct physical clients, require the provider-created bounded store, and leave unexpected transaction/runtime exceptions uncaught. The reviewer found no blocker, P1, or P2. | PASS |
+| Evidence integrity | The hosted failure diagnoses, solution membership, production physical-route use, deleted adapters, narrowed exception outcomes, test counts, and replay/nonclaim boundaries match the committed implementation and retained artifacts. The first frozen head left its generated-map manifest stale after source/test/spec inputs changed; the authorized full generator now records input head `5a42fb06c`, fingerprint `0a423d0f…`, and unchanged counts. The originating reviewer re-inspected `025206262` and returned PASS. | PASS |
+| Scope/test preservation | The protected solution edit is limited to the restore-required evidence tool. Only duplicated legacy test adapters were deleted; no test method or skip, EF oracle, package, shell, fixture, replay, coverage-ledger row, verdict, status, task, or provider-evidence surface changed. The same stale-map finding was remediated at `025206262`; the originating reviewer confirmed both worktrees clean and returned PASS. | PASS |
+
+These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
+coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
 **2026-07-25 preview.88 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.88` release built from Groundwork merge
@@ -191,7 +473,7 @@ slice, publish first to an external staging directory, then import only that exa
 export ELSA_GROUNDWORK_EVIDENCE_OUTPUT="$(mktemp -d "${TMPDIR:-/tmp}/elsa-groundwork-evidence.XXXXXX")"
 export ELSA_GROUNDWORK_SOURCE_COMMIT="$(git rev-parse HEAD)"
 export ELSA_GROUNDWORK_SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview88"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview103"
 
 # The versioned publisher independently rejects a later or dirty checkout and
 # rejects output beneath this repository. These checks keep the shell flow
@@ -207,7 +489,7 @@ dotnet run --project tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/E
   --ledger specs/094-harden-groundwork-stores/coverage-ledger.json \
   --staging-root "$ELSA_GROUNDWORK_EVIDENCE_OUTPUT" \
   --source-repository "$(git rev-parse --show-toplevel)" \
-  --provider-version "0.0.1-preview.88" \
+  --provider-version "0.0.1-preview.103" \
   --elsa-commit "$ELSA_GROUNDWORK_SOURCE_COMMIT" \
   --elsa-tree "$ELSA_GROUNDWORK_SOURCE_TREE" \
   --run-identity "$ELSA_GROUNDWORK_RUN_IDENTITY"
@@ -219,7 +501,7 @@ mechanically import those records by
 `(coverageEntryId, scenarioId, provider)` with `(coverageEntryId, scenarioId, provider, providerVersion)` as the
 generation-retention key; do not hand-author or infer missing obligations. The importer requires exactly the
 checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance, digest-verified staged artifacts,
-and unchanged preview.80/preview.81/preview.86 history. Publication does
+and unchanged preview.80/preview.81/preview.86/preview.88 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
 
@@ -404,7 +686,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.88` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.103` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
@@ -875,9 +1157,10 @@ This checkpoint does not execute an EF comparator or provider matrix, start a da
 inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
 collect timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a
 performance verdict, independently prove provider-internal executable root-lease exclusion, or
-advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconciliation, real EF
+advance a Spec 094 task. Groundwork #50 completion, current-family evidence reconciliation, real EF
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
-stay in the #646 completion gate.
+stay in the #646 completion gate. The preview.103 exact-source publication/import remains a
+prerequisite to any current provider or performance claim.
 
 ### Outbox drain correctness-runner checkpoint
 

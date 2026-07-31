@@ -9,38 +9,39 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
-    private const string ExpectedGroundworkVersion = "0.0.1-preview.88";
-    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.95";
-    private const string PreviousPublishedGroundworkVersion = "0.0.1-preview.86";
-    private const string EarlierPublishedGroundworkVersion = "0.0.1-preview.81";
+    private const string ExpectedGroundworkVersion = "0.0.1-preview.103";
+    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.103";
+    private const string Prior88GroundworkVersion = "0.0.1-preview.88";
+    private const string Prior86GroundworkVersion = "0.0.1-preview.86";
+    private const string Prior81GroundworkVersion = "0.0.1-preview.81";
     private const string HistoricalGroundworkVersion = "0.0.1-preview.80";
     private const string ImmutableActivationLedgerRef = "dec0b88bc21db15aa3c22181648ab201c483b01a";
     private const string LedgerRelativePath = "specs/094-harden-groundwork-stores/coverage-ledger.json";
-    private const string CurrentCheckpointFenceAttachmentRelativePath =
+    private const string Prior88CheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json";
-    private const string CurrentCheckpointFenceAttachmentSha256 =
+    private const string Prior88CheckpointFenceAttachmentSha256 =
         "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2";
-    private const string PreviousCheckpointFenceAttachmentRelativePath =
+    private const string Prior86CheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json";
-    private const string PreviousCheckpointFenceAttachmentSha256 =
+    private const string Prior86CheckpointFenceAttachmentSha256 =
         "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24";
-    private const string EarlierCheckpointFenceAttachmentRelativePath =
+    private const string Prior81CheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/versions/0.0.1-preview.81/ledger-attachments/runtime-checkpoint-fence.json";
-    private const string EarlierCheckpointFenceAttachmentSha256 =
+    private const string Prior81CheckpointFenceAttachmentSha256 =
         "ee6ea1c85dad6d1506abfbb7899ca73b33f52ae811fd35e254b0f9bce36ddf34";
     private const string HistoricalCheckpointFenceAttachmentRelativePath =
         "specs/094-harden-groundwork-stores/ledger-attachments/runtime-checkpoint-fence.json";
     private const string HistoricalCheckpointFenceAttachmentSha256 =
         "b8fb7ce1faea246d3746c0c586b4e870d0309f17d84490e19a93b957600fac7c";
-    private const string EarlierCheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
-    private const string EarlierCheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
-    private const string EarlierCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
-    private const string PreviousCheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
-    private const string PreviousCheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
-    private const string PreviousCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
-    private const string CurrentCheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
-    private const string CurrentCheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
-    private const string CurrentCheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
+    private const string Prior81CheckpointFenceEvidenceCommit = "bf452355867c8f76a11d9bca9191563a773a631a";
+    private const string Prior81CheckpointFenceEvidenceTree = "8b3504d52cef5f4a19ae5318fc66f46aefcfd048";
+    private const string Prior81CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview81";
+    private const string Prior86CheckpointFenceEvidenceCommit = "2dc442ea31061971cae6a86a8e8f0a13904cbeb7";
+    private const string Prior86CheckpointFenceEvidenceTree = "ae590a5d927e83b9688afa878a02214ed81ee9e9";
+    private const string Prior86CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview86";
+    private const string Prior88CheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
+    private const string Prior88CheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
+    private const string Prior88CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -105,38 +106,48 @@ public sealed class GroundworkCoverageLedgerTests
     public void Preview81_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
         AssertCheckpointFenceGeneration(
-            EarlierPublishedGroundworkVersion,
-            EarlierCheckpointFenceAttachmentRelativePath,
-            EarlierCheckpointFenceAttachmentSha256,
-            EarlierCheckpointFenceEvidenceCommit,
-            EarlierCheckpointFenceEvidenceTree,
-            EarlierCheckpointFenceRunIdentity);
+            Prior81GroundworkVersion,
+            Prior81CheckpointFenceAttachmentRelativePath,
+            Prior81CheckpointFenceAttachmentSha256,
+            Prior81CheckpointFenceEvidenceCommit,
+            Prior81CheckpointFenceEvidenceTree,
+            Prior81CheckpointFenceRunIdentity);
     }
 
     [Fact]
     public void Preview86_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
         AssertCheckpointFenceGeneration(
-            PreviousPublishedGroundworkVersion,
-            PreviousCheckpointFenceAttachmentRelativePath,
-            PreviousCheckpointFenceAttachmentSha256,
-            PreviousCheckpointFenceEvidenceCommit,
-            PreviousCheckpointFenceEvidenceTree,
-            PreviousCheckpointFenceRunIdentity);
+            Prior86GroundworkVersion,
+            Prior86CheckpointFenceAttachmentRelativePath,
+            Prior86CheckpointFenceAttachmentSha256,
+            Prior86CheckpointFenceEvidenceCommit,
+            Prior86CheckpointFenceEvidenceTree,
+            Prior86CheckpointFenceRunIdentity);
     }
 
     [Fact]
-    public void Preview88_checkpoint_fence_attachment_is_imported_exactly_once_as_current_provenance()
+    public void Preview88_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
         AssertCheckpointFenceGeneration(
-            ExpectedGroundworkVersion,
-            CurrentCheckpointFenceAttachmentRelativePath,
-            CurrentCheckpointFenceAttachmentSha256,
-            CurrentCheckpointFenceEvidenceCommit,
-            CurrentCheckpointFenceEvidenceTree,
-            CurrentCheckpointFenceRunIdentity);
+            Prior88GroundworkVersion,
+            Prior88CheckpointFenceAttachmentRelativePath,
+            Prior88CheckpointFenceAttachmentSha256,
+            Prior88CheckpointFenceEvidenceCommit,
+            Prior88CheckpointFenceEvidenceTree,
+            Prior88CheckpointFenceRunIdentity);
+    }
 
+    [Fact]
+    public void Preview103_checkpoint_fence_evidence_awaits_mechanical_import()
+    {
         var entries = Entries(ReadLedger()).ToArray();
+        Assert.DoesNotContain(
+            entries.SelectMany(entry => entry["providerEvidence"]!.AsObject())
+                .SelectMany(pair => pair.Value!.AsArray())
+                .OfType<JsonObject>(),
+            record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion);
+
         Assert.DoesNotContain(
             entries,
             entry => entry["status"]?.GetValue<string>() is
@@ -157,12 +168,12 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.Empty(CreateEvidenceValidator().Validate(ledger));
         AssertCheckpointFenceGeneration(
-            ExpectedGroundworkVersion,
-            CurrentCheckpointFenceAttachmentRelativePath,
-            CurrentCheckpointFenceAttachmentSha256,
-            CurrentCheckpointFenceEvidenceCommit,
-            CurrentCheckpointFenceEvidenceTree,
-            CurrentCheckpointFenceRunIdentity,
+            Prior88GroundworkVersion,
+            Prior88CheckpointFenceAttachmentRelativePath,
+            Prior88CheckpointFenceAttachmentSha256,
+            Prior88CheckpointFenceEvidenceCommit,
+            Prior88CheckpointFenceEvidenceTree,
+            Prior88CheckpointFenceRunIdentity,
             ledger);
     }
 
@@ -181,7 +192,7 @@ public sealed class GroundworkCoverageLedgerTests
         {
             ["elsaCommit"] = new string('a', 40),
             ["elsaTree"] = new string('b', 40),
-            ["runIdentity"] = "runtime-checkpoint-fence-preview88"
+            ["runIdentity"] = "runtime-checkpoint-fence-preview103"
         };
         WriteEvidenceArtifacts([record]);
         Entry(ledger, "runtime-checkpoint-commit")["providerEvidence"]!["sqlite"]!.AsArray().Add(record);
@@ -858,9 +869,9 @@ public sealed class GroundworkCoverageLedgerTests
         {
             var records = entry["providerEvidence"]![provider]!.AsArray();
             var retained = records[0]!.DeepClone().AsObject();
-            retained["providerVersion"] = PreviousPublishedGroundworkVersion;
+            retained["providerVersion"] = Prior88GroundworkVersion;
             retained["evidence"] = GroundworkEvidenceArtifactContract.VersionedEvidencePath(
-                PreviousPublishedGroundworkVersion,
+                Prior88GroundworkVersion,
                 provider,
                 EntryId,
                 retained["scenarioId"]!.GetValue<string>());
@@ -872,7 +883,7 @@ public sealed class GroundworkCoverageLedgerTests
 
         Assert.DoesNotContain(
             findings,
-            finding => finding.Contains(PreviousPublishedGroundworkVersion, StringComparison.Ordinal));
+            finding => finding.Contains(Prior88GroundworkVersion, StringComparison.Ordinal));
         Assert.DoesNotContain(
             findings,
             finding => finding.Contains("occurs 2 times", StringComparison.Ordinal));

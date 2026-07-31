@@ -209,13 +209,13 @@ public sealed class AspNetCoreIdentityNativePlanTests
         new(IdentityStorageManifest.IdentityUserDocumentKind, IdentityStorageManifest.FindUserByNormalizedNameQuery, IdentityStorageManifest.NormalizedUserNameKeyField, 1),
         new(IdentityStorageManifest.IdentityUserDocumentKind, IdentityStorageManifest.FindUserByNormalizedEmailQuery, IdentityStorageManifest.NormalizedEmailKeyField, 2),
         new(IdentityStorageManifest.IdentityRoleDocumentKind, IdentityStorageManifest.FindRoleByNormalizedNameQuery, IdentityStorageManifest.NormalizedRoleNameKeyField, 1),
-        new(IdentityStorageManifest.IdentityRoleDocumentKind, IdentityStorageManifest.ListRolesByTenantQuery, IdentityStorageManifest.TenantIdField, 512),
-        new(IdentityStorageManifest.UserClaimDocumentKind, IdentityStorageManifest.ListUserClaimsQuery, IdentityStorageManifest.UserLookupKeyField, 512),
-        new(IdentityStorageManifest.UserClaimDocumentKind, IdentityStorageManifest.FindUsersByClaimQuery, IdentityStorageManifest.ClaimKeyField, 512),
-        new(IdentityStorageManifest.RoleClaimDocumentKind, IdentityStorageManifest.ListRoleClaimsQuery, IdentityStorageManifest.RoleLookupKeyField, 512),
-        new(IdentityStorageManifest.UserRoleDocumentKind, IdentityStorageManifest.ListUserRolesQuery, IdentityStorageManifest.UserLookupKeyField, 512),
-        new(IdentityStorageManifest.UserRoleDocumentKind, IdentityStorageManifest.ListRoleUsersQuery, IdentityStorageManifest.RoleLookupKeyField, 512),
-        new(IdentityStorageManifest.ExternalLoginDocumentKind, IdentityStorageManifest.ListUserLoginsQuery, IdentityStorageManifest.UserLookupKeyField, 512)
+        new(IdentityStorageManifest.IdentityRoleDocumentKind, IdentityStorageManifest.ListRolesByTenantQuery, IdentityStorageManifest.TenantIdField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.UserClaimDocumentKind, IdentityStorageManifest.ListUserClaimsQuery, IdentityStorageManifest.UserLookupKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.UserClaimDocumentKind, IdentityStorageManifest.FindUsersByClaimQuery, IdentityStorageManifest.ClaimKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.RoleClaimDocumentKind, IdentityStorageManifest.ListRoleClaimsQuery, IdentityStorageManifest.RoleLookupKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.UserRoleDocumentKind, IdentityStorageManifest.ListUserRolesQuery, IdentityStorageManifest.UserLookupKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.UserRoleDocumentKind, IdentityStorageManifest.ListRoleUsersQuery, IdentityStorageManifest.RoleLookupKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount),
+        new(IdentityStorageManifest.ExternalLoginDocumentKind, IdentityStorageManifest.ListUserLoginsQuery, IdentityStorageManifest.UserLookupKeyField, ElsaGroundworkQueryRoutes.MaximumResultCount)
     ];
 
     internal static IReadOnlyList<AspNetCoreIdentityNativeRouteContract> EvidenceRouteCatalog()

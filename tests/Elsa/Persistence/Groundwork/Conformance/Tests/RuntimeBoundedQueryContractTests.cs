@@ -146,22 +146,31 @@ public sealed class RuntimeBoundedQueryContractTests
             var physicalDefinition = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
                 unit.PhysicalStorage?.Policy).Definition;
             var query = CreateProbeQuery(route, physical, physicalDefinition);
-            switch (route.ResultOperation)
+            try
             {
-                case ElsaGroundworkQueryResultOperation.Any:
-                    Assert.False(await bounded.AnyAsync(query));
-                    break;
-                case ElsaGroundworkQueryResultOperation.First:
-                    Assert.Null(await bounded.FirstOrDefaultAsync(query));
-                    break;
-                default:
+                switch (route.ResultOperation)
                 {
-                    var result = await bounded.QueryAsync(query);
-                    Assert.Empty(result.Documents);
-                    Assert.Equal(0, result.TotalCount);
-                    Assert.Null(result.NextContinuation);
-                    break;
+                    case ElsaGroundworkQueryResultOperation.Any:
+                        Assert.False(await bounded.AnyAsync(query));
+                        break;
+                    case ElsaGroundworkQueryResultOperation.First:
+                        Assert.Null(await bounded.FirstOrDefaultAsync(query));
+                        break;
+                    default:
+                    {
+                        var result = await bounded.QueryAsync(query);
+                        Assert.Empty(result.Documents);
+                        Assert.Equal(0, result.TotalCount);
+                        Assert.Null(result.NextContinuation);
+                        break;
+                    }
                 }
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException(
+                    $"Provider '{providerKey}' failed B7 route '{route.DocumentKind}/{physical.Identity}'.",
+                    exception);
             }
         }
 
@@ -678,6 +687,8 @@ public sealed class RuntimeBoundedQueryContractTests
 
         if (operations.Contains(PortableQueryOperation.Equal))
             return DocumentQueryComparison.Equal(predicate.Path, value);
+        if (operations.Contains(PortableQueryOperation.NotEqual))
+            return DocumentQueryComparison.NotEqual(predicate.Path, null);
         if (operations.Contains(PortableQueryOperation.GreaterThan))
             return DocumentQueryComparison.GreaterThan(predicate.Path, value);
         if (operations.Contains(PortableQueryOperation.GreaterThanOrEqual))
