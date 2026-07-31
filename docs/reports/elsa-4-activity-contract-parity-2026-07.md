@@ -342,8 +342,10 @@ Still outstanding, in priority order:
 1. ~~**Contract-surface snapshot guard.**~~ **Done** — `tests/Elsa/Activities/Design/Tests/Contracts/`.
 2. ~~**In-process test drive** on `WorkflowExecutionHarness`.~~ **Done** —
    `tests/Elsa/Activities/Behavioral/`, with two documented gaps (`GraphActivity`, `DispatchWorkflow`).
-3. **REST e2e test drive** for triggers, suspend/resume, dispatch, the `SendHttpRequest` dynamic ports,
-   and the intrinsic authoring catalog (§1). **Still outstanding.**
+3. **REST e2e test drive** — *partly done*. The two publish-time gaps are closed: the `SendHttpRequest`
+   dynamic ports are proven connectable and correctly routing on a published node, and the intrinsic
+   authoring catalog (§1) is proven discoverable and sufficient to author a working node. Dispatch,
+   `GraphActivity`, BPMN and the recurring schedulers over REST are still outstanding.
 4. ~~**Fixes.** §2.4 (`Fault` inputs), §2.7 (`PublishEvent.IsLocalEvent`) and §2.1 (`RunJavaScript`
    outcomes).~~ **Done**, plus §1 (three intrinsic descriptors) and §2.8 (`For.EndInclusive`, documented
    rather than changed).

@@ -119,18 +119,66 @@ genuinely unreachable is a defect in the activity, not an entry in that list.
 | #1113 | The authoring catalog publishes `Finish`, `SetCorrelationId` and `SetInstanceName` — each the replacement for a first-class Elsa 3 activity, previously implemented by the engine and accepted by the REST API but absent from the palette. **Design call:** `Merge`/`Reduce` stay withheld (they execute identically to `Set` today, so three palette entries for one behaviour would mislead); `Control`/`Return` stay withheld (compiler seams with no Elsa 3 counterpart). The tests pin that decision. |
 | #1117 | `For.EndInclusive` — **documented, not changed.** Elsa 3's `OuterBoundInclusive` defaults to `true` and this defaults to `false`, so a ported loop runs one fewer iteration. The half-open convention is what the member name reads as and what the rest of the module assumes, so the divergence stands; it is now called out in the activity docs and the module README instead of being silent. |
 
+## REST e2e drive
+
+Run against a from-source `Elsa.Server` on SQLite with a freshly deployed Groundwork schema. Two new suites
+close the two gaps the in-process drive structurally could not.
+
+### `SendHttpRequest` dynamic ports are real published ports
+
+`e2e-tests/http/Test-SendHttpRequestStatusOutcomes.ps1`
+
+The attribute existing is not proof the published node has the ports. The in-process drive proves the
+activity *emits* an outcome named after the matched status, and the snapshot guard proves the design facet
+*advertises* the mechanism — neither proves a published workflow can connect a branch to port `"200"` and
+have the runtime take it. This authors a Flowchart wiring one branch per port, publishes it, and runs it:
+
+| ExpectedStatusCodes | Response | Port taken |
+|---|---|---|
+| `[200, 404]` | 200 | `200` |
+| `[404]` | 200 | `Unmatched status code` |
+
+Both routed correctly and the sibling branches did not run. **The per-status ports and the catch-all are
+genuinely connectable on the published node.** The second case matters most: it proves the catch-all is a
+real port, not just a string in an attribute.
+
+### The intrinsic authoring catalog is discoverable and sufficient
+
+`e2e-tests/get-endpoints/Test-IntrinsicAuthoringCatalog.ps1`
+
+`GET /design/activities/catalog` now offers five intrinsic descriptors — `Set`, `SetOutput`,
+`SetCorrelationId`, `SetInstanceName`, `Finish` — and withholds `Merge`, `Reduce`, `Control`, `Return`.
+Both directions are asserted, so re-adding a withheld kind is a deliberate change rather than a drift.
+
+The suite then closes the loop: it takes the `SetCorrelationId` descriptor's **own** version id, intrinsic
+kind and value-input key, authors a node from them, publishes, runs, and checks the correlation id landed
+on the instance. Authoring from the descriptor rather than a hand-written literal is the point — it proves
+the published descriptor is sufficient to place a working node, which is exactly what #1113 was about.
+
+### Regression sweep
+
+The existing suites were re-run against the same server to confirm the source changes hold through the real
+HTTP + persistence + runtime path — in particular `Fault` (whose inputs changed), `Correlate` (which uses
+the `SetCorrelationId` intrinsic) and `For` (whose `EndInclusive` default was reviewed and kept):
+
+`Test-WorkflowFlow`, `Test-SequenceWorkflow`, `Test-IfWorkflow`, `Test-SwitchWorkflow`,
+`Test-HttpWorkflow`, `http/Test-HttpMethods`, `http/Test-HttpEcho`, `fault-handling/Test-FaultActivity`,
+`events/Test-Event`, `correlate/Test-Correlate`, `javascript/Test-JavaScriptExpressions`,
+`orchestration-controls/Test-SuspendResume`, `orchestration-controls/Test-FinishTerminate`,
+`orchestration-controls/Test-StimulusRouting`, `branching/Test-ParallelFork`,
+`single-outcome/Test-ForLoop` — all pass.
+
 ## Still outstanding
 
-**The REST e2e test drive (#1119 task 3) was not run.** Everything whose contract only fully materialises
-at publish time or needs a real host is therefore still unverified end-to-end:
+The e2e drive covered the two publish-time gaps above and a regression sweep, not the full matrix. Not run:
 
-- triggers and suspend/resume over HTTP (`HttpEndpoint`, `Event`, `Timer`, `Cron`, `Delay`);
-- **`SendHttpRequest`'s dynamic outcome ports as *published node* ports.** The in-process drive proves the
-  activity emits them and the snapshot guard proves the design facet advertises them, but neither proves
-  the published node exposes them as connectable ports;
-- `DispatchWorkflow` (waited and fire-and-forget), `GraphActivity` inlining, `BpmnProcess`/`BpmnDecision`;
-- the intrinsic authoring catalog additions from #1113 — the descriptors are unit-tested, but no e2e run
-  has authored a `Finish`/`SetCorrelationId`/`SetInstanceName` node through the catalog and published it.
+- `DispatchWorkflow` (waited and fire-and-forget), `GraphActivity` inlining, `BpmnProcess`/`BpmnDecision`
+  over REST — the same two activities the in-process drive defers on, so they remain the weakest-covered
+  pair in the library from this exercise's point of view;
+- `Timer`/`Cron` recurring firing and `Delay` expiry against a live scheduler;
+- the combined scenarios sketched in the original brief (HTTP endpoint → JS transform → `SendHttpRequest`
+  → branch per code → `WriteHttpResponse`; `ForEach` containing `If` + `Break` + `Set`; `Parallel` fork
+  with a `Delay` in one branch and a `DispatchWorkflow` in the other).
 
 Out of scope for this pass, unchanged from the contract audit: #1116 (HttpEndpoint file uploads +
 `DownloadHttpFile`/`WriteFileHttpResponse`) and #1118 (the seven missing activities).
