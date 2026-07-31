@@ -21,6 +21,12 @@ repository_root="$(git -C "$script_directory" rev-parse --show-toplevel)"
 fixture_directory="$repository_root/tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Fixtures/schema-evolution/preview.95"
 harness_source="$script_directory/Preview95SchemaFixtureReproducer.cs"
 harness_project="$script_directory/Preview95SchemaFixtureReproducer.csproj"
+
+if [[ -n "$(git -C "$repository_root" status --porcelain=v1 --untracked-files=all)" ]]; then
+  echo "Refusing fixture replay from a dirty candidate worktree." >&2
+  exit 1
+fi
+
 temporary_root="$(mktemp -d "${TMPDIR:-/tmp}/elsa-preview95-replay.XXXXXX")"
 detached_tree="$temporary_root/source"
 generated_directory="$temporary_root/generated"
