@@ -334,6 +334,18 @@ Still outstanding, in priority order:
    outcomes) are small and well-understood, but applying C# changes that cannot be compiled or tested
    would violate the repo's own test gate. They are filed as issues instead.
 
+## Filed issues
+
+| Issue | Covers |
+|---|---|
+| [#1113](https://github.com/elsa-workflows/elsa-foundation/issues/1113) | Authoring catalog exposes only 2 of 9 intrinsics (§1) |
+| [#1114](https://github.com/elsa-workflows/elsa-foundation/issues/1114) | `RunJavaScript` has no outcomes (§2.1) |
+| [#1115](https://github.com/elsa-workflows/elsa-foundation/issues/1115) | `HttpEndpoint` declares no outcome ports (§2.2) |
+| [#1116](https://github.com/elsa-workflows/elsa-foundation/issues/1116) | `HttpEndpoint` file-upload surface + the two missing HTTP file activities (§2.2, §3) |
+| [#1117](https://github.com/elsa-workflows/elsa-foundation/issues/1117) | Member-level gaps on `Fault`, `SendHttpRequest`, `DispatchWorkflow`, `PublishEvent`, `Switch`, and the `For.EndInclusive` default change (§2.3–§2.8) |
+| [#1118](https://github.com/elsa-workflows/elsa-foundation/issues/1118) | Tracking: Elsa 3 activities with no Elsa 4 counterpart (§3) |
+| [#1119](https://github.com/elsa-workflows/elsa-foundation/issues/1119) | The blocked work: snapshot guard + behavioural test drive |
+
 ## Routing
 
 Findings here are evidence. Work that gets planned should move to the
