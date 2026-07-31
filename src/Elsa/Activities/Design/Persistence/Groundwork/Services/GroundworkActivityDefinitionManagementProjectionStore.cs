@@ -82,7 +82,10 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
                 ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind,
                 ActivitiesDesignStorageManifest.ManagementDefinitionsQuery,
                 clauses,
-                [new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField)],
+                [
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
+                ],
                 take: 1)
                 .Select(global::Groundwork.Core.PhysicalStorage.BoundedQueryResultOperation.First),
             cancellationToken);
@@ -165,7 +168,10 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
                 kind,
                 queryIdentity,
                 clauses,
-                [new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField)],
+                [
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
+                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
+                ],
                 query.Offset,
                 query.Limit),
             cancellationToken);

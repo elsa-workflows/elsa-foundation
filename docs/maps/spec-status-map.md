@@ -134,7 +134,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
 | [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Draft | - | 0 | 0 | deferred, out of scope |
-| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 0 | 73 | retained |
+| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | retained |
 | [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
 | [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |
 | [108-bpmn-container-activity](../../specs/108-bpmn-container-activity/spec.md) | 108-bpmn-container-activity | unknown | - | 0 | 0 | deferred, out of scope |
@@ -177,8 +177,9 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [137-dispatch-cancel-on-subtree](../../specs/137-dispatch-cancel-on-subtree/spec.md) | Cancel Waited Dispatches on Subtree Teardown | Draft | - | 12 | 0 | - |
 | [137-receive-correlation](../../specs/137-receive-correlation/spec.md) | Receive Event Correlation | Draft | - | 15 | 0 | retained, out of scope |
 | [138-reusable-boundary-outcomes](../../specs/138-reusable-boundary-outcomes/spec.md) | Reusable Activity Boundary Outcomes | Draft | - | 18 | 1 | - |
-| [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 47 | 15 | retained, out of scope |
+| [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 48 | 14 | retained, out of scope |
 | [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
 | [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 86 | 0 | superseded, retained, deferred |
 | [142-workflow-version-override](../../specs/142-workflow-version-override/spec.md) | Workflow Version Override | Draft | - | 21 | 0 | - |
 | [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | Implemented | - | 25 | 0 | superseded, retained, out of scope |
+| [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Draft | - | 18 | 78 | superseded, retained, out of scope |

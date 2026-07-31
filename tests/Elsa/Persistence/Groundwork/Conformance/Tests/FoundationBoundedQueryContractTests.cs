@@ -94,7 +94,7 @@ public sealed class FoundationBoundedQueryContractTests
     {
         const string scope = "tenant-a";
         const string provider = "oidc";
-        const int pageSize = 512;
+        const int pageSize = ElsaGroundworkQueryRoutes.MaximumResultCount;
         await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
         await driver.InitializeAsync();
         driver.Descriptor.Topology.EnsureSupports(
@@ -128,11 +128,11 @@ public sealed class FoundationBoundedQueryContractTests
             bounded.Observations,
             observation => AssertIamClaimMappingPage(
                 observation,
-                skip: 0,
+                expectsContinuation: false,
                 expectedMaterialized: pageSize),
             observation => AssertIamClaimMappingPage(
                 observation,
-                skip: pageSize,
+                expectsContinuation: true,
                 expectedMaterialized: 1));
     }
 
@@ -423,14 +423,18 @@ public sealed class FoundationBoundedQueryContractTests
 
     private static void AssertIamClaimMappingPage(
         QueryObservation observation,
-        int skip,
+        bool expectsContinuation,
         int expectedMaterialized)
     {
         Assert.Equal(
             IdentityStorageManifest.ListClaimMappingsByProviderQuery,
             observation.Query.QueryIdentity);
-        Assert.Equal(skip, observation.Query.Skip);
-        Assert.Equal(512, observation.Query.Take);
+        Assert.Null(observation.Query.Skip);
+        if (expectsContinuation)
+            Assert.False(string.IsNullOrWhiteSpace(observation.Query.Continuation));
+        else
+            Assert.Null(observation.Query.Continuation);
+        Assert.Equal(ElsaGroundworkQueryRoutes.MaximumResultCount, observation.Query.Take);
         Assert.Equal(expectedMaterialized, observation.MaterializedDocuments);
         Assert.Collection(
             observation.Query.Clauses,

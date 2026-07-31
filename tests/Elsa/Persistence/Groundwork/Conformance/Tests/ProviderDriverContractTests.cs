@@ -106,6 +106,40 @@ public class ProviderDriverContractTests
     }
 
     [Fact]
+    public async Task Sqlite_physical_schema_apply_preserves_existing_data_and_rejects_active_client_leases()
+    {
+        await using var driver = new SqliteGroundworkProviderDriver();
+        await driver.InitializeAsync(CancellationToken.None);
+        var source = await driver.PrepareSchemaParityAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
+        await driver.ResetPhysicalAsync(source, CancellationToken.None);
+
+        await using (var activeClient = await driver.OpenPhysicalClientAsync(CancellationToken.None))
+        {
+            var saved = await activeClient.DocumentStore.SaveAsync(
+                new SaveDocumentRequest(
+                    IdentityStorageManifest.IdentityRoleDocumentKind,
+                    "role-1",
+                    IdentityStorageManifest.SchemaVersion,
+                    """{ "tenantId": "default", "normalizedName": "ADMIN", "normalizedNameKey": "default:ADMIN" }""",
+                    ExpectedVersion: 0),
+                CancellationToken.None);
+            Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                driver.ApplyPhysicalSchemaAsync(source, CancellationToken.None).AsTask());
+        }
+
+        await driver.ApplyPhysicalSchemaAsync(source, CancellationToken.None);
+        Assert.Equal(source.PhysicalTarget.Fingerprint, driver.PhysicalTargetFingerprint);
+
+        await using var reopenedClient = await driver.OpenPhysicalClientAsync(CancellationToken.None);
+        Assert.NotNull(await reopenedClient.DocumentStore.LoadAsync(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            "role-1",
+            CancellationToken.None));
+    }
+
+    [Fact]
     public void Identity_restart_probe_protocol_round_trips_and_redacts_payloads()
     {
         var user = new AspNetCoreIdentityRestartProbeUser(

@@ -47,10 +47,15 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             Assert.True(page.SupportsDisjunction);
             Assert.True(page.SupportsTotalCount);
             Assert.Equal(
-                new BoundedQuerySortField(
-                    ActivitiesDesignStorageManifest.ManagementSortField,
-                    PhysicalSortDirection.Ascending),
-                Assert.Single(page.SortFields));
+                [
+                    new BoundedQuerySortField(
+                        ActivitiesDesignStorageManifest.ManagementSortField,
+                        PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(
+                        ActivitiesDesignStorageManifest.ManagementValidFromField,
+                        PhysicalSortDirection.Ascending)
+                ],
+                page.SortFields);
             Assert.Equal(
                 ActivitiesDesignStorageManifest.ManagementSortField,
                 Assert.Single(page.PredicateFields).Path);
@@ -80,10 +85,34 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
                 policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-id").Columns,
                 scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
                 id => Assert.NotEqual("valid_to", id.ColumnLogicalName));
+            var legacySortIndex = policy.Definition.Indexes.Single(index =>
+                index.LogicalName == "management-by-sort");
+            Assert.False(legacySortIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "sort_key"],
+                legacySortIndex.Columns.Select(column => column.ColumnLogicalName));
+            var sortIndex = policy.Definition.Indexes.Single(index =>
+                index.LogicalName == "management-by-sort-v2");
+            Assert.True(sortIndex.IsUnique);
             Assert.Collection(
-                policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-sort").Columns,
+                sortIndex.Columns,
                 scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
-                sort => Assert.Equal("sort_key", sort.ColumnLogicalName));
+                sort => Assert.Equal("sort_key", sort.ColumnLogicalName),
+                revision => Assert.Equal("valid_from", revision.ColumnLogicalName));
+            var legacyRetentionIndex = policy.Definition.Indexes.Single(index =>
+                index.LogicalName == "management-by-valid-to");
+            Assert.False(legacyRetentionIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "valid_to"],
+                legacyRetentionIndex.Columns.Select(column => column.ColumnLogicalName));
+            var retentionIndex = policy.Definition.Indexes.Single(index =>
+                index.LogicalName == "management-by-valid-to-v2");
+            Assert.True(retentionIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "valid_to", "resource_id", "valid_from"],
+                retentionIndex.Columns.Select(column => column.ColumnLogicalName));
+            Assert.Equal("management-by-sort-v2", page.IndexIdentity);
+            Assert.Equal("management-by-valid-to-v2", retention.IndexIdentity);
         });
     }
 

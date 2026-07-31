@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
@@ -45,6 +46,24 @@ public sealed class OpenTelemetryGroundworkStorageSchemaTests
         var resourcePolicy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(resources.PhysicalStorage.Policy);
         Assert.Contains(resourcePolicy.Definition.Indexes,
             x => x.LogicalName == OpenTelemetryGroundworkStorageSchema.ByRetentionIndex && x.Columns.Count == 3);
+        Assert.Contains(resourcePolicy.Definition.Indexes,
+            x => x.LogicalName == $"{OpenTelemetryGroundworkStorageSchema.ByRetentionIndex}-v2" &&
+                 x.Columns.Count == 4);
+        var envelope = new DocumentEnvelopeDefinition();
+        foreach (var catalog in manifest.StorageUnits.Where(unit =>
+                     unit.Identity.Value is CatalogDocuments.ResourceKind or CatalogDocuments.InstrumentKind))
+        {
+            foreach (var query in catalog.PhysicalStorage!.BoundedQueries.Where(candidate =>
+                         candidate.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing))
+            {
+                Assert.Equal(QueryPagingSupport.Cursor, query.PagingSupport);
+                var index = Assert.Single(
+                    Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(catalog.PhysicalStorage.Policy)
+                        .Definition.Indexes,
+                    candidate => candidate.LogicalName == query.IndexIdentity);
+                Assert.Equal(envelope.IdLookupKeyColumn, index.Columns[^1].ColumnLogicalName);
+            }
+        }
         Assert.Contains("open-telemetry-capture-operation", OpenTelemetryGroundworkStorageSchema.RequiredOperationLedgers);
 
         PhysicalTableDefinition ExplicitDefinition(string kind) => Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
@@ -88,11 +107,13 @@ public sealed class OpenTelemetryGroundworkStorageSchemaTests
                 var keyBytes = index.Columns.Sum(column => column.ColumnLogicalName switch
                 {
                     "storage_scope" => 128 * 2,
+                    "id_lookup_key" => 32,
+                    "id_comparison_key" => 1_350,
                     _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.String =>
                         columns[column.ColumnLogicalName].Length!.Value * 2,
                     _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.Int32 => 4,
                     _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.Int64 => 8,
-                    _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.DateTime => 8,
+                    _ when columns[column.ColumnLogicalName].Type == PortablePhysicalType.DateTime => 10,
                     _ => throw new Xunit.Sdk.XunitException(
                         $"SQL Server validator does not recognize index column '{column.ColumnLogicalName}'.")
                 });

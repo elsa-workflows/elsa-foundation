@@ -94,8 +94,19 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken)
     {
-        await ResetDatabaseAsync(cancellationToken);
+        await ResetPhysicalStorageCoreAsync(cancellationToken);
         var source = await CreatePhysicalSchemaSourceAsync(manifestSources, cancellationToken);
+        await ApplyPhysicalSchemaCoreAsync(source, cancellationToken);
+    }
+
+    protected override async ValueTask ResetPhysicalStorageCoreAsync(CancellationToken cancellationToken) =>
+        await ResetDatabaseAsync(cancellationToken);
+
+    protected override async ValueTask ApplyPhysicalSchemaCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
         var executor = new SqlServerPhysicalSchemaExecutor(RequiredConnectionString());
         var applied = await PhysicalSchemaApplication.ApplyAsync(
             source.PhysicalTarget,
@@ -879,8 +890,8 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
 
     private static void EnsureSchemaApplied(PhysicalSchemaApplicationResult result)
     {
-        if (result.Outcome is PhysicalSchemaApplicationOutcome.Rejected or PhysicalSchemaApplicationOutcome.AuthorizationRequired)
-            throw new InvalidOperationException($"SQL Server physical schema application was not accepted: {result.Outcome}.");
+        if (result.Outcome is not (PhysicalSchemaApplicationOutcome.Applied or PhysicalSchemaApplicationOutcome.NoChanges))
+            throw new InvalidOperationException($"SQL Server physical schema application did not complete: {result.Outcome}.");
     }
 
 }

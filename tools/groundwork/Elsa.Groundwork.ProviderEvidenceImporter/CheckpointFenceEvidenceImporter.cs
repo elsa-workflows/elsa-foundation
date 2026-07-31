@@ -26,7 +26,11 @@ public static class CheckpointFenceEvidenceImporter
         new(
             "0.0.1-preview.86",
             "versions/0.0.1-preview.86/ledger-attachments/runtime-checkpoint-fence.json",
-            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24")
+            "954a34a1bb3ce03881bedd167ba87c95d7d58d3f5abdb573e50e123361e0ef24"),
+        new(
+            "0.0.1-preview.88",
+            "versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json",
+            "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2")
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -86,6 +90,9 @@ public static class CheckpointFenceEvidenceImporter
             ValidateStagedRecords(records, stagingRoot, request);
         }
 
+        ValidateCleanSourceRepository(
+            request.SourceRepositoryRoot,
+            recoverExistingGeneration ? destinationVersionDirectory : null);
         ValidateLedgerHasNoCurrentGeneration(ledger, request.ProviderVersion);
         var ledgerWithImportedEvidence = AppendRecords(ledger, records);
         EnsureStatusesUnchanged(ledger, ledgerWithImportedEvidence);
@@ -169,6 +176,38 @@ public static class CheckpointFenceEvidenceImporter
         {
             throw new InvalidOperationException(
                 "Versioned provider evidence must be imported against the exact checked-out source commit and tree recorded in its provenance.");
+        }
+    }
+
+    private static void ValidateCleanSourceRepository(
+        string sourceRepositoryRoot,
+        string? exactRecoverableGenerationDirectory)
+    {
+        var sourceRepository = CanonicalPath(sourceRepositoryRoot);
+        var arguments = new List<string>
+        {
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            "."
+        };
+        if (exactRecoverableGenerationDirectory is not null &&
+            IsWithin(exactRecoverableGenerationDirectory, sourceRepository))
+        {
+            var relativeGeneration = Path.GetRelativePath(
+                    sourceRepository,
+                    exactRecoverableGenerationDirectory)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            arguments.Add($":(exclude){relativeGeneration}");
+            arguments.Add($":(exclude){relativeGeneration}/**");
+        }
+
+        var worktreeStatus = Git(sourceRepository, [.. arguments]);
+        if (worktreeStatus.Length != 0)
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be imported from an exact clean source repository with no tracked, staged, or untracked changes.");
         }
     }
 

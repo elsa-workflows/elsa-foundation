@@ -222,7 +222,13 @@ public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentSt
                         [
                             DocumentQueryClause.Of(DocumentQueryComparison.Equal(
                                 ElsaRuntimeStorageManifest.CollectionField,
-                                ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection))
+                                ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection)),
+                            DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(
+                                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
+                                null)),
+                            DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(
+                                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                                null))
                         ],
                         [
                             new DocumentQueryOrder(

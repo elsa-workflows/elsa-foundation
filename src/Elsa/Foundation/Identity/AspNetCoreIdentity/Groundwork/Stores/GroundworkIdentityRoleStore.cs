@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -20,7 +21,6 @@ public sealed class GroundworkIdentityRoleStore(
     GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleClaimStore<IdentityRole>
 {
     private const int SingleResultTake = 1;
-    private const int RelationshipPageSize = 512;
     private const int MaxRelationshipMaterialization = 100_000;
 
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -201,32 +201,26 @@ public sealed class GroundworkIdentityRoleStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         CancellationToken cancellationToken) =>
-        (await QueryPageAsync(documentKind, queryIdentity, comparison, skip: null, SingleResultTake, cancellationToken)).FirstOrDefault();
+        (await QueryPageAsync(documentKind, queryIdentity, comparison, continuation: null, SingleResultTake, cancellationToken)).FirstOrDefault();
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
-        CancellationToken cancellationToken)
-    {
-        var documents = new List<DocumentEnvelope>();
-        for (var skip = 0; ; skip += RelationshipPageSize)
-        {
-            var page = await QueryPageAsync(documentKind, queryIdentity, comparison, skip, RelationshipPageSize, cancellationToken);
-            documents.AddRange(page);
-            if (page.Count < RelationshipPageSize)
-                return documents;
-            if (documents.Count >= MaxRelationshipMaterialization)
-                throw new InvalidOperationException(
-                    $"Groundwork ASP.NET Core Identity route '{queryIdentity}' exceeded the bounded relationship materialization limit.");
-        }
-    }
+        CancellationToken cancellationToken) =>
+        await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            documentKind,
+            queryIdentity,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
+            cancellationToken,
+            MaxRelationshipMaterialization);
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryPageAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
-        int? skip,
+        string? continuation,
         int take,
         CancellationToken cancellationToken) =>
         (await BoundedStore.QueryAsync(
@@ -235,9 +229,9 @@ public sealed class GroundworkIdentityRoleStore(
                 queryIdentity,
                 [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
                 [],
-                skip,
-                take,
                 null,
+                take,
+                continuation,
                 null,
                 BoundedQueryResultOperation.Documents),
             cancellationToken)).Documents;

@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public sealed class AspNetCoreIdentityProviderEvidenceTests
 {
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.60";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.88";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.102";
     private static readonly Lazy<JsonSchema> EvidenceSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(EvidenceSchemaPath(RepositoryRoot()))));
 
@@ -509,6 +509,19 @@ internal static class AspNetCoreIdentityProviderEvidenceValidator
 {
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.60";
     private const string AcceptedEvidenceIdentityManifestVersion = "1.0.4";
+    private static readonly IReadOnlyList<AspNetCoreIdentityNativeRouteContract> AcceptedPreview60RouteCatalog =
+    [
+        new("identityUser", "find-user-by-normalized-name", "normalizedUserNameKey", 1, "identity_users", "identity-user-by-normalized-name"),
+        new("identityUser", "find-user-by-normalized-email", "normalizedEmailKey", 2, "identity_users", "identity-user-by-normalized-email"),
+        new("identityRole", "find-role-by-normalized-name", "normalizedRoleNameKey", 1, "identity_roles", "identity-role-by-normalized-name"),
+        new("identityRole", "list-roles-by-tenant", "tenantId", 512, "identity_roles", "identity-role-by-tenant"),
+        new("identityUserClaim", "list-user-claims", "userLookupKey", 512, "identity_user_claims", "identity-user-claim-by-user"),
+        new("identityUserClaim", "find-users-by-claim", "claimKey", 512, "identity_user_claims", "identity-user-claim-by-claim"),
+        new("identityRoleClaim", "list-role-claims", "roleLookupKey", 512, "identity_role_claims", "identity-role-claim-by-role"),
+        new("identityUserRole", "list-user-roles", "userLookupKey", 512, "identity_user_roles", "identity-user-role-by-user"),
+        new("identityUserRole", "list-role-users", "roleLookupKey", 512, "identity_user_roles", "identity-user-role-by-role"),
+        new("identityExternalLogin", "list-user-logins", "userLookupKey", 512, "identity_external_logins", "identity-login-by-user")
+    ];
     private static readonly IReadOnlyDictionary<string, ProviderContract> ProviderCatalog =
         new Dictionary<string, ProviderContract>(StringComparer.Ordinal)
         {
@@ -635,7 +648,10 @@ internal static class AspNetCoreIdentityProviderEvidenceValidator
         AspNetCoreIdentityNativeRoutesEvidence nativeRoutes)
     {
         var provider = ProviderCatalog[providerKey];
-        var routeCatalog = AspNetCoreIdentityNativePlanTests.EvidenceRouteCatalog();
+        // The accepted artifacts are immutable preview.60/manifest-1.0.4 evidence. Validate them
+        // against their frozen route contract, never against the current manifest's evolving index
+        // identities or paging bounds.
+        var routeCatalog = AcceptedPreview60RouteCatalog;
         RequireExact("native route identities", routeCatalog.Select(route => route.QueryIdentity), nativeRoutes.Routes.Select(route => route.QueryIdentity));
         var distinctPhysicalNames = nativeRoutes.Routes
             .Select(route => route.PhysicalName)

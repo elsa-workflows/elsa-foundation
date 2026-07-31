@@ -498,3 +498,17 @@ Evidence note T059: the new omitted-solution test plus the existing Windows-refe
 Evidence note T060: the three new dependency-input tests passed within the 4/4 new-test run, and
 the existing Windows/static and shared-build fixtures passed 2/2; commands used `--no-restore`,
 build servers disabled, and no database-server container.
+
+### 2026-07-31 preview.102 prerequisite checkpoint
+
+Groundwork merge `68e7c344163c199024aed00ccdcaa2deb51ef5bb` published the coherent
+`0.0.1-preview.102` package/tool family. The serialized Elsa integration aligns all seven packages,
+the tool manifest, and the Spec 094 current-family guard to that release. This family includes the
+provider-applied ordering-tail work from PR #154, the provider-internal SQLite materialization proof
+from PR #155, and the immutable physical-form baseline registry/control plane from PR #156.
+
+This checkpoint is prerequisite preparation, not deletion admission: the preview.102 four-provider
+evidence generation has not yet been published or mechanically imported; Groundwork #50, #25, and
+#141 remain open because their remaining controlled matrices and provider obligations have not
+passed; T009–T013 and T017 remain unchecked; no coverage-ledger status, performance verdict, EF
+bucket, issue state, or Project 33 completion state advances.

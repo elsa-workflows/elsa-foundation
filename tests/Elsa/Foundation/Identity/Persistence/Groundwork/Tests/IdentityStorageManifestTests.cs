@@ -11,6 +11,8 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
 public sealed class IdentityStorageManifestTests
 {
+    private static readonly DocumentEnvelopeDefinition Envelope = new();
+
     private static readonly string[] ExpectedAuthorityUnits =
     [
         "identityUser",
@@ -62,6 +64,22 @@ public sealed class IdentityStorageManifestTests
     }
 
     [Fact]
+    public void Manifest_resolves_every_scale_bearing_route_with_exact_physical_order_evidence()
+    {
+        var manifest = IdentityStorageManifest.Create();
+        var resolution = PhysicalStorageResolver.Resolve(
+            manifest,
+            PhysicalNamePolicy.Identity,
+            ProviderPhysicalNameNormalizer.Identity);
+
+        Assert.True(
+            resolution.IsValid,
+            string.Join(Environment.NewLine, resolution.Diagnostics.Select(diagnostic =>
+                $"{diagnostic.Code}: {diagnostic.Message}")));
+        Assert.Equal(manifest.StorageUnits.Count, resolution.Definitions.Count);
+    }
+
+    [Fact]
     public void Every_query_is_bound_to_an_optimized_index_on_the_same_unit()
     {
         var manifest = IdentityStorageManifest.Create();
@@ -78,12 +96,20 @@ public sealed class IdentityStorageManifestTests
             var table = ExplicitTableDefinition(physicalStorage.Policy);
             foreach (var query in physicalStorage.BoundedQueries)
             {
-                Assert.Single(
+                var logicalIndex = Assert.Single(
                     physicalStorage.LogicalIndexes,
                     candidate => candidate.Identity == query.IndexIdentity);
-                Assert.Single(
+                var physicalIndex = Assert.Single(
                     table.Indexes,
                     candidate => candidate.LogicalName == query.IndexIdentity);
+                Assert.Equal(QueryPagingSupport.Cursor, query.PagingSupport);
+                Assert.False(logicalIndex.IsUnique);
+                Assert.False(physicalIndex.IsUnique);
+                Assert.Equal(Envelope.StorageScopeColumn, physicalIndex.Columns[0].ColumnLogicalName);
+                Assert.Equal(
+                    logicalIndex.Fields.Select(field => field.Path),
+                    physicalIndex.Columns.Skip(1).SkipLast(1).Select(column => column.ColumnLogicalName));
+                Assert.Equal(Envelope.IdLookupKeyColumn, physicalIndex.Columns[^1].ColumnLogicalName);
             }
         }
     }
@@ -200,8 +226,12 @@ public sealed class IdentityStorageManifestTests
     {
         var unit = IdentityStorageManifest.Create().StorageUnits.Single(candidate =>
             candidate.Identity.Value == IdentityStorageManifest.IdentityMutationReceiptDocumentKind);
-        var index = Assert.Single(unit.PhysicalStorage!.LogicalIndexes);
         var query = Assert.Single(unit.PhysicalStorage.BoundedQueries);
+        var index = Assert.Single(unit.PhysicalStorage.LogicalIndexes, candidate =>
+            candidate.Identity == query.IndexIdentity);
+        Assert.Contains(unit.PhysicalStorage.LogicalIndexes, candidate =>
+            candidate.Identity == "identity-mutation-receipt-by-expiry");
+        Assert.Equal("identity-mutation-receipt-by-expiry-v2", query.IndexIdentity);
         var table = ExplicitTableDefinition(unit.PhysicalStorage.Policy);
         var expiry = Assert.Single(table.ProjectedColumns);
 
@@ -210,7 +240,7 @@ public sealed class IdentityStorageManifestTests
         Assert.Equal(IndexValueKind.DateTime, index.ValueKind);
         Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
         Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
-        Assert.Equal(QueryPagingSupport.Offset, query.PagingSupport);
+        Assert.Equal(QueryPagingSupport.Cursor, query.PagingSupport);
         Assert.Equal(
             new BoundedQuerySortField(
                 IdentityStorageManifest.MutationReceiptExpiresAtField,
@@ -241,11 +271,23 @@ public sealed class IdentityStorageManifestTests
 
             foreach (var index in table.Indexes)
             {
-                var projectedKeyBytes = index.Columns
-                    .Where(column => !string.Equals(column.ColumnLogicalName, "storage_scope", StringComparison.Ordinal))
-                    .Select(column => table.ProjectedColumns.Single(projected => projected.LogicalName == column.ColumnLogicalName))
-                    .Sum(column => (column.Length ?? 0) * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit);
-                var declaredKeyBytes = IdentityStorageManifest.SqlServerStorageScopeKeyBytes + projectedKeyBytes;
+                var declaredKeyBytes = index.Columns.Sum(column =>
+                {
+                    if (column.ColumnLogicalName == Envelope.StorageScopeColumn)
+                        return IdentityStorageManifest.SqlServerStorageScopeKeyBytes;
+                    if (column.ColumnLogicalName == Envelope.IdLookupKeyColumn)
+                        return IdentityStorageManifest.SqlServerDocumentIdentityLookupKeyBytes;
+                    var projected = table.ProjectedColumns.Single(candidate =>
+                        candidate.LogicalName == column.ColumnLogicalName);
+                    return projected.Type switch
+                    {
+                        PortablePhysicalType.String =>
+                            (projected.Length ?? 0) * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit,
+                        PortablePhysicalType.DateTime => IdentityStorageManifest.SqlServerDateTime2KeyBytes,
+                        _ => throw new InvalidOperationException(
+                            $"SQL Server key-width evidence does not cover projected type '{projected.Type}'.")
+                    };
+                });
                 Assert.True(
                     declaredKeyBytes <= IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes,
                     $"Physical index '{index.LogicalName}' declares {declaredKeyBytes} SQL Server key bytes.");
@@ -268,8 +310,7 @@ public sealed class IdentityStorageManifestTests
 
             foreach (var query in unit.PhysicalStorage.BoundedQueries)
             {
-                var index = table.Indexes.Single(candidate => candidate.LogicalName == query.IndexIdentity);
-                var providerParameters = index.Columns.Count(column => !string.Equals(column.ColumnLogicalName, "storage_scope", StringComparison.Ordinal));
+                var providerParameters = query.PredicateFields.Count;
                 Assert.True(
                     providerParameters <= IdentityStorageManifest.MaxBoundedQueryParameters,
                     $"Bounded query '{query.Identity}' requires {providerParameters} provider parameters.");

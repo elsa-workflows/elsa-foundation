@@ -105,14 +105,16 @@ public static class ElsaGroundworkQueryRoutes
         Route("runtime-workflow-execution-state", "list-pinned-artifact-ids-bounded", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Projection(),
             BoundedOrdered(
                 ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery,
-                ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex,
+                $"{ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex}-v2",
                 ElsaGroundworkQueryContinuation.Offset,
                 [
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField
                 ],
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
-                Equal(ElsaRuntimeStorageManifest.CollectionField))),
+                Equal(ElsaRuntimeStorageManifest.CollectionField),
+                NotEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+                NotEqual(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField))),
         Route("runtime-workflow-execution-state", "list-all-replaced-by-bounded-page", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, Documents(), WorkflowExecutionHistoryRoute()),
 
         Route("runtime-workflow-alteration-plan", "list-bounded", ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind, Documents(),
@@ -1222,6 +1224,9 @@ public static class ElsaGroundworkQueryRoutes
 
     private static ElsaGroundworkQueryPredicate Equal(string path) =>
         new(path, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+
+    private static ElsaGroundworkQueryPredicate NotEqual(string path) =>
+        new(path, new HashSet<PortableQueryOperation> { PortableQueryOperation.NotEqual });
 
     private static ElsaGroundworkQueryPredicate GreaterThanOrEqual(string path) =>
         new(path, new HashSet<PortableQueryOperation> { PortableQueryOperation.GreaterThanOrEqual });

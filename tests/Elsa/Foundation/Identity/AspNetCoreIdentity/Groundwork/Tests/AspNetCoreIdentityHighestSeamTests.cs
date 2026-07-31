@@ -14,8 +14,6 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using FastEndpoints;
-using Groundwork.Core.Manifests;
-using Groundwork.Core.Queries;
 using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -166,14 +164,14 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     {
         await using var driver = new SqliteGroundworkProviderDriver();
         await driver.InitializeAsync();
-        var manifest = IdentityStorageManifest.Create();
+        await driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
         var access = DocumentStoreAccess.Scoped(new StorageScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant));
         var sourceUser = AspNetCoreIdentityScenarioData.CreateIdentityUser(AspNetCoreIdentityScenarioData.PrimaryUser);
         var sourceRole = AspNetCoreIdentityScenarioData.CreateIdentityRole(AspNetCoreIdentityScenarioData.PrimaryRole);
         var login = new UserLoginInfo("github", "ada-external", "GitHub");
         var claim = new Claim(IdentityClaimTypes.Permission, "identity.users.read");
 
-        await using (var firstClient = await driver.OpenClientAsync(manifest, access))
+        await using (var firstClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None))
         {
             var stores = CreateSqliteStores(firstClient);
             Assert.True((await stores.Users.CreateAsync(sourceUser, CancellationToken.None)).Succeeded);
@@ -184,7 +182,7 @@ public sealed class AspNetCoreIdentityHighestSeamTests
             await stores.Users.SetTokenAsync(sourceUser, "github", "refresh-token", "refresh-1", CancellationToken.None);
         }
 
-        await using (var reopenedClient = await driver.OpenClientAsync(manifest, access))
+        await using (var reopenedClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None))
         {
             var stores = CreateSqliteStores(reopenedClient);
             var reloadedByName = await stores.Users.FindByNameAsync(sourceUser.NormalizedUserName!, CancellationToken.None);
@@ -233,9 +231,8 @@ public sealed class AspNetCoreIdentityHighestSeamTests
 
     private static SqliteStores CreateSqliteStores(GroundworkProviderClient client)
     {
-        var manifest = IdentityStorageManifest.Create();
-        var bounded = client.DocumentStore as IBoundedDocumentStore
-            ?? new TestBoundedDocumentStore(client.DocumentStore, manifest);
+        var bounded = client.BoundedDocumentStore
+            ?? throw new InvalidOperationException("The SQLite Groundwork provider client requires a bounded document-store runtime.");
         var accessor = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
             new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant)));
         return new SqliteStores(
@@ -249,63 +246,6 @@ public sealed class AspNetCoreIdentityHighestSeamTests
         : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
-    }
-
-    private sealed class TestBoundedDocumentStore(IDocumentStore store, StorageManifest manifest)
-        : IBoundedDocumentStore
-    {
-        public async Task<DocumentQueryResult> QueryAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default)
-        {
-            var (indexIdentity, value) = Resolve(query);
-#pragma warning disable GW0004
-            var all = await store.QueryAsync(
-                new DocumentStoreQuery(query.DocumentKind, indexIdentity, value),
-                cancellationToken);
-#pragma warning restore GW0004
-            IEnumerable<DocumentEnvelope> window = all;
-            if (query.Skip is { } skip)
-                window = window.Skip(skip);
-            if (query.Take is { } take)
-                window = window.Take(take);
-            return new DocumentQueryResult(window.ToArray(), all.Count);
-        }
-
-        public async Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            (await QueryAsync(query, cancellationToken)).TotalCount;
-
-        public async Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            (await QueryAsync(query, cancellationToken)).Documents.FirstOrDefault();
-
-        public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            await FirstOrDefaultAsync(query, cancellationToken) is not null;
-
-        private (string IndexIdentity, string Value) Resolve(DocumentQuery query)
-        {
-            var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
-            var indexIdentity = unit.PhysicalStorage?.BoundedQueries
-                                    .SingleOrDefault(candidate => candidate.Identity == query.QueryIdentity)
-                                    ?.IndexIdentity
-                                ?? unit.Queries.Single(candidate => candidate.Identity == query.QueryIdentity).IndexIdentity;
-            var index = unit.Indexes.Single(candidate => candidate.Identity == indexIdentity);
-            var clause = query.Clauses.Count == 1
-                ? query.Clauses[0]
-                : throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have one clause.");
-            var comparison = clause.Comparisons.Count == 1
-                ? clause.Comparisons[0]
-                : throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have one comparison.");
-            var indexField = index.Fields.Count == 1
-                ? index.Fields[0]
-                : throw new InvalidOperationException($"Groundwork test index '{indexIdentity}' must have one field.");
-            if (comparison.Operator != QueryComparisonOperator.Equal || comparison.Path != indexField.Path || comparison.Values.Count != 1)
-                throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
-            var value = comparison.Values[0]
-                        ?? throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have a non-null comparison value.");
-            return (indexIdentity, value);
-        }
     }
 
     private sealed class MultiTenantSignInHost : IAsyncDisposable

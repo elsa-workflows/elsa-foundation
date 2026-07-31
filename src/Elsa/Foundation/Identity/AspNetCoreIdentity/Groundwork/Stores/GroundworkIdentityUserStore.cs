@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -38,7 +39,6 @@ public sealed partial class GroundworkIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int SingleResultTake = 1;
     private const int AmbiguousEmailTake = 2;
-    private const int RelationshipPageSize = 512;
     private const int MaxRelationshipMaterialization = 100_000;
     private const int LockoutTransitionMaxAttempts = 5;
 
@@ -416,7 +416,7 @@ public sealed partial class GroundworkIdentityUserStore(
         (string Field, string Value) comparison,
         int take,
         CancellationToken cancellationToken) =>
-        await QueryPageAsync(documentKind, queryIdentity, comparison, null, skip: null, take, cancellationToken);
+        await QueryPageAsync(documentKind, queryIdentity, comparison, null, continuation: null, take, cancellationToken);
 
     private async Task EnsureUserExistsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
@@ -441,34 +441,23 @@ public sealed partial class GroundworkIdentityUserStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         (string Field, string Value)? secondComparison,
-        CancellationToken cancellationToken)
-    {
-        var documents = new List<DocumentEnvelope>();
-        for (var skip = 0; ; skip += RelationshipPageSize)
-        {
-            var page = await QueryPageAsync(
-                documentKind,
-                queryIdentity,
-                comparison,
-                secondComparison,
-                skip,
-                RelationshipPageSize,
-                cancellationToken);
-            documents.AddRange(page);
-            if (page.Count < RelationshipPageSize)
-                return documents;
-            if (documents.Count >= MaxRelationshipMaterialization)
-                throw new InvalidOperationException(
-                    $"Groundwork ASP.NET Core Identity route '{queryIdentity}' exceeded the bounded relationship materialization limit.");
-        }
-    }
+        CancellationToken cancellationToken) =>
+        await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            documentKind,
+            queryIdentity,
+            secondComparison is { } second
+                ? [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value)), DocumentQueryClause.Of(DocumentQueryComparison.Equal(second.Field, second.Value))]
+                : [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
+            cancellationToken,
+            MaxRelationshipMaterialization);
 
     private async Task<IReadOnlyList<DocumentEnvelope>> QueryPageAsync(
         string documentKind,
         string queryIdentity,
         (string Field, string Value) comparison,
         (string Field, string Value)? secondComparison,
-        int? skip,
+        string? continuation,
         int take,
         CancellationToken cancellationToken) =>
         (await BoundedStore.QueryAsync(
@@ -479,9 +468,9 @@ public sealed partial class GroundworkIdentityUserStore(
                     ? [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value)), DocumentQueryClause.Of(DocumentQueryComparison.Equal(second.Field, second.Value))]
                     : [DocumentQueryClause.Of(DocumentQueryComparison.Equal(comparison.Field, comparison.Value))],
                 [],
-                skip,
-                take,
                 null,
+                take,
+                continuation,
                 null,
                 BoundedQueryResultOperation.Documents),
             cancellationToken)).Documents;
