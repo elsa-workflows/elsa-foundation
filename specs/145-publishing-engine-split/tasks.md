@@ -18,9 +18,9 @@
 
 **Purpose**: Scaffold the new engine package and wire it into the build.
 
-- [ ] T001 Create `src/Elsa/Workflows/Publishing/Publishing/Elsa.Workflows.Publishing.csproj` (net10.0) referencing `Publishing.Core`, `Design.Persistence.Core`, `Design.Validations.Core`, `Runtime.Core`, `Locking.Core`, `Events.Core`, `Mediator.Core`, `Tasks.Core` — the engine's dependency envelope (no FastEndpoints, no ApiCapabilities).
-- [ ] T002 Add the new project to `Elsa.Server.slnx` under the `/src/Elsa/Workflows/Publishing/` solution folder (satisfies `ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments`).
-- [ ] T003 Add a `ProjectReference` to `Elsa.Workflows.Publishing` from `src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj` (Api `DependsOn` the engine and references its types; Server pulls it transitively).
+- [X] T001 Create `src/Elsa/Workflows/Publishing/Publishing/Elsa.Workflows.Publishing.csproj` (net10.0) mirroring the Api envelope minus FastEndpoints + Api.Capabilities. (Also created a `WorkflowsPublishingFeature : IShellFeature` stub, `[ShellFeature("WorkflowsPublishing")]`, `DependsOn { WorkflowsRuntimeTriggers, Events }`, empty `virtual ConfigureServices` pending Phase 2.)
+- [X] T002 Add the new project to `Elsa.Server.slnx` under the `/src/Elsa/Workflows/Publishing/` solution folder (satisfies `ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments`).
+- [X] T003 Add a `ProjectReference` to `Elsa.Workflows.Publishing` from `src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj` (Api `DependsOn` the engine and references its types; Server pulls it transitively). Engine project builds green (0 errors).
 
 **Checkpoint**: New engine project exists, compiles empty, and is in the solution.
 
