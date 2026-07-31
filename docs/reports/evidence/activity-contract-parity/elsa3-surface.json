@@ -1,0 +1,2629 @@
+[
+  {
+    "module": "Elsa.Expressions.JavaScript",
+    "file": "src/modules/Elsa.Expressions.JavaScript/Activities/RunJavaScript/RunJavaScript.cs",
+    "class": "RunJavaScript",
+    "baseType": "CodeActivity<object?>",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Scripting",
+        "Executes JavaScript code",
+        "Run JavaScript"
+      ],
+      "DisplayName": "Run JavaScript",
+      "Name": "Run JavaScript"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Script",
+        "type": "string",
+        "Description": "The script to run.",
+        "hasAttribute": true
+      },
+      {
+        "name": "PossibleOutcomes",
+        "type": "ICollection<string>",
+        "Description": "A list of possible outcomes.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/DownloadHttpFile.cs",
+    "class": "DownloadHttpFile",
+    "baseType": "Activity<HttpFile>",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Downloads a file from a given URL.",
+        "Download File"
+      ],
+      "DisplayName": "Download File",
+      "Name": "Download File"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [
+      "Failed to connect",
+      "Timeout"
+    ],
+    "inputs": [
+      {
+        "name": "Url",
+        "type": "Uri?",
+        "Description": "The URL to download the file from.",
+        "DisplayName": "URL",
+        "Name": "URL",
+        "hasAttribute": true
+      },
+      {
+        "name": "Method",
+        "type": "string",
+        "Description": "The HTTP method to use when sending the request.",
+        "DefaultValue": "GET",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT"
+        ],
+        "hasAttribute": true
+      },
+      {
+        "name": "ExpectedStatusCodes",
+        "type": "ICollection<int>",
+        "Description": "A list of expected status codes to handle.",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestContent",
+        "type": "object?",
+        "Description": "The content to send with the request. Can be a string, an object, a byte array or a stream.",
+        "Name": "Content",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestContentType",
+        "type": "string?",
+        "Description": "The content type to use when sending the request.",
+        "DisplayName": "Content Type",
+        "Name": "Content Type",
+        "hasAttribute": true
+      },
+      {
+        "name": "Authorization",
+        "type": "string?",
+        "Description": "The Authorization header value to send with the request. For example: Bearer {some-access-token}",
+        "Category": "Security",
+        "hasAttribute": true
+      },
+      {
+        "name": "DisableAuthorizationHeaderValidation",
+        "type": "bool",
+        "Description": "A value that allows to add the Authorization header without validation.",
+        "Category": "Security",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The headers to send along with the request.",
+        "Category": "Advanced",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Response",
+        "type": "HttpResponseMessage",
+        "IsSerializable": false,
+        "hasAttribute": true
+      },
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Description": "The HTTP response status code",
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseContentStream",
+        "type": "Stream?",
+        "Description": "The downloaded content stream, if any.",
+        "IsSerializable": false,
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseContentBytes",
+        "type": "byte[]?",
+        "Description": "The downloaded content bytes, if any.",
+        "IsSerializable": false,
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The response headers that were received.",
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseContentHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The response content headers that were received.",
+        "DisplayName": "Content Headers",
+        "Name": "Content Headers",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/FlowSendHttpRequest.cs",
+    "class": "FlowSendHttpRequest",
+    "baseType": "SendHttpRequestBase",
+    "baseName": "SendHttpRequestBase",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Send an HTTP request.",
+        "HTTP Request (flow)"
+      ],
+      "DisplayName": "HTTP Request (flow)",
+      "Name": "HTTP Request (flow)"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [
+      "Failed to connect",
+      "Timeout"
+    ],
+    "inputs": [
+      {
+        "name": "ExpectedStatusCodes",
+        "type": "ICollection<int>",
+        "Description": "A list of expected status codes to handle.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Url",
+        "type": "Uri?",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Method",
+        "type": "string",
+        "Description": "The HTTP method to use when sending the request.",
+        "DefaultValue": "GET",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "PATCH",
+          "OPTIONS",
+          "HEAD"
+        ],
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Content",
+        "type": "object?",
+        "Description": "The content to send with the request. Can be a string, an object, a byte array or a stream.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Description": "The content type to use when sending the request.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Authorization",
+        "type": "string?",
+        "Description": "The Authorization header value to send with the request. For example: Bearer {some-access-token}",
+        "Category": "Security",
+        "CanContainSecrets": true,
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "DisableAuthorizationHeaderValidation",
+        "type": "bool",
+        "Description": "A value that allows to add the Authorization header without validation.",
+        "Category": "Security",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "RequestHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The headers to send along with the request.",
+        "Category": "Advanced",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "EnableResiliency",
+        "type": "bool",
+        "Description": "Obsolete. Use the common Resilience Strategy setting instead.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Description": "The HTTP response status code",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ParsedContent",
+        "type": "object?",
+        "Description": "The parsed content, if any.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The response headers that were received.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "SendHttpRequestBase"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/HttpEndpoint.cs",
+    "class": "HttpEndpoint",
+    "baseType": "Trigger<HttpRequest>",
+    "baseName": "Trigger",
+    "isAbstract": false,
+    "isTrigger": true,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Wait for an inbound HTTP request that matches the specified path and methods.",
+        "HTTP Endpoint"
+      ],
+      "DisplayName": "HTTP Endpoint",
+      "Name": "HTTP Endpoint"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [
+      "File too large",
+      "Invalid file MIME type",
+      "Invalid file extension",
+      "Request too large"
+    ],
+    "inputs": [
+      {
+        "name": "Path",
+        "type": "string",
+        "Description": "The path to associate with the workflow.",
+        "hasAttribute": true
+      },
+      {
+        "name": "SupportedMethods",
+        "type": "ICollection<string>",
+        "Description": "The HTTP methods to accept.",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "HEAD",
+          "DELETE"
+        ],
+        "hasAttribute": true
+      },
+      {
+        "name": "Authorize",
+        "type": "bool",
+        "Description": "Allow authenticated requests only.",
+        "Category": "Security",
+        "hasAttribute": true
+      },
+      {
+        "name": "Policy",
+        "type": "string?",
+        "Description": "Provide a policy to evaluate. If the policy fails, the request is forbidden.",
+        "Category": "Security",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestTimeout",
+        "type": "TimeSpan?",
+        "Description": "The maximum time allowed to process the request.",
+        "Category": "Upload",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestSizeLimit",
+        "type": "long?",
+        "Description": "The maximum request size allowed in bytes.",
+        "Category": "Upload",
+        "hasAttribute": true
+      },
+      {
+        "name": "FileSizeLimit",
+        "type": "long?",
+        "Description": "The maximum file size allowed in bytes for an individual file.",
+        "Category": "Upload",
+        "hasAttribute": true
+      },
+      {
+        "name": "AllowedFileExtensions",
+        "type": "ICollection<string>",
+        "Description": "Only file extensions in this list are allowed. Leave empty to allow all extensions",
+        "Category": "Upload",
+        "hasAttribute": true
+      },
+      {
+        "name": "BlockedFileExtensions",
+        "type": "ICollection<string>",
+        "Description": "File extensions in this list are forbidden. Leave empty to not block any extension.",
+        "Category": "Upload",
+        "hasAttribute": true
+      },
+      {
+        "name": "AllowedMimeTypes",
+        "type": "ICollection<string>",
+        "Description": "Only MIME types in this list are allowed. Leave empty to allow all types",
+        "Category": "Upload",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ParsedContent",
+        "type": "object?",
+        "Description": "The parsed request content, if any.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Files",
+        "type": "IFormFile[]",
+        "Description": "The uploaded files, if any.",
+        "IsSerializable": false,
+        "hasAttribute": true
+      },
+      {
+        "name": "File",
+        "type": "IFormFile?",
+        "Description": "The first uploaded file, if any.",
+        "IsSerializable": false,
+        "hasAttribute": true
+      },
+      {
+        "name": "RouteData",
+        "type": "IDictionary<string, object>",
+        "Description": "The parsed route data, if any.",
+        "hasAttribute": true
+      },
+      {
+        "name": "QueryStringData",
+        "type": "IDictionary<string, object>",
+        "Description": "The querystring data, if any.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Headers",
+        "type": "IDictionary<string, object>",
+        "Description": "The headers, if any.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/HttpEndpointBase.cs",
+    "class": "HttpEndpointBase",
+    "baseType": "HttpEndpointBase<object>",
+    "baseName": "HttpEndpointBase",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/HttpEndpointBase.cs",
+    "class": "HttpEndpointBase",
+    "baseType": "Trigger<TResult>",
+    "baseName": "Trigger",
+    "isAbstract": true,
+    "isTrigger": true,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/SendHttpRequest.cs",
+    "class": "SendHttpRequest",
+    "baseType": "SendHttpRequestBase",
+    "baseName": "SendHttpRequestBase",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Send an HTTP request.",
+        "HTTP Request"
+      ],
+      "DisplayName": "HTTP Request",
+      "Name": "HTTP Request"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Url",
+        "type": "Uri?",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Method",
+        "type": "string",
+        "Description": "The HTTP method to use when sending the request.",
+        "DefaultValue": "GET",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "PATCH",
+          "OPTIONS",
+          "HEAD"
+        ],
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Content",
+        "type": "object?",
+        "Description": "The content to send with the request. Can be a string, an object, a byte array or a stream.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Description": "The content type to use when sending the request.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Authorization",
+        "type": "string?",
+        "Description": "The Authorization header value to send with the request. For example: Bearer {some-access-token}",
+        "Category": "Security",
+        "CanContainSecrets": true,
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "DisableAuthorizationHeaderValidation",
+        "type": "bool",
+        "Description": "A value that allows to add the Authorization header without validation.",
+        "Category": "Security",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "RequestHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The headers to send along with the request.",
+        "Category": "Advanced",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "EnableResiliency",
+        "type": "bool",
+        "Description": "Obsolete. Use the common Resilience Strategy setting instead.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Description": "The HTTP response status code",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ParsedContent",
+        "type": "object?",
+        "Description": "The parsed content, if any.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The response headers that were received.",
+        "hasAttribute": true,
+        "inheritedFrom": "SendHttpRequestBase"
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "SendHttpRequestBase"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/SendHttpRequestBase.cs",
+    "class": "SendHttpRequestBase",
+    "baseType": "Activity<HttpResponseMessage>(source, line)",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Url",
+        "type": "Uri?",
+        "hasAttribute": true
+      },
+      {
+        "name": "Method",
+        "type": "string",
+        "Description": "The HTTP method to use when sending the request.",
+        "DefaultValue": "GET",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "PATCH",
+          "OPTIONS",
+          "HEAD"
+        ],
+        "hasAttribute": true
+      },
+      {
+        "name": "Content",
+        "type": "object?",
+        "Description": "The content to send with the request. Can be a string, an object, a byte array or a stream.",
+        "hasAttribute": true
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Description": "The content type to use when sending the request.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Authorization",
+        "type": "string?",
+        "Description": "The Authorization header value to send with the request. For example: Bearer {some-access-token}",
+        "Category": "Security",
+        "CanContainSecrets": true,
+        "hasAttribute": true
+      },
+      {
+        "name": "DisableAuthorizationHeaderValidation",
+        "type": "bool",
+        "Description": "A value that allows to add the Authorization header without validation.",
+        "Category": "Security",
+        "hasAttribute": true
+      },
+      {
+        "name": "RequestHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The headers to send along with the request.",
+        "Category": "Advanced",
+        "hasAttribute": true
+      },
+      {
+        "name": "EnableResiliency",
+        "type": "bool",
+        "Description": "Obsolete. Use the common Resilience Strategy setting instead.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Description": "The HTTP response status code",
+        "hasAttribute": true
+      },
+      {
+        "name": "ParsedContent",
+        "type": "object?",
+        "Description": "The parsed content, if any.",
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The response headers that were received.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/WriteFileHttpResponse.cs",
+    "class": "WriteFileHttpResponse",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Send one ore more files (zipped) to the HTTP response.",
+        "HTTP File Response"
+      ],
+      "DisplayName": "HTTP File Response",
+      "Name": "HTTP File Response"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Description": "The content type of the file to serve. Leave empty to let the system determine the content type.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Filename",
+        "type": "string?",
+        "Description": "The name of the file to serve. Leave empty to let the system determine the file name.",
+        "hasAttribute": true
+      },
+      {
+        "name": "EntityTag",
+        "type": "string?",
+        "Description": "The Entity Tag of the file to serve. Leave empty to let the system determine the Entity Tag.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Content",
+        "type": "object",
+        "Description": "The file content to serve. Supports various types, such as byte array, stream, string, Uri, Downloadable and a (mixed) array of the aforementioned types.",
+        "hasAttribute": true
+      },
+      {
+        "name": "EnableResumableDownloads",
+        "type": "bool",
+        "Description": "Whether to enable resumable downloads. When enabled, the client can resume a download if the connection is lost.",
+        "hasAttribute": true
+      },
+      {
+        "name": "DownloadCorrelationId",
+        "type": "string",
+        "Description": "The correlation ID of the download used to resume a download. If left empty, the x-download-id header will be used.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Http",
+    "file": "src/modules/Elsa.Http/Activities/WriteHttpResponse.cs",
+    "class": "WriteHttpResponse",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "HTTP",
+        "Write a response to the current HTTP response object.",
+        "HTTP Response"
+      ],
+      "DisplayName": "HTTP Response",
+      "Name": "HTTP Response"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "StatusCode",
+        "type": "HttpStatusCode",
+        "Description": "The status code to return.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Content",
+        "type": "object?",
+        "Description": "The content to write back. String values will be sent as-is, while objects will be serialized to a JSON string. Byte arrays and streams will be sent as files.",
+        "hasAttribute": true
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Description": "The content type to write when sending the response.",
+        "hasAttribute": true
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "HttpHeaders?",
+        "Description": "The headers to send along with the response.",
+        "Category": "Advanced",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Scheduling",
+    "file": "src/modules/Elsa.Scheduling/Activities/Cron.cs",
+    "class": "Cron",
+    "baseType": "EventGenerator",
+    "baseName": "EventGenerator",
+    "isAbstract": false,
+    "isTrigger": true,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Scheduling",
+        "Trigger workflow execution at a specific interval using a CRON expression."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "CronExpression",
+        "type": "string",
+        "Description": "The CRON expression at which the timer should execute.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "EventGenerator"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Scheduling",
+    "file": "src/modules/Elsa.Scheduling/Activities/Delay.cs",
+    "class": "Delay",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Scheduling",
+        "Delay execution for the specified amount of time."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "TimeSpan",
+        "type": "TimeSpan",
+        "Description": "The timespan to delay workflow execution.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Scheduling",
+    "file": "src/modules/Elsa.Scheduling/Activities/StartAt.cs",
+    "class": "StartAt",
+    "baseType": "Trigger",
+    "baseName": "Trigger",
+    "isAbstract": false,
+    "isTrigger": true,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Scheduling",
+        "Trigger execution at a specific time in the future."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "DateTime",
+        "type": "DateTimeOffset",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Scheduling",
+    "file": "src/modules/Elsa.Scheduling/Activities/Timer.cs",
+    "class": "Timer",
+    "baseType": "TimerBase",
+    "baseName": "TimerBase",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Scheduling",
+        "Trigger workflow execution at a specific interval."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Interval",
+        "type": "TimeSpan",
+        "Description": "The interval at which the timer should execute.",
+        "DefaultValue": "00:01:00",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "TimerBase"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Scheduling",
+    "file": "src/modules/Elsa.Scheduling/Activities/TimerBase.cs",
+    "class": "TimerBase",
+    "baseType": "EventGenerator(source, line)",
+    "baseName": "EventGenerator",
+    "isAbstract": true,
+    "isTrigger": true,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "EventGenerator"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/ActivityT.cs",
+    "class": "Activity",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Break.cs",
+    "class": "Break",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Looping",
+        "Break out of a loop."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/CodeActivity.cs",
+    "class": "CodeActivity",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/CodeActivity.cs",
+    "class": "CodeActivity",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/CodeActivity.cs",
+    "class": "CodeActivityWithResult",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Complete.cs",
+    "class": "Complete",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Composition",
+        "Signals the current composite activity to complete itself as a whole."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Outcomes",
+        "type": "object",
+        "Description": "The outcome or set of outcomes to complete this activity with.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Composite.cs",
+    "class": "Composite",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Composite.cs",
+    "class": "Composite",
+    "baseType": "Composite",
+    "baseName": "Composite",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Composite.cs",
+    "class": "CompositeWithResult",
+    "baseType": "Composite",
+    "baseName": "Composite",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "Composite"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Container.cs",
+    "class": "Container",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Correlate.cs",
+    "class": "Correlate",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Set the CorrelationId of the workflow to a given value."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "CorrelationId",
+        "type": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/DynamicActivity.cs",
+    "class": "DynamicActivity",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/End.cs",
+    "class": "End",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Flow",
+        "A milestone activity that marks the end of a flowchart."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Models/EventGenerator.cs",
+    "class": "EventGenerator",
+    "baseType": "Trigger",
+    "baseName": "Trigger",
+    "isAbstract": true,
+    "isTrigger": true,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Fault.cs",
+    "class": "Fault",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Faults the workflow."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Code",
+        "type": "string",
+        "Description": "Code to categorize the fault.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Category",
+        "type": "string",
+        "Description": "Category to categorize the fault. Examples: HTTP, Alteration, Azure, etc.",
+        "hasAttribute": true
+      },
+      {
+        "name": "FaultType",
+        "type": "string",
+        "Description": "The type of fault. Examples: System, Business, Integration, etc.",
+        "DisplayName": "Type",
+        "Name": "Type",
+        "hasAttribute": true
+      },
+      {
+        "name": "Message",
+        "type": "string?",
+        "Description": "The message to include with the fault.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Finish.cs",
+    "class": "Finish",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Mark the workflow as finished."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/FlowDecision.cs",
+    "class": "FlowDecision",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Evaluate a Boolean condition to determine which path to execute next.",
+        "Decision"
+      ],
+      "DisplayName": "Decision",
+      "Name": "Decision"
+    },
+    "outcomes": [
+      "True",
+      "False"
+    ],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/FlowFork.cs",
+    "class": "FlowFork",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Branch execution into multiple branches that will be executed in parallel.",
+        "Fork (flow)"
+      ],
+      "DisplayName": "Fork (flow)",
+      "Name": "Fork (flow)"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Branches",
+        "type": "ICollection<string>",
+        "Description": "A list of expected outcomes to handle.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/FlowJoin.cs",
+    "class": "FlowJoin",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Explicitly merge multiple branches into a single branch of execution.",
+        "Join"
+      ],
+      "DisplayName": "Join",
+      "Name": "Join"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Mode",
+        "type": "FlowJoinMode",
+        "Description": "The join mode determines whether this activity should continue as soon as one inbound path comes in (WaitAny), or once all inbound paths have executed (WaitAll). To wait for all activated inbound paths, set the mode to WaitAllActive.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/FlowNode.cs",
+    "class": "FlowNode",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Flow",
+        "A simple container that executes the specified activity.",
+        "Container"
+      ],
+      "DisplayName": "Container",
+      "Name": "Container"
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/FlowSwitch.cs",
+    "class": "FlowSwitch",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Evaluate a set of case conditions and schedule the activity for a matching case.",
+        "Switch (flow)"
+      ],
+      "DisplayName": "Switch (flow)",
+      "Name": "Switch (flow)"
+    },
+    "outcomes": [
+      "Default"
+    ],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Mode",
+        "type": "SwitchMode",
+        "Description": "The switch mode determines whether the first match should be scheduled, or all matches.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Flowchart/Activities/Flowchart.cs",
+    "class": "Flowchart",
+    "baseType": "Container",
+    "baseName": "Container",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Flow",
+        "A flowchart is a collection of activities and connections between them."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Container"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/For.cs",
+    "class": "For",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Looping",
+        "Iterate over a sequence of steps between a start and an end number."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Start",
+        "type": "int",
+        "Description": "The start step.",
+        "hasAttribute": true
+      },
+      {
+        "name": "End",
+        "type": "int",
+        "Description": "The end step.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Step",
+        "type": "int",
+        "Description": "The step size. To count down, enter a negative number.",
+        "hasAttribute": true
+      },
+      {
+        "name": "OuterBoundInclusive",
+        "type": "bool",
+        "Description": "Controls whether the end step is upper/lowerbound inclusive or exclusive. True (inclusive) by default.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "CurrentValue",
+        "type": "object?",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/ForEachT.cs",
+    "class": "ForEach",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Items",
+        "type": "ICollection<T>",
+        "Description": "The set of values to iterate.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "CurrentValue",
+        "type": "T",
+        "Description": "Assign the current value to the specified variable.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Fork.cs",
+    "class": "Fork",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Control Flow",
+        "Branch execution into multiple branches."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/If.cs",
+    "class": "If",
+    "baseType": "Activity<bool>",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Evaluate a Boolean condition to determine which activity to execute next."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Inline.cs",
+    "class": "Inline",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Evaluate a Boolean condition to determine which path to execute next."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Inline.cs",
+    "class": "Inline",
+    "baseType": "CodeActivity<T>",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/NotFoundActivity.cs",
+    "class": "NotFoundActivity",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "System",
+        "A placeholder activity that will be used in case a workflow definition references an activity type that cannot be found."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Parallel.cs",
+    "class": "Parallel",
+    "baseType": "Container",
+    "baseName": "Container",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Container"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/ParallelForEachT.cs",
+    "class": "ParallelForEach",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Looping",
+        "Schedule an activity for each item in parallel."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Items",
+        "type": "object",
+        "Description": "The items to iterate through.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/ReadLine.cs",
+    "class": "ReadLine",
+    "baseType": "CodeActivity<string>",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Console",
+        "Read a line of text from the console."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Sequence.cs",
+    "class": "Sequence",
+    "baseType": "Container",
+    "baseName": "Container",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Workflows",
+        "Execute a set of activities in sequence."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Container"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/SetName.cs",
+    "class": "SetName",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Set the name of the workflow instance to a specified value."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Value",
+        "type": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/SetVariable.cs",
+    "class": "SetVariable",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Assign value to a workflow variable."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Value",
+        "type": "T",
+        "Description": "The value to assign.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/SetVariable.cs",
+    "class": "SetVariable",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Assign a value to a workflow variable."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Value",
+        "type": "object?",
+        "Description": "The value to assign.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Start.cs",
+    "class": "Start",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Flow",
+        "A milestone activity that marks the start of a flowchart."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/StateMachine/Activities/StateMachine.cs",
+    "class": "StateMachine",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Flow",
+        "Executes a state machine made of named states and trigger-driven transitions."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Switch.cs",
+    "class": "Switch",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Branching",
+        "Evaluate a set of case conditions and schedule the activity for a matching case."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Mode",
+        "type": "SwitchMode",
+        "Description": "The switch mode determines whether the first match should be scheduled, or all matches.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Output",
+        "type": "object"
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/Trigger.cs",
+    "class": "Trigger",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Abstractions/Trigger.cs",
+    "class": "Trigger",
+    "baseType": "Activity<TResult>",
+    "baseName": "Activity",
+    "isAbstract": true,
+    "isTrigger": false,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/While.cs",
+    "class": "While",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Looping",
+        "Execute an activity while a given condition evaluates to true."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/Workflow.cs",
+    "class": "Workflow",
+    "baseType": "Composite<object>",
+    "baseName": "Composite",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Workflows",
+        "A workflow is an activity that executes its Root activity."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "Composite"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Core",
+    "file": "src/modules/Elsa.Workflows.Core/Activities/WriteLine.cs",
+    "class": "WriteLine",
+    "baseType": "CodeActivity",
+    "baseName": "CodeActivity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Console",
+        "Write a line of text to the console."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "Text",
+        "type": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "hasAttribute": true,
+        "inheritedFrom": "CodeActivity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/BulkDispatchWorkflows.cs",
+    "class": "BulkDispatchWorkflows",
+    "baseType": "Activity",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Composition",
+        "Create new workflow instances for each item in the data source and dispatch them for execution."
+      ]
+    },
+    "outcomes": [
+      "Completed",
+      "Canceled",
+      "Done"
+    ],
+    "dynamicOutcomes": [
+      "Completed",
+      "Done"
+    ],
+    "inputs": [
+      {
+        "name": "WorkflowDefinitionId",
+        "type": "string",
+        "Description": "The definition ID of the workflows to dispatch.",
+        "DisplayName": "Workflow Definition",
+        "Name": "Workflow Definition",
+        "hasAttribute": true
+      },
+      {
+        "name": "Items",
+        "type": "object",
+        "Description": "The data source to use for dispatching the workflows.",
+        "hasAttribute": true
+      },
+      {
+        "name": "DefaultItemInputKey",
+        "type": "string",
+        "Description": "The default key to use for the input name when sending the current item to the dispatched workflow. Will not be used if the Items field contain a list of dictionaries",
+        "DefaultValue": "Item",
+        "hasAttribute": true
+      },
+      {
+        "name": "CorrelationIdFunction",
+        "type": "string?",
+        "Description": "A function to compute the correlation ID to associate a dispatched workflow with.",
+        "DisplayName": "Correlation ID Function",
+        "Name": "Correlation ID Function",
+        "hasAttribute": true
+      },
+      {
+        "name": "Input",
+        "type": "IDictionary<string, object>?",
+        "Description": "Additional input to send to the workflows being dispatched.",
+        "hasAttribute": true
+      },
+      {
+        "name": "WaitForCompletion",
+        "type": "bool",
+        "Description": "Wait for the dispatched workflows to complete before completing this activity.",
+        "hasAttribute": true
+      },
+      {
+        "name": "StartNewTrace",
+        "type": "bool",
+        "Description": "Start a new trace context when using Open Telemetry.",
+        "Category": "Open Telemetry",
+        "hasAttribute": true
+      },
+      {
+        "name": "ChannelName",
+        "type": "string?",
+        "Description": "The channel to dispatch the workflow to.",
+        "DisplayName": "Channel",
+        "Name": "Channel",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/DispatchWorkflow.cs",
+    "class": "DispatchWorkflow",
+    "baseType": "Activity<object>",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Composition",
+        "Create a new workflow instance of the specified workflow and dispatch it for execution."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "WorkflowDefinitionId",
+        "type": "string",
+        "Description": "The definition ID of the workflow to dispatch.",
+        "DisplayName": "Workflow Definition",
+        "Name": "Workflow Definition",
+        "hasAttribute": true
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Description": "The correlation ID to associate the workflow with.",
+        "DisplayName": "Correlation ID",
+        "Name": "Correlation ID",
+        "hasAttribute": true
+      },
+      {
+        "name": "Input",
+        "type": "IDictionary<string, object>?",
+        "Description": "The input to send to the workflow.",
+        "hasAttribute": true
+      },
+      {
+        "name": "WaitForCompletion",
+        "type": "bool",
+        "Description": "Wait for the child workflow to complete before completing this activity.",
+        "hasAttribute": true
+      },
+      {
+        "name": "StartNewTrace",
+        "type": "bool",
+        "Description": "Start a new trace context when using Open Telemetry.",
+        "Category": "Open Telemetry",
+        "hasAttribute": true
+      },
+      {
+        "name": "ChannelName",
+        "type": "string?",
+        "Description": "The channel to dispatch the workflow to.",
+        "DisplayName": "Channel",
+        "Name": "Channel",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/Event.cs",
+    "class": "Event",
+    "baseType": "Trigger<object?>",
+    "baseName": "Trigger",
+    "isAbstract": false,
+    "isTrigger": true,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Wait for an event to be published."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "EventName",
+        "type": "string",
+        "Description": "The name of the event to listen for.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/EventBase.cs",
+    "class": "EventBase",
+    "baseType": "Trigger<object>",
+    "baseName": "Trigger",
+    "isAbstract": true,
+    "isTrigger": true,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/EventBase.cs",
+    "class": "EventBase",
+    "baseType": "Trigger<TResult>",
+    "baseName": "Trigger",
+    "isAbstract": true,
+    "isTrigger": true,
+    "meta": {},
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Trigger"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/ExecuteWorkflow.cs",
+    "class": "ExecuteWorkflow",
+    "baseType": "Activity<ExecuteWorkflowResult>",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Composition",
+        "Create a new workflow instance of the specified workflow and execute it."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "WorkflowDefinitionId",
+        "type": "string",
+        "Description": "The definition ID of the workflow to execute.",
+        "DisplayName": "Workflow Definition",
+        "Name": "Workflow Definition",
+        "hasAttribute": true
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Description": "The correlation ID to associate the workflow with.",
+        "DisplayName": "Correlation ID",
+        "Name": "Correlation ID",
+        "hasAttribute": true
+      },
+      {
+        "name": "Input",
+        "type": "IDictionary<string, object>?",
+        "Description": "The input to send to the workflow.",
+        "hasAttribute": true
+      },
+      {
+        "name": "WaitForCompletion",
+        "type": "bool",
+        "Description": "Wait for the child workflow to complete before completing this activity.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/PublishEvent.cs",
+    "class": "PublishEvent",
+    "baseType": "Activity(source, line)",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Publishes an event."
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "EventName",
+        "type": "string",
+        "Description": "The name of the event to publish.",
+        "hasAttribute": true
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Description": "The correlation ID to scope the event to.",
+        "hasAttribute": true
+      },
+      {
+        "name": "IsLocalEvent",
+        "type": "bool",
+        "Description": "Whether the event is local to the workflow. When checked, the event will be delivered to this workflow instance only.",
+        "DisplayName": "Local event",
+        "Name": "Local event",
+        "hasAttribute": true
+      },
+      {
+        "name": "Payload",
+        "type": "object",
+        "Description": "The payload to send as the event body.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  },
+  {
+    "module": "Elsa.Workflows.Runtime",
+    "file": "src/modules/Elsa.Workflows.Runtime/Activities/RunTask.cs",
+    "class": "RunTask",
+    "baseType": "Activity<object>",
+    "baseName": "Activity",
+    "isAbstract": false,
+    "isTrigger": false,
+    "meta": {
+      "activityAttributeStrings": [
+        "Elsa",
+        "Primitives",
+        "Requests a given task to be run. "
+      ]
+    },
+    "outcomes": [],
+    "dynamicOutcomes": [],
+    "inputs": [
+      {
+        "name": "TaskName",
+        "type": "string",
+        "Description": "The name of the task being requested.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Payload",
+        "type": "IDictionary<string, object>?",
+        "Description": "Any additional parameters to send to the task.",
+        "hasAttribute": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "TaskId",
+        "type": "string",
+        "Description": "The ID of the task that was requested to run.",
+        "hasAttribute": true
+      },
+      {
+        "name": "Result",
+        "type": "T",
+        "inheritedFrom": "Activity"
+      }
+    ]
+  }
+]
