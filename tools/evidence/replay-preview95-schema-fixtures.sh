@@ -81,9 +81,9 @@ cp "$harness_project" "$detached_harness/Preview95SchemaFixtureReproducer.csproj
 mkdir -p "$generated_directory" "$isolated_nuget" "$isolated_cli_home"
 if [[ "$runtime" == "host" ]]; then
   DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
-    dotnet restore "$detached_harness/Preview95SchemaFixtureReproducer.csproj" --force-evaluate --no-cache
+    dotnet restore "$detached_harness/Preview95SchemaFixtureReproducer.csproj" --force-evaluate --no-http-cache
   DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
-    dotnet tool restore --tool-manifest "$detached_tree/.config/dotnet-tools.json" --no-cache
+    dotnet tool restore --tool-manifest "$detached_tree/.config/dotnet-tools.json" --no-http-cache
   DOTNET_CLI_HOME="$isolated_cli_home" NUGET_PACKAGES="$isolated_nuget" \
     dotnet run \
     --project "$detached_harness/Preview95SchemaFixtureReproducer.csproj" \
@@ -102,8 +102,8 @@ else
     -w /src \
     "$linux_noble_image" \
     bash -lc \
-    'dotnet restore tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --force-evaluate --no-cache &&
-     dotnet tool restore --tool-manifest .config/dotnet-tools.json --no-cache &&
+    'dotnet restore tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --force-evaluate --no-http-cache &&
+     dotnet tool restore --tool-manifest .config/dotnet-tools.json --no-http-cache &&
      dotnet run --project tools/Preview95SchemaFixtureReproducer/Preview95SchemaFixtureReproducer.csproj --no-restore -- /output'
   global_packages="$isolated_nuget"
 fi
