@@ -24,6 +24,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -899,7 +900,9 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private async Task InvokeSlotLifecycleHandlerAsync(string operation, string definitionId, string slotName)
     {
-        var assembly = typeof(PublishWorkflowRequestHandler).Assembly;
+        // The slot-lifecycle handlers stay in the Api assembly (spec 145); anchor on an Api type, since
+        // PublishWorkflowRequestHandler itself has moved to the engine assembly.
+        var assembly = typeof(WorkflowsPublishingApiFeature).Assembly;
         var handlerType = assembly.GetType($"Elsa.Workflows.Publishing.Api.Handlers.{operation}PublicationSlotRequestHandler");
         var requestType = assembly.GetType($"Elsa.Workflows.Publishing.Api.Requests.{operation}PublicationSlot");
 
@@ -921,6 +924,9 @@ public sealed class PublishWorkflowRequestHandlerTests
         var extractor = new WorkflowTriggerBindingExtractor([]);
         services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);
         services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(extractor, _bindingStore));
+        // spec 145: the publish engine (compiler, stores, the PublishWorkflow handler) moved to the
+        // WorkflowsPublishing engine feature; compose it explicitly alongside the transport feature.
+        new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();

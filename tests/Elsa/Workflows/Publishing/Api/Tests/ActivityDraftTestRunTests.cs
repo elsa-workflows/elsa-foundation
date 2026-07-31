@@ -785,6 +785,9 @@ public sealed class ActivityDraftTestRunTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
+        // spec 145: the publish engine moved to WorkflowsPublishing (pulled via DependsOn at shell
+        // composition). This harness composes features directly, so it composes the engine explicitly.
+        new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddSingleton(documents);
         services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
