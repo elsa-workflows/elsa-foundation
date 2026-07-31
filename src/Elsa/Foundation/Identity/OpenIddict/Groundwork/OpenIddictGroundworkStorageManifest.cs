@@ -63,13 +63,13 @@ public static class OpenIddictGroundworkStorageManifest
                 [ClientIdIndex, ApplicationRedirectUriIndex, ApplicationPostLogoutRedirectUriIndex],
                 [ClientIdQuery, ApplicationRedirectUriQuery, ApplicationPostLogoutRedirectUriQuery]),
             Unit(OpenIddictGroundworkJson.AuthorizationDocumentKind, "OpenIddict authorization", CreateAuthorizationDefinition(),
-                [AuthorizationSubjectIndex, AuthorizationScopeIndex],
+                [AuthorizationSubjectV2Index, AuthorizationScopeIndex],
                 [AuthorizationSubjectQuery, AuthorizationScopeQuery]),
             Unit(OpenIddictGroundworkJson.ScopeDocumentKind, "OpenIddict scope", CreateScopeDefinition(),
                 [ScopeNameIndex, ScopeResourceIndex],
                 [ScopeNameQuery, ScopeResourceQuery]),
             Unit(OpenIddictGroundworkJson.TokenDocumentKind, "OpenIddict token", CreateTokenDefinition(),
-                [TokenReferenceIndex, TokenSubjectIndex], [TokenReferenceQuery, TokenSubjectQuery])
+                [TokenReferenceIndex, TokenSubjectIndex, TokenSubjectV2Index], [TokenReferenceQuery, TokenSubjectQuery])
         ],
         new HashSet<string> { "optimistic-concurrency", "global-openiddict-stores" },
         []);
@@ -95,7 +95,9 @@ public static class OpenIddictGroundworkStorageManifest
             CollectionColumn("scope", "scopes")
         ],
         Envelope,
-        [Index(AuthorizationSubjectIndex.Identity, "subject", "applicationId", "status", "type")]);
+        [
+            Index(AuthorizationSubjectV2Index.Identity, "subject", Envelope.IdLookupKeyColumn)
+        ]);
 
     public static PhysicalTableDefinition CreateScopeDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
         "openiddict_scopes",
@@ -121,7 +123,8 @@ public static class OpenIddictGroundworkStorageManifest
         Envelope,
         [
             UniqueIndex(TokenReferenceIndex.Identity, "referenceId"),
-            Index(TokenSubjectIndex.Identity, "subject", "status", "expirationDate")
+            Index(TokenSubjectIndex.Identity, "subject", "status", "expirationDate"),
+            Index(TokenSubjectV2Index.Identity, "subject", Envelope.IdLookupKeyColumn)
         ]);
 
     private static readonly DocumentEnvelopeDefinition Envelope = new();
@@ -131,8 +134,11 @@ public static class OpenIddictGroundworkStorageManifest
         CollectionIndex("openiddict-application-by-redirect-uri", "redirectUris");
     private static readonly LogicalIndexDeclaration ApplicationPostLogoutRedirectUriIndex =
         CollectionIndex("openiddict-application-by-post-logout-redirect-uri", "postLogoutRedirectUris");
-    private static readonly LogicalIndexDeclaration AuthorizationSubjectIndex = CompoundIndex(
-        "openiddict-authorization-by-subject-application-status-type", "subject", "applicationId", "status", "type");
+    // Spec 106 is greenfield: the earlier four-field authorization index was never part of the
+    // retained preview.95 schema and exceeds SQL Server's 1,700-byte key limit. It is intentionally
+    // replaced, not upgraded; manually materialized pre-release schemas are outside this contract.
+    private static readonly LogicalIndexDeclaration AuthorizationSubjectV2Index = KeywordIndex(
+        "openiddict-authorization-by-subject-application-status-type-v2", "subject");
     private static readonly LogicalIndexDeclaration AuthorizationScopeIndex =
         CollectionIndex("openiddict-authorization-by-scope", "scopes");
     private static readonly LogicalIndexDeclaration ScopeNameIndex = KeywordIndex("openiddict-scope-by-name", "name", unique: true);
@@ -141,20 +147,22 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly LogicalIndexDeclaration TokenReferenceIndex = KeywordIndex("openiddict-token-by-reference-id", "referenceId", unique: true);
     private static readonly LogicalIndexDeclaration TokenSubjectIndex = CompoundIndex(
         "openiddict-token-by-subject-status-expiration", "subject", "status", "expirationDate");
+    private static readonly LogicalIndexDeclaration TokenSubjectV2Index = KeywordIndex(
+        "openiddict-token-by-subject-status-expiration-v2", "subject");
 
     private static readonly BoundedQueryDeclaration ClientIdQuery = PointQuery(FindApplicationByClientIdQuery, ClientIdIndex);
     private static readonly BoundedQueryDeclaration ApplicationRedirectUriQuery =
         CollectionQuery(FindApplicationByRedirectUriQuery, ApplicationRedirectUriIndex);
     private static readonly BoundedQueryDeclaration ApplicationPostLogoutRedirectUriQuery =
         CollectionQuery(FindApplicationByPostLogoutRedirectUriQuery, ApplicationPostLogoutRedirectUriIndex);
-    private static readonly BoundedQueryDeclaration AuthorizationSubjectQuery = RangeQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectIndex);
+    private static readonly BoundedQueryDeclaration AuthorizationSubjectQuery = SubjectQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectV2Index);
     private static readonly BoundedQueryDeclaration AuthorizationScopeQuery =
         CollectionQuery(FindAuthorizationByScopeQuery, AuthorizationScopeIndex);
     private static readonly BoundedQueryDeclaration ScopeNameQuery = PointQuery(FindScopeByNameQuery, ScopeNameIndex);
     private static readonly BoundedQueryDeclaration ScopeResourceQuery =
         CollectionQuery(FindScopeByResourceQuery, ScopeResourceIndex);
     private static readonly BoundedQueryDeclaration TokenReferenceQuery = PointQuery(FindTokenByReferenceIdQuery, TokenReferenceIndex);
-    private static readonly BoundedQueryDeclaration TokenSubjectQuery = RangeQuery(FindTokenBySubjectQuery, TokenSubjectIndex);
+    private static readonly BoundedQueryDeclaration TokenSubjectQuery = SubjectQuery(FindTokenBySubjectQuery, TokenSubjectV2Index);
     private static StorageUnit Unit(
         string identity,
         string displayName,
@@ -248,17 +256,14 @@ public static class OpenIddictGroundworkStorageManifest
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true);
 
-    private static BoundedQueryDeclaration RangeQuery(string identity, LogicalIndexDeclaration index) => new(
+    private static BoundedQueryDeclaration SubjectQuery(string identity, LogicalIndexDeclaration index) => new(
         identity,
         index.Identity,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.None,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
-        predicateFields: index.Fields.Select(field => new BoundedQueryPredicateField(
-            field.Path,
-            new HashSet<PortableQueryOperation>
-            {
-                field.Path == "expirationDate" ? PortableQueryOperation.LessThanOrEqual : PortableQueryOperation.Equal
-            })).ToArray());
+        predicateFields: [new BoundedQueryPredicateField(
+            index.Fields[0].Path,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })]);
 }

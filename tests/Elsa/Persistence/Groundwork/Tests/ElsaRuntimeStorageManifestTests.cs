@@ -541,9 +541,14 @@ public sealed class ElsaRuntimeStorageManifestTests
         var faultAttentionRoute = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.PageFaultedWorkflowExecutionsForAttentionQuery);
-        var pinnedLogical = Assert.Single(
+        var legacyPinnedLogical = Assert.Single(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex);
+        var pinnedIndexIdentity =
+            $"{ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex}-v2";
+        var pinnedLogical = Assert.Single(
+            unit.PhysicalStorage.LogicalIndexes,
+            index => index.Identity == pinnedIndexIdentity);
         var pinnedRoute = Assert.Single(
             unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.PagePinnedExecutableArtifactIdsQuery);
@@ -610,6 +615,12 @@ public sealed class ElsaRuntimeStorageManifestTests
             ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength,
             physical.ProjectedColumns.Single(column =>
                 column.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField).Length);
+        Assert.All(
+            physical.ProjectedColumns.Where(column => column.Path is
+                ElsaRuntimeStorageManifest.CollectionField or
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField or
+                ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField),
+            column => Assert.True(column.IsNullable));
         Assert.Contains(
             physical.Indexes,
             index =>
@@ -622,8 +633,21 @@ public sealed class ElsaRuntimeStorageManifestTests
                 index.Columns.Count == 5);
         Assert.Equal(QueryPagingSupport.Offset, pinnedRoute.PagingSupport);
         Assert.Equal(
+            pinnedIndexIdentity,
+            pinnedRoute.IndexIdentity);
+        Assert.Equal(
             ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField,
             pinnedRoute.LatestPerKeyPath);
+        Assert.Contains(
+            pinnedRoute.ResidualPredicateFields,
+            field =>
+                field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField &&
+                field.Operations.SetEquals([PortableQueryOperation.NotEqual]));
+        Assert.Contains(
+            pinnedRoute.ResidualPredicateFields,
+            field =>
+                field.Path == ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField &&
+                field.Operations.SetEquals([PortableQueryOperation.NotEqual]));
         Assert.Collection(
             pinnedLogical.Fields,
             collection => Assert.Equal(ElsaRuntimeStorageManifest.CollectionField, collection.Path),
@@ -634,11 +658,32 @@ public sealed class ElsaRuntimeStorageManifestTests
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
                 executionId.Path));
         Assert.True(pinnedLogical.IsUnique);
+        Assert.Equal(MissingValueBehavior.Excluded, pinnedLogical.MissingValueBehavior);
+        Assert.False(legacyPinnedLogical.IsUnique);
+        Assert.Equal(MissingValueBehavior.Excluded, legacyPinnedLogical.MissingValueBehavior);
+        var pinnedPhysical = Assert.Single(
+            physical.Indexes,
+            index => index.LogicalName == pinnedIndexIdentity);
+        Assert.True(pinnedPhysical.IsUnique);
+        Assert.Equal(MissingValueBehavior.Excluded, pinnedPhysical.MissingValueBehavior);
+        Assert.Equal(
+            new[]
+            {
+                "storage_scope",
+                "collection",
+                "history_artifact_id",
+                "history_workflow_execution_id"
+            },
+            pinnedPhysical.Columns.Select(column => column.ColumnLogicalName));
+        Assert.All(
+            pinnedPhysical.Columns,
+            column => Assert.Equal(PhysicalSortDirection.Ascending, column.Direction));
         Assert.Contains(
             physical.Indexes,
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex &&
-                index.IsUnique &&
+                !index.IsUnique &&
+                index.MissingValueBehavior == MissingValueBehavior.Excluded &&
                 index.Columns.Count == 4 &&
                 index.Columns[^1].ColumnLogicalName == "history_workflow_execution_id");
     }

@@ -39,6 +39,18 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\ProcessProbe\Elsa.Persistence.Groundwork.ProcessProbe.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyGroundworkProcessProbeArtifacts" AfterTargets="Build">
+    <RemoveDir Directories="$(TargetDir)GroundworkProcessProbe" />
+    <ItemGroup>
+      <_GroundworkProcessProbeArtifact Include="$(MSBuildProjectDirectory)/../../ProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GroundworkProcessProbeArtifact)"
+          DestinationFiles="@(_GroundworkProcessProbeArtifact->'$(TargetDir)GroundworkProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

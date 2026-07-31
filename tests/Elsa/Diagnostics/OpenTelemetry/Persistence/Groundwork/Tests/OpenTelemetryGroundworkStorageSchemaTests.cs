@@ -45,7 +45,10 @@ public sealed class OpenTelemetryGroundworkStorageSchemaTests
             x => x.Identity == "resources-by-last-seen" && x.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing);
         var resourcePolicy = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(resources.PhysicalStorage.Policy);
         Assert.Contains(resourcePolicy.Definition.Indexes,
-            x => x.LogicalName == OpenTelemetryGroundworkStorageSchema.ByRetentionIndex && x.Columns.Count == 4);
+            x => x.LogicalName == OpenTelemetryGroundworkStorageSchema.ByRetentionIndex && x.Columns.Count == 3);
+        Assert.Contains(resourcePolicy.Definition.Indexes,
+            x => x.LogicalName == $"{OpenTelemetryGroundworkStorageSchema.ByRetentionIndex}-v2" &&
+                 x.Columns.Count == 4);
         var envelope = new DocumentEnvelopeDefinition();
         foreach (var catalog in manifest.StorageUnits.Where(unit =>
                      unit.Identity.Value is CatalogDocuments.ResourceKind or CatalogDocuments.InstrumentKind))

@@ -226,8 +226,12 @@ public sealed class IdentityStorageManifestTests
     {
         var unit = IdentityStorageManifest.Create().StorageUnits.Single(candidate =>
             candidate.Identity.Value == IdentityStorageManifest.IdentityMutationReceiptDocumentKind);
-        var index = Assert.Single(unit.PhysicalStorage!.LogicalIndexes);
         var query = Assert.Single(unit.PhysicalStorage.BoundedQueries);
+        var index = Assert.Single(unit.PhysicalStorage.LogicalIndexes, candidate =>
+            candidate.Identity == query.IndexIdentity);
+        Assert.Contains(unit.PhysicalStorage.LogicalIndexes, candidate =>
+            candidate.Identity == "identity-mutation-receipt-by-expiry");
+        Assert.Equal("identity-mutation-receipt-by-expiry-v2", query.IndexIdentity);
         var table = ExplicitTableDefinition(unit.PhysicalStorage.Policy);
         var expiry = Assert.Single(table.ProjectedColumns);
 

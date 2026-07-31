@@ -125,6 +125,36 @@ public sealed class ActivitiesDesignStorageManifestTests
         }
     }
 
+    [Fact]
+    public void Fork_candidate_retention_preserves_the_preview95_index_shape_and_routes_to_v2()
+    {
+        var unit = ActivitiesDesignStorageManifest.Create().StorageUnits.Single(x =>
+            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var legacyIdentity = ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionIndex;
+        var v2Identity = $"{legacyIdentity}-v2";
+        var legacyIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == legacyIdentity);
+        var v2Index = Assert.Single(storage.LogicalIndexes, index => index.Identity == v2Identity);
+        var legacyPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == legacyIdentity);
+        var v2PhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == v2Identity);
+        var query = Assert.Single(storage.BoundedQueries, candidate =>
+            candidate.Identity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery);
+
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField],
+            legacyIndex.Fields.Select(field => field.Path));
+        Assert.Equal(
+            [
+                ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
+                ActivitiesDesignStorageManifest.EntityIdField
+            ],
+            v2Index.Fields.Select(field => field.Path));
+        Assert.DoesNotContain(legacyPhysicalIndex.Columns, column => column.ColumnLogicalName == "entity_id");
+        Assert.Equal("entity_id", v2PhysicalIndex.Columns.Last().ColumnLogicalName);
+        Assert.Equal(v2Identity, query.IndexIdentity);
+    }
+
     private static void AssertUnit(
         global::Groundwork.Core.Manifests.StorageManifest manifest,
         string documentKind,
@@ -136,19 +166,26 @@ public sealed class ActivitiesDesignStorageManifestTests
 
         foreach (var (indexIdentity, queryIdentity, path) in expectedRoutes)
         {
-            var index = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
+            var versionedIndexIdentity = $"{indexIdentity}-v2";
+            var legacyIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
+            var index = Assert.Single(storage.LogicalIndexes, index => index.Identity == versionedIndexIdentity);
+            Assert.Equal([path, ActivitiesDesignStorageManifest.EntityIdField], legacyIndex.Fields.Select(field => field.Path));
             Assert.Equal([path, ActivitiesDesignStorageManifest.EntityIdField], index.Fields.Select(field => field.Path));
             var query = Assert.Single(storage.BoundedQueries, query =>
-                query.Identity == queryIdentity && query.IndexIdentity == indexIdentity);
+                query.Identity == queryIdentity && query.IndexIdentity == versionedIndexIdentity);
             Assert.Equal(
                 [
                     new BoundedQuerySortField(path, PhysicalSortDirection.Ascending),
                     new BoundedQuerySortField(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
                 ],
                 query.SortFields);
-            var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
+            var legacyPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
+            var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == versionedIndexIdentity);
+            Assert.False(legacyIndex.IsUnique);
+            Assert.False(legacyPhysicalIndex.IsUnique);
             Assert.True(index.IsUnique);
             Assert.True(physicalIndex.IsUnique);
+            Assert.Equal("entity_id", legacyPhysicalIndex.Columns.Last().ColumnLogicalName);
             Assert.Equal("entity_id", physicalIndex.Columns.Last().ColumnLogicalName);
         }
     }

@@ -564,8 +564,7 @@ public sealed class ProviderNativePlanTests
                         IdentityStorageManifest.IdentityClaimMappingDocumentKind,
                         IdentityStorageManifest.ListClaimMappingsByProviderQuery,
                         [Equal(IdentityStorageManifest.ProviderLookupKeyField, "provider-key")],
-                        take: 512,
-                        skip: 0),
+                        take: ElsaGroundworkQueryRoutes.MaximumResultCount),
                     Documents(
                         IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
                         IdentityStorageManifest.ListExpiredMutationReceiptsQuery,
@@ -956,7 +955,9 @@ public sealed class ProviderNativePlanTests
                 [
                     Equal(
                         ElsaRuntimeStorageManifest.CollectionField,
-                        ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection)
+                        ElsaRuntimeStorageManifest.WorkflowExecutionStateCollection),
+                    NotEqualNull(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
+                    NotEqualNull(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
                 ],
                 [
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryArtifactIdField),
@@ -1252,6 +1253,9 @@ public sealed class ProviderNativePlanTests
 
     private static DocumentQueryClause Equal(string path, string value) =>
         DocumentQueryClause.Of(DocumentQueryComparison.Equal(path, value));
+
+    private static DocumentQueryClause NotEqualNull(string path) =>
+        DocumentQueryClause.Of(DocumentQueryComparison.NotEqual(path, null));
 
     private static DocumentQueryClause LessThanOrEqual(string path, string value) =>
         DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(path, value));

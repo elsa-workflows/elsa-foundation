@@ -18,6 +18,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 public static class IdentityStorageManifest
 {
     private static readonly DocumentEnvelopeDefinition Envelope = new();
+    private const string AdditiveIndexVersionSuffix = "-v2";
 
     public const int MaxAggregateRelationshipEntries = 512;
     public const string SchemaVersion = "1.0.6";
@@ -210,15 +211,23 @@ public static class IdentityStorageManifest
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTable(documentKind, tableName, indexes, queries)),
                 logicalIndexes: indexes
-                    .Select(index => new LogicalIndexDeclaration(
-                        index.Identity,
-                        index.Fields,
-                        index.ValueKind,
-                        index.IsUnique,
-                        index.MissingValueBehavior))
+                    .SelectMany(index =>
+                    {
+                        var legacy = LogicalIndex(index, index.Identity);
+                        return RequiresAdditiveV2(index, queries)
+                            ? new[] { legacy, LogicalIndex(index, V2(index.Identity)) }
+                            : [legacy];
+                    })
                     .ToArray(),
                 boundedQueries: queries
-                    .Select(query => BoundedQuery(query, indexes.Single(index => index.Identity == query.IndexIdentity)))
+                    .Select(query =>
+                    {
+                        var index = indexes.Single(index => index.Identity == query.IndexIdentity);
+                        return BoundedQuery(
+                            query,
+                            index,
+                            RequiresAdditiveV2(index, queries) ? V2(index.Identity) : index.Identity);
+                    })
                     .ToArray())
         };
     }
@@ -249,13 +258,13 @@ public static class IdentityStorageManifest
             return PhysicalTableDefinition.DedicatedDocumentTable(tableName);
 
         var physicalIndexes = indexes
-            .Select(index =>
+            .SelectMany(index =>
             {
-                var physicalColumns = new List<PhysicalIndexColumnDefinition>
+                var legacyColumns = new List<PhysicalIndexColumnDefinition>
                 {
                     new(Envelope.StorageScopeColumn, 0)
                 };
-                physicalColumns.AddRange(index.Fields.Select((field, order) =>
+                legacyColumns.AddRange(index.Fields.Select((field, order) =>
                     new PhysicalIndexColumnDefinition(field.Path, order + 1)));
 
                 var providerTieBreakPaging = queries
@@ -264,24 +273,35 @@ public static class IdentityStorageManifest
                     .Where(paging => paging is QueryPagingSupport.Cursor or QueryPagingSupport.Offset)
                     .Distinct()
                     .ToArray();
-                if (!index.IsUnique && providerTieBreakPaging.Length == 1)
-                {
-                    physicalColumns.Add(new PhysicalIndexColumnDefinition(
-                        providerTieBreakPaging[0] == QueryPagingSupport.Cursor
-                            ? Envelope.IdLookupKeyColumn
-                            : Envelope.IdComparisonKeyColumn,
-                        physicalColumns.Count));
-                }
-                else if (!index.IsUnique && providerTieBreakPaging.Length > 1)
+                if (!index.IsUnique && providerTieBreakPaging.Length > 1)
                 {
                     throw new InvalidOperationException(
                         $"Identity index '{index.Identity}' cannot mix cursor and offset provider identity tie-breaks.");
                 }
 
-                return new PhysicalIndexDefinition(
+                var legacy = new PhysicalIndexDefinition(
                     index.Identity,
-                    physicalColumns,
+                    legacyColumns,
                     missingValueBehavior: index.MissingValueBehavior);
+                if (!RequiresAdditiveV2(index, queries))
+                    return new[] { legacy };
+
+                var versionedColumns = new List<PhysicalIndexColumnDefinition>(legacyColumns)
+                {
+                    new(
+                        providerTieBreakPaging[0] == QueryPagingSupport.Cursor
+                            ? Envelope.IdLookupKeyColumn
+                            : Envelope.IdComparisonKeyColumn,
+                        legacyColumns.Count)
+                };
+                return new[]
+                {
+                    legacy,
+                    new PhysicalIndexDefinition(
+                        V2(index.Identity),
+                        versionedColumns,
+                        missingValueBehavior: index.MissingValueBehavior)
+                };
             })
             .ToArray();
         return PhysicalTableDefinition.PhysicalEntityTable(
@@ -293,12 +313,13 @@ public static class IdentityStorageManifest
 
     private static BoundedQueryDeclaration BoundedQuery(
         PortableQueryDeclaration query,
-        IndexDeclaration index)
+        IndexDeclaration index,
+        string indexIdentity)
     {
         var path = index.Fields.Single().Path;
         return new BoundedQueryDeclaration(
             query.Identity,
-            query.IndexIdentity,
+            indexIdentity,
             query.Operations,
             query.SortSupport,
             query.PagingSupport,
@@ -308,6 +329,18 @@ public static class IdentityStorageManifest
                 : [new BoundedQuerySortField(path, PhysicalSortDirection.Ascending)],
             predicateFields: [new BoundedQueryPredicateField(path, query.Operations)]);
     }
+
+    private static LogicalIndexDeclaration LogicalIndex(IndexDeclaration index, string identity) =>
+        new(identity, index.Fields, index.ValueKind, index.IsUnique, index.MissingValueBehavior);
+
+    private static bool RequiresAdditiveV2(
+        IndexDeclaration index,
+        IReadOnlyCollection<PortableQueryDeclaration> queries) =>
+        !index.IsUnique && queries.Any(query =>
+            query.IndexIdentity == index.Identity &&
+            query.PagingSupport is QueryPagingSupport.Cursor or QueryPagingSupport.Offset);
+
+    private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";
 
     private static PortableQueryDeclaration Query(string name, string indexName) => new(
         name,

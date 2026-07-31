@@ -18,8 +18,8 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    private const string PendingTargetFingerprint = "25f0bd01e2f95e0f2f8b16dae8acef44e640fce985b322883431d6d81d6c11c0";
-    private const string PendingPlanFingerprint = "0669a2f12c1db43979e40259eb68213fe8b7397583c6f5a4595a38cbe7d38ad5";
+    private const string PendingTargetFingerprint = "8e475dc3097262805b2913ba9ecab8f4447129c1d5525b0e81aea3aff2b04b97";
+    private const string PendingPlanFingerprint = "81b67c2ff3588bea311e2098286e7ee93b3be6c94c502560f2953837b96e9535";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
@@ -94,8 +94,12 @@ public sealed class GroundworkTargetBaselineTests
         // unaccepted physical target and plan fingerprint drift from the accepted preview.81 values. Pin the
         // observed drift without accepting it as evidence; the exact-source publication work unit must ratify
         // it before enabling evidence output.
-        Assert.Equal(PendingTargetFingerprint, telemetrySnapshot.TargetFingerprint);
-        Assert.Equal(PendingPlanFingerprint, telemetrySnapshot.PlanFingerprint);
+        Assert.True(
+            StringComparer.Ordinal.Equals(PendingTargetFingerprint, telemetrySnapshot.TargetFingerprint),
+            $"Pending target fingerprint mismatch. Expected: {PendingTargetFingerprint}; Actual: {telemetrySnapshot.TargetFingerprint}");
+        Assert.True(
+            StringComparer.Ordinal.Equals(PendingPlanFingerprint, telemetrySnapshot.PlanFingerprint),
+            $"Pending plan fingerprint mismatch. Expected: {PendingPlanFingerprint}; Actual: {telemetrySnapshot.PlanFingerprint}");
         Assert.NotEqual(AcceptedTargetFingerprint, telemetrySnapshot.TargetFingerprint);
         Assert.NotEqual(AcceptedPlanFingerprint, telemetrySnapshot.PlanFingerprint);
 

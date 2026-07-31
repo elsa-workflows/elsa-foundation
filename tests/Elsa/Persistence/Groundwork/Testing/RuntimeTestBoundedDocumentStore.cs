@@ -97,16 +97,23 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
     {
         var expected = comparison.Values.Single();
         var actual = ReadComparable(document, comparison.Path);
-        if (comparison.Operator == QueryComparisonOperator.Equal && expected is null)
-            return actual is null;
         if (expected is null)
-            throw new InvalidOperationException("Only Runtime test equality comparisons may use null.");
+        {
+            return comparison.Operator switch
+            {
+                QueryComparisonOperator.Equal => actual is null,
+                QueryComparisonOperator.NotEqual => actual is not null,
+                _ => throw new InvalidOperationException(
+                    "Only Runtime test equality and inequality comparisons may use null.")
+            };
+        }
         if (actual is null)
             return false;
         var compared = StringComparer.Ordinal.Compare(actual, NormalizeComparable(comparison.Path, expected));
         return comparison.Operator switch
         {
             QueryComparisonOperator.Equal => compared == 0,
+            QueryComparisonOperator.NotEqual => compared != 0,
             QueryComparisonOperator.StartsWith => actual.StartsWith(expected, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => compared > 0,
             QueryComparisonOperator.LessThanOrEqual => compared <= 0,

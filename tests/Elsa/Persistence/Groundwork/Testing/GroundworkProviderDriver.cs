@@ -382,6 +382,28 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
         ResetPhysicalAsync(manifestSources: null, cancellationToken);
 
     public async ValueTask ResetPhysicalAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureInitialized();
+            if (!_clients.IsEmpty)
+                throw new InvalidOperationException("A provider driver cannot reset while client leases are active.");
+            await ResetPhysicalStorageCoreAsync(cancellationToken);
+            await ApplyPhysicalSchemaCoreAsync(source, cancellationToken);
+            _storeMode = StoreMode.Physical;
+            Failures.Reset();
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    public async ValueTask ResetPhysicalAsync(
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
         CancellationToken cancellationToken = default)
     {
@@ -394,6 +416,29 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
             await ResetPhysicalCoreAsync(manifestSources, cancellationToken);
             _storeMode = StoreMode.Physical;
             Failures.Reset();
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Applies a physical schema target to the driver's existing database without resetting it.
+    /// </summary>
+    public async ValueTask ApplyPhysicalSchemaAsync(
+        GroundworkPhysicalSchemaManifestSource source,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        await _lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureInitialized();
+            if (!_clients.IsEmpty)
+                throw new InvalidOperationException("A provider driver cannot apply a physical schema while client leases are active.");
+            await ApplyPhysicalSchemaCoreAsync(source, cancellationToken);
+            _storeMode = StoreMode.Physical;
         }
         finally
         {
@@ -667,6 +712,10 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     protected abstract ValueTask ResetCoreAsync(CancellationToken cancellationToken);
     protected abstract ValueTask ResetPhysicalCoreAsync(
         IReadOnlyCollection<IGroundworkStorageManifestSource>? manifestSources,
+        CancellationToken cancellationToken);
+    protected abstract ValueTask ResetPhysicalStorageCoreAsync(CancellationToken cancellationToken);
+    protected abstract ValueTask ApplyPhysicalSchemaCoreAsync(
+        GroundworkPhysicalSchemaManifestSource source,
         CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenClientCoreAsync(Guid clientId, CancellationToken cancellationToken);
     protected abstract ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(

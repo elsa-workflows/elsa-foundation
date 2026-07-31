@@ -130,13 +130,39 @@ identity:
 - Secrets reuses the already-enforced `(tenant, normalized name)` uniqueness with status added; and
 - the pinned-artifact route includes the workflow execution ID used as the runtime document ID.
 
+The immutable preview.95 fixtures then caught a proposed runtime shortcut before freeze. Marking the
+existing collection, artifact-ID, and execution-ID projections required would have changed their
+historical nullable definitions and produced `GW-SCHEMA-003` on every provider. The final form keeps
+those projections and the legacy non-unique index byte-for-byte, adds a unique `-v2` index, and adds
+explicit `IS NOT NULL` residual predicates for the artifact and execution IDs. That combination is
+additive, preserves the public offset/latest-per-key contract, and lets SQL Server legally use the
+provider-generated filtered index hint. The exact historical planner passes 4/4 and the isolated SQL
+Server B7 native route passes 1/1 on this form.
+
+OpenIddict has one deliberately different disposition. Its earlier authorization compound index
+would require a 2,048-byte SQL Server key, above the 1,700-byte limit. The immutable preview.95
+fixtures contain no OpenIddict state, and Spec 106 defines this unreleased adapter as greenfield with
+no data-migration obligation, so the impossible unmaterialized authorization declaration is removed
+instead of preserved. The current subject route uses the bounded
+`subject + id_lookup_key` cursor form; the safe token legacy compound index remains alongside its v2
+route. Any manually materialized old authorization schema is not auto-upgradeable and is outside this
+greenfield contract. OpenIddict manifest tests pass 36/36 and its complete four-provider capability
+probe passes 16/16.
+
 The provider-native full-reference validator now passes. Root verification also passed Activities
-Design Groundwork **73/73**, temporal projections **12/12**, Workflow Design Groundwork **96/96**,
-Secrets **88/88**, runtime Groundwork **739/739**, and Unified Host **62/62**. The SQLite cold-start
-schema-operation baseline is **933**, and the continuation-cycle fixture now returns non-empty pages
-so it exercises the repeated-token guard rather than the earlier empty-page guard. The candidate
-remains draft until the originating correctness reviewer and the other two exact-range reviewers
-inspect the remediated commit.
+Design Groundwork **74/74**, temporal projections **12/12**, Workflow Design Groundwork **97/97**,
+Secrets **88/88**, runtime Groundwork **739/739**, and Unified Host **70/70**. The SQLite cold-start
+schema-operation baseline is **963**, and the continuation-cycle fixture now returns non-empty pages
+so it exercises the repeated-token guard rather than the earlier empty-page guard. The complete
+conformance project passes **239 passed / 18 intentionally skipped / 0 failed (257 total)**, including
+both enabled SQLite acceptance-scale native-plan suites. The design baseline retains the accepted
+preview.81 fingerprints and pins preview.102's still-unaccepted drift as target
+`8e475dc3097262805b2913ba9ecab8f4447129c1d5525b0e81aea3aff2b04b97` and plan
+`81b67c2ff3588bea311e2098286e7ee93b3be6c94c502560f2953837b96e9535`; its exact focused test
+passes 1/1 without enabling evidence output. The full architecture suite passes **351/351** and the
+Release reference-server build succeeds with **0 errors** (24 pre-existing legacy/obsolete API
+warnings). The candidate remains draft until the originating correctness reviewer and the other two
+exact-range reviewers inspect the remediated commit.
 
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.

@@ -121,6 +121,27 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
+    public void Search_reuses_the_name_v2_index_without_a_duplicate_mongodb_key_shape()
+    {
+        var unit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(candidate =>
+            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var search = Assert.Single(storage.BoundedQueries, query =>
+            query.Identity == WorkflowsDesignStorageManifest.SearchDefinitionsQuery);
+
+        Assert.Equal("definition-by-name-v2", search.IndexIdentity);
+        Assert.DoesNotContain(storage.LogicalIndexes, index =>
+            index.Identity == "definition-by-search-v2");
+        Assert.DoesNotContain(table.Indexes, index =>
+            index.LogicalName == "definition-by-search-v2");
+        Assert.Contains(storage.LogicalIndexes, index =>
+            index.Identity == "definition-by-search" && !index.IsUnique);
+        Assert.Contains(table.Indexes, index =>
+            index.LogicalName == "definition-by-search" && !index.IsUnique);
+    }
+
+    [Fact]
     public void Exact_version_route_enforces_uniqueness_on_definition_and_semver_sort_key_only()
     {
         var versionUnit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(unit =>

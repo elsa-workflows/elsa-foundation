@@ -51,8 +51,8 @@ public sealed class IamNormalizedLookupWorkload
             ["find-user-by-normalized-name"] = 1,
             ["find-user-by-normalized-email"] = 2,
             ["find-role-by-normalized-name"] = 1,
-            ["list-user-roles"] = 512,
-            ["list-role-users"] = 512
+            ["list-user-roles"] = 500,
+            ["list-role-users"] = 500
         };
 
     public static IamNormalizedLookupInputDefinition InputDefinition { get; } = new(Seed, 1, 1, 16, 1, 1, 0, OperationSequence);

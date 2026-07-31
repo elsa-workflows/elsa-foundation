@@ -17,6 +17,7 @@ public static class SecretsStorageManifest
     public const string SecretsTable = "secrets";
     public const string SecretByNameIndex = "secret-by-name";
     public const string SecretFilteredListIndex = "secret-filtered-list";
+    public const string SecretFilteredListV2Index = "secret-filtered-list-v2";
     public const string ListFilteredQuery = "list-filtered";
     public const string ListUnfilteredQuery = "list-unfiltered";
     public const string SearchFilteredQuery = "search-filtered";
@@ -49,6 +50,16 @@ public static class SecretsStorageManifest
             MissingValueBehavior.Excluded);
         var filteredListIndex = new LogicalIndexDeclaration(
             SecretFilteredListIndex,
+            [
+                new IndexField(TenantIdField),
+                new IndexField(StatusField),
+                new IndexField(NormalizedNameField)
+            ],
+            IndexValueKind.Keyword,
+            isUnique: false,
+            MissingValueBehavior.IncludedAsNull);
+        var filteredListV2Index = new LogicalIndexDeclaration(
+            SecretFilteredListV2Index,
             [
                 new IndexField(TenantIdField),
                 new IndexField(StatusField),
@@ -104,13 +115,23 @@ public static class SecretsStorageManifest
                         new PhysicalIndexColumnDefinition(StatusField, 2),
                         new PhysicalIndexColumnDefinition(NormalizedNameField, 3)
                     ],
+                    isUnique: false,
+                    missingValueBehavior: MissingValueBehavior.IncludedAsNull),
+                new PhysicalIndexDefinition(
+                    filteredListV2Index.Identity,
+                    [
+                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition(TenantIdField, 1),
+                        new PhysicalIndexColumnDefinition(StatusField, 2),
+                        new PhysicalIndexColumnDefinition(NormalizedNameField, 3)
+                    ],
                     isUnique: true,
                     missingValueBehavior: MissingValueBehavior.IncludedAsNull)
             ]);
         var listRoute = FilterRoute(
             ListFilteredQuery,
             BoundedQueryExecutionClass.ScaleBearing,
-            filteredListIndex.Identity,
+            filteredListV2Index.Identity,
             statusIsIndexed: true);
         var unfilteredListRoute = FilterRoute(
             ListUnfilteredQuery,
@@ -165,7 +186,7 @@ public static class SecretsStorageManifest
             PhysicalStorage = new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
-                [nameIndex, collectionIndex, filteredListIndex],
+                [nameIndex, collectionIndex, filteredListIndex, filteredListV2Index],
                 [listRoute, unfilteredListRoute, searchRoute, legacyBackfillRoute])
         };
 

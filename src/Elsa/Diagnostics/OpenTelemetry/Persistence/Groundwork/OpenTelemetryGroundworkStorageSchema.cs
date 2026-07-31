@@ -14,6 +14,7 @@ public static class OpenTelemetryGroundworkStorageSchema
 {
     public const string SchemaVersion = "1.0.0";
     public const string OperationLedgerKind = "openTelemetryCaptureOperation";
+    private const string AdditiveIndexVersionSuffix = "-v2";
 
     public const string ByResourceStatusIndex = "by-resource-status";
     public const string ByResourceServiceIndex = "by-resource-service";
@@ -131,7 +132,33 @@ public static class OpenTelemetryGroundworkStorageSchema
         LogicalIndexDeclaration[] logicalIndexes,
         BoundedQueryDeclaration[] queries)
     {
-        var indexes = logicalIndexes.Select(index => PhysicalIndex(index, queries)).ToArray();
+        var changedIndexes = logicalIndexes
+            .Where(index => queries.Any(query =>
+                query.ExecutionClass == BoundedQueryExecutionClass.ScaleBearing &&
+                StringComparer.Ordinal.Equals(query.IndexIdentity, index.Identity)))
+            .Select(index => index.Identity)
+            .ToHashSet(StringComparer.Ordinal);
+        var versionedLogicalIndexes = logicalIndexes
+            .SelectMany(index => changedIndexes.Contains(index.Identity)
+                ? new[] { index, CloneLogicalIndex(index, V2(index.Identity)) }
+                : [index])
+            .ToArray();
+        var versionedQueries = queries
+            .Select(query => changedIndexes.Contains(query.IndexIdentity)
+                ? CloneQuery(query, V2(query.IndexIdentity))
+                : query)
+            .ToArray();
+        var indexes = logicalIndexes
+            .SelectMany(index => changedIndexes.Contains(index.Identity)
+                ? new[]
+                {
+                    LegacyPhysicalIndex(index),
+                    PhysicalIndex(
+                        CloneLogicalIndex(index, V2(index.Identity)),
+                        versionedQueries)
+                }
+                : [LegacyPhysicalIndex(index)])
+            .ToArray();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             tableName,
             columns,
@@ -145,8 +172,8 @@ public static class OpenTelemetryGroundworkStorageSchema
             PhysicalStorage = new(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
-                logicalIndexes,
-                queries)
+                versionedLogicalIndexes,
+                versionedQueries)
         };
     }
 
@@ -452,6 +479,55 @@ public static class OpenTelemetryGroundworkStorageSchema
             index.Identity,
             columns);
     }
+
+    private static PhysicalIndexDefinition LegacyPhysicalIndex(LogicalIndexDeclaration index)
+    {
+        var paths = index.Fields.Select(field => Path(field.Path)).ToArray();
+        return new(
+            index.Identity,
+            [
+                new PhysicalIndexColumnDefinition("storage_scope", 0),
+                .. paths.Select((path, position) =>
+                    new PhysicalIndexColumnDefinition(
+                        path,
+                        position + 1,
+                        index.Identity == ByResourceServiceIndex && position > 0
+                            ? PhysicalSortDirection.Descending
+                            : PhysicalSortDirection.Ascending))
+            ]);
+    }
+
+    private static LogicalIndexDeclaration CloneLogicalIndex(
+        LogicalIndexDeclaration index,
+        string identity) =>
+        new(
+            identity,
+            index.Fields,
+            index.ValueKind,
+            index.IsUnique,
+            index.MissingValueBehavior);
+
+    private static BoundedQueryDeclaration CloneQuery(
+        BoundedQueryDeclaration query,
+        string indexIdentity) =>
+        new(
+            query.Identity,
+            indexIdentity,
+            query.Operations,
+            query.SortSupport,
+            query.PagingSupport,
+            query.ExecutionClass,
+            query.SupportsDisjunction,
+            query.SupportsTotalCount,
+            query.SortFields,
+            query.PredicateBindingMode == BoundedQueryPredicateBindingMode.ImplicitFirstLogicalIndexField
+                ? null
+                : query.PredicateFields,
+            query.ResultOperations,
+            query.LatestPerKeyPath,
+            query.ResidualPredicateFields);
+
+    private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";
 
     private static string Path(string path) => path.TrimStart('/');
 }
