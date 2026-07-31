@@ -257,6 +257,16 @@ source projects, not warnings introduced by the tool or this integration fix. Ex
 format checks and `git diff --check` pass. The replay harness and immutable fixtures did not change,
 so the already-recorded clean Darwin/Noble fixture replays remain the applicable evidence.
 
+Three adversarial read-only reviewers inspected exact replacement range
+`ca818b649d85c5167e2222c0ec534e215153d473..025206262d426849995a72d63e571d68225490d9`.
+They were briefed to assume the hosted-CI remediation and its evidence had been green-washed.
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | Solution restore now covers the evidence tool without excluding it from the all-project EF scanner. Both SQLite tests physicalize the production Identity manifest, open distinct physical clients, require the provider-created bounded store, and leave unexpected transaction/runtime exceptions uncaught. The reviewer found no blocker, P1, or P2. | PASS |
+| Evidence integrity | The hosted failure diagnoses, solution membership, production physical-route use, deleted adapters, narrowed exception outcomes, test counts, and replay/nonclaim boundaries match the committed implementation and retained artifacts. The first frozen head left its generated-map manifest stale after source/test/spec inputs changed; the authorized full generator now records input head `5a42fb06c`, fingerprint `0a423d0f…`, and unchanged counts. The originating reviewer re-inspected `025206262` and returned PASS. | PASS |
+| Scope/test preservation | The protected solution edit is limited to the restore-required evidence tool. Only duplicated legacy test adapters were deleted; no test method or skip, EF oracle, package, shell, fixture, replay, coverage-ledger row, verdict, status, task, or provider-evidence surface changed. The same stale-map finding was remediated at `025206262`; the originating reviewer confirmed both worktrees clean and returned PASS. | PASS |
+
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
