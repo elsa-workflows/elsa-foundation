@@ -234,6 +234,29 @@ Root then reran both complete clean replays at `1f2f6ea4`: host/Darwin and diges
 restored into isolated caches and reproduced all four canonical fixture payloads. The lane and main
 worktrees were clean, and remote `main` remained the reviewed base `ca818b649…`.
 
+Hosted checks on the later record-sealed head
+`9ff56e9eb79178f9765a71632bafe8596e6034e7` proved the cross-runtime fixture remediation:
+Unified Host passed **70/70** on Linux. The same Build & test job then exposed two independent
+integration defects. First, the EF surface ratchet scans every repository project and correctly
+refused an incomplete restore because `tools/evidence/Preview95SchemaFixtureReproducer.csproj` was
+not a member of the restored `Elsa.Server.slnx`; the solution now restores that evidence tool rather
+than weakening or excluding it from the scanner. Second, the SQLite Identity reopen test still
+adapted the legacy `IDocumentStore` API and attempted to resolve a new physical `-v2` route through
+that legacy surface. The reopen and concurrency tests now initialize the real Identity physical
+schema, open physical provider clients, and require the provider's `BoundedDocumentStore`. Their
+duplicated legacy query adapters were deleted. The link/delete race also no longer treats every
+`InvalidOperationException` as a valid loser: it accepts only the documented missing-user,
+`NotFound`, or `ConcurrencyConflict` outcomes.
+
+Root verification of the replacement passed the EF surface ratchet **1/1**, the SQLite reopen test
+**1/1**, the 100-iteration SQLite Identity race **1/1**, the complete ASP.NET Core Identity
+Groundwork suite **133/133**, and the complete architecture suite **351/351**. The evidence tool is
+present in `dotnet sln Elsa.Server.slnx list`, restores through that solution, and builds in Release
+with **0 errors**; its ten warnings are pre-existing obsolete-API warnings in referenced production
+source projects, not warnings introduced by the tool or this integration fix. Exact changed-file
+format checks and `git diff --check` pass. The replay harness and immutable fixtures did not change,
+so the already-recorded clean Darwin/Noble fixture replays remain the applicable evidence.
+
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
