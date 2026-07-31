@@ -417,6 +417,99 @@ and returned **PASS**. `git diff --check` is clean; the auxiliary documentation 
 after a targeted restore, with existing Groundwork migration warnings and no container or provider
 execution.
 
+## Preview.102 provider remediation checkpoint (2026-07-31)
+
+The preview.102 import changed cursor paging evidence in two truthful ways.
+Provider-native page plans request one lookahead row (`Take + 1`) so the runtime
+can emit a continuation while returning at most `Take`, and cursor-only
+retention routes reject the former offset-capacity probe. The current
+`DiagnosticsBoundedExecutionTests` therefore require an exact native `Page`
+command, its one-row lookahead, and provider-applied order. Capacity evidence
+inspects the production first cursor page at the real 1,000-row retention
+bound.
+
+The same recertification exposed one nondeterministic PostgreSQL catalog race.
+Groundwork's unconditional upsert may report `ConcurrencyConflict` when a
+concurrent equivalent writer wins. The adapter now reads back that winner and
+accepts it only when document kind, schema version, and canonical content are
+byte-exact. A divergent winner is still translated as unavailable and is not
+retried or overwritten.
+
+Root verification on branch base Elsa `d16590059a897e83c7098ab20c4909c97602b9c4`
+and Groundwork package family `0.0.1-preview.102` was rerun on the clean exact
+implementation head `6e1b4e1a43740c36cbce724d3d5d5d2b9b37fdc0`. The retained
+[preview.102 evidence manifest](evidence/preview102-provider-remediation-results.json)
+binds the implementation tree, configuration and source hashes, resolved
+package/tool family, provider topology, exact commands, totals, skips, and
+retained sanitized result artifacts. The following is abbreviated rerun
+guidance, not the count-producing command receipt; the manifest retains the
+full commands including result capture:
+
+```bash
+dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj \
+  --no-restore \
+  --filter 'FullyQualifiedName~Equivalent_catalog_winner_reconciles_an_ambiguous_concurrency_conflict_without_rewriting|FullyQualifiedName~Divergent_catalog_winner_remains_a_conflict_and_is_not_overwritten' \
+  --logger 'console;verbosity=minimal'
+# 2 passed
+
+dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj \
+  --no-build \
+  --logger 'console;verbosity=minimal'
+# 78 passed
+
+dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj \
+  --no-restore \
+  --filter 'FullyQualifiedName~DiagnosticsGroundworkProviderConformanceTests|FullyQualifiedName~DiagnosticsScopeAndRetentionConformanceTests|FullyQualifiedName~DiagnosticsBoundedExecutionTests|FullyQualifiedName~DiagnosticsProviderLifecycleSmokeTests' \
+  --logger 'console;verbosity=minimal'
+# 54 passed
+```
+
+The exact real-provider concurrent-writer theory passed 4/4 across SQLite, SQL
+Server, PostgreSQL, and MongoDB, proving the public concurrent-write behavior.
+It does not prove that any provider returned `ConcurrencyConflict` or entered
+the new reconciliation branch; that branch is proven by the two deterministic
+fault-injection tests. The complete 54-case rerun then passed with zero failures
+or skips.
+
+The initial exact-range review blocked this checkpoint twice. Correctness found
+that the provider-order assertion required only a nonempty sequence, so a
+reversed or incomplete cursor order could pass. Implementation head `6e1b4e1a`
+now compares every provider-applied field identifier, direction, and
+identity-tie-break marker to the admitted plan. Evidence integrity found that
+the preview.102 counts and four-provider claim existed only in prose; the
+hash-bound manifest above now retains their exact-source receipt. A second
+evidence review rejected hashes whose TRX preimages remained only under
+`/tmp`; the final receipt retains sanitized artifacts with every test
+name/outcome/duration and summary counter, along with the sanitized package
+resolution and actual tool output.
+
+Three independent reviewers then re-verified the complete remediated range
+`d16590059a897e83c7098ab20c4909c97602b9c4..e3cce22fde297252e344eb2d1069c233e1ecbb70`
+read-only and returned **PASS**:
+
+- Correctness/mechanism confirmed exact planned-versus-provider order,
+  fail-closed equivalent-winner reconciliation, divergent-winner preservation,
+  and the narrowed separation between deterministic branch proof and
+  four-provider public behavior.
+- Evidence integrity reproduced every manifest-linked artifact hash and
+  counter, the 78/78, 2/2, 4/4, and 54/54 inventories, all four provider case
+  names, package/tool resolution, source/configuration hashes, topology, and
+  nonclaims.
+- Scope/test preservation found no deleted, skipped, or weakened test; no
+  secret, connection value, host name, user path, or container identifier in
+  retained artifacts; and no package, solution, shell, ledger, EF,
+  performance, or final-removal edit.
+
+The required Luna reviewer model was unavailable; all three reviews used
+GPT-5.6 Terra High as the documented delegate fallback. The next commit records
+only these final dispositions. Before merge, the same reviewers re-verify that
+record-only head so the durable account cannot diverge from the candidate.
+
+This checkpoint repairs current-family correctness and native-plan evidence
+only. It does not import a #646 performance verdict, delete either diagnostics
+EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
+or authorize #642 closure.
+
 ## Final dependency audit
 
 ```bash

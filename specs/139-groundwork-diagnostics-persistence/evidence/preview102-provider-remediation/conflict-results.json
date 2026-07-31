@@ -1,0 +1,40 @@
+{
+  "artifactKind": "sanitized-vstest-results",
+  "results": [
+    {
+      "duration": "00:00:00.1076091",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Divergent_catalog_winner_remains_a_conflict_and_is_not_overwritten"
+    },
+    {
+      "duration": "00:00:00.7492795",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.GroundworkOpenTelemetryCatalogTests.Equivalent_catalog_winner_reconciles_an_ambiguous_concurrency_conflict_without_rewriting"
+    }
+  ],
+  "run": {
+    "counters": {
+      "aborted": 0,
+      "completed": 0,
+      "disconnected": 0,
+      "error": 0,
+      "executed": 2,
+      "failed": 0,
+      "inProgress": 0,
+      "inconclusive": 0,
+      "notExecuted": 0,
+      "notRunnable": 0,
+      "passed": 2,
+      "passedButRunAborted": 0,
+      "pending": 0,
+      "timeout": 0,
+      "total": 2,
+      "warning": 0
+    },
+    "elapsed": null,
+    "outcome": "Completed"
+  },
+  "sanitization": "Retains every test name, outcome, duration, run counters, outcome, and elapsed interval; removes run/test identifiers, host names, local paths, timestamps, stdout, container identifiers, and provider bootstrap output.",
+  "schemaVersion": 1,
+  "sourceTrxSha256": "19f7bff159274a83d33d3f63f2a0d6b0574fe16887f0cd5d22727840e61017d5"
+}

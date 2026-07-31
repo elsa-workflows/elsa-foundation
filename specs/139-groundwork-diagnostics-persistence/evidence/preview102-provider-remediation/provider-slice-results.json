@@ -1,0 +1,300 @@
+{
+  "artifactKind": "sanitized-vstest-results",
+  "results": [
+    {
+      "duration": "00:00:02.5697259",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsBoundedExecutionTests.All_scale_bearing_diagnostic_record_and_catalog_routes_expose_native_bounded_plans(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.9067975",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsBoundedExecutionTests.All_scale_bearing_diagnostic_record_and_catalog_routes_expose_native_bounded_plans(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:19.4014655",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsBoundedExecutionTests.All_scale_bearing_diagnostic_record_and_catalog_routes_expose_native_bounded_plans(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.2036113",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsBoundedExecutionTests.All_scale_bearing_diagnostic_record_and_catalog_routes_expose_native_bounded_plans(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.0065110",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsBoundedExecutionTests.Missing_sqlite_diagnostic_schema_is_rejected_without_materialization"
+    },
+    {
+      "duration": "00:00:01.5649832",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.9415265",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:07.0809568",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.1335844",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Catalog_identity_uses_the_provider_unicode_case_policy_across_collision_restart_retention_and_scopes(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.9507958",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.5042027",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:07.4395986",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0925707",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_queries_reduce_the_configured_newest_raw_window_before_filters(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.8777908",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_union_accepts_valid_values_observed_before_retention(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.9367121",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_union_accepts_valid_values_observed_before_retention(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:14.4256374",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_union_accepts_valid_values_observed_before_retention(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.1382940",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Grouped_trace_union_accepts_valid_values_observed_before_retention(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:02.4579968",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_catalogs_records_and_counts_survive_restart(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.8399068",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_catalogs_records_and_counts_survive_restart(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:06.7238853",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_catalogs_records_and_counts_survive_restart(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0986173",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_catalogs_records_and_counts_survive_restart(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:02.0401497",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.7636729",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:07.8080653",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.1599571",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.OpenTelemetry_operation_identity_and_concurrent_writers_match_across_providers(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.4216640",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.1124222",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:07.5364432",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0193376",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Preview81_trace_definition_fails_closed_and_preview86_requires_fresh_unreleased_storage(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:01.7881069",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Query_filters_ordering_limits_and_catalog_capacity_match_across_providers(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:01.1756580",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Query_filters_ordering_limits_and_catalog_capacity_match_across_providers(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:27.8480101",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Query_filters_ordering_limits_and_catalog_capacity_match_across_providers(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.2165815",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Query_filters_ordering_limits_and_catalog_capacity_match_across_providers(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:01.1195419",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.6771790",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:23.6490054",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.1937176",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Repeated_trace_fragments_reduce_before_filters_ordering_take_continuation_and_restart(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.3802073",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_commit_cursor_and_high_water_survive_restart(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.1765475",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_commit_cursor_and_high_water_survive_restart(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:03.7652159",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_commit_cursor_and_high_water_survive_restart(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0070395",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_commit_cursor_and_high_water_survive_restart(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:00.3789091",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_replay_retry_and_failure_semantics_match_across_providers(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.1619058",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_replay_retry_and_failure_semantics_match_across_providers(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:04.3449039",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_replay_retry_and_failure_semantics_match_across_providers(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0786020",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsGroundworkProviderConformanceTests.Structured_log_replay_retry_and_failure_semantics_match_across_providers(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:03.3401389",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsProviderLifecycleSmokeTests.Real_fixture_creates_isolated_ready_leases_for_all_four_providers"
+    },
+    {
+      "duration": "00:00:00.2969283",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Structured_log_retention_never_observes_or_mutates_another_scope(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.0932697",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Structured_log_retention_never_observes_or_mutates_another_scope(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:00.6357224",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Structured_log_retention_never_observes_or_mutates_another_scope(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.0097281",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Structured_log_retention_never_observes_or_mutates_another_scope(providerKind: Sqlite)"
+    },
+    {
+      "duration": "00:00:01.8538706",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Telemetry_retention_never_observes_or_mutates_another_scope(providerKind: MongoDb)"
+    },
+    {
+      "duration": "00:00:00.7421913",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Telemetry_retention_never_observes_or_mutates_another_scope(providerKind: PostgreSql)"
+    },
+    {
+      "duration": "00:00:04.0020171",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Telemetry_retention_never_observes_or_mutates_another_scope(providerKind: SqlServer)"
+    },
+    {
+      "duration": "00:00:00.1577772",
+      "outcome": "Passed",
+      "testName": "Elsa.Diagnostics.Persistence.Tests.DiagnosticsScopeAndRetentionConformanceTests.Telemetry_retention_never_observes_or_mutates_another_scope(providerKind: Sqlite)"
+    }
+  ],
+  "run": {
+    "counters": {
+      "aborted": 0,
+      "completed": 0,
+      "disconnected": 0,
+      "error": 0,
+      "executed": 54,
+      "failed": 0,
+      "inProgress": 0,
+      "inconclusive": 0,
+      "notExecuted": 0,
+      "notRunnable": 0,
+      "passed": 54,
+      "passedButRunAborted": 0,
+      "pending": 0,
+      "timeout": 0,
+      "total": 54,
+      "warning": 0
+    },
+    "elapsed": null,
+    "outcome": "Completed"
+  },
+  "sanitization": "Retains every test name, outcome, duration, run counters, outcome, and elapsed interval; removes run/test identifiers, host names, local paths, timestamps, stdout, container identifiers, and provider bootstrap output.",
+  "schemaVersion": 1,
+  "sourceTrxSha256": "3377082602a3153bd6bac23c2ec9ca1d49e2d6806ec1c19c502d7283385c2f7b"
+}
