@@ -937,8 +937,10 @@
       "inputs": [],
       "outputs": [],
       "outcomes": {
-        "declared": false,
-        "ports": [],
+        "declared": true,
+        "ports": [
+          "Break"
+        ],
         "dynamic": null
       },
       "structure": null
