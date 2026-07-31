@@ -60,7 +60,7 @@ A feature author auditing the publishing domain expects the `.Api` feature to co
 ### Edge Cases
 
 - **Durable persistence override**: a durable persistence provider that overrides the in-memory publication/executable stores MUST continue to override them when the engine feature registers the in-memory defaults (same `TryAdd` seam, now owned by the engine feature).
-- **API-only expectations**: any consumer that (incorrectly) relied on the API feature to register engine *services* must still resolve them — because enabling the API feature transitively enables the engine feature via inheritance/DependsOn.
+- **API-only expectations**: any consumer that relied on the API feature to register engine *services* must still resolve them at runtime — because enabling the API feature transitively enables the engine feature via `DependsOn`. (Unit tests that call the Api feature's `ConfigureServices` *directly* — bypassing shell `DependsOn` resolution — must compose the engine feature too; a §2.21.1-permitted wiring change, see SC-001.)
 - **Command relocation**: any code elsewhere in the repo that sends or handles the publish command must compile against the command's new `Publishing.Core` location.
 - **Test-run and other publishing endpoints**: all publishing endpoints (not just publish) move to the transport layer together; none may be left registering engine services.
 
@@ -68,10 +68,11 @@ A feature author auditing the publishing domain expects the `.Api` feature to co
 
 ### Functional Requirements
 
-- **FR-001**: A new engine feature (ShellFeature `WorkflowsPublishing`, package `Elsa.Workflows.Publishing`) MUST register the entire publish engine currently registered by `WorkflowsPublishingApiFeature` — the executable compiler and its decomposition collaborators, the publication activator / projection reconciler / preflight, the publication slot/record/policy/intent stores and their in-memory defaults, the executable and source-reference stores, the layout/structure services, the deletion guard, and the publish orchestration request/command handlers — **except** endpoint and API-capability registration.
+- **FR-001**: A new engine feature (ShellFeature `WorkflowsPublishing`, package `Elsa.Workflows.Publishing`) MUST register the **auth-free workflow-publish + compile core** currently registered by `WorkflowsPublishingApiFeature` — the executable compiler and its decomposition collaborators, the publication activator / projection reconciler / preflight, the publication slot/record/policy/intent stores and their in-memory defaults, the executable and source-reference stores, the layout/structure services, the deletion guard, and the **workflow**-publish orchestration request/command handler(s) — **except** endpoint and API-capability registration.
+- **FR-001a**: The engine feature MUST NOT depend on any authorization/transport concern. `IActivityPublishingAuthorizationContext`, its HttpContext implementation, and the **activity-draft** publish/test-run services (`ActivityDefinitionPublisher`, `ActivityDraftTestRunService`, and their handlers/endpoints) that consume it MUST remain in the Api/transport layer. (Decoupling those activity-draft services' authorization so they can later move to an engine is a separate follow-up, out of scope here.)
 - **FR-002**: The engine feature MUST NOT register or mount any HTTP endpoint or FastEndpoints transport, and MUST NOT depend on `ApiCapabilities`.
-- **FR-003**: `WorkflowsPublishingApiFeature` MUST inherit the engine feature (§2.5 feature inheritance): call `base.ConfigureServices(services)` and then register ONLY the FastEndpoints endpoints and the API-capability declarations/sources.
-- **FR-004**: The publish orchestration handler(s) (e.g. the publish request/command handler) MUST live in the engine feature's package. API endpoints MUST become pure senders that dispatch a mediator command and contain no orchestration logic (Variant 2).
+- **FR-003**: `WorkflowsPublishingApiFeature` MUST keep its `FastEndpointsFeatureBase` base and obtain the engine via composition, not inheritance: declare `DependsOn WorkflowsPublishing` (framework §2.11) so the shell activates the engine feature, and in its own `ConfigureServices` register ONLY the FastEndpoints endpoints, the API-capability declarations/sources, the HttpContext authorization context, and the activity-draft services.
+- **FR-004**: The **workflow**-publish orchestration handler(s) MUST live in the engine feature's package. The workflow-publish API endpoint MUST become a pure sender that dispatches a mediator command and contains no orchestration logic (Variant 2).
 - **FR-005**: The shared publish command/request contracts MUST live in `Elsa.Workflows.Publishing.Core`, referenced by both the API endpoint (sender) and the engine handler (receiver) so neither feature references the other's implementation package.
 - **FR-006**: The refactor MUST be behaviour-preserving: enabling `WorkflowsPublishingApi` yields an identical endpoint surface and identical publish behaviour to the pre-split baseline, and all existing publishing tests pass without changes to the test cases (§2.21.1).
 - **FR-007**: DependsOn MUST be assigned per responsibility — the engine feature declares `WorkflowsRuntimeTriggers` and `Events`; the API feature declares `WorkflowsPublishing` and `ApiCapabilities`.
@@ -82,7 +83,7 @@ A feature author auditing the publishing domain expects the `.Api` feature to co
 ### Key Entities
 
 - **WorkflowsPublishing feature (engine)**: the new endpoint-free activation unit that owns all publish engine services and the orchestration handler.
-- **WorkflowsPublishingApi feature (transport)**: the slimmed activation unit that inherits the engine and adds only endpoints + API capabilities.
+- **WorkflowsPublishingApi feature (transport)**: the slimmed activation unit that keeps its `FastEndpointsFeatureBase` base, `DependsOn`s the engine, and adds only endpoints + API capabilities + the HttpContext authorization context + activity-draft services.
 - **Publish command/request contract**: the mediator message relocated to `Publishing.Core`, the seam between transport (sender) and engine (handler).
 - **Publish orchestration handler**: the logic that compiles, persists, activates, and retires publications — relocated into the engine feature.
 
@@ -90,16 +91,16 @@ A feature author auditing the publishing domain expects the `.Api` feature to co
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of existing publishing tests pass with zero modifications to the test cases.
+- **SC-001**: All existing publishing tests preserve their subject and objective and pass. Assertions are unchanged; the one permitted change (framework §2.21.1) is test *wiring* — the registration test that today calls the Api feature's `ConfigureServices` directly and asserts engine services must now also compose the engine feature (since engine services arrive via `DependsOn`, not inheritance). Engine-service resolution assertions move to / are shared with the new engine registration test.
 - **SC-002**: A shell composed with the engine feature and without the API feature mounts zero publish HTTP endpoints, yet can publish a version in-process and the resulting workflow is startable.
-- **SC-003**: The API feature's `ConfigureServices` registers only endpoint/transport and API-capability entries on top of the engine base — zero engine-service or orchestration-handler registrations remain in the API feature.
+- **SC-003**: The API feature's `ConfigureServices` registers only endpoints/transport, API-capability sources, the HttpContext authorization context, and the activity-draft publish/test-run services — zero **workflow-publish** engine-service or orchestration-handler registrations remain in the API feature (those come from the engine feature via `DependsOn`).
 - **SC-004**: With the API feature enabled, the public publishing endpoint surface (routes and behaviour) is identical to the pre-split baseline.
 - **SC-005**: Every sender/handler of the relocated publish command compiles and passes against the command's new `Publishing.Core` location, with no orphaned references.
 
 ## Assumptions
 
-- The publish engine services currently registered in `WorkflowsPublishingApiFeature.ConfigureServices` are self-contained and can be moved wholesale into the engine feature's registration; the API feature's remaining registrations are limited to endpoints and API-capability sources.
-- The publish command/request contracts are the only cross-boundary contracts that must relocate to `Publishing.Core`; other publishing contracts already live in `Publishing.Core`.
-- No consumer outside the Publishing domain depends on the *API* feature to register *engine* services (to be confirmed by the planning-phase blast-radius map); consumers that need the engine will enable the engine feature (directly or transitively via the API feature).
-- Durable persistence providers continue to override the in-memory publication/executable stores through the same `TryAdd`/override seam, now owned by the engine feature.
-- The split uses feature inheritance (§2.5) rather than duplicate registration; the API feature remains `public` and non-sealed, and the engine feature exposes `virtual ConfigureServices`.
+- The **workflow-publish + compile** engine services are auth-free and self-contained and move into the engine feature. The **activity-draft** publish/test-run services (`ActivityDefinitionPublisher`, `ActivityDraftTestRunService`) and the authorization context stay in the API feature — they are a separate, transport-authorization-coupled concern (confirmed: no workflow-publish engine service consumes them).
+- The publish command/request contracts (`PublishWorkflow` + `PublishedWorkflowView`) are the only cross-boundary contracts that must relocate to `Publishing.Core`; other publishing contracts already live in `Publishing.Core`.
+- Consumers that need the engine enable it via `DependsOn` (the two downstream design features repoint to `WorkflowsPublishing`); the shell activates the engine whenever the API feature is enabled.
+- Durable persistence providers continue to override the in-memory publication/executable stores through the same `RemoveAll`+`AddScoped` override seam, now owned by the engine feature.
+- The split uses `DependsOn` composition (§2.11), not feature inheritance, between the engine and the API feature: the API feature keeps its `FastEndpointsFeatureBase` base and declares `DependsOn WorkflowsPublishing`. Both feature classes are `public`; the engine feature is non-sealed with `virtual ConfigureServices` per §2.23.3.

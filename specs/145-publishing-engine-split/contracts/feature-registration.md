@@ -4,27 +4,30 @@ The observable "contract" of this refactor is the DI registration surface of the
 
 ## Engine feature — `WorkflowsPublishing`
 
-Composing **only** `WorkflowsPublishing` (no Api) MUST make all of the following resolvable, and MUST mount **zero** HTTP endpoints:
+Composing **only** `WorkflowsPublishing` (no Api) MUST make all of the following resolvable, and MUST mount **zero** HTTP endpoints and register **no** authorization service:
 
 - `IWorkflowExecutableCompiler`, `IWorkflowExecutableStore`, `IWorkflowExecutableSourceReferenceStore`, `IWorkflowExecutableSourceReferenceReader`, `IExecutableActivityTemplateReader`
 - `IPublicationSlotStore`, `IPublicationRecordStore`, `IPublicationPolicyStore`, `IPublicationProjectionIntentStore`, `IPublicationPolicyResolver`, `IPublicationPreflightService`, `IPublicationProjectionPreparer`, `IPublicationActivator`
 - `IWorkflowDefinitionVersionLayoutStore` (fallback), `IActivityStructureService`, `IWorkflowDefinitionPermanentDeletionGuard`
-- `IActivityTemplateProviderCompilerRegistry`, `IActivityTemplateDependencyDiscovererRegistry`, `IActivityTemplateCompiler`, `IActivityDefinitionPublisher`, `IActivitySourceVersionPublisher`, `IActivityDraftTestRunService`, `IActivityDraftTestRunStore`
-- `IRequestHandler<PublishWorkflow, PublishedWorkflowView>` (the relocated handler) + sibling publish/test-run/slot-lifecycle handlers
+- `IActivityTemplateProviderCompilerRegistry`, `IActivityTemplateDependencyDiscovererRegistry`, `IActivityTemplateCompiler`
+- `IRequestHandler<PublishWorkflow, PublishedWorkflowView>` (the relocated handler) + the workflow test-run / slot-lifecycle / preflight handlers
 - Event handlers for `OnExecutableCompilationCollecting`, `OnExecutableNodeMetadataCollecting`
-- `IActivityPublishingAuthorizationContext` → **neutral default** (engine-only shell)
 - `TimeProvider`
+
+MUST NOT resolve (engine is authorization-free): `IActivityPublishingAuthorizationContext` — absent in an engine-only shell.
 
 Behavioural contract: sending `PublishWorkflow(versionId)` in-process compiles the executable, writes a single **live Published** `WorkflowExecutableSourceReference`, and indexes triggers — identical to the pre-split publish result.
 
 ## Transport feature — `WorkflowsPublishingApi`
 
-Composing `WorkflowsPublishingApi` MUST:
+Composing `WorkflowsPublishingApi` (which `DependsOn WorkflowsPublishing`) MUST, at the **shell** level:
 
-- Resolve **everything** the engine resolves (inherited via `base.ConfigureServices`) — the existing `WorkflowsPublishingApiFeatureTests` presence assertions pass unchanged.
-- Additionally register: `IHttpContextAccessor`; `IActivityPublishingAuthorizationContext` → `HttpContextActivityPublishingAuthorizationContext` (**overrides** the engine's neutral default); the publishing FastEndpoints endpoints; `AddApiCapability(PublishingApiCapabilities.StaticDeclaration)`; `AddApiCapabilitySource<ConversionProfilesCapabilitySource>()`.
+- Resolve everything the engine resolves (the shell activates the engine via `DependsOn`).
+- Additionally register: `IHttpContextAccessor`; `IActivityPublishingAuthorizationContext → HttpContextActivityPublishingAuthorizationContext`; the activity-draft services `ActivityDefinitionPublisher` / `ActivityDraftTestRunService` (+ `IActivityDraftTestRunStore`, cancellation policy); the publishing FastEndpoints endpoints; `AddApiCapability(PublishingApiCapabilities.StaticDeclaration)`; `AddApiCapabilitySource<ConversionProfilesCapabilitySource>()`.
 - Mount the **same** publish/test-run/slot/preflight/inspection endpoints (routes + behaviour) as before the split.
-- Register **zero** engine services in its own `ConfigureServices` body beyond the base call, the HTTP override, endpoints, and capabilities (SC-003).
+- Register **zero workflow-publish engine services** in its own `ConfigureServices` (SC-003) — those come from the engine via `DependsOn`.
+
+> **Direct-`ConfigureServices` note (tests):** calling `new WorkflowsPublishingApiFeature().ConfigureServices(services)` in isolation does **not** run the engine's registration (that is a shell `DependsOn` concern). Tests asserting engine-service resolution must compose the engine feature too — a §2.21.1 wiring change. The Api-only assertions (auth context, activity-draft services, endpoints, capabilities) resolve from the Api feature alone.
 
 ## Relocated mediator contract
 
@@ -40,6 +43,6 @@ public sealed record PublishWorkflow(
 ```
 `PublishedWorkflowView` moves to `Elsa.Workflows.Publishing.Core.Models`. All senders/handlers reference the `Core` location; no reference resolves against the old `Api` namespace (SC-005).
 
-## Replacement-contract rule (framework §2.6.2)
+## Authorization contract (unchanged, Api-owned)
 
-`IActivityPublishingAuthorizationContext` has exactly one active implementation per shell: the engine's neutral default, or the Api's HttpContext impl when Api is composed. The Api override uses `RemoveAll<IActivityPublishingAuthorizationContext>()` + `AddScoped<…, HttpContextActivityPublishingAuthorizationContext>()` — no silent last-write-wins.
+`IActivityPublishingAuthorizationContext` keeps its single implementation `HttpContextActivityPublishingAuthorizationContext`, registered **only** by the Api feature. It is a transport concern; the engine does not participate. No neutral/alternate implementation is introduced by this refactor.

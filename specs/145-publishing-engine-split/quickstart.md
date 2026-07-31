@@ -26,7 +26,7 @@ After literal updates: `GroundworkPersistenceLifetimeTests` (file-path literals 
 New engine registration test (`§2.23.1`) composes **only** `WorkflowsPublishing`:
 
 - Build the `IServiceProvider` from `new WorkflowsPublishingFeature().ConfigureServices(services)`.
-- Assert `IRequestHandler<PublishWorkflow, PublishedWorkflowView>`, `IWorkflowExecutableCompiler`, the publication stores, and the **neutral** `IActivityPublishingAuthorizationContext` all resolve.
+- Assert `IRequestHandler<PublishWorkflow, PublishedWorkflowView>`, `IWorkflowExecutableCompiler`, and the publication stores resolve; assert `IActivityPublishingAuthorizationContext` is **not** registered (engine is authorization-free).
 - Assert **no** FastEndpoints publish endpoints are registered (no `Elsa.Api.FastEndpoints` transport pulled in).
 - (Integration-style, optional) send `PublishWorkflow(versionId)` for a materialised version and assert a single live Published source reference is produced.
 

@@ -20,7 +20,7 @@
 
 - [ ] T001 Create `src/Elsa/Workflows/Publishing/Publishing/Elsa.Workflows.Publishing.csproj` (net10.0) referencing `Publishing.Core`, `Design.Persistence.Core`, `Design.Validations.Core`, `Runtime.Core`, `Locking.Core`, `Events.Core`, `Mediator.Core`, `Tasks.Core` — the engine's dependency envelope (no FastEndpoints, no ApiCapabilities).
 - [ ] T002 Add the new project to `Elsa.Server.slnx` under the `/src/Elsa/Workflows/Publishing/` solution folder (satisfies `ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments`).
-- [ ] T003 Add a `ProjectReference` to `Elsa.Workflows.Publishing` from `src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj` (Api inherits the engine; Server pulls it transitively).
+- [ ] T003 Add a `ProjectReference` to `Elsa.Workflows.Publishing` from `src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj` (Api `DependsOn` the engine and references its types; Server pulls it transitively).
 
 **Checkpoint**: New engine project exists, compiles empty, and is in the solution.
 
@@ -38,19 +38,19 @@
 
 ### Create the engine feature and move the engine into it (FR-001, FR-004)
 
-- [ ] T007 Create `src/Elsa/Workflows/Publishing/Publishing/WorkflowsPublishingFeature.cs` — `[ShellFeature("WorkflowsPublishing")]`, `public`, non-sealed, `public override void ConfigureServices` declared `virtual`-friendly, `DependsOn = { "WorkflowsRuntimeTriggers", "Events" }`.
-- [ ] T008 Move the orchestration handlers `PublishWorkflowRequestHandler`, `PublishActivityDraftRequestHandler`, `StartWorkflowTestRunRequestHandler`, `PublicationSlotLifecycleRequestHandlers`, `RunRuntimeRequirementPreflightRequestHandler`, and the `CollectExecutableCompilation` / `CollectExecutableNodeMetadata` event handlers from `src/Elsa/Workflows/Publishing/Api/Handlers/` to `src/Elsa/Workflows/Publishing/Publishing/Handlers/`.
-- [ ] T009 Move the engine services from `src/Elsa/Workflows/Publishing/Api/Services/` to `src/Elsa/Workflows/Publishing/Publishing/Services/`: the compiler collaborator graph + `WorkflowExecutableCompiler`, template registries/compiler, activity publishers, activity-draft test-run services, projection reconciler/activator/preflight, publication policy resolver/preflight, in-memory publication/executable/snapshot/receipt stores, layout fallback + `DefaultActivityStructureService`, deletion guard, sidecar contexts, `WorkflowPublicationPreflightReader`, `PublicationSnapshotReviewService`.
-- [ ] T010 Move the publish exception types (`PublicationPreflightConflictException`, `PublicationActivationException`, `ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`) to `src/Elsa/Workflows/Publishing/Publishing/Exceptions/` — they stay visible to the endpoint's ProblemDetails catch blocks via the Api→engine reference.
-- [ ] T011 In `WorkflowsPublishingFeature.ConfigureServices`, register every moved engine service (mirroring the ENGINE-classified lines 54–114 of the old Api feature) plus `AddRequestHandlersFrom(GetType().Assembly)`, the two `AddEventHandler<Collect*>` registrations, and `TimeProvider.System`. Do NOT register `AddHttpContextAccessor`, the HttpContext auth impl, endpoints, or API capabilities.
+- [ ] T007 Create `src/Elsa/Workflows/Publishing/Publishing/WorkflowsPublishingFeature.cs` — `[ShellFeature("WorkflowsPublishing")]`, a `public` non-sealed class implementing `IShellFeature` with `public virtual void ConfigureServices(IServiceCollection services)` (overridable per §2.23.3), `DependsOn = { "WorkflowsRuntimeTriggers", "Events" }`. No FastEndpoints/API base.
+- [ ] T008 Move only the **workflow-publish** handlers to `src/Elsa/Workflows/Publishing/Publishing/Handlers/`: `PublishWorkflowRequestHandler`, `StartWorkflowTestRunRequestHandler`, `PublicationSlotLifecycleRequestHandlers`, `RunRuntimeRequirementPreflightRequestHandler`, and the `CollectExecutableCompilation` / `CollectExecutableNodeMetadata` event handlers. **Leave** `PublishActivityDraftRequestHandler` and `ActivityPublicationPreflightHandlers` in `Api/Handlers/` (activity-draft, authorization-coupled — Decision 3).
+- [ ] T009 Move the **auth-free** engine services from `Api/Services/` to `src/Elsa/Workflows/Publishing/Publishing/Services/`: the compiler collaborator graph + `WorkflowExecutableCompiler`, template registries/compiler, projection reconciler/activator/preflight, publication policy resolver/preflight, in-memory publication/executable/snapshot/receipt stores, layout fallback + `DefaultActivityStructureService`, deletion guard, sidecar contexts, `WorkflowPublicationPreflightReader`, `PublicationSnapshotReviewService`. **Do NOT move** `ActivityDefinitionPublisher`, `ActivityDraftTestRunService`, `HttpContextActivityPublishingAuthorizationContext`, or `SourceOwnedActivityVersionPublisher` — they stay in `Api/Services/` (Decision 3/4).
+- [ ] T010 Move the workflow-publish exception types (`PublicationPreflightConflictException`, `PublicationActivationException`, `ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`) to `src/Elsa/Workflows/Publishing/Publishing/Exceptions/` — they stay visible to the endpoint's ProblemDetails catch blocks via the Api→engine reference.
+- [ ] T011 In `WorkflowsPublishingFeature.ConfigureServices`, register every moved auth-free engine service (the ENGINE-classified subset of the old Api feature) plus `AddRequestHandlersFrom(GetType().Assembly)`, the two `AddEventHandler<Collect*>` registrations, and `TimeProvider.System`. Do NOT register `AddHttpContextAccessor`, any authorization context, endpoints, or API capabilities.
 
-### Neutral authorization-context default (FR-003 edge, Decision 3)
+### Authorization stays in Api (Decision 3 — no engine changes)
 
-- [ ] T012 Add `NeutralActivityPublishingAuthorizationContext` (engine-owned, non-HTTP default of `IActivityPublishingAuthorizationContext`, permissive/no-tenant — mirroring the existing test fake `MutableAuthorizationContext`) in `src/Elsa/Workflows/Publishing/Publishing/Services/`, and `TryAddScoped` it in the engine feature so activity-draft engine services resolve in an engine-only shell.
+- [ ] T012 Verify (and keep) in the Api feature: `AddHttpContextAccessor()`, `IActivityPublishingAuthorizationContext → HttpContextActivityPublishingAuthorizationContext`, and the activity-draft services `ActivityDefinitionPublisher` / `ActivityDraftTestRunService` (+ `IActivityDraftTestRunStore`, cancellation policy) + `SourceOwnedActivityVersionPublisher`. Confirm no moved engine service references `IActivityPublishingAuthorizationContext` (engine builds without it). **No neutral default is introduced.**
 
-### Slim the Api feature to transport (FR-002, FR-003, US3 core change)
+### Slim the Api feature to transport + activity-draft (FR-002, FR-003, US3 core change)
 
-- [ ] T013 Rewrite `src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs` to `: WorkflowsPublishingFeature`: call `base.ConfigureServices(services)`, then register ONLY `AddHttpContextAccessor()`, the HttpContext auth override (`RemoveAll<IActivityPublishingAuthorizationContext>()` + `AddScoped<…, HttpContextActivityPublishingAuthorizationContext>()`), the FastEndpoints endpoints (retain `FastEndpointsFeatureBase` in the inheritance chain), `AddApiCapability(PublishingApiCapabilities.StaticDeclaration)`, and `AddApiCapabilitySource<ConversionProfilesCapabilitySource>()`. Set `DependsOn = { "WorkflowsPublishing", "ApiCapabilities" }`.
+- [ ] T013 Edit `src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs` — keep `: FastEndpointsFeatureBase` (unchanged base), set `DependsOn = { "WorkflowsPublishing", "ApiCapabilities" }`, and in `ConfigureServices` keep `base.ConfigureServices(services)` + the FastEndpoints endpoints + `AddApiCapability(PublishingApiCapabilities.StaticDeclaration)` + `AddApiCapabilitySource<ConversionProfilesCapabilitySource>()` + `AddHttpContextAccessor()` + the HttpContext authorization registration + the activity-draft service registrations (from T012). **Remove** every workflow-publish engine-service registration (now supplied by the engine feature via `DependsOn`).
 
 ### Repoint downstream consumers (Decision 5)
 
@@ -64,9 +64,9 @@
 ## Phase 3: User Story 1 — Compose the publish engine without endpoints (P1) 🎯
 
 **Goal**: Prove the engine composes standalone with no HTTP publish endpoints.
-**Independent Test**: `new WorkflowsPublishingFeature().ConfigureServices(services)` → resolve handler/compiler/stores/neutral-auth; assert zero publish endpoints.
+**Independent Test**: `new WorkflowsPublishingFeature().ConfigureServices(services)` → resolve handler/compiler/stores; assert `IActivityPublishingAuthorizationContext` is absent; assert zero publish endpoints.
 
-- [ ] T016 [US1] Create engine registration test (§2.23.1) `tests/Elsa/Workflows/Publishing/Tests/WorkflowsPublishingFeatureTests.cs` (+ `Elsa.Workflows.Publishing.Tests.csproj` referencing the engine project): compose the engine feature alone; assert `IRequestHandler<PublishWorkflow, PublishedWorkflowView>`, `IWorkflowExecutableCompiler`, the publication stores, and the neutral `IActivityPublishingAuthorizationContext` resolve; assert no `Elsa.Api.FastEndpoints` publish endpoint types are registered (SC-002/SC-003).
+- [ ] T016 [US1] Create engine registration test (§2.23.1) `tests/Elsa/Workflows/Publishing/Tests/WorkflowsPublishingFeatureTests.cs` (+ `Elsa.Workflows.Publishing.Tests.csproj` referencing the engine project): compose the engine feature alone; assert `IRequestHandler<PublishWorkflow, PublishedWorkflowView>`, `IWorkflowExecutableCompiler`, and the publication stores resolve; assert `IActivityPublishingAuthorizationContext` is **NOT** registered (engine is authorization-free); assert no `Elsa.Api.FastEndpoints` publish endpoint types are registered (SC-002/SC-003).
 - [ ] T017 [US1] Add the new test project to `Elsa.Server.slnx` (ArchitectureGuard).
 
 **Checkpoint**: Engine-only composition proven headless.
@@ -81,7 +81,8 @@
 - [ ] T018 [US2] Update file-path literals in `tests/Elsa/Architecture/GroundworkPersistenceLifetimeTests.cs:138-140` for `IPublicationProjectionPreparer`/`IPublicationActivator`/`PublicationSnapshotReviewService` to the engine feature file (subject/objective preserved — §2.21.1).
 - [ ] T019 [US2] Extend `tests/Elsa/Workflows/Publishing/Api/Tests/BridgeDependencyDirectionTests.cs:21` to assert the **engine** assembly also honours the forbidden-reference list; extend `tests/Elsa/Architecture/RuntimeExecutionSliceDependencyTests.cs:32` to cover the engine assembly's non-reference to `Runtime.Api`.
 - [ ] T020 [US2] Add an engine `ProjectReference` to `tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj` only if it references the handler/view types directly (else confirm the reference resolves transitively via the Api feature).
-- [ ] T021 [US2] Run `dotnet test` for `Publishing/Api/Tests` and `Publishing/Persistence/Groundwork/Tests`; confirm `WorkflowsPublishingApiFeatureTests` (incl. the `IActivityPublishingAuthorizationContext` presence assert at line 37, now satisfied via the HttpContext override), `PublishWorkflowRequestHandlerTests`, `PublishWorkflowTriggerIndexingTests`, and `PublishingGroundworkLifetimeTests` pass **unchanged**. Repair wiring only — never assertions (SC-001, SC-004).
+- [ ] T021 [US2] Update the **wiring** of `WorkflowsPublishingApiFeatureTests` (§2.21.1, setup-only): its engine-service presence assertions currently rely on a direct `new WorkflowsPublishingApiFeature().ConfigureServices()` call, but engine services now arrive via `DependsOn`. Compose the engine feature alongside the Api feature in the arrange step (or move the engine-service assertions to T016's engine test). The `IActivityPublishingAuthorizationContext` (line 37) and activity-draft presence assertions stay satisfied by the Api feature directly. Preserve every assertion's subject/objective; change only setup.
+- [ ] T021b [US2] Run `dotnet test` for `Publishing/Api/Tests` and `Publishing/Persistence/Groundwork/Tests`; confirm `PublishWorkflowRequestHandlerTests`, `PublishWorkflowTriggerIndexingTests`, `PublishingGroundworkLifetimeTests`, and the re-wired `WorkflowsPublishingApiFeatureTests` pass (assertions unchanged) (SC-001, SC-004).
 
 **Checkpoint**: Behaviour preservation verified.
 
@@ -129,5 +130,5 @@ The MVP is the **atomic split**: Phase 1 + Phase 2 + Phase 4 (existing suite gre
 ## Notes
 
 - Moves (T004–T010) are file relocations + namespace edits, not rewrites — preserve behaviour exactly.
-- The only genuinely-new code is T012 (neutral auth default). Everything else is move + re-register.
+- There is **no genuinely-new code** — T012 only verifies authorization stays in Api; everything else is move + re-register.
 - Commit after each coherent group; keep the working tree buildable at phase checkpoints.
