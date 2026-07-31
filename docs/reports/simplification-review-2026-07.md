@@ -207,19 +207,42 @@ Also `IsPackable=false` × 97 and the `Elsa.Platform.PackageManifest.Generator` 
 Formatting has drifted with it: 18 files tab-indented, 5 collapse the whole `PropertyGroup` onto one
 line, and `Elsa.Server.slnx` mixes `/` and `\` path separators across its 245 entries.
 
-### B2 — `JsonSerializerOptions` reinvented 91 times
+### B2 — `JsonSerializerOptions` repeated 91 times — but **do not merge the wrappers**
 
-`new JsonSerializerOptions(JsonSerializerDefaults.Web)` appears 91× across 84 files, with ~8
-near-identical frozen-options and envelope-versioning wrapper classes. **The duplication is
-self-documented in the code:**
+*Revised after inspection. The first pass of this review called the ~8 frozen-options wrapper classes
+"near-identical" and recommended collapsing them. That was wrong, and the correction is the more
+useful finding.*
 
-- `IdentityGroundworkJson.cs` — *"Mirrors the Secrets Groundwork options"*
-- `GroundworkDesignJson.cs` and `GroundworkActivitiesDesignJson.cs` — both cite *"the same
-  convention the runtime bridge's `GroundworkRuntimeJson` follows"*
+`new JsonSerializerOptions(JsonSerializerDefaults.Web)` does appear 91× across 84 files, and the
+wrappers do cite each other in their own doc comments (`IdentityGroundworkJson`: *"Mirrors the
+Secrets Groundwork options"*; `GroundworkDesignJson` and `GroundworkActivitiesDesignJson` both cite
+*"the same convention the runtime bridge's `GroundworkRuntimeJson` follows"*). Reading them, though,
+they hold **at least three genuinely different converter configurations**:
 
-Each also reimplements its own `Serialize<T>` / `Deserialize<T>(DocumentEnvelope)` / version-parsing
-boilerplate. One factory plus a shared envelope-versioning base in `src/Elsa/Serialization/SystemText/`
-replaces all of it — after checking whether `IPayloadSerializer` already covers part of the job.
+| Wrapper | Configuration |
+|---|---|
+| `GroundworkDesignJson`, `GroundworkActivitiesDesignJson` | Web defaults only |
+| `SecretsGroundworkJson` | Web + `JsonStringEnumConverter` |
+| `IdentityGroundworkJson` | Web + `JsonStringEnumConverter` + `ReadOnlyStringSetJsonConverter` |
+
+Each is a **frozen persistence contract**, not a style choice — `IdentityGroundworkJson`'s own
+comment says freezing the options "keeps the on-disk shape deterministic, which the golden-fixture
+drift test relies on." Merging them onto one options instance would silently change how enums
+serialize for the modules that currently omit the converter: a breaking change to already-persisted
+documents that the type system cannot catch.
+
+The envelope-versioning code around them differs materially too, and is not copy-paste:
+`DistributedGroundworkDocuments` enforces strict schema-version equality and refuses anything else,
+while `PublishingGroundworkDocumentSerialization` carries a per-document-kind version map plus an
+upcaster registry.
+
+**What is actually shared is two lines of construction idiom.** The remaining honest options are a
+factory with explicit opt-in layers (`GroundworkJson.Web()`, `.WithStringEnums()`) that keeps each
+module's contract declared and separate — a small win — or leaving it alone. Either way this is
+**not** a consolidation, and it must not be attempted without running the golden-fixture drift tests.
+
+This is the same shape of trap as C3 below: "these look alike, therefore merge" is the obvious YAGNI
+read, and here the near-identical text encodes deliberately independent contracts.
 
 ### B3 — `AdaptiveIntervalSchedule` exists five times
 
@@ -388,7 +411,7 @@ restorable .NET 10 environment with private-feed access.
 | 2 | Root `.editorconfig` + `EnableNETAnalyzers`/`AnalysisLevel`, warnings-first | C1 | low, build-gated |
 | 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | trivial |
 | 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | low, build-gated |
-| 5 | Shared JSON options factory + envelope-versioning base | B2 | medium, build-gated |
+| 5 | ~~Consolidate the JSON options wrappers~~ — **withdrawn**; they are distinct frozen persistence contracts. At most a layered factory, gated on golden-fixture tests | B2 | do not attempt blind |
 | 6 | Shared base for the four `*.Unified` provider features | B6 | medium, build-gated |
 | 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | high, **build-gated** |
 | 8 | Modernization tail: primary constructors, collection expressions, sync-over-async | C2 | medium, build-gated |
