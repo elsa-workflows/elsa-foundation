@@ -294,7 +294,15 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
                 explanation.Commands,
                 command => command.Kind == PhysicalDocumentQueryCommandKind.Page);
             Assert.Equal(checked(query.Take + 1), page.ProviderAppliedMaximumRows);
-            Assert.NotEmpty(page.ProviderAppliedOrder);
+            Assert.Equal(
+                explanation.Plan.Order.Select(order => (
+                    FieldIdentifier: order.Field.Identifier,
+                    order.Direction,
+                    order.IsIdentityTieBreak)),
+                page.ProviderAppliedOrder.Select(order => (
+                    order.FieldIdentifier,
+                    order.Direction,
+                    order.IsIdentityTieBreak)));
         }
     }
 }
