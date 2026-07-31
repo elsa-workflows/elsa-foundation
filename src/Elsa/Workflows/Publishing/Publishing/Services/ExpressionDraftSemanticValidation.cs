@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
-internal static class ExpressionDraftSemanticValidation
+public static class ExpressionDraftSemanticValidation
 {
     public static async ValueTask<ExpressionDraftValidationResult> ValidateSafelyAsync(
         IExpressionDraftSemanticValidator validator,

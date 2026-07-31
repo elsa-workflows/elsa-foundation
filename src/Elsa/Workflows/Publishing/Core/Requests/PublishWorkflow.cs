@@ -1,8 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Requests;
+namespace Elsa.Workflows.Publishing.Core.Requests;
 
 public sealed record PublishWorkflow(
     string VersionId,

@@ -113,6 +113,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
+        // spec 145 (interim): the workflow-publish orchestration handler now lives in the endpoint-free
+        // engine assembly (Elsa.Workflows.Publishing). Scan it too so behaviour is preserved until the
+        // full feature-registration split (engine owns registrations + DependsOn) lands.
+        services.AddRequestHandlersFrom(typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly);
         services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
         // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry) but advertised
         // under the client's expressions capability; the source merges that relation into elsa.api.expressions.

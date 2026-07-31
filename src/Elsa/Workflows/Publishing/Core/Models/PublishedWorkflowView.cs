@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Models;
+namespace Elsa.Workflows.Publishing.Core.Models;
 
 public sealed record PublishedWorkflowView(
     string PublicationId,
@@ -34,7 +34,7 @@ public sealed record PublishedWorkflowView(
             executable.Identity.DefinitionVersionId,
             publication.ArtifactId,
             publication.SlotName,
-            PublicationContract.ToView(publication.Status),
+            ToStatusView(publication.Status),
             reference.SourceReferenceId,
             publication.CreatedAt,
             publication.ActivatedAt ?? throw new InvalidOperationException(
@@ -45,4 +45,14 @@ public sealed record PublishedWorkflowView(
             executable.RootActivity.ExecutableNodeId,
             executable.Nodes.Count,
             wasCreated);
+
+    private static PublicationStatusView ToStatusView(PublicationStatus status) => status switch
+    {
+        PublicationStatus.Candidate => PublicationStatusView.Preparing,
+        PublicationStatus.PendingProjection => PublicationStatusView.Pending,
+        PublicationStatus.Active => PublicationStatusView.Active,
+        PublicationStatus.Retired => PublicationStatusView.Retired,
+        PublicationStatus.Failed => PublicationStatusView.Failed,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported publication status.")
+    };
 }

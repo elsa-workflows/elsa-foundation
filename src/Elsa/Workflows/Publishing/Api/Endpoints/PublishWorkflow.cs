@@ -10,7 +10,7 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using PublishWorkflowCommand = Elsa.Workflows.Publishing.Api.Requests.PublishWorkflow;
+using PublishWorkflowCommand = Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow;
 using PublishWorkflowRequest = Elsa.Workflows.Publishing.Api.Requests.PublishWorkflowRequest;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;

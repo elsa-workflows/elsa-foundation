@@ -3,7 +3,7 @@ using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
-using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
