@@ -161,8 +161,31 @@ preview.81 fingerprints and pins preview.102's still-unaccepted drift as target
 `81b67c2ff3588bea311e2098286e7ee93b3be6c94c502560f2953837b96e9535`; its exact focused test
 passes 1/1 without enabling evidence output. The full architecture suite passes **351/351** and the
 Release reference-server build succeeds with **0 errors** (24 pre-existing legacy/obsolete API
-warnings). The candidate remains draft until the originating correctness reviewer and the other two
-exact-range reviewers inspect the remediated commit.
+warnings).
+
+### Preview.102 package/schema-alignment review disposition
+
+Three adversarial read-only reviewers inspected the exact initial frozen range
+`ca818b649d85c5167e2222c0ec534e215153d473..af54125de82af0ea64d9fc1a271d43a688344cb0`
+on correctness/mechanism, evidence integrity, and scope/test preservation. The reviewers were
+briefed to assume the implementation had green-washed its evidence. Confirmed findings and final
+dispositions are:
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The historical planner checked only the expected `-v2` creates. It now derives every preview.95 `CreatePhysicalIndex` identity from each immutable applied state, requires the current provider target to retain the complete set, and allow-lists only the known additive/validation operation kinds so a future destructive kind fails closed. The focused planner passes **4/4**; the originating reviewer re-inspected the remediation and returned PASS. | PASS |
+| Evidence integrity | Fixture hashes and prose did not independently prove that the payloads came from the claimed Elsa/package source. The new replay creates a detached `ca818b649…` worktree, verifies tree `82433ec…`, all seven preview.95 packages plus `Groundwork.Tool`, every package's Groundwork commit `d297147…`, regenerates the four canonical applied states through an isolated production-composition reproducer, and compares their decompressed SHA-256 values. Root ran the complete replay successfully. | PASS |
+| Evidence integrity | The first replay trusted mutable caller fixture/harness files. It now rejects tracked, staged, or untracked candidate-worktree dirt before reading or copying those bytes. Root proved the dirty rejection, committed the guard, reran the complete clean replay on `d5b3b8b84f8769d4cd31699c4839246d1dc601dd`, and the originating reviewer returned PASS. | PASS |
+| Evidence integrity | The cold-start report retained one stale 922-operation sentence while the executable baseline and current report outcome were 963. The sentence now says 963; the reviewer found no remaining contradiction. | PASS |
+| Scope/test preservation | The final source changes made the generated map manifest stale. Root ran the authorized full map generator; `5bf66b775fa169f082fffbc9f7314ecbb47376f3` refreshes the input fingerprint and the truthful 1,159→1,160 direct-reference delta from the UnifiedHost ProcessProbe edge. The originating reviewer re-inspected the generated files and returned PASS. | PASS |
+| Scope/test preservation | No test was removed or skipped, OpenIddict remains explicitly greenfield/excluded from the historical fixture, the coverage ledger changes only its package-family label, and no row, performance verdict, provider evidence, or Spec 094 task advances. The affected architecture guards passed **95/95**. | PASS |
+
+Correctness and evidence reviewers confirmed their final PASS on
+`ca818b649d85c5167e2222c0ec534e215153d473..d5b3b8b84f8769d4cd31699c4839246d1dc601dd`.
+The scope/test-preservation reviewer confirmed final PASS on
+`ca818b649d85c5167e2222c0ec534e215153d473..5bf66b775fa169f082fffbc9f7314ecbb47376f3`.
+The later quickstart-only commit records these already-completed dispositions and changes no
+implementation, fixture, package, generated map, ledger, task, or test.
 
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
