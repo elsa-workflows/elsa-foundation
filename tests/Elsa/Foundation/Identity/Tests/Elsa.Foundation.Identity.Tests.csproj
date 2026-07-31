@@ -1,12 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
-
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector" PrivateAssets="all" />
 		<!-- Required to self-host a real CShells host and drive the shell-activation (IShellInitializer) path

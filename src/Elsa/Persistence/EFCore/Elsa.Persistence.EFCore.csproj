@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <Version>0.0.1-local</Version>
     <GenerateElsaPackageManifest>false</GenerateElsaPackageManifest>
   </PropertyGroup>
@@ -26,7 +23,6 @@
 	</ItemGroup>
 	
 	
-
 
   <ItemGroup>
     <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->

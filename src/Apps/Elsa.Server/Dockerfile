@@ -35,9 +35,10 @@ WORKDIR /src
 ARG TARGETARCH
 
 # Copy repo-root build configuration first so restore layers cache well.
-# Directory.Build.props carries package metadata only (no build-behavior changes);
-# it is copied so the image builds identically to local/CI. This repo has no root
-# Directory.Build.targets.
+# Directory.Build.props carries the shared TargetFramework/Nullable/ImplicitUsings
+# and package metadata, so it is load-bearing for restore, not just cosmetic --
+# without it the project files below have no target framework. This repo has no
+# root Directory.Build.targets.
 #
 # NuGet.config is the repo-root config. Its packageSourceMapping maps every
 # package the solution uses to an explicit source, so restore is fully

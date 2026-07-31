@@ -1,12 +1,22 @@
 <Project>
 
   <!--
-    Shared NuGet package metadata for the publishable Elsa.* libraries.
-    This file is metadata-only on purpose: it must not change build behavior
-    (no Version here — CI injects /p:Version), so that adding it does not alter
-    how any project compiles. Non-packable projects (the Elsa.Server host and the
-    test projects) simply ignore these properties.
+    Shared build settings for every project in the repository.
+
+    Properties set here are imported before each project's own body, so any
+    project can still override them locally — e.g.
+    src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a Roslyn
+    source generator and pins its own TargetFramework/ImplicitUsings.
+
+    Still deliberately absent: Version. CI injects /p:Version.
   -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Shared NuGet package metadata for the publishable Elsa.* libraries. -->
   <PropertyGroup>
     <Authors>Elsa Workflows</Authors>
     <Company>Elsa Workflows</Company>
