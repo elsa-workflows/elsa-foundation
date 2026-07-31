@@ -68,19 +68,21 @@ specs/145-publishing-engine-split/
 ### Source Code (repository root)
 
 ```text
-src/Elsa/Workflows/Publishing/
+src/Elsa/Workflows/Publishing/                 # engine feature lives at the domain ROOT (bare-form,
+│                                              #   mirrors Elsa.Workflows.Runtime at .../Runtime/ — the
+│                                              #   ArchitectureGuard Project_paths convention requires this,
+│                                              #   NOT a Publishing/Publishing/ subdir)
+├── Elsa.Workflows.Publishing.csproj           # Elsa.Workflows.Publishing (Layer 3 — engine); <Compile Remove> siblings
+├── WorkflowsPublishingFeature.cs              # [ShellFeature "WorkflowsPublishing"] : IShellFeature, virtual ConfigureServices,
+│                                              #   DependsOn { WorkflowsRuntimeTriggers, Events }; registers the auth-free engine
+├── Handlers/                                  # MOVED: workflow-publish handler + Collect* event handlers (NOT activity-draft handlers)
+├── Services/                                  # MOVED: compiler + collaborators, activator/reconciler/preflight,
+│                                              #   in-memory stores, layout/structure, deletion guard (NO authorization services)
+├── Exceptions/                                # MOVED: PublicationPreflight/Activation/ExpressionPublication/Compilation
+├── README.md + EXTENSION_POINTS.md            # NEW (owns Collect* events + template registries)
 ├── Core/                         # Elsa.Workflows.Publishing.Core (Layer 1) — GAINS:
 │   ├── Requests/PublishWorkflow.cs            # MOVED from Api/Requests (IRequest<PublishedWorkflowView>)
 │   └── Models/PublishedWorkflowView.cs        # MOVED from Api/Models (Core-clean)
-├── Publishing/                   # Elsa.Workflows.Publishing  (Layer 3 — NEW engine feature)
-│   ├── Elsa.Workflows.Publishing.csproj
-│   ├── WorkflowsPublishingFeature.cs          # [ShellFeature "WorkflowsPublishing"] : IShellFeature, virtual ConfigureServices,
-│   │                                          #   DependsOn { WorkflowsRuntimeTriggers, Events }; registers the auth-free engine
-│   ├── Handlers/                              # MOVED: workflow-publish handler + Collect* event handlers (NOT activity-draft handlers)
-│   ├── Services/                              # MOVED: compiler + collaborators, activator/reconciler/preflight,
-│   │                                          #   in-memory stores, layout/structure, deletion guard (NO authorization services)
-│   ├── Exceptions/                            # MOVED: PublicationPreflight/Activation/ExpressionPublication/Compilation
-│   ├── README.md + EXTENSION_POINTS.md        # NEW (owns Collect* events + template registries)
 └── Api/                          # Elsa.Workflows.Publishing.Api (Layer 3 — SLIMMED, transport + activity-draft)
     ├── WorkflowsPublishingApiFeature.cs       # : FastEndpointsFeatureBase (unchanged base); DependsOn { WorkflowsPublishing,
     │                                          #   ApiCapabilities }; registers endpoints + API capabilities + AddHttpContextAccessor +

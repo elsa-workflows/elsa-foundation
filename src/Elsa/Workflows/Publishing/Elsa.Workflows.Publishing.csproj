@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    The publishing ENGINE feature (endpoint-free). It owns the auth-free workflow-publish + compile
+    logic and is composable without any transport. Like its Api sibling it is a bridge over stable
+    Design and Runtime contracts (§E2.2) — it references NEITHER the Runtime impl's Api NOR any *.Api
+    feature, and carries no FastEndpoints / Api.Capabilities dependency. Authorization is a transport
+    concern and stays in Elsa.Workflows.Publishing.Api.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Sibling publishing projects live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Api/**/*;Core/**/*;Persistence/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Core/**/*;Persistence/**/*" />
+    <None Remove="Api/**/*;Core/**/*;Persistence/**/*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="Core\Elsa.Workflows.Publishing.Core.csproj" />
+  </ItemGroup>
+
+</Project>
