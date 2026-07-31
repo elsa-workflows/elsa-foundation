@@ -21,7 +21,7 @@ Use the narrowest source that answers the task.
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
-| Feature/work-unit specifications | `specs/` |
+| Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
