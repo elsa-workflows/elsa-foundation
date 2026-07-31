@@ -221,10 +221,18 @@ Each also reimplements its own `Serialize<T>` / `Deserialize<T>(DocumentEnvelope
 boilerplate. One factory plus a shared envelope-versioning base in `src/Elsa/Serialization/SystemText/`
 replaces all of it — after checking whether `IPayloadSerializer` already covers part of the job.
 
-### B3 — `AdaptiveIntervalSchedule` exists four times
+### B3 — `AdaptiveIntervalSchedule` exists five times
 
-Four copies, 15–17 lines each, all different hashes, under `src/Elsa/Workflows/Runtime/`:
-`ReferenceGarbageCollection/`, `Scheduling/`, `Distributed/Services/`, `Resumption/`.
+Four standalone copies, 15–17 lines each, all different hashes, under
+`src/Elsa/Workflows/Runtime/`: `ReferenceGarbageCollection/`, `Scheduling/`, `Distributed/Services/`,
+`Resumption/`. A **fifth** is nested privately as `WorkflowAlterationAdaptiveIntervalSchedule` inside
+`Services/Alterations/WorkflowAlterationOrchestrationPumpTask.cs` — identical logic, invisible to a
+filename search, which is why the first count missed it.
+
+All five class bodies are byte-identical; only the namespace and the doc-comment wording differ. The
+type belongs in `Elsa.Tasks.Schedules` beside its fixed-interval sibling `IntervalSchedule` and the
+`ScheduledTaskExecution` it delegates to — not in the runtime domain at all. All five consuming
+projects already referenced `Elsa.Tasks.Schedules`, so the move needed no new dependency edge.
 
 ### B4 — Error codes have no home
 
@@ -379,7 +387,7 @@ restorable .NET 10 environment with private-feed access.
 | 1 | Hoist TFM/`Nullable`/`ImplicitUsings` to `Directory.Build.props`; add `tests/Directory.Build.props`; strip 245 duplicated blocks; normalize csproj/slnx formatting | B1 | low, build-gated |
 | 2 | Root `.editorconfig` + `EnableNETAnalyzers`/`AnalysisLevel`, warnings-first | C1 | low, build-gated |
 | 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | trivial |
-| 4 | Collapse `AdaptiveIntervalSchedule` 4→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | low, build-gated |
+| 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | low, build-gated |
 | 5 | Shared JSON options factory + envelope-versioning base | B2 | medium, build-gated |
 | 6 | Shared base for the four `*.Unified` provider features | B6 | medium, build-gated |
 | 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | high, **build-gated** |
