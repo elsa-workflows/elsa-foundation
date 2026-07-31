@@ -82,20 +82,31 @@ public abstract class ActivityDriveTestBase(ActivityDriveFixture fixture)
         ActivityContractInventory.Activities.Single(type => type.FullName == activityTypeName);
 
     /// <summary>Drives are keyed by activity full name in theory data so failures name the activity, not an index.</summary>
-    protected static TheoryData<string> ActivityNames()
+    /// <param name="excluded">
+    /// Returns a reason when the activity is deliberately not driven here. Excluded cases are left out of the
+    /// enumerated universe rather than asserted-and-skipped: xunit 2.9's runner does not surface a dynamic skip,
+    /// so an excluded case would otherwise read as an ordinary failure. The exclusions are reported instead by
+    /// <c>ActivityDriveHealthTests.Undriven_coverage_is_declared_with_reasons</c>.
+    /// </param>
+    protected static TheoryData<string> ActivityNames(Func<string, string?>? excluded = null)
     {
         var data = new TheoryData<string>();
         foreach (var type in ActivityContractInventory.Activities)
-            data.Add(type.FullName!);
+            if (excluded?.Invoke(type.FullName!) is null)
+                data.Add(type.FullName!);
         return data;
     }
 
-    protected static TheoryData<string, string> ActivityMemberPairs(Func<Type, IReadOnlyList<string>> members)
+    /// <inheritdoc cref="ActivityNames"/>
+    protected static TheoryData<string, string> ActivityMemberPairs(
+        Func<Type, IReadOnlyList<string>> members,
+        Func<string, string, string?>? excluded = null)
     {
         var data = new TheoryData<string, string>();
         foreach (var type in ActivityContractInventory.Activities)
             foreach (var member in members(type))
-                data.Add(type.FullName!, member);
+                if (excluded?.Invoke(type.FullName!, member) is null)
+                    data.Add(type.FullName!, member);
         return data;
     }
 }

@@ -6,6 +6,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 - [Elsa 4 architecture review 2026-07](elsa-4-architecture-review-2026-07.md) - consolidated full-codebase review with verified findings and improvement roadmap (W1-W21). Detail sub-reports and per-work-unit implementation briefs: [elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md).
 - [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](elsa-4-activity-gaps.md).
+- [Elsa 4 activity behavioural drive 2026-08](elsa-4-activity-behavioural-drive-2026-08.md) - the behavioural half of that audit: every activity driven through a real workflow engine, declared outcomes and outputs measured against what the engine actually committed. Records the contract-surface snapshot guard, the fixes applied, and the REST e2e drive still outstanding.
 - [Knowledge inventory](knowledge-inventory.md)
 - [Unfinished work](unfinished-work.md) - inventory of findings and loose concerns, not the active work queue.
 - [Architecture tour review](architecture-tour-review.md)

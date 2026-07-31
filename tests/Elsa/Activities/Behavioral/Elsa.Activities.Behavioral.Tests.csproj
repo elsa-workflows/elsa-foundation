@@ -34,6 +34,7 @@
     <ProjectReference Include="..\..\..\..\src\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 
     <ProjectReference Include="..\..\..\..\src\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

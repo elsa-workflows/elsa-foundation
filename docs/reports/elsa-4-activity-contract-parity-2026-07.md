@@ -308,31 +308,45 @@ Required inputs in **bold**; `(Done)` means no outcome is declared, so only the 
 
 ---
 
+## 7. Behavioural half — what the drive found (2026-08)
+
+The blocked work below has since been done in a local environment with full package access. See
+[`elsa-4-activity-behavioural-drive-2026-08.md`](elsa-4-activity-behavioural-drive-2026-08.md) for the
+run record; the headline is that driving the activities surfaced one defect a contract diff structurally
+could not:
+
+- **`Break` declared no outcomes at all.** It always completes with the `Break` outcome, but carried no
+  `[ActivityOutcome]`, so the scanner emitted no outcomes facet, the studio fell back to its own `Done`
+  default, and the designer showed a port that can never be taken while hiding the one that always is.
+  Fixed.
+- **`Fault` has an unreachable `Done` port** for the same reason in reverse: it declares no outcomes and
+  never completes, so the studio's `Done` default is a port nothing can ever take. Recorded as a
+  studio-side default rather than an activity defect.
+
 ## Blocked work
 
-The behavioural half of this audit is **not done**, and could not be started in this environment.
+> **Superseded (2026-08).** Items 1, 2 and 4 are done; item 3 is not. See §7 and the
+> [behavioural drive report](elsa-4-activity-behavioural-drive-2026-08.md).
+
+The behavioural half of this audit was **not done**, and could not be started in the environment this
+audit ran in.
 
 Every project in the repo transitively references `CShells`, `Nuplane` or `Groundwork` packages served
-from `f.feedz.io`. That host is unreachable through this environment's egress policy, so
+from `f.feedz.io`. That host is unreachable through that environment's egress policy, so
 `dotnet restore` fails with `NU1301` for every project — including a single leaf like
 `src/Elsa/Activities/Http/Elsa.Activities.Http.csproj`. `api.nuget.org` is reachable; `f.feedz.io` is
-not. Nothing can be compiled, so no test, no harness run and no server run was possible.
+not. Nothing could be compiled, so no test, no harness run and no server run was possible.
 
 Still outstanding, in priority order:
 
-1. **Contract-surface snapshot guard.** An xUnit test over `ClrAssemblyScanner` with a committed JSON
-   baseline, so contract drift shows up as a reviewable diff. Intended home:
-   `tests/Elsa/Activities/Design/Tests/Contracts/`. Deliberately **not** committed unverified — an
-   unbuildable test and a hand-written baseline would be worse than none. The Python tooling in
-   `tools/parity/` is the interim stand-in.
-2. **In-process test drive** on `WorkflowExecutionHarness`: for each activity, prove every declared
-   outcome is reachable and every declared output is populated. This is what would catch a *declared but
-   dead* outcome — something a contract diff cannot see.
+1. ~~**Contract-surface snapshot guard.**~~ **Done** — `tests/Elsa/Activities/Design/Tests/Contracts/`.
+2. ~~**In-process test drive** on `WorkflowExecutionHarness`.~~ **Done** —
+   `tests/Elsa/Activities/Behavioral/`, with two documented gaps (`GraphActivity`, `DispatchWorkflow`).
 3. **REST e2e test drive** for triggers, suspend/resume, dispatch, the `SendHttpRequest` dynamic ports,
-   and the intrinsic authoring catalog (§1).
-4. **Fixes.** §2.4 (`Fault` inputs), §2.7 (`PublishEvent.IsLocalEvent`) and §2.1 (`RunJavaScript`
-   outcomes) are small and well-understood, but applying C# changes that cannot be compiled or tested
-   would violate the repo's own test gate. They are filed as issues instead.
+   and the intrinsic authoring catalog (§1). **Still outstanding.**
+4. ~~**Fixes.** §2.4 (`Fault` inputs), §2.7 (`PublishEvent.IsLocalEvent`) and §2.1 (`RunJavaScript`
+   outcomes).~~ **Done**, plus §1 (three intrinsic descriptors) and §2.8 (`For.EndInclusive`, documented
+   rather than changed).
 
 ## Filed issues
 

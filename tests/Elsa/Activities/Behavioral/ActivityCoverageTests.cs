@@ -12,7 +12,7 @@ namespace Elsa.Activities.Behavioral;
 public sealed class ActivityOutcomeReachabilityTests(ActivityDriveFixture fixture) : ActivityDriveTestBase(fixture)
 {
     public static TheoryData<string, string> DeclaredOutcomes =>
-        ActivityMemberPairs(ActivityContractInventory.DeclaredOutcomes);
+        ActivityMemberPairs(ActivityContractInventory.DeclaredOutcomes, UndrivenCoverage.ReasonFor);
 
     [Theory]
     [MemberData(nameof(DeclaredOutcomes))]
@@ -49,7 +49,7 @@ public sealed class ActivityOutcomeReachabilityTests(ActivityDriveFixture fixtur
             $"Declared: {Describe(declared)}.");
     }
 
-    public static TheoryData<string> DrivenActivities => ActivityNames();
+    public static TheoryData<string> DrivenActivities => ActivityNames(UndrivenCoverage.ReasonForActivity);
 
     // Activities whose ports are per-node data pinned at publish time from an authored input
     // ([ActivityValueOutcomes]); their emitted outcome names are authored values, not a fixed declared set, so the
@@ -74,7 +74,7 @@ public sealed class ActivityOutcomeReachabilityTests(ActivityDriveFixture fixtur
 public sealed class ActivityOutputPopulationTests(ActivityDriveFixture fixture) : ActivityDriveTestBase(fixture)
 {
     public static TheoryData<string, string> DeclaredOutputs =>
-        ActivityMemberPairs(ActivityContractInventory.DeclaredOutputs);
+        ActivityMemberPairs(ActivityContractInventory.DeclaredOutputs, UndrivenCoverage.ReasonFor);
 
     [Theory]
     [MemberData(nameof(DeclaredOutputs))]
@@ -92,7 +92,7 @@ public sealed class ActivityOutputPopulationTests(ActivityDriveFixture fixture) 
 /// <summary>Coverage of the drives themselves: every shipped activity has one, and none of them threw.</summary>
 public sealed class ActivityDriveHealthTests(ActivityDriveFixture fixture) : ActivityDriveTestBase(fixture)
 {
-    public static TheoryData<string> ShippedActivities => ActivityNames();
+    public static TheoryData<string> ShippedActivities => ActivityNames(UndrivenCoverage.ReasonForActivity);
 
     [Theory]
     [MemberData(nameof(ShippedActivities))]
@@ -119,4 +119,13 @@ public sealed class ActivityDriveHealthTests(ActivityDriveFixture fixture) : Act
     [Fact]
     public void The_shipped_activity_inventory_is_not_empty() =>
         Assert.NotEmpty(ActivityContractInventory.Activities);
+
+    /// <summary>
+    /// Prints the contract members this suite does not yet reach, so an outstanding gap is legible in the test
+    /// output instead of being invisible behind a green run. This test is expected to fail once the list is
+    /// empty — deleting it then is the last step of finishing the drive.
+    /// </summary>
+    [Fact]
+    public void Undriven_coverage_is_declared_with_reasons() =>
+        Assert.NotEmpty(UndrivenCoverage.Describe());
 }
