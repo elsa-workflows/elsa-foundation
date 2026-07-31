@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -21,7 +22,7 @@ public sealed class ListRecommendedActivityDefinitionsHandler(
         CancellationToken cancellationToken)
     {
         if (request.Offset < 0 || request.Limit is < 1 or > 100)
-            throw new ActivityAuthoringException(400, "activity.request.invalid", "Invalid picker request", "Offset must be non-negative and limit must be between 1 and 100.");
+            throw new ActivityAuthoringException(400, ActivityErrorCodes.RequestInvalid, "Invalid picker request", "Offset must be non-negative and limit must be between 1 and 100.");
         var page = await picker.ReadAsync(context.TenantId, request.Offset, request.Limit, cancellationToken);
         var settings = await settingsStore.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope, cancellationToken);
         var availableKeys = availabilityEvaluator.FilterAddable(page.Items.Select(x => x.Definition), settings)

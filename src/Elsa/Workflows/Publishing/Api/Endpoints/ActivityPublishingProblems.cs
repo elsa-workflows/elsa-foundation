@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -49,12 +50,12 @@ internal static class ActivityPublishingProblems
     }
 
     public static ActivityPublishingProblemDetails Unexpected(HttpContext context) => new(
-        Type("activity.operation.failed"),
+        Type(ActivityErrorCodes.OperationFailed),
         "Activity operation failed",
         StatusCodes.Status500InternalServerError,
         "The activity operation failed.",
         context.Request.Path.Value ?? string.Empty,
-        "activity.operation.failed",
+        ActivityErrorCodes.OperationFailed,
         context.TraceIdentifier,
         []);
 
@@ -70,14 +71,14 @@ internal static class ActivityPublishingProblems
 
     private static int StatusCode(ActivityPublicationRejectedException exception) => exception.ErrorCode switch
     {
-        "activity.request.invalid" => StatusCodes.Status400BadRequest,
+        ActivityErrorCodes.RequestInvalid => StatusCodes.Status400BadRequest,
         "activity.tenant.reference-denied" => StatusCodes.Status403Forbidden,
         "activity.draft.not-found" => StatusCodes.Status404NotFound,
         "activity.definition.content-authority" or
         "activity.draft.stale-revision" or
         "activity.definition.stale-head" or
-        "activity.version.conflict" or
-        "activity.publication.conflict" or
+        ActivityErrorCodes.VersionConflict or
+        ActivityErrorCodes.PublicationConflict or
         "activity.draft.not-active" or
         "activity.draft.stale-layout" or
         "activity.draft.layout-not-found" => StatusCodes.Status409Conflict,
@@ -87,7 +88,7 @@ internal static class ActivityPublishingProblems
 
     private static string Title(string errorCode, string defaultTitle) => errorCode switch
     {
-        "activity.request.invalid" => "Activity request is invalid",
+        ActivityErrorCodes.RequestInvalid => "Activity request is invalid",
         "activity.tenant.reference-denied" => "Activity reference is forbidden",
         "activity.draft.not-found" => "Activity draft was not found",
         _ when errorCode.Contains("stale", StringComparison.Ordinal) || errorCode.Contains("conflict", StringComparison.Ordinal) =>

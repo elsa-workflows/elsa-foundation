@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Core.Services;
 
@@ -89,7 +90,7 @@ public sealed class ActivityTemplateProviderCompilerRegistry : IActivityTemplate
                     request.ProviderFingerprint,
                     [],
                     [new(
-                        "activity.provider.failure",
+                        ActivityErrorCodes.ProviderFailure,
                         ActivityDiagnosticSeverity.Error,
                         $"Activity provider '{ProviderKey}' failed during 'compile'.",
                         new("ActivityDraft", request.DraftId, request.DefinitionId, Revision: request.Revision),

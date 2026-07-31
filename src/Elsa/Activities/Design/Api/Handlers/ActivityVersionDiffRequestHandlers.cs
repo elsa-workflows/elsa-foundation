@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -221,10 +222,10 @@ public sealed class ActivityVersionDiffService(
     private static ActivityAuthoringException NotFound(string code, string title, string detail) => new(404, code, title, detail);
 
     private static ActivityAuthoringException BadRequest(string detail) =>
-        new(400, "activity.request.invalid", "Invalid activity diff request", detail);
+        new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity diff request", detail);
 
     private static ActivityAuthoringException OperationFailed(string detail) =>
-        new(500, "activity.operation.failed", "Activity diff operation failed", detail);
+        new(500, ActivityErrorCodes.OperationFailed, "Activity diff operation failed", detail);
 
 }
 

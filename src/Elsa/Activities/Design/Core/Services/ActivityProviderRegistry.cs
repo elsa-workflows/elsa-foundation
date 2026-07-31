@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Core.Services;
 
@@ -159,7 +160,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
         private ActivityDiagnostic Failure(
             string operation,
             string schemaVersion) => new(
-            "activity.provider.failure",
+            ActivityErrorCodes.ProviderFailure,
             ActivityDiagnosticSeverity.Error,
             $"Activity provider '{ProviderKey}' failed during '{operation}'.",
             new("ActivityDefinition", ProviderKey),

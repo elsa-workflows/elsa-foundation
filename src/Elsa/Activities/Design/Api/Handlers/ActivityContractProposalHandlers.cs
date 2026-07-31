@@ -9,6 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -109,7 +110,7 @@ public sealed class ActivityContractProposalService(
         if (owner.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
             throw new ActivityAuthoringException(409, "activity.definition.content-authority", "Activity definition is source-owned", "Provider proposals cannot mutate a source-owned activity definition.");
         if (!context.CanAuthorProvider(draft.State.Provider.ProviderKey))
-            throw new ActivityAuthoringException(403, "activity.authorization.denied", "Activity authoring is forbidden", "The caller is not authorized to author this activity provider.");
+            throw new ActivityAuthoringException(403, ActivityErrorCodes.AuthorizationDenied, "Activity authoring is forbidden", "The caller is not authorized to author this activity provider.");
         if (draft.Status != ActivityDefinitionDraftStatus.Active ||
             draft.Revision != request.ExpectedRevision ||
             !StringComparer.Ordinal.Equals(draft.State.Provider.ProviderKey, request.ExpectedProviderKey) ||
@@ -319,7 +320,7 @@ public sealed class ActivityContractProposalService(
     }
 
     private static ActivityAuthoringException BadRequest(string detail) =>
-        new(400, "activity.request.invalid", "Invalid activity authoring request", detail);
+        new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity authoring request", detail);
 
     private static ActivityAuthoringException StaleProposal(string detail) =>
         new(409, "activity.contract.proposal-stale", "Activity contract proposal is stale", detail);

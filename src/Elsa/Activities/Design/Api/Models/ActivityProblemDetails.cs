@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json.Serialization;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Models;
 
@@ -43,12 +44,12 @@ public static class ActivityProblemDetails
     }
 
     public static ActivityProblemDetailsView Unexpected(HttpContext context) => new(
-        Type("activity.operation.failed"),
+        Type(ActivityErrorCodes.OperationFailed),
         "Activity operation failed",
         StatusCodes.Status500InternalServerError,
         "The activity operation failed.",
         context.Request.Path,
-        "activity.operation.failed",
+        ActivityErrorCodes.OperationFailed,
         context.TraceIdentifier,
         []);
 

@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -38,7 +39,7 @@ internal sealed class RuntimeRequirementPreflightEndpoint(
                 StatusCodes.Status400BadRequest,
                 exception.Message,
                 HttpContext.Request.Path,
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 HttpContext.TraceIdentifier,
                 []), StatusCodes.Status400BadRequest, cancellationToken);
         }
@@ -55,7 +56,7 @@ internal sealed class RuntimeRequirementPreflightEndpoint(
                 StatusCodes.Status500InternalServerError,
                 "The Runtime requirement preflight failed.",
                 HttpContext.Request.Path,
-                "activity.operation.failed",
+                ActivityErrorCodes.OperationFailed,
                 HttpContext.TraceIdentifier,
                 []), StatusCodes.Status500InternalServerError, cancellationToken);
         }
