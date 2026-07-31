@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 101
+- Discovered feature classes: 102
 
 ## Features
 
@@ -82,6 +82,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
+| WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs) |
 | WorkflowsRuntimeAttentionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Attention | IShellFeature | [WorkflowsRuntimeAttentionFeature.cs](../../src/Elsa/Workflows/Runtime/Attention/WorkflowsRuntimeAttentionFeature.cs) |
 | WorkflowsRuntimeCheckpointPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature, IPostConfigureShellServices | [WorkflowsRuntimeCheckpointPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs) |
 | WorkflowsRuntimeDistributedFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed | IShellFeature | [WorkflowsRuntimeDistributedFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/WorkflowsRuntimeDistributedFeature.cs) |
