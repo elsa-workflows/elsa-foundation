@@ -47,7 +47,7 @@ public sealed class EagerShellActivationHostedService(
             var stopwatch = Stopwatch.StartNew();
             try
             {
-                await registry.GetOrActivateAsync(name, cancellationToken).ConfigureAwait(false);
+                await registry.GetOrActivateAsync(name, cancellationToken);
                 stopwatch.Stop();
                 logger.LogInformation("Eager shell activation: shell '{Shell}' active in {ElapsedMs} ms.", name, stopwatch.Elapsed.TotalMilliseconds);
             }

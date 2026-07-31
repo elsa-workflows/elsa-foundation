@@ -80,7 +80,7 @@ public sealed class StimulusRouter : IStimulusRouter
         // 1. Snapshot the pre-existing fan-in resume set BEFORE starting new instances, so bookmarks created by
         //    just-started (synchronously executed) instances are never resumed by the stimulus that started them.
         var waitingExecutionIds = request.Mode == StimulusRoutingMode.StartOnly
-            ? Array.Empty<string>()
+            ? []
             : await SnapshotWaitingExecutionsAsync(request, now, cancellationToken);
 
         // 2. Start a new instance for every matching published trigger (E3-1).

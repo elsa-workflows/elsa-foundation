@@ -215,7 +215,7 @@ public sealed class ActivityUpgradePlanner(
             latest = await planStore.FindAsync(latest.SuccessorPlanId, cancellationToken)
                      ?? throw new InvalidOperationException($"Successor plan '{latest.SuccessorPlanId}' is unavailable.");
         var combined = (StringComparer.Ordinal.Equals(latest.PlanId, predecessor.PlanId)
-                ? Array.Empty<ActivityVersionReplacement>()
+                ? []
                 : latest.Replacements)
             .Concat(replacements)
             .GroupBy(x => x.FromVersionId, StringComparer.Ordinal)

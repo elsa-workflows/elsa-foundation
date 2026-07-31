@@ -98,7 +98,7 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
             IEnumerable<Assembly> providerAssemblies;
             try
             {
-                providerAssemblies = await provider.GetAssembliesAsync(_serviceProvider, cancellationToken).ConfigureAwait(false);
+                providerAssemblies = await provider.GetAssembliesAsync(_serviceProvider, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

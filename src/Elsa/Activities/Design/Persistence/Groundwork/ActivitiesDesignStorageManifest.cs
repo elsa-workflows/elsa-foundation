@@ -1018,7 +1018,7 @@ public static class ActivitiesDesignStorageManifest
                     .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
                     .. (!index.IsUnique && includesDocumentIdentity
                         ? new[] { new IndexField(EntityIdField, IndexValueKind.Keyword) }
-                        : Array.Empty<IndexField>())
+                        : [])
                 ];
                 var current = new LogicalIndexDeclaration(
                     includesDocumentIdentity ? V2(index.Identity) : index.Identity,

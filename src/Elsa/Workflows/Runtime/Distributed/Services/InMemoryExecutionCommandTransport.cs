@@ -81,7 +81,7 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
         lock (_state.SyncRoot)
         {
             if (!_state.Inboxes.TryGetValue(Key(workflowExecutionId), out var inbox))
-                return new ValueTask<IReadOnlyList<ExecutionCommandTransportItem>>(Array.Empty<ExecutionCommandTransportItem>());
+                return new ValueTask<IReadOnlyList<ExecutionCommandTransportItem>>([]);
 
             var leaseExpiresAt = now + leaseDuration;
             var leased = new List<ExecutionCommandTransportItem>();

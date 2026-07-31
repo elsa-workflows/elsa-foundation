@@ -59,7 +59,7 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
     {
         try
         {
-            await foreach (var item in subscriber.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in subscriber.ReadAllAsync(cancellationToken))
                 yield return item;
         }
         finally
@@ -116,7 +116,7 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
         {
             try
             {
-                while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                while (await _channel.Reader.WaitToReadAsync(cancellationToken))
                 {
                     while (_channel.Reader.TryRead(out var entry))
                         yield return StructuredLogStreamItem.ForEntry(entry);
