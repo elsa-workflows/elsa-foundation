@@ -220,6 +220,20 @@ in 3m56s. The SDK emitted its existing workload-verification advisory during the
 the focused Linux test itself emitted no warning. These results supersede the Linux-hosted failure
 without converting it into a provider-evidence or performance claim.
 
+The replacement three-axis review inspected exact range
+`ca818b649d85c5167e2222c0ec534e215153d473..1f2f6ea4fd10761a242198bd71f4844caa683d09`.
+All earlier verdicts are historical and superseded for this cross-runtime remediation.
+
+| Axis | Confirmed finding and disposition | Status |
+|---|---|---|
+| Correctness/mechanism | The first Noble mode would have accepted either known algorithm and could have mislabeled an unexpected Darwin result as Noble. It now requires the exact Noble algorithm before fixture selection. The first cache-bypass remediation also used unsupported `--no-cache`; both restore surfaces now use their verified `--no-http-cache` option. The originating reviewer passed script syntax, strict invalid-argument cases, CLI option checks, and the focused historical planner **4/4** on the replacement head. | PASS |
+| Evidence integrity | The first host replay inherited global NuGet/tool caches, so matching nuspec metadata did not independently exclude substituted cached binaries. Host and Noble now use fresh replay-local package/CLI homes with HTTP-cache reuse disabled. The reviewer recomputed all eight compressed hashes, inspected the algorithm identities in every payload, verified source/package/tool/upstream tuples and the Noble image digest, scanned for sensitive material, and found the corrected invocation, provenance, counts, and nonclaims truthful. | PASS |
+| Scope/test preservation | The new Noble family is additive and leaves all Darwin fixtures immutable. No test was removed or skipped; the ledger changes only its package-family label, and no task, provider evidence, performance verdict, or status advances. Focused architecture guards passed **95/95**. The final generated map manifest is fresh and follows the last map input. | PASS |
+
+Root then reran both complete clean replays at `1f2f6ea4`: host/Darwin and digest-pinned Noble each
+restored into isolated caches and reproduced all four canonical fixture payloads. The lane and main
+worktrees were clean, and remote `main` remained the reviewed base `ca818b649…`.
+
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
