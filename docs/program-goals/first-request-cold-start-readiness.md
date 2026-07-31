@@ -28,14 +28,14 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
    sensitive work). Measured honestly in `specs/134-container-readytorun-publish/research.md` — the deterministic
    signal is publish size + a clean per-RID crossgen pass; walls were not benchmarked (fleet load). See the
    recommendation there.
-3. **Schema batch / skip-if-current.** Reduce the current 930-operation fresh-DB admission and skip it entirely on an
+3. **Schema batch / skip-if-current.** Reduce the current 933-operation fresh-DB admission and skip it entirely on an
    already-current database. Constraint: the locked apply protocol
    (`specs/094-harden-groundwork-stores/contracts/storage-composition.md:158`) keeps approval semantics; the
    frozen `SchemaVersion` is **not** a lever — skip-if-current needs a separate applied-plan fingerprint.
    **Skip-if-current: implemented (spec 133, SQLite), opt-in** — records an Elsa-owned applied-plan fingerprint
    (`elsa_groundwork_admission_stamp`) and skips the full inspection/validation walk on a matching later boot,
    measured ~5 s (loaded) warm walk → ~1 ms fingerprint read. Off by default: the fingerprint covers the plan
-   but not out-of-band drift. **Batching: deferred to Groundwork** — the 930-op apply is 930 package-internal
+   but not out-of-band drift. **Batching: deferred to Groundwork** — the 933-op apply is 933 package-internal
    transactions (one per op, each with a durability re-read); the batch-apply path must land in the Groundwork
    package (proposal in spec 133), not Elsa-side.
 4. **Opt-in eager activation — IMPLEMENTED (spec 132).** A host-side `IHostedService`

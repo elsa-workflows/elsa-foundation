@@ -8,7 +8,7 @@ program unit 1). This unit **measures only — it optimizes nothing.** Two indep
 1. **The cost is the lazy shell-activation cliff paid inside the first request, not host build.** Host build and
    Kestrel startup are seconds; the first matching request that triggers CShells shell activation dominates by
    one-to-two orders of magnitude. A warm second request returns in tens of milliseconds.
-2. **Fresh-database schema admission applies a deterministic 930 DDL operations** for the reference SQLite
+2. **Fresh-database schema admission applies a deterministic 933 DDL operations** for the reference SQLite
    `GroundworkAllFeaturesDeploymentSchema`, on one connection, inside that first request. A warm restart applies
    **0** (idempotent). This number is load-independent (asserted by `ColdStartSchemaOperationCountTests`) and is
    materially higher than the ~581 previously reputed.
@@ -17,7 +17,7 @@ program unit 1). This unit **measures only — it optimizes nothing.** Two indep
 
 This machine runs parallel fleet sessions; during capture the 1-minute load average ranged roughly **95–455**
 (measured `uptime` alongside each number below). **Every wall-clock number here is indicative, not a benchmark.**
-The trustworthy, reproducible evidence is (a) the deterministic 930-operation count and (b) the *phase ratios*
+The trustworthy, reproducible evidence is (a) the deterministic 933-operation count and (b) the *phase ratios*
 (activation cliff ≫ host build). Re-run the recipe on a quiet machine (`uptime` load < 2) for publishable walls.
 
 ## Per-phase table (indicative walls, load ~200–455)
@@ -44,15 +44,19 @@ the same activation, versus sub-50 ms warm — the same one-to-two order-of-magn
 
 | Case | Applied schema operations | Source |
 |---|---:|---|
-| Fresh SQLite database (first request, `AutoApplyOnStartup=true`) | **930** | `ColdStartSchemaOperationCountTests` |
+| Fresh SQLite database (first request, `AutoApplyOnStartup=true`) | **933** | `ColdStartSchemaOperationCountTests` |
 | Warm database (already admitted) | **0** | same test — idempotent restart |
 
-930 = the current physicalized `CREATE`/index operation set for the 8 reference deployment families (Runtime, Secrets,
+933 = the current physicalized `CREATE`/index operation set for the 8 reference deployment families (Runtime, Secrets,
 Studio Preferences, Distributed, Workflows Design, Activities Design, Design-atomic ledger, Publishing). Identity
 is excluded because the reference host persists ASP.NET Core Identity through EF Core, not Groundwork
 (`shells.json` enables `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`). The
 `elsa-groundwork.db` file created by the cold run was ~4.7 MB. Runtime alterations added the durable plan/job
 units and indexes, increasing the prior 873-operation snapshot by 57.
+The preview.102 SQL Server key-width remediation later added bounded identity/unique-index schema
+shape, increasing the immediately preceding 930-operation snapshot by 3. The test derives the count
+from a fresh SQLite target and keeps the warm restart at 0; this report does not infer wall-clock
+performance from that structural delta.
 
 ## Mid-activation contention tail
 
@@ -127,7 +131,7 @@ Both attackable costs are now sized: the activation cliff (units 3 + 4) and JIT 
 1. **Unit 4 — opt-in eager activation** removes the contention tail (the worst user-visible symptom: every early
    request pays the full wall) by moving activation off the request path. Highest user-facing win; host-side, no
    external-package change required.
-2. **Unit 3 — schema skip-if-current** removes the 930-operation admission on warm boots (the common
+2. **Unit 3 — schema skip-if-current** removes the 933-operation admission on warm boots (the common
    restart/redeploy case) and batches it on fresh boots. Deterministic, high-leverage, guarded by the pinned test.
 3. **Unit 2 — ReadyToRun publish** cuts the ~2.5 s host-build + JIT-heavy activation share; do it alongside, and
    file the CShells `IShellInitializerObserver` proposal so unit 2 can attribute the residual per-initializer cost.
