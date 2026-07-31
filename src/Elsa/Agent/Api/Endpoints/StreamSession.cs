@@ -5,6 +5,7 @@ using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
+using Elsa.Api.FastEndpoints.Extensions;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Agent.Api.Endpoints;
@@ -21,11 +22,7 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
     public override async Task HandleAsync(AgentSessionRouteRequest req, CancellationToken ct)
     {
         var response = HttpContext.Response;
-        response.StatusCode = StatusCodes.Status200OK;
-        response.ContentType = "text/event-stream";
-        response.Headers.CacheControl = "no-cache";
-        response.Headers.Connection = "keep-alive";
-        response.Headers["X-Accel-Buffering"] = "no";
+        response.StartServerSentEventStream();
 
         var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
         if (error is not null)
