@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -19,7 +20,6 @@ public sealed class GroundworkRoleStore(
     IBoundedDocumentStore? boundedStore = null,
     GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleStore, IRevisionAwareRoleStore
 {
-    private const int RelationshipPageSize = 512;
     private const int MaxRelationshipMaterialization = 100_000;
 
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -51,30 +51,16 @@ public sealed class GroundworkRoleStore(
     public async ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var roles = new List<RoleRecord>();
-        for (var skip = 0; ; skip += RelationshipPageSize)
-        {
-            var page = (await BoundedStore.QueryAsync(
-                new DocumentQuery(
-                    IdentityStorageManifest.IdentityRoleDocumentKind,
-                    IdentityStorageManifest.ListRolesByTenantQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        IdentityStorageManifest.TenantIdField,
-                        IdentityCompositeDocumentId.Normalize(tenantId)))],
-                    [],
-                    skip,
-                    RelationshipPageSize,
-                    null,
-                    null,
-                    BoundedQueryResultOperation.Documents),
-                cancellationToken)).Documents;
-
-            roles.AddRange(page.Select(Map));
-            if (page.Count < RelationshipPageSize)
-                return roles;
-            if (roles.Count >= MaxRelationshipMaterialization)
-                throw new InvalidOperationException("Groundwork Identity role listing exceeded the bounded relationship materialization limit.");
-        }
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            IdentityStorageManifest.ListRolesByTenantQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                IdentityStorageManifest.TenantIdField,
+                IdentityCompositeDocumentId.Normalize(tenantId)))],
+            cancellationToken,
+            MaxRelationshipMaterialization);
+        return documents.Select(Map).ToArray();
     }
 
     public async ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default)

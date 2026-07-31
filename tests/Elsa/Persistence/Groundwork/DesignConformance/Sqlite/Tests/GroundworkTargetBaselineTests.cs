@@ -14,12 +14,12 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.95";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.102";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    private const string PendingTargetFingerprint = "40a5900b1088f8ae035b21c928b3da0a2e2c8eadd8c4534b3fdd4752c3bf2750";
-    private const string PendingPlanFingerprint = "ae06d6969c4c311523cab1937a7d57e2d706db1f0019a6c5759aec6287e0dc87";
+    private const string PendingTargetFingerprint = "25f0bd01e2f95e0f2f8b16dae8acef44e640fce985b322883431d6d81d6c11c0";
+    private const string PendingPlanFingerprint = "0669a2f12c1db43979e40259eb68213fe8b7397583c6f5a4595a38cbe7d38ad5";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
@@ -90,7 +90,7 @@ public sealed class GroundworkTargetBaselineTests
         Assert.Equal(CurrentGroundworkVersion, PackageVersion(typeof(IDocumentStore).Assembly));
         Assert.Equal(CurrentGroundworkVersion, packageFamilyVersion);
         Assert.Equal(CurrentGroundworkVersion, schemaToolVersion);
-        // preview.95 plus the durable runtime-alteration and workflow-executable coordination schemas retains
+        // preview.102 plus the durable runtime-alteration and workflow-executable coordination schemas retains
         // unaccepted physical target and plan fingerprint drift from the accepted preview.81 values. Pin the
         // observed drift without accepting it as evidence; the exact-source publication work unit must ratify
         // it before enabling evidence output.
@@ -135,7 +135,7 @@ public sealed class GroundworkTargetBaselineTests
             evidence.PlanFingerprint != AcceptedPlanFingerprint)
         {
             throw new InvalidOperationException(
-                "The preview.95 target/plan fingerprint drift is captured but not accepted for evidence publication. " +
+                "The preview.102 target/plan fingerprint drift is captured but not accepted for evidence publication. " +
                 "Ratify it in the exact-source evidence work unit before enabling baseline evidence output.");
         }
 

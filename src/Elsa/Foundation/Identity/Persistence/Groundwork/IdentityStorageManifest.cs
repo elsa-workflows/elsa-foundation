@@ -17,10 +17,14 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 /// </summary>
 public static class IdentityStorageManifest
 {
+    private static readonly DocumentEnvelopeDefinition Envelope = new();
+
     public const int MaxAggregateRelationshipEntries = 512;
     public const string SchemaVersion = "1.0.6";
     public const int ProjectedLookupColumnLength = 400;
-    public const int SqlServerStorageScopeKeyBytes = 900;
+    public const int SqlServerStorageScopeKeyBytes = 256;
+    public const int SqlServerDocumentIdentityLookupKeyBytes = 32;
+    public const int SqlServerDateTime2KeyBytes = 10;
     public const int SqlServerUnicodeBytesPerCodeUnit = 2;
     public const int SqlServerMaxNonclusteredIndexKeyBytes = 1_700;
     public const int MaxBoundedQueryParameters = 1;
@@ -204,7 +208,7 @@ public static class IdentityStorageManifest
         {
             PhysicalStorage = new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
-                PhysicalStoragePolicy.Explicit(PhysicalTable(documentKind, tableName, indexes)),
+                PhysicalStoragePolicy.Explicit(PhysicalTable(documentKind, tableName, indexes, queries)),
                 logicalIndexes: indexes
                     .Select(index => new LogicalIndexDeclaration(
                         index.Identity,
@@ -222,7 +226,8 @@ public static class IdentityStorageManifest
     private static PhysicalTableDefinition PhysicalTable(
         string documentKind,
         string tableName,
-        IReadOnlyCollection<IndexDeclaration> indexes)
+        IReadOnlyCollection<IndexDeclaration> indexes,
+        IReadOnlyCollection<PortableQueryDeclaration> queries)
     {
         var projectedColumns = indexes
             .SelectMany(index => index.Fields.Select(field => new
@@ -244,17 +249,45 @@ public static class IdentityStorageManifest
             return PhysicalTableDefinition.DedicatedDocumentTable(tableName);
 
         var physicalIndexes = indexes
-            .Select(index => new PhysicalIndexDefinition(
-                index.Identity,
-                [
-                    new PhysicalIndexColumnDefinition("storage_scope", 0),
-                    .. index.Fields.Select((field, index) => new PhysicalIndexColumnDefinition(field.Path, index + 1))
-                ],
-                missingValueBehavior: MissingValueBehavior.Excluded))
+            .Select(index =>
+            {
+                var physicalColumns = new List<PhysicalIndexColumnDefinition>
+                {
+                    new(Envelope.StorageScopeColumn, 0)
+                };
+                physicalColumns.AddRange(index.Fields.Select((field, order) =>
+                    new PhysicalIndexColumnDefinition(field.Path, order + 1)));
+
+                var providerTieBreakPaging = queries
+                    .Where(query => query.IndexIdentity == index.Identity)
+                    .Select(query => query.PagingSupport)
+                    .Where(paging => paging is QueryPagingSupport.Cursor or QueryPagingSupport.Offset)
+                    .Distinct()
+                    .ToArray();
+                if (!index.IsUnique && providerTieBreakPaging.Length == 1)
+                {
+                    physicalColumns.Add(new PhysicalIndexColumnDefinition(
+                        providerTieBreakPaging[0] == QueryPagingSupport.Cursor
+                            ? Envelope.IdLookupKeyColumn
+                            : Envelope.IdComparisonKeyColumn,
+                        physicalColumns.Count));
+                }
+                else if (!index.IsUnique && providerTieBreakPaging.Length > 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Identity index '{index.Identity}' cannot mix cursor and offset provider identity tie-breaks.");
+                }
+
+                return new PhysicalIndexDefinition(
+                    index.Identity,
+                    physicalColumns,
+                    missingValueBehavior: index.MissingValueBehavior);
+            })
             .ToArray();
         return PhysicalTableDefinition.PhysicalEntityTable(
             tableName,
             projectedColumns,
+            Envelope,
             indexes: physicalIndexes);
     }
 
@@ -281,14 +314,14 @@ public static class IdentityStorageManifest
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.None,
-        QueryPagingSupport.Offset);
+        QueryPagingSupport.Cursor);
 
     private static PortableQueryDeclaration ExpiredReceiptQuery(string indexName) => new(
         ListExpiredMutationReceiptsQuery,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
         QuerySortSupport.Ascending,
-        QueryPagingSupport.Offset);
+        QueryPagingSupport.Cursor);
 
     private static IndexDeclaration Keyword(string identity, params string[] fields) => new(
         identity,

@@ -102,7 +102,8 @@ public static class SecretsStorageManifest
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(TenantIdField, 1),
                         new PhysicalIndexColumnDefinition(StatusField, 2),
-                        new PhysicalIndexColumnDefinition(NormalizedNameField, 3)
+                        new PhysicalIndexColumnDefinition(NormalizedNameField, 3),
+                        new PhysicalIndexColumnDefinition(envelope.IdComparisonKeyColumn, 4)
                     ],
                     missingValueBehavior: MissingValueBehavior.IncludedAsNull)
             ]);

@@ -13,6 +13,7 @@ public static class ActivitiesDesignStorageManifest
     // Frozen legacy stamp. Groundwork physicalizes additive document kinds/indexes from the manifest;
     // changing this value is not a migration mechanism and would make existing envelopes unreadable.
     public const string SchemaVersion = "1.0.0";
+    private static readonly DocumentEnvelopeDefinition Envelope = new();
 
     public const string ByDefinitionIndex = "by-definition";
     public const string ByHeadVersionIndex = "by-head-version";
@@ -23,9 +24,9 @@ public static class ActivitiesDesignStorageManifest
     public const string DocumentIdField = PhysicalDocumentFieldPaths.Id;
 
     /// <summary>
-    /// The projected entity-id path used as the deterministic tie-break for the auxiliary
-    /// exhaustive routes. Ordering rides the bounded projected column instead of the envelope
-    /// comparison key so the composed index keys stay inside SQL Server's 1700-byte limit.
+    /// The projected entity-id path used as the workload-visible tie-break for the auxiliary
+    /// exhaustive routes. Preview.102 additionally appends Groundwork's provider identity key to
+    /// each non-unique paged physical index so equal business keys still have a total physical order.
     /// </summary>
     public const string EntityIdField = "entity.id";
     public const string DefinitionIdField = "entity.definitionId";
@@ -250,8 +251,13 @@ public static class ActivitiesDesignStorageManifest
                         ActivityForkCandidateExpiredQuery,
                         ActivityForkCandidateRetentionIndex,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
-                        QuerySortSupport.None,
-                        QueryPagingSupport.Offset)
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Offset,
+                        [
+                            new BoundedQuerySortField(
+                                ActivityForkCandidateRetentionField,
+                                PhysicalSortDirection.Ascending)
+                        ])
                 ]),
             Unit(
                 ActivityForkReceiptDocumentKind,
@@ -310,11 +316,11 @@ public static class ActivitiesDesignStorageManifest
         var physicalIndexes = new[]
         {
             PointLookupIndex("activity-definition-by-id-point"),
-            PhysicalIndex("activity-definition-by-id", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
-            PhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
+            OffsetPhysicalIndex("activity-definition-by-id", "activity_definition_id"),
+            OffsetPhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
+            OffsetPhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
+            OffsetPhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
+            OffsetPhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
         };
         var documentResults = new[]
         {
@@ -463,7 +469,7 @@ public static class ActivitiesDesignStorageManifest
         var physicalIndexes = new[]
         {
             PointLookupIndex("activity-definition-version-by-id-point"),
-            PhysicalIndex(
+            OffsetPhysicalIndex(
                 "activity-definition-versions-by-definition",
                 "definition_id",
                 "sem_ver_sort_key",
@@ -675,25 +681,28 @@ public static class ActivitiesDesignStorageManifest
         var physical = PhysicalTableDefinition.PhysicalEntityTable(
             documentKind,
             columns,
+            Envelope,
             indexes:
             [
                 new PhysicalIndexDefinition(
                     "management-by-id",
                     [
-                        new PhysicalIndexColumnDefinition("storage_scope", 0),
+                        new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(ColumnName(logicalIdField), 1)
                     ]),
                 new PhysicalIndexDefinition(
                     "management-by-sort",
                     [
-                        new PhysicalIndexColumnDefinition("storage_scope", 0),
-                        new PhysicalIndexColumnDefinition("sort_key", 1)
+                        new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition("sort_key", 1),
+                        new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, 2)
                     ]),
                 new PhysicalIndexDefinition(
                     "management-by-valid-to",
                     [
-                        new PhysicalIndexColumnDefinition("storage_scope", 0),
-                        new PhysicalIndexColumnDefinition("valid_to", 1)
+                        new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                        new PhysicalIndexColumnDefinition("valid_to", 1),
+                        new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, 2)
                     ])
             ]);
         return unit with
@@ -720,7 +729,7 @@ public static class ActivitiesDesignStorageManifest
             PhysicalStorage = new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(
-                    PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, indexes: physicalIndexes)),
+                    PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, Envelope, physicalIndexes)),
                 logicalIndexes,
                 boundedQueries)
         };
@@ -741,18 +750,21 @@ public static class ActivitiesDesignStorageManifest
         new(
             identity,
             [
-                new PhysicalIndexColumnDefinition("storage_scope", 0),
+                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                 .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
             ],
             missingValueBehavior: MissingValueBehavior.Excluded);
+
+    private static PhysicalIndexDefinition OffsetPhysicalIndex(string identity, params string[] columns) =>
+        PhysicalIndex(identity, [.. columns, Envelope.IdComparisonKeyColumn]);
 
     private static PhysicalIndexDefinition PointLookupIndex(string identity) =>
         new(
             identity,
             [
-                new PhysicalIndexColumnDefinition("storage_scope", 0),
-                new PhysicalIndexColumnDefinition("id_lookup_key", 1),
-                new PhysicalIndexColumnDefinition("id_comparison_key", 2)
+                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                new PhysicalIndexColumnDefinition(Envelope.IdLookupKeyColumn, 1),
+                new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, 2)
             ],
             isUnique: true,
             missingValueBehavior: MissingValueBehavior.Excluded);
@@ -947,17 +959,48 @@ public static class ActivitiesDesignStorageManifest
             ? [.. indexedColumns, Column("entity_id", EntityIdField, false, IdentityColumnLength)]
             : indexedColumns;
         var physicalIndexes = indexes
-            .Select(index => new PhysicalIndexDefinition(
-                index.Identity,
-                [
-                    new PhysicalIndexColumnDefinition("storage_scope", 0),
-                    .. index.Fields.Select((field, order) => new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)),
-                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new PhysicalIndexColumnDefinition("entity_id", index.Fields.Length + 1, PhysicalSortDirection.Ascending) }
-                        : Array.Empty<PhysicalIndexColumnDefinition>())
-                ],
-                isUnique: index.IsUnique,
-                missingValueBehavior: MissingValueBehavior.Excluded))
+            .Select(index =>
+            {
+                var physicalColumns = new List<PhysicalIndexColumnDefinition>
+                {
+                    new(Envelope.StorageScopeColumn, 0)
+                };
+                physicalColumns.AddRange(index.Fields.Select((field, order) =>
+                    new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)));
+                if (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity))
+                {
+                    physicalColumns.Add(new PhysicalIndexColumnDefinition(
+                        "entity_id",
+                        physicalColumns.Count,
+                        PhysicalSortDirection.Ascending));
+                }
+
+                var providerTieBreakPaging = queries
+                    .Where(query => query.IndexIdentity == index.Identity)
+                    .Select(query => query.PagingSupport)
+                    .Where(paging => paging is QueryPagingSupport.Cursor or QueryPagingSupport.Offset)
+                    .Distinct()
+                    .ToArray();
+                if (!index.IsUnique && providerTieBreakPaging.Length == 1)
+                {
+                    physicalColumns.Add(new PhysicalIndexColumnDefinition(
+                        providerTieBreakPaging[0] == QueryPagingSupport.Cursor
+                            ? Envelope.IdLookupKeyColumn
+                            : Envelope.IdComparisonKeyColumn,
+                        physicalColumns.Count));
+                }
+                else if (!index.IsUnique && providerTieBreakPaging.Length > 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Activity-design index '{index.Identity}' cannot mix cursor and offset provider identity tie-breaks.");
+                }
+
+                return new PhysicalIndexDefinition(
+                    index.Identity,
+                    physicalColumns,
+                    isUnique: index.IsUnique,
+                    missingValueBehavior: MissingValueBehavior.Excluded);
+            })
             .ToArray();
         var boundedQueries = queries
             .Select(query => new BoundedQueryDeclaration(
@@ -981,7 +1024,7 @@ public static class ActivitiesDesignStorageManifest
         {
             PhysicalStorage = new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
-                PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, indexes: physicalIndexes)),
+                PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, Envelope, physicalIndexes)),
                 logicalIndexes,
                 boundedQueries)
         };

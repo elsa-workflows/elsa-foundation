@@ -192,7 +192,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(CollectionColumn, 1),
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
+                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3),
+                        new PhysicalIndexColumnDefinition(envelope.IdComparisonKeyColumn, 4)
                     ])
             ]);
         var historyQuery = new BoundedQueryDeclaration(

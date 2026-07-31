@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.88` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.102` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.88`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.102`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,7 +18,7 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.88`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.102`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
@@ -27,9 +27,44 @@ The original checkpoint/fence attachment and its unversioned evidence paths reta
 `0.0.1-preview.80` four-provider slice as immutable historical provenance. The later
 `0.0.1-preview.81` slice lives under `versions/0.0.1-preview.81/`; the coverage ledger retains that
 versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
-lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The current
-`0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and is imported mechanically by tuple. All rows remain below
+lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The latest retained
+`0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and was imported mechanically by tuple. The
+`preview.102` generation remains intentionally absent until the exact clean-source four-provider publisher
+and mechanical importer complete. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
+
+**2026-07-31 preview.102 integration preparation**: the seven Groundwork packages and
+`Groundwork.Tool` align to the public `0.0.1-preview.102` release built from Groundwork merge
+`68e7c344163c199024aed00ccdcaa2deb51ef5bb`. This exact family includes the provider-applied
+ordering-tail work from PR #154, the provider-internal SQLite materialization proof from PR #155,
+and the immutable physical-form baseline registry/control plane from PR #156. The latter two are
+reviewed checkpoints inside Groundwork #141 and #50, not completion of either issue: ordinary
+fence/prune and non-SQLite relationship evidence remain for #141, while #50 still requires the
+controlled four-provider synchronized-contention matrix, reviewed population and activation of the
+registry, and final physical-form reports. This preparation imports no provider evidence, advances
+no coverage-ledger status, records no performance verdict, and completes no Spec 094 task.
+
+Pre-freeze verification restored the exact package/tool family and passed:
+
+- the complete Release solution build (zero errors; existing warnings retained);
+- the complete architecture suite (348/348);
+- benchmark protocol/integrity tests (266/266);
+- Activities Design Groundwork (72/72), SQLite design conformance (57/57), Identity persistence
+  Groundwork (74/74), Groundwork querying (108/108), and ASP.NET Core Identity Groundwork
+  (133/133);
+- the focused runtime/IAM-secrets/Identity evidence contract slice (9 passed, four publication-only
+  tests explicitly skipped without opt-in); and
+- offline resolution of the full reference manifest for SQLite, PostgreSQL, SQL Server, and MongoDB,
+  each with status `ready` and zero diagnostics.
+
+The first preview.102 Identity resolution exposed twelve `GW-PHYSICAL-025` diagnostics: every
+non-unique scale-bearing offset route lacked the provider identity ordering tail. Offset's
+`id_comparison_key` would make the widest SQL Server key 2,406 bytes, beyond the 1,700-byte limit.
+The remediated shape uses cursor paging and the fixed-width envelope `id_lookup_key` tail (1,088
+bytes at the widest route), migrates exhaustive callers to the bounded continuation pager, preserves
+the 100,000-document materialization ceiling, and adds direct resolver, ordered-index, pager-limit,
+and source-policy regression tests. No historical Identity evidence was rewritten; preview.102 still
+requires a fresh exact-source four-provider generation.
 
 **2026-07-25 preview.88 source alignment**: the seven Groundwork packages and `Groundwork.Tool` consume the
 public `0.0.1-preview.88` release built from Groundwork merge
@@ -191,7 +226,7 @@ slice, publish first to an external staging directory, then import only that exa
 export ELSA_GROUNDWORK_EVIDENCE_OUTPUT="$(mktemp -d "${TMPDIR:-/tmp}/elsa-groundwork-evidence.XXXXXX")"
 export ELSA_GROUNDWORK_SOURCE_COMMIT="$(git rev-parse HEAD)"
 export ELSA_GROUNDWORK_SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview88"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview102"
 
 # The versioned publisher independently rejects a later or dirty checkout and
 # rejects output beneath this repository. These checks keep the shell flow
@@ -207,7 +242,7 @@ dotnet run --project tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/E
   --ledger specs/094-harden-groundwork-stores/coverage-ledger.json \
   --staging-root "$ELSA_GROUNDWORK_EVIDENCE_OUTPUT" \
   --source-repository "$(git rev-parse --show-toplevel)" \
-  --provider-version "0.0.1-preview.88" \
+  --provider-version "0.0.1-preview.102" \
   --elsa-commit "$ELSA_GROUNDWORK_SOURCE_COMMIT" \
   --elsa-tree "$ELSA_GROUNDWORK_SOURCE_TREE" \
   --run-identity "$ELSA_GROUNDWORK_RUN_IDENTITY"
@@ -219,7 +254,7 @@ mechanically import those records by
 `(coverageEntryId, scenarioId, provider)` with `(coverageEntryId, scenarioId, provider, providerVersion)` as the
 generation-retention key; do not hand-author or infer missing obligations. The importer requires exactly the
 checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance, digest-verified staged artifacts,
-and unchanged preview.80/preview.81/preview.86 history. Publication does
+and unchanged preview.80/preview.81/preview.86/preview.88 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
 
@@ -404,7 +439,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.88` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.102` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
@@ -875,9 +910,10 @@ This checkpoint does not execute an EF comparator or provider matrix, start a da
 inject and recover from a valid-current-fence mid-commit failure, recreate storage/process state,
 collect timing/native-plan evidence, select a physical form, edit the coverage ledger, issue a
 performance verdict, independently prove provider-internal executable root-lease exclusion, or
-advance a Spec 094 task. Groundwork #50 completion, preview.95 evidence reconciliation, real EF
+advance a Spec 094 task. Groundwork #50 completion, current-family evidence reconciliation, real EF
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
-stay in the #646 completion gate.
+stay in the #646 completion gate. The preview.102 exact-source publication/import remains a
+prerequisite to any current provider or performance claim.
 
 ### Outbox drain correctness-runner checkpoint
 

@@ -110,6 +110,7 @@ public sealed class ActivitiesDesignStorageManifestTests
         string documentKind,
         params (string Index, string Query, string Path)[] expectedRoutes)
     {
+        var envelope = new DocumentEnvelopeDefinition();
         var unit = manifest.StorageUnits.Single(unit => unit.Identity.Value == documentKind);
         var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
         var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
@@ -129,7 +130,7 @@ public sealed class ActivitiesDesignStorageManifestTests
             var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
             Assert.False(index.IsUnique);
             Assert.False(physicalIndex.IsUnique);
-            Assert.Equal("entity_id", physicalIndex.Columns.Last().ColumnLogicalName);
+            Assert.Equal(envelope.IdComparisonKeyColumn, physicalIndex.Columns.Last().ColumnLogicalName);
         }
     }
 }

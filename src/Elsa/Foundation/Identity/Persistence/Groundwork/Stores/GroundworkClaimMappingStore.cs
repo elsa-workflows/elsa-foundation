@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Stores;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -18,7 +19,6 @@ public sealed class GroundworkClaimMappingStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IBoundedDocumentStore? boundedStore = null) : IClaimMappingStore, IRevisionAwareClaimMappingStore
 {
-    private const int PageSize = 512;
     private const int MaxMaterialization = 100_000;
 
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
@@ -29,30 +29,20 @@ public sealed class GroundworkClaimMappingStore(
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var rules = new List<ClaimMappingRule>();
-        for (var skip = 0; ; skip += PageSize)
-        {
-            var page = (await BoundedStore.QueryAsync(
-                new DocumentQuery(
-                    IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-                    IdentityStorageManifest.ListClaimMappingsByProviderQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        IdentityStorageManifest.ProviderLookupKeyField,
-                        IdentityDocumentId.From(tenantId, provider)))],
-                    [],
-                    skip,
-                    PageSize,
-                    null,
-                    null,
-                    BoundedQueryResultOperation.Documents),
-                cancellationToken)).Documents;
-
-            rules.AddRange(page.Select(Map));
-            if (page.Count < PageSize)
-                return rules.OrderBy(rule => rule.Order).ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase).ToArray();
-            if (rules.Count >= MaxMaterialization)
-                throw new InvalidOperationException("Groundwork claim-mapping listing exceeded the bounded provider materialization limit.");
-        }
+        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
+            BoundedStore,
+            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+            IdentityStorageManifest.ListClaimMappingsByProviderQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                IdentityStorageManifest.ProviderLookupKeyField,
+                IdentityDocumentId.From(tenantId, provider)))],
+            cancellationToken,
+            MaxMaterialization);
+        return documents
+            .Select(Map)
+            .OrderBy(rule => rule.Order)
+            .ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default)
