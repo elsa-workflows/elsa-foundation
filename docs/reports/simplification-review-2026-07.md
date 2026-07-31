@@ -454,21 +454,25 @@ Both are recorded so the next reviewer does not re-derive them.
 Ordered by leverage per unit of risk. Items marked **build-gated** cannot be done without a
 restorable .NET 10 environment with private-feed access.
 
-| # | Work | Finding | Risk |
+Status as of PR [#1112](https://github.com/elsa-workflows/elsa-foundation/pull/1112) (merged or
+awaiting merge): items 1, 2, 10 and the first two thirds of 4 are **done**.
+
+| # | Work | Finding | Status |
 |---|---|---|---|
-| 1 | Hoist TFM/`Nullable`/`ImplicitUsings` to `Directory.Build.props`; add `tests/Directory.Build.props`; strip 245 duplicated blocks; normalize csproj/slnx formatting | B1 | low, build-gated |
-| 2 | Root `.editorconfig` + `EnableNETAnalyzers`/`AnalysisLevel`, warnings-first | C1 | low, build-gated |
-| 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | trivial |
-| 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | low, build-gated |
-| 5 | ~~Consolidate the JSON options wrappers~~ — **withdrawn**; they are distinct frozen persistence contracts. At most a layered factory, gated on golden-fixture tests | B2 | do not attempt blind |
-| 6 | Shared base for the four `*.Unified` provider features | B6 | medium, build-gated |
-| 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | high, **build-gated** |
-| 8 | Modernization tail: primary constructors, collection expressions, sync-over-async | C2 | medium, build-gated |
-| 9 | One .NET tool replacing 10 duplicated scripts; keep script shims | B5 | medium, build-gated |
-| 10 | `docs/reference/spec-lifecycle.md` + statuses applied in place + `specs/README.md` | D2 | low, docs-only |
-| 11 | Keep/drop verdicts for `Agent.Anthropic` and `Expressions.Liquid` | A2 | decision |
-| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | decision |
-| 13 | A subtractive obligation in the operating model | D3 | decision |
+| 1 | Hoist TFM/`Nullable`/`ImplicitUsings` to `Directory.Build.props`; add `tests/Directory.Build.props`; strip the duplicated blocks | B1 | ✅ **done** — net −1,173 lines; all 246 projects verified to resolve identical properties |
+| 2 | Root `.editorconfig` + `EnableNETAnalyzers`/`AnalysisLevel`, warnings-first | C1 | ✅ **done** — three rules tuned against measured output; see the file's header |
+| 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | ⬜ open, trivial |
+| 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | 🟡 first two ✅; `ErrorCodes` deferred — see B4 for the seam constraint |
+| 5 | ~~Consolidate the JSON options wrappers~~ | B2 | ❌ **withdrawn** — distinct frozen persistence contracts; do not attempt |
+| 6 | Shared base for the four `*.Unified` provider features | B6 | ⬜ open, medium, build-gated |
+| 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | ⬜ open, high leverage, **build-gated** |
+| 8 | Modernization tail: primary constructors, collection expressions, sync-over-async | C2 | ⬜ open, medium, build-gated |
+| 9 | One .NET tool replacing 10 duplicated scripts; keep script shims | B5 | ⬜ open, medium, build-gated |
+| 10 | `docs/reference/spec-lifecycle.md` + `specs/README.md` | D2 | ✅ **done** — statuses applied in place is the open remainder |
+| 11 | Keep/drop verdicts for `Agent.Anthropic` and `Expressions.Liquid` | A2 | ⬜ decision |
+| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | ⬜ decision |
+| 13 | A subtractive obligation in the operating model | D3 | ⬜ decision |
+| 14 | Recalibrate the `SQLite defaults` perf gate | C5 | ⬜ open |
 
 ---
 
