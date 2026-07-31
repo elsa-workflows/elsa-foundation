@@ -187,6 +187,35 @@ The scope/test-preservation reviewer confirmed final PASS on
 The later quickstart-only commit records these already-completed dispositions and changes no
 implementation, fixture, package, generated map, ledger, task, or test.
 
+Hosted Linux CI on the reviewed `f304e4b1d1beb97a01af01744115b0df846de11f` head then found a
+cross-runtime evidence defect that the macOS verification could not expose. The immutable
+preview.95 applied states carry Groundwork's exact runtime Unicode identity algorithm. Darwin
+produces
+`groundwork-unicode-ordinal-ignore-case-v1-3206f759667cb9cc764ec243dfb3d322a39970184efab619e80163c36d86818f`;
+Ubuntu Noble produces
+`groundwork-unicode-ordinal-ignore-case-v1-124ca0d0d2b045d7be0e6aea8f07f74fbc0428a13c53a47d8a7d41db71b5ec5f`.
+The original fixture family contained only the Darwin identity, so the production planner correctly
+rejected it on Linux rather than silently accepting a comparison policy from another runtime.
+
+The remediation preserves that fail-closed boundary. The Darwin fixtures remain immutable at their
+original paths, and a second immutable Noble family lives under
+`Fixtures/schema-evolution/preview.95/unicode-identity-124ca0d0d2b0/`. The test selects a family only
+for one of the two exact reviewed algorithm identities and throws for every unknown identity; it
+does not normalize, substitute, or weaken Groundwork's runtime fingerprint. The clean replay command
+now accepts `--runtime host` or `--runtime linux-noble`; Noble execution uses the digest-pinned
+`mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664`
+image and the same exact Elsa/package/tool/upstream-source tuple as the Darwin replay.
+
+At implementation head `cba61a1e00537082198c9c3e8132e645737b6183`, root reproduced the complete
+Noble replay and exact canonical hashes for SQLite `80e1fde0…`, SQL Server `a38f2233…`,
+PostgreSQL `35762019…`, and MongoDB `a232f105…`. An independent verifier archived that exact clean
+commit, confirmed the pinned image digest and Noble algorithm/family selection, and passed the
+focused historical planner **4/4** in the disposable Linux checkout. Root independently passed the
+same planner **4/4** on Darwin and the real four-provider historical physical-upgrade test **4/4**
+in 3m56s. The SDK emitted its existing workload-verification advisory during the container restore;
+the focused Linux test itself emitted no warning. These results supersede the Linux-hosted failure
+without converting it into a provider-evidence or performance claim.
+
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.
 
