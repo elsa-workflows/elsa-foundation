@@ -257,12 +257,39 @@ type belongs in `Elsa.Tasks.Schedules` beside its fixed-interval sibling `Interv
 `ScheduledTaskExecution` it delegates to — not in the runtime domain at all. All five consuming
 projects already referenced `Elsa.Tasks.Schedules`, so the move needed no new dependency edge.
 
-### B4 — Error codes have no home
+### B4 — Error codes have no home, and the obvious home is blocked by the Design↔Runtime seam
 
 No `ErrorCodes` constants class exists anywhere. ~20 dotted literals repeat 3–25× each:
 `"activity.request.invalid"` ×25 across 17 files, `"activity.action.forbidden"` ×15,
 `"activity.operation.failed"` ×10, `"activity.publication.invalid"` ×8, plus per-activity
-`"elsa.*.structure"` families. A typo in any one site silently mints an unmatched code.
+`"elsa.*.structure"` families. These are a **wire contract** — a typo in any one site silently mints
+an unmatched code that no client can match on, and nothing detects it.
+
+The placement is the interesting part, and it rules out the obvious answer. The `activity.*` codes
+span **three** domains:
+
+| Code | Domains |
+|---|---|
+| `activity.request.invalid`, `activity.operation.failed` | Activities/Design, Workflows/Publishing, Workflows/Runtime |
+| `activity.provider.failure` | Activities/Design, Workflows/Publishing |
+| `activity.cursor.expired` | Activities/Design, Workflows/Runtime |
+
+So the constants cannot live in `Activities.Design.Core`: `Workflows.Runtime` would have to reference
+it, and that breaks the **Design↔Runtime seam**, which is not merely convention — it is enforced by
+`ArchitectureGuardTests` (`DeferredRuntimeDesignReferences` carries exactly one tracked exception,
+plus a spec-006 test asserting no project in the activity-construction runtime path references any
+Design project).
+
+**The only correct home is `Elsa.Primitives`** — zero-dependency by §2.3, and exactly the case §2.17
+describes ("a shared helper in `<App>.Primitives` … only when ≥3 consumers"). Two of the three
+consumer `.Core` projects already reference it; `Elsa.Workflows.Publishing.Core` does not, so the
+change adds one project-reference edge to the app's own primitives library (not an external
+dependency, so §2.17 is satisfied).
+
+**Not done in this pass.** It is a cross-domain contract placement touching ~100 call sites in
+projects that need the private feeds to compile — an architectural decision that deserves its own
+work unit rather than a drive-by in a review PR. The constraint above is the part worth carrying
+forward: anyone attempting this who reaches for `Activities.Design.Core` will fail the guard suite.
 
 ### B5 — Every tool is written twice
 
@@ -340,6 +367,28 @@ ASP.NET Core folded them into the shared framework, but undocumented and an open
 breaking drive-by "bump everything" PR.
 
 **Net finding: no pin should be deleted; three groups should be commented.**
+
+### C5 — The `SQLite defaults` perf gate has no headroom over its own variance
+
+*Found by tripping it twice while landing this review's own commits.*
+
+`http-workflow-performance.yml` enforces `--enforce-p95-ms 250` against a live HTTP workflow
+benchmark. Warm p95 across the 10 recorded runs that produced a measurement — four branches, all
+passing except where noted — spans **137.9 ms to 246.2 ms**: a **108 ms spread against a 250 ms
+budget**, with the threshold sitting ~4 ms above the observed maximum of *passing* runs.
+
+The cold/warm relationship also inverts freely between consecutive runs (cold 263.8 / warm 246.2 in
+one; cold 187.6 / warm 251.4 in the next), which is not how a real regression behaves.
+
+The gate is therefore comparing a single noisy sample against a constant that sits at roughly the
+95th percentile of that sample's own distribution, so it fails a meaningful fraction of the time on
+changes that cannot affect runtime — this branch tripped it on a commit whose diff was one Markdown
+file, and on another that changed zero dependency-graph edges.
+
+**Do not fix this by raising the budget.** The gate guards something real. Recommended, in order of
+value: take several samples per run and enforce on their median; or measure a per-run baseline in the
+same job so runner speed cancels out, instead of comparing to a fixed constant; or, if a constant is
+preferred, recalibrate it from the observed distribution and record how the number was derived.
 
 ---
 
