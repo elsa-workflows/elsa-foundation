@@ -1,6 +1,6 @@
-namespace Elsa.Expressions.Core.Contracts;
-
 using Elsa.Expressions.Core.Models;
+
+namespace Elsa.Expressions.Core.Contracts;
 
 public interface IExpressionDescriptor
 {

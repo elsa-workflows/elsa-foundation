@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
   <ItemGroup>
     <!-- Expose the internal RouteTable to its unit tests so the atomic-swap semantics can be asserted directly. -->
   </ItemGroup>
@@ -29,7 +23,6 @@
     <ProjectReference Include="..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
-
 
   <ItemGroup>
     <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
