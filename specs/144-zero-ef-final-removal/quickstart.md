@@ -512,3 +512,15 @@ evidence generation has not yet been published or mechanically imported; Groundw
 #141 remain open because their remaining controlled matrices and provider obligations have not
 passed; T009–T013 and T017 remain unchecked; no coverage-ledger status, performance verdict, EF
 bucket, issue state, or Project 33 completion state advances.
+
+### 2026-07-31 preview.103 prerequisite checkpoint
+
+Groundwork merge `b9ba0249eed0a00da9b6d37575f39383c22ae2c9` published
+`0.0.1-preview.103`, adding the MongoDB fixed-assignment and transition selector-mirror reopen repair
+from PR #157. The serialized Elsa integration aligns the seven package pins, tool manifest, Spec 094
+current-family ratchet, and current-version guards. Preview.102 remains an immutable no-generation
+checkpoint; preview.103 provider publication and tuple-keyed mechanical import are still required.
+
+This alignment does not admit EF deletion: it advances no provider-evidence status or performance
+verdict, leaves Groundwork #50 and Elsa #642/#643/#646/#647 open, and does not change any EF ratchet
+bucket or Project 33 completion state.

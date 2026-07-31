@@ -5,10 +5,10 @@ This guide is the implementation/review path for feature 094. A narrow green uni
 ## Prerequisites
 
 - .NET 10 SDK selected by the repository.
-- Access to the package feed containing the pinned Groundwork `0.0.1-preview.102` release.
+- Access to the package feed containing the pinned Groundwork `0.0.1-preview.103` release.
 - Docker-compatible container runtime for SQL Server, PostgreSQL, and MongoDB.
 - Enough local resources to run MongoDB as a replica set for transaction scenarios.
-- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.102`, matching all
+- `Groundwork.Tool` restored from the repository-local tool manifest at `0.0.1-preview.103`, matching all
   Groundwork packages.
 
 Groundwork PR #88 is the generic version-aware codec boundary in this release; PR #101 admits sort-only index
@@ -18,7 +18,7 @@ reference Groundwork.
 
 Do not use a standalone MongoDB instance for scenarios that claim multi-document atomicity.
 
-The repository's current Groundwork family is `0.0.1-preview.102`; do not combine it with a different
+The repository's current Groundwork family is `0.0.1-preview.103`; do not combine it with a different
 `Groundwork.Tool` or provider package version. PR #88 provides the generic version-aware codec consumed by this
 family. Elsa owns only its per-kind policies, legacy-stamp parsing, JSON options, and concrete upcasters behind
 the Elsa provider marker.
@@ -29,9 +29,34 @@ The original checkpoint/fence attachment and its unversioned evidence paths reta
 versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
 lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The latest retained
 `0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and was imported mechanically by tuple. The
-`preview.102` generation remains intentionally absent until the exact clean-source four-provider publisher
+`preview.102` generation was never published. The current `preview.103` generation remains intentionally absent until the exact clean-source four-provider publisher
 and mechanical importer complete. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
+
+**2026-07-31 preview.103 integration preparation**: Groundwork merge
+`b9ba0249eed0a00da9b6d37575f39383c22ae2c9` published the coherent
+`0.0.1-preview.103` package/tool family through
+[Groundwork PR #157](https://github.com/valence-works/Groundwork/pull/157). The patch repairs MongoDB
+fixed-assignment and transition selector-mirror persistence across shared documents, dedicated document
+tables, and physical entity tables, including reopen durability. This serialized Elsa checkpoint aligns
+the repository package/tool family and current-version guards only. It imports no provider evidence,
+advances no coverage-ledger status, records no performance verdict, and completes no Spec 094 task.
+
+The upstream `Publish NuGet Packages` run
+[`30618297992`](https://github.com/valence-works/Groundwork/actions/runs/30618297992) passed for the
+exact merge SHA and its feed log names the `preview.103` packages. Root restored the complete
+`Elsa.Server.slnx` graph with `--force-evaluate`, restored `Groundwork.Tool 0.0.1-preview.103`, and
+verified the following container-free gates serially:
+
+- current ledger/importer architecture guards: **88/88**;
+- focused current-version conformance: **7 passed / 1 publication-only skip / 0 failed**;
+- benchmark protocol and comparison-integrity guards: **266/266**;
+- SQLite design target/package/tool version gate: **1/1**.
+
+An initial parallel test attempt shared transitive build outputs and hit `GenerateDepsFile` file locks;
+it supplied no accepted result. The serial reruns above supersede it. No database-server container,
+provider-evidence publisher, mechanical importer, or benchmark timing process ran during this
+alignment.
 
 **2026-07-31 preview.102 integration preparation**: the seven Groundwork packages and
 `Groundwork.Tool` align to the public `0.0.1-preview.102` release built from Groundwork merge
@@ -430,7 +455,7 @@ slice, publish first to an external staging directory, then import only that exa
 export ELSA_GROUNDWORK_EVIDENCE_OUTPUT="$(mktemp -d "${TMPDIR:-/tmp}/elsa-groundwork-evidence.XXXXXX")"
 export ELSA_GROUNDWORK_SOURCE_COMMIT="$(git rev-parse HEAD)"
 export ELSA_GROUNDWORK_SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview102"
+export ELSA_GROUNDWORK_RUN_IDENTITY="runtime-checkpoint-fence-preview103"
 
 # The versioned publisher independently rejects a later or dirty checkout and
 # rejects output beneath this repository. These checks keep the shell flow
@@ -446,7 +471,7 @@ dotnet run --project tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/E
   --ledger specs/094-harden-groundwork-stores/coverage-ledger.json \
   --staging-root "$ELSA_GROUNDWORK_EVIDENCE_OUTPUT" \
   --source-repository "$(git rev-parse --show-toplevel)" \
-  --provider-version "0.0.1-preview.102" \
+  --provider-version "0.0.1-preview.103" \
   --elsa-commit "$ELSA_GROUNDWORK_SOURCE_COMMIT" \
   --elsa-tree "$ELSA_GROUNDWORK_SOURCE_TREE" \
   --run-identity "$ELSA_GROUNDWORK_RUN_IDENTITY"
@@ -643,7 +668,7 @@ For each workload in [`contracts/performance-handoff.md`](contracts/performance-
 
 Do not time setup, schema application, or a workload whose correctness/provider gate is failing.
 For `iam-normalized-lookup-update`, run the real physical Groundwork correctness path with mandatory SQLite and
-the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.102` and the current Identity
+the opt-in SQL Server/PostgreSQL/MongoDB matrix against Groundwork `0.0.1-preview.103` and the current Identity
 storage manifest. Retain its provider identity, input/result digests, observable operations, and native route
 evidence captured at 100,000 physical records. The accepted `preview.76`/`preview.77` artifacts, the earlier `preview.60` /
 Identity manifest v1.0.4 matrix, and all older artifacts are immutable historical provenance, not current pass
@@ -1116,7 +1141,7 @@ collect timing/native-plan evidence, select a physical form, edit the coverage l
 performance verdict, independently prove provider-internal executable root-lease exclusion, or
 advance a Spec 094 task. Groundwork #50 completion, current-family evidence reconciliation, real EF
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
-stay in the #646 completion gate. The preview.102 exact-source publication/import remains a
+stay in the #646 completion gate. The preview.103 exact-source publication/import remains a
 prerequisite to any current provider or performance claim.
 
 ### Outbox drain correctness-runner checkpoint

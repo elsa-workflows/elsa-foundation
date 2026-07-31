@@ -8,7 +8,7 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class CheckpointFenceEvidenceImporterTests
 {
-    private const string ProviderVersion = "0.0.1-preview.102";
+    private const string ProviderVersion = "0.0.1-preview.103";
 
     [Fact]
     public async Task Imports_only_the_complete_36_record_generation_without_advancing_statuses()
@@ -115,7 +115,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
             Provenance = new CheckpointFenceEvidenceProvenance(
                 new string('a', 40),
                 new string('b', 40),
-                "runtime-checkpoint-fence-preview102")
+                "runtime-checkpoint-fence-preview103")
         };
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -605,7 +605,7 @@ public sealed class CheckpointFenceEvidenceImporterTests
             Provenance = new CheckpointFenceEvidenceProvenance(
                 RunGit("rev-parse", "HEAD"),
                 RunGit("rev-parse", "HEAD^{tree}"),
-                "runtime-checkpoint-fence-preview102");
+                "runtime-checkpoint-fence-preview103");
         }
 
         private string RunGit(params string[] arguments)

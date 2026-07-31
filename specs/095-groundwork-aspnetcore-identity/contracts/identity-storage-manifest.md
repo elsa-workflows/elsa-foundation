@@ -27,7 +27,7 @@
 ## Route Rules
 
 - Every route has a stable identity, finite maximum, explicit result operation, and deterministic final ID tie-break.
-  On the current `preview.102` family, every non-unique Identity route uses cursor paging and ends its
+  On the current `preview.103` family, every non-unique Identity route uses cursor paging and ends its
   physical index with the envelope `id_lookup_key`. The fixed-width lookup key is provider-applied
   ordering evidence, not a caller predicate, and keeps the widest SQL Server compound index below
   1,700 bytes; offset paging's `id_comparison_key` would exceed that provider limit for the declared

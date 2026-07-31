@@ -13,7 +13,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
 {
     private const string PublishOptIn = "ELSA_PUBLISH_GROUNDWORK_RUNTIME_EVIDENCE";
     private const string EvidenceOutput = "ELSA_GROUNDWORK_EVIDENCE_OUTPUT";
-    private const string EvidenceVersion = "0.0.1-preview.102";
+    private const string EvidenceVersion = "0.0.1-preview.103";
     private const string SourceCommit = "ELSA_GROUNDWORK_SOURCE_COMMIT";
     private const string SourceTree = "ELSA_GROUNDWORK_SOURCE_TREE";
     private const string RunIdentity = "ELSA_GROUNDWORK_RUN_IDENTITY";
@@ -67,7 +67,7 @@ public sealed class RuntimeProviderEvidencePublicationTests
         var provenance = GroundworkProviderEvidenceProvenance.Create(
             new string('a', 40),
             new string('b', 40),
-            "runtime-checkpoint-fence-preview102");
+            "runtime-checkpoint-fence-preview103");
 
         RequireExactCleanSource(provenance, provenance.ElsaCommit, provenance.ElsaTree, isClean: true);
 
