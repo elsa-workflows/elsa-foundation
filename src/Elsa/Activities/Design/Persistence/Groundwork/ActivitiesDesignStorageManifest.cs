@@ -256,6 +256,9 @@ public static class ActivitiesDesignStorageManifest
                         [
                             new BoundedQuerySortField(
                                 ActivityForkCandidateRetentionField,
+                                PhysicalSortDirection.Ascending),
+                            new BoundedQuerySortField(
+                                EntityIdField,
                                 PhysicalSortDirection.Ascending)
                         ])
                 ]),
@@ -307,20 +310,20 @@ public static class ActivitiesDesignStorageManifest
         var logicalIndexes = new[]
         {
             LogicalIndex("activity-definition-by-id-point", [DocumentIdField], unique: true),
-            LogicalIndex("activity-definition-by-id", [ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-category", [ActivityDefinitionCategoryField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-display-name", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField]),
-            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField])
+            LogicalIndex("activity-definition-by-id", [ActivityDefinitionIdField], unique: true),
+            LogicalIndex("activity-definition-by-type-key", [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField], unique: true),
+            LogicalIndex("activity-definition-by-category", [ActivityDefinitionCategoryField, ActivityDefinitionIdField], unique: true),
+            LogicalIndex("activity-definition-by-display-name", [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField], unique: true),
+            LogicalIndex("activity-definition-by-description", [ActivityDefinitionDescriptionField, ActivityDefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
         {
             PointLookupIndex("activity-definition-by-id-point"),
-            OffsetPhysicalIndex("activity-definition-by-id", "activity_definition_id"),
-            OffsetPhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
-            OffsetPhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
-            OffsetPhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
-            OffsetPhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
+            UniquePhysicalIndex("activity-definition-by-id", "activity_definition_id"),
+            UniquePhysicalIndex("activity-definition-by-type-key", "activity_type_key", "activity_definition_id"),
+            UniquePhysicalIndex("activity-definition-by-category", "category", "activity_definition_id"),
+            UniquePhysicalIndex("activity-definition-by-display-name", "display_name", "activity_definition_id"),
+            UniquePhysicalIndex("activity-definition-by-description", "description", "activity_definition_id")
         };
         var documentResults = new[]
         {
@@ -461,7 +464,8 @@ public static class ActivitiesDesignStorageManifest
                     ActivityDefinitionVersionDefinitionIdField,
                     ActivityDefinitionVersionSemVerSortKeyField,
                     ActivityDefinitionVersionIdField
-                ]),
+                ],
+                unique: true),
             LogicalIndex(
                 "activity-definition-version-by-definition-and-sort-key",
                 [ActivityDefinitionVersionDefinitionIdField, ActivityDefinitionVersionSemVerSortKeyField])
@@ -469,7 +473,7 @@ public static class ActivitiesDesignStorageManifest
         var physicalIndexes = new[]
         {
             PointLookupIndex("activity-definition-version-by-id-point"),
-            OffsetPhysicalIndex(
+            UniquePhysicalIndex(
                 "activity-definition-versions-by-definition",
                 "definition_id",
                 "sem_ver_sort_key",
@@ -626,16 +630,21 @@ public static class ActivitiesDesignStorageManifest
             new LogicalIndexDeclaration(
                 "management-by-sort",
                 [
-                    new IndexField(ManagementSortField, IndexValueKind.Keyword)
+                    new IndexField(ManagementSortField, IndexValueKind.Keyword),
+                    new IndexField(ManagementValidFromField, IndexValueKind.Keyword)
                 ],
                 IndexValueKind.Keyword,
-                false,
+                true,
                 MissingValueBehavior.Excluded),
             new LogicalIndexDeclaration(
                 "management-by-valid-to",
-                [new IndexField(ManagementValidToField, IndexValueKind.Keyword)],
+                [
+                    new IndexField(ManagementValidToField, IndexValueKind.Keyword),
+                    new IndexField(ManagementResourceIdField, IndexValueKind.Keyword),
+                    new IndexField(ManagementValidFromField, IndexValueKind.Keyword)
+                ],
                 IndexValueKind.Keyword,
-                false,
+                true,
                 MissingValueBehavior.Excluded)
         };
         var boundedQueries = new[]
@@ -664,7 +673,11 @@ public static class ActivitiesDesignStorageManifest
                 BoundedQueryExecutionClass.ScaleBearing,
                 supportsDisjunction: true,
                 supportsTotalCount: true,
-                sortFields: [new BoundedQuerySortField(ManagementSortField, PhysicalSortDirection.Ascending)],
+                sortFields:
+                [
+                    new BoundedQuerySortField(ManagementSortField, PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(ManagementValidFromField, PhysicalSortDirection.Ascending)
+                ],
                 predicateFields: pageIndexPredicates,
                 residualPredicateFields: pageResidualPredicates),
             new BoundedQueryDeclaration(
@@ -675,7 +688,12 @@ public static class ActivitiesDesignStorageManifest
                 QueryPagingSupport.Offset,
                 BoundedQueryExecutionClass.ScaleBearing,
                 supportsTotalCount: true,
-                sortFields: [new BoundedQuerySortField(ManagementValidToField, PhysicalSortDirection.Ascending)],
+                sortFields:
+                [
+                    new BoundedQuerySortField(ManagementValidToField, PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(ManagementResourceIdField, PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(ManagementValidFromField, PhysicalSortDirection.Ascending)
+                ],
                 predicateFields: [Predicate(ManagementValidToField, PortableQueryOperation.LessThanOrEqual)])
         };
         var physical = PhysicalTableDefinition.PhysicalEntityTable(
@@ -695,15 +713,18 @@ public static class ActivitiesDesignStorageManifest
                     [
                         new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition("sort_key", 1),
-                        new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, 2)
-                    ]),
+                        new PhysicalIndexColumnDefinition("valid_from", 2)
+                    ],
+                    isUnique: true),
                 new PhysicalIndexDefinition(
                     "management-by-valid-to",
                     [
                         new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition("valid_to", 1),
-                        new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, 2)
-                    ])
+                        new PhysicalIndexColumnDefinition("resource_id", 2),
+                        new PhysicalIndexColumnDefinition("valid_from", 3)
+                    ],
+                    isUnique: true)
             ]);
         return unit with
         {
@@ -755,8 +776,15 @@ public static class ActivitiesDesignStorageManifest
             ],
             missingValueBehavior: MissingValueBehavior.Excluded);
 
-    private static PhysicalIndexDefinition OffsetPhysicalIndex(string identity, params string[] columns) =>
-        PhysicalIndex(identity, [.. columns, Envelope.IdComparisonKeyColumn]);
+    private static PhysicalIndexDefinition UniquePhysicalIndex(string identity, params string[] columns) =>
+        new(
+            identity,
+            [
+                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
+            ],
+            isUnique: true,
+            missingValueBehavior: MissingValueBehavior.Excluded);
 
     private static PhysicalIndexDefinition PointLookupIndex(string identity) =>
         new(
@@ -933,17 +961,21 @@ public static class ActivitiesDesignStorageManifest
                 "A unique activity-design index cannot be used by an id-sorted exhaustive route; declare a separate non-unique ordered route.");
         }
         var logicalIndexes = indexes
-            .Select(index => new LogicalIndexDeclaration(
-                index.Identity,
-                [
-                    .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
-                    .. (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity)
-                        ? new[] { new IndexField(EntityIdField, IndexValueKind.Keyword) }
-                        : Array.Empty<IndexField>())
-                ],
-                IndexValueKind.Keyword,
-                index.IsUnique,
-                MissingValueBehavior.Excluded))
+            .Select(index =>
+            {
+                var includesDocumentIdentity = documentIdOrderedIndexes.Contains(index.Identity);
+                return new LogicalIndexDeclaration(
+                    index.Identity,
+                    [
+                        .. index.Fields.Select(field => new IndexField(field, IndexValueKind.Keyword)),
+                        .. (!index.IsUnique && includesDocumentIdentity
+                            ? new[] { new IndexField(EntityIdField, IndexValueKind.Keyword) }
+                            : Array.Empty<IndexField>())
+                    ],
+                    IndexValueKind.Keyword,
+                    index.IsUnique || includesDocumentIdentity,
+                    MissingValueBehavior.Excluded);
+            })
             .ToArray();
         var indexedColumns = indexes
             .SelectMany(index => index.Fields)
@@ -967,7 +999,8 @@ public static class ActivitiesDesignStorageManifest
                 };
                 physicalColumns.AddRange(index.Fields.Select((field, order) =>
                     new PhysicalIndexColumnDefinition(ColumnName(field), order + 1)));
-                if (!index.IsUnique && documentIdOrderedIndexes.Contains(index.Identity))
+                var includesDocumentIdentity = documentIdOrderedIndexes.Contains(index.Identity);
+                if (!index.IsUnique && includesDocumentIdentity)
                 {
                     physicalColumns.Add(new PhysicalIndexColumnDefinition(
                         "entity_id",
@@ -981,7 +1014,7 @@ public static class ActivitiesDesignStorageManifest
                     .Where(paging => paging is QueryPagingSupport.Cursor or QueryPagingSupport.Offset)
                     .Distinct()
                     .ToArray();
-                if (!index.IsUnique && providerTieBreakPaging.Length == 1)
+                if (!index.IsUnique && !includesDocumentIdentity && providerTieBreakPaging.Length == 1)
                 {
                     physicalColumns.Add(new PhysicalIndexColumnDefinition(
                         providerTieBreakPaging[0] == QueryPagingSupport.Cursor
@@ -989,7 +1022,7 @@ public static class ActivitiesDesignStorageManifest
                             : Envelope.IdComparisonKeyColumn,
                         physicalColumns.Count));
                 }
-                else if (!index.IsUnique && providerTieBreakPaging.Length > 1)
+                else if (!index.IsUnique && !includesDocumentIdentity && providerTieBreakPaging.Length > 1)
                 {
                     throw new InvalidOperationException(
                         $"Activity-design index '{index.Identity}' cannot mix cursor and offset provider identity tie-breaks.");
@@ -998,7 +1031,7 @@ public static class ActivitiesDesignStorageManifest
                 return new PhysicalIndexDefinition(
                     index.Identity,
                     physicalColumns,
-                    isUnique: index.IsUnique,
+                    isUnique: index.IsUnique || includesDocumentIdentity,
                     missingValueBehavior: MissingValueBehavior.Excluded);
             })
             .ToArray();

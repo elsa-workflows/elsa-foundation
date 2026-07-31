@@ -105,12 +105,31 @@ public sealed class ActivitiesDesignStorageManifestTests
         Assert.Equal("1.0.0", ActivitiesDesignStorageManifest.SchemaVersion);
     }
 
+    [Fact]
+    public void Offset_routes_use_unique_bounded_identity_tuples_instead_of_the_wide_provider_comparison_key()
+    {
+        var comparisonKey = new DocumentEnvelopeDefinition().IdComparisonKeyColumn;
+        foreach (var unit in ActivitiesDesignStorageManifest.Create().StorageUnits)
+        {
+            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+            foreach (var route in storage.BoundedQueries.Where(route =>
+                         route.PagingSupport == QueryPagingSupport.Offset))
+            {
+                Assert.True(storage.LogicalIndexes.Single(index => index.Identity == route.IndexIdentity).IsUnique);
+                var physical = table.Indexes.Single(index => index.LogicalName == route.IndexIdentity);
+                Assert.True(physical.IsUnique);
+                Assert.DoesNotContain(physical.Columns, column =>
+                    column.ColumnLogicalName == comparisonKey);
+            }
+        }
+    }
+
     private static void AssertUnit(
         global::Groundwork.Core.Manifests.StorageManifest manifest,
         string documentKind,
         params (string Index, string Query, string Path)[] expectedRoutes)
     {
-        var envelope = new DocumentEnvelopeDefinition();
         var unit = manifest.StorageUnits.Single(unit => unit.Identity.Value == documentKind);
         var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
         var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
@@ -128,9 +147,9 @@ public sealed class ActivitiesDesignStorageManifestTests
                 ],
                 query.SortFields);
             var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
-            Assert.False(index.IsUnique);
-            Assert.False(physicalIndex.IsUnique);
-            Assert.Equal(envelope.IdComparisonKeyColumn, physicalIndex.Columns.Last().ColumnLogicalName);
+            Assert.True(index.IsUnique);
+            Assert.True(physicalIndex.IsUnique);
+            Assert.Equal("entity_id", physicalIndex.Columns.Last().ColumnLogicalName);
         }
     }
 }

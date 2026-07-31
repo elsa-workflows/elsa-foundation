@@ -633,12 +633,14 @@ public sealed class ElsaRuntimeStorageManifestTests
             executionId => Assert.Equal(
                 ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
                 executionId.Path));
+        Assert.True(pinnedLogical.IsUnique);
         Assert.Contains(
             physical.Indexes,
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex &&
-                index.Columns.Count == 5 &&
-                index.Columns[^1].ColumnLogicalName == new DocumentEnvelopeDefinition().IdComparisonKeyColumn);
+                index.IsUnique &&
+                index.Columns.Count == 4 &&
+                index.Columns[^1].ColumnLogicalName == "history_workflow_execution_id");
     }
 
     [Fact]

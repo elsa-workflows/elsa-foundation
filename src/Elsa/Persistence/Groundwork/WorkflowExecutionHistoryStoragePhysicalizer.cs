@@ -84,7 +84,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
+            isUnique: true,
             MissingValueBehavior.Excluded);
         var faultedAttentionIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
@@ -192,9 +192,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(CollectionColumn, 1),
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3),
-                        new PhysicalIndexColumnDefinition(envelope.IdComparisonKeyColumn, 4)
-                    ])
+                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
+                    ],
+                    isUnique: true)
             ]);
         var historyQuery = new BoundedQueryDeclaration(
             ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,

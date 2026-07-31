@@ -47,10 +47,15 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             Assert.True(page.SupportsDisjunction);
             Assert.True(page.SupportsTotalCount);
             Assert.Equal(
-                new BoundedQuerySortField(
-                    ActivitiesDesignStorageManifest.ManagementSortField,
-                    PhysicalSortDirection.Ascending),
-                Assert.Single(page.SortFields));
+                [
+                    new BoundedQuerySortField(
+                        ActivitiesDesignStorageManifest.ManagementSortField,
+                        PhysicalSortDirection.Ascending),
+                    new BoundedQuerySortField(
+                        ActivitiesDesignStorageManifest.ManagementValidFromField,
+                        PhysicalSortDirection.Ascending)
+                ],
+                page.SortFields);
             Assert.Equal(
                 ActivitiesDesignStorageManifest.ManagementSortField,
                 Assert.Single(page.PredicateFields).Path);
@@ -80,13 +85,18 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
                 policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-id").Columns,
                 scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
                 id => Assert.NotEqual("valid_to", id.ColumnLogicalName));
+            var sortIndex = policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-sort");
+            Assert.True(sortIndex.IsUnique);
             Assert.Collection(
-                policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-sort").Columns,
+                sortIndex.Columns,
                 scope => Assert.Equal("storage_scope", scope.ColumnLogicalName),
                 sort => Assert.Equal("sort_key", sort.ColumnLogicalName),
-                identity => Assert.Equal(
-                    new DocumentEnvelopeDefinition().IdComparisonKeyColumn,
-                    identity.ColumnLogicalName));
+                revision => Assert.Equal("valid_from", revision.ColumnLogicalName));
+            var retentionIndex = policy.Definition.Indexes.Single(index => index.LogicalName == "management-by-valid-to");
+            Assert.True(retentionIndex.IsUnique);
+            Assert.Equal(
+                ["storage_scope", "valid_to", "resource_id", "valid_from"],
+                retentionIndex.Columns.Select(column => column.ColumnLogicalName));
         });
     }
 

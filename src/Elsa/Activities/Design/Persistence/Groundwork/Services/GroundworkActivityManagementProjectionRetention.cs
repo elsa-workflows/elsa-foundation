@@ -56,7 +56,11 @@ public sealed class GroundworkActivityManagementProjectionRetention(
                         [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
                             ActivitiesDesignStorageManifest.ManagementValidToField,
                             GroundworkActivityManagementProjectionWriter.SequenceKey(oldestRetainedSequence)))],
-                        [new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidToField)],
+                        [
+                            new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidToField),
+                            new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementResourceIdField),
+                            new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
+                        ],
                         offset,
                         500),
                     cancellationToken);

@@ -76,9 +76,11 @@ lacked provider-applied identity ordering tails. Adding offset tails would have 
 cursor-paged, appends the fixed-width `id_lookup_key` tail with the exact declared sort direction, and
 changes catalog-capacity cleanup from offset skipping to bounded continuation traversal. A direct
 regression proves cleanup sends no `Skip` and advances through a non-null continuation. The same CI run
-also exposed three stale test expectations for already-correct preview.102 offset tails in Activities
-Design temporal management, runtime pinned-artifact history, and Secrets; those assertions now pin the
-new `id_comparison_key` column explicitly.
+also exposed three stale test expectations around preview.102 offset tails in Activities Design
+temporal management, runtime pinned-artifact history, and Secrets. The first remediation updated
+those assertions to the new `id_comparison_key` shape; the later exact-range correctness review below
+proved that resolver-green shape was not SQL Server-deployable and superseded it with bounded unique
+tuples plus a provider-native validator.
 
 Root verification of that remediation passed the complete OpenTelemetry Groundwork suite (76/76), the
 Unified Host schema-activation class (8/8), the three formerly stale focused tests (1/1 each), and a
@@ -103,6 +105,38 @@ dispositions were:
 | Correctness/mechanism | The bounded exhaustive pager could loop when a provider returned an empty page with a fresh continuation. It now rejects that impossible shape, with a two-token regression proving the guard. The originating reviewer re-verified the fix. | PASS |
 | Evidence integrity | The preview evidence importer admitted a dirty source checkout. It now rejects tracked, staged, and untracked dirt, retaining only the exact validated destination-generation recovery exception. The originating reviewer re-verified the focused importer/guard suite. | PASS |
 | Scope/test preservation | The source scanner could miss a forbidden direct query call when an allowed pager call appeared on the same line. It now removes only the qualified allowed invocation before scanning the remainder; a mixed-line regression proves the direct call is still reported. The generated dependency maps were refreshed from the clean remediated source and the originating reviewer re-verified both dispositions. | PASS |
+
+The next exact-range review inspected
+`ca818b649d85c5167e2222c0ec534e215153d473..8566416c2ef5b94774df39462189de4f8003aecc`.
+Evidence-integrity and scope/test-preservation reviewers returned PASS, but correctness/mechanism
+blocked the candidate: offline resolution did not execute SQL Server's provider-native 1,700-byte
+index-key validator, and 31 non-point offset indexes outside OpenTelemetry still carried the
+1,350-byte `id_comparison_key` tail. The widest examples reached 2,374 bytes.
+
+The remediation adds a permanent no-I/O construction test over the complete
+`GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema`; constructing
+`SqlServerPhysicalDocumentStore` invokes the real provider validator for every compiled route.
+The initially failing `activity-definition-by-category` index reported 2,374 bytes. The corrected
+manifests remove the redundant provider tail only where a bounded tuple has a storage-enforced
+identity:
+
+- Activities and Workflow Design list indexes include the projected entity ID used as the document
+  ID and are now unique composites;
+- reusable Activities routes retain their business-key order and add the projected entity ID as
+  their final unique component;
+- temporal management routes use `(sort key, valid-from)` or
+  `(valid-to, resource ID, valid-from)`, preserving public offset semantics while distinguishing
+  retained revisions;
+- Secrets reuses the already-enforced `(tenant, normalized name)` uniqueness with status added; and
+- the pinned-artifact route includes the workflow execution ID used as the runtime document ID.
+
+The provider-native full-reference validator now passes. Root verification also passed Activities
+Design Groundwork **73/73**, temporal projections **12/12**, Workflow Design Groundwork **96/96**,
+Secrets **88/88**, runtime Groundwork **739/739**, and Unified Host **62/62**. The SQLite cold-start
+schema-operation baseline is **933**, and the continuation-cycle fixture now returns non-empty pages
+so it exercises the repeated-token guard rather than the earlier empty-page guard. The candidate
+remains draft until the originating correctness reviewer and the other two exact-range reviewers
+inspect the remediated commit.
 
 These are integration-preparation facts only. They import no preview.102 provider evidence, advance no
 coverage-ledger row, issue no performance verdict, and complete no Spec 094 task.

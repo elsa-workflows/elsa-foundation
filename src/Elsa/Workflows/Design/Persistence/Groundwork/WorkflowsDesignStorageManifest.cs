@@ -108,18 +108,18 @@ public static class WorkflowsDesignStorageManifest
         var indexes = new[]
         {
             LogicalIndex("definition-by-id-point", [DocumentIdField], unique: true),
-            LogicalIndex("definition-by-id-list", [DefinitionIdField]),
-            LogicalIndex("definition-by-name", [DefinitionNameField, DefinitionIdField]),
-            LogicalIndex("definition-by-description", [DefinitionDescriptionField, DefinitionIdField]),
-            LogicalIndex("definition-by-search", [DefinitionNameField, DefinitionIdField])
+            LogicalIndex("definition-by-id-list", [DefinitionIdField], unique: true),
+            LogicalIndex("definition-by-name", [DefinitionNameField, DefinitionIdField], unique: true),
+            LogicalIndex("definition-by-description", [DefinitionDescriptionField, DefinitionIdField], unique: true),
+            LogicalIndex("definition-by-search", [DefinitionNameField, DefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
         {
             PointLookupIndex("definition-by-id-point"),
-            OffsetPhysicalIndex("definition-by-id-list", "definition_id"),
-            OffsetPhysicalIndex("definition-by-name", "name", "definition_id"),
-            OffsetPhysicalIndex("definition-by-description", "description", "definition_id"),
-            OffsetPhysicalIndex("definition-by-search", "name", "definition_id")
+            UniquePhysicalIndex("definition-by-id-list", "definition_id"),
+            UniquePhysicalIndex("definition-by-name", "name", "definition_id"),
+            UniquePhysicalIndex("definition-by-description", "description", "definition_id"),
+            UniquePhysicalIndex("definition-by-search", "name", "definition_id")
         };
         var queries = new[]
         {
@@ -148,14 +148,14 @@ public static class WorkflowsDesignStorageManifest
         var indexes = new[]
         {
             LogicalIndex("version-by-id", [DocumentIdField], unique: true),
-            LogicalIndex("versions-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField]),
+            LogicalIndex("versions-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField], unique: true),
             LogicalIndex("version-by-definition-and-sort-key", [VersionDefinitionIdField, VersionSemVerSortKeyField], unique: true),
             LogicalIndex("latest-version-by-definition", [VersionDefinitionIdField, VersionSemVerSortKeyField, VersionIdField])
         };
         var physicalIndexes = new[]
         {
             PointLookupIndex("version-by-id"),
-            OffsetPhysicalIndex("versions-by-definition", "definition_id", "sem_ver_sort_key", "version_id"),
+            UniquePhysicalIndex("versions-by-definition", "definition_id", "sem_ver_sort_key", "version_id"),
             PhysicalIndex("version-by-definition-and-sort-key", true, "definition_id", "sem_ver_sort_key"),
             OrderedPhysicalIndex(
                 "latest-version-by-definition",
@@ -188,18 +188,17 @@ public static class WorkflowsDesignStorageManifest
         var indexes = new[]
         {
             LogicalIndex("draft-by-id", [DocumentIdField], unique: true),
-            LogicalIndex("drafts-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField])
+            LogicalIndex("drafts-by-definition", [DraftDefinitionIdField, DraftLastModifiedAtField, DraftCreatedAtField, DraftIdField], unique: true)
         };
         var physicalIndexes = new[]
         {
             PointLookupIndex("draft-by-id"),
-            OrderedPhysicalIndex(
+            OrderedUniquePhysicalIndex(
                 "drafts-by-definition",
                 ("definition_id", PhysicalSortDirection.Ascending),
                 ("last_modified_at", PhysicalSortDirection.Descending),
                 ("created_at", PhysicalSortDirection.Descending),
-                ("draft_id", PhysicalSortDirection.Descending),
-                (Envelope.IdComparisonKeyColumn, PhysicalSortDirection.Ascending))
+                ("draft_id", PhysicalSortDirection.Descending))
         };
         var queries = new[]
         {
@@ -283,8 +282,8 @@ public static class WorkflowsDesignStorageManifest
     private static PhysicalIndexDefinition PhysicalIndex(string identity, bool unique, params string[] columns) =>
         new(identity, [new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0), .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))], isUnique: unique, missingValueBehavior: MissingValueBehavior.Excluded);
 
-    private static PhysicalIndexDefinition OffsetPhysicalIndex(string identity, params string[] columns) =>
-        PhysicalIndex(identity, false, [.. columns, Envelope.IdComparisonKeyColumn]);
+    private static PhysicalIndexDefinition UniquePhysicalIndex(string identity, params string[] columns) =>
+        PhysicalIndex(identity, true, columns);
 
     private static PhysicalIndexDefinition PointLookupIndex(string identity) =>
         new(identity,
@@ -305,6 +304,18 @@ public static class WorkflowsDesignStorageManifest
             .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column.Column, index + 1, column.Direction))
         ],
         missingValueBehavior: MissingValueBehavior.Excluded);
+
+    private static PhysicalIndexDefinition OrderedUniquePhysicalIndex(
+        string identity,
+        params (string Column, PhysicalSortDirection Direction)[] columns) =>
+        new(
+            identity,
+            [
+                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column.Column, index + 1, column.Direction))
+            ],
+            isUnique: true,
+            missingValueBehavior: MissingValueBehavior.Excluded);
 
     private static BoundedQueryDeclaration Query(
         string identity,

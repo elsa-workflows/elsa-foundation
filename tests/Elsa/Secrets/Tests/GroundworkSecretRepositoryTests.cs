@@ -259,15 +259,15 @@ public sealed class GroundworkSecretRepositoryTests
         var filteredPhysicalIndex = Assert.Single(
             policy.Definition.Indexes,
             index => index.LogicalName == SecretsStorageManifest.SecretFilteredListIndex);
+        Assert.True(storage.LogicalIndexes.Single(index =>
+            index.Identity == SecretsStorageManifest.SecretFilteredListIndex).IsUnique);
+        Assert.True(filteredPhysicalIndex.IsUnique);
         Assert.Collection(
             filteredPhysicalIndex.Columns,
             scope => Assert.Equal(new DocumentEnvelopeDefinition().StorageScopeColumn, scope.ColumnLogicalName),
             tenant => Assert.Equal(SecretsStorageManifest.TenantIdField, tenant.ColumnLogicalName),
             status => Assert.Equal(SecretsStorageManifest.StatusField, status.ColumnLogicalName),
-            name => Assert.Equal(SecretsStorageManifest.NormalizedNameField, name.ColumnLogicalName),
-            identity => Assert.Equal(
-                new DocumentEnvelopeDefinition().IdComparisonKeyColumn,
-                identity.ColumnLogicalName));
+            name => Assert.Equal(SecretsStorageManifest.NormalizedNameField, name.ColumnLogicalName));
         Assert.Equal(
             SecretNameConstraints.MaximumLength,
             policy.Definition.ProjectedColumns.Single(column =>

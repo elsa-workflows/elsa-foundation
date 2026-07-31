@@ -145,6 +145,26 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
+    public void Offset_routes_use_unique_entity_identity_tuples_without_the_wide_provider_comparison_key()
+    {
+        var comparisonKey = new DocumentEnvelopeDefinition().IdComparisonKeyColumn;
+        foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
+        {
+            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+            foreach (var route in storage.BoundedQueries.Where(route =>
+                         route.PagingSupport == QueryPagingSupport.Offset))
+            {
+                Assert.True(storage.LogicalIndexes.Single(index => index.Identity == route.IndexIdentity).IsUnique);
+                var physical = table.Indexes.Single(index => index.LogicalName == route.IndexIdentity);
+                Assert.True(physical.IsUnique);
+                Assert.DoesNotContain(physical.Columns, column =>
+                    column.ColumnLogicalName == comparisonKey);
+            }
+        }
+    }
+
+    [Fact]
     public void Identity_comparison_algorithm_version_participates_in_the_target_fingerprint()
     {
         var baselineManifest = WorkflowsDesignStorageManifest.Create();
