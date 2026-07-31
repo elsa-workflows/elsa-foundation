@@ -58,6 +58,24 @@ it supplied no accepted result. The serial reruns above supersede it. No databas
 provider-evidence publisher, mechanical importer, or benchmark timing process ran during this
 alignment.
 
+After freezing candidate `5f56c34cac44c65cffec81f9959c34eb07db7e30`, root also passed the
+complete architecture suite **351/351** and the OpenIddict Groundwork unit/manifest suite **36/36**
+against the same implementation and package graph.
+
+Three read-only reviewers were briefed adversarially to assume green-washing and inspected exact
+range
+`77d6109f6a4dac1f6b3994635e17e5a2342ab045..5f56c34cac44c65cffec81f9959c34eb07db7e30`:
+
+| Axis | Verdict and disposition |
+|---|---|
+| Correctness/mechanism | **PASS** — all seven packages, the tool, current-version guards, and generated package/dependency maps coherently resolve `preview.103`; no production API/schema behavior changed and remaining `preview.102` references are historical. |
+| Evidence integrity | **PASS** — upstream PR #157, merge SHA, and publisher run provenance are valid; the ledger contains zero `preview.103` records, immutable historical attachments are unchanged, and no status/verdict claim advances. |
+| Scope/test preservation | **PASS** — ledger content other than `groundworkVersion` is unchanged, status counts remain 30 implemented / 4 externally blocked / 1 planned, performance-verdict count remains zero, and no task, EF ratchet, historical evidence, issue, or Project state changed. |
+
+Requested Luna reviewer capacity was unavailable; all three reviews used the documented GPT-5.6
+Terra High fallback. No finding required source remediation. The final record/map commits were
+separately re-verified as documentation-only before merge.
+
 **2026-07-31 preview.102 integration preparation**: the seven Groundwork packages and
 `Groundwork.Tool` align to the public `0.0.1-preview.102` release built from Groundwork merge
 `68e7c344163c199024aed00ccdcaa2deb51ef5bb`. This exact family includes the provider-applied
