@@ -39,7 +39,6 @@ public sealed partial class GroundworkIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int SingleResultTake = 1;
     private const int AmbiguousEmailTake = 2;
-    private const int RelationshipPageSize = 512;
     private const int MaxRelationshipMaterialization = 100_000;
     private const int LockoutTransitionMaxAttempts = 5;
 

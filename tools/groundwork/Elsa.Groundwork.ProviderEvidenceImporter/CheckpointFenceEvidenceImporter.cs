@@ -90,6 +90,9 @@ public static class CheckpointFenceEvidenceImporter
             ValidateStagedRecords(records, stagingRoot, request);
         }
 
+        ValidateCleanSourceRepository(
+            request.SourceRepositoryRoot,
+            recoverExistingGeneration ? destinationVersionDirectory : null);
         ValidateLedgerHasNoCurrentGeneration(ledger, request.ProviderVersion);
         var ledgerWithImportedEvidence = AppendRecords(ledger, records);
         EnsureStatusesUnchanged(ledger, ledgerWithImportedEvidence);
@@ -173,6 +176,38 @@ public static class CheckpointFenceEvidenceImporter
         {
             throw new InvalidOperationException(
                 "Versioned provider evidence must be imported against the exact checked-out source commit and tree recorded in its provenance.");
+        }
+    }
+
+    private static void ValidateCleanSourceRepository(
+        string sourceRepositoryRoot,
+        string? exactRecoverableGenerationDirectory)
+    {
+        var sourceRepository = CanonicalPath(sourceRepositoryRoot);
+        var arguments = new List<string>
+        {
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            "."
+        };
+        if (exactRecoverableGenerationDirectory is not null &&
+            IsWithin(exactRecoverableGenerationDirectory, sourceRepository))
+        {
+            var relativeGeneration = Path.GetRelativePath(
+                    sourceRepository,
+                    exactRecoverableGenerationDirectory)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            arguments.Add($":(exclude){relativeGeneration}");
+            arguments.Add($":(exclude){relativeGeneration}/**");
+        }
+
+        var worktreeStatus = Git(sourceRepository, [.. arguments]);
+        if (worktreeStatus.Length != 0)
+        {
+            throw new InvalidOperationException(
+                "Versioned provider evidence must be imported from an exact clean source repository with no tracked, staged, or untracked changes.");
         }
     }
 

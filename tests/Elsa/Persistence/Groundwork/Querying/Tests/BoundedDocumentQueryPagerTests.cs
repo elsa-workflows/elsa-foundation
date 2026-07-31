@@ -97,6 +97,21 @@ public sealed class BoundedDocumentQueryPagerTests
     }
 
     [Fact]
+    public async Task Continuation_pager_rejects_a_continuation_after_an_empty_page()
+    {
+        var store = new ScriptedBoundedDocumentStore(
+            new DocumentQueryResult([], 0, "next-1"),
+            new DocumentQueryResult([], 0, "next-2"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            BoundedDocumentQueryPager.QueryAllAsync(
+                store, DocumentKind, ExhaustQuery, [], CancellationToken.None).AsTask());
+
+        Assert.Contains("continuation after an empty page", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, store.QueryCount);
+    }
+
+    [Fact]
     public async Task Continuation_pager_honors_cancellation_before_provider_io()
     {
         var store = new ScriptedBoundedDocumentStore(new DocumentQueryResult([], 0));

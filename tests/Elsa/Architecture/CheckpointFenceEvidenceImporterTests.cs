@@ -124,6 +124,24 @@ public sealed class CheckpointFenceEvidenceImporterTests
         Assert.Contains("exact checked-out source commit and tree", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("tracked")]
+    [InlineData("staged")]
+    [InlineData("untracked")]
+    public async Task Rejects_a_dirty_source_repository_before_writing_the_generation_or_ledger(
+        string dirtyState)
+    {
+        using var fixture = new ImportFixture();
+        fixture.DirtySourceRepository(dirtyState);
+        var ledgerBefore = File.ReadAllText(fixture.LedgerPath);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ImportAsync());
+
+        Assert.Contains("exact clean source repository", exception.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.DestinationGenerationPath));
+        Assert.Equal(ledgerBefore, File.ReadAllText(fixture.LedgerPath));
+    }
+
     [Fact]
     public async Task Rejects_records_without_the_exact_provider_topology_and_independent_clients()
     {
@@ -451,6 +469,25 @@ public sealed class CheckpointFenceEvidenceImporterTests
             ["elsaTree"] = Provenance.ElsaTree,
             ["runIdentity"] = Provenance.RunIdentity
         };
+
+        public void DirtySourceRepository(string dirtyState)
+        {
+            switch (dirtyState)
+            {
+                case "tracked":
+                    File.AppendAllText(LedgerPath, Environment.NewLine);
+                    break;
+                case "staged":
+                    File.WriteAllText(Path.Combine(SourceRepositoryRoot, "staged-evidence-change.txt"), "dirty");
+                    RunGit("add", "staged-evidence-change.txt");
+                    break;
+                case "untracked":
+                    File.WriteAllText(Path.Combine(SourceRepositoryRoot, "untracked-evidence-change.txt"), "dirty");
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(dirtyState), dirtyState, null);
+            }
+        }
 
         public void SeedRecoverableDestination()
         {

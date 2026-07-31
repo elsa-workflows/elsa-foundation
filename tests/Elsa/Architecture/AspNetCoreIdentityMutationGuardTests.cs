@@ -59,14 +59,40 @@ public sealed class AspNetCoreIdentityMutationGuardTests
                     QueryAllAsync();
             }
             """);
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/MixedPager.cs",
+            """
+            namespace Injected;
 
-        var diagnostic = Assert.Single(AspNetCoreIdentityMutationScanner.Scan(fixture.Path));
+            public sealed class MixedPager
+            {
+                public async Task LoadAsync()
+                {
+                    await BoundedDocumentQueryPager.QueryAllAsync(); await store.QueryAllAsync();
+                }
+            }
+            """);
 
-        Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
-        Assert.Equal(
-            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnboundedPager.cs",
-            diagnostic.Path);
-        Assert.Equal(6, diagnostic.Line);
+        var diagnostics = AspNetCoreIdentityMutationScanner.Scan(fixture.Path);
+
+        Assert.Collection(
+            diagnostics,
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/MixedPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(7, diagnostic.Line);
+            },
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnboundedPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(6, diagnostic.Line);
+            });
     }
 
     public static TheoryData<string, string, string, int> MutationCases => new()
@@ -272,9 +298,9 @@ internal static partial class AspNetCoreIdentityMutationScanner
                     "Identity user/role authority documents have exactly one canonical definition.");
             }
 
+            var codeWithoutReviewedPager = ReviewedBoundedPagerRegex().Replace(code, string.Empty);
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
-                UnboundedQueryRegex().IsMatch(code) &&
-                !ReviewedBoundedPagerRegex().IsMatch(code))
+                UnboundedQueryRegex().IsMatch(codeWithoutReviewedPager))
             {
                 Add(diagnostics, "IDENTITY-UNBOUNDED-QUERY", relativePath, lineNumber,
                     "Groundwork Identity may use only declared, finite bounded-query routes.");

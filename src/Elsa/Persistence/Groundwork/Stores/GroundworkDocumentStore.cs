@@ -113,6 +113,11 @@ public static class BoundedDocumentQueryPager
                 throw new InvalidOperationException(
                     $"Document query '{queryIdentity}' provider page exceeded the requested bound.");
             }
+            if (result.Documents.Count == 0 && result.NextContinuation is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{queryIdentity}' provider returned a continuation after an empty page.");
+            }
 
             documents.AddRange(result.Documents);
             if (maximumDocumentCount is { } maximum && documents.Count > maximum)
