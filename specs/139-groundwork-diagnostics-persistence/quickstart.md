@@ -481,8 +481,29 @@ hash-bound manifest above now retains their exact-source receipt. A second
 evidence review rejected hashes whose TRX preimages remained only under
 `/tmp`; the final receipt retains sanitized artifacts with every test
 name/outcome/duration and summary counter, along with the sanitized package
-resolution and actual tool output. Both originating reviewers must re-verify
-the final evidence commit before this draft can be promoted.
+resolution and actual tool output.
+
+Three independent reviewers then re-verified the complete remediated range
+`d16590059a897e83c7098ab20c4909c97602b9c4..e3cce22fde297252e344eb2d1069c233e1ecbb70`
+read-only and returned **PASS**:
+
+- Correctness/mechanism confirmed exact planned-versus-provider order,
+  fail-closed equivalent-winner reconciliation, divergent-winner preservation,
+  and the narrowed separation between deterministic branch proof and
+  four-provider public behavior.
+- Evidence integrity reproduced every manifest-linked artifact hash and
+  counter, the 78/78, 2/2, 4/4, and 54/54 inventories, all four provider case
+  names, package/tool resolution, source/configuration hashes, topology, and
+  nonclaims.
+- Scope/test preservation found no deleted, skipped, or weakened test; no
+  secret, connection value, host name, user path, or container identifier in
+  retained artifacts; and no package, solution, shell, ledger, EF,
+  performance, or final-removal edit.
+
+The required Luna reviewer model was unavailable; all three reviews used
+GPT-5.6 Terra High as the documented delegate fallback. The next commit records
+only these final dispositions. Before merge, the same reviewers re-verify that
+record-only head so the durable account cannot diverge from the candidate.
 
 This checkpoint repairs current-family correctness and native-plan evidence
 only. It does not import a #646 performance verdict, delete either diagnostics
