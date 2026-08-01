@@ -2,12 +2,6 @@
 
   <!-- Test-support library (not a test project): the shared in-memory Groundwork IDocumentStore
        test double consumed by the Groundwork-backed store test suites across several domains. -->
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Groundwork.Core" />

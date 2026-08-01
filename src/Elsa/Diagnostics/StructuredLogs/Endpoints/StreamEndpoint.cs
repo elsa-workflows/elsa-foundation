@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Extensions;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
@@ -81,11 +82,7 @@ internal sealed class StreamEndpoint(
         }
 
         var response = HttpContext.Response;
-        response.StatusCode = 200;
-        response.ContentType = "text/event-stream";
-        response.Headers.CacheControl = "no-cache";
-        response.Headers.Connection = "keep-alive";
-        response.Headers["X-Accel-Buffering"] = "no";
+        response.StartServerSentEventStream();
         await response.Body.FlushAsync(ct);
 
         try

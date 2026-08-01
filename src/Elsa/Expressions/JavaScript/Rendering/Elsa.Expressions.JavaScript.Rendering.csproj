@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
 	  <Version>0.0.1-local</Version>
   </PropertyGroup>
 
@@ -18,7 +15,6 @@
 		<PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
 	</ItemGroup>
-
 
   <ItemGroup>
     <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
