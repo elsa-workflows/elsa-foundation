@@ -19,6 +19,9 @@
   <Folder Name="/tools/evidence/">
     <Project Path="tools/evidence/Preview95SchemaFixtureReproducer.csproj" />
   </Folder>
+  <Folder Name="/tools/maps/">
+    <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Apps/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
