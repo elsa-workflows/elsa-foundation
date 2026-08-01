@@ -48,6 +48,14 @@ This bucket exists so weak implementations, missing tests, TestContainers policy
 ## Current Roadmap Notes
 
 - Start from a selected verification target, not from a broad "fix tests" pass.
+- **Activity contract reality (2026-08).** The Elsa 4 activity library now has a contract-surface snapshot guard and
+  an in-process behavioural drive that measures declared outcomes, outputs and required inputs against what the
+  engine actually commits ([report](../reports/elsa-4-activity-behavioural-drive-2026-08.md), issue #1119, PR #1123).
+  26 of 28 activities are covered. The open work unit is
+  [#1124](https://github.com/elsa-workflows/elsa-foundation/issues/1124): `DispatchWorkflow` and `GraphActivity` are
+  undriven in-process and uncovered over REST. `DispatchWorkflow` matters most — it has the library's richest outcome
+  set (five ports) and none has been shown reachable by this measurement, which is where an undetected dead port is
+  most likely to be.
 - Runtime-specific execution decisions should come from the Runtime Execution Seam bucket first.
 - Integration testing policy should be grounded in actual connected-feature verification needs.
 
