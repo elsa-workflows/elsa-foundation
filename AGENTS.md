@@ -84,7 +84,10 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- all
 
 The tool needs the .NET SDK. If it is unavailable, ask the user to install it before refreshing maps.
 
-Generated maps are committed snapshots and are never refreshed automatically. Before relying on any
+Generated maps are committed snapshots and are never refreshed automatically. CI does not
+regenerate them; it only runs `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`,
+which compares the committed `input_fingerprint` against the tree and fails when a refresh is
+due. Refreshing stays a deliberate, human-initiated act. Before relying on any
 map for navigation or verification, check `docs/maps/manifest.json`. If relevant inputs are dirty,
 changed, or freshness is uncertain, report that the snapshot is stale and ask the user to invoke or
 authorize the narrowest relevant map refresh. After an explicitly authorized refresh, review any

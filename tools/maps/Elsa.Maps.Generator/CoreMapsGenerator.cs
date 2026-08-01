@@ -466,19 +466,7 @@ public static partial class CoreMapsGenerator
         IReadOnlyList<FeatureRow> features,
         IReadOnlyList<SpecFacts> specs)
     {
-        var inputs = repo.ListFiles("src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md")
-            .Concat(["Directory.Packages.props"])
-            .Concat(GeneratorScripts)
-            .Where(path => File.Exists(repo.Absolute(path)))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        var listing = new StringBuilder();
-        foreach (var path in inputs)
-            listing.Append(path).Append('=').Append(Sha256File(repo.Absolute(path))).Append('\n');
-
-        var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(listing.ToString())));
+        var (fingerprint, inputs) = ComputeFingerprint(repo);
         var head = repo.TryGetHead();
         var dirty = repo.TryGetInputsDirty();
 
@@ -490,7 +478,7 @@ public static partial class CoreMapsGenerator
             .Line($"  \"git_head\": {(head is null ? "null" : $"\"{head}\"")},")
             .Line($"  \"relevant_inputs_dirty\": {(dirty is null ? "null" : dirty.Value ? "true" : "false")},")
             .Line($"  \"input_fingerprint\": \"{fingerprint}\",")
-            .Line($"  \"input_file_count\": {inputs.Length},")
+            .Line($"  \"input_file_count\": {inputs.Count},")
             .Line("  \"counts\": {")
             .Line($"    \"source_projects\": {projects.Count(project => project.Kind == "source")},")
             .Line($"    \"test_projects\": {projects.Count(project => project.Kind == "test")},")
@@ -535,6 +523,27 @@ public static partial class CoreMapsGenerator
         "tools/maps/generate-feature-dependency-map.ps1",
         "tools/maps/generate-feature-dependency-map.sh"
     ];
+
+    /// <summary>
+    /// The fingerprint over every map input, plus the input list it was computed from. Exposed so the
+    /// freshness check can recompute it without writing anything.
+    /// </summary>
+    public static (string Fingerprint, IReadOnlyList<string> Inputs) ComputeFingerprint(RepoContext repo)
+    {
+        var inputs = repo.ListFiles("src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md")
+            .Concat(["Directory.Packages.props"])
+            .Concat(GeneratorScripts)
+            .Where(path => File.Exists(repo.Absolute(path)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        var listing = new StringBuilder();
+        foreach (var path in inputs)
+            listing.Append(path).Append('=').Append(Sha256File(repo.Absolute(path))).Append('\n');
+
+        return (Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(listing.ToString()))), inputs);
+    }
 
     private static string Sha256File(string path)
     {
