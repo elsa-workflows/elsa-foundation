@@ -530,7 +530,12 @@ public static partial class CoreMapsGenerator
     /// </summary>
     public static (string Fingerprint, IReadOnlyList<string> Inputs) ComputeFingerprint(RepoContext repo)
     {
-        var inputs = repo.ListFiles("src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md")
+        // EXTENSION_POINTS.md files are inputs to the extension-point map, so they belong in the
+        // fingerprint. The shell generator omitted them, which meant adding an extension-point
+        // heading changed the map while the freshness signal still read clean.
+        var inputs = repo.ListFiles(
+                "src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md",
+                "EXTENSION_POINTS.md", "src/EXTENSION_POINTS.md", "src/*/EXTENSION_POINTS.md")
             .Concat(["Directory.Packages.props"])
             .Concat(GeneratorScripts)
             .Where(path => File.Exists(repo.Absolute(path)))
