@@ -21,6 +21,7 @@ try
             "domain" => DomainMapGenerator.Generate(repo, projects),
             "extension-points" => ExtensionPointMapGenerator.Generate(repo, projects),
             "architecture-reference" => ArchitectureReferenceMapGenerator.Generate(repo, projects),
+            "feature-dependency" => FeatureDependencyMapGenerator.Generate(repo, projects),
             _ => throw new ArgumentException($"Unknown map layer '{layer}'.")
         });
     }
@@ -39,5 +40,5 @@ catch (Exception exception) when (exception is ArgumentException or InvalidOpera
 
 static IEnumerable<string> Expand(IReadOnlyList<string> requested) =>
     requested.Contains("all", StringComparer.Ordinal)
-        ? ["domain", "extension-points", "architecture-reference"]
+        ? ["domain", "extension-points", "architecture-reference", "feature-dependency"]
         : requested;
