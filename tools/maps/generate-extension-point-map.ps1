@@ -3,5 +3,5 @@
 # AGENTS.md, docs/maps/README.md and ~27 spec tasks.md files document this exact invocation.
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-dotnet run --project (Join-Path $scriptDir "Elsa.Maps.Generator") -- extension-points @args
+dotnet run --project (Join-Path $scriptDir "Elsa.Maps.Generator") -- extension-points
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -209,8 +209,7 @@ for ((pass = 0; pass < passes; pass++)); do
   done
   cat "$pass_file" >> "$warm_file"
   sort -n "$pass_file" > "$pass_file.sorted"
-  percentile "$pass_file.sorted" 0.95 >> "$pass_file.p95"
-  cat "$pass_file.p95" >> "$pass_p95_file"
+  percentile "$pass_file.sorted" 0.95 >> "$pass_p95_file"
 done
 
 sorted_file="$temporary_directory/warm-sorted-ms"
