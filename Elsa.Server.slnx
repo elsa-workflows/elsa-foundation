@@ -316,8 +316,10 @@
   <Folder Name="/tests/" />
   <Folder Name="/tests/Elsa/" />
   <Folder Name="/tests/Elsa/Activities/">
-    <Project Path="tests/Elsa/Activities/Behavioral/Elsa.Activities.Behavioral.Tests.csproj" />
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Behavioral/">
+    <Project Path="tests/Elsa/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/ControlFlow/">
     <Project Path="tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
