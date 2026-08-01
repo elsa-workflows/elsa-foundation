@@ -132,6 +132,58 @@ public sealed class PublishEventTests
     }
 
     [Fact]
+    public async Task LocalEvent_StagesAndCarriesTheLocalFlag_ThroughToTheIntent()
+    {
+        var stager = new RecordingPublishStimulusStager();
+        var activity = new PublishEvent(stager) { EventName = "order.placed", IsLocalEvent = true };
+
+        await ExecuteAsync(activity);
+
+        Assert.True(Assert.Single(stager.Requests).IsLocalEvent);
+
+        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
+        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed", isLocalEvent: true));
+        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
+
+        Assert.True(ReadPayload(intent).IsLocalEvent);
+    }
+
+    /// <summary>
+    /// A local publish must not wake sibling instances or fire a published message start (#1117): the handler
+    /// routes ResumeOnly and pins the target to the publishing execution — taken from the intent (the runtime's
+    /// own record of who committed the send), never from the activity-authored payload.
+    /// </summary>
+    [Fact]
+    public async Task Handler_RoutesLocalEvent_ResumeOnly_TargetedAtThePublishingExecution()
+    {
+        var router = new RecordingStimulusRouter();
+        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
+        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed", isLocalEvent: true));
+        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
+
+        await new PublishStimulusExecutor(router).HandleAsync(intent);
+
+        var dispatch = Assert.Single(router.Requests);
+        Assert.Equal(StimulusRoutingMode.ResumeOnly, dispatch.Mode);
+        Assert.Equal(WorkflowExecutionId, dispatch.TargetWorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task Handler_LeavesBroadcastPublishUntargeted()
+    {
+        var router = new RecordingStimulusRouter();
+        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
+        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "order.placed"));
+        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
+
+        await new PublishStimulusExecutor(router).HandleAsync(intent);
+
+        var dispatch = Assert.Single(router.Requests);
+        Assert.Equal(StimulusRoutingMode.StartAndResume, dispatch.Mode);
+        Assert.Null(dispatch.TargetWorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task Handler_WrapsRouterFailure_AsTransientDeliveryFailure()
     {
         var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
@@ -156,8 +208,10 @@ public sealed class PublishEventTests
         return Assert.IsAssignableFrom<IActivityCompletionTransition>(transition);
     }
 
-    private static string ReadEventName(RuntimePostCommitIntent intent) =>
-        intent.Payload!.Value.Deserialize<PublishStimulusIntentPayload>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.EventName;
+    private static string ReadEventName(RuntimePostCommitIntent intent) => ReadPayload(intent).EventName;
+
+    private static PublishStimulusIntentPayload ReadPayload(RuntimePostCommitIntent intent) =>
+        intent.Payload!.Value.Deserialize<PublishStimulusIntentPayload>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
     private sealed class RecordingPublishStimulusStager : IPublishStimulusStager
     {

@@ -572,12 +572,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         {
             var faultedState = state with
             {
-                Fault = new NormalizedActivityFault(
-                    returnedFault.Code,
-                    typeof(ActivityFault).FullName!,
-                    returnedFault.Message,
-                    sanitizedStackTrace: null,
-                    returnedFault.IsRetryable)
+                Fault = returnedFault.ToNormalized()
             };
             await RecordFaultAsync(
                 activityFaultIncidentRecorder,

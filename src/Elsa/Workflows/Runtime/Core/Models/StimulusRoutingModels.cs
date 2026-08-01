@@ -39,7 +39,8 @@ public sealed class StimulusDispatchRequest
         IReadOnlyCollection<WorkflowTriggerBinding>? matchedTriggerBindings = null,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         ValueTypeDescriptor? payloadType = null,
-        string? providerId = null)
+        string? providerId = null,
+        string? targetWorkflowExecutionId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -54,6 +55,12 @@ public sealed class StimulusDispatchRequest
             throw new ArgumentException("Typed stimulus delivery metadata requires both a payload type and provider ID.");
         if (providerId is not null && string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Typed stimulus provider ID cannot be blank.", nameof(providerId));
+        if (targetWorkflowExecutionId is not null && string.IsNullOrWhiteSpace(targetWorkflowExecutionId))
+            throw new ArgumentException("Target workflow execution id cannot be blank when provided.", nameof(targetWorkflowExecutionId));
+        if (targetWorkflowExecutionId is not null && mode != StimulusRoutingMode.ResumeOnly)
+            throw new ArgumentException(
+                $"Targeting workflow execution '{targetWorkflowExecutionId}' requires {nameof(StimulusRoutingMode.ResumeOnly)} routing: a start would create a different execution than the target.",
+                nameof(targetWorkflowExecutionId));
 
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
@@ -67,6 +74,7 @@ public sealed class StimulusDispatchRequest
         DispatchOptions = dispatchOptions;
         PayloadType = payloadType;
         ProviderId = providerId;
+        TargetWorkflowExecutionId = targetWorkflowExecutionId;
     }
 
     public string StimulusType { get; }
@@ -128,6 +136,18 @@ public sealed class StimulusDispatchRequest
 
     /// <summary>The adapter identity that validated and produced <see cref="Input"/>.</summary>
     public string? ProviderId { get; }
+
+    /// <summary>
+    /// When set, delivery is confined to this one workflow execution: the router narrows the resume fan-in to
+    /// bookmarks owned by it. This is the routing shape a <b>local</b> publish needs
+    /// (<c>PublishEvent.IsLocalEvent</c>, #1117) — an event the publishing instance raises for itself, which must
+    /// not wake siblings or start new instances. Null (the default) keeps the broadcast fan-out.
+    /// <para>
+    /// Setting this requires <see cref="StimulusRoutingMode.ResumeOnly"/>, so "targeted" needs no separate
+    /// start-suppression rule anywhere downstream: the mode already carries it.
+    /// </para>
+    /// </summary>
+    public string? TargetWorkflowExecutionId { get; }
 
     public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {

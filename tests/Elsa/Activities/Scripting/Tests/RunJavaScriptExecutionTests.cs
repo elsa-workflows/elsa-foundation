@@ -82,6 +82,80 @@ public sealed class RunJavaScriptExecutionTests
         Assert.Equal(42, arguments.GetProperty("order").GetProperty("total").GetInt32());
     }
 
+    /// <summary>
+    /// #1114: with <c>PossibleOutcomes</c> authored, the script routes by returning. The value output is still
+    /// populated on every branch — routing does not replace the result.
+    /// </summary>
+    [Theory]
+    [InlineData("return 'approved';", "approved")]
+    [InlineData("return 'rejected';", "rejected")]
+    [InlineData("return args.total > 100 ? 'rejected' : 'approved';", "rejected")]
+    public async Task Script_return_value_selects_a_declared_outcome(string script, string expectedOutcome)
+    {
+        var completion = await RunAsync(script, ["approved", "rejected"]);
+
+        Assert.Equal(expectedOutcome, completion.Outcome);
+        Assert.Equal(expectedOutcome, completion.Result.Value!.Value.GetString());
+    }
+
+    /// <summary>A return value that names no declared port takes the catch-all, exactly like an unmatched status code.</summary>
+    [Theory]
+    [InlineData("return 'something-else';")]
+    [InlineData("return null;")]
+    [InlineData("return { verdict: 'approved' };")]
+    [InlineData("return ['approved'];")]
+    [InlineData("")]
+    public async Task Unrecognized_return_value_takes_the_unmatched_outcome(string script)
+    {
+        var completion = await RunAsync(script, ["approved", "rejected"]);
+
+        Assert.Equal(RunJavaScript.UnmatchedOutcome, completion.Outcome);
+    }
+
+    /// <summary>Outcome names are identifiers: the match is ordinal, so casing is not forgiven.</summary>
+    [Fact]
+    public async Task Outcome_matching_is_ordinal()
+    {
+        var completion = await RunAsync("return 'Approved';", ["approved"]);
+
+        Assert.Equal(RunJavaScript.UnmatchedOutcome, completion.Outcome);
+    }
+
+    /// <summary>A numeric return names a port by its textual form, mirroring SendHttpRequest's status-code ports.</summary>
+    [Fact]
+    public async Task Numeric_return_value_selects_a_numerically_named_outcome()
+    {
+        var completion = await RunAsync("return 404;", ["200", "404"]);
+
+        Assert.Equal("404", completion.Outcome);
+    }
+
+    /// <summary>Without authored outcomes the activity keeps its single implicit Done completion.</summary>
+    [Fact]
+    public async Task Without_possible_outcomes_the_activity_always_completes_done()
+    {
+        var completion = await RunAsync("return 'approved';", possibleOutcomes: null);
+
+        Assert.Equal("Done", completion.Outcome);
+        Assert.Equal("approved", completion.Result.Value!.Value.GetString());
+    }
+
+    private static async Task<IActivityCompletionTransition<RunJavaScriptResult>> RunAsync(
+        string script,
+        ICollection<string>? possibleOutcomes)
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var activity = new RunJavaScript(scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>())
+        {
+            Script = script,
+            Arguments = JsonSerializer.SerializeToElement(new { total = 250 }),
+            PossibleOutcomes = possibleOutcomes
+        };
+
+        return Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(await ExecuteAsync(activity));
+    }
+
     private static async ValueTask<ActivityTransition> ExecuteAsync(RunJavaScript activity)
     {
         var context = new SimpleActivityExecutionContext(

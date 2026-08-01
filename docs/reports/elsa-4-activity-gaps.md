@@ -1,5 +1,18 @@
 # Elsa 3 → Elsa 4 — Activities Not Yet Ported
 
+> **⚠️ SUPERSEDED (2026-07-31) by
+> [`elsa-4-activity-contract-parity-2026-07.md`](elsa-4-activity-contract-parity-2026-07.md).**
+>
+> This document is stale and its "missing" claims are wrong on current `main`. Specifically: §3 lists
+> `Delay`, `Timer` and `Cron` as missing (all three exist under `src/Elsa/Activities/Scheduling`), §3
+> lists `Event` as missing (`Elsa.Activities.Primitives` has both `Event` and `PublishEvent`), §4 lists
+> the HTTP activities as missing (`HttpEndpoint`, `SendHttpRequest` and `WriteHttpResponse` all exist),
+> and §2 lists sub-workflow dispatch as a stub (`Elsa.Activities.DispatchWorkflow` is implemented with
+> five outcomes). The superseding report carries a mechanically extracted, member-level diff against
+> a pinned `elsa-core` commit, with regenerable evidence.
+>
+> Kept for the historical record of the PRD #255 porting effort. Do not use it as a current gap list.
+
 > Small inventory focused on **activities** (the workflow building blocks), not modules/infra.
 >
 > - **Elsa 4 column** is verified against this repo (`src/Elsa/Activities` on `main`).

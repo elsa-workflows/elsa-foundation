@@ -249,18 +249,58 @@ public enum ActivityTransitionKind
 
 public sealed record ActivityFault
 {
-    public ActivityFault(string code, string message, bool isRetryable = false)
+    /// <summary>Metadata key carrying <see cref="Category"/> onto the normalized durable fault record.</summary>
+    public const string CategoryMetadataKey = "fault.category";
+
+    /// <summary>Metadata key carrying <see cref="FaultType"/> onto the normalized durable fault record.</summary>
+    public const string FaultTypeMetadataKey = "fault.type";
+
+    public ActivityFault(string code, string message, bool isRetryable = false, string? category = null, string? faultType = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
         Code = code;
         Message = message;
         IsRetryable = isRetryable;
+        Category = Normalize(category);
+        FaultType = Normalize(faultType);
     }
 
     public string Code { get; }
     public string Message { get; }
     public bool IsRetryable { get; }
+
+    /// <summary>
+    /// Optional author-chosen classification of the fault (Elsa 3's <c>Fault.Category</c>). Carried onto the
+    /// durable fault record's metadata under <see cref="CategoryMetadataKey"/>; null when unclassified.
+    /// </summary>
+    public string? Category { get; }
+
+    /// <summary>
+    /// Optional author-chosen fault type (Elsa 3's <c>Fault.FaultType</c>), orthogonal to <see cref="Code"/>:
+    /// the code identifies the failure, the type names the family it belongs to. Carried onto the durable
+    /// fault record's metadata under <see cref="FaultTypeMetadataKey"/>; null when unclassified.
+    /// </summary>
+    public string? FaultType { get; }
+
+    /// <summary>
+    /// The classification pair projected as durable-record metadata. Empty when neither is set, so an
+    /// unclassified fault persists exactly the shape it did before classification existed.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ClassificationMetadata
+    {
+        get
+        {
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (Category is not null)
+                metadata[CategoryMetadataKey] = Category;
+            if (FaultType is not null)
+                metadata[FaultTypeMetadataKey] = FaultType;
+            return metadata;
+        }
+    }
+
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed record ActivityTriggerExpectation
