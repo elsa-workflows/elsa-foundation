@@ -140,8 +140,15 @@ public static partial class ExtensionPointMapGenerator
         lines.Where(line => line.StartsWith(prefix, StringComparison.Ordinal)).Select(line => line[prefix.Length..]);
 
     /// <summary>
-    /// The nearest project that owns a catalog, found by walking up from the catalog's directory.
+    /// The nearest project that owns a catalog, found by walking up from the catalog's directory and
+    /// taking the ordinally-first <c>.csproj</c> in the first directory that has one.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="ProjectGraph.OwningProject{T}"/>. That picks the longest matching
+    /// directory prefix; this picks the first match walking upward, which differs when a directory holds
+    /// several projects. The shell generator used <c>find -maxdepth 1 … | sort | head -1</c> per level,
+    /// and the map's byte-for-byte output depends on reproducing that rule rather than the other one.
+    /// </remarks>
     private static string OwnerProject(IReadOnlyList<ProjectFacts> projects, string relativePath)
     {
         var directory = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty;

@@ -45,13 +45,35 @@ public static partial class ProjectGraph
             ReadReferences(repo.Absolute(relativePath)));
     }
 
-    private static IReadOnlyList<string> ReadReferences(string absolutePath) =>
+    /// <summary>
+    /// Referenced project names in ordinal order, with duplicates retained. Callers that report a
+    /// deduplicated view apply <c>Distinct</c> themselves; the v1 map layer reports the raw count.
+    /// </summary>
+    public static IReadOnlyList<string> ReadReferencedProjectNames(string absolutePath) =>
         ProjectReferencePattern.Matches(File.ReadAllText(absolutePath))
             .Select(match => match.Groups[1].Value)
             .Select(include => Path.GetFileNameWithoutExtension(include.Replace('\\', '/')))
-            .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    /// <summary>
+    /// The project whose directory is the longest prefix of <paramref name="relativePath"/>, or null
+    /// when the file sits outside every project.
+    /// </summary>
+    public static TProject? OwningProject<TProject>(
+        IReadOnlyList<TProject> projects,
+        string relativePath,
+        Func<TProject, string> projectPath)
+        where TProject : class =>
+        projects
+            .Select(project => (project, directory: Path.GetDirectoryName(projectPath(project))?.Replace('\\', '/') ?? string.Empty))
+            .Where(candidate => relativePath.StartsWith(candidate.directory + "/", StringComparison.Ordinal))
+            .OrderByDescending(candidate => candidate.directory.Length)
+            .Select(candidate => candidate.project)
+            .FirstOrDefault();
+
+    private static IReadOnlyList<string> ReadReferences(string absolutePath) =>
+        ReadReferencedProjectNames(absolutePath).Distinct(StringComparer.Ordinal).ToArray();
 
     /// <summary>The top-level grouping a project belongs to.</summary>
     public static string DomainGroup(string project)

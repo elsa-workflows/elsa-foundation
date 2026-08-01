@@ -99,7 +99,8 @@ public sealed class RepoContext
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
         foreach (var argument in arguments)
@@ -108,9 +109,15 @@ public sealed class RepoContext
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start git; map generation requires a git checkout.");
 
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
+        // Both pipes must be drained concurrently. Reading one to completion before the other deadlocks
+        // as soon as git fills the second pipe's buffer -- `ls-files` over this repo emits thousands of
+        // lines, and on a checkout with autocrlf enabled git also emits a stderr warning per file.
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+
+        var output = outputTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error.Trim()}");

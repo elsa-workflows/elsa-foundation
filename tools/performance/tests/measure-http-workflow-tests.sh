@@ -151,6 +151,13 @@ if ! jq -e '.latencyMs.p95 == 802' "$passes_report" >/dev/null; then
   printf '%s\n' 'FAIL: pooled latencyMs.p95 no longer describes every measured sample.' >&2
   exit 1
 fi
+# samples.measured must count every pass, so it agrees with latencyMs and --output-samples rather
+# than reporting one pass while the aggregates describe three.
+if ! jq -e '.samples == {warmup: 0, measured: 3}' "$passes_report" >/dev/null; then
+  printf '%s\n' 'FAIL: samples.measured did not count all passes.' >&2
+  jq -c '.samples' "$passes_report" >&2
+  exit 1
+fi
 
 rm -f "$FAKE_CURL_COUNTER"
 set +e

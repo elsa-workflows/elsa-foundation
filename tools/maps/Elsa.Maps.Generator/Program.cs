@@ -6,21 +6,35 @@ using Elsa.Maps.Generator;
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
 
+// "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
+string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
 var layers = args.Length > 0 ? args : ["all"];
 
 try
 {
     var repo = RepoContext.Discover();
 
-    // Freshness check: recompute the fingerprint and compare it with the committed manifest. Writes
-    // nothing, so it is safe to run in CI while generation itself stays manually initiated.
-    if (layers is ["check"])
+    // Freshness check: regenerates into a scratch directory and compares the bytes with what is
+    // committed. Writes nothing into the repository, so it is safe to run in CI while generation
+    // itself stays manually initiated.
+    if (layers.Contains("check", StringComparer.Ordinal))
+    {
+        if (layers.Length > 1)
+            throw new ArgumentException("'check' cannot be combined with other layers.");
+
         return MapFreshness.Check(repo);
+    }
+
+    // Validate every requested layer before generating, so an unknown one fails cleanly instead of
+    // writing part of the maps and then throwing.
+    var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
+    if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
+        throw new ArgumentException($"Unknown map layer '{unknown}'. Known layers: {string.Join(", ", knownLayers)}, all, check.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();
 
-    foreach (var layer in Expand(layers))
+    foreach (var layer in requested)
     {
         written.AddRange(layer switch
         {
@@ -44,8 +58,3 @@ catch (Exception exception) when (exception is ArgumentException or InvalidOpera
     Console.Error.WriteLine(exception.Message);
     return 2;
 }
-
-static IEnumerable<string> Expand(IReadOnlyList<string> requested) =>
-    requested.Contains("all", StringComparer.Ordinal)
-        ? ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"]
-        : requested;

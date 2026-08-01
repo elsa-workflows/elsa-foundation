@@ -10,9 +10,6 @@ namespace Elsa.Maps.Generator;
 /// </summary>
 public static partial class CoreMapsGenerator
 {
-    [GeneratedRegex("<ProjectReference[^>]+Include=\"([^\"]+)\"", RegexOptions.Compiled)]
-    private static partial Regex ProjectReferencePattern { get; }
-
     [GeneratedRegex("<TargetFramework>([^<]*)</TargetFramework>", RegexOptions.Compiled)]
     private static partial Regex TargetFrameworkPattern { get; }
 
@@ -73,10 +70,7 @@ public static partial class CoreMapsGenerator
         var name = Path.GetFileNameWithoutExtension(relativePath);
 
         // Not deduplicated: this layer reports the raw reference count, unlike the domain map.
-        var references = ProjectReferencePattern.Matches(File.ReadAllText(repo.Absolute(relativePath)))
-            .Select(match => Path.GetFileNameWithoutExtension(match.Groups[1].Value.Replace('\\', '/')))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        var references = ProjectGraph.ReadReferencedProjectNames(repo.Absolute(relativePath));
 
         return new ProjectRow(
             name,
@@ -116,7 +110,7 @@ public static partial class CoreMapsGenerator
             if (!text.Contains("FeatureBase", StringComparison.Ordinal) && !text.Contains("IShellFeature", StringComparison.Ordinal))
                 continue;
 
-            var owner = OwnerProject(projects, relativePath);
+            var owner = ProjectGraph.OwningProject(projects, relativePath, project => project.RelativePath);
             if (owner is null) continue;
 
             foreach (var line in text.Split('\n'))
@@ -148,14 +142,6 @@ public static partial class CoreMapsGenerator
         if (Regex.IsMatch(bases, "EFCore.*FeatureBase")) kind = "EF Core feature base";
         return kind;
     }
-
-    private static ProjectRow? OwnerProject(IReadOnlyList<ProjectRow> projects, string relativePath) =>
-        projects
-            .Select(project => (project, directory: Path.GetDirectoryName(project.RelativePath)?.Replace('\\', '/') ?? string.Empty))
-            .Where(candidate => relativePath.StartsWith(candidate.directory + "/", StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.directory.Length)
-            .Select(candidate => candidate.project)
-            .FirstOrDefault();
 
     private static string TargetFramework(RepoContext repo, ProjectRow project)
     {

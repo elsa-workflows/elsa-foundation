@@ -257,6 +257,7 @@ json_report="$(jq -n \
   --argjson expectedStatus "$expected_status" \
   --argjson warmup "$warmup" \
   --argjson requests "$requests" \
+  --argjson measuredSamples "$((requests * passes))" \
   --argjson concurrency "$concurrency" \
   --argjson coldMs "$cold_ms" \
   --argjson minimumMs "$minimum_ms" \
@@ -272,10 +273,10 @@ json_report="$(jq -n \
   --arg commitsBefore "$commits_before" \
   --arg commitsAfter "$commits_after" \
   --arg commitDelta "$commit_delta" \
-  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider, concurrency: $concurrency}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, enforcement: {passes: $passes, p95PerPass: $passP95Ms, medianP95Ms: $enforcedP95Ms, budgetMs: (if $budgetP95Ms == "" then null else ($budgetP95Ms | tonumber) end)}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
+  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider, concurrency: $concurrency}, samples: {warmup: $warmup, measured: $measuredSamples}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, enforcement: {passes: $passes, p95PerPass: $passP95Ms, medianP95Ms: $enforcedP95Ms, budgetMs: (if $budgetP95Ms == "" then null else ($budgetP95Ms | tonumber) end)}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
 
 markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s` (TLS verification: `%s`)\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured at concurrency %s\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
-  "$timestamp_utc" "$url" "$(if [[ "$insecure" == true ]]; then printf disabled; else printf enabled; fi)" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$requests" \
+  "$timestamp_utc" "$url" "$(if [[ "$insecure" == true ]]; then printf disabled; else printf enabled; fi)" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$((requests * passes))" \
   "$concurrency" "$cold_ms" "$minimum_ms" "$average_ms" "$p50_ms" "$p95_ms" "$p99_ms" "$maximum_ms" \
   "${commit_delta:-not measured}" "$machine" "$dotnet_version" "$git_revision")"
 

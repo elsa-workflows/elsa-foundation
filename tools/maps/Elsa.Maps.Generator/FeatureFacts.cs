@@ -62,7 +62,7 @@ public static partial class FeatureScanner
         var text = File.ReadAllText(repo.Absolute(relativePath));
         if (!FeatureBasePattern.IsMatch(text)) yield break;
 
-        var owner = OwnerProject(projects, relativePath);
+        var owner = ProjectGraph.OwningProject(projects, relativePath, project => project.RelativePath);
         if (owner is null) yield break;
 
         var lines = text.Split('\n');
@@ -150,12 +150,4 @@ public static partial class FeatureScanner
         return OptionSignalProbes.Where(probe => probe.Pattern.IsMatch(flattened)).Select(probe => probe.Label).ToArray();
     }
 
-    /// <summary>The project whose directory is the longest prefix of the file's path.</summary>
-    private static ProjectFacts? OwnerProject(IReadOnlyList<ProjectFacts> projects, string relativePath) =>
-        projects
-            .Select(project => (project, directory: Path.GetDirectoryName(project.RelativePath)?.Replace('\\', '/') ?? string.Empty))
-            .Where(candidate => relativePath.StartsWith(candidate.directory + "/", StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.directory.Length)
-            .Select(candidate => candidate.project)
-            .FirstOrDefault();
 }
