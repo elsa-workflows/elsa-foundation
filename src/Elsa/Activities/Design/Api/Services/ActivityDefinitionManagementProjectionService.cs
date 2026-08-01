@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -169,10 +170,10 @@ public sealed class ActivityDefinitionManagementProjectionService(
         var designOwned = authority.Kind == ActivityContentAuthorityKind.Design;
         return
         [
-            Action("edit-definition", canManage && designOwned, canManage ? "activity.definition.source-owned" : "activity.action.forbidden"),
-            Action("create-draft", canManage && designOwned, canManage ? "activity.definition.source-owned" : "activity.action.forbidden"),
-            Action("set-recommendation", canManage, "activity.action.forbidden"),
-            Action("fork-definition", canManage && !designOwned, canManage ? "activity.definition.design-owned" : "activity.action.forbidden")
+            Action("edit-definition", canManage && designOwned, canManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
+            Action("create-draft", canManage && designOwned, canManage ? "activity.definition.source-owned" : ActivityErrorCodes.ActionForbidden),
+            Action("set-recommendation", canManage, ActivityErrorCodes.ActionForbidden),
+            Action("fork-definition", canManage && !designOwned, canManage ? "activity.definition.design-owned" : ActivityErrorCodes.ActionForbidden)
         ];
     }
 
@@ -181,7 +182,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
         var canManageActive = context.CanManageActivityDefinitions && draft.Status == ActivityDefinitionDraftStatus.Active;
         var canAuthorProvider = context.CanAuthorProvider(draft.ProviderKey);
         var stateUnavailable = !context.CanManageActivityDefinitions
-            ? "activity.action.forbidden"
+            ? ActivityErrorCodes.ActionForbidden
             : draft.Status != ActivityDefinitionDraftStatus.Active
                 ? "activity.draft.not-active"
                 : null;
@@ -189,14 +190,14 @@ public sealed class ActivityDefinitionManagementProjectionService(
         return
         [
             Action("edit-draft", canManageActive && canAuthorProvider, authoringUnavailable),
-            Action("edit-draft-label", canManageActive, stateUnavailable ?? "activity.action.forbidden"),
-            Action("discard-draft", canManageActive, stateUnavailable ?? "activity.action.forbidden"),
+            Action("edit-draft-label", canManageActive, stateUnavailable ?? ActivityErrorCodes.ActionForbidden),
+            Action("discard-draft", canManageActive, stateUnavailable ?? ActivityErrorCodes.ActionForbidden),
             Action("validate-draft", canManageActive && canAuthorProvider, authoringUnavailable),
             Action("publish-draft", canManageActive && canAuthorProvider, authoringUnavailable),
-            Action("migrate-draft-provider", canManageActive, stateUnavailable ?? "activity.action.forbidden"),
+            Action("migrate-draft-provider", canManageActive, stateUnavailable ?? ActivityErrorCodes.ActionForbidden),
             Action("propose-contract", canManageActive && canAuthorProvider, authoringUnavailable),
             Action("apply-contract-proposal", canManageActive && canAuthorProvider, authoringUnavailable),
-            Action("create-conflict-copy", canManageActive, stateUnavailable ?? "activity.action.forbidden")
+            Action("create-conflict-copy", canManageActive, stateUnavailable ?? ActivityErrorCodes.ActionForbidden)
         ];
     }
 
@@ -210,17 +211,17 @@ public sealed class ActivityDefinitionManagementProjectionService(
         return
         [
             Action("clone-draft", canManage && designOwned && canAuthorProvider,
-                !canManage ? "activity.action.forbidden" : !designOwned ? "activity.definition.source-owned" : "activity.provider.authoring-forbidden"),
+                !canManage ? ActivityErrorCodes.ActionForbidden : !designOwned ? "activity.definition.source-owned" : "activity.provider.authoring-forbidden"),
             Action("fork-definition", canManage && !designOwned,
-                canManage ? "activity.definition.design-owned" : "activity.action.forbidden"),
+                canManage ? "activity.definition.design-owned" : ActivityErrorCodes.ActionForbidden),
             Action("set-recommendation", canManage && version.Lifecycle == ActivityDefinitionVersionLifecycle.Active,
-                canManage ? "activity.version.lifecycle-ineligible" : "activity.action.forbidden"),
+                canManage ? "activity.version.lifecycle-ineligible" : ActivityErrorCodes.ActionForbidden),
             Action("retire-version", canManage && version.Lifecycle == ActivityDefinitionVersionLifecycle.Active,
-                canManage ? "activity.version.lifecycle-ineligible" : "activity.action.forbidden"),
+                canManage ? "activity.version.lifecycle-ineligible" : ActivityErrorCodes.ActionForbidden),
             Action("restore-version", canManage && version.Lifecycle == ActivityDefinitionVersionLifecycle.Retired,
-                canManage ? "activity.version.lifecycle-ineligible" : "activity.action.forbidden"),
+                canManage ? "activity.version.lifecycle-ineligible" : ActivityErrorCodes.ActionForbidden),
             Action("revoke-version", canManage && version.Lifecycle != ActivityDefinitionVersionLifecycle.Revoked,
-                canManage ? "activity.version.lifecycle-ineligible" : "activity.action.forbidden")
+                canManage ? "activity.version.lifecycle-ineligible" : ActivityErrorCodes.ActionForbidden)
         ];
     }
 
@@ -325,7 +326,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
 
     private static ActivityAuthoringException Invalid(string message) => new(
         400,
-        "activity.request.invalid",
+        ActivityErrorCodes.RequestInvalid,
         "Invalid activity management request",
         message);
 
@@ -333,7 +334,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
 
     private static ActivityAuthoringException Expired(ActivityManagementSnapshotExpiredException exception) => new(
         410,
-        "activity.cursor.expired",
+        ActivityErrorCodes.CursorExpired,
         "Activity management snapshot expired",
         "The retained activity management snapshot is no longer available.",
         recovery: new(Instruction: "restart-without-cursor"),

@@ -12,6 +12,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.Options;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -276,7 +277,7 @@ public sealed class ActivityForkService(
         }
         catch (ActivityForkCollisionException exception)
         {
-            throw Conflict("activity.fork.collision", "Activity fork identity collision", "A reserved target identity or activity type key is no longer available. Create a new preview.", exception);
+            throw Conflict(ActivityErrorCodes.ForkCollision, "Activity fork identity collision", "A reserved target identity or activity type key is no longer available. Create a new preview.", exception);
         }
         catch (OperationCanceledException)
         {
@@ -618,9 +619,9 @@ public sealed class ActivityForkService(
         inner);
 
     private static ActivityAuthoringException BadRequest(string detail) =>
-        new(400, "activity.request.invalid", "Invalid activity fork request", detail);
+        new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity fork request", detail);
 
-    private static ActivityAuthoringException Forbidden(string detail, string code = "activity.authorization.denied") =>
+    private static ActivityAuthoringException Forbidden(string detail, string code = ActivityErrorCodes.AuthorizationDenied) =>
         new(403, code, "Activity fork is forbidden", detail);
 
     private static ActivityAuthoringException NotFound(string code, string title, string detail) =>

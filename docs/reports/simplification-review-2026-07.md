@@ -461,18 +461,18 @@ awaiting merge): items 1, 2, 10 and the first two thirds of 4 are **done**.
 |---|---|---|---|
 | 1 | Hoist TFM/`Nullable`/`ImplicitUsings` to `Directory.Build.props`; add `tests/Directory.Build.props`; strip the duplicated blocks | B1 | ✅ **done** — net −1,173 lines; all 246 projects verified to resolve identical properties |
 | 2 | Root `.editorconfig` + `EnableNETAnalyzers`/`AnalysisLevel`, warnings-first | C1 | ✅ **done** — three rules tuned against measured output; see the file's header |
-| 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | ⬜ open, trivial |
-| 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | 🟡 first two ✅; `ErrorCodes` deferred — see B4 for the seam constraint |
+| 3 | Comment the two transitive pins and the `2.3.x` ASP.NET Core pins — **delete none** | C3 | ✅ **done** — first comments in the file. Correction: the seven `2.3.x` pins are all *directly* referenced, not transitive |
+| 4 | Collapse `AdaptiveIntervalSchedule` 5→1; shared SSE helper; central `ErrorCodes` | B3, B7, B4 | ✅ **done** — `ActivityErrorCodes` in `Elsa.Primitives`, 85 sites in 25 files. Needed **no** new project reference; every consumer already reaches it transitively |
 | 5 | ~~Consolidate the JSON options wrappers~~ | B2 | ❌ **withdrawn** — distinct frozen persistence contracts; do not attempt |
-| 6 | Shared base for the four `*.Unified` provider features | B6 | ⬜ open, medium, build-gated |
-| 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | ⬜ open, high leverage, **build-gated** |
-| 8 | Modernization tail: primary constructors, collection expressions, sync-over-async | C2 | ⬜ open, medium, build-gated |
+| 6 | Shared base for the four `*.Unified` provider features | B6 | ❌ **withdrawn after building it** — measured net **+74 lines** (+80 base vs −11 saved). Hoisting the cache settings is barred by `GroundworkStorageCompositionTests`. See [decisions §2](simplification-review-decisions-2026-08.md) |
+| 7 | Narrow implementation classes to `internal sealed`, domain by domain | A1 | ⛔ **blocked — constitutional**. §2.23.3 mandates `public sealed` for logic-bearing implementations and names `internal sealed` as the convention it replaced; 673/681 already comply. See [decisions §1](simplification-review-decisions-2026-08.md) |
+| 8 | Modernization tail: primary constructors, collection expressions, sync-over-async | C2 | 🟡 safe subset ✅ — 6 no-op `ConfigureAwait(false)` removed, 9 collection expressions. Correction: the counts were repo-wide; 266 of 270 `new List<T>()` are `var`-declared and **cannot** take `[]` |
 | 9 | One .NET tool replacing 10 duplicated scripts; keep script shims | B5 | ⬜ open, medium, build-gated |
 | 10 | `docs/reference/spec-lifecycle.md` + `specs/README.md` | D2 | ✅ **done** — statuses applied in place is the open remainder |
-| 11 | Keep/drop verdicts for `Agent.Anthropic` and `Expressions.Liquid` | A2 | ⬜ decision |
-| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | ⬜ decision |
-| 13 | A subtractive obligation in the operating model | D3 | ⬜ decision |
-| 14 | Recalibrate the `SQLite defaults` perf gate | C5 | ⬜ open |
+| 11 | Keep/drop verdicts for `Agent.Anthropic` and `Expressions.Liquid` | A2 | 📋 proposal ready — **keep both**; the real drop candidate is the superseded `ClaudeAgentProvider` stub. [decisions §3](simplification-review-decisions-2026-08.md) |
+| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | ❌ **withdrawn** — measured like-for-like, projects grew 2.25× against 6.32× LoC; the trigger would never have fired. The census here compared a `src`+`tests` baseline to `src`-only current counts. [§3 of the §2.25 proposal](subtractive-obligation-amendment-2026-08.md) |
+| 13 | A subtractive obligation in the operating model | D3 | 📋 **drafted as framework §2.25** — [proposal](subtractive-obligation-amendment-2026-08.md). Grounded in retirement, not size: 112 specs still `Draft`, 42 with no status, guards 300→351 in 62 commits, two catalog drifts found by accident |
+| 14 | Recalibrate the `SQLite defaults` perf gate | C5 | 📋 proposal ready — median-of-N. Blocker: the 10 cited runs are **not in git**. [decisions §5](simplification-review-decisions-2026-08.md) |
 
 ---
 

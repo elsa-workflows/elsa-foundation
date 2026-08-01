@@ -13,6 +13,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Graph.Design.Services;
 
@@ -533,7 +534,7 @@ public sealed class GraphActivityProvider(
             if (!dependenciesByOccurrence.TryGetValue(node.NodeId, out var matches))
             {
                 diagnostics.Add(Diagnostic(
-                    "activity.dependency.unresolved",
+                    ActivityErrorCodes.DependencyUnresolved,
                     $"Graph node '{node.NodeId}' has no exact resolved dependency.",
                     subject,
                     node.JsonPointer,

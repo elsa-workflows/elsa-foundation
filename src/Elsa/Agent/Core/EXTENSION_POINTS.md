@@ -94,6 +94,7 @@ Providers implement `ContinueTurnAsync(AgentTurnContext)`: given the turn histor
 Known implementations:
 
 - `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — binds Elsa's provider-neutral agent facade to the GitHub Copilot SDK when explicitly enabled and authenticated, while keeping SDK tool mutation behind Elsa-owned proposal policy. Also implements `IAgentHarness` (below).
+- `AnthropicAgentProvider` (`Elsa.Agent.Anthropic`) *(intra-domain — provider adapter)* — drives Claude over the shared agent tool currency using an `IChatClient`. Enabling it excludes other agent harnesses (single active harness). Implements `IAgentProvider` only; the host step loop drives the turn.
 - `DeterministicAgentProvider` (`Elsa.Agent.Core`) *(intra-domain — test/default seam)* — deterministic provider implementation for backend contract validation without an external SDK.
 
 ### `IAgentHarness`
@@ -103,4 +104,3 @@ Kind: Bridge/adapter (a provider that owns its own multi-step agent loop). When 
 Known implementations:
 
 - `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) — delegates to the GitHub Copilot SDK harness; our `IAgentTool`s are passed as auto-invoked `AIFunction`s via session config, and SDK tool-execution events map to the Studio timeline. Advertises Tools/Reasoning/Usage/Plan/Mcp/Permissions.
-- `ClaudeAgentProvider` (`Elsa.Agent.Core`) *(stub)* — interface-complete placeholder advertising Tools only, proving the pluggable swap; wire an Anthropic `IChatClient` + `FunctionInvokingChatClient` over the same tool currency to enable.
