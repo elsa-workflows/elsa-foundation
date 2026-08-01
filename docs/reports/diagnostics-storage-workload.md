@@ -6,6 +6,27 @@ Date: 2026-07-12.
 
 Tracking: [Elsa issue #632](https://github.com/elsa-workflows/elsa-foundation/issues/632), [Groundwork diagnostic record-store #30](https://github.com/valence-works/Groundwork/issues/30), [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629), and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 
+## Amendment 2026-07-31: grouped reduction is required
+
+This report is a decision input dated 2026-07-12. One of its conclusions has since been overtaken by our own implementation and is corrected here rather than rewritten in place.
+
+The report states three times that no caller requires grouping or grouped aggregates (Outcome, Out of Scope, Decision). That was true on 2026-07-12. It stopped being true when the OpenTelemetry trace-list endpoint was built on Groundwork's grouped-reduction contract, and the report was never revised.
+
+**The requirement.** `GroundworkOpenTelemetryStore` calls `IDiagnosticRecordStore.QueryGroupsAsync` on its read path:
+
+| Call site | Operation |
+|---|---|
+| `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs:453` | `QueryTracesAsync` — trace list: filter, page, sort by `StartTime` descending |
+| `…/GroundworkOpenTelemetryStore.cs:490` | `GetTraceAsync` — trace detail, single group by trace id |
+
+Both select `TraceSummaryProfile`, declared at `…/Records/OpenTelemetryRecordStreamDefinitions.cs:142`. It groups span records by `TraceId` and declares ten reducers: `FirstBy` on `TraceId`, `RootSpanId` and `Name` (each ordered by `StartTime` ascending, cursor-ascending tie-break); `MinTimestamp` on `StartTime`; `MaxTimestamp` on `EndTime`; `MaxInt64` on `Status`; `SetUnionString` on `ResourceId`, `ServiceName` and `WorkflowInstanceId`; and `SumInt64` on `SpanCount`. Post-reduction predicates admit equality on `TraceId`, `ResourceId`, `ServiceName` and `Status`, and `Contains` on `TraceId`, `Name` and `WorkflowInstanceId`. Page size is the caller's `take`; bounded input is `MaxGroupedQueryInputRecords`, set to the configured trace capacity at line 127.
+
+`DiagnosticsBoundedExecutionTests` asserts a native grouped plan for this route, and `specs/139-groundwork-diagnostics-persistence/evidence/preview{86,88,102}-*.json` records it green on all four providers.
+
+**Why this matters beyond the record.** In July 2026 the stale statement was cited as evidence that Groundwork's grouped-reduction contract had no consumer, and the contract was removed. The removal would have broken the trace UI and stopped this repository compiling — `GroupReductionProfiles` and `MaxGroupedQueryInputRecords` are named directly in our stream definitions. It was caught before release and reverted; see Groundwork [ADR 0004](https://github.com/valence-works/groundwork/blob/main/docs/adr/0004-retire-groundwork-operational.md) and its grouped-reduction scope report. This amendment exists so the same inference cannot be drawn from this document again.
+
+The rest of the report stands: generic reduce, map/reduce, and arbitrary aggregation are still out of scope. What is in scope is exactly the named, profile-bound, bounded grouped reduction described above.
+
 ## Outcome
 
 Elsa Structured Logs and OpenTelemetry do need a specialized Groundwork persistence primitive. Ordinary document CRUD is useful for the small mutable OpenTelemetry resource and instrument catalogs, but it is not the right abstraction for the high-volume immutable records. The missing primitive is an idempotent atomic single-stream batch append, bounded server-side query, exact inspection/count, and deterministic retention trim over tenant-scoped, time-ordered record streams.
@@ -16,7 +37,7 @@ Groundwork should own durable record semantics and provider execution. Elsa shou
 
 The existing Elsa core contracts remain Groundwork-free. `IStructuredLogStore` and `IOpenTelemetryStore` stay in their domain core modules; only the concrete Elsa persistence projects adapt those contracts to Groundwork.
 
-No current Elsa caller requires numeric rollups, grouping, generic reduce, or map/reduce. Exact counts are required. Metric endpoints return raw points and instruments. This workload therefore does not justify adding reduce to Groundwork.
+No current Elsa caller requires numeric rollups, grouping, generic reduce, or map/reduce. Exact counts are required. Metric endpoints return raw points and instruments. This workload therefore does not justify adding reduce to Groundwork. *(Superseded for grouping — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Generic reduce and map/reduce remain out of scope.)*
 
 ## Evidence Scope
 
@@ -194,7 +215,8 @@ The specialized primitive deliberately does not include:
 - redaction and parsing;
 - arbitrary updates/deletes;
 - general joins or `IQueryable`;
-- numeric/grouped aggregates; or
+- numeric/grouped aggregates (superseded — profile-bound grouped reduction is required; see
+  [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required)); or
 - map/reduce.
 
 ## Portable Semantics Versus Provider Optimizations
@@ -333,4 +355,4 @@ This report does not absorb issue #420's SSE-writer deduplication, in-memory rin
 
 ## Decision
 
-Resolve `diagnostic-storage` with the specialized record-store shape above. Counts are required; generic reduce is not. Capture buffering stays in Elsa. Mutable catalogs stay in ordinary Groundwork documents. Every durable operation is explicit-scope, idempotent where retried, bounded, server-side, restart-safe, and conformance-tested across all four mandatory providers.
+Resolve `diagnostic-storage` with the specialized record-store shape above. Counts are required; generic reduce is not. Profile-bound grouped reduction is required — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Capture buffering stays in Elsa. Mutable catalogs stay in ordinary Groundwork documents. Every durable operation is explicit-scope, idempotent where retried, bounded, server-side, restart-safe, and conformance-tested across all four mandatory providers.
