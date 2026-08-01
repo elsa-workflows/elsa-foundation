@@ -201,7 +201,64 @@ data. Any recalibration must re-derive the distribution and record its derivatio
 
 ---
 
-## 6. Summary of what needs a ruling
+## 6. §9.9 — the generated maps, the shell twins, and the code graph
+
+The maps tooling is now one .NET tool. Two things surfaced that matter more than the port itself.
+
+### The two "identical" generators were not identical, and porting found four bugs
+
+| # | Where | Defect |
+|---|---|---|
+| 1 | `generate-extension-point-map.sh` | Tab is an IFS *whitespace* character, so `IFS=$'\t' read` collapses consecutive tabs. Catalogs with no `###` headings or no `Kind:` lines lose those fields and every later column shifts left. **37 rows affected; 25 corrupted rows are committed on `main`**, reporting `0` as their "Extension-point headings". |
+| 2 | `generate-extension-point-map.ps1:131` | Double-quoted string, so PowerShell reads the backticks around `EXTENSION_POINTS.md` as escapes and strips them. **So the twins disagreed with each other, and both were wrong.** |
+| 3 | `generate-maps.sh` feature-map | `sort -k3,3` with no `-t`, so fields split on spaces as well as tabs. The Kind column contains spaces ("EF Core feature base"), so the sort key landed on a token *inside* Kind, not the project. |
+| 4 | `generate-maps.sh` findings | The multi-version count uses gawk's `arr[i][j]`, which BWK awk rejects, and `2>/dev/null \|\| echo 0` swallowed the error. Silently **0 on macOS, 3 on Linux**. The true answer is 3. |
+
+Plus: `manifest.json`'s `generated_files` was a hardcoded list of all 11 files, so a v1-only refresh
+claimed the four v2 maps were fresh without writing them. And the shell sorted with the ambient
+locale, so output depended on `LC_COLLATE`; the tool pins ordinal ordering.
+
+This is exactly the B5 risk — *"no test proving the two implementations agree"* — except it was not
+hypothetical. It had already shipped into committed documentation.
+
+### Are the maps still needed, given the code knowledge graph?
+
+`codebase-memory-mcp` indexes this repository (**101k nodes / 374k edges**) and answers symbol-level
+questions — find a class, trace calls, semantic search, Leiden clustering — far better than a static
+table. The honest split:
+
+| Map | Subsumed by the code graph? |
+|---|---|
+| project-reference, package, feature, test | **Largely** — but the graph models *code* imports, not `.csproj` `ProjectReference` or NuGet version resolution |
+| domain, architecture-reference | Partly — clusters are richer, but the design/runtime seam is a build-graph fact |
+| **spec-status** | **No** — spec lifecycle from `specs/*.md` |
+| **extension-point** | **No** — `EXTENSION_POINTS.md` catalog contents |
+| **feature-dependency** | **No** — `[ShellFeature(name:…)]` arguments and config-property classification |
+
+Complementary, but **over-built for what is uniquely theirs**: non-code artifacts and build-graph facts.
+
+### The evidence that they are not currently load-bearing
+
+- Nothing in CI reads or validates them.
+- The committed maps were **stale** (148 source projects recorded; 151 actual) and **partly corrupted**
+  (25 rows), and neither was noticed.
+- A full session of deep repository investigation completed without opening `docs/maps/` once — and in
+  the two places a map covered the question, it would have answered *wrong*.
+
+**Recommendation.** Keep generation manually initiated — that is the right default, and the port
+removes the cost argument. Measured on an otherwise-idle machine: the five shell generators total
+roughly **4 minutes** (v1 layer 1m30s, domain 1m36s, feature-dependency 26s); the tool produces **all
+twelve outputs in 4.8s**. Then add a **CI freshness check** that recomputes `input_fingerprint` and
+fails when the committed maps do not match the tree — a sub-second job that regenerates nothing and
+makes silent rot impossible. The runtime was never the real defect.
+
+**A related observation for §9.13.** The code graph has **340 indexed projects, 310 of them throwaway
+worktrees**. The same one-way ratchet the review found in the repository has reproduced itself in the
+tooling around it. Nothing in that system subtracts either.
+
+---
+
+## 7. Summary of what needs a ruling
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -211,3 +268,4 @@ data. Any recalibration must re-derive the distribution and record its derivatio
 | 4 | Amend §2.16.1 with an aggregate growth trigger? | **Yes**, keep exemption classes |
 | 5 | Create a subtractive consolidation review? | **Yes** — highest leverage |
 | 6 | Fix the perf gate by median-of-N? | **Yes**; do not raise the budget |
+| 7 | Add a CI freshness check for the generated maps? | **Yes** — sub-second; keeps generation manual |
