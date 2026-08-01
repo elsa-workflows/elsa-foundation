@@ -265,7 +265,7 @@ tooling around it. Nothing in that system subtracts either.
 | 1 | Reopen §2.23.3 (`public sealed`) together with the testing strategy? | **No**, unless reopening both |
 | 2 | Accept the §9.6 revert? | **Yes** — net +74 lines |
 | 3 | Keep `Liquid` and `Agent.Anthropic`; delete the `ClaudeAgentProvider` stub? | **Yes** |
-| 4 | Amend §2.16.1 with an aggregate growth trigger? | **Yes**, keep exemption classes |
-| 5 | Create a subtractive consolidation review? | **Yes** — highest leverage |
+| 4 | Amend §2.16.1 with an aggregate growth trigger? | **Withdrawn** — measurement refutes the premise; see [the §2.25 proposal §3](subtractive-obligation-amendment-2026-08.md) |
+| 5 | Create a subtractive consolidation review? | **Yes** — drafted as framework §2.25 |
 | 6 | Fix the perf gate by median-of-N? | **Yes**; do not raise the budget |
 | 7 | Add a CI freshness check for the generated maps? | **Yes** — sub-second; keeps generation manual |

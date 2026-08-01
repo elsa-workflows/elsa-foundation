@@ -470,8 +470,8 @@ awaiting merge): items 1, 2, 10 and the first two thirds of 4 are **done**.
 | 9 | One .NET tool replacing 10 duplicated scripts; keep script shims | B5 | ⬜ open, medium, build-gated |
 | 10 | `docs/reference/spec-lifecycle.md` + `specs/README.md` | D2 | ✅ **done** — statuses applied in place is the open remainder |
 | 11 | Keep/drop verdicts for `Agent.Anthropic` and `Expressions.Liquid` | A2 | 📋 proposal ready — **keep both**; the real drop candidate is the superseded `ClaudeAgentProvider` stub. [decisions §3](simplification-review-decisions-2026-08.md) |
-| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | 📋 proposal ready — [decisions §4](simplification-review-decisions-2026-08.md) |
-| 13 | A subtractive obligation in the operating model | D3 | 📋 proposal ready — [decisions §4](simplification-review-decisions-2026-08.md). Ratchet confirmed still running: 148→151 projects, 4,274→4,302 public types in 62 commits |
+| 12 | §2.16.1 aggregate-growth trigger amendment | A3 | ❌ **withdrawn** — measured like-for-like, projects grew 2.25× against 6.32× LoC; the trigger would never have fired. The census here compared a `src`+`tests` baseline to `src`-only current counts. [§3 of the §2.25 proposal](subtractive-obligation-amendment-2026-08.md) |
+| 13 | A subtractive obligation in the operating model | D3 | 📋 **drafted as framework §2.25** — [proposal](subtractive-obligation-amendment-2026-08.md). Grounded in retirement, not size: 112 specs still `Draft`, 42 with no status, guards 300→351 in 62 commits, two catalog drifts found by accident |
 | 14 | Recalibrate the `SQLite defaults` perf gate | C5 | 📋 proposal ready — median-of-N. Blocker: the 10 cited runs are **not in git**. [decisions §5](simplification-review-decisions-2026-08.md) |
 
 ---
