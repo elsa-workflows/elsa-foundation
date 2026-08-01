@@ -177,6 +177,12 @@ publishes the same deterministic synchronous workflow and enforces a 250 ms defa
 regression ceiling on relevant pull requests. The broader threshold accounts for shared-runner storage
 and scheduling variance; the controlled local acceptance budget remains 50 ms.
 
+**Updated 2026-08-01.** The gate now takes **three independent measured passes** and enforces the
+**median** of their p95 values (`--passes 3`), so a single pass disturbed by shared-runner scheduling
+can no longer fail it alone. The threshold is unchanged at 250 ms; what changed is the statistic it
+is compared against. Per-pass values are recorded in the report's `enforcement` object, and the
+pooled `latencyMs` aggregates still describe every sample taken.
+
 ## Subsequent recommendations
 
 1. Keep the committed local factorial and hosted default-on lane as regression evidence; do not infer performance from cache unit tests alone.

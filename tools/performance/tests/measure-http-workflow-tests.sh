@@ -128,4 +128,56 @@ if ! jq -e '.samples == {warmup: 0, measured: 1} and .latencyMs == {cold: 901, m
   exit 1
 fi
 
+# --passes: enforcement takes the median of the per-pass p95 values, not the pooled p95, so a single
+# pass disturbed by shared-runner scheduling cannot fail the gate on its own.
+rm -f "$FAKE_CURL_COUNTER"
+passes_report="$temporary_directory/passes-report.json"
+bash "$subject" \
+  --url http://127.0.0.1:7243/workflows/http/hello-world \
+  --expected-body 'Hello World!' \
+  --warmup 0 \
+  --requests 1 \
+  --passes 3 \
+  --enforce-p95-ms 801 >"$passes_report"
+if ! jq -e '.enforcement == {passes: 3, p95PerPass: [10, 801, 802], medianP95Ms: 801, budgetMs: 801}' \
+  "$passes_report" >/dev/null; then
+  printf '%s\n' 'FAIL: --passes did not report per-pass p95 values and their median.' >&2
+  jq -c '.enforcement' "$passes_report" >&2
+  exit 1
+fi
+# The pooled p95 across all three passes is 802, so a budget of 801 would have failed under the old
+# single-sample rule. Passing here is the whole point of the change.
+if ! jq -e '.latencyMs.p95 == 802' "$passes_report" >/dev/null; then
+  printf '%s\n' 'FAIL: pooled latencyMs.p95 no longer describes every measured sample.' >&2
+  exit 1
+fi
+
+rm -f "$FAKE_CURL_COUNTER"
+set +e
+bash "$subject" \
+  --url http://127.0.0.1:7243/workflows/http/hello-world \
+  --expected-body 'Hello World!' \
+  --warmup 0 \
+  --requests 1 \
+  --passes 3 \
+  --enforce-p95-ms 800 >"$temporary_directory/passes-fail.json" 2>"$temporary_directory/passes-fail.err"
+passes_fail_status=$?
+set -e
+if [[ "$passes_fail_status" -eq 0 ]] || ! grep -q 'median of 3 pass' "$temporary_directory/passes-fail.err"; then
+  printf 'FAIL: median p95 above budget did not fail the gate (status %s).\n' "$passes_fail_status" >&2
+  cat "$temporary_directory/passes-fail.err" >&2
+  exit 1
+fi
+
+rm -f "$FAKE_CURL_COUNTER"
+set +e
+bash "$subject" --url http://127.0.0.1:7243/workflows/http/hello-world \
+  --expected-body 'Hello World!' --passes 0 >"$temporary_directory/passes-invalid" 2>&1
+passes_invalid_status=$?
+set -e
+if [[ "$passes_invalid_status" -ne 2 ]] || ! grep -q -- '--passes requires a positive integer' "$temporary_directory/passes-invalid"; then
+  printf 'FAIL: --passes 0 returned %s without the expected usage error.\n' "$passes_invalid_status" >&2
+  exit 1
+fi
+
 printf '%s\n' 'PASS: measure-http-workflow sample output contract.'

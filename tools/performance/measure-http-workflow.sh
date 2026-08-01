@@ -25,7 +25,10 @@ Options:
   --output-json PATH          Optional JSON report path.
   --output-markdown PATH      Optional Markdown report path.
   --output-samples PATH       Write measured warm latencies, one numeric ms value per line.
-  --enforce-p95-ms NUMBER     Fail when warm p95 exceeds this budget.
+  --passes COUNT              Independent measured passes (default: 1). With more than one,
+                              enforcement uses the MEDIAN of the per-pass p95 values, which is
+                              robust to a single pass disturbed by shared-runner scheduling.
+  --enforce-p95-ms NUMBER     Fail when the enforced p95 exceeds this budget.
   --insecure                  Disable TLS certificate verification (local development only).
   --help                      Show this help.
 EOF
@@ -45,6 +48,7 @@ output_json=""
 output_markdown=""
 output_samples=""
 enforce_p95_ms=""
+passes=1
 insecure=false
 
 while (($# > 0)); do
@@ -69,6 +73,7 @@ while (($# > 0)); do
       output_samples="$2"
       shift 2
       ;;
+    --passes) passes="${2:?--passes requires a value}"; shift 2 ;;
     --enforce-p95-ms) enforce_p95_ms="${2:?--enforce-p95-ms requires a value}"; shift 2 ;;
     --insecure) insecure=true; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -109,6 +114,10 @@ if [[ -n "$segment_cap" ]] && ! [[ "$segment_cap" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
+if ! [[ "$passes" =~ ^[1-9][0-9]*$ ]]; then
+  printf '%s\n' '--passes requires a positive integer.' >&2
+  exit 2
+fi
 if [[ -n "$enforce_p95_ms" ]] && ! [[ "$enforce_p95_ms" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
   printf '%s\n' '--enforce-p95-ms must be a non-negative number.' >&2
   exit 2
@@ -174,20 +183,34 @@ for ((request = 0; request < warmup; request++)); do
   measure_request
 done
 measured_directory="$temporary_directory/measured"
-mkdir -p "$measured_directory"
-for ((batch_start = 0; batch_start < requests; batch_start += concurrency)); do
-  pids=()
-  for ((offset = 0; offset < concurrency && batch_start + offset < requests; offset++)); do
-    request=$((batch_start + offset))
-    measure_request "$measured_directory/$request" &
-    pids+=("$!")
+pass_p95_file="$temporary_directory/pass-p95-ms"
+: > "$pass_p95_file"
+# Each pass is an independent batch of `requests` measurements. Enforcement takes the median of the
+# per-pass p95 values so one pass disturbed by shared-runner scheduling cannot fail the gate on its
+# own; the reported latencyMs aggregates still describe every sample taken.
+for ((pass = 0; pass < passes; pass++)); do
+  rm -rf "$measured_directory"
+  mkdir -p "$measured_directory"
+  for ((batch_start = 0; batch_start < requests; batch_start += concurrency)); do
+    pids=()
+    for ((offset = 0; offset < concurrency && batch_start + offset < requests; offset++)); do
+      request=$((batch_start + offset))
+      measure_request "$measured_directory/$request" &
+      pids+=("$!")
+    done
+    for pid in "${pids[@]}"; do
+      wait "$pid"
+    done
   done
-  for pid in "${pids[@]}"; do
-    wait "$pid"
+  pass_file="$temporary_directory/warm-pass-$pass-ms"
+  : > "$pass_file"
+  for ((request = 0; request < requests; request++)); do
+    cat "$measured_directory/$request" >> "$pass_file"
   done
-done
-for ((request = 0; request < requests; request++)); do
-  cat "$measured_directory/$request" >> "$warm_file"
+  cat "$pass_file" >> "$warm_file"
+  sort -n "$pass_file" > "$pass_file.sorted"
+  percentile "$pass_file.sorted" 0.95 >> "$pass_file.p95"
+  cat "$pass_file.p95" >> "$pass_p95_file"
 done
 
 sorted_file="$temporary_directory/warm-sorted-ms"
@@ -199,6 +222,10 @@ average_ms="$(awk '{ total += $1 } END { printf "%.3f", total / NR }' "$warm_fil
 p50_ms="$(percentile "$sorted_file" 0.50)"
 p95_ms="$(percentile "$sorted_file" 0.95)"
 p99_ms="$(percentile "$sorted_file" 0.99)"
+sorted_pass_p95_file="$temporary_directory/pass-p95-sorted-ms"
+sort -n "$pass_p95_file" > "$sorted_pass_p95_file"
+enforced_p95_ms="$(percentile "$sorted_pass_p95_file" 0.50)"
+pass_p95_json="$(jq -Rn '[inputs | tonumber]' < "$sorted_pass_p95_file")"
 
 if [[ -n "$output_samples" ]]; then
   mkdir -p "$(dirname "$output_samples")"
@@ -238,10 +265,14 @@ json_report="$(jq -n \
   --argjson p95Ms "$p95_ms" \
   --argjson p99Ms "$p99_ms" \
   --argjson maximumMs "$maximum_ms" \
+  --argjson passes "$passes" \
+  --argjson passP95Ms "$pass_p95_json" \
+  --argjson enforcedP95Ms "$enforced_p95_ms" \
+  --arg budgetP95Ms "$enforce_p95_ms" \
   --arg commitsBefore "$commits_before" \
   --arg commitsAfter "$commits_after" \
   --arg commitDelta "$commit_delta" \
-  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider, concurrency: $concurrency}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
+  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider, concurrency: $concurrency}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, enforcement: {passes: $passes, p95PerPass: $passP95Ms, medianP95Ms: $enforcedP95Ms, budgetMs: (if $budgetP95Ms == "" then null else ($budgetP95Ms | tonumber) end)}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
 
 markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s` (TLS verification: `%s`)\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured at concurrency %s\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
   "$timestamp_utc" "$url" "$(if [[ "$insecure" == true ]]; then printf disabled; else printf enabled; fi)" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$requests" \
@@ -259,10 +290,16 @@ fi
 if [[ -z "$output_json" && -z "$output_markdown" ]]; then
   printf '%s\n' "$json_report"
 else
-  printf 'Measured warm p95: %s ms (cold: %s ms).\n' "$p95_ms" "$cold_ms"
+  if ((passes > 1)); then
+    printf 'Measured warm p95: %s ms across %s passes (per-pass p95: %s); enforced median p95: %s ms (cold: %s ms).\n' \
+      "$p95_ms" "$passes" "$(tr '\n' ' ' < "$sorted_pass_p95_file" | sed 's/ $//')" "$enforced_p95_ms" "$cold_ms"
+  else
+    printf 'Measured warm p95: %s ms (cold: %s ms).\n' "$p95_ms" "$cold_ms"
+  fi
 fi
 
-if [[ -n "$enforce_p95_ms" ]] && ! awk -v actual="$p95_ms" -v budget="$enforce_p95_ms" 'BEGIN { exit !(actual <= budget) }'; then
-  printf 'Warm p95 %s ms exceeds budget %s ms.\n' "$p95_ms" "$enforce_p95_ms" >&2
+if [[ -n "$enforce_p95_ms" ]] && ! awk -v actual="$enforced_p95_ms" -v budget="$enforce_p95_ms" 'BEGIN { exit !(actual <= budget) }'; then
+  printf 'Warm p95 %s ms exceeds budget %s ms (median of %s pass(es): %s).\n' \
+    "$enforced_p95_ms" "$enforce_p95_ms" "$passes" "$(tr '\n' ' ' < "$sorted_pass_p95_file" | sed 's/ $//')" >&2
   exit 1
 fi
