@@ -457,3 +457,6 @@ FodyWeavers.xsd
 bench-out*/
 bench-*.sh
 bench-out-runner.sh
+
+# Contract-surface snapshot guard: the failing-run artifact written beside the committed baseline.
+tests/Elsa/Activities/Design/Tests/Contracts/*.actual.json

@@ -70,7 +70,16 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
     [ActivityInput(Key = nameof(Step), Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
     public int Step { get; set; } = 1;
 
-    /// <summary>When true the range is closed (<c>[Start, End]</c>); otherwise half-open (<c>[Start, End)</c>).</summary>
+    /// <summary>
+    /// When true the range is closed (<c>[Start, End]</c>); otherwise half-open (<c>[Start, End)</c>).
+    /// <para>
+    /// <b>Porting note (#1117).</b> Elsa 3's equivalent flag, <c>OuterBoundInclusive</c>, defaults to
+    /// <see langword="true"/>; this one defaults to <see langword="false"/>. A loop ported member-for-member
+    /// therefore runs one fewer iteration unless this is set explicitly. The divergence is deliberate — the
+    /// half-open convention is what the member name reads as and what <c>for (i = start; i &lt; end; i += step)</c>
+    /// means — and is called out in the module README.
+    /// </para>
+    /// </summary>
     [ActivityInput(Key = nameof(EndInclusive), Order = 30)]
     public bool EndInclusive { get; set; }
 

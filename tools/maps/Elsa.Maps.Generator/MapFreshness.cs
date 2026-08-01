@@ -1,52 +1,74 @@
-using System.Text.Json;
-
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Compares the committed <c>docs/maps/manifest.json</c> fingerprint against the current tree.
+/// Reports whether the committed maps still describe the tree.
 /// </summary>
 /// <remarks>
-/// This exists because the committed maps were three projects stale and carried 25 corrupted rows
-/// without anything objecting. Generation stays manually initiated; this only reports that a
-/// refresh is due, and writes nothing.
+/// <para>
+/// The check regenerates every map into a scratch directory and compares the bytes with what is
+/// committed. It deliberately does <b>not</b> gate on <c>input_fingerprint</c>: that changes on every
+/// source edit, so a fingerprint gate would oblige every code PR to regenerate and commit eleven map
+/// files, even though most source edits change no map at all. Comparing outputs asks the question that
+/// actually matters — are the committed maps still true? — and stays quiet otherwise.
+/// </para>
+/// <para>
+/// It exists because the committed maps went three projects stale and carried 25 corrupted rows with
+/// nothing objecting. Generation itself stays manually initiated; this only reports.
+/// </para>
 /// </remarks>
 public static class MapFreshness
 {
-    /// <summary>Returns 0 when the maps match the tree, 1 when a refresh is due.</summary>
+    /// <summary>Returns 0 when the committed maps match freshly generated ones, 1 otherwise.</summary>
     public static int Check(RepoContext repo)
     {
-        var manifestPath = Path.Combine(repo.Root, "docs", "maps", "manifest.json");
-        if (!File.Exists(manifestPath))
+        var scratch = Path.Combine(Path.GetTempPath(), $"elsa-maps-check-{Environment.ProcessId}");
+
+        try
         {
-            Console.Error.WriteLine("docs/maps/manifest.json is missing; run the map generator.");
+            Directory.CreateDirectory(scratch);
+            MarkdownTable.Redirect = (repo.Root, scratch);
+
+            var projects = ProjectGraph.Read(repo);
+            var generated = new List<string>();
+            generated.AddRange(CoreMapsGenerator.Generate(repo));
+            generated.AddRange(DomainMapGenerator.Generate(repo, projects));
+            generated.AddRange(ExtensionPointMapGenerator.Generate(repo, projects));
+            generated.AddRange(ArchitectureReferenceMapGenerator.Generate(repo, projects));
+            generated.AddRange(FeatureDependencyMapGenerator.Generate(repo, projects));
+
+            // manifest.json carries input_fingerprint and git metadata that move with every commit, so it
+            // is regenerated but not compared — it is bookkeeping, not a description of the tree.
+            var stale = generated
+                .Where(path => !path.EndsWith("manifest.json", StringComparison.Ordinal))
+                .Where(path => !SameBytes(Path.Combine(repo.Root, path), Path.Combine(scratch, path)))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            if (stale.Length == 0)
+            {
+                Console.WriteLine("Generated maps still describe the tree.");
+                return 0;
+            }
+
+            Console.Error.WriteLine(
+                $"""
+                 Generated maps no longer describe the tree. {stale.Length} file(s) would change:
+
+                 {string.Join(Environment.NewLine, stale.Select(path => "  " + path))}
+
+                 Refresh them and commit the result:
+
+                   dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+                 """);
             return 1;
         }
-
-        var (fingerprint, inputs) = CoreMapsGenerator.ComputeFingerprint(repo);
-
-        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
-        var committed = document.RootElement.TryGetProperty("input_fingerprint", out var value)
-            ? value.GetString()
-            : null;
-
-        if (string.Equals(committed, fingerprint, StringComparison.Ordinal))
+        finally
         {
-            Console.WriteLine($"Generated maps are fresh ({inputs.Count} inputs, fingerprint {fingerprint[..12]}\u2026).");
-            return 0;
+            MarkdownTable.Redirect = null;
+            try { Directory.Delete(scratch, recursive: true); } catch (IOException) { /* best-effort cleanup */ }
         }
-
-        Console.Error.WriteLine(
-            $"""
-             Generated maps are stale.
-
-               committed input_fingerprint: {committed ?? "(absent)"}
-               current input_fingerprint:   {fingerprint}
-               inputs hashed:               {inputs.Count}
-
-             Refresh them and commit the result:
-
-               dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-             """);
-        return 1;
     }
+
+    private static bool SameBytes(string left, string right) =>
+        File.Exists(left) && File.Exists(right) && File.ReadAllBytes(left).AsSpan().SequenceEqual(File.ReadAllBytes(right));
 }

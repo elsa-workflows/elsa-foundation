@@ -83,7 +83,8 @@ public sealed class StimulusRouter : IStimulusRouter
             ? []
             : await SnapshotWaitingExecutionsAsync(request, now, cancellationToken);
 
-        // 2. Start a new instance for every matching published trigger (E3-1).
+        // 2. Start a new instance for every matching published trigger (E3-1). A targeted request is ResumeOnly by
+        //    construction, so it is already excluded here — no separate start-suppression rule is needed.
         var starts = request.Mode == StimulusRoutingMode.ResumeOnly
             ? []
             : await StartMatchingTriggersAsync(request, dispatchMetadata, cancellationToken);
@@ -105,7 +106,11 @@ public sealed class StimulusRouter : IStimulusRouter
             new GlobalBookmarkStimulusLookupRequest(request.StimulusType, request.StimulusHash, now, request.CorrelationId),
             cancellationToken);
 
-        return lookup.WorkflowExecutionIds;
+        // A targeted (local) publish narrows the fan-in to the one execution that raised it; the lookup still runs
+        // so a target with no matching wait resolves to an empty set rather than an unconditional resume attempt.
+        return request.TargetWorkflowExecutionId is { } target
+            ? lookup.WorkflowExecutionIds.Where(id => StringComparer.Ordinal.Equals(id, target)).ToArray()
+            : lookup.WorkflowExecutionIds;
     }
 
     private async ValueTask<IReadOnlyList<StimulusStartOutcome>> StartMatchingTriggersAsync(

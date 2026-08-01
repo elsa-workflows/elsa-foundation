@@ -15,11 +15,21 @@ public static class MarkdownTable
     public static string Lines(IEnumerable<string> values) => string.Join("<br>", values);
 
     /// <summary>
+    /// When set, generated files are written under this root instead of the repository, preserving their
+    /// relative paths. The freshness check uses it to generate into a scratch directory so it can compare
+    /// outputs without touching the working tree.
+    /// </summary>
+    public static (string RepoRoot, string OutputRoot)? Redirect { get; set; }
+
+    /// <summary>
     /// Writes a file with LF endings and no BOM, which is what the shell generators produced and what the
     /// committed maps contain.
     /// </summary>
     public static void Write(string path, StringBuilder content)
     {
+        if (Redirect is { } redirect && path.StartsWith(redirect.RepoRoot, StringComparison.Ordinal))
+            path = Path.Combine(redirect.OutputRoot, Path.GetRelativePath(redirect.RepoRoot, path));
+
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content.ToString().Replace("\r\n", "\n", StringComparison.Ordinal), new UTF8Encoding(false));
     }
