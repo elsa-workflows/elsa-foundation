@@ -8,6 +8,7 @@ This index summarizes the preserved provenance blocks. It is a finding/navigatio
 
 | Provenance block | Date | Status signal | Raw history |
 |---|---:|---|---|
+| Version change `3.1.0` draft to `3.2.0` draft (subtractive obligation) | 2026-08-02 | MINOR draft change; new §2.25 consolidation review with standing to retire specs, superseded guards and stale catalog entries, plus §2.25.3 requiring build- or test-verifiable evidence for any removal; ratified 2026-08-02 from the [proposal report](subtractive-obligation-amendment-2026-08.md). The companion §2.16.1 aggregate-growth trigger was **not** adopted — measured, projects grew 2.25× against 6.32× LoC | [Framework history](constitution-history-framework.md) |
 | Version change `3.0.0` draft to `3.1.0` draft (W21/MD-5: minimum-viable-project guidance) | 2026-07-04 | MINOR draft change; new §2.16.1 soft guidance (~100-LoC justification note for new Layer-3 projects) + six-class exemption test; ratified 2026-07-04 from the [W21 proposal report](elsa-4-w21-md5-minimum-project-size-amendment.md) | [Framework history](constitution-history-framework.md) |
 | Version change `2.0.0` draft to `3.0.0` draft | 2026-06-02 | Major draft change; unified event model and delivery-strategy rewrite | [Framework history](constitution-history-framework.md) |
 | v2.0.0 consolidated provenance fold | 2026-05-19 to 2026-05-26 | Prior amendment plan and entity-design clarifications folded into later draft | [Framework history](constitution-history-framework.md) |
@@ -26,6 +27,7 @@ This index summarizes the preserved provenance blocks. It is a finding/navigatio
 
 | Provenance block | Date | Status signal | Raw history |
 |---|---:|---|---|
+| Version change `3.3.0` draft to `3.4.0` draft (subtractive-obligation cascade) | 2026-08-02 | MINOR draft change; framework re-pin to v3.2.0. Every Elsa specialization reviewed for compatibility with §2.25; no Elsa-side specialization required | [Elsa history](constitution-history-elsa.md) |
 | Version change `3.2.0` draft to `3.3.0` draft (W21/MD-5 cascade) | 2026-07-04 | MINOR draft change; framework re-pin to v3.1.0 + §E5 interpretive note carrying the Elsa worked examples (13/13 sub-100-LoC projects exempt, 0 forced merges) | [Elsa history](constitution-history-elsa.md) |
 | Version change `3.1.0` draft to `3.2.0` draft (W14: naming pass) | 2026-07-04 | MINOR draft change; new §E6 Type-naming rules (R1–R8) codified as an enforceable Elsa specialization of framework §2.2; applied by rename families A–E | [Elsa history](constitution-history-elsa.md) |
 | Version change `3.0.0` draft to `3.1.0` draft (W6: MD-2/MD-4 drift fixes) | 2026-07-02 | MINOR draft change; §E2.1 domain tree refreshed to shipped reality; §E2.2 hard rule records the tracked Runtime→Design allow-list exception | [Elsa history](constitution-history-elsa.md) |
