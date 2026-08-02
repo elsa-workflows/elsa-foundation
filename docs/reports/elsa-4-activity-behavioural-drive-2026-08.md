@@ -111,18 +111,16 @@ than an activity-contract gap.
 
 ## Coverage
 
-26 of the 28 activities are driven through a real workflow, with every declared outcome shown reachable
-and every declared output shown populated. Two are not, and the gaps are declared in code
-(`UndrivenCoverage`) and reported by a dedicated test rather than hidden inside a green run:
+**All 28 shipped activities** are driven through a real workflow, with every declared outcome shown
+reachable and every declared output shown populated. `UndrivenCoverage` is empty.
 
-| Activity | Why not driven here | Where it is covered |
-|---|---|---|
-| `DispatchWorkflow` | Refuses to execute against a hand-built node: it requires the exact child-executable pin the publish compiler stamps into node metadata, plus the outbox sweep, child admission and parent-resume path. None of that is stood up by the plain harness. | `tests/Elsa/Activities/DispatchWorkflow/Tests` on that module's own runtime fixture; `e2e-tests` |
-| `GraphActivity` | An inlining boundary: driving it needs a published reusable-activity definition version and its provider, not a hand-built node. | `tests/Elsa/Activities/Graph/Tests` |
+The class is kept rather than deleted, and its guard test inverted: `Undriven_coverage_is_empty` now
+asserts the list stays empty, so re-declaring a gap is a deliberate, reviewable act rather than a quiet
+way to make a failing assertion go away. Nothing may be added to it to silence a failing assertion — an
+outcome that turns out to be genuinely unreachable is a defect in the activity, not an entry in that list.
 
-Folding those two fixtures into this suite is the remaining work for full in-process coverage. Nothing
-may be added to `UndrivenCoverage` to silence a failing assertion — an outcome that turns out to be
-genuinely unreachable is a defect in the activity, not an entry in that list.
+The last two — `DispatchWorkflow` and `GraphActivity`, the pair #1119 deferred — landed under
+[#1124](https://github.com/elsa-workflows/elsa-foundation/issues/1124); see the section below.
 
 ## Fixes applied from the contract audit
 
@@ -183,13 +181,172 @@ the `SetCorrelationId` intrinsic) and `For` (whose `EndInclusive` default was re
 `orchestration-controls/Test-StimulusRouting`, `branching/Test-ParallelFork`,
 `single-outcome/Test-ForLoop` — all pass.
 
+## Closing the last two — `DispatchWorkflow` and `GraphActivity` (#1124)
+
+### The design call: how the drive gets a dispatch-capable harness
+
+`DispatchWorkflow` cannot run on the plain harness, and #1124 offered three ways to fix that: move the
+existing 871-line `DispatchWorkflowRuntimeTestFixture` into the shared `tests/Elsa/Activities/Testing/`
+library, teach `WorkflowExecutionHarness` a dispatch-capable opt-in, or give the behavioural project its
+own duplicate fixture.
+
+Two facts settled it. First, the behavioural project **already** references both
+`Elsa.Activities.DispatchWorkflow.Runtime` and `Elsa.Activities.Graph.Runtime` — it must, to enumerate the
+whole shipped library. So the dependency the issue worried about is not a cost of driving these two; it is
+a cost of *where the code lives*. Second, a `ProjectReference` is unconditional: a `WithDispatch()` builder
+step in the shared library would pay exactly the same dependency as moving the fixture there. Option 2 as
+literally phrased does not avoid the cost it was proposed to avoid.
+
+What does avoid it is splitting on **what is actually generic**. Everything `DispatchWorkflow` needs beyond
+today's harness turns out to name no DispatchWorkflow type at all:
+
+| Added to `WorkflowExecutionHarness` | Why it is generic |
+|---|---|
+| `PublishAsync` | Saves an executable *and* the live Published source reference the start dispatcher gates on (ADR 0040). Any drive needing a second workflow wants this. |
+| `StartPublishedAsync` | Starts through the real `IWorkflowStartDispatcher`. `RunAsync` hand-builds its start envelope and so seeds no durable partition, authority or source provenance — any activity that reads its *parent execution's* durable context, not just its own inputs, cannot run on that path. |
+| `SweepAsync` / `SweepUntilQuietAsync` | Runs the post-commit outbox + stranded-work resumption sweep to quiescence. |
+| `CancelAsync` | Delivers one Cancel command through the execution agent — the control-plane path. |
+| `RetirePublicationAsync` | Retires a source reference, modelling an unpublish between an intent being committed and delivered. |
+| `ReadRunAsync` | Reads the persisted run of *any* execution id, not just the harness's own. |
+
+Every type involved lives in `Elsa.Workflows.Runtime.Core`, which the shared library already references, so
+**`Elsa.Activities.Testing` gained no new project reference**. Everything DispatchWorkflow-named — the pin
+metadata key, the completion resume target, the outcome expectations — stays in the drive. That is option 2
+in spirit (pay the dependency only where it is used) without the compile-time reference that would have made
+option 2 indistinguishable from option 1.
+
+### `DispatchWorkflow` — all five outcomes, both outputs
+
+Each wait-mode outcome mirrors the child's fate, so each is reached by making a real child meet that fate
+and letting the completion enricher, the outbox and the parent-resume path carry it back. Nothing
+hand-feeds the parent a resume payload; synthesising one would prove the `switch` in `ResumeAsync` compiles,
+not that the runtime can ever deliver that status.
+
+| Outcome | How it is reached |
+|---|---|
+| `Dispatched` | `WaitForCompletion=false` — completes inline, carrying only `ChildWorkflowExecutionId`. |
+| `Completed` | Waited; the child runs a probe leaf and completes. |
+| `Faulted` | Waited; the child's root activity faults, ending the child workflow Faulted. |
+| `Cancelled` | Waited; the child waits on an event, then takes a real Cancel command through its agent. |
+| `DispatchFailed` | Waited; the child's publication is **retired after the parent stages its dispatch**, so the gated child start can never succeed and delivery exhausts. |
+
+`ChildWorkflowExecutionId` is populated by every case; `Result` only by the waited ones, which is the
+contract — fire-and-forget has no result to carry.
+
+`DispatchFailed` caps `ChildStartMaxDeliveryAttempts` at 1 (a documented feature setting) so the first
+failure is final. The alternative — leaving the default four and advancing a fake clock through the
+backoff — measures the same terminal state while adding a simulated clock to the drive.
+
+`WorkflowDefinitionId` is un-deferred and enforced exactly as F3 describes: the start comes back carrying
+`VF-ACT-004: Input 'WorkflowDefinitionId' on executable node 'node-dispatch' does not accept null or
+absence`, before the activity is constructed. Worth noting the *status* is `AcceptedButFaulted` rather than
+`Rejected` — "refused before the activity runs" is the contract; the precise dispatch status is not.
+
+### F5 — one constant id made every two-workflow drive impossible (test infrastructure)
+
+`verified-by-run`
+
+`DeterministicRuntimeExecutionIdGenerator` returned the literal `"command-generated"` for *every* command.
+A checkpoint commit id derives from the command that produced it, so the parent's start command and the
+dispatched child's start command produced the same commit id, and the child's `WorkflowStarted` checkpoint
+died with `RuntimeCheckpointReplayConflictException: … was replayed with a conflicting payload`. The child
+never ran; the parent waited forever.
+
+Invisible in every existing test, because until now nothing on this harness started a second workflow — a
+directly-authored command carries an authored id, and only a *generated* one hit the collision. Fixed by
+numbering the generated ids. Recorded because it is the reason this gap looked harder than it was: the
+blocker was one line of shared test infrastructure, not the dispatch lifecycle.
+
+### `GraphActivity` — `Done` through a real run
+
+The graph boundary is not a CLR activity the harness can reflect over: it is activated from a pinned
+`elsa.graph-activity/1` descriptor rather than from a type, and declares no atomic result type. The drive
+builds the node with the descriptor and contract `GraphActivityProvider` emits, and the runtime activates it
+through the real `GraphActivityActivationStrategy`. Two cases: an unmapped boundary completing with the
+implicit `Done`, and a mapped one translating its entry's outcome to an authored boundary port.
+
+What this adds over `GraphActivityExecutionTests` is the engine. Those tests call
+`ExecuteStructureAsync`/`OnChildCompletedAsync` on a hand-made context and read the returned transition,
+which cannot show that the scheduler ever schedules the entry node or that the selected outcome is ever
+*committed*. Here it is read back out of persisted state.
+
+`GraphActivity` joins `Switch`, `BpmnDecision`, `SendHttpRequest` and `RunJavaScript` in the
+observed-outcome exemption list: a mapped boundary's ports are authored per-node data pinned at publish
+time, not a fixed declared set. Its *declared* side remains the implicit `Done`, which the drive reaches.
+
+### REST e2e — `e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1`
+
+A direct drive of the outcome matrix, with the BPMN engine taken out from between the assertion and the
+activity. Run against a from-source `Elsa.Server` on SQLite with a freshly deployed Groundwork schema:
+
+| Case | Port taken | Parent |
+|---|---|---|
+| `WaitForCompletion=false` | `Dispatched` | Completed |
+| waited, child completes | `Completed` | Completed |
+| waited, child faults | `Faulted` | **Completed**, zero incidents |
+
+The third is the one worth having: a faulted child surfaces as an ordinary routable port and the step after the
+dispatch still runs, rather than the fault crossing the boundary and taking the parent down with it. The child's
+incident stays on the child.
+
+`Cancelled` and `DispatchFailed` are **not reachable over REST** and are deliberately not attempted:
+cancellation would need an instance-cancellation control-plane call, which the runtime API does not expose, and
+`DispatchFailed` would need child-start delivery to exhaust its retries, which no REST surface can force. Both
+are driven in-process. This is stated in the script so the absence reads as a known boundary rather than an
+oversight.
+
+### F6 — the workflow root activity's outcome is missing from the inspection projection (#1127)
+
+`verified-by-run`
+
+The first version of that script authored the dispatch node as the workflow **root**, and could not see the
+outcome it had definitely taken: the instance detail reported `outcomeNames: []` on a `Completed` node. The
+activity-execution detail for the same node carries `runtime.completionOutcomeNames: ["Completed"]` — the
+durable record is correct, the projection is not.
+
+It is positional, not activity-specific. Wrapping the node in a `Sequence` moves the loss to the `Sequence`:
+
+```
+- node-root      [Completed] Sequence           outcomeNames: []
+- node-dispatch  [Completed] DispatchWorkflow   outcomeNames: ["Completed"]
+- node-after     [Completed] WriteLine          outcomeNames: ["Done"]
+```
+
+A run that never suspends keeps its root outcome; one that suspends and resumes does not. Filed as
+[#1127](https://github.com/elsa-workflows/elsa-foundation/issues/1127) rather than fixed here — it is a runtime
+read-model defect, not an activity-contract one, and the in-process drive reads `ActivityExecutionState`
+directly so it is unaffected. The e2e script nests the node (also the realistic authoring shape) and says why.
+
+Worth noting what caught it: not an assertion, but authoring the *simplest possible* parent. Every existing
+suite that drives a dispatch happens to nest it, so nothing had looked at the root position.
+
+### #1117's `DispatchWorkflow` items — assessed, deliberately not landed here
+
+#1124 suggests `ChannelName`/`StartNewTrace` might land alongside Unit A. They should not, and the reason is
+this suite's own principle. Both are **feature additions**, not contract corrections: there is no channel
+concept anywhere on the dispatch path (`WorkflowDispatchRecord` carries no channel, and nothing routes on
+one), and `StartNewTrace` is a telemetry-topology decision about where a dispatched child's trace begins.
+Adding either as an input without the mechanism behind it would create exactly the thing this drive exists to
+catch — a declared surface an author can bind and nothing will ever read. They need their own unit with a
+design call, not a slot in a coverage change.
+
+### Correction — `GraphActivity` inlining is not uncovered over REST
+
+#1124 records "`GraphActivity` inlining has no e2e coverage at all." That is wrong, and worth correcting
+rather than acting on. The `e2e-tests/reusable-activities/` suite **is** the graph boundary: reusable
+activities are authored as `elsa.activity-graph` graphs, and its eight scripts already cover root placement,
+three-layer nesting, exact-version pinning, draft test-runs, and schema-2 mapped boundary outcomes over
+REST. `e2e-tests/README.md` categorises that suite as "authoring lifecycle + graph inlining at runtime". No
+new script was written for it; duplicating that coverage would have added maintenance without adding signal.
+
 ## Still outstanding
 
-The e2e drive covered the two publish-time gaps above and a regression sweep, not the full matrix. Not run:
+In-process coverage is complete. The REST drive is not the full matrix. Not run:
 
-- `DispatchWorkflow` (waited and fire-and-forget), `GraphActivity` inlining, `BpmnProcess`/`BpmnDecision`
-  over REST — the same two activities the in-process drive defers on, so they remain the weakest-covered
-  pair in the library from this exercise's point of view;
+- `BpmnProcess`/`BpmnDecision` over REST beyond what `bpmn/Test-BpmnCallActivity.ps1` reaches;
+- `DispatchWorkflow`'s `Cancelled` and `DispatchFailed` over REST — structurally unreachable there today
+  (no instance-cancellation endpoint, no way to force delivery exhaustion), so closing this needs an API
+  change rather than another script;
 - `Timer`/`Cron` recurring firing and `Delay` expiry against a live scheduler;
 - the combined scenarios sketched in the original brief (HTTP endpoint → JS transform → `SendHttpRequest`
   → branch per code → `WriteHttpResponse`; `ForEach` containing `If` + `Break` + `Set`; `Parallel` fork

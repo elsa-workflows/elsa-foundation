@@ -12,6 +12,8 @@ public sealed class DeterministicRuntimeExecutionIdGenerator : IRuntimeExecution
 {
     private readonly string _workflowExecutionId;
     private readonly Queue<string> _activityExecutionIds;
+    private int _commandOrdinal;
+    private int _envelopeOrdinal;
 
     public DeterministicRuntimeExecutionIdGenerator(IEnumerable<string> activityExecutionIds)
         : this(WorkflowExecutionHarness.WorkflowExecutionId, activityExecutionIds)
@@ -25,8 +27,13 @@ public sealed class DeterministicRuntimeExecutionIdGenerator : IRuntimeExecution
     }
 
     public string NewWorkflowExecutionId() => _workflowExecutionId;
-    public string NewWorkflowExecutionCommandId() => "command-generated";
-    public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-generated";
+
+    // Numbered rather than constant: a checkpoint commit id derives from the command that produced it, so two
+    // commands sharing an id collide as a replay conflict. That is invisible in a single-execution test and fatal
+    // in one that starts a second workflow (a dispatched child), whose start command is generated, not authored.
+    public string NewWorkflowExecutionCommandId() => $"command-generated-{Interlocked.Increment(ref _commandOrdinal)}";
+
+    public string NewWorkflowExecutionCommandEnvelopeId() => $"envelope-generated-{Interlocked.Increment(ref _envelopeOrdinal)}";
 
     public string NewActivityExecutionId() =>
         _activityExecutionIds.TryDequeue(out var activityExecutionId)

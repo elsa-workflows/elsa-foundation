@@ -45,6 +45,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
     private static readonly DateTimeOffset Now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>The fixed timestamp every harness run stamps, for callers that build their own executables.</summary>
+    public static DateTimeOffset Timestamp => Now;
+
     private readonly ServiceProvider _provider;
     private readonly string _workflowExecutionId;
     private readonly WorkflowExecutableIdentity _identity;
@@ -229,6 +232,191 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(_workflowExecutionId);
         var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(_workflowExecutionId);
+        return new WorkflowExecutionRun(states, workflowState);
+    }
+
+    /// <summary>The durable partition every <see cref="StartPublishedAsync"/> run pins.</summary>
+    public static readonly WorkflowExecutionPartition Partition = new("partition-test");
+
+    /// <summary>
+    /// Saves an executable together with the live Published source reference the start dispatcher gates on
+    /// (ADR 0040), returning the reference so it can be started through <see cref="StartPublishedAsync"/>.
+    /// Applies the same CLR contract pinning <see cref="RunAsync(WorkflowExecutable)"/> does, so a hand-built
+    /// graph of CLR activities needs no contract of its own.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="RunAsync(WorkflowExecutable)"/>, this does not assume one executable per harness: a
+    /// drive that needs a second workflow (a dispatch target, a reusable-activity definition) publishes each
+    /// one and starts only the root.
+    /// </remarks>
+    public async Task<WorkflowExecutableSourceReference> PublishAsync(WorkflowExecutable executable, string sourceReferenceId)
+    {
+        EnsureActivityTypesRegistered();
+        executable = PinClrActivityContracts(executable);
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+
+        var reference = new WorkflowExecutableSourceReference(
+            SourceReferenceId: sourceReferenceId,
+            ArtifactId: executable.Identity.ArtifactId,
+            SourceKind: "WorkflowDefinitionVersion",
+            SourceId: executable.Identity.DefinitionVersionId,
+            SourceVersion: executable.Identity.ArtifactVersion,
+            DefinitionId: executable.Identity.DefinitionId,
+            DefinitionVersionId: executable.Identity.DefinitionVersionId,
+            ArtifactVersion: executable.Identity.ArtifactVersion,
+            CreatedAt: Now,
+            PublishedAt: Now,
+            Scope: WorkflowExecutableReferenceScope.Published,
+            ExpiresAt: null,
+            PublicationId: $"publication-{sourceReferenceId}",
+            SlotId: $"slot-{sourceReferenceId}");
+        await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference);
+        return reference;
+    }
+
+    /// <summary>
+    /// Retires a published source reference, so a later start gated on a live Published reference is refused.
+    /// Models an author unpublishing a workflow between something committing an intent to run it and the intent
+    /// being delivered.
+    /// </summary>
+    public async Task RetirePublicationAsync(WorkflowExecutableSourceReference reference, string reason)
+    {
+        var retired = await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .RetireAsync(reference.SourceReferenceId, Now.AddMinutes(1), reason);
+        if (!retired)
+            throw new InvalidOperationException($"Source reference '{reference.SourceReferenceId}' could not be retired.");
+    }
+
+    /// <summary>
+    /// Starts a published executable through the real <see cref="IWorkflowStartDispatcher"/> and drains it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RunAsync(WorkflowExecutable)"/> hand-builds its start envelope and therefore seeds no durable
+    /// partition, authority or source provenance on the workflow state. An activity that reads its <em>parent
+    /// execution's</em> durable context rather than only its own inputs — anything that starts or addresses
+    /// another workflow — cannot run on that path at all. This is the same route the production start API takes,
+    /// so those snapshots are present and the run is admission-gated on a live Published reference.
+    /// Throws when the command is not accepted, matching <see cref="RunAsync(WorkflowExecutable)"/> — a start the
+    /// value-flow guard refuses surfaces as a rejection naming the offending input, not a silent no-op.
+    /// </remarks>
+    public async Task<WorkflowExecutionStartDispatchResult> StartPublishedAsync(
+        WorkflowExecutableSourceReference reference,
+        string workflowExecutionId,
+        string? correlationId = null,
+        string? tenantId = null)
+    {
+        EnsureActivityTypesRegistered();
+        var authority = new WorkflowExecutionAuthoritySnapshot(
+            systemIdentity: "activity-behavioural-drive",
+            rootInitiator: "activity-behavioural-drive");
+
+        await using var scope = _provider.CreateAsyncScope();
+        var start = await scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(
+                artifactId: reference.ArtifactId,
+                requestedBy: authority.SystemIdentity,
+                workflowExecutionId: workflowExecutionId,
+                idempotencyKey: $"start:{workflowExecutionId}",
+                metadata: null,
+                variables: null,
+                inputs: null,
+                stimulusInput: null,
+                triggerNodeId: null,
+                runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(reference.SourceReferenceId),
+                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                parentWorkflowExecutionId: null,
+                correlationId: correlationId,
+                tenantId: tenantId,
+                partition: Partition,
+                authority: authority));
+
+        if (start.CommandDispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+        {
+            throw new InvalidOperationException(
+                $"Start command was not accepted (status: {start.CommandDispatch.Status}). Reason: {start.CommandDispatch.Reason}");
+        }
+
+        return start;
+    }
+
+    /// <summary>
+    /// Runs one resumption sweep: re-delivers due post-commit outbox items and re-drives stranded scheduler work.
+    /// Requires the caller to have registered the resumption feature via <see cref="Builder.WithFeature"/>.
+    /// </summary>
+    /// <remarks>
+    /// The sweep is how a post-commit intent — the durable "do this after the checkpoint lands" record — actually
+    /// gets delivered. A drive whose activity stages an intent rather than acting inline has not observed anything
+    /// until the sweep runs, and each sweep delivers one generation of intents, so reaching an outcome that is two
+    /// intents deep (stage → child runs → resume parent) takes two sweeps.
+    /// </remarks>
+    public async Task<RuntimeResumptionSweepResult> SweepAsync()
+    {
+        await using var scope = _provider.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+            .SweepAsync(new RuntimeResumptionSweepRequest());
+    }
+
+    /// <summary>
+    /// Sweeps repeatedly until a sweep finds nothing due, so a chain of post-commit intents — each one committed
+    /// by the delivery of the previous — runs to quiescence. Bounded, and it throws rather than looping forever:
+    /// a chain that never settles is a defect to surface, not a hang to wait out.
+    /// </summary>
+    /// <remarks>
+    /// The loop condition is <em>attempted</em>, not delivered. A failed delivery is still progress: exhausting a
+    /// child start is exactly what commits the intent that reports the failure back, so stopping at the first
+    /// sweep that delivers nothing would abandon the chain one step before its conclusion.
+    /// </remarks>
+    public async Task<int> SweepUntilQuietAsync(int maxSweeps = 8)
+    {
+        for (var sweep = 1; sweep <= maxSweeps; sweep++)
+            if ((await SweepAsync()).OutboxAttemptedCount == 0)
+                return sweep;
+
+        throw new InvalidOperationException($"Resumption sweeps still found due work after {maxSweeps} passes.");
+    }
+
+    /// <summary>
+    /// Delivers one Cancel command to a running execution through its agent — the control-plane path an operator
+    /// (or a parent cancelling its child) takes — and drains it.
+    /// </summary>
+    public async Task CancelAsync(string workflowExecutionId)
+    {
+        var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
+            new WorkflowExecutionActorActivationRequest(
+                workflowExecutionId: workflowExecutionId,
+                reason: WorkflowExecutionActorActivationReason.ControlPlaneCommand,
+                requestedAt: Now,
+                requestedBy: "activity-behavioural-drive",
+                requiredCapabilities: WorkflowExecutionActorCapabilities.None,
+                partition: Partition));
+
+        var command = new WorkflowExecutionCommand(
+            CommandId: $"command-cancel-{workflowExecutionId}",
+            WorkflowExecutionId: workflowExecutionId,
+            Kind: WorkflowExecutionCommandKind.Cancel,
+            EnqueuedAt: Now,
+            Payload: null,
+            Metadata: new Dictionary<string, string>());
+
+        var dispatch = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(
+            envelopeId: $"envelope-cancel-{workflowExecutionId}",
+            workflowExecutionId: workflowExecutionId,
+            command: command,
+            idempotencyKey: $"{workflowExecutionId}:cancel",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now,
+            metadata: new Dictionary<string, string>(),
+            partition: Partition));
+        if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+            throw new InvalidOperationException($"Cancel command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
+    }
+
+    /// <summary>Reads the persisted run of any workflow execution these stores know about.</summary>
+    public async Task<WorkflowExecutionRun> ReadRunAsync(string workflowExecutionId)
+    {
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId);
+        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId);
         return new WorkflowExecutionRun(states, workflowState);
     }
 

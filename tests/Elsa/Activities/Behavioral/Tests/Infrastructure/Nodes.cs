@@ -17,11 +17,15 @@ namespace Elsa.Activities.Behavioral.Infrastructure;
 /// </remarks>
 public static class Nodes
 {
-    /// <summary>A leaf CLR activity node with literal input bindings.</summary>
+    /// <summary>
+    /// A leaf CLR activity node with literal input bindings, and optionally the node metadata the publish
+    /// compiler would stamp (e.g. <c>DispatchWorkflow</c>'s pinned child-executable target).
+    /// </summary>
     public static ExecutableNode Leaf(
         string nodeId,
         Type activityType,
-        IReadOnlyDictionary<string, object?>? inputs = null) =>
+        IReadOnlyDictionary<string, object?>? inputs = null,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -30,7 +34,7 @@ public static class Nodes
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
             inputBindings: Literals(inputs),
-            metadata: new Dictionary<string, string>());
+            metadata: metadata ?? new Dictionary<string, string>());
 
     /// <summary>A structural CLR activity node with child slots and a structure payload.</summary>
     public static ExecutableNode Structural(
