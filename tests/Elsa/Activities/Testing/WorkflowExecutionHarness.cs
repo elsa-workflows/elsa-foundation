@@ -380,6 +380,11 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// Delivers one Cancel command to a running execution through its agent — the control-plane path an operator
     /// (or a parent cancelling its child) takes — and drains it.
     /// </summary>
+    /// <remarks>
+    /// Activates the agent on <see cref="Partition"/>, so this pairs with executions started by
+    /// <see cref="StartPublishedAsync"/> (or dispatched beneath one). A run started by
+    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets.
+    /// </remarks>
     public async Task CancelAsync(string workflowExecutionId)
     {
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(

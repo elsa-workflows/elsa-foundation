@@ -312,9 +312,14 @@ It is positional, not activity-specific. Wrapping the node in a `Sequence` moves
 - node-after     [Completed] WriteLine          outcomeNames: ["Done"]
 ```
 
-A run that never suspends keeps its root outcome; one that suspends and resumes does not. Filed as
-[#1127](https://github.com/elsa-workflows/elsa-foundation/issues/1127) rather than fixed here — it is a runtime
-read-model defect, not an activity-contract one, and the in-process drive reads `ActivityExecutionState`
+**The trigger is not isolated.** Every nested node observed carried its outcome. Root nodes did not, in every
+shape but one — a directly-executed run that never suspended kept its root `Done`. Suspend-and-resume is
+therefore *a* trigger, but not the only one: child A of `bpmn/Test-BpmnCallActivity.ps1` is a dispatched child
+whose root `WriteLine` never suspended and still reports no outcome. Whatever the mechanism is, it is wider than
+"resume", and this report does not claim to have found it.
+
+Filed as [#1127](https://github.com/elsa-workflows/elsa-foundation/issues/1127) rather than fixed here — it is a
+runtime read-model defect, not an activity-contract one, and the in-process drive reads `ActivityExecutionState`
 directly so it is unaffected. The e2e script nests the node (also the realistic authoring shape) and says why.
 
 Worth noting what caught it: not an assertion, but authoring the *simplest possible* parent. Every existing

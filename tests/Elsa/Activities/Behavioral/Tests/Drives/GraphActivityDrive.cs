@@ -3,7 +3,6 @@ using Elsa.Activities.Behavioral.Infrastructure;
 using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Graph.Runtime.Activities;
 using Elsa.Activities.Graph.Runtime.Models;
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;

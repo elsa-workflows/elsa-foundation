@@ -6,7 +6,6 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
@@ -60,6 +59,8 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
         await DriveOutcomeAsync(recorder, "completed", ChildBehaviour.Completes, waitForCompletion: true);
         await DriveOutcomeAsync(recorder, "faulted", ChildBehaviour.Faults, waitForCompletion: true);
         await DriveOutcomeAsync(recorder, "cancelled", ChildBehaviour.Waits, waitForCompletion: true, cancelChild: true);
+        // The child's behaviour is irrelevant here — it never gets to run, because retiring its publication
+        // leaves the gated child start with nothing live to select.
         await DriveOutcomeAsync(
             recorder,
             "dispatch-failed",
@@ -83,8 +84,9 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
         // via a fake clock, which proves less and hides more.
         await using var harness = NewHarness(caseId, childStartMaxDeliveryAttempts: retireChildPublication ? 1 : 4);
         var parentWorkflowExecutionId = $"wfexec-parent-{caseId}";
-        var childReference = await harness.PublishAsync(NewChildExecutable(caseId, childBehaviour), $"source-child-{caseId}");
-        var parentExecutable = NewParentExecutable(caseId, childReference, waitForCompletion, bindDefinitionId: true);
+        var child = NewChildExecutable(caseId, childBehaviour);
+        var childReference = await harness.PublishAsync(child, $"source-child-{caseId}");
+        var parentExecutable = NewParentExecutable(caseId, child.Identity, childReference, waitForCompletion, bindDefinitionId: true);
         var parentReference = await harness.PublishAsync(parentExecutable, $"source-parent-{caseId}");
 
         await harness.StartPublishedAsync(parentReference, parentWorkflowExecutionId, correlationId: $"correlation-{caseId}");
@@ -117,11 +119,10 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
     {
         const string caseId = "missing-definition-id";
         await using var harness = NewHarness(caseId);
-        var childReference = await harness.PublishAsync(
-            NewChildExecutable(caseId, ChildBehaviour.Completes),
-            $"source-child-{caseId}");
+        var child = NewChildExecutable(caseId, ChildBehaviour.Completes);
+        var childReference = await harness.PublishAsync(child, $"source-child-{caseId}");
         var parentReference = await harness.PublishAsync(
-            NewParentExecutable(caseId, childReference, waitForCompletion: false, bindDefinitionId: false),
+            NewParentExecutable(caseId, child.Identity, childReference, waitForCompletion: false, bindDefinitionId: false),
             $"source-parent-{caseId}");
 
         try
@@ -168,13 +169,18 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
         return new WorkflowDispatchIdentity(parentWorkflowExecutionId, activityExecutionId).ChildWorkflowExecutionId;
     }
 
+    /// <param name="childIdentity">
+    /// The identity of the executable that was actually published, not one re-derived here. The pin is the only
+    /// thing pointing the activity at its target, so deriving it twice would let the two drift into a pin that
+    /// names an artifact no one stored.
+    /// </param>
     private static WorkflowExecutable NewParentExecutable(
         string caseId,
+        WorkflowExecutableIdentity childIdentity,
         WorkflowExecutableSourceReference childReference,
         bool waitForCompletion,
         bool bindDefinitionId)
     {
-        var childIdentity = NewIdentity($"child-{caseId}");
         var inputs = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             [nameof(DispatchWorkflowActivity.WaitForCompletion)] = waitForCompletion
