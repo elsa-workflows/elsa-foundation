@@ -13,6 +13,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -834,7 +835,7 @@ public sealed class ActivityDraftTestRunService(
             idempotencyKey.Length > 200 ||
             correlationId?.Length > 200)
             throw Reject(
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "The activity Test Run request identity is malformed.");
     }
 

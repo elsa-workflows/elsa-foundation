@@ -28,7 +28,7 @@ public sealed class WorkflowExecutableInputValidation
 
         return new WorkflowExecutableInputValidation(
             new ReadOnlyDictionary<string, JsonElement>(snapshot),
-            Array.Empty<WorkflowExecutableInputValidationFinding>());
+            []);
     }
 
     public static WorkflowExecutableInputValidation Failure(IEnumerable<WorkflowExecutableInputValidationFinding> findings)

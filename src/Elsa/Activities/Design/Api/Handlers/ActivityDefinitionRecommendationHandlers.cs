@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -94,7 +95,7 @@ public sealed class ActivityDefinitionRecommendationService(
     }
 
     private static ActivityAuthoringException Invalid(string message) =>
-        new(400, "activity.request.invalid", "Invalid recommendation request", message);
+        new(400, ActivityErrorCodes.RequestInvalid, "Invalid recommendation request", message);
 
     private static ActivityAuthoringException NotFound(Exception? inner = null) =>
         new(404, "activity.version.not-found", "Activity version not found", "The requested activity version was not found for this definition.", innerException: inner);

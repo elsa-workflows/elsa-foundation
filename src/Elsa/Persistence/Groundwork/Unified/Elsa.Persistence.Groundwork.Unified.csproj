@@ -10,6 +10,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Exactly one ProjectReference, deliberately. GroundworkStorageCompositionTests
+      .Unified_contains_no_hard_coded_family_union_or_domain_project_references asserts it: this project
+      composes provider-neutral persistence and must stay free of workflow-domain project references.
+      Anything needing a domain type (WorkflowExecutableCacheOptions, for instance) belongs in the
+      provider leaves, which already carry that reference.
+    -->
     <ProjectReference Include="..\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
   </ItemGroup>
 

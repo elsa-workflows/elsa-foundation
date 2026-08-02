@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Core.Services;
 
@@ -44,7 +45,7 @@ public sealed class ActivityDraftValidator(
         catch (InvalidOperationException)
         {
             diagnostics.Add(new(
-                "activity.provider.unavailable",
+                ActivityErrorCodes.ProviderUnavailable,
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider or manifest schema is unavailable.",
                 subject,

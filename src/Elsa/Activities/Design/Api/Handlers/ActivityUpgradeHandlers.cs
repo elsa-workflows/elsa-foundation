@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -32,7 +33,7 @@ public sealed class CreateActivityUpgradePlanHandler(
         {
             throw new ActivityAuthoringException(
                 400,
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "Invalid activity upgrade plan request",
                 exception.Message,
                 innerException: exception);

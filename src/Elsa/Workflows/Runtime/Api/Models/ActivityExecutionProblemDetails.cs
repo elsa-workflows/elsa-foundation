@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
 
@@ -44,7 +45,7 @@ internal static class ActivityExecutionProblemDetails
         WriteAsync(
             context,
             StatusCodes.Status400BadRequest,
-            "activity.request.invalid",
+            ActivityErrorCodes.RequestInvalid,
             "Invalid activity execution request",
             detail,
             cancellationToken);
@@ -84,7 +85,7 @@ internal static class ActivityExecutionProblemDetails
             ActivityExecutionHierarchyCursorFailure.Expired => WriteAsync(
                 context,
                 StatusCodes.Status410Gone,
-                "activity.cursor.expired",
+                ActivityErrorCodes.CursorExpired,
                 "Activity execution cursor expired",
                 "The activity execution hierarchy snapshot used by this cursor is no longer available.",
                 exception.Metadata,
@@ -92,7 +93,7 @@ internal static class ActivityExecutionProblemDetails
             _ => WriteAsync(
                 context,
                 StatusCodes.Status400BadRequest,
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "Invalid activity execution cursor",
                 "The activity execution hierarchy cursor is invalid.",
                 null,
@@ -103,7 +104,7 @@ internal static class ActivityExecutionProblemDetails
         WriteAsync(
             context,
             StatusCodes.Status500InternalServerError,
-            "activity.operation.failed",
+            ActivityErrorCodes.OperationFailed,
             "Activity execution inspection failed",
             "The activity execution inspection operation failed.",
             cancellationToken);

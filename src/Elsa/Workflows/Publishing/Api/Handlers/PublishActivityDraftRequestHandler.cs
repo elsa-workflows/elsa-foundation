@@ -4,6 +4,7 @@ using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -20,15 +21,15 @@ public sealed class PublishActivityDraftRequestHandler(IActivityDefinitionPublis
             string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
             request.ExpectedDefinitionHeadVersionId is not null && string.IsNullOrWhiteSpace(request.ExpectedDefinitionHeadVersionId))
             throw new ActivityPublicationRejectedException(
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "The publication request is malformed.",
                 []);
         if (!SemVer.TryParse(request.Version, out _))
             throw new ActivityPublicationRejectedException(
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "The publication version must be valid SemVer 2.0.0 syntax.",
                 [new(
-                    "activity.version.invalid",
+                    ActivityErrorCodes.VersionInvalid,
                     ActivityDiagnosticSeverity.Error,
                     $"Version '{request.Version}' is not valid SemVer 2.0.0.",
                     new("ActivityDraft", request.DraftId, Revision: request.ExpectedDraftRevision),
