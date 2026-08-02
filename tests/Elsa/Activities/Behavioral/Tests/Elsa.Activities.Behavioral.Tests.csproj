@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
 
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />

@@ -60,7 +60,10 @@ public sealed class ActivityOutcomeReachabilityTests(ActivityDriveFixture fixtur
         "Elsa.Activities.Scripting.Activities.RunJavaScript",
         // Switch case ports and BpmnDecision outcomes are likewise authored data, not a declared enum.
         "Elsa.Activities.Switch.Activities.Switch",
-        "Elsa.Activities.Bpmn.Activities.BpmnDecision"
+        "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+        // A graph boundary's ports are its authored outcome mappings, pinned per node at publish time. Its
+        // *declared* side is the implicit Done an unmapped boundary completes with, which the drive still reaches.
+        "Elsa.Activities.Graph.Runtime.Activities.GraphActivity"
     ];
 
     private static string Describe(IReadOnlyCollection<string> outcomes) =>
@@ -160,11 +163,14 @@ public sealed class ActivityDriveHealthTests(ActivityDriveFixture fixture) : Act
         Assert.NotEmpty(ActivityContractInventory.Activities);
 
     /// <summary>
-    /// Prints the contract members this suite does not yet reach, so an outstanding gap is legible in the test
-    /// output instead of being invisible behind a green run. This test is expected to fail once the list is
-    /// empty — deleting it then is the last step of finishing the drive.
+    /// The ratchet. Every shipped activity is now driven, so the undriven list is empty and must stay that way:
+    /// an entry re-appearing means an activity dropped out of measured coverage, which has to be argued for in
+    /// review rather than slipped in to quiet a failing assertion.
     /// </summary>
     [Fact]
-    public void Undriven_coverage_is_declared_with_reasons() =>
-        Assert.NotEmpty(UndrivenCoverage.Describe());
+    public void Undriven_coverage_is_empty() =>
+        Assert.True(
+            UndrivenCoverage.Describe().Count == 0,
+            "Coverage regressed — these contract members are no longer measured against a real run: " +
+            string.Join(Environment.NewLine, UndrivenCoverage.Describe()));
 }
