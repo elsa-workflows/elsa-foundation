@@ -5,10 +5,10 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 3.3.0 (draft)
+**Version:** 3.4.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v3.1.0**.
+**Derives from:** framework constitution **v3.2.0**.
 
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
@@ -454,4 +454,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.3.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04 | **Derives from framework constitution:** v3.1.0
+**Version:** 3.4.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-08-02 | **Derives from framework constitution:** v3.2.0

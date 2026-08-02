@@ -5,7 +5,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 3.1.0 (draft)
+**Version:** 3.2.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -46,6 +46,7 @@ shared program-goals planner.
   - [§2.22 Feature documentation](#222-feature-documentation)
   - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Exception boundaries](#2235-exception-boundaries--infrastructure-exceptions-are-wrapped) · [§2.23.6 Integration testing — out of scope](#2236-integration-testing--out-of-scope)
   - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Rationale reference](#2241-rationale-reference) · [§2.24.2 The catalog](#2242-the-catalog-draft-pending-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
+  - [§2.25 Consolidation review — the subtractive obligation](#225-consolidation-review--the-subtractive-obligation) · [§2.25.1 The obligation](#2251-the-obligation) · [§2.25.2 Standing](#2252-standing) · [§2.25.3 Evidence bar](#2253-evidence-bar--subtraction-is-verified-never-inferred) · [§2.25.4 What the review reports](#2254-what-the-review-reports)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
 - [§4 Versioning](#4-versioning)
   - [§4.1 Per-Package Versioning](#41-per-package-versioning)
@@ -916,6 +917,38 @@ A pattern adopted *before* going through this gate is technical debt — surface
 
 ---
 
+### §2.25 Consolidation review — the subtractive obligation
+
+Every obligation in this constitution is additive: a work unit may add a project (§2.16), an extension-point catalog (§2.22.1), guard tests (§2.23), a spec, and evidence records. None of them requires anything to be removed. This section supplies the counterpart.
+
+#### §2.25.1 The obligation
+
+A **consolidation review** runs periodically, on a cadence the architects set (a quarter is the suggested starting point). It is a work unit like any other: it produces a report, its changes go through the normal gates, and it may conclude that nothing needs to change. It is the only unit with standing to *retire* artifacts, and it is expected to use it.
+
+#### §2.25.2 Standing
+
+The review may, within one unit of work:
+
+- move a spec to a terminal status, or archive it, per the spec lifecycle policy;
+- delete a guard test whose gate has been superseded, provided the report names the gate that replaced it;
+- prune or correct an extension-point catalog entry that no longer matches the code;
+- merge two projects, subject to §2.16 (NuGet identity is preserved wherever possible) and the §2.16.1 exemption classes;
+- delete generated artifacts and their generators when no consumer remains.
+
+#### §2.25.3 Evidence bar — subtraction is verified, never inferred
+
+Every removal MUST be justified by evidence the build or the test suite can produce: a compile, a test run, a reachability check, a guard that still passes without the deleted code. **A static census, a text search, or a similarity judgement is not sufficient evidence to remove anything.**
+
+This bar is not theoretical caution. Static analysis systematically cannot see why code exists. Near-identical text routinely encodes independently-versioned contracts; an apparently unused symbol is often reached by reflection, configuration, or a package consumer outside the tree; and a duplication that looks collapsible can turn out to cost more to share than to repeat. A body empowered to delete, reasoning from a census, removes load-bearing code — and does so with the confidence the census supplied. The build and the test suite are the only instruments that answer the question actually being asked.
+
+#### §2.25.4 What the review reports
+
+Each run records what it retired and why, and — equally — what it examined and deliberately kept. The second list is what stops the next review re-deriving the same conclusions, and it is where the "looks duplicated, is actually two independent contracts" cases get written down.
+
+**Cross-references.** §2.16 / §2.16.1 (project granularity and the exemption classes); §2.22.1 (extension-point catalogs); §2.23 (guard and unit tests); §2.21.1 (refactoring golden rule).
+
+---
+
 ## §3 Runtime composition — Nuplane Strategy
 
 Nuplane is selected as the framework's runtime hot-reload mechanism. It loads, activates, and replaces modules at runtime where the underlying runtime allows it. Application architects are free to choose any other software that meets this same intent.
@@ -985,4 +1018,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 3.1.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04
+**Version:** 3.2.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-08-02

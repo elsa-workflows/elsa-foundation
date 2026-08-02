@@ -1,9 +1,14 @@
-# Subtractive obligation — framework constitution amendment (PROPOSAL)
+# Subtractive obligation — framework constitution amendment (RATIFIED)
 
-Status: **proposal for ratification review** by Joey Barten, Sipke Schoorstra, Frans van Ek.
-Produced from §9.13 of the [simplification review](simplification-review-2026-07.md), ruled *yes —
-a periodic consolidation review* on 2026-08-01. Provenance to be recorded in the
-[amendment index](constitution-amendment-index.md) on ratification.
+Status: **ratified 2026-08-02** by Sipke — applied as framework constitution **§2.25**
+(v3.1.0 → v3.2.0), with an Elsa-side re-pin to framework v3.2.0 (Elsa constitution v3.3.0 → v3.4.0)
+and no Elsa specialization required. Provenance recorded in the
+[amendment index](constitution-amendment-index.md) and the
+[framework history](constitution-history-framework.md). Produced from §9.13 of the
+[simplification review](simplification-review-2026-07.md).
+
+**§3 below is the part that did NOT ship**: the companion §2.16.1 aggregate-growth trigger was
+withdrawn because measuring it refuted its premise. §2.16.1 is unchanged.
 
 **Branch point:** `42d6436b4`. **Method:** every figure below is a direct count at that SHA,
 reproducible with the commands in [Appendix A](#appendix-a--how-the-numbers-were-taken).
@@ -93,9 +98,14 @@ passes, and the aggregate concern it was to address is not visible in the data.
 
 ---
 
-## 4. Draft amendment text (PROPOSAL — for ratification review)
+## 4. Amendment text as proposed
 
-To be added to the framework constitution as **§2.25**, following §2.24.
+Ratified and applied as framework **§2.25**, following §2.24. The applied text differs in one
+respect: the §2.25.3 justification below cites this repository's own findings, and the framework
+constitution is deliberately written example-free so it stands alone for any application (see its
+closing note on synthetic and `<App>`-placeholder examples). The shipped §2.25.3 therefore states the
+general reason static analysis cannot justify removal; the concrete evidence stays here, in §3 and
+§2 above.
 
 > ### §2.25 Consolidation review — the subtractive obligation
 >
@@ -154,7 +164,7 @@ point of §2.25.3.
 
 ---
 
-## 6. Recommendation to ratifiers
+## 6. Recommendation to ratifiers *(as submitted; both accepted 2026-08-02)*
 
 1. **Adopt §2.25** as drafted. The retirement gap is real, evidenced, and currently unowned.
 2. **Do not adopt the §2.16.1 aggregate trigger.** Its premise does not survive measurement (§3).
