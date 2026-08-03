@@ -3,8 +3,8 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Publishing.Api.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 

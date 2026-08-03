@@ -18,7 +18,16 @@ public sealed class BridgeDependencyDirectionTests
     [InlineData("Elsa.Activities.Primitives")]    // a Runtime kind feature
     public void BridgeDoesNotReference(string forbiddenAssembly)
     {
-        var referenced = typeof(WorkflowsPublishingApiFeature).Assembly
+        // spec 145: the bridge is now split into the endpoint-free ENGINE assembly
+        // (Elsa.Workflows.Publishing) and its transport sibling (…Publishing.Api). Both must ride on
+        // the two seams' .Core contracts only, so the forbidden-reference list binds each assembly.
+        AssertDoesNotReference(typeof(WorkflowsPublishingApiFeature).Assembly, forbiddenAssembly);
+        AssertDoesNotReference(typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly, forbiddenAssembly);
+    }
+
+    private static void AssertDoesNotReference(System.Reflection.Assembly assembly, string forbiddenAssembly)
+    {
+        var referenced = assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name);
 

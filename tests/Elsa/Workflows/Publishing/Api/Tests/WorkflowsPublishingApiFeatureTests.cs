@@ -1,12 +1,13 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Capabilities;
-using Elsa.Workflows.Publishing.Api.Handlers;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -22,6 +23,11 @@ public sealed class WorkflowsPublishingApiFeatureTests
     {
         var services = new ServiceCollection();
 
+        // spec 145: the workflow-publish + compile engine moved to the endpoint-free WorkflowsPublishing
+        // feature, which the Api feature pulls in via DependsOn at shell-composition time. This unit test
+        // invokes ConfigureServices directly (bypassing DependsOn resolution), so it composes both features
+        // to assert the same publishing surface it always has (§2.21.1 wiring change; assertions unchanged).
+        new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
 
         // TS-1 (§2.23.1): registration presence, not implementation-type pinning, so swapping an equivalent

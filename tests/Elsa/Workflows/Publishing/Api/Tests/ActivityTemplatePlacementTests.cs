@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
@@ -5,7 +6,6 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Api.Contracts;

@@ -1,7 +1,11 @@
 # Workflows.Publishing extension points moved
 
-The authoritative Publishing-domain catalog is maintained beside the composition root:
-[the Publishing API extension-point catalog](../Api/EXTENSION_POINTS.md).
+The Publishing-domain contracts live in `Elsa.Workflows.Publishing.Core`, but their defaults and obligations
+are cataloged beside the two composition roots that own them:
 
-Contracts continue to live in `Elsa.Workflows.Publishing.Core`; this pointer avoids maintaining a second copy of
-their defaults and obligations.
+- **Engine** (compiler, publication authority stores, policy/preflight/activation/projection, compilation
+  fan-in, activity-template registries): [the Publishing engine catalog](../EXTENSION_POINTS.md).
+- **Transport + activity-draft** (HTTP endpoints, transport authorization, activity-draft publish/test-run):
+  [the Publishing API catalog](../Api/EXTENSION_POINTS.md).
+
+These pointers avoid maintaining a second copy of the defaults and obligations.

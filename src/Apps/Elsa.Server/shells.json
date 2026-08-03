@@ -160,6 +160,7 @@
           "WorkflowDesignValidations": {},
           "WorkflowsDashboard": {},
           "WorkflowsRuntimeAttention": {},
+          "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {

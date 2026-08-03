@@ -1,6 +1,6 @@
+using Elsa.Workflows.Publishing.Api.Models;
 using System.Text.Json.Serialization;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Requests;
 

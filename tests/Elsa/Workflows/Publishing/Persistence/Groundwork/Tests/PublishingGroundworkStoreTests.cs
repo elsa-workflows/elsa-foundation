@@ -263,8 +263,10 @@ public sealed class PublishingGroundworkStoreTests
             if (provider == "memory")
                 return new PublishingStoreFixture(provider, null, new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
             var path = Path.Combine(Path.GetTempPath(), $"elsa-publishing-{Guid.NewGuid():N}.db");
+            // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
+            // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
             var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path}",
+                $"Data Source={path};Pooling=False",
                 PublishingGroundworkStorageManifest.Create(),
                 SqliteProvider,
                 DocumentStoreAccess.Scoped(new StorageScope("default")));
@@ -276,7 +278,7 @@ public sealed class PublishingGroundworkStoreTests
             if (provider == "memory")
                 return;
             Store = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={sqlitePath}",
+                $"Data Source={sqlitePath};Pooling=False",
                 PublishingGroundworkStorageManifest.Create(),
                 SqliteProvider,
                 DocumentStoreAccess.Scoped(new StorageScope("default")));

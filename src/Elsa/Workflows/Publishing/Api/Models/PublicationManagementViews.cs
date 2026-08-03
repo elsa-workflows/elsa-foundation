@@ -95,16 +95,6 @@ public enum PublicationActionView
     SideBySide
 }
 
-public enum PublicationStatusView
-{
-    Preparing,
-    Pending,
-    Active,
-    Retiring,
-    Retired,
-    Failed
-}
-
 public enum PublicationPolicySourceView
 {
     Request,

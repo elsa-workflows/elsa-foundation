@@ -14,7 +14,7 @@ namespace Elsa.Activities.Graph.Design;
     name: "ActivitiesGraphDesign",
     DisplayName = "Activities Graph (Design)",
     Description = "Authored activity-graph validation, dependency discovery, and compilation.",
-    DependsOn = new object[] { "ActivitiesDesignApi", "WorkflowsPublishingApi" })]
+    DependsOn = new object[] { "ActivitiesDesignApi", "WorkflowsPublishing" })]
 public sealed class GraphActivitiesDesignFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

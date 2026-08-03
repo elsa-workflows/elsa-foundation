@@ -14,7 +14,6 @@ using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Commands;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
-using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
@@ -39,7 +38,7 @@ namespace Elsa.Workflows.Publishing.Api;
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that compile persisted catalog metadata into canonical workflow executables.",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities", "Events" }
+    DependsOn = new object[] { "WorkflowsPublishing", "ApiCapabilities" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {
@@ -49,54 +48,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        // Transport authorization (HTTP-bound). Authorization is a transport concern; the engine is
+        // authorization-free, so its context + the activity-draft services that consume it live here.
         services.AddHttpContextAccessor();
         services.TryAddScoped<IActivityPublishingAuthorizationContext, HttpContextActivityPublishingAuthorizationContext>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityContractStorageDriverProvider, RuntimeActivityContractStorageDriverProvider>());
-        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
-        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
-        services.TryAddScoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
-        services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
-        services.TryAddSingleton<IPublicationSlotStore, InMemoryPublicationSlotStore>();
-        services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
-        services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
-        services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
-        // Deterministic policies hold no request or persistence state and remain safe singletons.
-        services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
-        services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
-        // Publishing operations consume provider-overridable stores. Durable providers register those stores as
-        // scoped services, so their aggregators must share the request scope instead of capturing it globally.
-        services.TryAddScoped<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
-        services.TryAddScoped<IPublicationActivator, PublicationActivator>();
-        services.TryAddScoped<WorkflowPublicationPreflightReader>();
-        services.TryAddScoped<PublicationSnapshotReviewService>();
-        services.TryAddSingleton<IPublicationSnapshotReviewStore, InMemoryPublicationSnapshotReviewStore>();
-        services.TryAddSingleton<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>();
-        // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
-        // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
-        services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
-        services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
-        // Permanent definition deletion must not strand a live publication: the guard is contributed into the
-        // design-persistence delete commands and vetoes while a slot is active or a Published reference is live.
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
-        // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
-        // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
-        services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
-        services.TryAddScoped<ValueConversionPlanResolver>();
-        services.TryAddScoped<ActivityResultConversionPlanLinker>();
-        services.TryAddScoped<RuntimeInputBindingCompiler>();
-        services.TryAddScoped<RuntimeOutputCaptureCompiler>();
-        services.TryAddScoped<WorkflowExecutableHasher>();
-        services.TryAddScoped<ActivityTreeProjector>();
-        services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
-        services.TryAddScoped<ExecutableNodeCompiler>();
-        services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
-        services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
-        services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
-        services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
-        services.TryAddScoped<ActivityTemplatePlacer>();
-        services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
         services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
         services.TryAddScoped<IActivityDraftTestRunService, ActivityDraftTestRunService>();
@@ -104,18 +59,16 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IActivityDraftTestRunCancellationPolicy, DefaultActivityDraftTestRunCancellationPolicy>();
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();
-        services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
-        services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
-        services.AddEventHandler<OnExecutableCompilationCollecting, CollectExecutableCompilation>();
-        services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
-        services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddScoped<RuntimeRequirementPreflight>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
-        services.TryAddSingleton(TimeProvider.System);
+
+        // The workflow-publish + compile engine (compiler + collaborators, publication stores/activator,
+        // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via DependsOn.
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
-        // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry) but advertised
-        // under the client's expressions capability; the source merges that relation into elsa.api.expressions.
+        // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry, supplied by
+        // the engine) but advertised under the client's expressions capability; the source merges that relation
+        // into elsa.api.expressions.
         services.AddApiCapabilitySource<ConversionProfilesCapabilitySource>();
     }
 }
