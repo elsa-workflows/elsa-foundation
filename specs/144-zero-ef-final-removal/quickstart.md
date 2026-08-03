@@ -438,6 +438,23 @@ than a mismatch between two imported generations. The row's other three findings
 still current: zero `performanceVerdict` objects, empty diagnostics provider-evidence arrays, and no
 accepted immutable #50 baseline.
 
+Currency note (2026-08-03), T010 row: the row describes PR #1093 as a "Draft foundation PR". It is
+**merged** (`gh pr view 1093` → `state: MERGED`, 2,997 additions), so the OpenIddict Groundwork
+foundations — storage manifest, records, serializer/codec, generic-query rejection, session factory,
+failure mapper — are on `main`. What remains open is unchanged and is the substantive part: all four
+store implementations (145 members across `IOpenIddictApplicationStore`, `IOpenIddictAuthorizationStore`,
+`IOpenIddictScopeStore`, `IOpenIddictTokenStore` per
+`specs/106-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`), the production
+registration, the atomic-mutation and relationship coordinators, four-provider evidence, and the still-open
+upstream Groundwork contracts #141/#143. Spec 106 Phase 3 onward is entirely unstarted.
+
+Currency note (2026-08-03), T009 row: #642's remaining work is **not code**. The Groundwork diagnostics
+stores are complete — no stub, TODO, or `NotImplementedException` anywhere under
+`src/Elsa/Diagnostics/*/Persistence/Groundwork/` — and spec 139 has T001–T049 and T056 checked. What is
+open is an evidence chain: T050/T051 import a #646 verdict that does not yet exist, T057 runs a
+four-provider certification at the current Groundwork version (none exists past `preview.88`), and
+T053–T055 then delete the EF projects mechanically. Treating T009 as an engineering task will mis-plan it.
+
 Oracle-availability note, T011 scope: #646's EF comparison can only cover contracts that have an EF
 implementation. That set is `IStructuredLogStore`, `IOpenTelemetryStore`, the four Elsa IAM contracts,
 and the two ASP.NET Core Identity framework contracts — SQLite only, because EF Core has no PostgreSQL
