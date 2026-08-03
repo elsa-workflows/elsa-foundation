@@ -438,6 +438,23 @@ than a mismatch between two imported generations. The row's other three findings
 still current: zero `performanceVerdict` objects, empty diagnostics provider-evidence arrays, and no
 accepted immutable #50 baseline.
 
+Currency note (2026-08-04), T012 row: the two missing dashboard providers are now implemented, so the
+row's "Missing" column is out of date. SQL Server is a third `GroundworkRunHealthDialect` member with
+`JSON_VALUE`/`TRY_CAST`/`datetimeoffset` handling and T-SQL `TOP`/CTE syntax; MongoDB is a separate pair
+of data-source classes over the aggregation pipeline, because none of the `DbConnection`-and-SQL
+machinery transfers to it. Both are wired into their unified registrations — each of which was
+**missing the Dashboard project reference entirely**, so neither could have composed the dashboard even
+with dialect support present. Each provider has a container-backed test leaf deliberately routed to
+nightly, mirroring the SQLite fixtures' data and assertions so the four providers are comparable.
+
+Running SQL Server against a real container immediately caught a defect no SQLite-only test could see:
+SQLite and PostgreSQL both accept `GROUP BY` on a select-list alias and T-SQL does not, so the
+top-failures query failed outright. Fixed by grouping on the full expression, which is valid in all three.
+
+What the row still correctly requires is unchanged: **host acceptance evidence and the final issue/Project
+disposition for #932 are not supplied by this work.** The gate remains open until those land; only the
+"no implementation exists" half of the blocker is resolved.
+
 Currency note (2026-08-03), T010 row: the row describes PR #1093 as a "Draft foundation PR". It is
 **merged** (`gh pr view 1093` → `state: MERGED`, 2,997 additions), so the OpenIddict Groundwork
 foundations — storage manifest, records, serializer/codec, generic-query rejection, session factory,
