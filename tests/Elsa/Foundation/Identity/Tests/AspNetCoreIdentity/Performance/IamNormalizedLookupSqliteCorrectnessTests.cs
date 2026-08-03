@@ -18,6 +18,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Performance;
 /// Executes the shared, timing-free IAM scenario against each real SQLite-backed store implementation.
 /// Native-plan evidence remains a separate prerequisite for performance measurement and verdicts.
 /// </summary>
+[Collection(Differential.SqliteIdentityFileCollection.Name)]
 public sealed class IamNormalizedLookupSqliteCorrectnessTests
 {
     [Fact]

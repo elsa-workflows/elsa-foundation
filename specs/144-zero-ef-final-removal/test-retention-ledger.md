@@ -565,6 +565,36 @@ Support-only sources added with them (no Fact/Theory identity), to be deleted in
 - tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryDifferentialProbes.cs — the six dimension probes.
 - tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryDivergenceLedger.cs — executable half of the divergence ledger.
 
+### tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/TenantMembershipStoreDifferentialTests.cs
+
+Added 2026-08-03 under [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) as the
+EF-vs-Groundwork behavioural differential for `ITenantMembershipStore` on SQLite — the only Elsa IAM
+contract that is both dual-stack and admissible. Original subject: IAM persistence: EF-vs-Groundwork
+differential oracle. Reachability: DirectToken (constructs `EfCoreTenantMembershipStore` and
+`EfCoreUserStore` over `ApplicationIdentityDbContext`).
+
+Adds no EF package or project reference: the project already reaches both stacks, and the EF SQLite
+path is obtained through the parameterless `AddFoundationAspNetCoreIdentityEntityFrameworkCore()`
+registration so no EF registration token enters the test project.
+
+These methods exist only to compare the temporary EF oracle against Groundwork and cannot be converted
+once the comparand is deleted. Their durable output is
+[`specs/094-harden-groundwork-stores/divergence-ledger.md`](../094-harden-groundwork-stores/divergence-ledger.md),
+which retains seven recorded divergences (all `ContractIsGroundwork`) independently of the tests.
+
+- tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/TenantMembershipStoreDifferentialTests.cs:35 Ef_and_groundwork_agree_or_carry_a_recorded_disposition — TenantMembershipStoreDifferentialTests.Ef_and_groundwork_agree_or_carry_a_recorded_disposition | Original subject: IAM persistence: EF-vs-Groundwork differential oracle | Objective: Ef_and_groundwork_agree_or_carry_a_recorded_disposition (6 dimension rows) | Reachability: DirectToken | Preliminary disposition: RemovePending.
+- tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/TenantMembershipStoreDifferentialTests.cs:82 Differential_surface_matches_its_recorded_identity — TenantMembershipStoreDifferentialTests.Differential_surface_matches_its_recorded_identity | Original subject: IAM persistence: EF-vs-Groundwork differential oracle | Objective: Differential_surface_matches_its_recorded_identity | Reachability: DirectToken | Preliminary disposition: RemovePending.
+
+Support-only sources added with them (no Fact/Theory identity), to be deleted in the same slice:
+
+- tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/TenantMembershipDifferential.cs — comparand factories, the six dimension probes, and the executable divergence ledger.
+
+Modified with them, and **not** to be deleted: `IamNormalizedLookupSqliteCorrectnessTests` gained
+`[Collection(SqliteIdentityFileCollection.Name)]` so it cannot run beside the differential. The EF
+identity registration hard-codes one SQLite data source, so both would otherwise delete each other's
+database mid-run. When the differential is removed, the collection attribute may be dropped from that
+test but its objective is unaffected.
+
 ## Support-only EF-reachable sources (no method rows)
 
 These sources have no Fact/Theory identity but are dependencies of ledger rows or the final guard:

@@ -2,7 +2,7 @@
 
 Work unit: `094-harden-groundwork-stores` (artifact), executed under [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646).
 Consumed by: [spec 144](../144-zero-ef-final-removal/) T011.
-Status: both diagnostics seams recorded. IAM seams pending.
+Status: both diagnostics seams and the one admissible IAM seam recorded.
 
 ## What this artifact is, and is not
 
@@ -27,7 +27,7 @@ implementation. See the [zero-EF decision map](../../docs/decision-maps/zero-ef-
 |---|---|---|
 | Diagnostics | `IStructuredLogStore` | **recorded below** |
 | Diagnostics | `IOpenTelemetryStore` | **recorded below** |
-| Identity (Elsa IAM) | `ITenantMembershipStore` | pending |
+| Identity (Elsa IAM) | `ITenantMembershipStore` | **recorded below** |
 | Identity (Elsa IAM) | `IUserStore`, `IRoleStore`, `IExternalIdentityStore` | blocked — ledger rows `externally-blocked` |
 | Runtime (all 21 rows) | — | **no EF comparand exists; not gradable by EF ratio** |
 
@@ -161,6 +161,95 @@ This is the differential doing the job it exists for: a ledger claim about diver
 forward after the underlying behaviour changed, and executing the comparison caught it. Note the
 direction — the risk in an inspection-derived ledger is not only missed divergence but **stale
 divergence**, which over-reports risk and can block a removal that is actually safe.
+
+## `ITenantMembershipStore` — SQLite, recorded 2026-08-03
+
+Comparands: `efcore.sqlite` (`EfCoreTenantMembershipStore`) and `groundwork.sqlite`
+(`GroundworkTenantMembershipStore`), both over real SQLite. The EF side reaches SQLite through the
+parameterless `AddFoundationAspNetCoreIdentityEntityFrameworkCore()` registration so that no EF
+registration token enters the test project and the fail-closed surface ratchet stays green.
+
+Scope note: this is the **only** Elsa IAM contract the differential may currently touch. `iam-user`,
+`iam-role` and `iam-external-identity` are `externally-blocked` in the coverage ledger and the
+validator has no transition out of that state; the ASP.NET Core Identity oracle tree is separately
+frozen under a content fingerprint.
+
+Executable form: `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/`.
+Surface digest: `42f863e9213e8bef8c012cba81867f5fbac698df8f2bd830ceb2c0aa456af098`.
+
+**Result: 25 facts compared across 6 dimensions; seven divergences, all `ContractIsGroundwork`.**
+
+| dimension | facts | verdict | disposition | testDisposition |
+|---|---|---|---|---|
+| `concurrency-conflict-shape` | 4 | `equivalent` | — | `RemovePending` |
+| `producer-ordering` | 5 | **`divergent`** (1) | `ContractIsGroundwork` | `RemovePending` |
+| `null-and-default-materialization` | 8 | **`divergent`** (5) | `ContractIsGroundwork` | `RemovePending` |
+| `rollback-visibility` | 3 | **`divergent`** (1) | `ContractIsGroundwork` | `RemovePending` |
+| `restart-observation` | 3 | `equivalent` | — | `RemovePending` |
+| `idempotent-replay` | 4 | `equivalent` | — | `RemovePending` |
+
+### Divergence 1 — EF's set encoding is lossy in three ways
+
+`EfCoreTenantMembershipStore` stores `RoleIds` and `DirectPermissions` as a single `'\n'`-joined
+column and splits them back with `StringSplitOptions.RemoveEmptyEntries | TrimEntries` into a
+`HashSet<string>(StringComparer.OrdinalIgnoreCase)`. Groundwork round-trips the set as stored.
+
+| fact | efObserved | groundworkObserved |
+|---|---|---|
+| `case-variant-role-count` | `1` | `2` |
+| `case-variants-collapsed` | `true` | `false` |
+| `padded-role` | `trimmed-or-lost` | `preserved` |
+| `embedded-newline-intact` | `false` | `true` |
+| `embedded-newline-permission-count` | `2` | `1` |
+
+Three distinct losses from one encoding choice: two role ids differing only in case silently become
+one; surrounding whitespace is stripped; and a value containing a newline is split into two values.
+The third is the sharpest — a permission string with an embedded newline becomes *two* permissions,
+which is a privilege-shaped corruption rather than a cosmetic one.
+
+**Disposition `ContractIsGroundwork`.** Preserving what was stored is the contract; EF's behaviour is
+an artifact of joining a set into one column, not a decision anyone took about identity semantics.
+Deleting EF removes the lossy encoding, so this does not block removal.
+
+### Divergence 2 — EF accepts a cross-tenant write
+
+| fact | efObserved | groundworkObserved |
+|---|---|---|
+| `foreign-tenant-write` | `accepted` | `threw:InvalidOperationException` |
+
+Saving a membership whose `TenantId` differs from the caller's scope succeeds on EF and is rejected by
+Groundwork's `IdentityPersistenceScopeGuard` before provider I/O. EF's store filters only on the
+record's own columns and has no notion of an ambient scope.
+
+**Disposition `ContractIsGroundwork`**, and this one is security-relevant rather than merely lossy:
+tenant isolation is the property the scope guard exists to hold. Deleting EF removes the permissive
+path. Recorded here because a reader who sees only the Groundwork behaviour would not know the
+stricter check was ever a difference.
+
+### Divergence 3 — EF's store is not usable concurrently through one instance
+
+| fact | efObserved | groundworkObserved |
+|---|---|---|
+| `concurrent-writes-through-one-instance` | `threw:InvalidOperationException` | `accepted` |
+
+`EfCoreTenantMembershipStore` holds one `DbContext`, which is not thread-safe, so concurrent writers
+through a single store instance fault with EF's concurrency detector. Groundwork's store accepts them.
+Both stacks converge once the same writes are re-driven serially — `loss=none`, `readable=12` on both
+— so this is a threading-model difference, not durability loss.
+
+**Disposition `ContractIsGroundwork`.** EF's constraint is inherent to `DbContext` and is normally
+hidden by scope-per-operation registration; it becomes visible only when the seam is driven directly.
+
+### Precondition difference found while building this probe
+
+Groundwork's membership store resolves the owning user document and rejects an orphan membership
+(`The requested user does not exist in the current persistence scope.`); EF's has no such link and
+persists one happily. This is referential integrity that Groundwork enforces and EF does not.
+
+It is not recorded as a per-fact divergence because it would otherwise dominate all six dimensions and
+mask everything else, so the probes seed a user first. Recorded here instead, with the same
+disposition — `ContractIsGroundwork` — because an orphan membership is not a state the model should
+be able to reach.
 
 ### Open follow-up for this seam
 
