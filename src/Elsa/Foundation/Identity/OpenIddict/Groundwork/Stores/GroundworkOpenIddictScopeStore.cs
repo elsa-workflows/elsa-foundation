@@ -9,6 +9,7 @@ using Elsa.Foundation.Identity.OpenIddict.Groundwork.Querying;
 using Elsa.Foundation.Identity.OpenIddict.Groundwork.Serialization;
 using Groundwork.Documents.Store;
 using OpenIddict.Abstractions;
+using Elsa.Persistence.Groundwork.Stores;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Stores;
 
@@ -21,11 +22,6 @@ public sealed class GroundworkOpenIddictScopeStore(
     IDocumentStore store,
     IBoundedDocumentStore? boundedStore = null) : IOpenIddictScopeStore<OpenIddictGroundworkScope>
 {
-    // Resource-membership matches are expected to be a small, admin-managed set. The declared collection
-    // route (see below) has no admitted cursor or sort capability, so it is exhausted as one bounded page
-    // rather than paged; this constant is the fail-closed bound on that single page.
-    private const int MaxResourceMaterialization = 10_000;
-
     private const string NameField = "name";
     private const string ResourcesField = "resources";
 
@@ -131,14 +127,32 @@ public sealed class GroundworkOpenIddictScopeStore(
         if (names.Any(string.IsNullOrEmpty))
             throw new ArgumentException("Scope names cannot be null or empty.", nameof(names));
 
-        // The declared name route only admits Equal (see OpenIddictGroundworkStorageManifest.ScopeNameQuery),
-        // not an "In" membership test, so a finite name set is resolved as one Equal lookup per name against
-        // the same declared route, rather than a single multi-value query or an in-memory filter.
-        foreach (var name in names)
+        if (names.IsEmpty)
+            yield break;
+
+        // The declared name route admits In as well as Equal, so the whole set resolves in one
+        // provider-executed membership query rather than one point lookup per name.
+        var envelopes = await QueryByNamesAsync(names, cancellationToken);
+        foreach (var envelope in envelopes)
+            yield return OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkScope>(envelope);
+    }
+
+    private async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryByNamesAsync(
+        ImmutableArray<string> names,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            var envelope = await FindByNameEnvelopeAsync(name, cancellationToken);
-            if (envelope is not null)
-                yield return OpenIddictGroundworkRecordSerializer.Deserialize<OpenIddictGroundworkScope>(envelope);
+            return await BoundedDocumentQueryPager.QueryAllAsync(
+                BoundedStore,
+                OpenIddictGroundworkJson.ScopeDocumentKind,
+                OpenIddictGroundworkStorageManifest.FindScopeByNameQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.In(NameField, [.. names]))],
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw OpenIddictGroundworkFailureMapper.Translate(exception, "scope.findByNames");
         }
     }
 
@@ -341,26 +355,21 @@ public sealed class GroundworkOpenIddictScopeStore(
         }
     }
 
+    /// <summary>
+    /// Pages the whole match set through the declared route. The route now admits cursor paging, so this
+    /// is exhaustive rather than the single capped page it had to be while the declaration combined
+    /// offset paging with no sort support.
+    /// </summary>
     private async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryByResourceAsync(string resource, CancellationToken cancellationToken)
     {
         try
         {
-            var result = await BoundedStore.QueryAsync(
-                new DocumentQuery(
-                    OpenIddictGroundworkJson.ScopeDocumentKind,
-                    OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(ResourcesField, resource))],
-                    take: MaxResourceMaterialization),
+            return await BoundedDocumentQueryPager.QueryAllAsync(
+                BoundedStore,
+                OpenIddictGroundworkJson.ScopeDocumentKind,
+                OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery,
+                [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(ResourcesField, resource))],
                 cancellationToken);
-
-            if (result.TotalCount > result.Documents.Count)
-            {
-                throw new InvalidOperationException(
-                    $"Document query '{OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery}' matched " +
-                    $"{result.TotalCount} scopes, exceeding the bounded materialization limit of {MaxResourceMaterialization}.");
-            }
-
-            return result.Documents;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

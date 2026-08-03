@@ -133,7 +133,7 @@ public sealed class GroundworkOpenIddictScopeStoreTests
     }
 
     [Fact]
-    public async Task FindByNamesAsync_resolves_a_finite_name_set_via_repeated_point_lookups()
+    public async Task FindByNamesAsync_resolves_a_finite_name_set_in_one_membership_query()
     {
         await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "alpha" }, CancellationToken.None);
         await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "beta" }, CancellationToken.None);
@@ -163,6 +163,30 @@ public sealed class GroundworkOpenIddictScopeStoreTests
 
         Assert.Single(found);
         Assert.Equal("with-resource", found[0].Name);
+    }
+
+    /// <summary>
+    /// Exhaustive rather than a single page. While the resource route declared offset paging with no sort
+    /// support it fitted neither pager helper, so the store had to cap the match set and throw above the
+    /// cap; the route now admits cursor paging.
+    /// </summary>
+    [Fact]
+    public async Task FindByResourceAsync_pages_through_a_match_set_larger_than_one_page()
+    {
+        const int matches = 250;
+        for (var i = 0; i < matches; i++)
+        {
+            await _store.CreateAsync(
+                new OpenIddictGroundworkScope { Name = $"paged-{i:D3}", Resources = ["bulk-resource"] },
+                CancellationToken.None);
+        }
+
+        var found = new List<OpenIddictGroundworkScope>();
+        await foreach (var scope in _store.FindByResourceAsync("bulk-resource", CancellationToken.None))
+            found.Add(scope);
+
+        Assert.Equal(matches, found.Count);
+        Assert.Equal(matches, found.Select(scope => scope.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -441,6 +465,8 @@ public sealed class GroundworkOpenIddictScopeStoreTests
             {
                 QueryComparisonOperator.Equal => property.ValueKind == JsonValueKind.String &&
                     string.Equals(property.GetString(), comparison.Values[0], StringComparison.Ordinal),
+                QueryComparisonOperator.In => property.ValueKind == JsonValueKind.String &&
+                    comparison.Values.Contains(property.GetString(), StringComparer.Ordinal),
                 QueryComparisonOperator.CollectionContains => property.ValueKind == JsonValueKind.Array &&
                     property.EnumerateArray().Any(element =>
                         element.ValueKind == JsonValueKind.String &&

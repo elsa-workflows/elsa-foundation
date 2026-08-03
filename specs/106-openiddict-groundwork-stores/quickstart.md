@@ -325,6 +325,13 @@ These were surfaced rather than worked around: no route was invented and no filt
 in-process. Each will also affect the application, authorization and token stores, so they are program
 findings and not scope-store details.
 
+**Update 2026-08-04: gaps 2 and 3 are closed; gap 1 remains open pending a decision.**
+`FindScopeByResourceQuery` now declares cursor paging, so `FindByResourceAsync` pages the whole match set
+and the 10,000 cap and its exception are gone. `FindScopeByNameQuery` now admits `In` alongside `Equal`,
+so `FindByNamesAsync` resolves a name set in one provider-executed membership query instead of N point
+lookups. Manifest and store were changed together — a declaration with no consumer is inert risk.
+Gap 1 needs a document-shape decision (see below the list).
+
 1. **No bounded count-all or list-all route exists for scopes.** `CountAsync()` and
    `ListAsync(count, offset)` fall back to `IDocumentStore.QueryAsync(PortableDocumentQuery)`. That is
    genuinely provider-executed (SQL `COUNT` / `SELECT … LIMIT/OFFSET`), but the package marks it
@@ -337,7 +344,24 @@ findings and not scope-store details.
 3. **`FindScopeByNameQuery` admits only `Equal`.** `FindByNamesAsync` resolves a name set as N sequential
    point lookups rather than one set-membership query.
 
-All three are declaration-level gaps in `OpenIddictGroundworkStorageManifest.cs`, and they sit in the
+### Gap 1 — the open decision
+
+Closing it needs the **fixed-value partition** pattern the runtime manifest already uses:
+`ElsaRuntimeStorageManifest.CollectionField` (`"collection"`) is a constant-valued keyword-indexed field,
+and `ListAllQuery` filters on it to give a properly bounded, ordered list-all route. Applying it here
+means adding a constant `collection` field to `OpenIddictGroundworkScope`, keyword-indexing it, and
+declaring a `list-all` route over that index with cursor paging and total-count support.
+
+That is a **persisted-document shape change plus a new index**, which is why it was not done alongside
+gaps 2 and 3. It is admissible under the pre-release no-back-compat agreement and must not bump
+`SchemaVersion` (a frozen legacy stamp here, not a migration knob), but it is a design decision rather
+than a mechanical fix, and the same field would want to be added to the application, authorization and
+token records at the same time so all four stores get it once.
+
+Until it is decided, `CountAsync()` and `ListAsync(count, offset)` reject with the capability exception
+rather than degrade — neither is needed to issue a token; they back administrative listing.
+
+The remaining gap sits in the
 same territory as the open upstream Groundwork contracts #141 (fenced cross-unit relationship guards) and
 #143 (fixed-value bounded assignment) that T007 already names as blockers. They should be resolved at the
 manifest/upstream level before the remaining three stores are written, or the same workarounds will be

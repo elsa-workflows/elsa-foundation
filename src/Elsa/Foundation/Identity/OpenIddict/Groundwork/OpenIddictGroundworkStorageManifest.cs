@@ -158,9 +158,37 @@ public static class OpenIddictGroundworkStorageManifest
     private static readonly BoundedQueryDeclaration AuthorizationSubjectQuery = SubjectQuery(FindAuthorizationBySubjectQuery, AuthorizationSubjectV2Index);
     private static readonly BoundedQueryDeclaration AuthorizationScopeQuery =
         CollectionQuery(FindAuthorizationByScopeQuery, AuthorizationScopeIndex);
-    private static readonly BoundedQueryDeclaration ScopeNameQuery = PointQuery(FindScopeByNameQuery, ScopeNameIndex);
-    private static readonly BoundedQueryDeclaration ScopeResourceQuery =
-        CollectionQuery(FindScopeByResourceQuery, ScopeResourceIndex);
+    // Admits In alongside Equal so a finite name set resolves as one membership query rather than one
+    // point lookup per name. OpenIddict's IOpenIddictScopeStore.FindByNamesAsync takes a name array.
+    private static readonly BoundedQueryDeclaration ScopeNameQuery = new(
+        FindScopeByNameQuery,
+        ScopeNameIndex.Identity,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In },
+        QuerySortSupport.None,
+        QueryPagingSupport.Offset,
+        BoundedQueryExecutionClass.ScaleBearing,
+        predicateFields:
+        [
+            new BoundedQueryPredicateField(
+                ScopeNameIndex.Fields.Single().Path,
+                new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In })
+        ]);
+
+    // Cursor rather than Offset paging: BoundedDocumentQueryPager.QueryAllAsync requires cursor paging,
+    // and QueryAllOffsetAsync requires a non-empty declared order, so the previous Offset + SortSupport.None
+    // combination fitted neither helper and forced a single capped page.
+    private static readonly BoundedQueryDeclaration ScopeResourceQuery = new(
+        FindScopeByResourceQuery,
+        ScopeResourceIndex.Identity,
+        new HashSet<PortableQueryOperation>
+        {
+            PortableQueryOperation.CollectionContains,
+            PortableQueryOperation.CollectionContainsAll
+        },
+        QuerySortSupport.None,
+        QueryPagingSupport.Cursor,
+        BoundedQueryExecutionClass.ScaleBearing,
+        supportsTotalCount: true);
     private static readonly BoundedQueryDeclaration TokenReferenceQuery = PointQuery(FindTokenByReferenceIdQuery, TokenReferenceIndex);
     private static readonly BoundedQueryDeclaration TokenSubjectQuery = SubjectQuery(FindTokenBySubjectQuery, TokenSubjectV2Index);
     private static StorageUnit Unit(
