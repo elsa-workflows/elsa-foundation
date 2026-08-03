@@ -1,3 +1,5 @@
+using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Design;
 using Elsa.Activities.DispatchWorkflow.Design.Services;
@@ -18,8 +20,6 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Api.Handlers;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -172,6 +172,11 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
+        // spec 145: the executable compiler + the OnExecutableCompilationCollecting handler moved to the
+        // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
+        // shell composition. This test invokes ConfigureServices directly (bypassing DependsOn), so it composes
+        // the engine feature too — otherwise the compiler and the compilation fan-in handler are unregistered.
+        new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         new DispatchWorkflowDesignFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

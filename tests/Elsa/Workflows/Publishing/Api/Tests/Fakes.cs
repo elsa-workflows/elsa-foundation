@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Services;
 using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -13,7 +14,6 @@ using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -100,7 +100,7 @@ internal sealed class TestWriteLinesActivity : Activity<ActivityUnit>
 /// </summary>
 internal static class TestCompiler
 {
-    public static Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableCompiler Create(
+    public static Elsa.Workflows.Publishing.Services.WorkflowExecutableCompiler Create(
         Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore workflowVersions,
         Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore activityVersions,
         Elsa.Workflows.Design.Core.Contracts.IActivityStructureService activityStructureService,

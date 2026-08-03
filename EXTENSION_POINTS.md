@@ -141,7 +141,8 @@ not automatic constitution violations.
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine (Groundwork) | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Workflows publishing — policy, slot authority, preflight, projection reconciliation, compiler, and persistence stores | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
+| Workflows publishing engine — compiler, slot authority/policy/preflight, projection reconciliation, compilation fan-in, and activity-template registries | [`src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md) |
+| Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md) |

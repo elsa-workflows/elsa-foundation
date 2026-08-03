@@ -84,6 +84,7 @@
           "Serialization": {},
           "Tasks": {},
           "WorkflowsDesignApi": {},
+          "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeTracing": {},

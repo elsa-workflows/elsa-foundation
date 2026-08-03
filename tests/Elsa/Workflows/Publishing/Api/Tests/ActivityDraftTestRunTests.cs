@@ -1,3 +1,6 @@
+using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Services;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
@@ -22,14 +25,12 @@ using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -515,7 +516,9 @@ public sealed class ActivityDraftTestRunTests
     {
         var clock = new MutableTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-restart-{Guid.NewGuid():N}.db");
-        var connectionString = $"Data Source={databasePath}";
+        // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
+        // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
+        var connectionString = $"Data Source={databasePath};Pooling=False";
         var authoring = AuthoringState.Create();
         var externalPayloads = new InMemoryExternalPayloadStore();
         ActivityDraftTestRunView first;
@@ -785,6 +788,9 @@ public sealed class ActivityDraftTestRunTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
+        // spec 145: the publish engine moved to WorkflowsPublishing (pulled via DependsOn at shell
+        // composition). This harness composes features directly, so it composes the engine explicitly.
+        new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddSingleton(documents);
         services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));

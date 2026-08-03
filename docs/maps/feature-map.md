@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 101
+- Discovered feature classes: 102
 
 ## Features
 
@@ -94,6 +94,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
+| WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs) |
 | WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | PublishingGroundworkFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.Groundwork | IShellFeature | [PublishingGroundworkFeature.cs](../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkFeature.cs) |
 | WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |

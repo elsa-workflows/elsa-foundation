@@ -12,10 +12,14 @@ how this module realizes those concepts and does not redefine them.
 
 ## Composition
 
-Enable the `WorkflowsPublishingApi` shell feature. It depends on `WorkflowsRuntimeTriggers` and registers the
-Publishing endpoints, request handlers, compiler, policy/preflight/activation services, and process-local stores.
-The in-memory stores are useful for tests and single-process development, but publication authority, policies,
-records, and reconciliation intents must be durable in a production host.
+Enable the `WorkflowsPublishingApi` shell feature. It depends on `WorkflowsPublishing` (the endpoint-free
+publish + compile engine) and `ApiCapabilities`, and registers only transport: the Publishing HTTP endpoints,
+the API capability declarations, transport authorization (`IActivityPublishingAuthorizationContext` over
+`HttpContext`), and the activity-draft publish/test-run services. The compiler, publication authority stores,
+and the policy/preflight/activation/projection services are supplied by the engine feature via `DependsOn` —
+see [the engine README](../README.md). The engine's in-memory stores are useful for tests and single-process
+development, but publication authority, policies, records, and reconciliation intents must be durable in a
+production host.
 
 For Groundwork-backed authority state, reference
 `Elsa.Workflows.Publishing.Persistence.Groundwork` and compose:

@@ -30,7 +30,6 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
@@ -159,6 +158,13 @@ public sealed class DomainManagementApiCompositionTests
                 typeof(ApiSecurityFeature).Assembly,
                 typeof(ActivitiesDesignApiFeature).Assembly,
                 typeof(GraphActivitiesDesignFeature).Assembly,
+                // spec 145: the publish engine split moved the workflow-publish feature out of
+                // WorkflowsPublishingApi into the endpoint-free WorkflowsPublishing engine, which both
+                // WorkflowsPublishingApi and GraphActivitiesDesign now DependsOn. Seed the engine and its
+                // transitive Runtime-triggers/Events feature assemblies so shell composition can discover them.
+                typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
+                typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeTriggersFeature).Assembly,
+                typeof(Elsa.Events.EventsFeature).Assembly,
                 typeof(ExpressionsFeature).Assembly,
                 typeof(MediatorFeature).Assembly,
                 typeof(DomainManagementApiCompositionTests).Assembly)

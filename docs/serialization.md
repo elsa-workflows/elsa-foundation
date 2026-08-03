@@ -214,7 +214,7 @@ written by
 over the `IWorkflowExecutableStore` seam, with one clean v7 golden fixture. Version 7 adds the compiled
 workflow-scope variable declarations (`workflowVariables`, #972) to v6's pinned activity contract and
 explicit input-nullability data required by typed value flow. The
-`InMemory` executable store registered by `WorkflowsPublishingApiFeature` is a `TryAdd` default that the
+`InMemory` executable store registered by `WorkflowsPublishingFeature` is a `TryAdd` default that the
 Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger
 index in the same publish flow, so a published artifact **and** its start-triggers survive a host restart.

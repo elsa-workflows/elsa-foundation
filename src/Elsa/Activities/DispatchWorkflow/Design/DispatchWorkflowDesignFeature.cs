@@ -15,7 +15,7 @@ namespace Elsa.Activities.DispatchWorkflow.Design;
     name: "ActivitiesDispatchWorkflowDesign",
     DisplayName = "Activities Dispatch Workflow (Design)",
     Description = "Provides live Published workflow options and exact publication pins for DispatchWorkflow.",
-    DependsOn = new object[] { "WorkflowsDesignApi", "WorkflowsPublishingApi" })]
+    DependsOn = new object[] { "WorkflowsDesignApi", "WorkflowsPublishing" })]
 public class DispatchWorkflowDesignFeature : IShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
