@@ -31,26 +31,20 @@ public sealed class GroundworkOpenIddictScopeStore(
 
     private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
 
-    public async ValueTask<long> CountAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            // The manifest declares no bounded "count all scopes" route (its only named routes are the
-            // name and resource lookups), so an unfiltered count goes through the store's provider-executed
-            // portable query surface instead of a declared route. This still runs at the provider (a real
-            // WHERE-less COUNT/SELECT), never a client-side materialize-then-filter.
-#pragma warning disable GW0004
-            var result = await store.QueryAsync(
-                new PortableDocumentQuery(OpenIddictGroundworkJson.ScopeDocumentKind, take: 0),
-                cancellationToken);
-#pragma warning restore GW0004
-            return result.TotalCount;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            throw OpenIddictGroundworkFailureMapper.Translate(exception, "scope.count");
-        }
-    }
+    /// <summary>
+    /// Rejected: the manifest declares no bounded count-all route for scopes. Its only named routes are the
+    /// name and resource lookups.
+    /// </summary>
+    /// <remarks>
+    /// The portable query surface would answer this at the provider, but it is forbidden in production
+    /// Groundwork reads by <c>ArchitectureGuardTests.Groundwork_production_reads_use_only_admitted_bounded_query_APIs</c>,
+    /// and with no declared id index it has no guaranteed order anyway. Rejecting keeps the missing route
+    /// visible instead of shipping an unordered fallback, matching how
+    /// <see cref="OpenIddictGroundworkGenericQueryTranslator"/> already refuses unsupported query shapes.
+    /// Declare a count-all route in the manifest to admit this member.
+    /// </remarks>
+    public ValueTask<long> CountAsync(CancellationToken cancellationToken) =>
+        throw OpenIddictGroundworkFailureMapper.UnsupportedGenericQuery("scope.CountAsync");
 
     public ValueTask<long> CountAsync<TResult>(
         Func<IQueryable<OpenIddictGroundworkScope>, IQueryable<TResult>> query,
@@ -374,26 +368,12 @@ public sealed class GroundworkOpenIddictScopeStore(
         }
     }
 
-    private async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllScopesAsync(int? count, int? offset, CancellationToken cancellationToken)
-    {
-        try
-        {
-            // See CountAsync: no bounded "list all scopes" route is declared, so this uses the store's
-            // provider-executed portable query surface (a real, bounded SELECT ... LIMIT/OFFSET) rather than
-            // a declared route or an in-memory filter. No index is declared for "id" either, so the result
-            // order is the provider's natural order, not a guaranteed id order.
-#pragma warning disable GW0004
-            var result = await store.QueryAsync(
-                new PortableDocumentQuery(OpenIddictGroundworkJson.ScopeDocumentKind, skip: offset, take: count),
-                cancellationToken);
-#pragma warning restore GW0004
-            return result.Documents;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            throw OpenIddictGroundworkFailureMapper.Translate(exception, "scope.list");
-        }
-    }
+    /// <summary>
+    /// Rejected for the same reason as <see cref="CountAsync(CancellationToken)"/>: no bounded list-all
+    /// route is declared, and paging without a declared id index would have no guaranteed order.
+    /// </summary>
+    private static ValueTask<IReadOnlyList<DocumentEnvelope>> QueryAllScopesAsync(int? count, int? offset, CancellationToken cancellationToken) =>
+        throw OpenIddictGroundworkFailureMapper.UnsupportedGenericQuery("scope.ListAsync");
 
     private static ImmutableDictionary<CultureInfo, string> ToCultureMap(IReadOnlyDictionary<string, string> source)
     {

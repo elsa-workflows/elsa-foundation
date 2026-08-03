@@ -209,34 +209,38 @@ public sealed class GroundworkOpenIddictScopeStoreTests
         Assert.Null(await _store.FindByIdAsync(scope.Id, CancellationToken.None));
     }
 
+    /// <summary>
+    /// Count-all and list-all are rejected, not degraded. The manifest declares no bounded route for
+    /// either, and the portable query surface that could answer them is forbidden in production Groundwork
+    /// reads by <c>ArchitectureGuardTests.Groundwork_production_reads_use_only_admitted_bounded_query_APIs</c>
+    /// — with no declared id index it would also page in unguaranteed order. These assertions exist so the
+    /// missing routes stay visible; when the manifest declares them, replace these with real behaviour
+    /// tests rather than deleting them.
+    /// </summary>
     [Fact]
-    public async Task CountAsync_counts_every_persisted_scope()
+    public async Task CountAsync_is_rejected_because_no_bounded_count_all_route_is_declared()
     {
-        Assert.Equal(0, await _store.CountAsync(CancellationToken.None));
-
         await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "one" }, CancellationToken.None);
-        await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "two" }, CancellationToken.None);
 
-        Assert.Equal(2, await _store.CountAsync(CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<OpenIddictGroundworkCapabilityException>(
+            async () => await _store.CountAsync(CancellationToken.None));
+
+        Assert.Equal(OpenIddictGroundworkCapabilityException.UnsupportedGenericQueryCode, exception.Code);
+        Assert.Equal("scope.CountAsync", exception.Operation);
     }
 
     [Fact]
-    public async Task ListAsync_pages_every_persisted_scope()
+    public async Task ListAsync_is_rejected_because_no_bounded_list_all_route_is_declared()
     {
         await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "list-one" }, CancellationToken.None);
-        await _store.CreateAsync(new OpenIddictGroundworkScope { Name = "list-two" }, CancellationToken.None);
 
-        var all = new List<OpenIddictGroundworkScope>();
-        await foreach (var scope in _store.ListAsync(null, null, CancellationToken.None))
-            all.Add(scope);
+        var exception = await Assert.ThrowsAsync<OpenIddictGroundworkCapabilityException>(async () =>
+        {
+            await foreach (var scope in _store.ListAsync(null, null, CancellationToken.None))
+                _ = scope;
+        });
 
-        Assert.Equal(2, all.Count);
-
-        var firstPage = new List<OpenIddictGroundworkScope>();
-        await foreach (var scope in _store.ListAsync(1, 0, CancellationToken.None))
-            firstPage.Add(scope);
-
-        Assert.Single(firstPage);
+        Assert.Equal("scope.ListAsync", exception.Operation);
     }
 
     [Fact]
