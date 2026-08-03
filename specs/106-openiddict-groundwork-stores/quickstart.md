@@ -305,3 +305,42 @@ with the originating correctness reviewer's `PASS` on the remediated code head,
 all three axes are green. The nonclaims remain: no admitted mutation, public
 OpenIddict store, replacement registration, four-provider store conformance,
 performance verdict, or EF removal is present.
+
+## Scope-store vertical slice — 2026-08-03
+
+`IOpenIddictScopeStore` is implemented at
+`src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Stores/GroundworkOpenIddictScopeStore.cs`, all 28
+members, none stubbed, with 54 passing tests in
+`tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/GroundworkOpenIddictScopeStoreTests.cs`.
+
+Deliberately narrow: the scope store is the only one of the four with no relationship cascade and no
+atomic redeem/revoke, so it needs none of the idempotency-receipt machinery that T030/T041 must still
+build. It was implemented first to prove the pattern against the merged foundations (PR #1093) before
+the harder three. **No registration extension was written** — that needs all four stores — and the other
+three stores are untouched. This slice does not advance any US1–US4 task to done.
+
+### Three manifest/route gaps found while implementing it
+
+These were surfaced rather than worked around: no route was invented and no filtering was moved
+in-process. Each will also affect the application, authorization and token stores, so they are program
+findings and not scope-store details.
+
+1. **No bounded count-all or list-all route exists for scopes.** `CountAsync()` and
+   `ListAsync(count, offset)` fall back to `IDocumentStore.QueryAsync(PortableDocumentQuery)`. That is
+   genuinely provider-executed (SQL `COUNT` / `SELECT … LIMIT/OFFSET`), but the package marks it
+   `[Obsolete(DiagnosticId = "GW0004")]` and there is no declared id index, so paging has **no
+   guaranteed deterministic order**. Both facts matter for a store contract that promises stable paging.
+2. **`FindScopeByResourceQuery` declares `Offset` paging with `QuerySortSupport.None`.** That combination
+   fits neither `BoundedDocumentQueryPager` helper — `QueryAllAsync` needs cursor paging and
+   `QueryAllOffsetAsync` throws without a non-empty declared order. `FindByResourceAsync` is therefore a
+   single bounded page capped at 10,000 matches that throws above the cap, not true pagination.
+3. **`FindScopeByNameQuery` admits only `Equal`.** `FindByNamesAsync` resolves a name set as N sequential
+   point lookups rather than one set-membership query.
+
+All three are declaration-level gaps in `OpenIddictGroundworkStorageManifest.cs`, and they sit in the
+same territory as the open upstream Groundwork contracts #141 (fenced cross-unit relationship guards) and
+#143 (fixed-value bounded assignment) that T007 already names as blockers. They should be resolved at the
+manifest/upstream level before the remaining three stores are written, or the same workarounds will be
+duplicated three more times — and the authorization store's compound `FindAsync(subject, client, status,
+type, scopes)` has a strictly worse version of gap 2 already recorded against the dropped four-field
+index.
