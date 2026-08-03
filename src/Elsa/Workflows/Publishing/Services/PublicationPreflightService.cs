@@ -1,7 +1,7 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Computes the trigger projection diff and cross-slot cardinality conflicts before activation.</summary>
 public sealed class PublicationPreflightService : IPublicationPreflightService

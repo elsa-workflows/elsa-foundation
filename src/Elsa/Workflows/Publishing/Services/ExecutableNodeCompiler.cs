@@ -15,7 +15,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Compiles the authored activity tree into the executable node tree and indexes its resume targets.

@@ -2,16 +2,16 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Core.Requests;
-using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Workflows.Publishing.Api.Handlers;
+namespace Elsa.Workflows.Publishing.Handlers;
 
 /// <summary>Compiles an immutable artifact and activates it through one policy-resolved publication slot.</summary>
 public sealed class PublishWorkflowRequestHandler(

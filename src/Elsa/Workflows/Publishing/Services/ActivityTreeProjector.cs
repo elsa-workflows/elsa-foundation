@@ -1,7 +1,7 @@
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Walks an authored activity tree exactly once, capturing every node in traversal order together with a

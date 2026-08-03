@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Scoped handoff of non-behavioral placed layout from compilation to Source Reference creation.</summary>
 public sealed class WorkflowExecutablePlacementSidecarContext

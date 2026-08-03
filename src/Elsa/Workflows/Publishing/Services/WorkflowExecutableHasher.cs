@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Computes the content-addressable identity of a compiled workflow executable: the deterministic SHA-256

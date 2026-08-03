@@ -1,7 +1,7 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Prepares serving projections before selecting one revisioned slot authority.</summary>
 public sealed class PublicationActivator(

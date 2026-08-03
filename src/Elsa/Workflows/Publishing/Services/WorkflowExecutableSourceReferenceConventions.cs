@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Canonical SourceKind names carried on <see cref="WorkflowExecutableSourceReference"/> records.</summary>
 public static class WorkflowExecutableSourceKinds

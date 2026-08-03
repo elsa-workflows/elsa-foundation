@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 public sealed class InMemoryActivityPublicationReceiptStore : IActivityPublicationReceiptStore
 {

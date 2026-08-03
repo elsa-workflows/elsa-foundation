@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 internal static class AuthoredValueConversionMapper
 {

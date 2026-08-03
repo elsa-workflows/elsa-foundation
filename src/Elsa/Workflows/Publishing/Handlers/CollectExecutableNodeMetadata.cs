@@ -2,7 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 
-namespace Elsa.Workflows.Publishing.Api.Handlers;
+namespace Elsa.Workflows.Publishing.Handlers;
 
 /// <summary>
 /// Compatibility handler retained for callers that explicitly publish the superseded metadata event.

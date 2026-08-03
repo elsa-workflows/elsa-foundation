@@ -1,7 +1,7 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Fallback <see cref="IWorkflowDefinitionVersionLayoutStore"/> for compositions with no design-persistence

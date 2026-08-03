@@ -4,7 +4,7 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Handlers;
+namespace Elsa.Workflows.Publishing.Handlers;
 
 /// <summary>
 /// Single fan-in handler that collects and validates every registered executable-compilation source.

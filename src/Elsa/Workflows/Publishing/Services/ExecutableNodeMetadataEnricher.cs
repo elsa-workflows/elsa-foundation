@@ -4,7 +4,7 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Aggregates deterministic executable-node metadata contributions and rejects conflicting ownership.</summary>
 public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPublisher) : IExecutableNodeMetadataEnricher

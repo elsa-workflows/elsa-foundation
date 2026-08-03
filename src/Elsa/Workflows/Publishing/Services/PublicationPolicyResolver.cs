@@ -1,7 +1,7 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>Resolves publication intent deterministically using request, workflow, then host precedence.</summary>
 public sealed class PublicationPolicyResolver : IPublicationPolicyResolver

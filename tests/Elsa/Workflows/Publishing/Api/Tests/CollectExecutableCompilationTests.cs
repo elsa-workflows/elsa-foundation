@@ -1,6 +1,6 @@
+using Elsa.Workflows.Publishing.Handlers;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;

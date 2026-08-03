@@ -13,7 +13,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Primitives.Diagnostics;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 public sealed record ActivityTemplateDependencyRequest(
     string DefinitionVersionId,

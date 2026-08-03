@@ -9,7 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 public interface IActivityPlacementHasher
 {

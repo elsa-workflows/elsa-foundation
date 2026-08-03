@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;

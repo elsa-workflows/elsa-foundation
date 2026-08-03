@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Compiles a single authored activity input into its durable <see cref="RuntimeInputBinding"/>. Owns the

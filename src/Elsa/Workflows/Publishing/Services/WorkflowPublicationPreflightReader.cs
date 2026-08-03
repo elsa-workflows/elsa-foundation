@@ -3,7 +3,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 public sealed record WorkflowPublicationPreflightPlan(
     ResolvedPublicationAction ResolvedAction,

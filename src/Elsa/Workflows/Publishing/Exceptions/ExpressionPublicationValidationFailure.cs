@@ -1,7 +1,7 @@
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 
-namespace Elsa.Workflows.Publishing.Api.Models;
+namespace Elsa.Workflows.Publishing.Exceptions;
 
 /// <summary>
 /// The safe diagnostic subset that may accompany a publication rejection.

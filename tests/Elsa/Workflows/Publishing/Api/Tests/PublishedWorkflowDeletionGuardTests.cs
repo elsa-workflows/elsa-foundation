@@ -7,7 +7,7 @@ using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;

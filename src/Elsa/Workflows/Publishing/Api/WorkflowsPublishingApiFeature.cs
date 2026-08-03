@@ -14,7 +14,6 @@ using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Commands;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
-using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;

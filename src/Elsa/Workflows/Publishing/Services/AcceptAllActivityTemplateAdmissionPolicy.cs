@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Services;
+namespace Elsa.Workflows.Publishing.Services;
 
 public sealed class AcceptAllActivityTemplateAdmissionPolicy : IActivityTemplateAdmissionPolicy
 {

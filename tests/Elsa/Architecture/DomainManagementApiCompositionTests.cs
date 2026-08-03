@@ -30,7 +30,6 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
