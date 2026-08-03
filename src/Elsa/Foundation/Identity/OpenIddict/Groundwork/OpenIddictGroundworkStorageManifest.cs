@@ -174,21 +174,8 @@ public static class OpenIddictGroundworkStorageManifest
                 new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.In })
         ]);
 
-    // Cursor rather than Offset paging: BoundedDocumentQueryPager.QueryAllAsync requires cursor paging,
-    // and QueryAllOffsetAsync requires a non-empty declared order, so the previous Offset + SortSupport.None
-    // combination fitted neither helper and forced a single capped page.
-    private static readonly BoundedQueryDeclaration ScopeResourceQuery = new(
-        FindScopeByResourceQuery,
-        ScopeResourceIndex.Identity,
-        new HashSet<PortableQueryOperation>
-        {
-            PortableQueryOperation.CollectionContains,
-            PortableQueryOperation.CollectionContainsAll
-        },
-        QuerySortSupport.None,
-        QueryPagingSupport.Cursor,
-        BoundedQueryExecutionClass.ScaleBearing,
-        supportsTotalCount: true);
+    private static readonly BoundedQueryDeclaration ScopeResourceQuery =
+        CollectionQuery(FindScopeByResourceQuery, ScopeResourceIndex);
     private static readonly BoundedQueryDeclaration TokenReferenceQuery = PointQuery(FindTokenByReferenceIdQuery, TokenReferenceIndex);
     private static readonly BoundedQueryDeclaration TokenSubjectQuery = SubjectQuery(FindTokenBySubjectQuery, TokenSubjectV2Index);
     private static StorageUnit Unit(
@@ -271,6 +258,13 @@ public static class OpenIddictGroundworkStorageManifest
         BoundedQueryExecutionClass.ScaleBearing,
         predicateFields: [new BoundedQueryPredicateField(index.Fields.Single().Path, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })]);
 
+    /// <summary>
+    /// Cursor rather than offset paging. BoundedDocumentQueryPager.QueryAllAsync requires cursor paging and
+    /// QueryAllOffsetAsync requires a non-empty declared order, so offset combined with
+    /// QuerySortSupport.None fitted neither helper and forced every collection lookup to be a single
+    /// capped page. Applied here rather than per route so the scope, application and authorization
+    /// collection routes all get exhaustive iteration from one declaration.
+    /// </summary>
     private static BoundedQueryDeclaration CollectionQuery(string identity, LogicalIndexDeclaration index) => new(
         identity,
         index.Identity,
@@ -280,7 +274,7 @@ public static class OpenIddictGroundworkStorageManifest
             PortableQueryOperation.CollectionContainsAll
         },
         QuerySortSupport.None,
-        QueryPagingSupport.Offset,
+        QueryPagingSupport.Cursor,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true);
 
