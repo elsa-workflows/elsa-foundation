@@ -2,7 +2,7 @@
 
 Work unit: `094-harden-groundwork-stores` (artifact), executed under [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646).
 Consumed by: [spec 144](../144-zero-ef-final-removal/) T011.
-Status: structured-log seam recorded. OpenTelemetry and IAM seams pending.
+Status: both diagnostics seams recorded. IAM seams pending.
 
 ## What this artifact is, and is not
 
@@ -26,7 +26,7 @@ implementation. See the [zero-EF decision map](../../docs/decision-maps/zero-ef-
 | Seam | Contracts | This ledger |
 |---|---|---|
 | Diagnostics | `IStructuredLogStore` | **recorded below** |
-| Diagnostics | `IOpenTelemetryStore` | pending |
+| Diagnostics | `IOpenTelemetryStore` | **recorded below** |
 | Identity (Elsa IAM) | `ITenantMembershipStore` | pending |
 | Identity (Elsa IAM) | `IUserStore`, `IRoleStore`, `IExternalIdentityStore` | blocked — ledger rows `externally-blocked` |
 | Runtime (all 21 rows) | — | **no EF comparand exists; not gradable by EF ratio** |
@@ -100,6 +100,67 @@ Zero divergences is a finding, not an absence of one: it is the evidence that de
   that clause. Same-stack coverage exists on both sides
   (`GroundworkStructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); a shared
   differential probe for it is open follow-up.
+
+## `IOpenTelemetryStore` — SQLite, recorded 2026-08-03
+
+Comparands: `efcore.sqlite` (`EfCoreOpenTelemetryStore`) and `groundwork.sqlite`
+(`GroundworkOpenTelemetryStore`), both over file-backed SQLite.
+
+Executable form: `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/`.
+Surface digest: `c46c00ae476b69e0da8c43d97fb70b7ffbd06cfd618fd4303a1339f9354e3fc7`.
+
+**Result: 38 facts compared across 6 dimensions; one divergence, dispositioned.**
+
+| dimension | facts | verdict | disposition | testDisposition |
+|---|---|---|---|---|
+| `concurrency-conflict-shape` | 6 | `equivalent` | — | `RemovePending` |
+| `producer-ordering` | 6 | `equivalent` | — | `RemovePending` |
+| `null-and-default-materialization` | 12 | `equivalent` | — | `RemovePending` |
+| `rollback-visibility` | 3 | **`divergent`** on `readable-trace-count` | **`ContractIsGroundwork`** | `RemovePending` |
+| `restart-observation` | 6 | `equivalent` | — | `RemovePending` |
+| `idempotent-replay` | 5 | `equivalent` | — | `RemovePending` |
+
+### The one divergence
+
+| field | value |
+|---|---|
+| dimension | `rollback-visibility` |
+| fact | `readable-trace-count` |
+| efObserved | `1` — the queued batch is lost when the process dies before `CompleteDrainingAsync` |
+| groundworkObserved | `2` — the queued batch is already durable when the process dies |
+| verdict | `divergent` |
+| disposition | **`ContractIsGroundwork`** |
+| authority | #646 differential, this ledger |
+
+A write is queued onto a bounded capture drain, then the provider is released *without* completing the
+drain. EF's channel-buffered drain loses the batch; Groundwork has already committed it. Stable across
+three repeated runs, so this is a behaviour difference and not drain-scheduling noise.
+
+`IOpenTelemetryStore.WriteAsync` promises no durability at return — both stacks document capture as
+nonblocking and best-effort under a bounded queue — so **neither stack violates the contract**. The
+disposition is `ContractIsGroundwork` because Groundwork's behaviour is a strict superset: it loses no
+accepted telemetry on abrupt stop, where EF has a real loss window. Deleting EF removes the weaker
+behaviour, so **this divergence does not block removal**. It is recorded rather than waived because a
+future reader comparing the two stacks will otherwise rediscover it and have to re-derive the reasoning.
+
+`partial-batch-visible=false` on both sides: neither stack exposes a torn batch, only whole-batch
+presence or absence.
+
+### Correction to spec 139's ledger
+
+[`specs/139-.../ef-test-removal-ledger.md`](../139-groundwork-diagnostics-persistence/ef-test-removal-ledger.md)
+records `QueryTracesAsync_WhenTraceIdAppearsInMultipleBatches_ReturnsMergedSummary` as **"pending
+contract; blocked. Current `LatestPerKeyField` returns only the newer record."**
+
+That is now stale. The `idempotent-replay` probe writes one trace id across two batches and both stacks
+return an identical merged summary — earliest start, latest end, worst status, summed span count, union
+of workflow ids. `GroundworkOpenTelemetryQueryConformanceTests.Repeated_trace_records_merge_to_one_summary_across_durable_batches`
+passes at this head. The 139 row has been corrected in place.
+
+This is the differential doing the job it exists for: a ledger claim about divergence was carried
+forward after the underlying behaviour changed, and executing the comparison caught it. Note the
+direction — the risk in an inspection-derived ledger is not only missed divergence but **stale
+divergence**, which over-reports risk and can block a removal that is actually safe.
 
 ### Open follow-up for this seam
 

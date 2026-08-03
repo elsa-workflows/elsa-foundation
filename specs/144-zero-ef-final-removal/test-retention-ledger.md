@@ -543,6 +543,28 @@ Support-only sources added with them (no Fact/Theory identity), to be deleted in
 - tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogDifferentialProbes.cs — the six dimension probes.
 - tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogDivergenceLedger.cs — executable half of the divergence ledger.
 
+### tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryStoreDifferentialTests.cs
+
+Added 2026-08-03 under [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) as the
+EF-vs-Groundwork behavioural differential for `IOpenTelemetryStore` on file-backed SQLite. Original
+subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle. Reachability:
+DirectToken (constructs `EfCoreOpenTelemetryStore` through the existing `OpenTelemetryTestHost`).
+
+Same rationale as the structured-log differential: these methods exist only to compare the temporary EF
+oracle against Groundwork and cannot be converted once the comparand is deleted. Their durable output is
+[`specs/094-harden-groundwork-stores/divergence-ledger.md`](../094-harden-groundwork-stores/divergence-ledger.md),
+which retains the one recorded divergence (`rollback-visibility` / `readable-trace-count`,
+disposition `ContractIsGroundwork`) independently of the tests.
+
+- tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryStoreDifferentialTests.cs:32 Ef_and_groundwork_agree_or_carry_a_recorded_disposition — OpenTelemetryStoreDifferentialTests.Ef_and_groundwork_agree_or_carry_a_recorded_disposition | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Ef_and_groundwork_agree_or_carry_a_recorded_disposition (6 dimension rows) | Reachability: DirectToken | Preliminary disposition: RemovePending.
+- tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryStoreDifferentialTests.cs:83 Differential_surface_matches_its_recorded_identity — OpenTelemetryStoreDifferentialTests.Differential_surface_matches_its_recorded_identity | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Differential_surface_matches_its_recorded_identity | Reachability: DirectToken | Preliminary disposition: RemovePending.
+
+Support-only sources added with them (no Fact/Theory identity), to be deleted in the same slice:
+
+- tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryDifferentialTarget.cs — EF and Groundwork comparand factories.
+- tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryDifferentialProbes.cs — the six dimension probes.
+- tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryDivergenceLedger.cs — executable half of the divergence ledger.
+
 ## Support-only EF-reachable sources (no method rows)
 
 These sources have no Fact/Theory identity but are dependencies of ledger rows or the final guard:
