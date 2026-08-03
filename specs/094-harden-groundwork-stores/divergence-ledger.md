@@ -301,6 +301,26 @@ Comparison is on **shape, not values**: each host seeds its own user, tenant and
 status codes, payload shape, and which claim kinds survive — never a literal username or tenant id.
 That is what makes it apples to apples across two independently composed hosts.
 
+### Load-bearing limitation: only part of this is a comparison
+
+**OpenIddict is EF-backed on both sides.** `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/` contains
+a storage manifest, schema, serializer, query translator and session factory but **no store
+implementations**, and the production registration is
+`core.UseEntityFrameworkCore().UseDbContext<OpenIddictIdentityDbContext>()`. The Groundwork identity
+host therefore also composes EF OpenIddict. Splitting the facts by what actually differed:
+
+| fact | genuinely compares two stacks? |
+|---|---|
+| `login-with-wrong-password`, `login-with-correct-password`, `identity-cookie-issued` | **yes** — user lookup and password verification run through the identity stores |
+| `token-carries-tenant-claim`, `token-carries-permission-claims` | **yes** — projected from the identity stores before issuance |
+| `token-before-login`, `token-after-login` | partly — the cookie principal is stack-dependent, the endpoint is not |
+| `token-payload-has-accessToken`, `has-expiresAt`, `access-token-non-empty`, `access-token-validates`, `bearer-authenticates-without-cookie` | **no** — token persistence is EF in both configurations |
+
+So the honest reading is: **the identity-store-dependent behaviour of an application is identical across
+the two stacks.** The token-issuance half is not yet evidence of anything, because there is no second
+implementation of it to compare against. It becomes a real comparison only once #643 lands Groundwork
+OpenIddict stores, and this section must be re-run then.
+
 ### Why this is the whole app-level surface
 
 Identity is the only lane where two composable stacks exist. Every shipping shell already runs the
@@ -321,8 +341,12 @@ The store differential found 8 divergences the app-level scenario cannot see: th
 sails past them. The app-level scenario covers composition the store probes cannot reach. Neither
 subsumes the other, and the pair is what supports the plain-language claim:
 
-> An application behaves the same on either persistence stack, and where the stores themselves differ,
-> every difference favours Groundwork.
+> An application's identity-store-dependent behaviour is identical across the two stacks, and where the
+> stores themselves differ, every difference favours Groundwork.
+
+Not yet the broader claim that "an application behaves the same on either stack", because OpenIddict —
+the token-persistence half of the identity lane — has no Groundwork implementation to compare against.
+That is also why EF Core is not removable today: removing it would leave token issuance with no store.
 
 ### Open follow-up for this seam
 
