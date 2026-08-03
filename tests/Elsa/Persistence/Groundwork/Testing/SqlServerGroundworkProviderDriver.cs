@@ -73,6 +73,15 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             await _container.StartAsync(cancellationToken);
             await CreateDatabaseAsync(cancellationToken);
         }
+        catch (DotNet.Testcontainers.Builders.DockerUnavailableException)
+        {
+            // Rethrown unchanged so a host without Docker is skippable rather than a hard failure. The
+            // generic catch below deliberately suppresses connection details; this exception reports that
+            // the Docker daemon is unreachable and carries none, and the container has not started yet so
+            // there is no connection string to leak. Fixtures' catch (DockerUnavailableException) skip
+            // paths were unreachable while this was swallowed.
+            throw;
+        }
         catch (OperationCanceledException)
         {
             throw;
