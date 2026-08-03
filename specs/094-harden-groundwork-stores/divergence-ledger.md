@@ -151,6 +151,27 @@ divergence was real, and it did not catch a systematic harness fault. The strong
 before recording any divergence, verify that both comparands were actually offered the same opportunity
 to exhibit the behaviour.
 
+### Symmetry audit of the other two seams — 2026-08-04
+
+Applied that check to every other recorded finding.
+
+**`IStructuredLogStore` — same asymmetry present, findings unaffected, harness fixed.** Its EF comparand
+disposed the host on abandon exactly as OpenTelemetry's did. It produced no false divergence only
+because the probe awaits each `AppendAsync`, whose contract completes *after* the append commits — so
+nothing was queued-but-unflushed to race over. The result was sound by luck of probe design rather than
+by the harness being correct, and a later probe change could have made it silently racy. The abandon is
+now symmetric; `acknowledged-writes-durable=true`, `durable-after-abandon=12` and `torn-batch=none` hold
+identically on both stacks across three repeated runs, so the recorded zero-divergence result stands
+on sound measurement.
+
+**`ITenantMembershipStore` — asymmetry class does not apply; all seven divergences hold.** The contract
+has two methods and no drain, so the target exposes no abandon seam at all. Reasoning through symmetry
+directly rather than relying on stability: every probe hands both stores the *identical* record through
+the *identical* call and compares the readback. The seven divergences are therefore properties of the
+stacks, not of the treatment — EF's newline-joined case-insensitive set encoding, its absence of any
+ambient scope concept, and `DbContext`'s thread-affinity. Each store also gets a freshly opened
+instance per probe on both sides. No finding withdrawn.
+
 ### Correction to spec 139's ledger
 
 [`specs/139-.../ef-test-removal-ledger.md`](../139-groundwork-diagnostics-persistence/ef-test-removal-ledger.md)

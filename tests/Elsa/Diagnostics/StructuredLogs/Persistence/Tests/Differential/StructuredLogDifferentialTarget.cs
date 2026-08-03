@@ -72,6 +72,7 @@ internal abstract class StructuredLogDifferentialTarget : IAsyncDisposable
 
     private sealed class EfCoreTarget() : StructuredLogDifferentialTarget("efcore.sqlite")
     {
+        private readonly List<StructuredLogsTestHost> _abandoned = [];
         private StructuredLogsTestHost? _host;
         private EfCoreStructuredLogStore? _store;
 
@@ -94,13 +95,23 @@ internal abstract class StructuredLogDifferentialTarget : IAsyncDisposable
 
             _host?.Dispose();
             _host = null;
+
+            foreach (var abandoned in _abandoned)
+                abandoned.Dispose();
+
+            _abandoned.Clear();
         }
 
         public override Task AbandonAsync()
         {
-            // Drop the drain loop without completing it, then release the connection the file depends on.
+            // Drop the caller's references without completing the drain, and WITHOUT disposing the host.
+            // Disposing it here closes the connection the drain writes through, which the Groundwork
+            // comparand has no way to do — the comparison would then measure the harness rather than the
+            // stores. That asymmetry produced a false divergence at the OpenTelemetry seam; see the
+            // withdrawn row in specs/094-harden-groundwork-stores/divergence-ledger.md. The host is
+            // retained so teardown can still dispose it.
+            _abandoned.Add(_host!);
             _store = null;
-            _host?.Dispose();
             _host = null;
             return Task.CompletedTask;
         }
