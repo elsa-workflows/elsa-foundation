@@ -25,7 +25,7 @@ internal static class OpenTelemetryDivergenceLedger
                 "sparse-empty-attributes", "sparse-null-instance-id", "sparse-null-sdk-language", "sparse-readable"
             ],
             [OpenTelemetryDimension.RollbackVisibility] =
-                ["flushed-write-durable", "partial-batch-visible", "readable-trace-count"],
+                ["flushed-write-durable", "partial-batch-visible"],
             [OpenTelemetryDimension.RestartObservation] =
             [
                 "logs-preserved", "metric-points-preserved", "readable-traces-after-restart",
@@ -48,11 +48,11 @@ internal static class OpenTelemetryDivergenceLedger
             [OpenTelemetryDimension.ConcurrencyConflictShape] = [],
             [OpenTelemetryDimension.ProducerOrdering] = [],
             [OpenTelemetryDimension.NullAndDefaultMaterialization] = [],
-            // Groundwork commits a queued batch durably before drain completion; EF's channel drain
-            // loses it when the process dies first. Stable across repeated runs, so this is a behaviour
-            // difference and not drain-scheduling noise. Disposition ContractIsGroundwork — see the
-            // markdown ledger row for the rationale and why it does not block EF deletion.
-            [OpenTelemetryDimension.RollbackVisibility] = ["readable-trace-count"],
+            // Previously recorded a divergence on readable-trace-count. Withdrawn: it was an artifact of
+            // the harness disposing EF's host on abandon while Groundwork's drain kept running, and once
+            // the two abandons were made symmetric the same probe returned different answers run to run.
+            // The fact is no longer observed at all — see RollbackVisibilityAsync's remarks.
+            [OpenTelemetryDimension.RollbackVisibility] = [],
             [OpenTelemetryDimension.RestartObservation] = [],
             [OpenTelemetryDimension.IdempotentReplay] = []
         };
@@ -62,7 +62,7 @@ internal static class OpenTelemetryDivergenceLedger
     /// those are the finding, and binding them would turn every real behaviour change into a digest
     /// mismatch instead of a divergence.
     /// </summary>
-    public const string SurfaceDigest = "c46c00ae476b69e0da8c43d97fb70b7ffbd06cfd618fd4303a1339f9354e3fc7";
+    public const string SurfaceDigest = "b2310b9850d716dc844e1f8c7c04fb24650aaf35d28a700eda473a18c1e0dfb2";
 
     public static IReadOnlyCollection<string> ComparedFactsFor(OpenTelemetryDimension dimension) =>
         Compared.TryGetValue(dimension, out var facts) ? facts : [];

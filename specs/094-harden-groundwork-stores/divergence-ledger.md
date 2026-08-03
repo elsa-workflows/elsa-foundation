@@ -107,44 +107,49 @@ Comparands: `efcore.sqlite` (`EfCoreOpenTelemetryStore`) and `groundwork.sqlite`
 (`GroundworkOpenTelemetryStore`), both over file-backed SQLite.
 
 Executable form: `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/`.
-Surface digest: `c46c00ae476b69e0da8c43d97fb70b7ffbd06cfd618fd4303a1339f9354e3fc7`.
+Surface digest: `b2310b9850d716dc844e1f8c7c04fb24650aaf35d28a700eda473a18c1e0dfb2`.
 
-**Result: 38 facts compared across 6 dimensions; one divergence, dispositioned.**
+**Result: 37 facts compared across 6 dimensions; zero divergences.**
 
 | dimension | facts | verdict | disposition | testDisposition |
 |---|---|---|---|---|
 | `concurrency-conflict-shape` | 6 | `equivalent` | — | `RemovePending` |
 | `producer-ordering` | 6 | `equivalent` | — | `RemovePending` |
 | `null-and-default-materialization` | 12 | `equivalent` | — | `RemovePending` |
-| `rollback-visibility` | 3 | **`divergent`** on `readable-trace-count` | **`ContractIsGroundwork`** | `RemovePending` |
+| `rollback-visibility` | 2 | `equivalent` | — | `RemovePending` |
 | `restart-observation` | 6 | `equivalent` | — | `RemovePending` |
 | `idempotent-replay` | 5 | `equivalent` | — | `RemovePending` |
 
-### The one divergence
+### Withdrawn divergence — `rollback-visibility` / `readable-trace-count`
 
-| field | value |
-|---|---|
-| dimension | `rollback-visibility` |
-| fact | `readable-trace-count` |
-| efObserved | `1` — the queued batch is lost when the process dies before `CompleteDrainingAsync` |
-| groundworkObserved | `2` — the queued batch is already durable when the process dies |
-| verdict | `divergent` |
-| disposition | **`ContractIsGroundwork`** |
-| authority | #646 differential, this ledger |
+**An earlier revision of this ledger recorded a divergence here (EF `1`, Groundwork `2`) with
+disposition `ContractIsGroundwork`, on the reasoning that Groundwork commits a queued batch before drain
+completion while EF's channel drain loses it. That finding was wrong and is withdrawn.**
 
-A write is queued onto a bounded capture drain, then the provider is released *without* completing the
-drain. EF's channel-buffered drain loses the batch; Groundwork has already committed it. Stable across
-three repeated runs, so this is a behaviour difference and not drain-scheduling noise.
+It was an artifact of the harness, not of the stores. The two comparands' `AbandonAsync` implementations
+were not symmetric: the EF target disposed its test host, which closes the connection its drain writes
+through, while the Groundwork target only dropped references and left its drain running. EF was being
+prevented from writing and Groundwork was not, which produces exactly the observed 1-versus-2 result
+independently of any real durability difference.
 
-`IOpenTelemetryStore.WriteAsync` promises no durability at return — both stacks document capture as
-nonblocking and best-effort under a bounded queue — so **neither stack violates the contract**. The
-disposition is `ContractIsGroundwork` because Groundwork's behaviour is a strict superset: it loses no
-accepted telemetry on abrupt stop, where EF has a real loss window. Deleting EF removes the weaker
-behaviour, so **this divergence does not block removal**. It is recorded rather than waived because a
-future reader comparing the two stacks will otherwise rediscover it and have to re-derive the reasoning.
+The original note claimed stability across three repeated runs. That was true and it was not sufficient:
+a deterministic harness asymmetry reproduces perfectly. Once the abandons were made symmetric, the same
+probe returned EF `1` twice and EF `2` on the third run — the underlying question is a race, not a
+behaviour.
 
-`partial-batch-visible=false` on both sides: neither stack exposes a torn batch, only whole-batch
-presence or absence.
+**The dimension is now reported without that fact.** Neither stack exposes a seam that stops a capture
+drain without letting it flush, so "does a queued-but-unflushed write survive process loss" is **not
+expressible in-process** at this seam. What remains is answerable regardless of who wins the drain race,
+and both stacks agree on it: a flushed write is durable (`flushed-write-durable=true`), and neither ever
+exposes more writes than were issued (`partial-batch-visible=false`).
+
+Answering the withdrawn question honestly needs a real out-of-process kill — `GroundworkProcessProbeRunner`
+already exists in the test infrastructure for exactly this shape of evidence. Recorded as open follow-up.
+
+**Method note worth carrying to the other seams.** Repeat-run stability was used here as the check that a
+divergence was real, and it did not catch a systematic harness fault. The stronger check is symmetry:
+before recording any divergence, verify that both comparands were actually offered the same opportunity
+to exhibit the behaviour.
 
 ### Correction to spec 139's ledger
 
@@ -336,7 +341,7 @@ can differ is login, token issuance and user management — which is exactly wha
 
 ### Reading these two layers together
 
-The store differential found 8 divergences the app-level scenario cannot see: they need awkward data
+The store differential found 7 divergences the app-level scenario cannot see: they need awkward data
 (a role id differing only by case, a permission containing a newline) to surface, and a normal login
 sails past them. The app-level scenario covers composition the store probes cannot reach. Neither
 subsumes the other, and the pair is what supports the plain-language claim:

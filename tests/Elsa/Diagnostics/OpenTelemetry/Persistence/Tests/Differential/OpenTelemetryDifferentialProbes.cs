@@ -166,7 +166,23 @@ internal static class OpenTelemetryDifferentialProbes
         return new(OpenTelemetryDimension.NullAndDefaultMaterialization, facts);
     }
 
-    /// <summary>Queued-but-unflushed writes lost to process death must not leave a partial batch visible.</summary>
+    /// <summary>
+    /// A flushed write must be durable, and an ungraceful stop must not expose a partially applied batch.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately does NOT report whether a queued-but-unflushed write survives. That is not expressible
+    /// in-process: neither stack offers a seam that stops a capture drain without letting it flush, so
+    /// after <c>AbandonAsync</c> both drains keep running and whether they win the race against the
+    /// reopened store's query is pure scheduling. Measuring it produced a stable-looking EF-versus-
+    /// Groundwork difference that was really an artifact of the harness disposing EF's host — and once the
+    /// two sides were made symmetric the same probe returned different answers run to run.
+    /// </para>
+    /// <para>
+    /// Answering it honestly needs a real out-of-process kill (see <c>GroundworkProcessProbeRunner</c>),
+    /// which is open follow-up rather than something to approximate here.
+    /// </para>
+    /// </remarks>
     private static async Task<OpenTelemetryObservation> RollbackVisibilityAsync(OpenTelemetryDifferentialTarget target)
     {
         var store = await target.OpenAsync();
@@ -183,7 +199,9 @@ internal static class OpenTelemetryDifferentialProbes
         var facts = new Dictionary<string, string>
         {
             ["flushed-write-durable"] = traces.Contains("trace-flushed") ? "true" : "false",
-            ["readable-trace-count"] = traces.Length.ToString(),
+            // Whether the unflushed write survived is deliberately NOT reported — see the remarks above.
+            // Only the torn-batch question is answerable here, and it is answerable regardless of who wins
+            // the drain race: neither stack may ever expose more than the writes that were issued.
             ["partial-batch-visible"] = traces.Length > 2 ? "true" : "false"
         };
 

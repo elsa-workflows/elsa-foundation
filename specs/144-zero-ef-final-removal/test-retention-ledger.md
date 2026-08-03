@@ -553,8 +553,9 @@ DirectToken (constructs `EfCoreOpenTelemetryStore` through the existing `OpenTel
 Same rationale as the structured-log differential: these methods exist only to compare the temporary EF
 oracle against Groundwork and cannot be converted once the comparand is deleted. Their durable output is
 [`specs/094-harden-groundwork-stores/divergence-ledger.md`](../094-harden-groundwork-stores/divergence-ledger.md),
-which retains the one recorded divergence (`rollback-visibility` / `readable-trace-count`,
-disposition `ContractIsGroundwork`) independently of the tests.
+which retains this seam's findings independently of the tests. It currently records **zero**
+divergences for OpenTelemetry: an earlier `rollback-visibility` / `readable-trace-count` divergence was
+withdrawn as a harness artifact, and that question is now recorded as not expressible in-process.
 
 - tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryStoreDifferentialTests.cs:32 Ef_and_groundwork_agree_or_carry_a_recorded_disposition — OpenTelemetryStoreDifferentialTests.Ef_and_groundwork_agree_or_carry_a_recorded_disposition | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Ef_and_groundwork_agree_or_carry_a_recorded_disposition (6 dimension rows) | Reachability: DirectToken | Preliminary disposition: RemovePending.
 - tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Differential/OpenTelemetryStoreDifferentialTests.cs:83 Differential_surface_matches_its_recorded_identity — OpenTelemetryStoreDifferentialTests.Differential_surface_matches_its_recorded_identity | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Differential_surface_matches_its_recorded_identity | Reachability: DirectToken | Preliminary disposition: RemovePending.

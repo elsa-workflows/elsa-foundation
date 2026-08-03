@@ -90,6 +90,7 @@ internal abstract class OpenTelemetryDifferentialTarget : IAsyncDisposable
 
     private sealed class EfCoreTarget() : OpenTelemetryDifferentialTarget("efcore.sqlite")
     {
+        private readonly List<OpenTelemetryTestHost> _abandoned = [];
         private OpenTelemetryTestHost? _host;
         private EfCoreOpenTelemetryStore? _store;
 
@@ -114,13 +115,21 @@ internal abstract class OpenTelemetryDifferentialTarget : IAsyncDisposable
 
             _host?.Dispose();
             _host = null;
+
+            foreach (var abandoned in _abandoned)
+                abandoned.Dispose();
+
+            _abandoned.Clear();
         }
 
         public override Task AbandonAsync()
         {
-            // Drop the drain loop without completing it, then release the connection the file depends on.
+            // Drop the caller's references without completing the drain, and WITHOUT disposing the host.
+            // Disposing it here would close the connection the drain writes through, which Groundwork's
+            // abandon has no way to do — the comparison would then measure the harness rather than the
+            // stores. The host is retained so teardown can still dispose it.
+            _abandoned.Add(_host!);
             _store = null;
-            _host?.Dispose();
             _host = null;
             return Task.CompletedTask;
         }
