@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.MongoDb.csproj" />
     <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
     <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\MongoDb\Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj" />
   </ItemGroup>
 
 </Project>

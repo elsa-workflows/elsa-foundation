@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 152
-- Test projects: 97
-- Direct project references: 1222
+- Source projects: 153
+- Test projects: 98
+- Direct project references: 1231
 
 ## Projects
 
@@ -104,7 +104,7 @@ Records direct project references only.
 | [Elsa.Persistence.Groundwork.Composition](../../src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj) | source | Elsa.Persistence | - | default | Elsa.Events.Core |
 | [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Workflows.Runtime.Attention<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Persistence.Groundwork.MongoDb](../../src/Elsa/Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Unified |
-| [Elsa.Persistence.Groundwork.MongoDb.Unified](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified |
+| [Elsa.Persistence.Groundwork.MongoDb.Unified](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Persistence.Groundwork.PostgreSql](../../src/Elsa/Persistence/Groundwork/PostgreSql/Elsa.Persistence.Groundwork.PostgreSql.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Unified |
 | [Elsa.Persistence.Groundwork.PostgreSql.Unified](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.Querying](../../src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Primitives<br>Elsa.Serialization.Core |
@@ -133,6 +133,7 @@ Records direct project references only.
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Elsa.Tasks | - | default | Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
+| [Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/MongoDb/Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.Capabilities<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.CodeGeneration](../../src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj) | source | Elsa.Workflows | netstandard2.0 | default | - |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Workflows.Primitives |
@@ -244,6 +245,7 @@ Records direct project references only.
 | [Elsa.Studio.Preferences.Persistence.Groundwork.Tests](../../tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Studio.Preferences.Persistence.Groundwork |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks |
+| [Elsa.Workflows.Dashboard.MongoDb.Tests](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/Elsa.Workflows.Dashboard.MongoDb.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Workflows.Dashboard.SqlServer.Tests](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Mediator.Core<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
@@ -293,5 +295,5 @@ Records direct project references only.
 | Elsa.Server | 1 | 0 |
 | Elsa.Studio | 3 | 2 |
 | Elsa.Tasks | 3 | 1 |
-| Elsa.Workflows | 31 | 18 |
+| Elsa.Workflows | 32 | 19 |
 | Elsa3 | 4 | 1 |

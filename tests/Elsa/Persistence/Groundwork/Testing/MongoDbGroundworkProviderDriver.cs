@@ -946,6 +946,14 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 "Unknown native-route projected value kind.")
         };
 
+    /// <summary>
+    /// Opens a new MongoDB client/database handle against the driver's current database, for callers that
+    /// need to read the physical per-document-kind collections directly rather than through the
+    /// <see cref="IDocumentStore"/> abstraction (for example, a read-model data source that runs its own
+    /// aggregation pipelines).
+    /// </summary>
+    public IMongoDatabase CreateRawDatabase() => new MongoClient(RequiredConnectionString()).GetDatabase(_databaseName);
+
     private string RequiredConnectionString() => _connectionString ??
         throw new InvalidOperationException("The MongoDB provider target has not been initialized.");
 
