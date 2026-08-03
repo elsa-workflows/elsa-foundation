@@ -589,6 +589,23 @@ Support-only sources added with them (no Fact/Theory identity), to be deleted in
 
 - tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/TenantMembershipDifferential.cs — comparand factories, the six dimension probes, and the executable divergence ledger.
 
+### tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/IdentityAppParityTests.cs
+
+Added 2026-08-03 under [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) as the
+**app-level** parity check: two real HTTP hosts, one composed over EF identity and one over Groundwork
+identity, driven through `POST /_elsa/identity/login` → `GET /_elsa/identity/token` and compared on
+observable outcome. Original subject: IAM composition: EF-vs-Groundwork app parity. Reachability:
+DirectToken (composes `TokenEndpointFixture`, which builds the EF identity host).
+
+Covers what the store differential cannot reach — DI wiring, cookie and antiforgery handling, token
+issuance, claim projection. Adds no EF package, project reference, or registration token of its own.
+
+Loses its EF comparand when the EF identity host is deleted, so it cannot be converted; its durable
+output is the app-level section of
+[`specs/094-harden-groundwork-stores/divergence-ledger.md`](../094-harden-groundwork-stores/divergence-ledger.md).
+
+- tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/IdentityAppParityTests.cs:42 An_identity_app_behaves_the_same_on_either_persistence_stack — IdentityAppParityTests.An_identity_app_behaves_the_same_on_either_persistence_stack | Original subject: IAM composition: EF-vs-Groundwork app parity | Objective: An_identity_app_behaves_the_same_on_either_persistence_stack | Reachability: DirectToken | Preliminary disposition: RemovePending.
+
 Modified with them, and **not** to be deleted: `IamNormalizedLookupSqliteCorrectnessTests` gained
 `[Collection(SqliteIdentityFileCollection.Name)]` so it cannot run beside the differential. The EF
 identity registration hard-codes one SQLite data source, so both would otherwise delete each other's

@@ -269,6 +269,61 @@ mask everything else, so the probes seed a user first. Recorded here instead, wi
 disposition — `ContractIsGroundwork` — because an orphan membership is not a state the model should
 be able to reach.
 
+## App-level parity — recorded 2026-08-03
+
+The three sections above compare persistence *semantics* at the store contract. This one compares what
+an application does: two real HTTP hosts, one composed over EF identity and one over Groundwork
+identity, driven through the shared identity surface (`POST /_elsa/identity/login` →
+`GET /_elsa/identity/token`) and compared on observable outcome.
+
+It exists because the store probes cannot reach composition: DI wiring, cookie and antiforgery
+handling, token issuance, and claim projection are integration behaviour, not storage behaviour.
+
+Executable form: `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Differential/IdentityAppParityTests.cs`.
+
+**Result: 13 app-level facts compared; zero divergences.**
+
+| fact | both stacks |
+|---|---|
+| `token-before-login` | `401` |
+| `login-with-wrong-password` | `401` |
+| `login-with-correct-password` | `200` |
+| `identity-cookie-issued` | `true` |
+| `token-after-login` | `200` |
+| `token-payload-has-accessToken` / `has-expiresAt` | `true` / `true` |
+| `access-token-non-empty` / `validates` | `true` / `true` |
+| `token-carries-tenant-claim` | `true` |
+| `token-carries-permission-claims` | `true` |
+| `token-carries-identity-name` | `false` (shared behaviour, not a divergence) |
+| `bearer-authenticates-without-cookie` | `200` |
+
+Comparison is on **shape, not values**: each host seeds its own user, tenant and role, so the facts are
+status codes, payload shape, and which claim kinds survive — never a literal username or tenant id.
+That is what makes it apples to apples across two independently composed hosts.
+
+### Why this is the whole app-level surface
+
+Identity is the only lane where two composable stacks exist. Every shipping shell already runs the
+workflow runtime, design, publishing, secrets, studio preferences and diagnostics on Groundwork —
+`src/Apps/Elsa.Server/shells.json` selects `GroundworkUnifiedPersistenceSqlite`,
+`DiagnosticsGroundworkPersistence`, `SecretsGroundworkPersistence`,
+`StudioPreferencesGroundworkPersistence` and `WorkflowsPublishingGroundwork`, with
+`FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` the sole EF selection.
+
+So there is no "EF-powered app" to compare against: an app on either configuration executes byte-
+identical code for every workflow start, resume, checkpoint, bookmark and query. The only surface that
+can differ is login, token issuance and user management — which is exactly what this section covers.
+
+### Reading these two layers together
+
+The store differential found 8 divergences the app-level scenario cannot see: they need awkward data
+(a role id differing only by case, a permission containing a newline) to surface, and a normal login
+sails past them. The app-level scenario covers composition the store probes cannot reach. Neither
+subsumes the other, and the pair is what supports the plain-language claim:
+
+> An application behaves the same on either persistence stack, and where the stores themselves differ,
+> every difference favours Groundwork.
+
 ### Open follow-up for this seam
 
 1. Internal-commit-retry idempotency needs a failure-injecting provider double shared by both stacks.
