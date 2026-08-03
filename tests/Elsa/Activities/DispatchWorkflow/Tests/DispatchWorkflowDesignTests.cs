@@ -172,6 +172,11 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
+        // spec 145: the executable compiler + the OnExecutableCompilationCollecting handler moved to the
+        // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
+        // shell composition. This test invokes ConfigureServices directly (bypassing DependsOn), so it composes
+        // the engine feature too — otherwise the compiler and the compilation fan-in handler are unregistered.
+        new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         new DispatchWorkflowDesignFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
