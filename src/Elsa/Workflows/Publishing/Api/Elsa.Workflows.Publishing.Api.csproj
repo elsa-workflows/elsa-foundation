@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
   <!--
     The bridge feature. It depends DOWN on stable Design and Runtime contracts and connects them:
       - the Design seam:  Elsa.Activities.Design.Core / .Persistence.Core (read the catalog row)

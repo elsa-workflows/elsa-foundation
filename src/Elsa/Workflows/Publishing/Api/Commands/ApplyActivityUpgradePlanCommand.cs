@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Commands;
 
@@ -24,7 +25,7 @@ public sealed class ApplyActivityUpgradePlanCommand(
             string.IsNullOrWhiteSpace(request.StageId) ||
             string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
             request.IdempotencyKey.Length > 200)
-            throw Rejected(400, "activity.request.invalid", "Plan, stage, and a bounded idempotency key are required.");
+            throw Rejected(400, ActivityErrorCodes.RequestInvalid, "Plan, stage, and a bounded idempotency key are required.");
 
         var plan = await planStore.FindAsync(request.PlanId, cancellationToken)
                    ?? throw Rejected(404, "activity.upgrade.plan-not-found", "The activity upgrade plan was not found.");

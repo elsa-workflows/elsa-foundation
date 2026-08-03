@@ -1,6 +1,6 @@
-namespace Elsa.Activities.Runtime.Core.Attributes;
-
 using Elsa.Primitives.Models;
+
+namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>Declares a stable read-only projection of an activity's atomic result record.</summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]

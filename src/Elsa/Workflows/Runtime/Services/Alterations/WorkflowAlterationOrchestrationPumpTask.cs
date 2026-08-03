@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
+using Elsa.Tasks.Schedules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -108,7 +109,7 @@ public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public ITaskSchedule GetSchedule() => new WorkflowAlterationAdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
+    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
 
     private static TimeSpan ComputeInterval(WorkflowAlterationOrchestrationOptions options, int failures)
     {
@@ -122,11 +123,5 @@ public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
         return multiplier > maxTicks / baseTicks
             ? options.MaxBackoffInterval
             : TimeSpan.FromTicks(Math.Min(maxTicks, baseTicks * multiplier));
-    }
-
-    private sealed class WorkflowAlterationAdaptiveIntervalSchedule(Func<TimeSpan> intervalProvider, ILogger logger) : ITaskSchedule
-    {
-        public IScheduledTaskExecution ScheduleExecution(Func<Task> action) =>
-            new Elsa.Tasks.Schedules.ScheduledTaskExecution(action, intervalProvider, logger);
     }
 }

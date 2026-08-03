@@ -33,6 +33,14 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
     <PackageVersion Include="Jint" Version="4.9.1" />
+    <!--
+      The Microsoft.AspNetCore.* pins below at 2.3.x are NOT stale, and must not be "bumped" to match
+      their 10.0.x siblings: 2.3.10/2.3.11 is the newest published version of those package IDs.
+      ASP.NET Core folded these assemblies into the shared framework, so the standalone packages
+      stopped shipping after 2.3.x. Affected: Authentication.Abstractions, Authorization.Policy,
+      Http, Http.Abstractions, Routing, Routing.Abstractions, StaticFiles. Each is referenced
+      directly by at least one project.
+    -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Abstractions" Version="2.3.11" />
     <PackageVersion Include="Microsoft.AspNetCore.Authorization" Version="10.0.8" />
     <PackageVersion Include="Microsoft.AspNetCore.Authorization.Policy" Version="2.3.10" />
@@ -69,6 +77,12 @@
     <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.8" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" Condition="'$(MSBuildProjectName)' != 'Elsa.Samples.Nuplane.Activities.Tests'" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" Condition="'$(MSBuildProjectName)' == 'Elsa.Samples.Nuplane.Activities.Tests'" />
+    <!--
+      Transitive pin: no project references Microsoft.OpenApi directly. Because
+      CentralPackageTransitivePinningEnabled is true (above), a PackageVersion with no matching
+      PackageReference is how this repo pins a transitive dependency's version — here the one
+      Microsoft.AspNetCore.OpenApi pulls in. Deleting it silently changes what restores.
+    -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
@@ -83,6 +97,11 @@
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <!--
+      Transitive pin: no project references SQLitePCLRaw.bundle_e_sqlite3 directly. It is the native
+      SQLite bundle that Microsoft.Data.Sqlite pulls in; pinned here so the native provider version
+      is deliberate rather than whatever the graph resolves. See the Microsoft.OpenApi note above.
+    -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />

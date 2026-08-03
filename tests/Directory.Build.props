@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    Test-tree defaults.
+
+    MSBuild imports only the *nearest* Directory.Build.props, so this file must
+    pull in the repo-root one explicitly - otherwise test projects would lose
+    TargetFramework/Nullable/ImplicitUsings and the shared package metadata.
+    The import comes first so anything set below wins on a collision.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    Nothing under tests/ is published to NuGet, so IsPackable is safe to default
+    here - all 93 projects set it today.
+
+    IsTestProject is deliberately NOT defaulted: the tree also holds support
+    libraries and an out-of-process probe (Elsa.Activities.Testing,
+    Elsa.Persistence.Groundwork.Testing, Elsa.Persistence.Groundwork.ProcessProbe)
+    that are not test projects. Defaulting it true would make `dotnet test` treat
+    them as suites. Each real test project keeps its own IsTestProject.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

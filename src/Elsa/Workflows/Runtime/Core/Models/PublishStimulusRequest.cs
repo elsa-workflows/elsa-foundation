@@ -21,7 +21,8 @@ public sealed class PublishStimulusRequest
         string activityExecutionId,
         string eventName,
         string? correlationId = null,
-        JsonElement? payload = null)
+        JsonElement? payload = null,
+        bool isLocalEvent = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -34,6 +35,7 @@ public sealed class PublishStimulusRequest
         EventName = eventName.Trim();
         CorrelationId = correlationId?.Trim();
         Payload = payload?.Clone();
+        IsLocalEvent = isLocalEvent;
     }
 
     /// <summary>The publishing activity's workflow execution id (the intent's owning execution).</summary>
@@ -50,4 +52,10 @@ public sealed class PublishStimulusRequest
 
     /// <summary>An optional stimulus payload delivered to started/resumed instances as their input.</summary>
     public JsonElement? Payload { get; }
+
+    /// <summary>
+    /// When true the publish is confined to <see cref="WorkflowExecutionId"/>: only same-name waits inside the
+    /// publishing instance resume, and no published start trigger fires (Elsa 3's <c>PublishEvent.IsLocalEvent</c>).
+    /// </summary>
+    public bool IsLocalEvent { get; }
 }

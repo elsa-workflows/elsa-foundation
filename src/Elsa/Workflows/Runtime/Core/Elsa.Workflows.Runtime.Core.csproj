@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
   <!--
     Spec 090 adds source/binary-compatible default interface members to this public Core package.
     This is a MINOR-compatible API expansion. Package versions are injected globally by

@@ -9,6 +9,53 @@ This file preserves raw framework constitution provenance. It is historical repo
 Sync Impact Report — Modular Software Design Framework Constitution
 =====================================================================
 
+Version change: 3.1.0 (draft) → 3.2.0 (draft)
+Date: 2026-08-02
+Unit: Subtractive obligation amendment (simplification review 2026-07 §9.13 /
+  D3). Ratified by Sipke 2026-08-02 from the proposal report
+  (subtractive-obligation-amendment-2026-08.md).
+  SemVer: MINOR — new section added; no existing rule removed or redefined.
+
+§2.25 (new) — Consolidation review, the subtractive obligation. Every existing
+  obligation is additive (§2.16 projects, §2.22.1 catalogs, §2.23 guards, specs,
+  evidence); none has a counterpart that removes anything. §2.25 adds a periodic
+  consolidation review with standing to retire specs, delete superseded guards,
+  prune stale catalog entries, merge projects subject to §2.16/§2.16.1, and
+  delete generated artifacts whose consumers are gone.
+
+  §2.25.3 is the load-bearing clause: every removal must be justified by evidence
+  a build or test can produce; a static census, text search, or similarity
+  judgement is explicitly insufficient. Grounded in measurement — of the
+  census-driven review's headline findings, five did not survive compilation
+  (two self-withdrawn, one barred by §2.23.3, one a net line *increase* when
+  built, one resting on a scope-mismatched comparison).
+
+  §2.25.3's justification is stated generically in the framework text — static
+  analysis cannot see why code exists — per the synthetic-examples policy; the
+  repository-specific evidence stays in the proposal report.
+
+  Evidence for the obligation is retirement, not size: 112 specs still marked
+  Draft with merged work, 42 with no status line, 27 duplicate spec numbers,
+  architecture guards 300 → 351 in 62 commits, and two extension-point catalog
+  drifts found by accident.
+
+NOT adopted: the companion §2.16.1 aggregate-growth trigger. Measured
+  like-for-like on the baseline's own scope (src+tests, 2026-07-02 → 2026-08-02),
+  projects grew 109 → 245 (2.25×) against LoC 84,300 → 532,387 (6.32×) — roughly
+  a third the rate of code, with mean project size rising 773 → 2,173 LoC. The
+  proposed trigger would never have fired. §2.16.1 is unchanged.
+
+Cascade: Elsa constitution re-pins framework v3.1.0 → v3.2.0 (Elsa 3.3.0 → 3.4.0).
+  Per Elsa §MINOR handling, every Elsa specialization was reviewed for
+  compatibility; §2.25 needs no Elsa-side specialization.
+-->
+~~~
+
+~~~markdown
+<!--
+Sync Impact Report — Modular Software Design Framework Constitution
+=====================================================================
+
 Version change: 3.0.0 (draft) → 3.1.0 (draft)
 Date: 2026-07-04
 Unit: W21 / MD-5 minimum-project-size amendment (Elsa 4 architecture review

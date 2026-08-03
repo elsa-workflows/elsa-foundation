@@ -71,7 +71,8 @@ public sealed class PublishStimulusStagingBuffer :
             EventStimulus.Hash(request.EventName),
             request.EventName,
             request.CorrelationId,
-            request.Payload);
+            request.Payload,
+            request.IsLocalEvent);
 
         return new RuntimePostCommitIntent(
             intentId: intentId,

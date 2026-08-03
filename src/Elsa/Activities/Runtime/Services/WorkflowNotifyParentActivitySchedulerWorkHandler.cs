@@ -292,7 +292,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : IWorkflow
             var fault = resolvedContinuation.Fault!;
             var faultedParentState = currentParentState with
             {
-                Fault = new NormalizedActivityFault(fault.Code, typeof(ActivityFault).FullName!, fault.Message, sanitizedStackTrace: null, fault.IsRetryable)
+                Fault = fault.ToNormalized()
             };
             var exception = new ActivityTransitionFaultException(fault);
             var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots);

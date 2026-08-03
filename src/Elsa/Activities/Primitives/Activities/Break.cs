@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 
@@ -28,6 +29,11 @@ namespace Elsa.Activities.Primitives.Activities;
 /// fork branches) and completes itself with <c>Break</c> so the outcome bubbles to the enclosing loop.
 /// </para>
 /// </remarks>
+// Break completes with the Break outcome and nothing else. Declaring it is what puts a Break port on the node in
+// the catalog: without the attribute the scanner emits no outcomes facet at all, the studio falls back to its own
+// "Done" default, and the designer shows a port that can never be taken while hiding the one that always is
+// (found by the behavioural drive, #1119).
+[ActivityOutcome(ActivityOutcomes.Break)]
 public sealed class Break : Activity<ActivityUnit>
 {
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>

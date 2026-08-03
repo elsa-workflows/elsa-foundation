@@ -11,6 +11,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - committed catalog of supported Git workflow shapes; personal selections belong in `.agent-prefs/`.
+- [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.
 - [First-user prompt options](first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.
 - [Identity generators](identity-generators.md) - swappable `IIdentityGenerator` strategies (UUIDv7, short 64-bit, Snowflake, GUID) for short/sortable entity ids.
 - [Activity Definition authoring composition](activity-definition-authoring-composition.md) - host opt-in/opt-out guidance for provider-neutral authoring, Activity Graph design, and Activity Graph runtime features.

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Core.Services;
 
@@ -10,7 +11,7 @@ namespace Elsa.Activities.Design.Core.Services;
 /// </summary>
 public static partial class ActivityProviderDiagnosticSanitizer
 {
-    private const string FallbackCode = "activity.provider.diagnostic";
+    private const string FallbackCode = ActivityErrorCodes.ProviderDiagnostic;
 
     public static IReadOnlyList<ActivityDiagnostic> Sanitize(
         IEnumerable<ActivityDiagnostic>? diagnostics,

@@ -19,6 +19,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -167,9 +168,9 @@ public sealed class ActivityDefinitionPublisher(
         var candidateVersion = request.Version ?? ActivityPublicationReviewPolicy.ProvisionalVersion(head?.Version);
         if (!SemVer.TryParse(candidateVersion, out _))
             throw Reject(
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 $"Version '{candidateVersion}' is not valid SemVer 2.0.0.",
-                [Diagnostic("activity.version.invalid", $"Version '{candidateVersion}' is not valid SemVer 2.0.0.", draft)]);
+                [Diagnostic(ActivityErrorCodes.VersionInvalid, $"Version '{candidateVersion}' is not valid SemVer 2.0.0.", draft)]);
 
         async Task<(ActivityTemplateCompilerResult Compilation, ActivityVersionDiff? Diff)> CompileCandidateAsync(string version)
         {
@@ -205,7 +206,7 @@ public sealed class ActivityDefinitionPublisher(
         {
             if (!attemptedVersions.Add(candidateVersion))
                 throw Reject(
-                    "activity.publication.invalid",
+                    ActivityErrorCodes.PublicationInvalid,
                     "The publication version could not be selected deterministically.",
                     [new(
                         "activity.version.selection-unstable",
@@ -231,7 +232,7 @@ public sealed class ActivityDefinitionPublisher(
 
             var suggestedVersion = validVersions.FirstOrDefault()
                                    ?? throw Reject(
-                                       "activity.version.conflict",
+                                       ActivityErrorCodes.VersionConflict,
                                        "No suggested semantic version is available for publication.",
                                        [],
                                        true);
@@ -242,7 +243,7 @@ public sealed class ActivityDefinitionPublisher(
 
         if (!ActivityPublicationReviewPolicy.IsVersionAtLeast(candidateVersion, minimumVersion))
             throw Reject(
-                "activity.publication.invalid",
+                ActivityErrorCodes.PublicationInvalid,
                 "The requested exact version is below the reviewed minimum.",
                 [new(
                     "activity.version.bump-insufficient",
@@ -260,7 +261,7 @@ public sealed class ActivityDefinitionPublisher(
                 SemVer.TryParse(x.Version, out var existingVersion) &&
                 existingVersion == selectedVersion))
             throw Reject(
-                "activity.version.conflict",
+                ActivityErrorCodes.VersionConflict,
                 $"Version '{candidateVersion}' already exists.",
                 [],
                 true);
@@ -376,7 +377,7 @@ public sealed class ActivityDefinitionPublisher(
                     request.Version,
                     preflight.MinimumVersion))
                 throw Reject(
-                    "activity.publication.invalid",
+                    ActivityErrorCodes.PublicationInvalid,
                     "The requested exact version is below the reviewed minimum.",
                     [new(
                         "activity.version.bump-insufficient",
@@ -395,7 +396,7 @@ public sealed class ActivityDefinitionPublisher(
                         })]);
             if (!preflight.IsPublishable)
                 throw Reject(
-                    "activity.publication.invalid",
+                    ActivityErrorCodes.PublicationInvalid,
                     "The reviewed activity publication is not ready.",
                     preflight.Diagnostics);
 
@@ -415,7 +416,7 @@ public sealed class ActivityDefinitionPublisher(
             }
             var status = exception.ErrorCode switch
             {
-                "activity.publication.conflict" => ActivityPublicationReceiptStatus.OutcomeUnknown,
+                ActivityErrorCodes.PublicationConflict => ActivityPublicationReceiptStatus.OutcomeUnknown,
                 var code when code.Contains("stale", StringComparison.Ordinal) =>
                     ActivityPublicationReceiptStatus.Stale,
                 _ => ActivityPublicationReceiptStatus.Rejected
@@ -442,7 +443,7 @@ public sealed class ActivityDefinitionPublisher(
                 request,
                 fingerprint,
                 ActivityPublicationReceiptStatus.Failed,
-                "activity.operation.failed",
+                ActivityErrorCodes.OperationFailed,
                 [],
                 cancellationToken);
             throw;
@@ -506,17 +507,17 @@ public sealed class ActivityDefinitionPublisher(
             draft.Revision,
             draft.State), cancellationToken);
         if (!validation.IsValid)
-            throw Reject("activity.publication.invalid", "Activity publication was rejected by validation.", validation.Diagnostics);
+            throw Reject(ActivityErrorCodes.PublicationInvalid, "Activity publication was rejected by validation.", validation.Diagnostics);
 
         if (!SemVer.TryParse(request.Version, out var requestedVersion))
-            throw Reject("activity.request.invalid", $"Version '{request.Version}' is not valid SemVer 2.0.0.", [Diagnostic(
-                "activity.version.invalid",
+            throw Reject(ActivityErrorCodes.RequestInvalid, $"Version '{request.Version}' is not valid SemVer 2.0.0.", [Diagnostic(
+                ActivityErrorCodes.VersionInvalid,
                 $"Version '{request.Version}' is not valid SemVer 2.0.0.",
                 draft)]);
 
         var existingVersions = await publicationStore.ListByDefinitionAsync(definition.Id, cancellationToken);
         if (existingVersions.Any(x => SemVer.TryParse(x.Version, out var existing) && existing == requestedVersion))
-            throw Reject("activity.version.conflict", $"Version '{request.Version}' already exists.", [], true);
+            throw Reject(ActivityErrorCodes.VersionConflict, $"Version '{request.Version}' already exists.", [], true);
 
         var layout = await layoutStore.FindDraftLayoutAsync(draft.Id, cancellationToken)
                      ?? throw Reject("activity.draft.layout-not-found", "The draft layout was not found.", [], true);
@@ -532,7 +533,7 @@ public sealed class ActivityDefinitionPublisher(
             request.Version,
             ComputeLayoutBytes(layout.Records)), cancellationToken);
         if (!compilation.IsSuccessful || compilation.Template is null)
-            throw Reject("activity.publication.invalid", "Activity publication was rejected during compilation.", compilation.Diagnostics);
+            throw Reject(ActivityErrorCodes.PublicationInvalid, "Activity publication was rejected during compilation.", compilation.Diagnostics);
 
         var head = authoring.HeadVersionId is null
             ? null
@@ -541,7 +542,7 @@ public sealed class ActivityDefinitionPublisher(
         var diff = await ComputeDiffAsync(head, versionId, request.Version, draft, layout, compilation, cancellationToken);
         var semVerDiagnostic = ValidateRequestedBump(head?.Version, requestedVersion, diff?.RequiredBump ?? ActivityVersionBump.None, draft);
         if (semVerDiagnostic is not null)
-            throw Reject("activity.publication.invalid", "The requested activity version is insufficient.", [semVerDiagnostic]);
+            throw Reject(ActivityErrorCodes.PublicationInvalid, "The requested activity version is insufficient.", [semVerDiagnostic]);
         var readinessDiagnostics = _reviewPolicy.ReadinessDiagnostics(draft, compilation.Template).ToArray();
 
         var requiredBump = diff?.RequiredBump ?? ActivityVersionBump.None;
@@ -587,7 +588,7 @@ public sealed class ActivityDefinitionPublisher(
                 true);
         if (readinessDiagnostics.Length > 0)
             throw Reject(
-                "activity.publication.invalid",
+                ActivityErrorCodes.PublicationInvalid,
                 "Activity publication runtime readiness checks failed.",
                 readinessDiagnostics);
 
@@ -683,7 +684,7 @@ public sealed class ActivityDefinitionPublisher(
         catch (InvalidOperationException exception)
         {
             throw Reject(
-                "activity.publication.conflict",
+                ActivityErrorCodes.PublicationConflict,
                 "Activity publication lost an expected-state or uniqueness race.",
                 [],
                 true,
@@ -1065,7 +1066,7 @@ public sealed class ActivityDefinitionPublisher(
             string.IsNullOrWhiteSpace(request.ExpectedDefinitionHeadVersionId) ||
             !SemVer.TryParse(request.Version, out _))
             throw Reject(
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "The reviewed publication request is malformed.",
                 []);
     }

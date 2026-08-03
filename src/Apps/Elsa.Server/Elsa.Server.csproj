@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
 		<!-- Deployable host, not a NuGet library: exclude it from `dotnet pack` over the solution. -->
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>

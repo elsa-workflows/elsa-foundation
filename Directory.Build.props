@@ -1,12 +1,45 @@
 <Project>
 
   <!--
-    Shared NuGet package metadata for the publishable Elsa.* libraries.
-    This file is metadata-only on purpose: it must not change build behavior
-    (no Version here — CI injects /p:Version), so that adding it does not alter
-    how any project compiles. Non-packable projects (the Elsa.Server host and the
-    test projects) simply ignore these properties.
+    Shared build settings for every project in the repository.
+
+    Properties set here are imported before each project's own body, so any
+    project can still override them locally. Two projects deliberately keep
+    their own copies rather than inheriting:
+
+      - src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a
+        Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
+
+      - src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore sits
+        inside the frozen EF oracle that FrozenAspNetCoreIdentityEfOracleRatchetTests
+        fingerprints for specs/144-zero-ef-final-removal. No change to that tree
+        — including its .csproj — is permitted before the approved removal work
+        unit, so it is left byte-for-byte alone.
+
+    Still deliberately absent: Version. CI injects /p:Version.
   -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Static analysis. The repository had no .editorconfig and no analyzer settings
+    at all, so its (genuinely good) style consistency was held up by code review
+    alone. The root .editorconfig codifies conventions the code already follows.
+
+    Everything is warnings-only on purpose: no TreatWarningsAsErrors here, so
+    turning analysis on cannot wedge the build. Promoting rules to errors is a
+    deliberate follow-up once the tree is clean under them.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- Shared NuGet package metadata for the publishable Elsa.* libraries. -->
   <PropertyGroup>
     <Authors>Elsa Workflows</Authors>
     <Company>Elsa Workflows</Company>

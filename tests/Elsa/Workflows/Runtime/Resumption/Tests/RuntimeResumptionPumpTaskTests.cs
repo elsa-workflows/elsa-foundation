@@ -1,4 +1,5 @@
 using Elsa.Tasks.Core;
+using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;

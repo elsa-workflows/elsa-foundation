@@ -11,6 +11,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -697,7 +698,7 @@ public sealed class ReusableActivityAuthoringService(
         {
             throw new ActivityAuthoringException(
                 400,
-                "activity.request.invalid",
+                ActivityErrorCodes.RequestInvalid,
                 "Invalid activity authoring request",
                 "The public activity contract contains an unsupported type reference.",
                 innerException: exception);
@@ -753,11 +754,11 @@ public sealed class ReusableActivityAuthoringService(
         ActivityDiagnosticOrderer.Order(diagnostics),
         inner);
 
-    private static ActivityAuthoringException BadRequest(string detail) => new(400, "activity.request.invalid", "Invalid activity authoring request", detail);
-    private static ActivityAuthoringException Forbidden(string detail, string code = "activity.authorization.denied") => new(403, code, "Activity authoring is forbidden", detail);
+    private static ActivityAuthoringException BadRequest(string detail) => new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity authoring request", detail);
+    private static ActivityAuthoringException Forbidden(string detail, string code = ActivityErrorCodes.AuthorizationDenied) => new(403, code, "Activity authoring is forbidden", detail);
     private static ActivityAuthoringException NotFound(string code, string title, string detail, Exception? inner = null) => new(404, code, title, detail, innerException: inner);
     private static ActivityAuthoringException Conflict(string code, string title, string detail, Exception? inner = null) => new(409, code, title, detail, innerException: inner);
-    private static ActivityAuthoringException OperationFailed(string detail) => new(500, "activity.operation.failed", "Activity authoring operation failed", detail);
+    private static ActivityAuthoringException OperationFailed(string detail) => new(500, ActivityErrorCodes.OperationFailed, "Activity authoring operation failed", detail);
 }
 
 public sealed class CreateReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)

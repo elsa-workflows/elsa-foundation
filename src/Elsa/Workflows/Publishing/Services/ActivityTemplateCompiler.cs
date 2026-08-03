@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -205,7 +206,7 @@ public sealed class ActivityTemplateCompiler(
         if (cycle is not null)
         {
             diagnostics.Add(new(
-                "activity.dependency.cycle",
+                ActivityErrorCodes.DependencyCycle,
                 ActivityDiagnosticSeverity.Error,
                 "Publishing this draft would create a dependency cycle.",
                 subject,
@@ -226,7 +227,7 @@ public sealed class ActivityTemplateCompiler(
         catch (InvalidOperationException)
         {
             diagnostics.Add(new(
-                "activity.provider.unavailable",
+                ActivityErrorCodes.ProviderUnavailable,
                 ActivityDiagnosticSeverity.Error,
                 "The requested activity provider or manifest schema is unavailable.",
                 subject,

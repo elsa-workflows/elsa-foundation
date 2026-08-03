@@ -81,7 +81,7 @@ public sealed class WorkflowCancellationPlanner(
             .Append(workflow.WorkflowExecutionId)
             .ToHashSet(StringComparer.Ordinal);
         IReadOnlyCollection<ActivityScopeCleanupRequest> cleanupRequests = _activityScopeCleanupStore is null
-            ? Array.Empty<ActivityScopeCleanupRequest>()
+            ? []
             : [await _activityScopeCleanupStore.CaptureAsync(
                 workflow.WorkflowExecutionId,
                 workflow.WorkflowExecutionId,

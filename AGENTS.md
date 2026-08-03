@@ -21,7 +21,7 @@ Use the narrowest source that answers the task.
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
-| Feature/work-unit specifications | `specs/` |
+| Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
@@ -74,10 +74,20 @@ bash tools/maps/generate-architecture-reference-map.sh
 bash tools/maps/generate-feature-dependency-map.sh
 ```
 
-If the local shell is unavailable, try the other script if that shell is installed. If neither
-PowerShell nor Bash is available, ask the user to install one of them before refreshing maps.
+All ten paths above are thin shims over one .NET tool, `tools/maps/Elsa.Maps.Generator`. Either shell
+works and both produce identical output, because there is now a single implementation. To refresh
+everything in one go:
 
-Generated maps are committed snapshots and are never refreshed automatically. Before relying on any
+```bash
+dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+```
+
+The tool needs the .NET SDK. If it is unavailable, ask the user to install it before refreshing maps.
+
+Generated maps are committed snapshots and are never refreshed automatically. CI does not
+regenerate them; it only runs `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`,
+which compares the committed `input_fingerprint` against the tree and fails when a refresh is
+due. Refreshing stays a deliberate, human-initiated act. Before relying on any
 map for navigation or verification, check `docs/maps/manifest.json`. If relevant inputs are dirty,
 changed, or freshness is uncertain, report that the snapshot is stale and ask the user to invoke or
 authorize the narrowest relevant map refresh. After an explicitly authorized refresh, review any

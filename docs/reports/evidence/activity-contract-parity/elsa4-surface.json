@@ -1,0 +1,933 @@
+[
+  {
+    "module": "Bpmn",
+    "file": "src/Elsa/Activities/Bpmn/Activities/BpmnDecision.cs",
+    "class": "BpmnDecision",
+    "baseType": "Activity<BpmnDecisionResult>",
+    "resultType": "BpmnDecisionResult",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Outcome",
+        "type": "string?",
+        "Key": "Outcome",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Bpmn",
+    "file": "src/Elsa/Activities/Bpmn/Activities/BpmnProcess.cs",
+    "class": "BpmnProcess",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": true,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Bpmn.Activities"
+    ],
+    "inputs": [
+      {
+        "name": "CanStartWorkflow",
+        "type": "bool",
+        "Key": "CanStartWorkflow",
+        "DefaultValue": "true",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/Do/Activities/Do.cs",
+    "class": "Do",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Do.Body"
+    ],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "Key": "Condition",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/For/Activities/For.cs",
+    "class": "For",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [
+      "For.Body"
+    ],
+    "inputs": [
+      {
+        "name": "Start",
+        "type": "int",
+        "Key": "Start",
+        "required": false
+      },
+      {
+        "name": "End",
+        "type": "int",
+        "Key": "End",
+        "required": false
+      },
+      {
+        "name": "Step",
+        "type": "int",
+        "Key": "Step",
+        "DefaultValue": "1",
+        "DefaultSyntax": "Literal",
+        "required": false
+      },
+      {
+        "name": "EndInclusive",
+        "type": "bool",
+        "Key": "EndInclusive",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/ForEach/Activities/ForEach.cs",
+    "class": "ForEach",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [
+      "ForEach.Body"
+    ],
+    "inputs": [
+      {
+        "name": "Collection",
+        "type": "object?",
+        "Key": "Collection",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/If/Activities/If.cs",
+    "class": "If",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "True",
+      "False",
+      "Break"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [
+      "If.Then",
+      "If.Else"
+    ],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "Key": "Condition",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/Parallel/Activities/Parallel.cs",
+    "class": "Parallel",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Parallel.Branch"
+    ],
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/Switch/Activities/Switch.cs",
+    "class": "Switch",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Default",
+      "Break"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Switch.Case",
+      "Switch.Default"
+    ],
+    "inputs": [
+      {
+        "name": "Value",
+        "type": "string?",
+        "Key": "Value",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "ControlFlow",
+    "file": "src/Elsa/Activities/ControlFlow/While/Activities/While.cs",
+    "class": "While",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [
+      "While.Body"
+    ],
+    "inputs": [
+      {
+        "name": "Condition",
+        "type": "bool",
+        "Key": "Condition",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "DispatchWorkflow",
+    "file": "src/Elsa/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs",
+    "class": "DispatchWorkflow",
+    "baseType": "StatefulActivity<DispatchWorkflowActivityResult, DispatchWorkflowState, WorkflowDispatchParentResumePayload>",
+    "resultType": "DispatchWorkflowActivityResult",
+    "isTrigger": false,
+    "hasResumeTarget": true,
+    "outcomes": [
+      "Dispatched",
+      "Completed",
+      "Faulted",
+      "Cancelled",
+      "DispatchFailed"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "WorkflowDefinitionId",
+        "type": "string",
+        "Key": "WorkflowDefinitionId",
+        "UIHint": "dropdown",
+        "required": true
+      },
+      {
+        "name": "Inputs",
+        "type": "IReadOnlyDictionary<string, JsonElement>?",
+        "Key": "Inputs",
+        "required": false
+      },
+      {
+        "name": "WaitForCompletion",
+        "type": "bool",
+        "Key": "WaitForCompletion",
+        "DefaultValue": "false",
+        "DefaultSyntax": "Literal",
+        "required": false
+      },
+      {
+        "name": "CancelChildOnParentCancellation",
+        "type": "bool",
+        "Key": "CancelChildOnParentCancellation",
+        "DefaultValue": "true",
+        "DefaultSyntax": "Literal",
+        "required": false
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Key": "CorrelationId",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ChildWorkflowExecutionId",
+        "type": "string",
+        "Key": "ChildWorkflowExecutionId",
+        "Path": "childWorkflowExecutionId"
+      },
+      {
+        "name": "Result",
+        "type": "DispatchWorkflowResult?",
+        "Key": "Result",
+        "Path": "result",
+        "IsRequired": false
+      }
+    ]
+  },
+  {
+    "module": "Flowchart",
+    "file": "src/Elsa/Activities/Flowchart/Activities/Flowchart.cs",
+    "class": "Flowchart",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done",
+      "Break"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Flowchart.Activities"
+    ],
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "module": "Graph",
+    "file": "src/Elsa/Activities/Graph/Runtime/Activities/GraphActivity.cs",
+    "class": "GraphActivity",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "module": "Http",
+    "file": "src/Elsa/Activities/Http/Activities/HttpEndpoint.cs",
+    "class": "HttpEndpoint",
+    "baseType": "StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>",
+    "resultType": "HttpEndpointResult",
+    "isTrigger": true,
+    "hasResumeTarget": true,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Path",
+        "type": "string",
+        "Key": "Path",
+        "Category": "Simple",
+        "required": true
+      },
+      {
+        "name": "SupportedMethods",
+        "type": "ICollection<string>?",
+        "Key": "SupportedMethods",
+        "Category": "Simple",
+        "UIHint": "checklist",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "HEAD",
+          "DELETE"
+        ],
+        "required": false
+      },
+      {
+        "name": "CanStartWorkflow",
+        "type": "bool",
+        "Key": "CanStartWorkflow",
+        "Category": "Simple",
+        "required": false
+      },
+      {
+        "name": "Authorize",
+        "type": "bool",
+        "Key": "Authorize",
+        "Category": "Advanced",
+        "required": false
+      },
+      {
+        "name": "Policy",
+        "type": "string?",
+        "Key": "Policy",
+        "Category": "Advanced",
+        "required": false
+      },
+      {
+        "name": "RequestTimeout",
+        "type": "TimeSpan?",
+        "Key": "RequestTimeout",
+        "Category": "Advanced",
+        "required": false
+      },
+      {
+        "name": "RequestSizeLimit",
+        "type": "long?",
+        "Key": "RequestSizeLimit",
+        "Category": "Advanced",
+        "required": false
+      },
+      {
+        "name": "ResponseMode",
+        "type": "ResponseMode",
+        "Key": "ResponseMode",
+        "Category": "Simple",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Request",
+        "type": "HttpRequestModel",
+        "Key": "Request",
+        "Path": "request"
+      },
+      {
+        "name": "RouteData",
+        "type": "IReadOnlyDictionary<string, string>",
+        "Key": "RouteData",
+        "Path": "routeData"
+      },
+      {
+        "name": "ParsedContent",
+        "type": "JsonElement?",
+        "Key": "ParsedContent",
+        "Path": "parsedContent",
+        "IsRequired": false
+      }
+    ]
+  },
+  {
+    "module": "Http",
+    "file": "src/Elsa/Activities/Http/Activities/SendHttpRequest.cs",
+    "class": "SendHttpRequest",
+    "baseType": "Activity<SendHttpRequestResult>",
+    "resultType": "SendHttpRequestResult",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done",
+      "Failed",
+      "Timeout"
+    ],
+    "valueOutcomes": {
+      "source": "ExpectedStatusCodes",
+      "UnmatchedOutcome": "Unmatched status code"
+    },
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Url",
+        "type": "Uri",
+        "Key": "Url",
+        "required": true
+      },
+      {
+        "name": "Method",
+        "type": "string",
+        "Key": "Method",
+        "DefaultValue": "GET",
+        "DefaultSyntax": "Literal",
+        "Options": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "HEAD"
+        ],
+        "required": false
+      },
+      {
+        "name": "Content",
+        "type": "string?",
+        "Key": "Content",
+        "required": false
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Key": "ContentType",
+        "DefaultValue": "text/plain",
+        "DefaultSyntax": "Literal",
+        "Options": [
+          "text/plain",
+          "application/json"
+        ],
+        "required": false
+      },
+      {
+        "name": "RequestHeaders",
+        "type": "IDictionary<string, string>?",
+        "Key": "RequestHeaders",
+        "required": false
+      },
+      {
+        "name": "ExpectedStatusCodes",
+        "type": "ICollection<int>?",
+        "Key": "ExpectedStatusCodes",
+        "required": false
+      },
+      {
+        "name": "Timeout",
+        "type": "TimeSpan?",
+        "Key": "Timeout",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "StatusCode",
+        "type": "int?",
+        "Key": "StatusCode",
+        "Path": "statusCode"
+      },
+      {
+        "name": "ResponseBody",
+        "type": "string?",
+        "Key": "ResponseBody",
+        "Path": "responseBody",
+        "HasSourceRepresentation": true
+      },
+      {
+        "name": "ResponseHeaders",
+        "type": "IDictionary<string, string[]>?",
+        "Key": "ResponseHeaders",
+        "Path": "responseHeaders"
+      }
+    ]
+  },
+  {
+    "module": "Http",
+    "file": "src/Elsa/Activities/Http/Activities/WriteHttpResponse.cs",
+    "class": "WriteHttpResponse",
+    "baseType": "Activity<HttpResponseInstruction>",
+    "resultType": "HttpResponseInstruction",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Key": "StatusCode",
+        "DefaultValue": "200",
+        "DefaultSyntax": "Literal",
+        "required": false
+      },
+      {
+        "name": "Body",
+        "type": "string?",
+        "Key": "Body",
+        "required": false
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Key": "ContentType",
+        "required": false
+      },
+      {
+        "name": "Headers",
+        "type": "IDictionary<string, string[]>?",
+        "Key": "Headers",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "StatusCode",
+        "type": "int",
+        "Key": "StatusCode",
+        "Path": "statusCode"
+      },
+      {
+        "name": "Headers",
+        "type": "IDictionary<string, string[]>",
+        "Key": "Headers",
+        "Path": "headers"
+      },
+      {
+        "name": "Body",
+        "type": "string?",
+        "Key": "Body",
+        "Path": "body"
+      },
+      {
+        "name": "ContentType",
+        "type": "string?",
+        "Key": "ContentType",
+        "Path": "contentType"
+      }
+    ]
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/Break.cs",
+    "class": "Break",
+    "baseType": "Activity<ActivityUnit>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/Event.cs",
+    "class": "Event",
+    "baseType": "StatefulTriggerActivity<EventResult, EventWaitState, EventReceived>",
+    "resultType": "EventResult",
+    "isTrigger": true,
+    "hasResumeTarget": true,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "EventName",
+        "type": "string",
+        "Key": "EventName",
+        "required": true
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Key": "CorrelationId",
+        "required": false
+      },
+      {
+        "name": "CanStartWorkflow",
+        "type": "bool",
+        "Key": "CanStartWorkflow",
+        "DefaultValue": "true",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "EventName",
+        "type": "string",
+        "Key": "Result",
+        "Path": "eventName"
+      }
+    ]
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/Fault.cs",
+    "class": "Fault",
+    "baseType": "Activity<ActivityUnit>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Message",
+        "type": "string?",
+        "Key": "message",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/Inline.cs",
+    "class": "Inline",
+    "baseType": "Activity<object?>",
+    "resultType": "object?",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Expression",
+        "type": "object?",
+        "Key": "Expression",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/PublishEvent.cs",
+    "class": "PublishEvent",
+    "baseType": "Activity<ActivityUnit>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "EventName",
+        "type": "string",
+        "Key": "EventName",
+        "required": true
+      },
+      {
+        "name": "CorrelationId",
+        "type": "string?",
+        "Key": "CorrelationId",
+        "required": false
+      },
+      {
+        "name": "Payload",
+        "type": "JsonElement?",
+        "Key": "Payload",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/ReadLine.cs",
+    "class": "ReadLine",
+    "baseType": "Activity<ReadLineResult>",
+    "resultType": "ReadLineResult",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "Line",
+        "type": "string?",
+        "Key": "Result",
+        "Path": "line",
+        "IsRequired": false
+      }
+    ]
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/WriteLine.cs",
+    "class": "WriteLine",
+    "baseType": "Activity<ActivityUnit>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Text",
+        "type": "string",
+        "Key": "text",
+        "required": true
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Primitives",
+    "file": "src/Elsa/Activities/Primitives/Activities/WriteLines.cs",
+    "class": "WriteLines",
+    "baseType": "Activity<ActivityUnit>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Lines",
+        "type": "List<string>?",
+        "Key": "Lines",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Scheduling",
+    "file": "src/Elsa/Activities/Scheduling/Activities/Cron.cs",
+    "class": "Cron",
+    "baseType": "Activity<CronResult>",
+    "resultType": "CronResult",
+    "isTrigger": true,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Expression",
+        "type": "string",
+        "Key": "Expression",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Expression",
+        "type": "string",
+        "Key": "Result",
+        "Path": "expression"
+      }
+    ]
+  },
+  {
+    "module": "Scheduling",
+    "file": "src/Elsa/Activities/Scheduling/Activities/Delay.cs",
+    "class": "Delay",
+    "baseType": "StatefulActivity<ActivityUnit, DelayState, DurableTimerElapsed>",
+    "resultType": "ActivityUnit",
+    "isTrigger": false,
+    "hasResumeTarget": true,
+    "outcomes": [
+      "Done"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Duration",
+        "type": "TimeSpan",
+        "Key": "Duration",
+        "DefaultValue": "00:00:00",
+        "DefaultSyntax": "Literal",
+        "required": false
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "module": "Scheduling",
+    "file": "src/Elsa/Activities/Scheduling/Activities/Timer.cs",
+    "class": "Timer",
+    "baseType": "Activity<TimerResult>",
+    "resultType": "TimerResult",
+    "isTrigger": true,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Interval",
+        "type": "string",
+        "Key": "Interval",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Interval",
+        "type": "string",
+        "Key": "Result",
+        "Path": "interval"
+      }
+    ]
+  },
+  {
+    "module": "Scripting",
+    "file": "src/Elsa/Activities/Scripting/Activities/RunJavaScript.cs",
+    "class": "RunJavaScript",
+    "baseType": "Activity<RunJavaScriptResult>",
+    "resultType": "RunJavaScriptResult",
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [],
+    "valueOutcomes": null,
+    "childSlots": [],
+    "inputs": [
+      {
+        "name": "Script",
+        "type": "required string",
+        "Key": "script",
+        "required": false
+      },
+      {
+        "name": "Arguments",
+        "type": "JsonElement",
+        "Key": "arguments",
+        "DefaultValue": "{}",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Value",
+        "type": "JsonElement?",
+        "Key": "result",
+        "Path": "value",
+        "IsRequired": false
+      }
+    ]
+  },
+  {
+    "module": "Sequence",
+    "file": "src/Elsa/Activities/Sequence/Activities/Sequence.cs",
+    "class": "Sequence",
+    "baseType": "StructuralActivity",
+    "resultType": null,
+    "isTrigger": false,
+    "hasResumeTarget": false,
+    "outcomes": [
+      "Done",
+      "Break"
+    ],
+    "valueOutcomes": null,
+    "childSlots": [
+      "Sequence.Activities"
+    ],
+    "inputs": [],
+    "outputs": []
+  }
+]

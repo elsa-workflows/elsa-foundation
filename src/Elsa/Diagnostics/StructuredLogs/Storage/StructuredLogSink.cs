@@ -59,8 +59,8 @@ public sealed class StructuredLogSink : IStructuredLogSink
     {
         try
         {
-            await previousPublication.ConfigureAwait(false);
-            var committed = await commit.ConfigureAwait(false);
+            await previousPublication;
+            var committed = await commit;
             _publisher.Publish(committed);
         }
         catch

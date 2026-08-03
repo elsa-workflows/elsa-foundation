@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.Options;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -360,7 +361,7 @@ public sealed class ActivityDependencyReader(
     private static ActivityAuthoringException NotFound() =>
         new(404, "activity.version.not-found", "Activity version not found", "The requested activity version was not found.");
     private static ActivityAuthoringException BadRequest(string detail) =>
-        new(400, "activity.request.invalid", "Invalid activity dependency query", detail);
+        new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity dependency query", detail);
     private static ActivityAuthoringException BindingMismatch(Exception? inner = null) =>
         new(
             409,
@@ -372,11 +373,11 @@ public sealed class ActivityDependencyReader(
     private static ActivityAuthoringException CursorExpired(Exception? inner = null) =>
         new(
             410,
-            "activity.cursor.expired",
+            ActivityErrorCodes.CursorExpired,
             "Activity dependency cursor expired",
             "The dependency projection snapshot used by this cursor is no longer available.",
             innerException: inner,
             recovery: new(Relation: "restart", Instruction: "Keep the loaded snapshot separate and restart from the latest authorized snapshot."));
     private static ActivityAuthoringException OperationFailed(string detail) =>
-        new(500, "activity.operation.failed", "Activity dependency query failed", detail);
+        new(500, ActivityErrorCodes.OperationFailed, "Activity dependency query failed", detail);
 }

@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -40,18 +41,18 @@ public sealed class ActivityVersionLifecycleService(
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(reason))
-            throw new ActivityAuthoringException(400, "activity.request.invalid", "Invalid lifecycle request", "A non-empty lifecycle reason is required.");
+            throw new ActivityAuthoringException(400, ActivityErrorCodes.RequestInvalid, "Invalid lifecycle request", "A non-empty lifecycle reason is required.");
 
         var current = await publications.FindAsync(versionId, cancellationToken)
                       ?? throw new ActivityAuthoringException(404, "activity.version.not-found", "Activity version not found", "The requested activity version was not found.");
         if (current.TenantId is not null && !StringComparer.Ordinal.Equals(current.TenantId, context.TenantId))
-            throw new ActivityAuthoringException(403, "activity.authorization.denied", "Activity lifecycle change is forbidden", "The requested activity version is outside the caller's tenant scope.");
+            throw new ActivityAuthoringException(403, ActivityErrorCodes.AuthorizationDenied, "Activity lifecycle change is forbidden", "The requested activity version is outside the caller's tenant scope.");
         if (current.Lifecycle != expectedLifecycle)
             throw StaleLifecycle(current, expectedLifecycle);
         var authoring = await authoringStore.FindAsync(current.DefinitionId, cancellationToken)
                         ?? throw new ActivityAuthoringException(404, "activity.definition.not-found", "Activity definition not found", "The activity definition authoring state was not found.");
         if (authoring.TenantId is not null && !StringComparer.Ordinal.Equals(authoring.TenantId, context.TenantId))
-            throw new ActivityAuthoringException(403, "activity.authorization.denied", "Activity lifecycle change is forbidden", "The requested activity definition is outside the caller's tenant scope.");
+            throw new ActivityAuthoringException(403, ActivityErrorCodes.AuthorizationDenied, "Activity lifecycle change is forbidden", "The requested activity definition is outside the caller's tenant scope.");
         await ValidateRecommendationDecisionAsync(current, authoring, targetLifecycle, recommendationDecision, cancellationToken);
 
         ActivityDefinitionVersionPublication changed;
@@ -105,11 +106,11 @@ public sealed class ActivityVersionLifecycleService(
         if (decision.Disposition == ActivityRecommendationDisposition.Clear)
         {
             if (decision.ReplacementVersionId is not null || decision.ExpectedReplacementLifecycle is not null)
-                throw new ActivityAuthoringException(400, "activity.request.invalid", "Invalid recommendation decision", "A clear decision cannot include a replacement version.", innerException: inner);
+                throw new ActivityAuthoringException(400, ActivityErrorCodes.RequestInvalid, "Invalid recommendation decision", "A clear decision cannot include a replacement version.", innerException: inner);
             return;
         }
         if (decision.ReplacementVersionId is null || decision.ExpectedReplacementLifecycle is null)
-            throw new ActivityAuthoringException(400, "activity.request.invalid", "Invalid recommendation decision", "A replacement decision requires an exact version and expected lifecycle.", innerException: inner);
+            throw new ActivityAuthoringException(400, ActivityErrorCodes.RequestInvalid, "Invalid recommendation decision", "A replacement decision requires an exact version and expected lifecycle.", innerException: inner);
         var replacement = await publications.FindAsync(decision.ReplacementVersionId, cancellationToken);
         if (replacement is null ||
             !StringComparer.Ordinal.Equals(replacement.DefinitionId, current.DefinitionId) ||

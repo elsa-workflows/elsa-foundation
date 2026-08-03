@@ -89,6 +89,7 @@ jobs:
             --output-json artifacts/http-workflow-performance/report.json \
             --output-markdown artifacts/http-workflow-performance/report.md \
             --output-samples artifacts/http-workflow-performance/samples.txt \
+            --passes 3 \
             --enforce-p95-ms 250
 
       - name: Stop server

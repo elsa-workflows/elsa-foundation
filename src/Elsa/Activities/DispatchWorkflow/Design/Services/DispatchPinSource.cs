@@ -129,13 +129,13 @@ public sealed class DispatchPinSource(
         ExecutableNode node)
     {
         if (!node.InputBindings.TryGetValue("Inputs", out var binding))
-            return (Array.Empty<KeyValuePair<string, JsonElement>>(), true);
+            return ([], true);
 
         if (binding.Source != RuntimeInputBindingSource.Literal)
-            return (Array.Empty<KeyValuePair<string, JsonElement>>(), false);
+            return ([], false);
 
         if (binding.LiteralValue is not { } literal || literal.ValueKind == JsonValueKind.Null)
-            return (Array.Empty<KeyValuePair<string, JsonElement>>(), true);
+            return ([], true);
         if (literal.ValueKind != JsonValueKind.Object)
             throw new ArgumentException($"DispatchWorkflow node '{node.ExecutableNodeId}' literal Inputs value must be a JSON object.");
 
