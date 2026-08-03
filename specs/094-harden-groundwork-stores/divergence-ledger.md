@@ -221,10 +221,28 @@ Saving a membership whose `TenantId` differs from the caller's scope succeeds on
 Groundwork's `IdentityPersistenceScopeGuard` before provider I/O. EF's store filters only on the
 record's own columns and has no notion of an ambient scope.
 
-**Disposition `ContractIsGroundwork`**, and this one is security-relevant rather than merely lossy:
-tenant isolation is the property the scope guard exists to hold. Deleting EF removes the permissive
-path. Recorded here because a reader who sees only the Groundwork behaviour would not know the
-stricter check was ever a difference.
+**Disposition `ContractIsGroundwork`.** Tenant isolation is the property the scope guard exists to
+hold, and deleting EF removes the permissive path.
+
+**Reachability triage (2026-08-03): not reachable from untrusted input; no urgent fix required.**
+`shells.Production.json` does enable the EF identity feature, so the permissive store is in shipping
+configuration — but nothing routes attacker-controlled data into it:
+
+- `ITenantMembershipStore` is referenced nowhere under `src/Elsa/Foundation/Identity/Api` or
+  `src/Elsa/Api`. There is no endpoint that writes a membership.
+- The only write consumers are the two seeders, and both take `identityOptions.Value.DefaultTenantId`
+  — a configuration value defaulting to the constant `"default"` — never request input.
+  `IdentitySeedCoordinator` is in fact Groundwork-only: it casts to the revision-aware contracts and
+  throws when they are absent, which EF's stores are, so EF seeds through
+  `EntityFrameworkCore/Seeding/IdentitySeeder.cs` instead. Both use the same configured tenant.
+- Read consumers (`IdentityClaimsProjector`, the principal factories) pass `user.TenantId` from the
+  persisted user record, not from the request.
+
+So this is a **missing defence-in-depth guard on a store with no untrusted write path**, not an
+exploitable tenant-isolation hole. It is correctly resolved by the removal programme rather than by a
+separate fix. It is recorded because the reasoning is not obvious from the code: anyone adding a
+multi-tenant administration endpoint over the EF store would reasonably assume the scope check exists,
+and it does not.
 
 ### Divergence 3 — EF's store is not usable concurrently through one instance
 
