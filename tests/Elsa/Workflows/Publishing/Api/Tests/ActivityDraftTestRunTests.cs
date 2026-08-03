@@ -515,7 +515,9 @@ public sealed class ActivityDraftTestRunTests
     {
         var clock = new MutableTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-restart-{Guid.NewGuid():N}.db");
-        var connectionString = $"Data Source={databasePath}";
+        // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
+        // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
+        var connectionString = $"Data Source={databasePath};Pooling=False";
         var authoring = AuthoringState.Create();
         var externalPayloads = new InMemoryExternalPayloadStore();
         ActivityDraftTestRunView first;
