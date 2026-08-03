@@ -8,7 +8,8 @@ namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 public enum GroundworkRunHealthDialect
 {
     Sqlite,
-    PostgreSql
+    PostgreSql,
+    SqlServer
 }
 
 /// <summary>
@@ -98,7 +99,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            SELECT {Json(e: true, "pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
+            SELECT {SelectTop(5)}{Json(e: true, "pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
             FROM groundwork_documents e
             WHERE e.document_kind = @executionKind
               AND {Json(e: true, "tenantId")} = @tenantId
@@ -106,9 +107,9 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
               AND {JsonInt("status")} = {(int)WorkflowExecutionStatus.Faulted}
               AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
               AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}
-            GROUP BY definition_id
+            GROUP BY {Json(e: true, "pinnedExecutable", "definitionId")}
             ORDER BY failed_count DESC, definition_id
-            LIMIT 5;
+            {LimitClause(5)};
             """;
         AddCommonParameters(command, query);
         var result = new List<WorkflowFailureDefinitionSnapshot>();
@@ -124,7 +125,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
             $"WHEN e.started_at >= {Instant($"@b{bucket.Index}From")} AND e.started_at < {Instant($"@b{bucket.Index}To")} THEN {bucket.Index}"));
         var testFilter = request.Query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}";
         return $"""
-            WITH executions AS (
+            {StatementPrefix}WITH executions AS (
                 SELECT {Json(e: true, "workflowExecutionId")} AS execution_id,
                        {JsonInt("status")} AS status,
                        {Instant(Json(e: true, "startedAt"))} AS started_at
@@ -171,22 +172,39 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         var path = e
             ? nested is null ? new[] { "state", property } : new[] { "state", property, nested }
             : new[] { property };
-        return dialect == GroundworkRunHealthDialect.Sqlite
-            ? $"json_extract({alias}.content_json, '$.{string.Join('.', path)}')"
-            : $"{alias}.content_json::jsonb #>> '{{{string.Join(',', path)}}}'";
+        return dialect switch
+        {
+            GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.content_json, '$.{string.Join('.', path)}')",
+            GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.content_json, '$.{string.Join('.', path)}')",
+            _ => $"{alias}.content_json::jsonb #>> '{{{string.Join(',', path)}}}'"
+        };
     }
 
-    private string JsonInt(string property) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? $"COALESCE(CAST({Json(e: true, property)} AS INTEGER), 0)"
-        : $"COALESCE(({Json(e: true, property)})::integer, 0)";
+    private string JsonInt(string property) => dialect switch
+    {
+        GroundworkRunHealthDialect.Sqlite => $"COALESCE(CAST({Json(e: true, property)} AS INTEGER), 0)",
+        GroundworkRunHealthDialect.SqlServer => $"COALESCE(TRY_CAST({Json(e: true, property)} AS int), 0)",
+        _ => $"COALESCE(({Json(e: true, property)})::integer, 0)"
+    };
 
-    private string Instant(string expression) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? $"julianday({expression})"
-        : $"({expression})::timestamptz";
+    private string Instant(string expression) => dialect switch
+    {
+        GroundworkRunHealthDialect.Sqlite => $"julianday({expression})",
+        GroundworkRunHealthDialect.SqlServer => $"CAST({expression} AS datetimeoffset)",
+        _ => $"({expression})::timestamptz"
+    };
 
     private object ProviderInstant(DateTimeOffset value) => dialect == GroundworkRunHealthDialect.Sqlite
         ? value.ToUniversalTime().ToString("O")
         : value;
+
+    // SQL Server has no LIMIT clause; row-limiting instead lives right after SELECT as TOP (n).
+    private string SelectTop(int count) => dialect == GroundworkRunHealthDialect.SqlServer ? $"TOP ({count}) " : string.Empty;
+
+    private string LimitClause(int count) => dialect == GroundworkRunHealthDialect.SqlServer ? string.Empty : $"LIMIT {count}";
+
+    // T-SQL requires the statement preceding a CTE to be terminated with a semicolon.
+    private string StatementPrefix => dialect == GroundworkRunHealthDialect.SqlServer ? ";" : string.Empty;
 
     private void AddCommonParameters(DbCommand command, WorkflowRunHealthQuery query)
     {

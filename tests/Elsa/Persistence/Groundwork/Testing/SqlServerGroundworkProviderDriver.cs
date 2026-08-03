@@ -545,6 +545,13 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             $"declared-key-bytes={totalBytes}");
     }
 
+    /// <summary>
+    /// Opens a new ADO connection against the driver's current database, for callers that need to read the
+    /// physical <c>groundwork_documents</c> table directly rather than through the <see cref="IDocumentStore"/>
+    /// abstraction (for example, a read-model data source that runs its own hand-written SQL).
+    /// </summary>
+    public SqlConnection CreateRawConnection() => new(RequiredConnectionString());
+
     protected override async ValueTask DisposeCoreAsync()
     {
         if (_connectionString is not null)

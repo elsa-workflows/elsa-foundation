@@ -543,6 +543,9 @@
   <Folder Name="/tests/Elsa/Workflows/Dashboard/">
     <Project Path="tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/SqlServer/">
+    <Project Path="tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/CodeGeneration/">
     <Project Path="tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj" />
   </Folder>
