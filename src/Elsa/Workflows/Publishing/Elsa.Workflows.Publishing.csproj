@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
   <!--
     The publishing ENGINE feature (endpoint-free). It owns the auth-free workflow-publish + compile
     logic and is composable without any transport. Like its Api sibling it is a bridge over stable

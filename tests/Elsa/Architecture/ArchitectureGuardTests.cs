@@ -338,6 +338,35 @@ public sealed class ArchitectureGuardTests
         Assert.Contains("WorkflowsRuntimeResumption", features);
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_the_publish_engine_alongside_its_transport(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+
+        // spec 145: WorkflowsPublishingApi is transport-only and DependsOn the endpoint-free
+        // WorkflowsPublishing engine. CShells auto-enables the dependency, so publishing works either way —
+        // but an unlisted engine is reported disabled by GET /modularity/features while it is composed, which
+        // reads to an operator as "the publish engine is off". Every other DependsOn edge in the stock shell
+        // resolves to an explicitly enabled feature; this keeps that invariant whole.
+        Assert.True(
+            features.ContainsKey("WorkflowsPublishingApi"),
+            $"{fileName} must enable WorkflowsPublishingApi so the publish endpoints are mounted.");
+        Assert.True(
+            features.ContainsKey("WorkflowsPublishing"),
+            $"{fileName} must also enable the WorkflowsPublishing engine its transport depends on.");
+    }
+
+    [Fact]
+    public void Docker_reference_shell_enables_the_publish_engine_alongside_its_transport()
+    {
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "docker", "compose", "elsa-server.shells.json"));
+
+        Assert.True(features.ContainsKey("WorkflowsPublishingApi"));
+        Assert.True(features.ContainsKey("WorkflowsPublishing"));
+    }
+
     [Fact]
     public void Server_catalogs_graph_design_separately_from_graph_runtime()
     {

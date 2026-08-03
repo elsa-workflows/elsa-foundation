@@ -12,8 +12,10 @@ and [specification 092](../../specs/092-reusable-activity-definitions/spec.md).
 | Activity Graph authoring, validation, and compilation | `Elsa.Activities.Graph.Design` | `ActivitiesGraphDesign` |
 | Published Activity Graph execution | `Elsa.Activities.Graph.Runtime` | `ActivitiesGraphRuntime` |
 
-`ActivitiesGraphDesign` depends on `ActivitiesDesignApi` and `WorkflowsPublishingApi`. When active,
-its provider contribution appears in `GET /design/activities/authoring-capabilities`.
+`ActivitiesGraphDesign` depends on `ActivitiesDesignApi` and `WorkflowsPublishing` — the endpoint-free
+publish engine, not the `WorkflowsPublishingApi` transport, so an authoring host composes the graph
+provider without mounting the publish HTTP endpoints. When active, its provider contribution appears in
+`GET /design/activities/authoring-capabilities`.
 
 The stock `Elsa.Server` catalogs both graph assemblies and enables both graph features because its
 default shell supports authoring and execution. A custom authoring host opts in by adding

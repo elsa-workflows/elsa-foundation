@@ -35,6 +35,7 @@
               "FolderPath": ""
             }
           },
+          "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingGroundwork": {},
           "WorkflowsRuntimeApi": {

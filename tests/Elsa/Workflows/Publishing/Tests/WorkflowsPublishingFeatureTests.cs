@@ -76,4 +76,20 @@ public sealed class WorkflowsPublishingFeatureTests
             descriptor.ServiceType.Assembly.GetName().Name == FastEndpointsAssemblyName ||
             descriptor.ImplementationType?.Assembly.GetName().Name == FastEndpointsAssemblyName);
     }
+
+    [Fact]
+    public void Does_not_reference_the_transport_assemblies_at_all()
+    {
+        // The two absence assertions above are satisfied by this project's reference list as much as by the
+        // engine's own registrations, so they cannot fail while the engine stays reference-clean. This is the
+        // assertion that can: it binds the engine assembly itself, so a future `using` that drags the transport
+        // back into the engine fails here instead of silently re-coupling the two.
+        var referenced = typeof(WorkflowsPublishingFeature).Assembly
+            .GetReferencedAssemblies()
+            .Select(assembly => assembly.Name)
+            .ToArray();
+
+        Assert.DoesNotContain("Elsa.Workflows.Publishing.Api", referenced);
+        Assert.DoesNotContain(FastEndpointsAssemblyName, referenced);
+    }
 }
