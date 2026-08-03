@@ -428,6 +428,24 @@ deletion:
 Evidence note T009–T013: all five prerequisite tasks remain unchecked. Historical preview.86/.88
 evidence and partial package checkpoints are not exact-family admission evidence.
 
+Currency note (2026-08-03), T011 row only: the recorded package mismatch has since resolved and been
+replaced by a different defect. The row's statement was accurate at `f769b5165` — the ledger declared
+`0.0.1-preview.88` while `Directory.Packages.props` pinned `0.0.1-preview.95`. Both now declare
+`0.0.1-preview.103`, so there is no version mismatch. The current blocker is that
+`specs/094-harden-groundwork-stores/versions/` contains only `preview.81`, `.86`, and `.88`, so the
+ledger's declared version has **no imported evidence generation at all** — a strictly weaker position
+than a mismatch between two imported generations. The row's other three findings are unchanged and
+still current: zero `performanceVerdict` objects, empty diagnostics provider-evidence arrays, and no
+accepted immutable #50 baseline.
+
+Oracle-availability note, T011 scope: #646's EF comparison can only cover contracts that have an EF
+implementation. That set is `IStructuredLogStore`, `IOpenTelemetryStore`, the four Elsa IAM contracts,
+and the two ASP.NET Core Identity framework contracts — SQLite only, because EF Core has no PostgreSQL
+or SQL Server wiring in `src/`. No runtime-family row has ever had an EF comparand, so runtime rows
+cannot receive an EF-ratio verdict and must be graded on absolute budgets and restart-recovery
+evidence instead. See [the zero-EF decision map](../../docs/decision-maps/zero-ef-groundwork.md)
+(`oracle-inventory`) for the full inventory and its derivation.
+
 ### T018/T019 — #932 dashboard acceptance intake
 
 Audit head: Elsa `origin/main` `f769b516598eb807c9528e7c2e72085b346603e8`, 2026-07-30.

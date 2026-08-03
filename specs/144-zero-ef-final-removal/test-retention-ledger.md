@@ -514,6 +514,35 @@ Reachability proof: tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictId
 - tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictTokenServiceTests.cs:115 — OpenIddictTokenServiceTests.Revoked_Refresh_Token_Cannot_Be_Used | Original subject: OpenIddict token service | Objective: Revoked_Refresh_Token_Cannot_Be_Used | Reachability: SharedFixture via OpenIddictIdentityFixture | Preliminary disposition: Convert.
 - tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictTokenServiceTests.cs:125 — OpenIddictTokenServiceTests.Unknown_Refresh_Token_Is_Rejected | Original subject: OpenIddict token service | Objective: Unknown_Refresh_Token_Is_Rejected | Reachability: SharedFixture via OpenIddictIdentityFixture | Preliminary disposition: Convert.
 
+## Post-intake additions (added after the frozen intake head)
+
+The T003/T004 inventories above are frozen at `f769b516598eb807c9528e7c2e72085b346603e8` and their row
+counts must not change. EF-reachable test methods created **after** that head are recorded here instead,
+so T014 re-opening and T040 disposition cannot silently skip them. Same vocabulary, same rules: a
+`RemovePending` row is not architect approval and authorizes no deletion.
+
+### tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogStoreDifferentialTests.cs
+
+Added 2026-08-03 under [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) as the
+EF-vs-Groundwork behavioural differential for `IStructuredLogStore` on file-backed SQLite. Original
+subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle. Reachability:
+DirectToken (constructs `EfCoreStructuredLogStore` through the existing `StructuredLogsTestHost`).
+
+These methods exist **only** to compare the temporary EF oracle against Groundwork. When the EF
+structured-log family is deleted, they lose their comparand and cannot be converted — their subject
+ceases to exist. Their durable output is
+[`specs/094-harden-groundwork-stores/divergence-ledger.md`](../094-harden-groundwork-stores/divergence-ledger.md),
+which is retained independently of the tests.
+
+- tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogStoreDifferentialTests.cs:36 Ef_and_groundwork_agree_or_carry_a_recorded_disposition — StructuredLogStoreDifferentialTests.Ef_and_groundwork_agree_or_carry_a_recorded_disposition | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Ef_and_groundwork_agree_or_carry_a_recorded_disposition (6 dimension rows) | Reachability: DirectToken | Preliminary disposition: RemovePending.
+- tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogStoreDifferentialTests.cs:92 Differential_surface_matches_its_recorded_identity — StructuredLogStoreDifferentialTests.Differential_surface_matches_its_recorded_identity | Original subject: diagnostics persistence/capture: EF-vs-Groundwork differential oracle | Objective: Differential_surface_matches_its_recorded_identity | Reachability: DirectToken | Preliminary disposition: RemovePending.
+
+Support-only sources added with them (no Fact/Theory identity), to be deleted in the same slice:
+
+- tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogDifferentialTarget.cs — EF and Groundwork comparand factories.
+- tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogDifferentialProbes.cs — the six dimension probes.
+- tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/StructuredLogDivergenceLedger.cs — executable half of the divergence ledger.
+
 ## Support-only EF-reachable sources (no method rows)
 
 These sources have no Fact/Theory identity but are dependencies of ledger rows or the final guard:

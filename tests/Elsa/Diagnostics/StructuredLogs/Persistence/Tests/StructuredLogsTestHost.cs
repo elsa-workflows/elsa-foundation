@@ -18,6 +18,13 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.Tests;
 /// at runtime (<see cref="ISystemClock"/> + the SQLite model-creating handler). Pass
 /// <c>createSchema: false</c> to simulate the pre-migration window.
 /// </summary>
+/// <remarks>
+/// Pass <c>fileDataSource</c> to bind a real on-disk database instead. The shared-cache in-memory
+/// default cannot outlive <see cref="Dispose"/>, so a differential that compares this store against a
+/// file-backed provider would compare a volatile store against a durable one and report agreement on
+/// every restart assertion. The #646 diagnostics workload requires
+/// <c>file-backed-distinct-connections-with-retained-ef-oracle</c> for exactly that reason.
+/// </remarks>
 internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsDbContext>, IDisposable
 {
     private readonly SqliteConnection _rootConnection;
@@ -42,9 +49,11 @@ internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsD
     public Task<StructuredLogsDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(CreateDbContext());
 
-    public static StructuredLogsTestHost Create(bool createSchema = true)
+    public static StructuredLogsTestHost Create(bool createSchema = true, string? fileDataSource = null)
     {
-        var connectionString = $"Data Source=structured-logs-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        var connectionString = fileDataSource is null
+            ? $"Data Source=structured-logs-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"
+            : $"Data Source={fileDataSource}";
         var connection = new SqliteConnection(connectionString);
         connection.Open();
 

@@ -230,6 +230,33 @@ What reproducible datasets, payload sizes, concurrency levels, warm/cold runs, m
 
 Spec 094 now supplies versioned correctness workloads, fixed input/result digests, exact native-route prerequisites, and a closed current mapping of the immutable ALL32 floor plus the two additive diagnostics rows to [Elsa #646](https://github.com/elsa-workflows/elsa-foundation/issues/646). Groundwork physical-form benchmarking remains [Groundwork #50](https://github.com/valence-works/Groundwork/issues/50). No lane may advance on missing, Redesign, or Blocked verdicts, and no timing verdict is inferred from a passing correctness matrix.
 
+## oracle-inventory: Which Seams Actually Have An EF Comparand?
+
+Blocked by: none
+Status: resolved
+Type: Research
+
+### Question
+
+The comparison lane assumes an EF implementation exists to compare against. For which contracts is that actually true, and on which providers?
+
+### Answer
+
+Far fewer than the removal narrative implies. **No runtime persistence seam has ever had an EF-Core-backed implementation.** Every runtime seam resolves to `InMemory*` by `TryAdd*` default and to `Groundwork*` through `AddGroundworkRuntimeStores`; there is no third registration. `git log --all --name-only -- "src/Elsa/Workflows/Runtime/**EFCore**"` is empty, so this is a permanent structural fact and not a deletion that already happened. The EF stores that did once exist were *design* persistence, removed under spec 093.
+
+The complete set of contracts with both an EF and a Groundwork implementation:
+
+| Lane | Contracts | Comparison state |
+|---|---|---|
+| Diagnostics | `IStructuredLogStore`, `IOpenTelemetryStore` | admissible; ledger rows `implemented` |
+| Identity (Elsa IAM) | `ITenantMembershipStore` | admissible; ledger row `implemented` |
+| Identity (Elsa IAM) | `IUserStore`, `IRoleStore`, `IExternalIdentityStore` | ledger rows `externally-blocked` |
+| Identity (ASP.NET Core) | Microsoft EF stores vs `GroundworkIdentityUserStore`/`…RoleStore` | oracle tree frozen under content fingerprint |
+
+**EF Core runs on SQLite only.** There is no `UseNpgsql` or `UseSqlServer` call anywhere in `src/`; the SQL Server and Npgsql EF packages appear in exactly one test project, used for SQL string-generation assertions that never open a connection. Every EF↔Groundwork comparison is therefore SQLite-only, while Groundwork conformance spans four providers. A support matrix must not present the two as equal assurance.
+
+Two consequences for sequencing. First, the seams usually named as the reason a benchmark gate exists — checkpoint, bookmark, durable value, scheduler queue, post-commit outbox — have **no oracle by construction**; their protocols are new rather than ported, so there is no prior behaviour they were written to match. Their evidence must come from absolute budgets, in-memory baselines, and restart-recovery observation, not from an EF ratio. Second, MongoDB has no EF comparand and never will; that is structural, and independently supports keeping it in preview until it graduates on its own evidence and on a transaction-capable topology.
+
 ## elsa-store-migration: In What Vertical Order Do Elsa Stores Move?
 
 Blocked by: none
