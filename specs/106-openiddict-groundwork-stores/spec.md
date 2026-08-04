@@ -12,6 +12,10 @@
 > hardened test doubles that now validate `ResultOperation` — the doubles had accepted a query every real
 > provider rejects while 146 tests stayed green.
 >
+> **The five-declaration manifest revision drafted under this spec is withdrawn, not deferred.** It
+> existed to unblock 16 rejected members on stores that no longer exist. `contracts/proposed-manifest-revision.md`
+> is deleted rather than left looking like a live decision.
+>
 > **Consequence for the zero-EF programme:** `Microsoft.EntityFrameworkCore*` is now permanent in this
 > repository via `OpenIddict.EntityFrameworkCore`. See [ADR 0042](../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
 > whose completion criterion this contradicts and which needs a targeted amendment.
