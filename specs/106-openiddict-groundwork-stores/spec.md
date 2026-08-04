@@ -1,3 +1,21 @@
+> # SUPERSEDED — 2026-08-04
+>
+> **This work unit is closed without completion, by product decision.** OpenIddict ships its own EF Core
+> and MongoDB persistence packages, which are adequate for anyone enabling OpenIddict, so Elsa will not
+> maintain a Groundwork adapter for it. `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/` and its
+> tests have been removed.
+>
+> What was built and then removed: four stores (145 members), an atomic-mutation receipt wrapper, and a
+> registration extension, all verified issuing tokens end to end before removal.
+>
+> **Two things outlived it and are retained:** a `ResultOperation` defect fix in query construction, and
+> hardened test doubles that now validate `ResultOperation` — the doubles had accepted a query every real
+> provider rejects while 146 tests stayed green.
+>
+> **Consequence for the zero-EF programme:** `Microsoft.EntityFrameworkCore*` is now permanent in this
+> repository via `OpenIddict.EntityFrameworkCore`. See [ADR 0042](../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
+> whose completion criterion this contradicts and which needs a targeted amendment.
+
 # Feature Specification: OpenIddict Groundwork Stores
 
 **Feature Branch**: `codex/106-openiddict-groundwork-stores`

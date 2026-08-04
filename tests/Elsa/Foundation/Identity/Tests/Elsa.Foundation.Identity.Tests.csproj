@@ -25,7 +25,6 @@
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
-		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Groundwork\Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
 		<ProjectReference Include="..\..\..\..\..\benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />

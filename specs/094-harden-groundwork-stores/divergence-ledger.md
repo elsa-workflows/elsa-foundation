@@ -327,11 +327,22 @@ Comparison is on **shape, not values**: each host seeds its own user, tenant and
 status codes, payload shape, and which claim kinds survive — never a literal username or tenant id.
 That is what makes it apples to apples across two independently composed hosts.
 
-### Limitation LIFTED 2026-08-04 — this is now a full-lane comparison
+### Limitation REINSTATED 2026-08-04 — OpenIddict keeps its own vendor persistence
 
-**Superseded.** Groundwork OpenIddict stores now exist and the Groundwork host composes them, so all
-thirteen facts compare two stacks. All thirteen agree. The caveat below is retained for provenance
-because it qualified a published claim.
+**The lift below is withdrawn.** A product decision was taken to remove the Groundwork OpenIddict
+adapter entirely and let OpenIddict use its own EF Core / MongoDB persistence packages, which are
+adequate for anyone enabling OpenIddict. So the Groundwork host composes **EF OpenIddict** again and the
+original caveat applies once more: the token-persistence facts compare EF to EF and are not evidence of
+anything.
+
+What still holds, and is unaffected: login, cookie issuance and claim projection run through the
+identity stores and are genuine two-stack comparisons.
+
+The defect found while the adapter briefly existed was real and its fix is retained — three stores built
+a `DocumentQuery` without selecting the `First` result operation, and the test doubles that missed it now
+validate it. Both outlive the adapter's removal.
+
+### Previously lifted, then reinstated (retained for provenance)
 
 Getting there found a defect no unit test could see. Three stores built a `DocumentQuery` and passed it
 to `FirstOrDefaultAsync` without `Select(BoundedQueryResultOperation.First)`; `ResultOperation` defaults
@@ -389,14 +400,17 @@ subsumes the other, and the pair is what supports the plain-language claim:
 > An application's identity-store-dependent behaviour is identical across the two stacks, and where the
 > stores themselves differ, every difference favours Groundwork.
 
-**Updated 2026-08-04: the broader claim now holds for the identity lane.** OpenIddict has Groundwork
-stores, the Groundwork host composes them, and all thirteen app-level facts agree — so an application
-behaves the same on either stack across login, claim projection, token issuance, refresh rotation and
-bearer authentication.
+**Final position, 2026-08-04.** The narrower claim is the supportable one: an application's
+*identity-store-dependent* behaviour is identical across the two stacks. The token-persistence half is
+not a comparison, because OpenIddict now deliberately keeps its own vendor persistence rather than
+gaining a Groundwork adapter.
 
-EF Core remains undeletable, but the reason has moved. It is no longer "token issuance would have no
-store"; it is the outstanding gates in spec 144 — #642's evidence chain, #932's host acceptance, and the
-runtime rows' unratified grading basis.
+**`Microsoft.EntityFrameworkCore*` is therefore permanent in this repository**, reached transitively via
+`OpenIddict.EntityFrameworkCore`. That directly contradicts ADR 0042's completion criterion — "no direct
+or transitive `Microsoft.EntityFrameworkCore*` dependency remains in `elsa-foundation`, its reference
+hosts, or its test graph" — which now needs a targeted amendment rather than being quietly missed.
+`OpenIddict.MongoDb` would preserve zero-EF at the cost of requiring MongoDB for the identity lane; it is
+not currently referenced.
 
 ### Follow-up resolved as not-expressible — 2026-08-04
 

@@ -23,6 +23,29 @@ The zero-EF target is greenfield. No released EF-backed installation needs an ex
 - Completion means no direct or transitive `Microsoft.EntityFrameworkCore*` dependency remains in `elsa-foundation`, its reference hosts, or its test graph. An architecture test will enforce that boundary.
 - No EF-to-Groundwork production-data migration is required because the product is greenfield.
 
+## Amendment required — 2026-08-04
+
+**The completion criterion below is no longer achievable as written.** A product decision was taken that
+OpenIddict keeps its own vendor persistence packages (`OpenIddict.EntityFrameworkCore`, or
+`OpenIddict.MongoDb`) rather than gaining a first-party Groundwork adapter, on the grounds that they are
+adequate for anyone enabling OpenIddict. The Groundwork OpenIddict adapter built under
+[spec 106](../../specs/106-openiddict-groundwork-stores/) has been removed.
+
+With `OpenIddict.EntityFrameworkCore` referenced, **a transitive `Microsoft.EntityFrameworkCore*`
+dependency is permanent**, so "Completion means no direct or transitive `Microsoft.EntityFrameworkCore*`
+dependency remains in `elsa-foundation`, its reference hosts, or its test graph" cannot hold.
+
+Two ways to reconcile, both needing ratification rather than silent reinterpretation:
+
+1. **Narrow the criterion** to *first-party* persistence: Elsa ships no EF-backed store of its own, while
+   a third-party component's own persistence package is out of scope. The EF-surface ratchet would then
+   need an explicit allowlist for `OpenIddict.EntityFrameworkCore` rather than shrinking to zero.
+2. **Adopt `OpenIddict.MongoDb` instead**, which preserves literal zero-EF at the cost of requiring
+   MongoDB for the identity lane. Not currently referenced.
+
+Until one is ratified, the ADR overstates what the programme will deliver. The rest of the decision —
+that Elsa's own durable stores are Groundwork-only — is unaffected.
+
 ## Consequences
 
 Feature authors maintain one provider-neutral store contract and one first-party concrete implementation rather than multiplying feature migrations across EF Core database providers. App hosts retain a provider choice through Groundwork's SQLite, SQL Server, PostgreSQL, and MongoDB providers.
