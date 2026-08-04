@@ -418,3 +418,46 @@ decided together rather than one at a time — adding indexes to this unit twice
 Note the constraint interacts: any new route must be legal at real plan compilation, and a
 collection-membership route cannot use cursor paging (`GW-QUERY-008`). An `applicationId` route would be
 a point route and is not affected, but it must still be probed.
+
+## Token store, and the complete route gap — 2026-08-04
+
+`IOpenIddictTokenStore` is implemented at
+`.../Stores/GroundworkOpenIddictTokenStore.cs`: 33 members implemented, 10 rejected, 2 conditional
+(`FindAsync`/`RevokeAsync` serve subject-only and refuse other combinations before touching a provider).
+Revoke runs through `OpenIddictGroundworkAtomicWrite`; a replay test asserts **zero** additional
+underlying saves, not merely an equal return value.
+
+**All four stores now exist.** No manifest declaration was changed to get there — every member that no
+declared route can serve is rejected with a capability exception rather than degraded, so the gaps are
+now precisely enumerable for the first time.
+
+### Every missing route, consolidated
+
+| Missing declaration | Blocks |
+|---|---|
+| count-all / list-all route on **all four** units | `CountAsync(plain)` and `ListAsync(plain)` on scope, application, authorization, token — 8 members |
+| `applicationId` index/route on **authorization** | `FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` |
+| `applicationId` index/route on **token** | `FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` |
+| `authorizationId` index/route on **token** | `FindByAuthorizationIdAsync`, `RevokeByAuthorizationIdAsync` |
+| standalone creation/expiration-date route on **authorization** and **token** | `PruneAsync` on both |
+
+That is **16 rejected members traceable to five missing declarations**, not to store implementation.
+
+### What it blocks beyond the member count
+
+- **T041's relationship coordinator is not startable.** The application→authorization→token cascade
+  needs to find authorizations by application id and tokens by authorization id. Neither route exists.
+- **OpenIddict's background pruning cannot run** on either unit.
+- **T020's registration extension is writable now** (all four stores exist) but would register stores
+  that reject members OpenIddict's own managers call.
+
+### Constraints on closing it
+
+1. **Every new route must be probed.** A declaration can pass store tests, the full 355-test
+   architecture suite and the maps gate and still be illegal — see the `GW-QUERY-008` withdrawal above.
+   `OpenIddictGroundworkCapabilityProbeTests` is the only check that compiles real provider plans.
+2. **The four-field authorization index is not available.** It was dropped for exceeding SQL Server's
+   1,700-byte key limit, which is why the compound `FindAsync` is conditional. Any replacement must stay
+   inside that budget.
+3. **Prefer one revision over five.** These are persisted-schema additions to units that would otherwise
+   be indexed repeatedly. Deciding them together is materially cheaper than one at a time.
