@@ -146,7 +146,22 @@
 
 ## Phase 5: User Story 3 - Prevent EF From Returning (Priority: P2)
 
-**Goal**: Replace migration-era ratchets with a permanent fail-closed absolute-zero guard over every repository project.
+**Goal**: Replace migration-era ratchets with a permanent fail-closed guard over every repository project.
+
+> **Scope change — 2026-08-04, ADR 0042 amendment ratified.** This phase's guard **cannot be
+> absolute-zero**. OpenIddict keeps its own vendor persistence by decision, so
+> `OpenIddict.EntityFrameworkCore` and the `Microsoft.EntityFrameworkCore.*` packages its `DbContext`
+> requires are permanent. The ratified criterion is **zero first-party EF**: no Elsa-authored EF store
+> remains, including `src/Elsa/Persistence/EFCore/`.
+>
+> So the guard must be a **fail-closed allowlist** — everything outside a small named set fails — rather
+> than a zero check. That is a stronger guard than the current shrink-only ratchet, not a weaker one: it
+> refuses any *new* EF edge outright instead of merely refusing growth. **T067 and T071 below, and this
+> goal line, are written for a zero check and need rewriting** by this spec's owner.
+>
+> Getting this wrong has a specific failure mode worth naming: a guard that can never pass will
+> eventually be switched off, and switching it off forfeits the protection the whole programme depends
+> on. An allowlist that passes today and fails on any new edge is what keeps it useful.
 
 **Independent Test**: Synthetic fixtures detect every bypass class, and the real complete restored graph has every guarded category empty.
 
