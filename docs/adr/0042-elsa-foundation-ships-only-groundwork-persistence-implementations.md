@@ -35,11 +35,22 @@ With `OpenIddict.EntityFrameworkCore` referenced, **a transitive `Microsoft.Enti
 dependency is permanent**, so "Completion means no direct or transitive `Microsoft.EntityFrameworkCore*`
 dependency remains in `elsa-foundation`, its reference hosts, or its test graph" cannot hold.
 
+**The containment is better than it first appears, and it makes option 1 concrete.** OpenIddict's EF
+usage is entirely self-contained: `OpenIddictIdentityDbContext` derives from plain `DbContext` rather
+than Elsa's `ElsaDbContextBase`, and `Elsa.Foundation.Identity.OpenIddict.csproj` references **no Elsa EF
+project at all** — only `OpenIddict.EntityFrameworkCore` and the `Microsoft.EntityFrameworkCore.*`
+packages it needs. So Elsa's own EF infrastructure (`src/Elsa/Persistence/EFCore/`) remains deletable,
+and what survives is exactly one third-party component persisting its own data with its own vendor
+package.
+
 Two ways to reconcile, both needing ratification rather than silent reinterpretation:
 
-1. **Narrow the criterion** to *first-party* persistence: Elsa ships no EF-backed store of its own, while
-   a third-party component's own persistence package is out of scope. The EF-surface ratchet would then
-   need an explicit allowlist for `OpenIddict.EntityFrameworkCore` rather than shrinking to zero.
+1. **Narrow the criterion** to *first-party* persistence: Elsa ships no EF-backed store of its own, and
+   a third-party component persisting its own data with its own vendor package is out of scope. Given the
+   containment above this is precise rather than a loophole — every Elsa-authored EF store still goes,
+   including `src/Elsa/Persistence/EFCore/`. The EF-surface ratchet would keep a small explicit
+   allowlist (`OpenIddict.EntityFrameworkCore` plus the EF packages its DbContext needs) instead of
+   shrinking to zero.
 2. **Adopt `OpenIddict.MongoDb` instead**, which preserves literal zero-EF at the cost of requiring
    MongoDB for the identity lane. Not currently referenced.
 

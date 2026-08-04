@@ -42,6 +42,20 @@
 **⚠️ CRITICAL**: No EF-family deletion task may begin until its linked prerequisite tasks pass on remote `main`.
 
 - [ ] T009 Verify #642 diagnostics four-provider/grouped-reducer/test-ledger evidence is merged and record its merge/artifact identities in `specs/144-zero-ef-final-removal/quickstart.md`
+> **OpenIddict scope change — 2026-08-04.** OpenIddict now keeps its own vendor persistence
+> (`OpenIddict.EntityFrameworkCore` / `OpenIddict.MongoDb`) rather than gaining a Groundwork adapter; the
+> adapter built under spec 106 has been removed and that spec is superseded. **The OpenIddict clauses in
+> T010, T029, T030, T036, T044 and T045 below now instruct the opposite of the decision and must not be
+> executed as written** — they variously require replacing OpenIddict EF host selection with Groundwork,
+> rehosting its tests onto Groundwork stores, or deleting its EF wiring, all of which are now retained by
+> design. Their Identity (non-OpenIddict) clauses are unaffected.
+>
+> T048 is unaffected: OpenIddict's `DbContext` derives from plain `DbContext` and its project references
+> no Elsa EF project, so `src/Elsa/Persistence/EFCore/` is still deletable.
+>
+> Rewriting these tasks needs the ADR 0042 amendment ratified first — see the amendment note there — so
+> they are flagged rather than edited, to avoid encoding an unratified scope in the task list.
+
 - [ ] T010 Verify #643 completes the 145-member OpenIddict ledger, production registration, four-provider black-box suite, exact-range reviews, and merge; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`. Behavioural-parity input (the correctness precondition that must pass before any #646 timing verdict is valid) is recorded per seam in `specs/094-harden-groundwork-stores/divergence-ledger.md`; that artifact carries no `performanceVerdict` and advances no coverage-ledger row. The 21 runtime-family rows have no EF comparand at all and so cannot receive an EF-ratio verdict; a proposed three-tier basis for grading them (enforced user-visible envelope, per-workload absolute ceilings, and a generation-over-generation ratio ratchet reusing the existing gate machinery) is in `specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md` and requires an independent ratifier before T011 can consume it
 - [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment, including #932's required final issue and Project 33 disposition; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
