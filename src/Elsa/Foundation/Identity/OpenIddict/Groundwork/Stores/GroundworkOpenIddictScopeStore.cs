@@ -22,6 +22,10 @@ public sealed class GroundworkOpenIddictScopeStore(
     IDocumentStore store,
     IBoundedDocumentStore? boundedStore = null) : IOpenIddictScopeStore<OpenIddictGroundworkScope>
 {
+    // Groundwork admits no cursor paging on collection-membership routes (GW-QUERY-008), so the
+    // resource lookup is one bounded page; this is the fail-closed ceiling on it.
+    private const int MaxResourceMaterialization = 10_000;
+
     private const string NameField = "name";
     private const string ResourcesField = "resources";
 
@@ -356,20 +360,35 @@ public sealed class GroundworkOpenIddictScopeStore(
     }
 
     /// <summary>
-    /// Pages the whole match set through the declared route. The route now admits cursor paging, so this
-    /// is exhaustive rather than the single capped page it had to be while the declaration combined
-    /// offset paging with no sort support.
+    /// One bounded page, failing closed above it rather than truncating silently.
     /// </summary>
+    /// <remarks>
+    /// Not exhaustive paging, and not for want of trying: Groundwork rejects cursor paging on a
+    /// collection-membership route at plan compilation with <c>GW-QUERY-008</c>, so the declared route
+    /// cannot support iteration. Resource membership is an admin-managed set, so a bounded page with a
+    /// hard ceiling is the honest shape until a provider certifies element-to-owner cursor paging
+    /// upstream.
+    /// </remarks>
     private async ValueTask<IReadOnlyList<DocumentEnvelope>> QueryByResourceAsync(string resource, CancellationToken cancellationToken)
     {
         try
         {
-            return await BoundedDocumentQueryPager.QueryAllAsync(
-                BoundedStore,
-                OpenIddictGroundworkJson.ScopeDocumentKind,
-                OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(ResourcesField, resource))],
+            var result = await BoundedStore.QueryAsync(
+                new DocumentQuery(
+                    OpenIddictGroundworkJson.ScopeDocumentKind,
+                    OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(ResourcesField, resource))],
+                    take: MaxResourceMaterialization),
                 cancellationToken);
+
+            if (result.TotalCount > result.Documents.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{OpenIddictGroundworkStorageManifest.FindScopeByResourceQuery}' matched " +
+                    $"{result.TotalCount} scopes, exceeding the bounded materialization limit of {MaxResourceMaterialization}.");
+            }
+
+            return result.Documents;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

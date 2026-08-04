@@ -24,6 +24,10 @@ public sealed class GroundworkOpenIddictApplicationStore(
     IDocumentStore store,
     IBoundedDocumentStore? boundedStore = null) : IOpenIddictApplicationStore<OpenIddictGroundworkApplication>
 {
+    // Groundwork admits no cursor paging on collection-membership routes (GW-QUERY-008), so each uri
+    // lookup is one bounded page; this is the fail-closed ceiling on it.
+    private const int MaxUriMaterialization = 10_000;
+
     private const string ClientIdField = "clientId";
     private const string RedirectUrisField = "redirectUris";
     private const string PostLogoutRedirectUrisField = "postLogoutRedirectUris";
@@ -162,12 +166,22 @@ public sealed class GroundworkOpenIddictApplicationStore(
     {
         try
         {
-            return await BoundedDocumentQueryPager.QueryAllAsync(
-                BoundedStore,
-                OpenIddictGroundworkJson.ApplicationDocumentKind,
-                OpenIddictGroundworkStorageManifest.FindApplicationByPostLogoutRedirectUriQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(PostLogoutRedirectUrisField, uri))],
+            var result = await BoundedStore.QueryAsync(
+                new DocumentQuery(
+                    OpenIddictGroundworkJson.ApplicationDocumentKind,
+                    OpenIddictGroundworkStorageManifest.FindApplicationByPostLogoutRedirectUriQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(PostLogoutRedirectUrisField, uri))],
+                    take: MaxUriMaterialization),
                 cancellationToken);
+
+            if (result.TotalCount > result.Documents.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{OpenIddictGroundworkStorageManifest.FindApplicationByPostLogoutRedirectUriQuery}' matched " +
+                    $"{result.TotalCount} applications, exceeding the bounded materialization limit of {MaxUriMaterialization}.");
+            }
+
+            return result.Documents;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -194,12 +208,22 @@ public sealed class GroundworkOpenIddictApplicationStore(
     {
         try
         {
-            return await BoundedDocumentQueryPager.QueryAllAsync(
-                BoundedStore,
-                OpenIddictGroundworkJson.ApplicationDocumentKind,
-                OpenIddictGroundworkStorageManifest.FindApplicationByRedirectUriQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(RedirectUrisField, uri))],
+            var result = await BoundedStore.QueryAsync(
+                new DocumentQuery(
+                    OpenIddictGroundworkJson.ApplicationDocumentKind,
+                    OpenIddictGroundworkStorageManifest.FindApplicationByRedirectUriQuery,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.CollectionContains(RedirectUrisField, uri))],
+                    take: MaxUriMaterialization),
                 cancellationToken);
+
+            if (result.TotalCount > result.Documents.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{OpenIddictGroundworkStorageManifest.FindApplicationByRedirectUriQuery}' matched " +
+                    $"{result.TotalCount} applications, exceeding the bounded materialization limit of {MaxUriMaterialization}.");
+            }
+
+            return result.Documents;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

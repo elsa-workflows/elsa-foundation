@@ -32,6 +32,15 @@ public sealed class OpenIddictGroundworkProviderException(string operation, Exce
     public string Operation { get; } = operation;
 }
 
+/// <summary>
+/// Raised by <c>OpenIddictGroundworkAtomicWrite</c> (spec 106 T030) when a mutation's commit outcome could
+/// not be classified within its bounded reconciliation window: the write may or may not have committed, and
+/// its mutation receipt could not be read back to settle the question. Mirrors
+/// <c>GroundworkIdentityUncertainCommitException</c>.
+/// </summary>
+public sealed class OpenIddictGroundworkUncertainCommitException(string message, Exception? innerException = null) :
+    InvalidOperationException(message, innerException);
+
 public static class OpenIddictGroundworkFailureMapper
 {
     public static OpenIddictGroundworkCapabilityException UnsupportedGenericQuery(string operation) => new(operation);

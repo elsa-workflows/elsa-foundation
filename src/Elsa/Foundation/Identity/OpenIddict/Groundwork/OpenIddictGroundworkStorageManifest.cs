@@ -31,6 +31,17 @@ public static class OpenIddictGroundworkStorageManifest
     public const string FindScopeByResourceQuery = "find-scope-by-resource";
     public const string FindTokenByReferenceIdQuery = "find-token-by-reference-id";
     public const string FindTokenBySubjectQuery = "find-token-by-subject";
+
+    /// <summary>
+    /// The expiry field and cleanup query for <see cref="OpenIddictGroundworkJson.MutationReceiptDocumentKind"/>
+    /// (spec 106 T030). Mirrors <c>IdentityStorageManifest.MutationReceiptExpiresAtField</c> /
+    /// <c>ListExpiredMutationReceiptsQuery</c> so <c>OpenIddictGroundworkAtomicWrite</c> can bound its
+    /// opportunistic cleanup query the same way the identity atomic-mutation executor does.
+    /// </summary>
+    public const string MutationReceiptExpiresAtField = "expiresAt";
+
+    public const string ListExpiredMutationReceiptsQuery = "list-expired-mutation-receipts";
+
     public static IReadOnlyList<GroundworkStorageRouteRequirement> BoundedRoutes { get; } =
     [
         Route(OpenIddictGroundworkJson.ApplicationDocumentKind, FindApplicationByClientIdQuery),
@@ -41,7 +52,8 @@ public static class OpenIddictGroundworkStorageManifest
         Route(OpenIddictGroundworkJson.ScopeDocumentKind, FindScopeByNameQuery),
         Route(OpenIddictGroundworkJson.ScopeDocumentKind, FindScopeByResourceQuery),
         Route(OpenIddictGroundworkJson.TokenDocumentKind, FindTokenByReferenceIdQuery),
-        Route(OpenIddictGroundworkJson.TokenDocumentKind, FindTokenBySubjectQuery)
+        Route(OpenIddictGroundworkJson.TokenDocumentKind, FindTokenBySubjectQuery),
+        Route(OpenIddictGroundworkJson.MutationReceiptDocumentKind, ListExpiredMutationReceiptsQuery)
     ];
 
     public static string Fingerprint { get; } = Convert.ToHexString(SHA256.HashData(
@@ -52,6 +64,7 @@ public static class OpenIddictGroundworkStorageManifest
             OpenIddictGroundworkJson.AuthorizationDocumentKind,
             OpenIddictGroundworkJson.ScopeDocumentKind,
             OpenIddictGroundworkJson.TokenDocumentKind,
+            OpenIddictGroundworkJson.MutationReceiptDocumentKind,
             string.Join('|', BoundedRoutes.Select(route => route.RouteIdentity))))));
 
     public static StorageManifest Create() => new(
@@ -69,7 +82,9 @@ public static class OpenIddictGroundworkStorageManifest
                 [ScopeNameIndex, ScopeResourceIndex],
                 [ScopeNameQuery, ScopeResourceQuery]),
             Unit(OpenIddictGroundworkJson.TokenDocumentKind, "OpenIddict token", CreateTokenDefinition(),
-                [TokenReferenceIndex, TokenSubjectIndex, TokenSubjectV2Index], [TokenReferenceQuery, TokenSubjectQuery])
+                [TokenReferenceIndex, TokenSubjectIndex, TokenSubjectV2Index], [TokenReferenceQuery, TokenSubjectQuery]),
+            Unit(OpenIddictGroundworkJson.MutationReceiptDocumentKind, "OpenIddict mutation receipt", CreateMutationReceiptDefinition(),
+                [MutationReceiptExpiryIndex], [MutationReceiptExpiryQuery])
         ],
         new HashSet<string> { "optimistic-concurrency", "global-openiddict-stores" },
         []);
@@ -127,7 +142,29 @@ public static class OpenIddictGroundworkStorageManifest
             Index(TokenSubjectV2Index.Identity, "subject", Envelope.IdLookupKeyColumn)
         ]);
 
+    /// <summary>
+    /// The replay-safe mutation-receipt table (spec 106 T030). It carries only the expiry field the
+    /// cleanup query needs; the receipt payload itself lives in the envelope content like every other
+    /// OpenIddict Groundwork document.
+    /// </summary>
+    public static PhysicalTableDefinition CreateMutationReceiptDefinition() => PhysicalTableDefinition.PhysicalEntityTable(
+        "openiddict_mutation_receipts",
+        [
+            Column("expiresAt", "expiresAt", PortablePhysicalType.DateTime, isNullable: false)
+        ],
+        Envelope,
+        // The cursor-paged, sorted cleanup query needs a deterministic tie-break beyond "expiresAt" alone
+        // (two receipts can expire at the same instant), mirroring the subject/token cursor indexes above.
+        [Index(MutationReceiptExpiryIndex.Identity, "expiresAt", Envelope.IdLookupKeyColumn)]);
+
     private static readonly DocumentEnvelopeDefinition Envelope = new();
+
+    /// <summary>Backs the opportunistic expired-receipt cleanup query with a bounded ascending scan.</summary>
+    private static readonly LogicalIndexDeclaration MutationReceiptExpiryIndex =
+        DateTimeIndex("openiddict-mutation-receipt-by-expiry", MutationReceiptExpiresAtField);
+
+    private static readonly BoundedQueryDeclaration MutationReceiptExpiryQuery =
+        ExpiredReceiptQuery(ListExpiredMutationReceiptsQuery, MutationReceiptExpiryIndex);
 
     private static readonly LogicalIndexDeclaration ClientIdIndex = KeywordIndex("openiddict-application-by-client-id", "clientId", unique: true);
     private static readonly LogicalIndexDeclaration ApplicationRedirectUriIndex =
@@ -230,6 +267,9 @@ public static class OpenIddictGroundworkStorageManifest
     private static LogicalIndexDeclaration CollectionIndex(string identity, string path) =>
         new(identity, [new IndexField(path, IndexValueKind.String)], IndexValueKind.String, false, MissingValueBehavior.Excluded);
 
+    private static LogicalIndexDeclaration DateTimeIndex(string identity, string path) =>
+        new(identity, [new IndexField(path, IndexValueKind.DateTime)], IndexValueKind.DateTime, false, MissingValueBehavior.Excluded);
+
     private static LogicalIndexDeclaration CompoundIndex(string identity, params string[] paths) =>
         new(identity,
             paths.Select(path => new IndexField(path, path == "expirationDate" ? IndexValueKind.DateTime : IndexValueKind.Keyword)).ToArray(),
@@ -259,11 +299,12 @@ public static class OpenIddictGroundworkStorageManifest
         predicateFields: [new BoundedQueryPredicateField(index.Fields.Single().Path, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })]);
 
     /// <summary>
-    /// Cursor rather than offset paging. BoundedDocumentQueryPager.QueryAllAsync requires cursor paging and
-    /// QueryAllOffsetAsync requires a non-empty declared order, so offset combined with
-    /// QuerySortSupport.None fitted neither helper and forced every collection lookup to be a single
-    /// capped page. Applied here rather than per route so the scope, application and authorization
-    /// collection routes all get exhaustive iteration from one declaration.
+    /// Offset paging with no declared sort is the only shape Groundwork admits for a collection-membership
+    /// query. Cursor paging was tried and rejected at plan compilation with <c>GW-QUERY-008</c>: no
+    /// provider certifies cursor paging or latest-per-key selection over element-to-owner shapes. That
+    /// makes exhaustive iteration unavailable here, so callers read one bounded page and fail closed above
+    /// it rather than truncating silently. Lifting this needs upstream provider certification, not a
+    /// change to this declaration.
     /// </summary>
     private static BoundedQueryDeclaration CollectionQuery(string identity, LogicalIndexDeclaration index) => new(
         identity,
@@ -274,9 +315,28 @@ public static class OpenIddictGroundworkStorageManifest
             PortableQueryOperation.CollectionContainsAll
         },
         QuerySortSupport.None,
-        QueryPagingSupport.Cursor,
+        QueryPagingSupport.Offset,
         BoundedQueryExecutionClass.ScaleBearing,
         supportsTotalCount: true);
+
+    /// <summary>
+    /// Ascending, cursor-paged scan of the oldest-expiring receipts, mirroring
+    /// <c>IdentityStorageManifest.ExpiredReceiptQuery</c> so <c>OpenIddictGroundworkAtomicWrite</c> can bound
+    /// its opportunistic cleanup to a finite oldest-first page.
+    /// </summary>
+    private static BoundedQueryDeclaration ExpiredReceiptQuery(string identity, LogicalIndexDeclaration index)
+    {
+        var path = index.Fields.Single().Path;
+        return new BoundedQueryDeclaration(
+            identity,
+            index.Identity,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
+            QuerySortSupport.Ascending,
+            QueryPagingSupport.Cursor,
+            BoundedQueryExecutionClass.ScaleBearing,
+            sortFields: [new BoundedQuerySortField(path, PhysicalSortDirection.Ascending)],
+            predicateFields: [new BoundedQueryPredicateField(path, new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual })]);
+    }
 
     private static BoundedQueryDeclaration SubjectQuery(string identity, LogicalIndexDeclaration index) => new(
         identity,

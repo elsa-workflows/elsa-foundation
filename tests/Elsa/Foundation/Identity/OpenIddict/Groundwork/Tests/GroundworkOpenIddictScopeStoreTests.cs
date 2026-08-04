@@ -166,12 +166,17 @@ public sealed class GroundworkOpenIddictScopeStoreTests
     }
 
     /// <summary>
-    /// Exhaustive rather than a single page. While the resource route declared offset paging with no sort
-    /// support it fitted neither pager helper, so the store had to cap the match set and throw above the
-    /// cap; the route now admits cursor paging.
+    /// Returns the whole match set while it fits inside the single bounded page the route allows.
     /// </summary>
+    /// <remarks>
+    /// This is NOT exhaustive pagination and must not be renamed as though it were. Groundwork rejects
+    /// cursor paging on a collection-membership route at plan compilation (<c>GW-QUERY-008</c>), so
+    /// offset-with-no-sort is the only legal declaration and one bounded page is the only legal read.
+    /// An earlier change declared cursor paging here; every in-memory test passed and only the
+    /// real-provider conformance probe rejected it, because the fakes never run the physical planner.
+    /// </remarks>
     [Fact]
-    public async Task FindByResourceAsync_pages_through_a_match_set_larger_than_one_page()
+    public async Task FindByResourceAsync_returns_every_match_within_the_single_bounded_page()
     {
         const int matches = 250;
         for (var i = 0; i < matches; i++)

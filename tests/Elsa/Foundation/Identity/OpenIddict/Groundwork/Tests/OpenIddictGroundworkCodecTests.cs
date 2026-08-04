@@ -31,7 +31,7 @@ public sealed class OpenIddictGroundworkCodecTests
     [Fact]
     public void Codec_contract_exposes_current_minimum_readable_and_upcast_policies()
     {
-        Assert.Equal(4, OpenIddictGroundworkJson.Policies.Count);
+        Assert.Equal(5, OpenIddictGroundworkJson.Policies.Count);
         Assert.Empty(OpenIddictGroundworkJson.Upcasters);
     }
 

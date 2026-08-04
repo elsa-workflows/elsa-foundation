@@ -15,11 +15,11 @@ public sealed class OpenIddictGroundworkStorageDeclarationTests
     }
 
     [Fact]
-    public async Task Deployment_source_declares_four_openiddict_storage_units()
+    public async Task Deployment_source_declares_five_openiddict_storage_units()
     {
         var declaration = await new OpenIddictGroundworkStorageManifestSource().CreateDeclarationAsync();
 
-        Assert.Equal(4, declaration.Manifest.StorageUnits.Count);
+        Assert.Equal(5, declaration.Manifest.StorageUnits.Count);
         Assert.All(declaration.ScopeClassifications.Values, value =>
             Assert.Equal(Elsa.Persistence.Groundwork.Composition.GroundworkStorageScopeClassification.ExplicitlyGlobal, value));
         Assert.Contains(declaration.TopologyRequirements, requirement =>

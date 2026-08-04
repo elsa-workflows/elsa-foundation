@@ -325,9 +325,24 @@ These were surfaced rather than worked around: no route was invented and no filt
 in-process. Each will also affect the application, authorization and token stores, so they are program
 findings and not scope-store details.
 
-**Update 2026-08-04: gaps 2 and 3 are closed; gap 1 remains open pending a decision.**
-`FindScopeByResourceQuery` now declares cursor paging, so `FindByResourceAsync` pages the whole match set
-and the 10,000 cap and its exception are gone. `FindScopeByNameQuery` now admits `In` alongside `Equal`,
+**Update 2026-08-04 (corrected): gap 3 is closed. Gap 2 was NOT a gap and is withdrawn. Gap 1 remains
+open pending a decision.**
+
+Gap 2 was misdiagnosed. `FindScopeByResourceQuery`'s offset-with-no-sort declaration is not an oversight
+that blocked pagination — it is **the only shape Groundwork admits for a collection-membership route**.
+Declaring cursor paging compiles fine and passes every in-memory test, then fails at real plan
+compilation with `GW-QUERY-008: Collection membership query '...' cannot use cursor paging or
+latest-per-key selection until a provider certifies those combined element-to-owner shapes`. The change
+was reverted; the bounded page and its fail-closed ceiling are correct-by-necessity, not a workaround.
+
+Worth recording how it was caught, because the cheap checks all missed it: the store unit tests, the
+full 355-test architecture suite and the maps gate were all green. Only
+`OpenIddictGroundworkCapabilityProbeTests` — which builds real provider query plans across all four
+providers — rejected it. Any future change to a bounded-query **declaration** needs that probe run, not
+just the fast suites, because the fakes never execute the physical planner.
+
+Lifting this needs upstream provider certification of element-to-owner cursor paging, which puts it in
+the same territory as Groundwork #141/#143 rather than in this repo. `FindScopeByNameQuery` now admits `In` alongside `Equal`,
 so `FindByNamesAsync` resolves a name set in one provider-executed membership query instead of N point
 lookups. Manifest and store were changed together — a declaration with no consumer is inert risk.
 Gap 1 needs a document-shape decision (see below the list).

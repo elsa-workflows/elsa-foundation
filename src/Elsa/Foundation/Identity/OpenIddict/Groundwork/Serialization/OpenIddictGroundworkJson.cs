@@ -16,12 +16,21 @@ public static class OpenIddictGroundworkJson
     public const string ScopeDocumentKind = "openiddict-scope";
     public const string TokenDocumentKind = "openiddict-token";
 
+    /// <summary>
+    /// The replay-safe mutation-receipt document kind owned by <c>OpenIddictGroundworkAtomicWrite</c>
+    /// (spec 106 T030). It is not one of the four OpenIddict record kinds materialized through
+    /// <see cref="Stores.OpenIddictGroundworkOperationIdentity"/>-derived stores, but shares the same
+    /// versioned-codec contract so its envelope schema stamp evolves under the same policy.
+    /// </summary>
+    public const string MutationReceiptDocumentKind = "openiddict-mutation-receipt";
+
     public static IReadOnlyList<DocumentSchemaVersionPolicy> Policies { get; } =
     [
         CreateApplicationPolicy(),
         CreateAuthorizationPolicy(),
         CreateScopePolicy(),
-        CreateTokenPolicy()
+        CreateTokenPolicy(),
+        CreateMutationReceiptPolicy()
     ];
 
     // No historical OpenIddict Groundwork content exists. Upcasters are deliberately
@@ -41,6 +50,9 @@ public static class OpenIddictGroundworkJson
 
     public static DocumentSchemaVersionPolicy CreateTokenPolicy() =>
         new(TokenDocumentKind, minimumReadableVersion: 1, currentVersion: 1);
+
+    public static DocumentSchemaVersionPolicy CreateMutationReceiptPolicy() =>
+        new(MutationReceiptDocumentKind, minimumReadableVersion: 1, currentVersion: 1);
 
     public static VersionedJsonDocumentCodec CreateCodec() =>
         new(Policies, Upcasters, new DocumentSchemaVersionFormat(ParseVersion, FormatVersion), Options);

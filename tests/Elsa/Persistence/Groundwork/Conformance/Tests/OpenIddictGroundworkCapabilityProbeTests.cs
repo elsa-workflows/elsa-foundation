@@ -86,6 +86,7 @@ public sealed class OpenIddictGroundworkCapabilityProbeTests
             {
                 OpenIddictGroundworkJson.ApplicationDocumentKind,
                 OpenIddictGroundworkJson.AuthorizationDocumentKind,
+                OpenIddictGroundworkJson.MutationReceiptDocumentKind,
                 OpenIddictGroundworkJson.ScopeDocumentKind,
                 OpenIddictGroundworkJson.TokenDocumentKind
             },
