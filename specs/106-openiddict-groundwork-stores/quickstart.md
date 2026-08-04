@@ -383,3 +383,38 @@ manifest/upstream level before the remaining three stores are written, or the sa
 duplicated three more times — and the authorization store's compound `FindAsync(subject, client, status,
 type, scopes)` has a strictly worse version of gap 2 already recorded against the dropped four-field
 index.
+
+
+## Authorization store — 2026-08-04, and a manifest gap that blocks the cascade
+
+`IOpenIddictAuthorizationStore` is implemented at
+`src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Stores/GroundworkOpenIddictAuthorizationStore.cs`.
+Of 32 members: 24 fully implemented, 2 conditionally, 6 rejected as the scope and application stores
+reject their unservable members. Revoke goes through `OpenIddictGroundworkAtomicWrite`, so replay
+performs no second underlying write; a test proves that rather than asserting the happy path.
+
+The conditional pair is deliberate and documented in the source. `FindAsync(subject, client, status,
+type, scopes)` serves subject-only and scopes-only and **rejects every other combination before touching
+a provider**, because `AuthorizationSubjectV2Index` is subject-only — the four-field index was dropped
+for exceeding SQL Server's 1,700-byte key limit. `RevokeAsync` serves subject-only on the same basis.
+Neither narrows the predicate silently, which was the one unacceptable outcome.
+
+### The gap: three members have no declared route at all
+
+`FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` and `PruneAsync` are rejected because the
+authorization storage unit declares **no `applicationId` index and no `creationDate` index**. This is
+not a store limitation that better code would fix.
+
+It matters more than the count suggests, because it blocks work already planned:
+
+- **T041's relationship coordinator cannot be built.** The application-to-authorization-to-token cascade
+  needs to find authorizations by application id, and there is no bounded route that can.
+- **OpenIddict's own background pruning cannot run.** `PruneAsync` selects by creation date.
+
+So the authorization unit needs two index/route additions before the cascade work is startable. That is
+the same class of persisted-schema decision as the open count-all/list-all gap, and the two should be
+decided together rather than one at a time — adding indexes to this unit twice is worse than once.
+
+Note the constraint interacts: any new route must be legal at real plan compilation, and a
+collection-membership route cannot use cursor paging (`GW-QUERY-008`). An `applicationId` route would be
+a point route and is not affected, but it must still be probed.
