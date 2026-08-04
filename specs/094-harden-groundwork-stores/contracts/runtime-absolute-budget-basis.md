@@ -73,6 +73,43 @@ Applied to the eight runtime workloads:
 | `outbox-drain` | 1 | 3 × measured p95 |
 | `due-timer-selection` | 1 | 3 × measured p95 |
 
+### Recommended provisional ceilings
+
+One number here is derived from measurement; the rest are reasoned bounds, and the difference is stated
+rather than blurred.
+
+**The one measured anchor.** From `runtime-http-performance-2026-07.md`: 13 commits/request at 466.924 ms
+p95 versus 1 commit/request at 38.529 ms p95. The marginal cost of one durable SQLite commit is therefore
+**≈ 35.7 ms p95** (≈ 18.8 ms p50). *Caveat: a p95 of a sum is not a sum of p95s, so treat this as an
+order-of-magnitude anchor, not an exact per-commit figure.*
+
+**Recommendation: two classes, not eight invented numbers.**
+
+| class | workloads | ceiling | basis |
+|---|---|---|---|
+| **Durable write path** | `checkpoint-commit`, `queue-drain`, `outbox-drain` | **100 ms p95** | 3 × the ~35.7 ms measured commit cost, rounded down |
+| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **25 ms p95** | reads perform no fsync; the *entire* coalesced round trip is 38.5 ms including a ~36 ms commit, so all non-commit work is single-digit ms. 25 ms is roughly 2.5× that remainder |
+
+Two classes rather than eight per-workload numbers because there is exactly one measurement. Inventing
+eight would dress up a single data point as eight.
+
+**Two caveats that matter more than the numbers.**
+
+1. **The measurement is from an Apple Silicon dev host; CI runners are slower.** A 3× headroom derived
+   from fast hardware may be tight on CI. Either set the ceilings from a **CI-measured** baseline, or
+   widen the write class to 150 ms if they are enforced on CI. This is the same hardware-sensitivity that
+   makes `SQLite defaults` flake, documented below.
+2. **These are SQLite-with-fsync figures.** Other providers differ, potentially a lot. As a
+   catastrophic-regression backstop one generous ceiling per class is adequate; if Tier B ever becomes a
+   precision instrument it needs per-provider numbers, which is an argument for keeping it a backstop.
+
+**Sunset condition.** Replace each class ceiling with `measured p95 × 3` per workload after the first
+matrix run at the consumed Groundwork version. These provisional numbers exist so Tier B can be ratified
+and wired now rather than blocking on that run.
+
+**Original position, retained:** the numbers below were deliberately withheld pending measurement. The
+above supplies them as *provisional with a stated sunset*, which is the weaker claim and the honest one.
+
 **Deliberately not stated as literal millisecond numbers here.** The store-performance harness has never
 run a full runtime matrix at the current Groundwork version — `specs/094-harden-groundwork-stores/versions/`
 stops at `preview.88` while the repo consumes `preview.103`. Writing invented millisecond constants into a

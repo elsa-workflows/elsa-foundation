@@ -23,7 +23,33 @@ The zero-EF target is greenfield. No released EF-backed installation needs an ex
 - Completion means no direct or transitive `Microsoft.EntityFrameworkCore*` dependency remains in `elsa-foundation`, its reference hosts, or its test graph. An architecture test will enforce that boundary.
 - No EF-to-Groundwork production-data migration is required because the product is greenfield.
 
-## Amendment required — 2026-08-04
+## Amendment — 2026-08-04, decided
+
+**Decision (maintainer): OpenIddict persistence is the host application's choice, and Elsa defaults to the
+EF Core provider.** OpenIddict ships its own EF Core and MongoDB persistence packages; a host that wants
+MongoDB selects `OpenIddict.MongoDb`, and one that wants something else selects that. Elsa does not
+maintain a first-party Groundwork adapter for a third-party component's storage. The adapter built under
+[spec 106](../../specs/106-openiddict-groundwork-stores/) is removed and that spec is superseded.
+
+**Consequent narrowing of the completion criterion.** "Completion means no direct or transitive
+`Microsoft.EntityFrameworkCore*` dependency remains" is narrowed to **first-party persistence**: Elsa
+ships no EF-backed store of its own. A third-party component persisting its own data through its own
+vendor package, selected by the host, is out of scope.
+
+This is precise rather than a loophole, because OpenIddict's EF usage is fully self-contained:
+`OpenIddictIdentityDbContext` derives from plain `DbContext` rather than Elsa's base, and
+`Elsa.Foundation.Identity.OpenIddict.csproj` references **no Elsa EF project at all**. Every Elsa-authored
+EF store still goes, including `src/Elsa/Persistence/EFCore/` itself.
+
+**What this obliges.** The EF-surface ratchet must stop targeting zero and instead hold a small explicit
+allowlist — `OpenIddict.EntityFrameworkCore` plus the `Microsoft.EntityFrameworkCore.*` packages its
+DbContext requires — so that any *new* EF edge outside that list still fails the gate. Without the
+allowlist the ratchet either fails forever or has to be switched off, and switching it off would lose the
+protection the whole programme depends on.
+
+## Superseded framing (retained for provenance)
+
+### Amendment required — 2026-08-04
 
 **The completion criterion below is no longer achievable as written.** A product decision was taken that
 OpenIddict keeps its own vendor persistence packages (`OpenIddict.EntityFrameworkCore`, or
