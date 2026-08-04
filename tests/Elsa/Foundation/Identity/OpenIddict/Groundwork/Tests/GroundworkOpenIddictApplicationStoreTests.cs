@@ -10,6 +10,7 @@ using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests;
 
@@ -456,6 +457,17 @@ public sealed class GroundworkOpenIddictApplicationStoreTests
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         {
+            // Real bounded stores reject a query whose ResultOperation does not match the execution
+            // method — callers must Select(BoundedQueryResultOperation.First). A double that skipped this
+            // let three stores ship a query that every provider refuses, and 146 unit tests stayed green
+            // until an end-to-end host exercised it. Validate it here so the fast tests can see it.
+            if (query.ResultOperation != BoundedQueryResultOperation.First)
+            {
+                throw new InvalidOperationException(
+                    $"Document query '{query.QueryIdentity}' requested result operation " +
+                    $"'{query.ResultOperation}' through the 'First' execution method.");
+            }
+
             lock (_gate)
                 return Task.FromResult(Filter(query).FirstOrDefault());
         }

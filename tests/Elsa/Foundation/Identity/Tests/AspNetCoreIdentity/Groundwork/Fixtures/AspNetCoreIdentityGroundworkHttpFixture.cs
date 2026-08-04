@@ -5,16 +5,16 @@ using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
-using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Elsa.Foundation.Identity.OpenIddict.Groundwork;
+using Elsa.Foundation.Identity.OpenIddict.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Foundation.Identity.Tests.OpenIddict;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using FastEndpoints;
+using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -68,8 +68,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
     public static async Task<AspNetCoreIdentityGroundworkHttpFixture> StartAsync(
         Action<IServiceCollection>? configureServices = null)
     {
-        var databaseSuffix = Guid.NewGuid().ToString("n");
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new InMemoryDocumentStore(CombinedManifest());
         var serviceDescriptors = Array.Empty<ServiceDescriptor>();
         var host = new HostBuilder()
             .UseEnvironment(Environments.Development)
@@ -84,11 +83,8 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     services.AddSingleton<IDocumentStore>(documents);
                     services.AddSingleton<IBoundedDocumentStore>(documents);
                     services.AddPersistenceCore(AspNetCoreIdentityGroundworkHttpFixture.PrimaryTenant);
-                    services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = true,
-                        configureDbContext: builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(
-                            builder,
-                            $"openiddict-{databaseSuffix}"));
+                    services.AddFoundationIdentityOpenIddictGroundwork(
+                        options => options.IsDevelopmentOrDemo = true);
                     services.AddFoundationAspNetCoreIdentityGroundwork();
                     services.Configure<IdentityOptions>(options => options.User.RequireUniqueEmail = true);
                     services.Configure<AspNetCoreIdentityOptions>(options =>
@@ -137,9 +133,6 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                 });
             })
             .Build();
-
-        await using (var scope = host.Services.CreateAsyncScope())
-            await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
 
         await host.StartAsync();
         var fixture = new AspNetCoreIdentityGroundworkHttpFixture(host, documents, serviceDescriptors);
@@ -293,4 +286,24 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
 
     private static void RequireSucceeded(IdentityResult result) =>
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(error => $"{error.Code}: {error.Description}")));
+
+    /// <summary>
+    /// Both the ASP.NET Core Identity Groundwork stores and the Groundwork OpenIddict stores share this
+    /// fixture's single <see cref="InMemoryDocumentStore"/>, so it must be constructed against a manifest
+    /// that declares both feature's storage units. Mirrors the same technique used by
+    /// <c>ActivityUpgradeGroundworkTests.CombinedManifest</c>: concatenate the storage units from each
+    /// feature's own <c>StorageManifest.Create()</c> rather than mutating either declaration.
+    /// </summary>
+    private static StorageManifest CombinedManifest()
+    {
+        var identity = IdentityStorageManifest.Create();
+        var openIddict = OpenIddictGroundworkStorageManifest.Create();
+        return new StorageManifest(
+            new StorageManifestIdentity("elsa-identity-and-openiddict-tests"),
+            new StorageManifestOwner("elsa.foundation.identity"),
+            new StorageManifestVersion("1"),
+            identity.StorageUnits.Concat(openIddict.StorageUnits).ToArray(),
+            new HashSet<string>(identity.RequiredCapabilities.Concat(openIddict.RequiredCapabilities)),
+            identity.CompatibilityNotes.Concat(openIddict.CompatibilityNotes).ToArray());
+    }
 }

@@ -327,6 +327,25 @@ Comparison is on **shape, not values**: each host seeds its own user, tenant and
 status codes, payload shape, and which claim kinds survive — never a literal username or tenant id.
 That is what makes it apples to apples across two independently composed hosts.
 
+### Limitation LIFTED 2026-08-04 — this is now a full-lane comparison
+
+**Superseded.** Groundwork OpenIddict stores now exist and the Groundwork host composes them, so all
+thirteen facts compare two stacks. All thirteen agree. The caveat below is retained for provenance
+because it qualified a published claim.
+
+Getting there found a defect no unit test could see. Three stores built a `DocumentQuery` and passed it
+to `FirstOrDefaultAsync` without `Select(BoundedQueryResultOperation.First)`; `ResultOperation` defaults
+to `Documents`, and every conformant bounded store rejects the mismatch. It blocked the **first refresh
+token OpenIddict ever mints**, so it broke all first-party issuance — while 146 store unit tests stayed
+green, because their doubles never inspected `ResultOperation`. The doubles now validate it.
+
+The result matters for the removal programme: **the sixteen members the OpenIddict stores reject are
+administrative and pruning paths, not the issuance path.** Token issuance, refresh rotation, logout
+invalidation and bearer authentication all work on Groundwork. Replacing EF OpenIddict is therefore not
+gated on the five missing declarations, contrary to what the rejected-member count suggests.
+
+### Superseded caveat (retained for provenance)
+
 ### Load-bearing limitation: only part of this is a comparison
 
 **OpenIddict is EF-backed on both sides.** `src/Elsa/Foundation/Identity/OpenIddict/Groundwork/` contains
@@ -370,9 +389,14 @@ subsumes the other, and the pair is what supports the plain-language claim:
 > An application's identity-store-dependent behaviour is identical across the two stacks, and where the
 > stores themselves differ, every difference favours Groundwork.
 
-Not yet the broader claim that "an application behaves the same on either stack", because OpenIddict —
-the token-persistence half of the identity lane — has no Groundwork implementation to compare against.
-That is also why EF Core is not removable today: removing it would leave token issuance with no store.
+**Updated 2026-08-04: the broader claim now holds for the identity lane.** OpenIddict has Groundwork
+stores, the Groundwork host composes them, and all thirteen app-level facts agree — so an application
+behaves the same on either stack across login, claim projection, token issuance, refresh rotation and
+bearer authentication.
+
+EF Core remains undeletable, but the reason has moved. It is no longer "token issuance would have no
+store"; it is the outstanding gates in spec 144 — #642's evidence chain, #932's host acceptance, and the
+runtime rows' unratified grading basis.
 
 ### Open follow-up for this seam
 

@@ -9,6 +9,8 @@ using Elsa.Foundation.Identity.OpenIddict.Groundwork.Serialization;
 using Groundwork.Documents.Store;
 using OpenIddict.Abstractions;
 using Elsa.Persistence.Groundwork.Stores;
+using Groundwork.Core.Queries;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Stores;
 
@@ -192,7 +194,7 @@ public sealed class GroundworkOpenIddictTokenStore(
                 new DocumentQuery(
                     OpenIddictGroundworkJson.TokenDocumentKind,
                     OpenIddictGroundworkStorageManifest.FindTokenByReferenceIdQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ReferenceIdField, identifier))]),
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ReferenceIdField, identifier))]).Select(BoundedQueryResultOperation.First),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

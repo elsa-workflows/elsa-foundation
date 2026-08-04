@@ -11,6 +11,8 @@ using Groundwork.Documents.Store;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using Elsa.Persistence.Groundwork.Stores;
+using Groundwork.Core.Queries;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Groundwork.Stores;
 
@@ -133,7 +135,7 @@ public sealed class GroundworkOpenIddictApplicationStore(
                 new DocumentQuery(
                     OpenIddictGroundworkJson.ApplicationDocumentKind,
                     OpenIddictGroundworkStorageManifest.FindApplicationByClientIdQuery,
-                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ClientIdField, identifier))]),
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(ClientIdField, identifier))]).Select(BoundedQueryResultOperation.First),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
