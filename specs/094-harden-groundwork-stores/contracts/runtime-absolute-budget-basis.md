@@ -117,6 +117,32 @@ Small, and mostly additive:
 
 Tiers A and C need no gate-logic changes at all; Tier B needs one field and one comparison.
 
+## Field evidence for the shape: Tier A's own gate flakes
+
+Observed while this proposal was open, and it argues for the design rather than against it.
+
+`SQLite defaults` (`.github/workflows/http-workflow-performance.yml`, the `--enforce-p95-ms 250` gate
+that Tier A inherits) **failed twice on branch `claude/ef-core-oracle-groundwork-16f4f3` without any
+change to the measured path**:
+
+- commit `3c34f66bc` failed it while changing **exactly one markdown file**;
+- commit `3a3950dd5` failed it while touching nothing under `src/Elsa/Workflows/Runtime/**` or
+  `src/Elsa/Persistence/Groundwork/**`;
+- the commits between them, including ones that *did* change persistence code, passed.
+
+A single absolute millisecond ceiling on a shared CI runner is therefore demonstrably noisy at this
+threshold. That is not a reason to abandon Tier A — it is real user-visible evidence and it already runs
+— but it is a concrete reason **not to make an absolute ceiling the sole gate**, which is the design this
+proposal argues for and the reason Tier C exists.
+
+Two consequences worth ratifying alongside the tiers:
+
+1. **Tier B's ceilings should be generous** (the proposed 3× headroom, not a tight bound), because they
+   are a catastrophic-regression backstop, not a precision instrument.
+2. **A single failing run of an absolute gate is not evidence of regression.** Require a repeat, or
+   correlate against whether the change touched the measured path at all, before treating it as one.
+   Both failures above would have been dismissed correctly by that second test alone.
+
 ## Why this shape rather than pure absolute budgets
 
 Pure absolute budgets were the obvious answer and I think they are the wrong one alone:
