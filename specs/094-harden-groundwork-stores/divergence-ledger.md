@@ -398,8 +398,27 @@ EF Core remains undeletable, but the reason has moved. It is no longer "token is
 store"; it is the outstanding gates in spec 144 — #642's evidence chain, #932's host acceptance, and the
 runtime rows' unratified grading basis.
 
-### Open follow-up for this seam
+### Follow-up resolved as not-expressible — 2026-08-04
 
-1. Internal-commit-retry idempotency needs a failure-injecting provider double shared by both stacks.
+1. **Internal-commit-retry idempotency cannot be compared symmetrically, and the follow-up is closed as
+   `not-expressible` rather than left open.** The interface requires that an accepted append retried
+   after *acknowledgement loss* returns the same cursor. Testing that needs a seam where the commit
+   succeeds and the acknowledgement is then lost. The two stacks differ in whether such a seam exists at
+   all:
+   - **Groundwork** acknowledges across a provider boundary (`IDiagnosticRecordStore`), so a decorator
+     can commit and then drop the acknowledgement — `AcknowledgementLosingStore` in
+     `GroundworkStructuredLogStoreTests` already does exactly this.
+   - **EF** acknowledges through a private in-process `TaskCompletionSource` completed immediately after
+     `SaveChangesAsync`. Its only injection point, `FaultInjectingFactory`, intercepts *context
+     creation* — strictly pre-commit. There is no post-commit, pre-acknowledgement seam to decorate.
+
+   Building the probe on those two primitives would compare a pre-commit failure against a post-commit
+   acknowledgement loss — the identical mistake as the withdrawn `rollback-visibility` divergence above,
+   where the comparands were not offered the same opportunity. Adding a test seam to EF production code
+   solely to compare a store scheduled for deletion is not worth the change either.
+
+   Same-stack coverage exists on both sides and is unaffected
+   (`GroundworkStructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); what does not exist,
+   and cannot without changing EF, is a *differential* over this clause.
 2. The four non-SQLite providers have no EF comparand and are covered by Groundwork conformance only.
    That is strictly less evidence than a differential and must not be reported as equivalent assurance.
