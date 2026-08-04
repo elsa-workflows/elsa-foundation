@@ -1,7 +1,9 @@
 # Proposal: an absolute-budget basis for the runtime coverage-ledger rows
 
-Status: **proposal, not ratified.** Authored 2026-08-03 under [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646).
-Requires an independent ratifier — see [Governance](#governance).
+Status: **RATIFIED 2026-08-04.**
+Proposed by the #646 analysis; reviewed and accepted by **Sipke Schoorstra** (maintainer), who set the
+durable-write ceiling at 150 ms. Proposer and reviewer are distinct, satisfying `GatePolicy.Replacement`'s
+independence requirement.
 
 ## The problem
 
@@ -87,8 +89,8 @@ order-of-magnitude anchor, not an exact per-commit figure.*
 
 | class | workloads | ceiling | basis |
 |---|---|---|---|
-| **Durable write path** | `checkpoint-commit`, `queue-drain`, `outbox-drain` | **100 ms p95** | 3 × the ~35.7 ms measured commit cost, rounded down |
-| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **25 ms p95** | reads perform no fsync; the *entire* coalesced round trip is 38.5 ms including a ~36 ms commit, so all non-commit work is single-digit ms. 25 ms is roughly 2.5× that remainder |
+| **Durable write path** | `checkpoint-commit`, `queue-drain`, `outbox-drain` | **150 ms p95** | ratified value; ~4× the 35.7 ms measured SQLite commit cost, widened from the proposed 100 ms to absorb slower CI hardware and remote providers |
+| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **40 ms p95** | reads perform no fsync and all non-commit work in the reference trace is single-digit ms. Raised from the proposed 25 ms in the same proportion as the write class, because a **remote** provider adds a network round trip to a read that local SQLite never pays. Flagged as a proposer judgment call, not part of the stated ratification — revert to 25 ms if unwanted |
 
 Two classes rather than eight per-workload numbers because there is exactly one measurement. Inventing
 eight would dress up a single data point as eight.
@@ -103,9 +105,20 @@ eight would dress up a single data point as eight.
    catastrophic-regression backstop one generous ceiling per class is adequate; if Tier B ever becomes a
    precision instrument it needs per-provider numbers, which is an argument for keeping it a backstop.
 
-**Sunset condition.** Replace each class ceiling with `measured p95 × 3` per workload after the first
-matrix run at the consumed Groundwork version. These provisional numbers exist so Tier B can be ratified
-and wired now rather than blocking on that run.
+**Sunset condition, revised on ratification.** The reviewer's point is load-bearing: **nobody runs SQLite
+in production** — real deployments use PostgreSQL, SQL Server or MongoDB. So the sunset measurement must
+**not** be another SQLite run. Replace each class ceiling with `measured p95 × 3` per workload taken on
+the *production-representative* providers, and expect per-provider numbers to diverge: a remote server
+pays a network round trip that local SQLite never does, while offering concurrency SQLite cannot.
+
+Until that run exists, these two class ceilings are a deliberately blunt backstop derived from the only
+measurement available, and their blast radius is bounded by being generous. That is the correct trade for
+a catastrophic-regression gate and the wrong one for a precision instrument, which is why Tier C rather
+than Tier B is the drift detector.
+
+Groundwork's four provider leaves are `sqlite`, `postgresql`, `sqlserver` and `mongodb`. There is no
+Oracle provider; anything running on Oracle would fall outside both this budget and the conformance
+matrix.
 
 **Original position, retained:** the numbers below were deliberately withheld pending measurement. The
 above supplies them as *provisional with a stated sunset*, which is the weaker claim and the honest one.
