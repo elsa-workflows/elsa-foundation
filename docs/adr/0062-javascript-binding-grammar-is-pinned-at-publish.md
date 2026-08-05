@@ -46,6 +46,25 @@ expressions:
 Any migration path that admits the first but not the second is not Elsa 3 compatibility; it is a
 third dialect that happens to accept `return`.
 
+The obvious simplification — adopt Script grammar everywhere and keep one grammar — does not work,
+because the two are not nested. They fork on object literals, and neither side raises an error:
+
+| source | expression grammar | Script grammar |
+|---|---|---|
+| `{ a: 1 }` | object `{a: 1}` | `1` — `{` opens a *block*, `a:` is a label |
+| `({ a: 1 })` | object `{a: 1}` | object `{a: 1}` |
+
+`{ name: request.name }` is a plausible binding that means an object under one grammar and
+`request.name` under the other, silently. Script grammar is therefore not a superset that could
+replace the current one; moving a source between grammars can change its value with no diagnostic.
+That is what forces the grammar to be recorded per expression rather than inferred from the source or
+assumed from the host, and it is the reason this is a setting rather than a fix.
+
+It also bounds what "implicit return" can be relied on. A Script yields the completion value of its
+last expression statement, so `const total = a + b; total` works — but `const total = a + b;` and
+`if (false) { 1 }` yield `undefined`, which the evaluator already rejects. Elsa 3 behaves the same
+way; a value is not guaranteed merely because the body ran.
+
 The obvious remedy — a host setting that switches the runtime grammar — is not available to us.
 ADR 0038 states that "same hash = same behavior" is a true invariant **in both directions**, and
 content-addressed promotion depends on it. A host-level grammar flag would make one `ArtifactHash`
@@ -134,6 +153,9 @@ migration goal, though the diagnostic improvement is retained above as decision 
   must be found and updated; the evaluator guard is one such site.
 - Strict mode is an open compatibility question, not a settled one. Elsa 3 evaluates non-strict;
   the `expression` grammar forces `"use strict"`. Spec 146 records the decision for `script`.
+- Under `script`, an object-literal binding must be written `({ ... })` or `return { ... };`, as in
+  Elsa 3. A bare `{ ... }` is a block, and its value is that of its last labeled expression. This is
+  the cost of the grammar, paid only by hosts that opt in.
 
 ## Follow-up
 

@@ -109,12 +109,18 @@ active grammar is reported.
 
 - An empty or whitespace-only source is unchanged by this feature; it remains whatever the existing
   contract makes it under either grammar.
-- A source valid under both grammars — any bare expression — must evaluate identically under both.
+- A source valid under both grammars — any bare expression — must evaluate identically under both,
+  with one exception below.
+- `{ a: 1 }` is the exception, and it is silent: an object literal under `expression`, a block whose
+  value is `1` under `script`. Both parse; neither diagnoses. `({ a: 1 })` is an object under both.
+  This divergence is why the grammar is recorded per expression rather than inferred.
 - An Elsa 3 expression relying on non-strict semantics is out of reach unless the strict-mode open
   question below resolves toward non-strict; it fails under either grammar today.
 - A `script` body whose last statement is an expression without `return` yields that completion
-  value, as in Elsa 3. A body that produces no value at all still fails the existing
-  "cannot return undefined" check.
+  value, as in Elsa 3 — `const total = a + b; total` is a working binding. A body whose last
+  statement produces no value — `const total = a + b;`, `if (false) { 1 }` — yields `undefined` and
+  still fails the existing "cannot return undefined" check. An implicit value is not guaranteed
+  merely because the body ran.
 - An `Options` bag carrying an unrecognized key must still be rejected; only `grammar` is admitted.
 - A `grammar` value outside the known set must be rejected at deserialization, not defaulted.
 - A draft authored under one host default and published against another must not silently disagree;
@@ -162,8 +168,11 @@ active grammar is reported.
 - **FR-015**: Publication review MUST surface a grammar change relative to the previously published
   executable.
 - **FR-016**: Executables published before this feature MUST evaluate unchanged, via FR-002's default.
+- **FR-016a**: Documentation for the `script` grammar MUST state that an object-literal binding is
+  written `({ ... })` or `return { ... };`, since a bare `{ ... }` is a block under this grammar.
 - **FR-017**: The implementation MUST add conformance tests for both grammars including
-  completion-value bodies, grammar-differentiated
+  completion-value bodies, the `{ a: 1 }` object-literal divergence and its `({ a: 1 })` remedy,
+  bodies that yield no value, grammar-differentiated
   fingerprints, promotion across mismatched host settings, options-key admission and rejection,
   validator/runtime agreement under each grammar, and the legacy default.
 - **FR-018**: Existing tests pinning `expression` behavior — including
