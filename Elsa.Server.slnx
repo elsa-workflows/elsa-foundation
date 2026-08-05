@@ -1,10 +1,15 @@
 <Solution>
+  <Folder Name="/benchmarks/" />
+  <Folder Name="/benchmarks/Elsa/" />
+  <Folder Name="/benchmarks/Elsa/Activities/" />
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Groundwork/" />
   <Folder Name="/benchmarks/Elsa/Groundwork/StorePerformance/">
     <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Workflows/" />
   <Folder Name="/benchmarks/Elsa/Workflows/Runtime/">
     <Project Path="benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj" />
   </Folder>
@@ -16,6 +21,7 @@
     <File Path="Directory.Packages.props" />
     <File Path="NuGet.config" />
   </Folder>
+  <Folder Name="/tools/" />
   <Folder Name="/tools/evidence/">
     <Project Path="tools/evidence/Preview95SchemaFixtureReproducer.csproj" />
   </Folder>
@@ -26,9 +32,7 @@
   <Folder Name="/src/Apps/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/">
-    <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
-  </Folder>
+  <Folder Name="/src/Elsa/" />
   <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
@@ -141,6 +145,9 @@
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Git/">
+    <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Http/">
     <Project Path="src/Elsa/Http/Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa/Http/Elsa.Http.csproj" />
@@ -232,6 +239,7 @@
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Studio/" />
   <Folder Name="/src/Elsa/Studio/Preferences/">
     <Project Path="src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <Project Path="src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
@@ -310,6 +318,7 @@
     <Project Path="src/Elsa3/Models/Elsa3.Models.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/Activities/" />
+  <Folder Name="/src/Elsa3/Activities/Design/" />
   <Folder Name="/src/Elsa3/Activities/Design/Import/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
@@ -426,12 +435,15 @@
   <Folder Name="/tests/Elsa/Attention/Core/">
     <Project Path="tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Attention/" />
   <Folder Name="/tests/Elsa/Attention/Api/">
     <Project Path="tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/OpenIddict/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/Elsa.Foundation.Identity.OpenIddict.Groundwork.Tests.csproj" />
   </Folder>
@@ -439,6 +451,8 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Groundwork/" />
+  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/" />
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/Benchmarks/">
     <Project Path="tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />
   </Folder>
@@ -525,9 +539,11 @@
   <Folder Name="/tests/Elsa/Secrets/Attention/">
     <Project Path="tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Studio/" />
   <Folder Name="/tests/Elsa/Studio/Preferences/">
     <Project Path="tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/" />
   <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj" />
   </Folder>
@@ -560,6 +576,7 @@
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
     <Project Path="tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj" />
   </Folder>
