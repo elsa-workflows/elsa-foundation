@@ -3,11 +3,13 @@ using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.DiagnosticRecords;
 using Groundwork.MongoDb.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using MongoDB.Driver;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 
@@ -125,6 +127,11 @@ public static class GroundworkMongoDbUnifiedRegistration
         services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
             _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
         services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
-        return services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
+        services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
+        services.AddGroundworkMongoDbWorkflowRunHealth(
+            _ => new MongoClient(connectionString).GetDatabase(databaseName));
+        services.AddGroundworkMongoDbWorkflowPortfolio(
+            _ => new MongoClient(connectionString).GetDatabase(databaseName));
+        return services;
     }
 }

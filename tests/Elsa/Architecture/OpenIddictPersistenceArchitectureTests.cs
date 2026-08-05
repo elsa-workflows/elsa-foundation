@@ -49,34 +49,13 @@ public sealed class OpenIddictPersistenceArchitectureTests
     }
 
     [Fact]
-    public void Groundwork_dependency_graph_references_behavior_without_reaching_EF()
-    {
-        var projectPath = Path.Combine(
-            RepoRoot,
-            "src",
-            "Elsa",
-            "Foundation",
-            "Identity",
-            "OpenIddict",
-            "Groundwork",
-            "Elsa.Foundation.Identity.OpenIddict.Groundwork.csproj");
-        var references = XDocument.Load(projectPath)
-            .Descendants("ProjectReference")
-            .Select(element => (string?)element.Attribute("Include"))
-            .ToArray();
-
-        Assert.Contains(
-            references,
-            include => include?.EndsWith(
-                @"Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
-                StringComparison.Ordinal) == true);
-
-        var violations = FindEfDependencyPaths(projectPath);
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void Transitional_EF_oracle_keeps_the_frozen_packages_and_excludes_nested_sources()
+    /// <summary>
+    /// OpenIddict persistence is supplied by OpenIddict's own vendor packages, so this EF reference is
+    /// permanent rather than a transitional oracle. Renamed from
+    /// <c>Transitional_EF_oracle_keeps_the_frozen_packages_and_excludes_nested_sources</c> when the
+    /// Groundwork OpenIddict adapter was removed; the assertion is unchanged, only the claim it makes.
+    /// </summary>
+    public void Vendor_EF_persistence_keeps_the_pinned_packages_and_excludes_nested_sources()
     {
         var projectPath = Path.Combine(
             RepoRoot,
@@ -94,9 +73,6 @@ public sealed class OpenIddictPersistenceArchitectureTests
             .ToArray();
 
         Assert.Equal(TransitionalOpenIddictEfPackages, efPackages);
-        Assert.Contains(
-            project.Descendants("Compile"),
-            element => string.Equals((string?)element.Attribute("Remove"), "Groundwork/**/*.cs", StringComparison.Ordinal));
         Assert.Contains(
             project.Descendants("Compile"),
             element => string.Equals((string?)element.Attribute("Remove"), "Behavior/**/*.cs", StringComparison.Ordinal));

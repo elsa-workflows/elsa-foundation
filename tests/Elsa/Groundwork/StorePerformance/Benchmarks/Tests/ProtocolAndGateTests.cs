@@ -153,6 +153,34 @@ public sealed class ProtocolAndGateTests
         Assert.Contains(reasonCode, gate.Reason);
     }
 
+    /// <summary>
+    /// The ratified absolute ceiling must actually bind. It was reachable on GatePolicy but unset by every
+    /// construction path, so a workload inside its ratio comparison could exceed the latency budget and
+    /// still pass — the budget existed on paper only.
+    /// </summary>
+    [Fact]
+    public void Runtime_hot_path_default_carries_the_ratified_absolute_ceiling()
+    {
+        Assert.Equal(
+            GatePolicy.RatifiedDurableWritePathP95Milliseconds,
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds);
+    }
+
+    [Fact]
+    public void Reviewed_replacement_inherits_the_ceiling_when_the_policy_file_omits_it()
+    {
+        var review = new GateReview("w", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+
+        var inherited = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review);
+        var explicitCeiling = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, 40d);
+
+        // Omitting the ceiling inherits it; dropping a ratified budget must be deliberate, not an omission.
+        Assert.Equal(GatePolicy.RatifiedDurableWritePathP95Milliseconds, inherited.MaxP95Milliseconds);
+        Assert.Equal(40d, explicitCeiling.MaxP95Milliseconds);
+        Assert.Throws<PerformanceContractException>(() =>
+            GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, 0d));
+    }
+
     [Fact]
     public async Task Manually_constructed_matrix_plan_cannot_bypass_diagnostics_admission()
     {

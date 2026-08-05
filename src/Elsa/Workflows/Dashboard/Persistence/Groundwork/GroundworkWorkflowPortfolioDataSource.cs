@@ -27,7 +27,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            {BaseCtes()}
+            {StatementPrefix}{BaseCtes()}
             SELECT (SELECT COUNT(*) FROM active),
                    (SELECT COUNT(*) FROM active a JOIN published p ON p.definition_id = a.definition_id),
                    (SELECT COUNT(*) FROM current_drafts WHERE row_number = 1);
@@ -51,7 +51,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            {BaseCtes(includePublished: false)}
+            {StatementPrefix}{BaseCtes(includePublished: false)}
             SELECT content_json FROM current_drafts WHERE row_number = 1 ORDER BY definition_id;
             """;
         AddParameter(command, "tenantId", tenantId);
@@ -103,21 +103,33 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
             """;
     }
 
-    private string Json(string container, string property, string alias) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? $"json_extract({alias}.content_json, '$.{container}.{property}')"
-        : $"{alias}.content_json::jsonb #>> '{{{container},{property}}}'";
+    private string Json(string container, string property, string alias) => dialect switch
+    {
+        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.content_json, '$.{container}.{property}')",
+        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.content_json, '$.{container}.{property}')",
+        _ => $"{alias}.content_json::jsonb #>> '{{{container},{property}}}'"
+    };
 
-    private string JsonInt(string container, string property, string alias) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? $"CAST({Json(container, property, alias)} AS INTEGER)"
-        : $"({Json(container, property, alias)})::integer";
+    private string JsonInt(string container, string property, string alias) => dialect switch
+    {
+        GroundworkRunHealthDialect.Sqlite => $"CAST({Json(container, property, alias)} AS INTEGER)",
+        GroundworkRunHealthDialect.SqlServer => $"TRY_CAST({Json(container, property, alias)} AS int)",
+        _ => $"({Json(container, property, alias)})::integer"
+    };
 
-    private string Instant(string expression) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? $"julianday({expression})"
-        : $"({expression})::timestamptz";
+    private string Instant(string expression) => dialect switch
+    {
+        GroundworkRunHealthDialect.Sqlite => $"julianday({expression})",
+        GroundworkRunHealthDialect.SqlServer => $"CAST({expression} AS datetimeoffset)",
+        _ => $"({expression})::timestamptz"
+    };
 
     private object ProviderInstant(DateTimeOffset value) => dialect == GroundworkRunHealthDialect.Sqlite
         ? value.ToUniversalTime().ToString("O")
         : value;
+
+    // T-SQL requires the statement preceding a CTE to be terminated with a semicolon.
+    private string StatementPrefix => dialect == GroundworkRunHealthDialect.SqlServer ? ";" : string.Empty;
 
     private static void AddParameter(DbCommand command, string name, object value)
     {

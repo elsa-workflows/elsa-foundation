@@ -82,6 +82,15 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         {
             await standalone.StartAsync(cancellationToken);
         }
+        catch (DotNet.Testcontainers.Builders.DockerUnavailableException)
+        {
+            // Rethrown unchanged so a host without Docker is skippable rather than a hard failure. The
+            // generic catch below deliberately suppresses connection details; this exception reports that
+            // the Docker daemon is unreachable and carries none, and the container has not started yet so
+            // there is no connection string to leak. Fixtures' catch (DockerUnavailableException) skip
+            // paths were unreachable while this was swallowed.
+            throw;
+        }
         catch (OperationCanceledException)
         {
             throw;
@@ -151,6 +160,15 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 ReplicaSetName = ReplicaSetName
             }.ToString();
             await ValidateTransactionTopologyAsync(cancellationToken);
+        }
+        catch (DotNet.Testcontainers.Builders.DockerUnavailableException)
+        {
+            // Rethrown unchanged so a host without Docker is skippable rather than a hard failure, matching
+            // SqlServerGroundworkProviderDriver. The generic catch below suppresses connection details; this
+            // exception reports an unreachable Docker daemon and carries none. While it was swallowed, every
+            // fixture's catch (DockerUnavailableException) skip path was unreachable.
+            await CleanupFailedInitializationAsync();
+            throw;
         }
         catch (OperationCanceledException)
         {
@@ -945,6 +963,14 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 value.Kind,
                 "Unknown native-route projected value kind.")
         };
+
+    /// <summary>
+    /// Opens a new MongoDB client/database handle against the driver's current database, for callers that
+    /// need to read the physical per-document-kind collections directly rather than through the
+    /// <see cref="IDocumentStore"/> abstraction (for example, a read-model data source that runs its own
+    /// aggregation pipelines).
+    /// </summary>
+    public IMongoDatabase CreateRawDatabase() => new MongoClient(RequiredConnectionString()).GetDatabase(_databaseName);
 
     private string RequiredConnectionString() => _connectionString ??
         throw new InvalidOperationException("The MongoDB provider target has not been initialized.");

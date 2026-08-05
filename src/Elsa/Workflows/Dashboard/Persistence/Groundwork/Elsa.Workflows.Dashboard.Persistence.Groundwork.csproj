@@ -7,4 +7,11 @@
     <ProjectReference Include="../../../../Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- The MongoDb provider project lives under this domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="MongoDb/**/*" />
+    <EmbeddedResource Remove="MongoDb/**/*" />
+    <None Remove="MongoDb/**/*" />
+  </ItemGroup>
 </Project>

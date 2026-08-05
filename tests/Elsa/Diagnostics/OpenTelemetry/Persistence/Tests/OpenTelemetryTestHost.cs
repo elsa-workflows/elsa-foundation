@@ -33,9 +33,18 @@ internal sealed class OpenTelemetryTestHost : IDbContextFactory<OpenTelemetryDbC
     public Task<OpenTelemetryDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(CreateDbContext());
 
-    public static OpenTelemetryTestHost Create()
+    /// <summary>
+    /// Pass <paramref name="fileDataSource"/> to bind a real on-disk database instead of the
+    /// shared-cache in-memory default. The default cannot outlive <see cref="Dispose"/>, so the #646
+    /// differential would otherwise compare a volatile EF store against a file-backed Groundwork one and
+    /// report agreement on every restart assertion. The diagnostics workload contract requires
+    /// <c>file-backed-distinct-connections-with-retained-ef-oracle</c> for exactly that reason.
+    /// </summary>
+    public static OpenTelemetryTestHost Create(string? fileDataSource = null)
     {
-        var connectionString = $"Data Source=otel-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        var connectionString = fileDataSource is null
+            ? $"Data Source=otel-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"
+            : $"Data Source={fileDataSource}";
         var connection = new SqliteConnection(connectionString);
         connection.Open();
 

@@ -73,6 +73,15 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             await _container.StartAsync(cancellationToken);
             await CreateDatabaseAsync(cancellationToken);
         }
+        catch (DotNet.Testcontainers.Builders.DockerUnavailableException)
+        {
+            // Rethrown unchanged so a host without Docker is skippable rather than a hard failure. The
+            // generic catch below deliberately suppresses connection details; this exception reports that
+            // the Docker daemon is unreachable and carries none, and the container has not started yet so
+            // there is no connection string to leak. Fixtures' catch (DockerUnavailableException) skip
+            // paths were unreachable while this was swallowed.
+            throw;
+        }
         catch (OperationCanceledException)
         {
             throw;
@@ -544,6 +553,13 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             $"key-columns={string.Join(',', columns)}\n" +
             $"declared-key-bytes={totalBytes}");
     }
+
+    /// <summary>
+    /// Opens a new ADO connection against the driver's current database, for callers that need to read the
+    /// physical <c>groundwork_documents</c> table directly rather than through the <see cref="IDocumentStore"/>
+    /// abstraction (for example, a read-model data source that runs its own hand-written SQL).
+    /// </summary>
+    public SqlConnection CreateRawConnection() => new(RequiredConnectionString());
 
     protected override async ValueTask DisposeCoreAsync()
     {
