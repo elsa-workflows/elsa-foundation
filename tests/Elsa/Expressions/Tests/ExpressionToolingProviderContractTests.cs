@@ -10,15 +10,26 @@ namespace Elsa.Expressions.Tests;
 public sealed class ExpressionToolingProviderContractTests
 {
     [Fact]
-    public void Resolver_routes_exact_expression_type_and_rejects_duplicates()
+    public void Resolver_routes_expression_types_case_insensitively_and_rejects_duplicates()
     {
         var javascript = new JavaScriptExpressionToolingProvider();
         var resolver = new ExpressionToolingProviderResolver([javascript]);
 
         Assert.Same(javascript, resolver.Find("JavaScript"));
-        Assert.Null(resolver.Find("javascript"));
+        Assert.Same(javascript, resolver.Find("javascript"));
+        Assert.Null(resolver.Find("Liquid"));
         Assert.Throws<ArgumentException>(() => resolver.Find(" "));
         Assert.Throws<ArgumentException>(() => new ExpressionToolingProviderResolver([javascript, new JavaScriptExpressionToolingProvider()]));
+    }
+
+    [Fact]
+    public async Task Providers_accept_a_case_variant_of_their_own_expression_type()
+    {
+        var javascript = await new JavaScriptExpressionToolingProvider().ValidateAsync(new(CreateScope("javascript", []), "1 + 1"), CancellationToken.None);
+        var liquid = await new LiquidExpressionToolingProvider().ValidateAsync(new(CreateScope("liquid", []), "{{ 1 }}"), CancellationToken.None);
+
+        Assert.NotEqual(ExpressionToolingOutcomeState.Incompatible, javascript.State);
+        Assert.NotEqual(ExpressionToolingOutcomeState.Incompatible, liquid.State);
     }
 
     [Fact]

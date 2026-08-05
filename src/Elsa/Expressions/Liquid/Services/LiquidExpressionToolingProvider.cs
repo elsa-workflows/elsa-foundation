@@ -95,7 +95,7 @@ public sealed class LiquidExpressionToolingProvider : IExpressionToolingProvider
     }
 
     private ExpressionToolingOutcome<T>? Compatible<T>(ExpressionToolingRequestScope scope) =>
-        !string.Equals(scope.Document.ExpressionType, ExpressionType, StringComparison.Ordinal)
+        !string.Equals(scope.Document.ExpressionType, ExpressionType, StringComparison.OrdinalIgnoreCase)
             ? ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Incompatible, SupportedVersion, "expression-type")
             : !scope.ContractVersion.IsCompatibleWith(SupportedVersion)
                 ? ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Incompatible, SupportedVersion, "contract-version")

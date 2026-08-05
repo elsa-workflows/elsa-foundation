@@ -65,6 +65,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IDraftValidator, IntrinsicVariableTargetValidator>();
         services.AddScoped<IDraftValidator, ValueFlowValidator>();
         services.TryAddSingleton<IExpressionToolingProviderResolver>(new UnavailableExpressionToolingProviderResolver());
+        services.TryAddSingleton<IExpressionDescriptorRegistry>(new EmptyExpressionDescriptorRegistry());
         services.AddScoped<IExpressionDraftSemanticValidator, ExpressionDraftSemanticValidator>();
         services.AddScoped<IDraftValidator, ExpressionDraftValidator>();
     }
@@ -72,5 +73,24 @@ public class WorkflowDesignValidationsFeature : IShellFeature
     private sealed class UnavailableExpressionToolingProviderResolver : IExpressionToolingProviderResolver
     {
         public IExpressionToolingProvider? Find(string expressionType) => null;
+    }
+
+    /// <summary>
+    /// Stands in when the Expressions module is not composed, so draft validation still resolves. It knows
+    /// no expression type, which keeps every authored type out of the text-tooling class.
+    /// </summary>
+    private sealed class EmptyExpressionDescriptorRegistry : IExpressionDescriptorRegistry
+    {
+        public void Add(IExpressionDescriptor descriptor)
+        {
+        }
+
+        public void AddRange(IEnumerable<IExpressionDescriptor> descriptors)
+        {
+        }
+
+        public IEnumerable<IExpressionDescriptor> ListAll() => [];
+        public IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate) => null;
+        public IExpressionDescriptor? Find(string type) => null;
     }
 }

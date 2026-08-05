@@ -12,20 +12,84 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class ExpressionDraftSemanticValidatorTests
 {
+    /// <summary>Mirrors the product composition: JavaScript and Liquid are text-authored, everything else is not.</summary>
+    private static readonly IExpressionDescriptor[] DefaultDescriptors =
+    [
+        new StubDescriptor("JavaScript", ExpressionEditingMode.Text),
+        new StubDescriptor("Liquid", ExpressionEditingMode.Text),
+        new StubDescriptor("Variable", ExpressionEditingMode.Reference),
+        new StubDescriptor("Secret", ExpressionEditingMode.Reference)
+    ];
+
     [Fact]
     public async Task Literal_string_values_do_not_require_a_text_tooling_provider()
     {
         var provider = new ErrorProvider();
-        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
-        var state = new WorkflowDefinitionState(
-            [],
-            new ActivityNode("node", "activity", [new("text", new("hello", "Literal"), null, null, null, null)], []),
-            [], [], null);
 
-        var result = await validator.ValidateAsync(state, "draft", CancellationToken.None);
+        var result = await Validate(provider, StateWith("hello", "Literal"));
 
         Assert.Equal(ExpressionDraftValidationState.Valid, result.State);
         Assert.Null(provider.Source);
+    }
+
+    [Theory]
+    [InlineData("Object")]
+    [InlineData("Variable")]
+    [InlineData("Input")]
+    [InlineData("Secret")]
+    public async Task Structured_and_reference_expression_types_do_not_require_a_text_tooling_provider(string expressionType)
+    {
+        var provider = new ErrorProvider();
+
+        var result = await Validate(provider, StateWith("Msg", expressionType));
+
+        Assert.Equal(ExpressionDraftValidationState.Valid, result.State);
+        Assert.Null(provider.Source);
+    }
+
+    [Fact]
+    public async Task Structured_object_arguments_are_skipped_whether_raw_or_stringified()
+    {
+        using var json = JsonDocument.Parse("""["GET"]""");
+
+        var raw = await Validate(new ErrorProvider(), StateWith(json.RootElement.Clone(), "Object"));
+        var stringified = await Validate(new ErrorProvider(), StateWith("""["GET"]""", "Object"));
+
+        Assert.Equal(ExpressionDraftValidationState.Valid, raw.State);
+        Assert.Equal(ExpressionDraftValidationState.Valid, stringified.State);
+    }
+
+    [Fact]
+    public async Task Unknown_expression_types_are_skipped_rather_than_blocking_the_draft()
+    {
+        var result = await Validate(provider: null, StateWith("whatever", "Mystery"));
+
+        Assert.Equal(ExpressionDraftValidationState.Valid, result.State);
+    }
+
+    [Fact]
+    public async Task A_text_expression_type_without_a_registered_provider_is_genuinely_unavailable()
+    {
+        var validator = Validator(provider: null, [new StubDescriptor("Fake", ExpressionEditingMode.Text)]);
+
+        var result = await validator.ValidateAsync(StateWith("source", "Fake"), "draft", CancellationToken.None);
+
+        Assert.Equal(ExpressionDraftValidationState.Unavailable, result.State);
+        Assert.Equal("provider-unavailable", result.Code);
+    }
+
+    [Fact]
+    public async Task Known_errors_outrank_an_unavailable_text_provider()
+    {
+        var validator = Validator(new ErrorProvider(), [.. DefaultDescriptors, new StubDescriptor("Fake", ExpressionEditingMode.Text)]);
+        var state = StateOf(
+            Argument("text", "bad source", "JavaScript"),
+            Argument("other", "source", "Fake"));
+
+        var result = await validator.ValidateAsync(state, "draft", CancellationToken.None);
+
+        Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
+        Assert.Equal("JavaScript/Semantic", Assert.Single(result.Diagnostics).Code);
     }
 
     [Fact]
@@ -33,13 +97,8 @@ public sealed class ExpressionDraftSemanticValidatorTests
     {
         using var json = JsonDocument.Parse("\"bad source\"");
         var provider = new ErrorProvider();
-        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
-        var state = new WorkflowDefinitionState(
-            [],
-            new ActivityNode("node", "activity", [new("text", new(json.RootElement.Clone(), "JavaScript"), null, null, null, null)], []),
-            [], [], null);
 
-        var result = await validator.ValidateAsync(state, "draft", CancellationToken.None);
+        var result = await Validate(provider, StateWith(json.RootElement.Clone()));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         Assert.Equal("bad source", provider.Source);
@@ -53,10 +112,8 @@ public sealed class ExpressionDraftSemanticValidatorTests
     {
         using var json = JsonDocument.Parse("""{"type":"JavaScript","source":"bad embedded source"}""");
         var provider = new ErrorProvider();
-        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
-        var state = StateWith(json.RootElement.Clone());
 
-        var result = await validator.ValidateAsync(state, "draft", CancellationToken.None);
+        var result = await Validate(provider, StateWith(json.RootElement.Clone()));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         Assert.Equal("bad embedded source", provider.Source);
@@ -75,8 +132,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task Draft_adapter_contributes_known_expression_errors_to_promotion_validation()
     {
-        var semantic = new ExpressionDraftSemanticValidator(new Resolver(new ErrorProvider()), new LeafStructureService());
-        var adapter = new ExpressionDraftValidator(semantic);
+        var adapter = new ExpressionDraftValidator(Validator(new ErrorProvider()));
         var draft = new WorkflowDefinitionDraftModel("draft", "definition", StateWith("bad source"));
 
         var errors = (await adapter.Validate(draft, CancellationToken.None)).ToArray();
@@ -89,10 +145,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task Real_JavaScript_provider_rejects_balanced_invalid_grammar_for_full_draft_gates()
     {
-        var provider = new JavaScriptExpressionToolingProvider();
-        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
-
-        var result = await validator.ValidateAsync(StateWith("const = 1;"), "draft", CancellationToken.None);
+        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith("const = 1;"));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -103,10 +156,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task Real_JavaScript_provider_rejects_empty_source_for_full_draft_gates()
     {
-        var provider = new JavaScriptExpressionToolingProvider();
-        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new LeafStructureService());
-
-        var result = await validator.ValidateAsync(StateWith(string.Empty), "draft", CancellationToken.None);
+        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith(string.Empty));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -114,22 +164,55 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Assert.Equal("node/inputs/text", diagnostic.AuthoredPath);
     }
 
-    private static WorkflowDefinitionState StateWith(object value) => new(
-        [],
-        new ActivityNode("node", "activity", [new("text", new(value, "JavaScript"), null, null, null, null)], []),
-        [], [], null);
-
-    private static async Task<ExpressionDraftValidationResult> ValidateOutcome(ExpressionToolingOutcomeState state)
+    [Fact]
+    public async Task A_case_variant_expression_type_still_reaches_the_real_provider()
     {
-        var validator = new ExpressionDraftSemanticValidator(
-            new Resolver(new OutcomeProvider(state)),
-            new LeafStructureService());
-        return await validator.ValidateAsync(StateWith("source"), "draft", CancellationToken.None);
+        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith("const = 1;", "javascript"));
+
+        Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
+        Assert.Equal("JavaScript/Syntax", Assert.Single(result.Diagnostics).Code);
     }
 
-    private sealed class Resolver(IExpressionToolingProvider provider) : IExpressionToolingProviderResolver
+    private static ExpressionDraftSemanticValidator Validator(IExpressionToolingProvider? provider) =>
+        Validator(provider, DefaultDescriptors);
+
+    private static ExpressionDraftSemanticValidator Validator(IExpressionToolingProvider? provider, IReadOnlyCollection<IExpressionDescriptor> descriptors) =>
+        new(new Resolver(provider), new DescriptorRegistry(descriptors), new LeafStructureService());
+
+    private static ValueTask<ExpressionDraftValidationResult> Validate(IExpressionToolingProvider? provider, WorkflowDefinitionState state) =>
+        Validator(provider).ValidateAsync(state, "draft", CancellationToken.None);
+
+    private static ArgumentState Argument(string referenceKey, object? value, string expressionType) =>
+        new(referenceKey, new(value, expressionType), null, null, null, null);
+
+    private static WorkflowDefinitionState StateWith(object? value, string expressionType = "JavaScript") =>
+        StateOf(Argument("text", value, expressionType));
+
+    private static WorkflowDefinitionState StateOf(params ArgumentState[] inputs) =>
+        new([], new ActivityNode("node", "activity", inputs, []), [], [], null);
+
+    private static async Task<ExpressionDraftValidationResult> ValidateOutcome(ExpressionToolingOutcomeState state) =>
+        await Validate(new OutcomeProvider(state), StateWith("source"));
+
+    private sealed record StubDescriptor(string TypeName, ExpressionEditingMode EditingMode) : IExpressionDescriptor
     {
-        public IExpressionToolingProvider? Find(string expressionType) => expressionType == provider.ExpressionType ? provider : null;
+        public string DisplayName => TypeName;
+        public IDictionary<string, object> Properties { get; } = new Dictionary<string, object>();
+    }
+
+    private sealed class DescriptorRegistry(IReadOnlyCollection<IExpressionDescriptor> descriptors) : IExpressionDescriptorRegistry
+    {
+        public void Add(IExpressionDescriptor descriptor) => throw new NotSupportedException();
+        public void AddRange(IEnumerable<IExpressionDescriptor> items) => throw new NotSupportedException();
+        public IEnumerable<IExpressionDescriptor> ListAll() => descriptors;
+        public IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate) => descriptors.FirstOrDefault(predicate);
+        public IExpressionDescriptor? Find(string type) => descriptors.FirstOrDefault(descriptor => string.Equals(descriptor.TypeName, type, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed class Resolver(IExpressionToolingProvider? provider) : IExpressionToolingProviderResolver
+    {
+        public IExpressionToolingProvider? Find(string expressionType) =>
+            provider is not null && string.Equals(expressionType, provider.ExpressionType, StringComparison.OrdinalIgnoreCase) ? provider : null;
     }
 
     private sealed class ErrorProvider : IExpressionToolingProvider

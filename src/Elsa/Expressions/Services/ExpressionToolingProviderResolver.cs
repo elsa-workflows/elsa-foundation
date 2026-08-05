@@ -14,7 +14,7 @@ public sealed class ExpressionToolingProviderResolver : IExpressionToolingProvid
             provider => string.IsNullOrWhiteSpace(provider.ExpressionType)
                 ? throw new InvalidOperationException("An expression tooling provider must declare an expression type.")
                 : provider.ExpressionType,
-            StringComparer.Ordinal);
+            StringComparer.OrdinalIgnoreCase);
     }
 
     public IExpressionToolingProvider? Find(string expressionType)

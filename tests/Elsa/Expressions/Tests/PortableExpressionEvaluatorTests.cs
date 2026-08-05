@@ -73,6 +73,22 @@ public sealed class PortableExpressionEvaluatorTests
         Assert.Contains("JavaScript", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Authoring and publishing route expression types case-insensitively, so runtime dispatch must agree —
+    /// otherwise a lowercase "javascript" definition publishes and then faults with no registered handler.
+    /// </summary>
+    [Fact]
+    public async Task Dispatches_a_case_variant_language_to_its_handler()
+    {
+        var handler = new RecordingHandler("JavaScript", JsonSerializer.SerializeToElement(42));
+        var evaluator = new PortableExpressionEvaluator([handler]);
+
+        var result = await evaluator.EvaluateAsync(Request("javascript", new Dictionary<string, JsonElement>()));
+
+        Assert.Equal(42, result.GetInt32());
+        Assert.Equal("javascript", handler.Request!.Definition.Language);
+    }
+
     private static ExpressionEvaluationRequest Request(
         string language,
         IReadOnlyDictionary<string, JsonElement> values,

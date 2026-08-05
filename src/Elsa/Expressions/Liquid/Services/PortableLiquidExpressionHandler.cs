@@ -25,7 +25,7 @@ public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPorta
         request.CancellationToken.ThrowIfCancellationRequested();
 
         var definition = request.Definition;
-        if (!StringComparer.Ordinal.Equals(definition.Language, Language))
+        if (!StringComparer.OrdinalIgnoreCase.Equals(definition.Language, Language))
             throw new ArgumentException($"Expected a {Language} expression, but received '{definition.Language}'.", nameof(request));
         if (!request.Capabilities.IsBindingPure ||
             !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))

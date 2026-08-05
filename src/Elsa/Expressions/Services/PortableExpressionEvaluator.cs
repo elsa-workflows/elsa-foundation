@@ -12,7 +12,7 @@ public sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
     public PortableExpressionEvaluator(IEnumerable<IPortableExpressionHandler> handlers)
     {
         ArgumentNullException.ThrowIfNull(handlers);
-        var snapshot = new Dictionary<string, IPortableExpressionHandler>(StringComparer.Ordinal);
+        var snapshot = new Dictionary<string, IPortableExpressionHandler>(StringComparer.OrdinalIgnoreCase);
         foreach (var handler in handlers)
         {
             ArgumentNullException.ThrowIfNull(handler);
