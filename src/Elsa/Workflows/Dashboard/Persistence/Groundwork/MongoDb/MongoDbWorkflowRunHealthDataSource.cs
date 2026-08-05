@@ -89,6 +89,10 @@ public sealed class MongoDbWorkflowRunHealthDataSource(
             .Match(Builders<BsonDocument>.Filter.And(
                 Builders<BsonDocument>.Filter.Gte("startedAtInstant", query.From.UtcDateTime),
                 Builders<BsonDocument>.Filter.Lt("startedAtInstant", query.To.UtcDateTime)))
+            // KNOWN DEFECT (cross-provider, pre-existing — see the SQL source for the full note): this
+            // $lookup matches incidents by workflowExecutionId alone. IncidentState carries no tenant, and
+            // execution ids are not globally unique (42-bit timestamp + 22 random bits), so a colliding id
+            // lets another tenant's incident be counted here. Needs a tenant on the incident document.
             .AppendStage<BsonDocument>(new BsonDocument("$lookup", new BsonDocument
             {
                 ["from"] = IncidentsCollectionName,

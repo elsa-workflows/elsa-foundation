@@ -119,6 +119,15 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         return result;
     }
 
+    /// <remarks>
+    /// KNOWN DEFECT (cross-provider, pre-existing): the incidents CTE below joins incidents to executions
+    /// by execution id alone. <c>IncidentState</c> carries no tenant, so an incident owned by another
+    /// tenant is counted against this tenant's execution when the two ids collide. Ids are NOT globally
+    /// unique — <c>ShortIdentityGenerator</c> emits a 42-bit timestamp plus only 22 random bits, making a
+    /// same-millisecond collision a birthday problem at roughly 2^11 ids rather than a cryptographic
+    /// improbability. Fixing it requires a tenant on the incident document or a scope-qualified join key;
+    /// it cannot be fixed inside this query. The MongoDb source carries the same defect.
+    /// </remarks>
     private string BuildBucketSql(WorkflowRunHealthDataQuery request)
     {
         var cases = string.Join(Environment.NewLine, request.Buckets.Select(bucket =>

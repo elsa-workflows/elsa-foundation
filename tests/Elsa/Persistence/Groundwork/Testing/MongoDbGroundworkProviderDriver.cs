@@ -161,6 +161,15 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
             }.ToString();
             await ValidateTransactionTopologyAsync(cancellationToken);
         }
+        catch (DotNet.Testcontainers.Builders.DockerUnavailableException)
+        {
+            // Rethrown unchanged so a host without Docker is skippable rather than a hard failure, matching
+            // SqlServerGroundworkProviderDriver. The generic catch below suppresses connection details; this
+            // exception reports an unreachable Docker daemon and carries none. While it was swallowed, every
+            // fixture's catch (DockerUnavailableException) skip path was unreachable.
+            await CleanupFailedInitializationAsync();
+            throw;
+        }
         catch (OperationCanceledException)
         {
             await CleanupFailedInitializationAsync();

@@ -185,24 +185,51 @@ internal static class OpenTelemetryDifferentialProbes
     /// </remarks>
     private static async Task<OpenTelemetryObservation> RollbackVisibilityAsync(OpenTelemetryDifferentialTarget target)
     {
+        // The FLUSHED batch spans all five signal streams. Tearing is only answerable on a batch whose
+        // drain completed: an abandoned batch caught mid-flight is legitimately partial, so asking the
+        // same question there measures drain scheduling rather than atomicity.
         var store = await target.OpenAsync();
-        await store.WriteAsync(Batch(resources: [Resource("resource-a", "service-a", Now)], traces: [Trace("trace-flushed", Now)]));
+        await store.WriteAsync(Batch(
+            resources: [Resource("resource-a", "service-a", Now)],
+            traces: [Trace("trace-flushed", Now)],
+            instruments: [Instrument("instrument-flushed", "resource-a")],
+            points: [Point("point-flushed", "instrument-flushed", "resource-a", Now)],
+            logs: [Log("log-flushed", "resource-a", "trace-flushed")]));
         await target.FlushAsync();
 
+        // The abandoned batch spans four signal streams on purpose. A single-signal batch cannot detect
+        // tearing: if a resource, instrument, metric point or log survived while its trace did not, a
+        // trace-only observation reports a clean rollback and the suite misses an atomicity regression.
         var reopened = await target.OpenAsync();
-        await reopened.WriteAsync(Batch(traces: [Trace("trace-unflushed", Now.AddSeconds(1))]));
+        await reopened.WriteAsync(Batch(
+            resources: [Resource("resource-torn", "service-torn", Now.AddSeconds(1))],
+            traces: [Trace("trace-unflushed", Now.AddSeconds(1))],
+            instruments: [Instrument("instrument-torn", "resource-torn")],
+            points: [Point("point-torn", "instrument-torn", "resource-torn", Now.AddSeconds(1))],
+            logs: [Log("log-torn", "resource-torn", "trace-unflushed")]));
         await target.AbandonAsync();
 
         var afterAbandon = await target.OpenAsync();
         var traces = (await afterAbandon.QueryTracesAsync(new() { Take = 50 })).Items.Select(t => t.TraceId).ToArray();
+        // Every stream of the completed batch must be present. If any one is missing while the others
+        // survived, the flushed write tore — and that verdict does not depend on the abandoned batch's
+        // drain race at all.
+        var flushedMetrics = await afterAbandon.QueryMetricsAsync(new() { Take = 50 });
+        var flushedSurvival = new[]
+        {
+            traces.Contains("trace-flushed"),
+            (await afterAbandon.QueryResourcesAsync(new() { Take = 50 })).Items.Any(r => r.Id == "resource-a"),
+            flushedMetrics.Instruments.Any(i => i.Id == "instrument-flushed"),
+            flushedMetrics.Points.Any(p => p.Id == "point-flushed"),
+            (await afterAbandon.QueryLogsAsync(new() { Take = 50 })).Items.Any(l => l.Id == "log-flushed")
+        };
 
         var facts = new Dictionary<string, string>
         {
-            ["flushed-write-durable"] = traces.Contains("trace-flushed") ? "true" : "false",
-            // Whether the unflushed write survived is deliberately NOT reported — see the remarks above.
-            // Only the torn-batch question is answerable here, and it is answerable regardless of who wins
-            // the drain race: neither stack may ever expose more than the writes that were issued.
-            ["partial-batch-visible"] = traces.Length > 2 ? "true" : "false"
+            ["flushed-write-durable"] = flushedSurvival.All(present => present) ? "true" : "false",
+            // Whether the ABANDONED write survived is deliberately NOT reported — see the remarks above.
+            // Tearing is asserted on the flushed batch, where the answer is deterministic.
+            ["partial-batch-visible"] = flushedSurvival.Distinct().Count() > 1 ? "true" : "false"
         };
 
         await target.CloseAsync();
