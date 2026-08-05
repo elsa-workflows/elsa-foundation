@@ -20,6 +20,7 @@ import {
 } from "../workflowAdapter";
 import {
   buildBpmnCanvas,
+  collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
   createBpmnShapeNode,
@@ -324,14 +325,11 @@ export function useWorkflowCanvas({
   }, [addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, observeReusablePlacement, resetToRoot, pinLayout, setError, setStatus]);
 
   const resolveRemovedActivityNodeIds = useCallback((deletedNodes: Node<WorkflowNodeData>[]) =>
-    deletedNodes.reduce((result, node) => {
-      const boundNodeId = (node.data as unknown as BpmnNodeData).boundActivity?.nodeId;
-      const activityNodeId = boundNodeId ?? node.id;
-      const activity = scope?.slot.activities.find(candidate => candidate.nodeId === activityNodeId);
-      return activity
-        ? collectActivityNodeIds(activity, catalogByVersion, result)
-        : result.add(activityNodeId);
-    }, new Set<string>()), [catalogByVersion, scope?.slot.activities]);
+    collectRemovedGraphNodeIds(
+      deletedNodes as unknown as Node<BpmnNodeData>[],
+      scope?.slot.activities ?? [],
+      catalogByVersion),
+    [catalogByVersion, scope?.slot.activities]);
 
   const interactions = useGraphCanvasInteractions({
     nodes,

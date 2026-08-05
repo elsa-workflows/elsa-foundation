@@ -9,10 +9,12 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import {
   ActivityGraphImplementationEditor,
-  ActivityGraphPublicInterfaceEditor
+  ActivityGraphPublicInterfaceEditor,
+  reconcileGraphLayout
 } from "../ActivityGraphImplementationEditor";
 import { inputReferenceContribution } from "../inputReferenceContribution";
 import { flowchartStructureKind } from "../flowchartStartNode";
+import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
@@ -257,6 +259,133 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(layout).toHaveLength(1);
     // The grid fallback would put the first node at (80, 80); a positioned drop must not land there.
     expect({ x: layout[0].x, y: layout[0].y }).not.toEqual({ x: 80, y: 80 });
+  });
+});
+
+describe("ActivityGraphImplementationEditor BPMN slots", () => {
+  // A BPMN scope renders from its process ELEMENTS, so an activity placed without a bound element has
+  // no representation on the canvas and is dropped by the next syncBpmnCanvasToScope.
+  it("binds a palette placement to a BPMN element", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: bpmnImplementationValue(), onChange });
+
+    click(buttonByText(rendered.container, "Primitives1"));
+    click(buttonByText(rendered.container, "Write line"));
+
+    const payload = lastPayload(onChange);
+    expect(payload.activities).toHaveLength(1);
+    const placed = payload.elements.find(element => element.elementId !== "start");
+    expect(placed?.elementType).toBe("task");
+    expect(placed?.childNodeId).toBe(payload.activities[0].nodeId);
+  });
+
+  it("renders the existing BPMN elements rather than the slot activities", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const rendered = renderDesigner({
+      value: bpmnImplementationValue([
+        { elementId: "start", elementType: "startEvent" },
+        { elementId: "task-1", elementType: "task", childNodeId: "write-line-1" }
+      ], [{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }])
+    });
+
+    expect(rendered.container.querySelector("[data-graph-node-id='task-1']")).not.toBeNull();
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-1']")).toBeNull();
+  });
+
+  it("drops the layout records of a deleted BPMN element and its bound activity", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value: {
+        ...bpmnImplementationValue([
+          { elementId: "start", elementType: "startEvent" },
+          { elementId: "task-1", elementType: "task", childNodeId: "write-line-1" }
+        ], [{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]),
+        layout: [
+          { nodeId: "start", data: { x: 0, y: 0 } },
+          { nodeId: "task-1", data: { x: 200, y: 100 } },
+          { nodeId: "write-line-1", data: { x: 200, y: 100 } }
+        ]
+      },
+      onChange
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='task-1']")!);
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+
+    const layout = onChange.mock.calls.at(-1)?.[0].layout as Array<{ nodeId: string }>;
+    expect(layout.map(record => record.nodeId)).toEqual(["start"]);
+  });
+
+  it("inspects the activity a selected BPMN element binds", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const rendered = renderDesigner({
+      value: bpmnImplementationValue([
+        { elementId: "start", elementType: "startEvent" },
+        { elementId: "task-1", elementType: "task", childNodeId: "write-line-1" }
+      ], [{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }])
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='task-1']")!);
+
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Version");
+    expect(buttonByText(rendered.container, "Move activity left", "aria-label").disabled).toBe(true);
+  });
+});
+
+describe("reconcileGraphLayout", () => {
+  // Every commitRoot path — an inspector edit above all — rebuilds the layout through this function.
+  // A BPMN scope positions its elements, so dropping records it does not recognise would scatter the
+  // process back to the default grid on the next property change.
+  it("keeps BPMN element positions alongside activity positions", () => {
+    const root = {
+      nodeId: "root",
+      activityVersionId: "bpmn-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: bpmnStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [
+            { elementId: "start", elementType: "startEvent" },
+            { elementId: "task-1", elementType: "task", childNodeId: "write-line-1" }
+          ],
+          sequenceFlows: [],
+          activities: [{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]
+        }
+      }
+    } as unknown as Parameters<typeof reconcileGraphLayout>[0];
+
+    const reconciled = reconcileGraphLayout(
+      root,
+      new Map([["bpmn-v1", bpmnCatalogItem()], ["write-line-v1", leafCatalogItem()]] as never),
+      [
+        { nodeId: "start", x: 10, y: 20 },
+        { nodeId: "task-1", x: 300, y: 400 }
+      ]
+    );
+
+    expect(reconciled.find(record => record.nodeId === "task-1")).toMatchObject({ x: 300, y: 400 });
+    expect(reconciled.find(record => record.nodeId === "start")).toMatchObject({ x: 10, y: 20 });
+  });
+
+  it("drops records for activities that are no longer in the graph", () => {
+    const root = {
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: flowchartStructureKind,
+        schemaVersion: "1.0.0",
+        payload: { activities: [], connections: [], startNodeId: null, nodeMetadata: {}, connectionMetadata: {} }
+      }
+    } as unknown as Parameters<typeof reconcileGraphLayout>[0];
+
+    expect(reconcileGraphLayout(root, new Map(), [{ nodeId: "gone", x: 1, y: 2 }])).toEqual([]);
   });
 });
 
@@ -508,6 +637,62 @@ function flowchartImplementationValue(kind = "Flowchart") {
       outcomeMappings: []
     },
     layout: []
+  };
+}
+
+// deleteSelected guards on window.confirm; approve exactly one prompt.
+function confirmOnce() {
+  const original = window.confirm;
+  window.confirm = () => {
+    window.confirm = original;
+    return true;
+  };
+}
+
+function bpmnCatalogItem() {
+  return {
+    activityVersionId: "bpmn-v1",
+    activityTypeKey: "Elsa.BpmnProcess",
+    version: "1.0.0",
+    category: "Composition",
+    displayName: "BPMN Process",
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    ports: []
+  };
+}
+
+function bpmnImplementationValue(
+  elements: Array<Record<string, unknown>> = [{ elementId: "start", elementType: "startEvent" }],
+  activities: Array<Record<string, unknown>> = []
+) {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "bpmn-v1",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: bpmnStructureKind,
+          schemaVersion: "1.0.0",
+          payload: { elements, sequenceFlows: [], activities }
+        }
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
+function lastPayload(onChange: ReturnType<typeof vi.fn>) {
+  const structure = onChange.mock.calls.at(-1)?.[0].payload.rootActivity.structure.payload;
+  return {
+    elements: (structure.elements ?? []) as Array<{ elementId: string; elementType: string; childNodeId?: string }>,
+    activities: (structure.activities ?? []) as Array<{ nodeId: string }>
   };
 }
 

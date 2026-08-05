@@ -1,6 +1,6 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { getActivityDisplay, readStructureDesignFacet, resolveActivityIcon, type CanvasScope, type WorkflowNodeIcon } from "../workflowAdapter";
+import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, resolveActivityIcon, type ActivityCatalogLookup, type CanvasScope, type WorkflowNodeIcon } from "../workflowAdapter";
 import {
   bpmnElementTypes,
   bpmnStructureKind,
@@ -121,11 +121,11 @@ export function syncBpmnCanvasToScope(
   const previousElementsById = new Map(readBpmnElements(owner).map(element => [element.elementId, element]));
   const previousFlowsById = new Map(readBpmnSequenceFlows(owner).map(flow => [flow.flowId, flow]));
 
-  const elements = nodes
+  const retainedElements = nodes
     .map(node => previousElementsById.get(node.id) ?? node.data?.element)
     .filter(isBpmnElement);
 
-  const elementIds = new Set(elements.map(element => element.elementId));
+  const elementIds = new Set(retainedElements.map(element => element.elementId));
   const sequenceFlows = edges
     .filter(edge => elementIds.has(edge.source) && elementIds.has(edge.target))
     .map(edge => {
@@ -140,6 +140,15 @@ export function syncBpmnCanvasToScope(
         isDefault: previous?.isDefault ?? data.isDefault ?? false
       } satisfies BpmnSequenceFlow;
     });
+
+  // A retained element is carried forward verbatim, so a gateway whose default flow was just deleted
+  // would keep pointing at a flowId that no longer exists. Drop the reference rather than persist a
+  // process that names a sequence flow it no longer contains.
+  const flowIds = new Set(sequenceFlows.map(flow => flow.flowId));
+  const elements = retainedElements.map(element =>
+    element.defaultFlowId && !flowIds.has(element.defaultFlowId)
+      ? { ...element, defaultFlowId: null }
+      : element);
 
   const referencedChildNodeIds = new Set(
     elements.map(element => element.childNodeId).filter((nodeId): nodeId is string => !!nodeId)
@@ -277,6 +286,42 @@ export function createBpmnFlowEdge(source: string, target: string): Edge {
     target,
     type: "workflow"
   };
+}
+
+// Per-node document side tables — layout above all — are keyed by CANVAS node id. Inside a BPMN scope
+// that key is the elementId, which collectActivityNodeIds never yields because it walks ActivityNodes.
+// Deleting a bound subprocess would therefore strand a layout record for every element nested in it.
+export function collectBpmnElementIds(
+  activity: ActivityNode,
+  catalog: ActivityCatalogLookup,
+  result: Set<string> = new Set()
+) {
+  for (const element of readBpmnElements(activity)) result.add(element.elementId);
+  for (const slot of getChildSlots(activity, catalog)) {
+    for (const child of slot.activities) collectBpmnElementIds(child, catalog, result);
+  }
+  return result;
+}
+
+/**
+ * Expands the canvas nodes a delete removed into every document node id that goes with them: the
+ * activity an element binds, that activity's nested activities, and the BPMN element ids of any BPMN
+ * scope in the subtree. Shared by the workflow designer and Activity Definition graph authoring, which
+ * differ only in where their slot activities come from.
+ */
+export function collectRemovedGraphNodeIds(
+  deleted: Node<BpmnNodeData>[],
+  slotActivities: ActivityNode[],
+  catalog: ActivityCatalogLookup
+): Set<string> {
+  return deleted.reduce((result, node) => {
+    const activityNodeId = node.data?.boundActivity?.nodeId ?? node.id;
+    const activity = slotActivities.find(candidate => candidate.nodeId === activityNodeId);
+    if (!activity) return result.add(activityNodeId);
+    collectActivityNodeIds(activity, catalog, result);
+    collectBpmnElementIds(activity, catalog, result);
+    return result;
+  }, new Set<string>());
 }
 
 function isContainerCatalogItem(catalogItem: ActivityCatalogItem) {

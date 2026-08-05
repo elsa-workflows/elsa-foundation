@@ -619,7 +619,9 @@ export function useGraphCanvasInteractions({
     if (isUnsupported) return;
     if (deletedNodes.length === 0) return;
     const deletedIds = new Set(deletedNodes.map(node => node.id));
-    const removedNodeIds = resolveRemovedActivityNodeIds?.(deletedNodes) ?? deletedIds;
+    // Always includes the canvas node ids themselves: per-node side tables (layout above all) are keyed
+    // by canvas node id, which in a BPMN scope is the element id rather than the resolved activity id.
+    const removedNodeIds = new Set([...deletedIds, ...(resolveRemovedActivityNodeIds?.(deletedNodes) ?? [])]);
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
     const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
