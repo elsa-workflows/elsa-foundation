@@ -120,13 +120,13 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     }
 
     /// <remarks>
-    /// KNOWN DEFECT (cross-provider, pre-existing): the incidents CTE below joins incidents to executions
-    /// by execution id alone. <c>IncidentState</c> carries no tenant, so an incident owned by another
-    /// tenant is counted against this tenant's execution when the two ids collide. Ids are NOT globally
-    /// unique — <c>ShortIdentityGenerator</c> emits a 42-bit timestamp plus only 22 random bits, making a
-    /// same-millisecond collision a birthday problem at roughly 2^11 ids rather than a cryptographic
-    /// improbability. Fixing it requires a tenant on the incident document or a scope-qualified join key;
-    /// it cannot be fixed inside this query. The MongoDb source carries the same defect.
+    /// The incidents CTE joins on <c>(execution_id, storage_scope)</c>, never on execution id alone.
+    /// Execution ids are not globally unique — <c>ShortIdentityGenerator</c> emits a 42-bit timestamp plus
+    /// only 22 random bits, so a same-millisecond collision is a birthday problem at roughly 2^11 ids rather
+    /// than a cryptographic improbability. <c>IncidentState</c> carries no tenant of its own, but every
+    /// Groundwork row does: <c>storage_scope</c> is the physical tenant partition key that
+    /// <c>GroundworkScopedDocumentStore</c> writes from the ambient <c>PersistenceScope</c>. Joining on it
+    /// keeps a colliding id in another tenant's partition from being counted here.
     /// </remarks>
     private string BuildBucketSql(WorkflowRunHealthDataQuery request)
     {
@@ -135,7 +135,8 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         var testFilter = request.Query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}";
         return $"""
             {StatementPrefix}WITH executions AS (
-                SELECT {Json(e: true, "workflowExecutionId")} AS execution_id,
+                SELECT e.storage_scope AS storage_scope,
+                       {Json(e: true, "workflowExecutionId")} AS execution_id,
                        {JsonInt("status")} AS status,
                        {Instant(Json(e: true, "startedAt"))} AS started_at
                 FROM groundwork_documents e
@@ -146,11 +147,14 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
                   AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
                   AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}
             ), incidents AS (
-                SELECT {Json(e: false, "workflowExecutionId", alias: "i")} AS execution_id, COUNT(*) AS incident_count
+                SELECT i.storage_scope AS storage_scope,
+                       {Json(e: false, "workflowExecutionId", alias: "i")} AS execution_id,
+                       COUNT(*) AS incident_count
                 FROM groundwork_documents i
                 JOIN executions e ON e.execution_id = {Json(e: false, "workflowExecutionId", alias: "i")}
+                                 AND e.storage_scope = i.storage_scope
                 WHERE i.document_kind = @incidentKind
-                GROUP BY {Json(e: false, "workflowExecutionId", alias: "i")}
+                GROUP BY i.storage_scope, {Json(e: false, "workflowExecutionId", alias: "i")}
             ), bucketed AS (
                 SELECT CASE
                     {cases}
@@ -159,6 +163,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
                 COALESCE(i.incident_count, 0) AS incident_count
                 FROM executions e
                 LEFT JOIN incidents i ON i.execution_id = e.execution_id
+                                     AND i.storage_scope = e.storage_scope
             )
             SELECT bucket_index,
                    COUNT(*) AS started_count,

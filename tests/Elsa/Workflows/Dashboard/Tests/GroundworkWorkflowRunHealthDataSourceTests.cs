@@ -13,51 +13,90 @@ using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Tests;
 
-public sealed class GroundworkWorkflowRunHealthDataSourceTests
+public sealed class GroundworkWorkflowRunHealthDataSourceTests : IAsyncDisposable
 {
+    private readonly string _path = Path.Join(Path.GetTempPath(), $"elsa-dashboard-{Guid.NewGuid():N}.db");
+    private readonly GroundworkRuntimeDocumentSerializer _serializer = new();
+
     [Fact]
     public async Task SqliteAdapterPagesPastOneHundredExecutionsAndReturnsTheirIncidentsExactly()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-dashboard-{Guid.NewGuid():N}.db");
-        try
-        {
-            var store = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path}",
-                ElsaRuntimeStorageManifest.Create(),
-                new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
-            var serializer = new GroundworkRuntimeDocumentSerializer();
-            var executionStore = new GroundworkWorkflowExecutionStateStore(
-                store,
-                serializer,
-                new FixedAccessContextAccessor(
-                    PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
-            var incidentStore = new GroundworkIncidentStateStore(store, serializer);
+        var tenant = await StoresAsync("tenant-a");
+        for (var index = 0; index < 125; index++)
+            await tenant.Executions.SaveAsync(Execution("tenant-a", index));
+        await tenant.Incidents.SaveAsync(Incident("incident-1", "run-124"));
 
-            for (var index = 0; index < 125; index++)
-                await executionStore.SaveAsync(Execution(index));
-            await incidentStore.SaveAsync(Incident("incident-1", "run-124"));
+        var snapshot = await QueryAsync("tenant-a");
 
-            var source = new GroundworkWorkflowRunHealthDataSource(
-                () => new SqliteConnection($"Data Source={path}"),
-                GroundworkRunHealthDialect.Sqlite);
-            var service = new WorkflowRunHealthService(source);
-            var snapshot = await service.QueryAsync(new(
-                DateTimeOffset.UnixEpoch,
-                DateTimeOffset.UnixEpoch.AddDays(1),
-                "Etc/UTC",
-                WorkflowRunHealthBucketSize.Day,
-                "tenant-a"));
-
-            Assert.Equal(125, snapshot.StartedCount);
-            Assert.Equal(1, snapshot.IncidentBearingRunCount);
-            Assert.Equal(1, snapshot.IncidentCount);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        Assert.Equal(125, snapshot.StartedCount);
+        Assert.Equal(1, snapshot.IncidentBearingRunCount);
+        Assert.Equal(1, snapshot.IncidentCount);
     }
+
+    /// <summary>
+    /// Execution ids are not globally unique, so two tenants can legitimately hold the same one. An incident
+    /// raised in one tenant must never be counted against the other tenant's identically-numbered execution.
+    /// </summary>
+    [Fact]
+    public async Task SqliteAdapterExcludesAnotherTenantsIncidentOnACollidingExecutionId()
+    {
+        const string collidingExecutionId = "run-0";
+        var tenantA = await StoresAsync("tenant-a");
+        var tenantB = await StoresAsync("tenant-b");
+
+        // Both tenants own an execution under the very same id; only tenant B's execution has an incident.
+        await tenantA.Executions.SaveAsync(Execution("tenant-a", 0));
+        await tenantB.Executions.SaveAsync(Execution("tenant-b", 0));
+        await tenantB.Incidents.SaveAsync(Incident("incident-1", collidingExecutionId));
+
+        var tenantASnapshot = await QueryAsync("tenant-a");
+        var tenantBSnapshot = await QueryAsync("tenant-b");
+
+        Assert.Equal(1, tenantASnapshot.StartedCount);
+        Assert.Equal(0, tenantASnapshot.IncidentCount);
+        Assert.Equal(0, tenantASnapshot.IncidentBearingRunCount);
+
+        // Tenant B still sees its own incident: the scope predicate narrows the join, it does not break it.
+        Assert.Equal(1, tenantBSnapshot.StartedCount);
+        Assert.Equal(1, tenantBSnapshot.IncidentCount);
+        Assert.Equal(1, tenantBSnapshot.IncidentBearingRunCount);
+    }
+
+    private async Task<TenantStores> StoresAsync(string tenantId)
+    {
+        var store = await SqliteDocumentStoreFactory.CreateAsync(
+            $"Data Source={_path}",
+            ElsaRuntimeStorageManifest.Create(),
+            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
+            DocumentStoreAccess.Scoped(new StorageScope(tenantId)));
+        return new(
+            new(store, _serializer, new FixedAccessContextAccessor(
+                PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)))),
+            new(store, _serializer));
+    }
+
+    private async Task<WorkflowRunHealthSnapshot> QueryAsync(string tenantId)
+    {
+        var source = new GroundworkWorkflowRunHealthDataSource(
+            () => new SqliteConnection($"Data Source={_path}"),
+            GroundworkRunHealthDialect.Sqlite);
+        return await new WorkflowRunHealthService(source).QueryAsync(new(
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch.AddDays(1),
+            "Etc/UTC",
+            WorkflowRunHealthBucketSize.Day,
+            tenantId));
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        File.Delete(_path);
+        return ValueTask.CompletedTask;
+    }
+
+    private sealed record TenantStores(
+        GroundworkWorkflowExecutionStateStore Executions,
+        GroundworkIncidentStateStore Incidents);
 
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
         : IPersistenceAccessContextAccessor
@@ -65,7 +104,7 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests
         public PersistenceAccessContext Current { get; } = current;
     }
 
-    private static WorkflowExecutionState Execution(int index)
+    private static WorkflowExecutionState Execution(string tenantId, int index)
     {
         var startedAt = DateTimeOffset.UnixEpoch.AddMinutes(index);
         return new(
@@ -79,12 +118,11 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests
             startedAt.AddMinutes(1),
             null,
             null,
-            "tenant-a",
+            tenantId,
             new Dictionary<string, string>());
     }
 
     private static IncidentState Incident(string id, string executionId) =>
         new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,
             null, "Failure", "Failed", DateTimeOffset.UnixEpoch, null);
-
 }
