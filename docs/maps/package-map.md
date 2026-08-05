@@ -45,7 +45,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Activities.Testing (2.3.10)<br>Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
-| Microsoft.AspNetCore.TestHost | 10.0.9 | Elsa.Activities.Http.IntegrationTests (10.0.9)<br>Elsa.Architecture.Tests (10.0.9)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.9)<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests (10.0.9)<br>Elsa.Foundation.Identity.Tests (10.0.9)<br>Elsa.Workflows.Runtime.Api.Tests (10.0.9) |
+| Microsoft.AspNetCore.TestHost | 10.0.10 | Elsa.Activities.Http.IntegrationTests (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Api.Tests (10.0.10) |
 | Microsoft.CodeAnalysis.CSharp | 5.0.0 | Elsa.Workflows.Design.CodeGeneration (5.0.0)<br>Elsa.Workflows.Design.CodeGeneration.Tests (5.0.0) |
 | Microsoft.Data.SqlClient | 7.0.1 | Elsa.Diagnostics.Persistence.Tests (7.0.1)<br>Elsa.Persistence.Groundwork.Conformance.Tests (7.0.1)<br>Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests (7.0.1)<br>Elsa.Persistence.Groundwork.SqlServer (7.0.1)<br>Elsa.Persistence.Groundwork.SqlServer.Tests (7.0.1)<br>Elsa.Persistence.Groundwork.SqlServer.Unified (7.0.1)<br>Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests (7.0.1)<br>Elsa.Persistence.Groundwork.Testing (7.0.1) |
 | Microsoft.Data.Sqlite | 10.0.10 | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests (10.0.10)<br>Elsa.Diagnostics.Persistence.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests (10.0.10)<br>Elsa.Persistence.Groundwork.Sqlite (10.0.10)<br>Elsa.Persistence.Groundwork.Testing (10.0.10) |
@@ -191,7 +191,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.Extensions.Http | 10.0.10 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.Extensions.Options | 10.0.10 |
-| [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | xunit | 2.9.3 |
@@ -295,7 +295,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Api.FastEndpoints.Tests](../../tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | CShells.AspNetCore | 0.0.29-preview.147 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | CShells.FastEndpoints | 0.0.29-preview.147 |
-| [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.10 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | YamlDotNet | 16.3.0 |
@@ -351,7 +351,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | xunit | 2.9.3 |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
-| [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | xunit | 2.9.3 |
@@ -489,7 +489,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj) | source | Groundwork.Core | 0.0.1-preview.103 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj) | source | Groundwork.Documents | 0.0.1-preview.103 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Groundwork.Sqlite | 0.0.1-preview.103 |
-| [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | xunit | 2.9.3 |
@@ -528,7 +528,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | CShells | 0.0.29-preview.147 |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | CShells.AspNetCore | 0.0.29-preview.147 |
-| [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Microsoft.EntityFrameworkCore.InMemory | 10.0.10 |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | coverlet.collector | 6.0.2 |
@@ -1011,7 +1011,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.10 |
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Microsoft.Extensions.Options | 10.0.10 |
 | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
-| [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.9 |
+| [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | xunit | 2.9.3 |
