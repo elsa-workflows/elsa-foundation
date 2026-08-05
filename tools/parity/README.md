@@ -4,7 +4,7 @@ Mechanical extraction and diff of the **activity contract surface** — every ac
 outputs, outcome ports, child slots and trigger flag — for `elsa-foundation` (Elsa 4) and
 `elsa-core` (Elsa 3).
 
-These scripts back [`docs/reports/elsa-4-activity-contract-parity-2026-07.md`](../../docs/reports/elsa-4-activity-contract-parity-2026-07.md).
+These scripts back [`docs/reports/elsa-4-activity-contract-parity-2026-08.md`](../../docs/reports/elsa-4-activity-contract-parity-2026-08.md).
 Re-run them whenever an activity contract changes so the report and its evidence stay honest.
 
 ## Why source parsing rather than reflection

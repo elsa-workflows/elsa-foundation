@@ -1,5 +1,21 @@
 # Elsa 3 → Elsa 4 — activity contract parity audit (2026-07)
 
+> **⚠️ SUPERSEDED (2026-08) by
+> [`elsa-4-activity-contract-parity-2026-08.md`](elsa-4-activity-contract-parity-2026-08.md).**
+>
+> Its numbers were correct when written and are wrong now. Two of the three headline findings have been
+> fixed: §1 (intrinsics) — the catalog now publishes **five** of nine, not two, and the remaining four
+> are deliberately withheld and asserted as such (#1113 closed); §2.1 (`RunJavaScript` outcomes) — the
+> activity now carries `ActivityValueOutcomes` with dynamic ports and a catch-all (#1114 closed). §2.2
+> (`HttpEndpoint` outcome ports + file upload) still stands, as #1115/#1116. Three verdicts flipped
+> `gap` → `present` in the regenerated evidence: `Fault`, `PublishEvent`, `RunJavaScript`, moving full
+> parity from 17 to 19 and member-level gaps from 10 rows to 7.
+>
+> The "Blocked work" section is also obsolete: the behavioural half has since been done — see
+> [`elsa-4-activity-behavioural-drive-2026-08.md`](elsa-4-activity-behavioural-drive-2026-08.md).
+>
+> Kept for the historical record. Do not use it as a current gap list.
+
 > **Scope.** Every out-of-the-box activity in `src/Elsa/Activities`, diffed member-by-member against its
 > Elsa 3 counterpart in `elsa-core`, plus the engine intrinsics that replaced Elsa 3 activities.
 > The question this answers: *which activities are missing inputs, missing outputs, missing outcomes, or

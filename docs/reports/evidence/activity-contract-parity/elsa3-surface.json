@@ -963,7 +963,7 @@
       {
         "name": "Result",
         "type": "T",
-        "inheritedFrom": "TimerBase"
+        "inheritedFrom": "EventGenerator"
       }
     ]
   },
@@ -1829,7 +1829,7 @@
       {
         "name": "Result",
         "type": "T",
-        "inheritedFrom": "Container"
+        "inheritedFrom": "Activity"
       }
     ]
   },
@@ -1915,7 +1915,7 @@
       {
         "name": "Result",
         "type": "T",
-        "inheritedFrom": "Container"
+        "inheritedFrom": "Activity"
       }
     ]
   },

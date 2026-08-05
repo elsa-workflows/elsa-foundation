@@ -284,9 +284,17 @@ def scan_file(path: str):
 
         inputs = []
         for im in INPUT_RE.finditer(body):
-            entry = {"name": im.group("name"), "type": " ".join(im.group("type").split())}
+            decl = " ".join(im.group("type").split())
+            # The production scanner honours BOTH Elsa's [Required] marker and the
+            # RequiredMemberAttribute the C# compiler emits for `required` members
+            # (ClrAssemblyScanner.HasRequired). Mirror that here, or an input declared with the
+            # `required` modifier is silently reported as optional.
+            required_modifier = decl == "required" or decl.startswith("required ")
+            if required_modifier:
+                decl = decl[len("required "):].strip()
+            entry = {"name": im.group("name"), "type": decl}
             entry.update(parse_named_args(im.group("args") or ""))
-            entry["required"] = "[Required]" in (im.group("extra") or "")
+            entry["required"] = required_modifier or "[Required]" in (im.group("extra") or "")
             inputs.append(entry)
 
         outputs = collect_outputs(body)

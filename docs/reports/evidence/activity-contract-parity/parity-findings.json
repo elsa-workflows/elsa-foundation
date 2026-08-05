@@ -8,13 +8,6 @@
       "divergences": []
     },
     {
-      "elsa3": "Fault",
-      "elsa4": "Fault",
-      "verdict": "gap",
-      "detail": "inputs missing: Code, Category, FaultType",
-      "divergences": []
-    },
-    {
       "elsa3": "FlowJoin",
       "elsa4": "Parallel",
       "verdict": "gap",
@@ -50,20 +43,6 @@
           "reason": "carried by the Elsa 4 `Request` output (HttpRequestModel.Headers)"
         }
       ]
-    },
-    {
-      "elsa3": "PublishEvent",
-      "elsa4": "PublishEvent",
-      "verdict": "gap",
-      "detail": "inputs missing: IsLocalEvent",
-      "divergences": []
-    },
-    {
-      "elsa3": "RunJavaScript",
-      "elsa4": "RunJavaScript",
-      "verdict": "gap",
-      "detail": "inputs missing: PossibleOutcomes; new in Elsa 4: Arguments, Value",
-      "divergences": []
     },
     {
       "elsa3": "SendHttpRequest",
@@ -199,6 +178,13 @@
       "divergences": []
     },
     {
+      "elsa3": "Fault",
+      "elsa4": "Fault",
+      "verdict": "present",
+      "detail": "full parity",
+      "divergences": []
+    },
+    {
       "elsa3": "FlowDecision",
       "elsa4": "If",
       "verdict": "present",
@@ -270,10 +256,24 @@
       "divergences": []
     },
     {
+      "elsa3": "PublishEvent",
+      "elsa4": "PublishEvent",
+      "verdict": "present",
+      "detail": "full parity",
+      "divergences": []
+    },
+    {
       "elsa3": "ReadLine",
       "elsa4": "ReadLine",
       "verdict": "present",
       "detail": "new in Elsa 4: Line",
+      "divergences": []
+    },
+    {
+      "elsa3": "RunJavaScript",
+      "elsa4": "RunJavaScript",
+      "verdict": "present",
+      "detail": "new in Elsa 4: Arguments, Value",
       "divergences": []
     },
     {
@@ -438,16 +438,6 @@
     },
     {
       "kind": "missing-inputs",
-      "elsa3": "Fault",
-      "elsa4": "Fault",
-      "members": [
-        "Code",
-        "Category",
-        "FaultType"
-      ]
-    },
-    {
-      "kind": "missing-inputs",
       "elsa3": "FlowJoin",
       "elsa4": "Parallel",
       "members": [
@@ -522,22 +512,6 @@
         "Result"
       ],
       "e3Outcomes": []
-    },
-    {
-      "kind": "missing-inputs",
-      "elsa3": "PublishEvent",
-      "elsa4": "PublishEvent",
-      "members": [
-        "IsLocalEvent"
-      ]
-    },
-    {
-      "kind": "missing-inputs",
-      "elsa3": "RunJavaScript",
-      "elsa4": "RunJavaScript",
-      "members": [
-        "PossibleOutcomes"
-      ]
     },
     {
       "kind": "missing-activity",

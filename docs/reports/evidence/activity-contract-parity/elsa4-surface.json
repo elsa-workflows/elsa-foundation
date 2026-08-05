@@ -604,7 +604,9 @@
     "resultType": "ActivityUnit",
     "isTrigger": false,
     "hasResumeTarget": false,
-    "outcomes": [],
+    "outcomes": [
+      "Break"
+    ],
     "valueOutcomes": null,
     "childSlots": [],
     "inputs": [],
@@ -664,9 +666,27 @@
     "childSlots": [],
     "inputs": [
       {
+        "name": "Code",
+        "type": "string?",
+        "Key": "code",
+        "required": false
+      },
+      {
         "name": "Message",
         "type": "string?",
         "Key": "message",
+        "required": false
+      },
+      {
+        "name": "Category",
+        "type": "string?",
+        "Key": "category",
+        "required": false
+      },
+      {
+        "name": "FaultType",
+        "type": "string?",
+        "Key": "faultType",
         "required": false
       }
     ],
@@ -723,6 +743,12 @@
         "name": "Payload",
         "type": "JsonElement?",
         "Key": "Payload",
+        "required": false
+      },
+      {
+        "name": "IsLocalEvent",
+        "type": "bool",
+        "Key": "IsLocalEvent",
         "required": false
       }
     ],
@@ -884,20 +910,28 @@
     "isTrigger": false,
     "hasResumeTarget": false,
     "outcomes": [],
-    "valueOutcomes": null,
+    "valueOutcomes": {
+      "source": "possibleOutcomes",
+      "UnmatchedOutcome": "Unmatched"
+    },
     "childSlots": [],
     "inputs": [
       {
         "name": "Script",
-        "type": "required string",
+        "type": "string",
         "Key": "script",
-        "required": false
+        "required": true
       },
       {
         "name": "Arguments",
         "type": "JsonElement",
         "Key": "arguments",
         "DefaultValue": "{}",
+        "required": false
+      },
+      {
+        "name": "PossibleOutcomes",
+        "type": "ICollection<string>?",
         "required": false
       }
     ],
