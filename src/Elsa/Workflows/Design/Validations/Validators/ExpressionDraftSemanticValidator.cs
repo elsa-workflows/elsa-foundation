@@ -12,6 +12,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <summary>Runs provider validation over every authored text expression without evaluating it.</summary>
 public sealed class ExpressionDraftSemanticValidator(
     IExpressionToolingProviderResolver providerResolver,
+    IExpressionDescriptorRegistry descriptorRegistry,
     IActivityStructureService structureService) : IExpressionDraftSemanticValidator
 {
     public async ValueTask<ExpressionDraftValidationResult> ValidateAsync(WorkflowDefinitionState state, string documentScope, CancellationToken cancellationToken)
@@ -22,18 +23,22 @@ public sealed class ExpressionDraftSemanticValidator(
         foreach (var (argumentBag, argument) in node.Inputs.Select(argument => ("inputs", argument))
                      .Concat(node.Outputs.Select(argument => ("outputs", argument))))
         {
-            if (string.IsNullOrWhiteSpace(argument.Value.ExpressionType) ||
-                string.Equals(argument.Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase) ||
-                !TryGetSource(argument.Value.Value, out var source))
+            if (string.IsNullOrWhiteSpace(argument.Value.ExpressionType))
                 continue;
-            var authoredPath = $"{node.NodeId}/{argumentBag}/{argument.ReferenceKey}";
             var provider = providerResolver.Find(argument.Value.ExpressionType);
             if (provider is null)
             {
-                unavailable = true;
+                // Only text-authored expressions need a tooling provider. Structured and reference types
+                // (Object, Variable, Input, Secret) carry authored data, not source text, so there is
+                // nothing to validate. Unavailable stays reserved for a text type whose provider is missing.
+                if (descriptorRegistry.Find(argument.Value.ExpressionType) is { EditingMode: ExpressionEditingMode.Text })
+                    unavailable = true;
                 continue;
             }
 
+            if (!TryGetSource(argument.Value.Value, out var source))
+                continue;
+            var authoredPath = $"{node.NodeId}/{argumentBag}/{argument.ReferenceKey}";
             var revision = Revision(source);
             var document = new ExpressionAuthoringDocument($"{documentScope}:{node.NodeId}:{argument.ReferenceKey}:{argument.Value.ExpressionType}", documentScope, node.NodeId, argument.ReferenceKey, argument.Value.ExpressionType, revision);
             var context = new ExpressionAuthoringContext(ExpressionToolingContractVersion.V1, document, revision, revision, [], new());

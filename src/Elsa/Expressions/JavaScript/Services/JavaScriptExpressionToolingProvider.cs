@@ -80,7 +80,7 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
 
     private ExpressionToolingOutcome<T>? EnsureCompatible<T>(ExpressionToolingRequestScope scope)
     {
-        if (!string.Equals(scope.Document.ExpressionType, ExpressionType, StringComparison.Ordinal))
+        if (!string.Equals(scope.Document.ExpressionType, ExpressionType, StringComparison.OrdinalIgnoreCase))
             return ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Incompatible, SupportedVersion, "expression-type");
         if (!scope.ContractVersion.IsCompatibleWith(SupportedVersion))
             return ExpressionToolingOutcome<T>.Failure(ExpressionToolingOutcomeState.Incompatible, SupportedVersion, "contract-version");

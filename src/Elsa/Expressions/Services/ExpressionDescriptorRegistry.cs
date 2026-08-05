@@ -5,7 +5,7 @@ namespace Elsa.Expressions.Services;
 /// <inheritdoc />
 public sealed class ExpressionDescriptorRegistry : IExpressionDescriptorRegistry
 {
-    private readonly IDictionary<string, IExpressionDescriptor> _expressionSyntaxDescriptors = new Dictionary<string, IExpressionDescriptor>();
+    private readonly IDictionary<string, IExpressionDescriptor> _expressionSyntaxDescriptors = new Dictionary<string, IExpressionDescriptor>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Represents a registry of expression descriptors.
