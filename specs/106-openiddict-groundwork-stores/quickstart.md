@@ -305,3 +305,159 @@ with the originating correctness reviewer's `PASS` on the remediated code head,
 all three axes are green. The nonclaims remain: no admitted mutation, public
 OpenIddict store, replacement registration, four-provider store conformance,
 performance verdict, or EF removal is present.
+
+## Scope-store vertical slice — 2026-08-03
+
+`IOpenIddictScopeStore` is implemented at
+`src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Stores/GroundworkOpenIddictScopeStore.cs`, all 28
+members, none stubbed, with 54 passing tests in
+`tests/Elsa/Foundation/Identity/OpenIddict/Groundwork/Tests/GroundworkOpenIddictScopeStoreTests.cs`.
+
+Deliberately narrow: the scope store is the only one of the four with no relationship cascade and no
+atomic redeem/revoke, so it needs none of the idempotency-receipt machinery that T030/T041 must still
+build. It was implemented first to prove the pattern against the merged foundations (PR #1093) before
+the harder three. **No registration extension was written** — that needs all four stores — and the other
+three stores are untouched. This slice does not advance any US1–US4 task to done.
+
+### Three manifest/route gaps found while implementing it
+
+These were surfaced rather than worked around: no route was invented and no filtering was moved
+in-process. Each will also affect the application, authorization and token stores, so they are program
+findings and not scope-store details.
+
+**Update 2026-08-04 (corrected): gap 3 is closed. Gap 2 was NOT a gap and is withdrawn. Gap 1 remains
+open pending a decision.**
+
+Gap 2 was misdiagnosed. `FindScopeByResourceQuery`'s offset-with-no-sort declaration is not an oversight
+that blocked pagination — it is **the only shape Groundwork admits for a collection-membership route**.
+Declaring cursor paging compiles fine and passes every in-memory test, then fails at real plan
+compilation with `GW-QUERY-008: Collection membership query '...' cannot use cursor paging or
+latest-per-key selection until a provider certifies those combined element-to-owner shapes`. The change
+was reverted; the bounded page and its fail-closed ceiling are correct-by-necessity, not a workaround.
+
+Worth recording how it was caught, because the cheap checks all missed it: the store unit tests, the
+full 355-test architecture suite and the maps gate were all green. Only
+`OpenIddictGroundworkCapabilityProbeTests` — which builds real provider query plans across all four
+providers — rejected it. Any future change to a bounded-query **declaration** needs that probe run, not
+just the fast suites, because the fakes never execute the physical planner.
+
+Lifting this needs upstream provider certification of element-to-owner cursor paging, which puts it in
+the same territory as Groundwork #141/#143 rather than in this repo. `FindScopeByNameQuery` now admits `In` alongside `Equal`,
+so `FindByNamesAsync` resolves a name set in one provider-executed membership query instead of N point
+lookups. Manifest and store were changed together — a declaration with no consumer is inert risk.
+Gap 1 needs a document-shape decision (see below the list).
+
+1. **No bounded count-all or list-all route exists for scopes.** `CountAsync()` and
+   `ListAsync(count, offset)` fall back to `IDocumentStore.QueryAsync(PortableDocumentQuery)`. That is
+   genuinely provider-executed (SQL `COUNT` / `SELECT … LIMIT/OFFSET`), but the package marks it
+   `[Obsolete(DiagnosticId = "GW0004")]` and there is no declared id index, so paging has **no
+   guaranteed deterministic order**. Both facts matter for a store contract that promises stable paging.
+2. **`FindScopeByResourceQuery` declares `Offset` paging with `QuerySortSupport.None`.** That combination
+   fits neither `BoundedDocumentQueryPager` helper — `QueryAllAsync` needs cursor paging and
+   `QueryAllOffsetAsync` throws without a non-empty declared order. `FindByResourceAsync` is therefore a
+   single bounded page capped at 10,000 matches that throws above the cap, not true pagination.
+3. **`FindScopeByNameQuery` admits only `Equal`.** `FindByNamesAsync` resolves a name set as N sequential
+   point lookups rather than one set-membership query.
+
+### Gap 1 — the open decision
+
+Closing it needs the **fixed-value partition** pattern the runtime manifest already uses:
+`ElsaRuntimeStorageManifest.CollectionField` (`"collection"`) is a constant-valued keyword-indexed field,
+and `ListAllQuery` filters on it to give a properly bounded, ordered list-all route. Applying it here
+means adding a constant `collection` field to `OpenIddictGroundworkScope`, keyword-indexing it, and
+declaring a `list-all` route over that index with cursor paging and total-count support.
+
+That is a **persisted-document shape change plus a new index**, which is why it was not done alongside
+gaps 2 and 3. It is admissible under the pre-release no-back-compat agreement and must not bump
+`SchemaVersion` (a frozen legacy stamp here, not a migration knob), but it is a design decision rather
+than a mechanical fix, and the same field would want to be added to the application, authorization and
+token records at the same time so all four stores get it once.
+
+Until it is decided, `CountAsync()` and `ListAsync(count, offset)` reject with the capability exception
+rather than degrade — neither is needed to issue a token; they back administrative listing.
+
+The remaining gap sits in the
+same territory as the open upstream Groundwork contracts #141 (fenced cross-unit relationship guards) and
+#143 (fixed-value bounded assignment) that T007 already names as blockers. They should be resolved at the
+manifest/upstream level before the remaining three stores are written, or the same workarounds will be
+duplicated three more times — and the authorization store's compound `FindAsync(subject, client, status,
+type, scopes)` has a strictly worse version of gap 2 already recorded against the dropped four-field
+index.
+
+
+## Authorization store — 2026-08-04, and a manifest gap that blocks the cascade
+
+`IOpenIddictAuthorizationStore` is implemented at
+`src/Elsa/Foundation/Identity/OpenIddict/Groundwork/Stores/GroundworkOpenIddictAuthorizationStore.cs`.
+Of 32 members: 24 fully implemented, 2 conditionally, 6 rejected as the scope and application stores
+reject their unservable members. Revoke goes through `OpenIddictGroundworkAtomicWrite`, so replay
+performs no second underlying write; a test proves that rather than asserting the happy path.
+
+The conditional pair is deliberate and documented in the source. `FindAsync(subject, client, status,
+type, scopes)` serves subject-only and scopes-only and **rejects every other combination before touching
+a provider**, because `AuthorizationSubjectV2Index` is subject-only — the four-field index was dropped
+for exceeding SQL Server's 1,700-byte key limit. `RevokeAsync` serves subject-only on the same basis.
+Neither narrows the predicate silently, which was the one unacceptable outcome.
+
+### The gap: three members have no declared route at all
+
+`FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` and `PruneAsync` are rejected because the
+authorization storage unit declares **no `applicationId` index and no `creationDate` index**. This is
+not a store limitation that better code would fix.
+
+It matters more than the count suggests, because it blocks work already planned:
+
+- **T041's relationship coordinator cannot be built.** The application-to-authorization-to-token cascade
+  needs to find authorizations by application id, and there is no bounded route that can.
+- **OpenIddict's own background pruning cannot run.** `PruneAsync` selects by creation date.
+
+So the authorization unit needs two index/route additions before the cascade work is startable. That is
+the same class of persisted-schema decision as the open count-all/list-all gap, and the two should be
+decided together rather than one at a time — adding indexes to this unit twice is worse than once.
+
+Note the constraint interacts: any new route must be legal at real plan compilation, and a
+collection-membership route cannot use cursor paging (`GW-QUERY-008`). An `applicationId` route would be
+a point route and is not affected, but it must still be probed.
+
+## Token store, and the complete route gap — 2026-08-04
+
+`IOpenIddictTokenStore` is implemented at
+`.../Stores/GroundworkOpenIddictTokenStore.cs`: 33 members implemented, 10 rejected, 2 conditional
+(`FindAsync`/`RevokeAsync` serve subject-only and refuse other combinations before touching a provider).
+Revoke runs through `OpenIddictGroundworkAtomicWrite`; a replay test asserts **zero** additional
+underlying saves, not merely an equal return value.
+
+**All four stores now exist.** No manifest declaration was changed to get there — every member that no
+declared route can serve is rejected with a capability exception rather than degraded, so the gaps are
+now precisely enumerable for the first time.
+
+### Every missing route, consolidated
+
+| Missing declaration | Blocks |
+|---|---|
+| count-all / list-all route on **all four** units | `CountAsync(plain)` and `ListAsync(plain)` on scope, application, authorization, token — 8 members |
+| `applicationId` index/route on **authorization** | `FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` |
+| `applicationId` index/route on **token** | `FindByApplicationIdAsync`, `RevokeByApplicationIdAsync` |
+| `authorizationId` index/route on **token** | `FindByAuthorizationIdAsync`, `RevokeByAuthorizationIdAsync` |
+| standalone creation/expiration-date route on **authorization** and **token** | `PruneAsync` on both |
+
+That is **16 rejected members traceable to five missing declarations**, not to store implementation.
+
+### What it blocks beyond the member count
+
+- **T041's relationship coordinator is not startable.** The application→authorization→token cascade
+  needs to find authorizations by application id and tokens by authorization id. Neither route exists.
+- **OpenIddict's background pruning cannot run** on either unit.
+- **T020's registration extension is writable now** (all four stores exist) but would register stores
+  that reject members OpenIddict's own managers call.
+
+### Constraints on closing it
+
+1. **Every new route must be probed.** A declaration can pass store tests, the full 355-test
+   architecture suite and the maps gate and still be illegal — see the `GW-QUERY-008` withdrawal above.
+   `OpenIddictGroundworkCapabilityProbeTests` is the only check that compiles real provider plans.
+2. **The four-field authorization index is not available.** It was dropped for exceeding SQL Server's
+   1,700-byte key limit, which is why the compound `FindAsync` is conditional. Any replacement must stay
+   inside that budget.
+3. **Prefer one revision over five.** These are persisted-schema additions to units that would otherwise
+   be indexed repeatedly. Deciding them together is materially cheaper than one at a time.

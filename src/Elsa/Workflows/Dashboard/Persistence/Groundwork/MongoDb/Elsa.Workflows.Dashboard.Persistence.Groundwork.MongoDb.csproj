@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../Elsa.Workflows.Dashboard.csproj" />
+    <ProjectReference Include="../../../../../Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj" />
+    <ProjectReference Include="../../../../Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+  </ItemGroup>
+
+</Project>

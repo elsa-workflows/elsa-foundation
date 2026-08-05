@@ -428,6 +428,58 @@ deletion:
 Evidence note T009–T013: all five prerequisite tasks remain unchecked. Historical preview.86/.88
 evidence and partial package checkpoints are not exact-family admission evidence.
 
+Currency note (2026-08-03), T011 row only: the recorded package mismatch has since resolved and been
+replaced by a different defect. The row's statement was accurate at `f769b5165` — the ledger declared
+`0.0.1-preview.88` while `Directory.Packages.props` pinned `0.0.1-preview.95`. Both now declare
+`0.0.1-preview.103`, so there is no version mismatch. The current blocker is that
+`specs/094-harden-groundwork-stores/versions/` contains only `preview.81`, `.86`, and `.88`, so the
+ledger's declared version has **no imported evidence generation at all** — a strictly weaker position
+than a mismatch between two imported generations. The row's other three findings are unchanged and
+still current: zero `performanceVerdict` objects, empty diagnostics provider-evidence arrays, and no
+accepted immutable #50 baseline.
+
+Currency note (2026-08-04), T012 row: the two missing dashboard providers are now implemented, so the
+row's "Missing" column is out of date. SQL Server is a third `GroundworkRunHealthDialect` member with
+`JSON_VALUE`/`TRY_CAST`/`datetimeoffset` handling and T-SQL `TOP`/CTE syntax; MongoDB is a separate pair
+of data-source classes over the aggregation pipeline, because none of the `DbConnection`-and-SQL
+machinery transfers to it. Both are wired into their unified registrations — each of which was
+**missing the Dashboard project reference entirely**, so neither could have composed the dashboard even
+with dialect support present. Each provider has a container-backed test leaf deliberately routed to
+nightly, mirroring the SQLite fixtures' data and assertions so the four providers are comparable.
+
+Running SQL Server against a real container immediately caught a defect no SQLite-only test could see:
+SQLite and PostgreSQL both accept `GROUP BY` on a select-list alias and T-SQL does not, so the
+top-failures query failed outright. Fixed by grouping on the full expression, which is valid in all three.
+
+What the row still correctly requires is unchanged: **host acceptance evidence and the final issue/Project
+disposition for #932 are not supplied by this work.** The gate remains open until those land; only the
+"no implementation exists" half of the blocker is resolved.
+
+Currency note (2026-08-03), T010 row: the row describes PR #1093 as a "Draft foundation PR". It is
+**merged** (`gh pr view 1093` → `state: MERGED`, 2,997 additions), so the OpenIddict Groundwork
+foundations — storage manifest, records, serializer/codec, generic-query rejection, session factory,
+failure mapper — are on `main`. What remains open is unchanged and is the substantive part: all four
+store implementations (145 members across `IOpenIddictApplicationStore`, `IOpenIddictAuthorizationStore`,
+`IOpenIddictScopeStore`, `IOpenIddictTokenStore` per
+`specs/106-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`), the production
+registration, the atomic-mutation and relationship coordinators, four-provider evidence, and the still-open
+upstream Groundwork contracts #141/#143. Spec 106 Phase 3 onward is entirely unstarted.
+
+Currency note (2026-08-03), T009 row: #642's remaining work is **not code**. The Groundwork diagnostics
+stores are complete — no stub, TODO, or `NotImplementedException` anywhere under
+`src/Elsa/Diagnostics/*/Persistence/Groundwork/` — and spec 139 has T001–T049 and T056 checked. What is
+open is an evidence chain: T050/T051 import a #646 verdict that does not yet exist, T057 runs a
+four-provider certification at the current Groundwork version (none exists past `preview.88`), and
+T053–T055 then delete the EF projects mechanically. Treating T009 as an engineering task will mis-plan it.
+
+Oracle-availability note, T011 scope: #646's EF comparison can only cover contracts that have an EF
+implementation. That set is `IStructuredLogStore`, `IOpenTelemetryStore`, the four Elsa IAM contracts,
+and the two ASP.NET Core Identity framework contracts — SQLite only, because EF Core has no PostgreSQL
+or SQL Server wiring in `src/`. No runtime-family row has ever had an EF comparand, so runtime rows
+cannot receive an EF-ratio verdict and must be graded on absolute budgets and restart-recovery
+evidence instead. See [the zero-EF decision map](../../docs/decision-maps/zero-ef-groundwork.md)
+(`oracle-inventory`) for the full inventory and its derivation.
+
 ### T018/T019 — #932 dashboard acceptance intake
 
 Audit head: Elsa `origin/main` `f769b516598eb807c9528e7c2e72085b346603e8`, 2026-07-30.

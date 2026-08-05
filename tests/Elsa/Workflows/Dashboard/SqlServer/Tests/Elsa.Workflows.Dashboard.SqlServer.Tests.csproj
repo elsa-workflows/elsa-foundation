@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="coverlet.collector" />
+    <!-- Referencing Testcontainers routes this leaf out of the fast PR gate into integration CI. -->
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" />
+    <ProjectReference Include="../../../../../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+    <ProjectReference Include="../../../../../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="../../../../../../tests/Elsa/Persistence/Groundwork/ProcessProbe/Elsa.Persistence.Groundwork.ProcessProbe.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- SqlServerGroundworkProviderDriver's out-of-process restart probe needs the ProcessProbe helper build
+       copied next to this project's test binaries; mirrors the Conformance/Tests project's own copy target. -->
+  <Target Name="CopyGroundworkProcessProbeArtifacts" AfterTargets="Build">
+    <RemoveDir Directories="$(TargetDir)GroundworkProcessProbe" />
+    <ItemGroup>
+      <_GroundworkProcessProbeArtifact Include="$(MSBuildProjectDirectory)/../../../../../../tests/Elsa/Persistence/Groundwork/ProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GroundworkProcessProbeArtifact)"
+          DestinationFiles="@(_GroundworkProcessProbeArtifact->'$(TargetDir)GroundworkProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

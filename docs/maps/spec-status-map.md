@@ -134,7 +134,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
 | [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Draft | - | 0 | 0 | deferred, out of scope |
-| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | retained |
+| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
 | [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
 | [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |
 | [108-bpmn-container-activity](../../specs/108-bpmn-container-activity/spec.md) | 108-bpmn-container-activity | unknown | - | 0 | 0 | deferred, out of scope |
@@ -184,3 +184,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | Implemented | - | 25 | 0 | superseded, retained, out of scope |
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Draft | - | 18 | 78 | superseded, retained, out of scope |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
+| [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | out of scope |

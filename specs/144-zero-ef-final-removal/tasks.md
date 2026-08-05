@@ -42,8 +42,22 @@
 **⚠️ CRITICAL**: No EF-family deletion task may begin until its linked prerequisite tasks pass on remote `main`.
 
 - [ ] T009 Verify #642 diagnostics four-provider/grouped-reducer/test-ledger evidence is merged and record its merge/artifact identities in `specs/144-zero-ef-final-removal/quickstart.md`
+> **OpenIddict scope change — 2026-08-04.** OpenIddict now keeps its own vendor persistence
+> (`OpenIddict.EntityFrameworkCore` / `OpenIddict.MongoDb`) rather than gaining a Groundwork adapter; the
+> adapter built under spec 106 has been removed and that spec is superseded. **The OpenIddict clauses in
+> T010, T029, T030, T036, T044 and T045 below now instruct the opposite of the decision and must not be
+> executed as written** — they variously require replacing OpenIddict EF host selection with Groundwork,
+> rehosting its tests onto Groundwork stores, or deleting its EF wiring, all of which are now retained by
+> design. Their Identity (non-OpenIddict) clauses are unaffected.
+>
+> T048 is unaffected: OpenIddict's `DbContext` derives from plain `DbContext` and its project references
+> no Elsa EF project, so `src/Elsa/Persistence/EFCore/` is still deletable.
+>
+> Rewriting these tasks needs the ADR 0042 amendment ratified first — see the amendment note there — so
+> they are flagged rather than edited, to avoid encoding an unratified scope in the task list.
+
 - [ ] T010 Verify #643 completes the 145-member OpenIddict ledger, production registration, four-provider black-box suite, exact-range reviews, and merge; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
-- [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`. Behavioural-parity input (the correctness precondition that must pass before any #646 timing verdict is valid) is recorded per seam in `specs/094-harden-groundwork-stores/divergence-ledger.md`; that artifact carries no `performanceVerdict` and advances no coverage-ledger row. The 21 runtime-family rows have no EF comparand at all and so cannot receive an EF-ratio verdict; a proposed three-tier basis for grading them (enforced user-visible envelope, per-workload absolute ceilings, and a generation-over-generation ratio ratchet reusing the existing gate machinery) is in `specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md` and requires an independent ratifier before T011 can consume it
 - [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment, including #932's required final issue and Project 33 disposition; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T013 Record three independent upstream gates in `specs/144-zero-ef-final-removal/quickstart.md`: exact consumed-package provenance for merged #141/#143 APIs; accepted #50 performance evidence and final issue disposition; and Groundwork parent #25 completion (or a named, separately ratified #647/#629 amendment). Never infer #50/#25 completion from package contents or a partial checkpoint.
 - [x] T014 [P] Open every test cited as replacement evidence in `specs/144-zero-ef-final-removal/test-retention-ledger.md` and correct or reject unsupported “covered by” claims
@@ -132,7 +146,22 @@
 
 ## Phase 5: User Story 3 - Prevent EF From Returning (Priority: P2)
 
-**Goal**: Replace migration-era ratchets with a permanent fail-closed absolute-zero guard over every repository project.
+**Goal**: Replace migration-era ratchets with a permanent fail-closed guard over every repository project.
+
+> **Scope change — 2026-08-04, ADR 0042 amendment ratified.** This phase's guard **cannot be
+> absolute-zero**. OpenIddict keeps its own vendor persistence by decision, so
+> `OpenIddict.EntityFrameworkCore` and the `Microsoft.EntityFrameworkCore.*` packages its `DbContext`
+> requires are permanent. The ratified criterion is **zero first-party EF**: no Elsa-authored EF store
+> remains, including `src/Elsa/Persistence/EFCore/`.
+>
+> So the guard must be a **fail-closed allowlist** — everything outside a small named set fails — rather
+> than a zero check. That is a stronger guard than the current shrink-only ratchet, not a weaker one: it
+> refuses any *new* EF edge outright instead of merely refusing growth. **T067 and T071 below, and this
+> goal line, are written for a zero check and need rewriting** by this spec's owner.
+>
+> Getting this wrong has a specific failure mode worth naming: a guard that can never pass will
+> eventually be switched off, and switching it off forfeits the protection the whole programme depends
+> on. An allowlist that passes today and fails on any new edge is what keeps it useful.
 
 **Independent Test**: Synthetic fixtures detect every bypass class, and the real complete restored graph has every guarded category empty.
 
