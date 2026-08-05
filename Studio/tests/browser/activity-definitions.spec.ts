@@ -59,7 +59,7 @@ test("Activity Definition draft management keeps parallel labels and supports bl
   await page.getByRole("button", { name: "Create blank draft" }).click();
 
   await expect(page).toHaveURL(/definition=definition-1.*section=editor.*draft=draft-blank/);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
   expect(state.draftRequests[0]).toMatchObject({
     sourceVersionId: null,
     presentationLabel: null,
@@ -75,7 +75,7 @@ test("Activity Definition draft management keeps parallel labels and supports bl
   await dialog.getByRole("button", { name: "Clone exact version" }).click();
 
   await expect(page).toHaveURL(/definition=definition-1.*section=editor.*draft=draft-clone/);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
   expect(state.draftRequests[1]).toEqual({ sourceVersionId: "version-1", presentationLabel: "Review" });
   expect(state.sourceVersion).toEqual(sourceVersionDetail());
 });
@@ -111,7 +111,7 @@ test("source-owned Activity Definition fork reviews and applies only the recomme
   await review.getByRole("button", { name: "Apply reviewed fork" }).click();
 
   await expect(page).toHaveURL(/definition=definition-fork.*section=editor.*draft=draft-fork/);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
   expect(state.previewRequests).toHaveLength(1);
   expect(state.previewRequests[0]).toMatchObject({
     sourceVersionId: "version-1",
@@ -199,6 +199,8 @@ test("Activity Definition Test Run preserves exact input presence and opens focu
   };
   await page.reload();
   await page.setViewportSize({ width: 360, height: 900 });
+  // The reload resets the collapsed graph-designer lifecycle section that holds the draft label.
+  await openDraftDetails(page);
   await page.evaluate(() => {
     const observations: unknown[] = [];
     window.addEventListener("elsa:activity-definitions:observation", event => {
@@ -482,7 +484,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.getByRole("button", { name: "Create definition" }).click();
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
   await page.getByRole("tab", { name: "Public Interface" }).click();
   await page.getByRole("textbox", { name: "Member name" }).fill("Customer note");
   await page.getByRole("button", { name: "Add input" }).click();
@@ -492,18 +494,18 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await contractInput.getByRole("combobox", { name: "Default" }).selectOption("literal");
   await contractInput.getByRole("textbox", { name: "Literal JSON value" }).fill("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
-  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  await expectSavedRevision(page, 2);
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   await addPaletteActivity(page, "Write line");
-  await expect(page.getByText("Saved revision 3")).toBeVisible();
+  await expectSavedRevision(page, 3);
   await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
   await addPaletteActivity(page, "Delay");
-  await expect(page.getByText("Saved revision 4")).toBeVisible();
+  await expectSavedRevision(page, 4);
   await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
 
   await page.reload();
-  await expect(page.getByText("Saved revision 4")).toBeVisible();
+  await expectSavedRevision(page, 4);
   await page.getByRole("tab", { name: "Public Interface" }).click();
   await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Literal JSON value" })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
@@ -523,7 +525,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
   await expect(page).toHaveURL(/draft=activity-draft-recovery/);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
   await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
   expect(state.conflictCopyPayload).toMatchObject({ rootActivity: { activityVersionId: "sequence-v1", structure: { payload: { activities: [
     { activityVersionId: "delay-v1" },
@@ -543,7 +545,7 @@ test("Activity Definition provider contract proposals require review and apply a
   expect(state.draft.revision).toBe(1);
 
   await page.getByRole("button", { name: "Apply selected changes" }).click();
-  await expect(page.getByText("Saved revision 2")).toBeVisible();
+  await expectSavedRevision(page, 2);
   await expect(page.locator("[data-contract-kind='input'][data-contract-reference-key='currency']")).toBeVisible();
   expect(state.proposalApplies).toBe(1);
   expect(state.lastProposalApply).toEqual({
@@ -562,7 +564,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   await page.getByRole("button", { name: "Create Activity Definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
   await page.getByRole("button", { name: "Create definition" }).click();
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
 
   state.validationMode = "invalid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
@@ -625,7 +627,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 test("Activity Graph diagnostics focus accessible root context while the exact control is pending", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
-  await expect(page.getByText("Saved revision 1")).toBeVisible();
+  await expectSavedRevision(page, 1);
 
   state.draft = {
     ...state.draft,
@@ -2357,7 +2359,27 @@ async function createBrowserActivity(page: Page) {
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();
-  await expect(page.getByText("Saved revision 1")).toBeVisible({ timeout: 15_000 });
+  await expectSavedRevision(page, 1, 15_000);
+  await openDraftDetails(page);
+}
+
+// #482 made "Draft details & publication" collapse by default in the graph designer view, hiding the
+// lifecycle and publication controls. Tests that drive those controls open the section first; before
+// that change it was always expanded.
+async function openDraftDetails(page: Page) {
+  const details = page.locator("details.ad-draft-lifecycle");
+  if (await details.evaluate(element => (element as HTMLDetailsElement).open)) return;
+  await details.locator("summary").click();
+  await expect(details).toHaveJSProperty("open", true);
+}
+
+// The draft header chip and the "Draft details & publication" status block both render the same
+// "Saved revision N" copy, so a bare getByText is a strict-mode violation. The chip is the canonical
+// always-visible save signal, so assert against it directly.
+async function expectSavedRevision(page: Page, revision: number, timeout = 15_000) {
+  // Autosave is a real round-trip through the mocked API, so the chip settles well after the action
+  // that triggered it; the default expect timeout is too tight under a loaded parallel run.
+  await expect(page.locator(".ad-save-chip")).toHaveText(`Saved revision ${revision}`, { timeout });
 }
 
 async function selectSequenceComposition(page: Page) {
