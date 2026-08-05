@@ -22,12 +22,15 @@ The planned module sequence is:
 
 - `Elsa.Workflows.ExecutionEvidence.Core` owns provider-neutral contracts, envelope models, the
   baseline catalog, session models, and store abstractions;
-- `Elsa.Workflows.ExecutionEvidence` owns capture/session services, source-domain integration
-  adapters, host-composition features, and a process-local in-memory implementation;
-- `Elsa.Workflows.ExecutionEvidence.Api` owns HTTP session, query, wait, integrity, and retention
-  endpoints; and
+- `Elsa.Workflows.ExecutionEvidence` owns provider-neutral capture/session services, source-domain
+  integration adapters, and the base host-composition feature;
+- `Elsa.Workflows.ExecutionEvidence.InMemory` is the explicit process-local #1133 provider leaf and
+  registration point;
+- `Elsa.Workflows.ExecutionEvidence.Api` owns HTTP session, query, wait, and integrity transport. Its
+  public feature inherits the base feature registration, calls `base.ConfigureServices`, and depends
+  on Core/base rather than InMemory; and
 - `Elsa.Workflows.ExecutionEvidence.Persistence.Groundwork` later supplies the only first-party
-  durable provider.
+  durable provider in #1137.
 
 The in-memory implementation must preserve commit visibility, identity, ordering, and explicit
 integrity semantics but does not claim completeness across process failure. The runtime's Groundwork
@@ -51,10 +54,15 @@ store; a separate best-effort intent created after checkpoint commit is not conf
 - The first slice can prove end-to-end capture and remote querying in one process.
 - Durable and distributed completeness is an explicit later feature, not an accidental claim of the
   in-memory adapter.
-- Store conformance tests must run against both in-memory and Groundwork implementations, with
-  additional crash/failover scenarios for Groundwork.
-- The validated generic checkpoint-enricher and post-commit intent seams are sufficient; Groundwork
-  durability does not require a new Runtime persistence-participation contract.
+- #1133 verifies the process-local InMemory leaf without claiming restart recovery. #1137 owns the
+  Groundwork provider, recovery/failover proof, and provider conformance.
+- Before Evidence capture, #1133 adds the evidence-agnostic generic Runtime Prepare/Commit protocol,
+  durable `Prepared` logical-checkpoint ledger and high-watermarks, replay-stable provenance/order,
+  atomic state/context/outbox/commit-marker CAS, and outbox checkpoint-order/status support across
+  the InMemory, coalescing, and Groundwork checkpoint stores. These are generic Runtime correctness
+  surfaces, not Evidence-specific persistence participation.
+- #1137's durable Evidence query-store/provider builds on those surfaces; it does not require an
+  Evidence-specific Runtime persistence-participation contract or branch.
 
 ## Linked decisions
 

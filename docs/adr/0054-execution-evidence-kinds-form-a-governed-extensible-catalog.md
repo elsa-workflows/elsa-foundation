@@ -17,8 +17,11 @@ Execution evidence needs a stable baseline while preserving Elsa's module contri
 ## Decision
 
 Every execution-evidence record uses a common envelope containing a stable string kind and schema
-version. The Execution Evidence `.Core` module owns the baseline workflow, activity, state, stimulus,
-scheduling, incident, and checkpoint kinds as typed contracts.
+version. The Execution Evidence `.Core` module owns the governed baseline catalog as typed contracts.
+In #1133, that catalog registers only `workflow.started`, `workflow.completed`, `activity.started`,
+and `activity.completed`, each at schema version 1 and with metadata-only payloads. #1134 owns the
+remaining lifecycle/completeness coverage, #1135 stimulus/scheduling/causation kinds, and #1136
+state/value kinds and disposition behavior.
 
 Optional modules may register additional typed evidence kinds by referencing the Execution Evidence
 contract module. Registrations declare the stable kind, schema version, payload contract, and capture
@@ -44,7 +47,8 @@ kind can still inspect and filter its common envelope without interpreting its t
   envelope access.
 - Contributors depend on Execution Evidence contracts; the Execution Evidence domain does not add
   knowledge of every contributing module.
-- Catalog documentation and compatibility fixtures become part of the public evidence contract.
+- Catalog documentation becomes part of the public evidence contract; shared protocol/conformance
+  fixtures are owned by #1138 rather than this first slice.
 
 ## Linked decisions
 

@@ -25,16 +25,18 @@ the intent into the query store with at-least-once delivery. The durable intent 
 recover materialization; the query-store row does not need to share the runtime checkpoint's physical
 transaction.
 
-For a workflow associated with an evidence session, failure to prepare or record evidence required
-by the active capture profile fails the runtime checkpoint. There is no best-effort canonical
-evidence mode. Once the checkpoint and its pending delivery work commit, later delivery failure does
-not roll back workflow state; delivery retries, and the evidence session remains incomplete until the
+For a workflow associated with an evidence session, failure to prepare or record required #1133
+metadata-only evidence fails the runtime checkpoint. There is no best-effort canonical evidence
+mode. #1136 owns value capture and value-disposition behavior; it is not part of this checkpoint
+contract. Once the checkpoint and its pending delivery work commit, later delivery failure does not
+roll back workflow state; delivery retries, and the evidence session remains incomplete until the
 record becomes available or an integrity failure is declared.
 
-Every evidence record has a stable evidence identifier and a workflow-local sequence number. The
-post-commit handler and store materialize idempotently by evidence identifier and use the sequence to
-order records and detect gaps. A sink must not infer that a duplicate delivery represents a second
-semantic occurrence.
+Every evidence record has a stable evidence identifier, the generic committed
+`WorkflowCheckpointOrder`, and a deterministic `CheckpointOrdinal`. Strict workflow-local semantic
+order is `(WorkflowCheckpointOrder, CheckpointOrdinal)`; #1134 owns gap-free completeness and
+definitive-negative semantics. The post-commit handler and store materialize idempotently by evidence
+identifier. A sink must not infer that a duplicate delivery represents a second semantic occurrence.
 
 An explicitly non-durable, in-memory QA implementation may lose already committed evidence when its
 process fails. It must still publish only committed evidence, retain stable identities and sequence
@@ -78,5 +80,6 @@ Groundwork. No new Runtime extension point or evidence-specific Runtime branch w
 ## Linked decisions
 
 - [Runtime checkpoint commit records post-commit work without inline delivery](0020-runtime-checkpoint-commit-post-commit-work.md)
+- [Execution Evidence starts in memory and adds Groundwork durability](0063-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md)
 - [Checkpoint-Gated Activity Execution Inspection](0001-checkpoint-gated-activity-execution-inspection.md)
 - [Execution evidence](../glossary/elsa.md)

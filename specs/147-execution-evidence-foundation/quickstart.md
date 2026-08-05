@@ -115,3 +115,41 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
 Record benchmark source revision, command, hardware/host configuration, workload shape, throughput, and allocations for module absent, enabled-unscoped, and enabled-scoped metadata-only modes. Do not invent a regression threshold in this slice.
+
+### T001–T003 ADR collision evidence (2026-08-05)
+
+| Inventory check | Before T001 | After T003 |
+|---|---|---|
+| ADR 0062 files | JavaScript binding grammar and the colliding proposed Evidence durability ADR both used 0062. | `0062-javascript-binding-grammar-is-pinned-at-publish.md` is the sole ADR 0062. |
+| Evidence durability record | `0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md` | `0063-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md` |
+| Non-generated Evidence durability ADR backlink | The Execution Evidence PRD linked the durability decision as ADR 0062. | The PRD and Evidence ADR backlink inventory link ADR 0063; plan/research already used the corrected future number. |
+| Generated maps | No map change was authorized. | Deferred: generated maps remain untouched and must be refreshed only after explicit authorization and findings review. |
+
+The repository-wide ADR-number/path search must retain JavaScript-only ADR 0062 references and the
+historical source-path text in T001 and this table's before column; neither is an active Evidence
+durability backlink.
+
+### T007 #1133 exclusion dispositions (2026-08-05)
+
+| ADR | Disposition | #1133 exclusion result | Reason |
+|---|---|---|---|
+| 0056 value capture | unchanged-and-why | PASS | This is the end-state #1136 value/sanitization/disposition decision. #1133 remains metadata-only and creates no value behavior. |
+| 0058 negative claims | unchanged-and-why | PASS | Settled barriers, gap-free completeness, and definitive-negative semantics remain #1134 work; #1133 reports only the listed inconclusive/completion observations. |
+| 0059 retention | unchanged-and-why | PASS | Whole-session retention cleanup and provider-conformance behavior remain #1137 work; #1133 adds neither TTL nor cleanup. |
+
+These dispositions and the E2.1/ADR amendments enter the T008 Governance / Architecture-Review
+Disposition Gate below as Draft/proposed material. Implementation-readiness review does not
+constitute ratification.
+
+### T008 Governance / Architecture-Review Disposition Gate (2026-08-05)
+
+Review scope: the Execution Evidence glossary alignment, proposed E2.1 module row, and ADR 0052–0061
+plus 0063 governance set.
+
+| Review evidence | Disposition | Unresolved concerns | Ratification evidence accepted |
+|---|---|---|---|
+| Control-room Critical Constitution Review and Source-of-Truth Audit | PASS. The contracts-only Core, provider-neutral base, explicit InMemory leaf, API transport/inheritance boundary, Runtime isolation, and #1134–#1138 ownership are enforceable and live in their correct source-of-truth layers. | None. | None. |
+| Independent architecture/dependency review | Initial BLOCKER: ADR 0063's consequence claimed the existing enricher/outbox seams were broadly sufficient and omitted #1133's required generic Runtime correctness work. The ADR was corrected to name the evidence-agnostic Prepare/Commit protocol, durable `Prepared` ledger/high-watermarks, replay-stable provenance/order, atomic state/context/outbox/marker CAS, and outbox checkpoint-order/status support across InMemory, coalescing, and Groundwork checkpoint stores, while retaining #1137's Evidence-provider boundary. Final disposition: PASS. | None after correction. | None. |
+
+The T008 implementation-readiness gate passes with no unresolved concern. It is not a ratification
+gate: the constitution remains Draft and the Execution Evidence ADRs remain proposed.
