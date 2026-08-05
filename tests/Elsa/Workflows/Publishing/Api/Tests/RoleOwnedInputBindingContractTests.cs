@@ -306,6 +306,64 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
+    public void Compiler_RawJsonArrayUnderLiteral_CompilesIdenticallyToTheObjectRoute()
+    {
+        // Issue #1143: a real JSON array authored under "Literal" is a first-class collection value — it takes the
+        // structured branch in ConvertLiteral and lands on the same binding as the legacy stringified "Object" route.
+        // Pinning the equivalence is what lets a client drop the Object promotion.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = CollectionInput("SupportedMethods", "String");
+
+        var literal = compiler.Compile("node-endpoint", input, new ArgumentValue(JsonSerializer.SerializeToElement(new[] { "GET", "POST" }), "Literal"));
+        var promoted = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Object"));
+
+        Assert.Equal(RuntimeInputBindingSource.Literal, literal.Source);
+        var array = literal.Literal!.InlineValue!.Value;
+        Assert.Equal(JsonValueKind.Array, array.ValueKind);
+        Assert.Equal(["GET", "POST"], array.EnumerateArray().Select(item => item.GetString()));
+        Assert.Equal(JsonSerializer.Serialize(promoted), JsonSerializer.Serialize(literal), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void Compiler_RawJsonObjectUnderLiteral_CompilesToStructuredLiteral()
+    {
+        // Issue #1143: the same structured branch covers object-typed inputs, so a client never needs "Object" to
+        // author a JSON object either.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition(
+            ReferenceKey: "payload",
+            Name: "Payload",
+            Type: new TypeReference("Object"),
+            StorageDriverType: null,
+            DisplayName: "Payload",
+            Category: null,
+            IsNullable: true);
+
+        var binding = compiler.Compile("node-send", input, new ArgumentValue(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"));
+
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        var value = binding.Literal!.InlineValue!.Value;
+        Assert.Equal(JsonValueKind.Object, value.ValueKind);
+        Assert.Equal(1, value.GetProperty("a").GetInt32());
+    }
+
+    [Fact]
+    public void Compiler_StringifiedJsonArrayUnderLiteral_FallsIntoScalarCollectionCoercion()
+    {
+        // Issue #1143: the boundary of the structured branch, pinned so it is explicit rather than a silent trap.
+        // A *stringified* array arrives as a plain string, misses the JsonElement branch, and is split on commas by the
+        // #924 scalar→collection coercion. Clients sending structured values as "Literal" must send the raw value.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = CollectionInput("SupportedMethods", "String");
+
+        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Literal"));
+
+        var array = binding.Literal!.InlineValue!.Value;
+        Assert.Equal(JsonValueKind.Array, array.ValueKind);
+        Assert.Equal(["[\"GET\"", "\"POST\"]"], array.EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
     public void CompileOmitted_NonNullableValueType_PinsClrDefault()
     {
         // Issue #925: an omitted optional input whose non-nullable CLR type has a natural default is pinned to it
