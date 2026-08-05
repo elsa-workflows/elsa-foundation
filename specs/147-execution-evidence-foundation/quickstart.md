@@ -18,16 +18,35 @@ After implementation, add direct server references and feature-catalog assemblie
 
 ## 2. Exercise session, ordering, and association paths
 
-With an access token containing the documented scopes:
+With an access token containing the documented scopes, generate one caller-supplied `Idempotency-Key` per intended
+associate-and-start or late-attach command. Reuse that exact key only to retry the same canonical request; use a new
+key for another command. Both endpoints require the header:
+
+```bash
+start_operation_key="evidence-start-$(uuidgen)"
+curl --fail-with-body -X POST "$ELSA_URL/execution-evidence/sessions/$SESSION_ID/workflows" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Idempotency-Key: $start_operation_key" \
+  -H "Content-Type: application/json" \
+  -d '{"workflowArtifactId":"workflow-artifact-id"}'
+
+attach_operation_key="evidence-attach-$(uuidgen)"
+curl --fail-with-body -X POST "$ELSA_URL/execution-evidence/sessions/$SESSION_ID/workflows/$WORKFLOW_EXECUTION_ID/attach" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Idempotency-Key: $attach_operation_key" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
 
 1. `POST /execution-evidence/sessions` with optional bounded metadata-only correlation.
-2. `POST /execution-evidence/sessions/{sessionId}/workflows` to associate-and-start. The bridge reserves the association before Runtime admission and supplies opaque generic context before ordinary dispatch. Verify an admitted but uncommitted start is reported as `starting`, then becomes `active` only at the first committed checkpoint; authoritative start/checkpoint failure removes it.
+2. `POST /execution-evidence/sessions/{sessionId}/workflows` to associate-and-start, sending the required `Idempotency-Key`. The bridge reserves the association before Runtime admission and supplies opaque generic context before ordinary dispatch. Verify an admitted but uncommitted start is reported as `starting`, then becomes `active` only at the first committed checkpoint; authoritative start/checkpoint failure removes it.
 3. Drive the ordinary workflow through the four v1 successful transitions. Query records and retain `nextCursor` exactly as returned. Verify each record’s stable `(workflowCheckpointOrder, checkpointOrdinal)` pair.
-4. Start another workflow through ordinary Runtime APIs, let it commit unscoped work, then use `POST /execution-evidence/sessions/{sessionId}/workflows/{workflowExecutionId}/attach`. Verify the owner-scheduled attach response reports `effectiveFromWorkflowCheckpointOrder`; no earlier fact appears.
-5. Test a forced checkpoint failure, persistence skip, uncertain client retry with the same operation key, two competing attaches from different sessions, attach during an active owner drain, and completion freezing a reservation after Runtime commits but before Evidence finalizes. They respectively produce no association, one durable winner, or a frozen winner that reconciles into the frozen set.
-6. `POST /execution-evidence/sessions/{sessionId}/complete`. The response freezes association and pending-reservation admission immediately. While a frozen workflow has no terminal cutoff, a start remains unresolved, or an intent is pending, the state stays incomplete.
-7. Use query/wait with a bounded `pageSize`; send correlation key/value together and a valid order range. Verify a cursor resumes exactly at its last examined item after a filtered nonmatch and after timeout. Reusing it with another page size, scope, filter, session, or after deletion must fail.
-8. Once every frozen workflow has a terminal cutoff and all matching generic outbox intents through it are Delivered, wait may return `completed-range-without-match`; only then may `DELETE /execution-evidence/sessions/{sessionId}` succeed.
+4. Start another workflow through ordinary Runtime APIs, let it commit unscoped work, then use `POST /execution-evidence/sessions/{sessionId}/workflows/{workflowExecutionId}/attach` with its own required `Idempotency-Key`. Verify the owner-scheduled attach response reports `effectiveFromWorkflowCheckpointOrder`; no earlier fact appears.
+5. For both association endpoints, prove one-character and 256-character nonblank keys are accepted, while missing, blank, and 257-character keys return stable `400 invalid-request`. Simulate a lost acknowledgement after a committed response, then resend the exact canonical request with the same key and the same normalized caller access context, session, target, and request material: it returns the Runtime-authoritative prior result and creates no second mutation. Reuse that key with any of those normalized materials changed: it returns `409 idempotency-conflict` and creates no mutation.
+6. Test a forced checkpoint failure, persistence skip, two competing attaches from different sessions, attach during an active owner drain, and completion freezing a reservation after Runtime commits but before Evidence finalizes. They respectively produce no association, one durable winner, or a frozen winner that reconciles into the frozen set.
+7. `POST /execution-evidence/sessions/{sessionId}/complete`. The response freezes association and pending-reservation admission immediately. While a frozen workflow has no terminal cutoff, a start remains unresolved, or an intent is pending, the state stays incomplete.
+8. Use query/wait with a bounded `pageSize`; send correlation key/value together and a valid order range. Verify a cursor resumes exactly at its last examined item after a filtered nonmatch and after timeout. Reusing it with another page size, scope, filter, session, or after deletion must fail.
+9. Once every frozen workflow has a terminal cutoff and all matching generic outbox intents through it are Delivered, wait may return `completed-range-without-match`; only then may `DELETE /execution-evidence/sessions/{sessionId}` succeed.
 
 A timeout is inconclusive. A process restart is outside the InMemory provider’s completeness claim. `FailedFinal` and `Cancelled` are terminal integrity failures, not successful completion.
 

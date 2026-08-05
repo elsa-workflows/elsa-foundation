@@ -89,9 +89,14 @@ paths:
       summary: Associate and start a workflow through the Evidence-owned bridge.
       description: >-
         The bridge creates a generic opaque immutable execution-context snapshot before ordinary Runtime dispatch.
-        The Runtime execute endpoint remains unmodified and unscoped unless this bridge is used.
+        The Runtime execute endpoint remains unmodified and unscoped unless this bridge is used. The required
+        Idempotency-Key binds normalized caller access context, session, target, and canonical request material. An exact retry
+        returns the authoritative prior result, including after a lost acknowledgement; reusing the key with any of
+        those materials changed returns 409 without a mutation.
       security:
         - elsaPermissions: [execution-evidence.manage]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -99,7 +104,9 @@ paths:
             schema: { $ref: '#/components/schemas/AssociateAndStartWorkflowRequest' }
       responses:
         '202':
-          description: Start admitted; association becomes effective at the first committed workflow checkpoint.
+          description: >-
+            Start admitted, or the authoritative prior result of an exact idempotent replay; association becomes
+            effective at the first committed workflow checkpoint.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkflowAssociation' }
@@ -107,7 +114,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/AssociationConflict' }
+        '409': { $ref: '#/components/responses/AssociationOrIdempotencyConflict' }
   /execution-evidence/sessions/{sessionId}/workflows/{workflowExecutionId}/attach:
     parameters:
       - $ref: '#/components/parameters/SessionId'
@@ -117,9 +124,14 @@ paths:
       summary: Late-associate an existing execution at a generic checkpoint boundary.
       description: >-
         Success linearizes only at a committed generic AttachIfAbsent checkpoint and returns its effective order.
-        Failed/skipped checkpoints create no association. A conflicting attach or an already frozen session fails.
+        Failed/skipped checkpoints create no association. A conflicting attach or an already frozen session fails. The
+        required Idempotency-Key binds normalized caller access context, session, target, and canonical request material. An
+        exact retry returns the authoritative prior result, including after a lost acknowledgement; reusing the key
+        with any of those materials changed returns 409 without a mutation.
       security:
         - elsaPermissions: [execution-evidence.manage]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -127,7 +139,9 @@ paths:
             schema: { $ref: '#/components/schemas/LateAttachRequest' }
       responses:
         '200':
-          description: Attachment committed; only facts at or after effective order are eligible.
+          description: >-
+            Attachment committed, or the authoritative prior result of an exact idempotent replay; only facts at or
+            after effective order are eligible.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkflowAssociation' }
@@ -135,7 +149,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/AssociationConflict' }
+        '409': { $ref: '#/components/responses/AssociationOrIdempotencyConflict' }
         '422': { $ref: '#/components/responses/CheckpointNotCommitted' }
   /execution-evidence/sessions/{sessionId}/records:
     parameters:
@@ -216,6 +230,20 @@ components:
       name: workflowExecutionId
       required: true
       schema: { type: string, minLength: 1, maxLength: 512 }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: >-
+        Caller-supplied reusable operation key. It must be 1–256 characters and contain a non-whitespace character.
+        Missing or invalid values return stable 400 invalid-request. The durable binding includes normalized caller access
+        context, session, target, and canonical request material: an exact retry returns the authoritative prior
+        result, while a mismatch returns 409 idempotency-conflict without mutation.
+      schema:
+        type: string
+        minLength: 1
+        pattern: ".*\\S.*"
+        maxLength: 256
     Kind:
       in: query
       name: kind
@@ -263,7 +291,9 @@ components:
       schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
   responses:
     InvalidRequest:
-      description: Input fails bounds, a filter is inconsistent, or the request cannot select a registered contract.
+      description: >-
+        Stable 400 invalid-request: input fails bounds, a filter is inconsistent, the request cannot select a
+        registered contract, or Idempotency-Key is missing, blank, or outside its 1–256-character bound.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     InvalidCursorOrRequest:
       description: Cursor is malformed, deleted, or not bound to this authorization-scoped normalized query shape.
@@ -271,8 +301,11 @@ components:
     Unauthorized: { description: Authentication required. }
     Forbidden: { description: Caller lacks the required scope or owner tenant/access-context scope. }
     NotFound: { description: Session is absent or not visible to the caller. }
-    AssociationConflict:
-      description: Session is frozen, workflow is already associated, or a competing attach won.
+    AssociationOrIdempotencyConflict:
+      description: >-
+        Session is frozen, workflow is already associated, or a competing attach won. Reusing an Idempotency-Key
+        with different normalized caller access context, session, target, or canonical request material returns stable 409
+        idempotency-conflict and makes no mutation.
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     CheckpointNotCommitted:
       description: The requested late-attach checkpoint failed or skipped; no association was made.
@@ -543,5 +576,5 @@ components:
         status: { type: integer }
         code:
           type: string
-          enum: [invalid-request, invalid-cursor, association-conflict, checkpoint-not-committed, incomplete-delivery, terminal-integrity-failure, delete-precondition-failed]
+          enum: [invalid-request, invalid-cursor, association-conflict, idempotency-conflict, checkpoint-not-committed, incomplete-delivery, terminal-integrity-failure, delete-precondition-failed]
         detail: { type: [string, 'null'] }
