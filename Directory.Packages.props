@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -68,6 +68,14 @@
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <!--
+      Transitive pin: no project references Microsoft.OpenApi directly. Because
+      CentralPackageTransitivePinningEnabled is true (above), a PackageVersion with no matching
+      PackageReference is how this repo pins a transitive dependency's version — here the one
+      Microsoft.AspNetCore.OpenApi pulls in. Deleting it silently changes what restores: without it
+      the graph resolves 2.0.0, which carries a high-severity advisory (GHSA-v5pm-xwqc-g5wc).
+    -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
@@ -81,6 +89,14 @@
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <!--
+      Transitive pin: no project references SQLitePCLRaw.bundle_e_sqlite3 directly. It is the native
+      SQLite bundle that Microsoft.Data.Sqlite pulls in; pinned here so the native provider version
+      is deliberate rather than whatever the graph resolves. Without it the graph resolves 2.1.11,
+      whose SQLitePCLRaw.lib.e_sqlite3 carries a high-severity advisory (GHSA-2m69-gcr7-jv3q).
+      See the Microsoft.OpenApi note above.
+    -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.12.0" />
