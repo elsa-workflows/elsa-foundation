@@ -240,10 +240,13 @@ Required inputs in **bold**; `(Done)` means no outcome is declared, so only the 
 | [#1117](https://github.com/elsa-workflows/elsa-foundation/issues/1117) | Member-level gaps; `Fault` and `PublishEvent` rows are now closed, `SendHttpRequest`/`DispatchWorkflow`/`Switch` remain | open — §2 |
 | [#1118](https://github.com/elsa-workflows/elsa-foundation/issues/1118) | Tracking: Elsa 3 activities with no Elsa 4 counterpart | open — §3 |
 | [#1119](https://github.com/elsa-workflows/elsa-foundation/issues/1119) | Snapshot guard + behavioural test drive | closed |
+| [#1152](https://github.com/elsa-workflows/elsa-foundation/issues/1152) | Tracking: gaps beyond the activity surface | open — §6 |
 
 ## Routing
 
 Findings here are evidence. Work that gets planned should move to the
 [Code Reality And Test Maturity](../program-goals/code-reality-and-test-maturity.md) bucket per
 `AGENTS.md`. Note there is currently **no program-goal bucket for Elsa 3 → Elsa 4 parity**, and the
-open parity issues (#1115–#1118) all sit in `needs-triage` — so nothing in §2, §3 or §6 is queued.
+open parity issues (#1115–#1118, #1152) all sit in `needs-triage` — so nothing in §2, §3 or §6 is
+queued. Deciding whether parity gets its own bucket, or is explicitly `none/free-flow`, is the
+prerequisite call.
