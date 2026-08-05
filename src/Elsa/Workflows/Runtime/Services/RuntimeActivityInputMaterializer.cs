@@ -510,7 +510,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var expression = resolved.Expression
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is an expression binding without an expression payload.");
 
-        if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.Ordinal))
+        if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.OrdinalIgnoreCase))
             return new EvaluatedExpression(DeserializeObjectExpression(expression, type, nodeId, inputName), null);
 
         var evaluated = await _portableExpressionEvaluator.EvaluateAsync(

@@ -13,7 +13,7 @@ public sealed class PortableJavaScriptExpressionHandler(IPortableJavaScriptEvalu
     public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (!StringComparer.Ordinal.Equals(request.Definition.Language, Language))
+        if (!StringComparer.OrdinalIgnoreCase.Equals(request.Definition.Language, Language))
             throw new ArgumentException($"Expected a '{Language}' expression definition.", nameof(request));
 
         return evaluator.EvaluateAsync(request);
