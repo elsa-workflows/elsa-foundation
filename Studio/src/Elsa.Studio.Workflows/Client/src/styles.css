@@ -1,5 +1,14 @@
+/* Token scope. Every --wf-* / --xy-* custom property lives here, keyed on a class any host can
+   opt into rather than on the two page roots that happen to own the workflow module's own chrome.
+   `.wf-tokens` is stamped by the shared graph-authoring workspace, so a host that embeds the
+   designer inside its own page shell (Activity Definition graph authoring) resolves the same
+   tokens the workflow editor does. Without it every `var(--wf-…)` in this sheet is invalid at
+   computed-value time and the shared node/palette/inspector chrome silently collapses to
+   initial values — no card, no border, no shadow, and React Flow falls back to its light
+   defaults for the minimap and controls. Layout that is genuinely page-specific stays below. */
 .wf-page,
-.wf-editor {
+.wf-editor,
+.wf-tokens {
   --wf-panel: var(--card, #ffffff);
   --wf-panel-muted: var(--muted, #f8fafc);
   --wf-canvas: color-mix(in srgb, var(--background, #ffffff) 88%, var(--muted, #f8fafc));
@@ -102,11 +111,17 @@
   --xy-background-pattern-color: var(--wf-border-strong);
   --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel) 70%, transparent);
 
+  color: var(--wf-text);
+}
+
+/* Page/editor shells own their own flow layout and body fill; an embedded workspace inherits
+   those from whatever host shell it is mounted in. */
+.wf-page,
+.wf-editor {
   display: flex;
   min-height: 100%;
   flex-direction: column;
   background: var(--background, #ffffff);
-  color: var(--wf-text);
 }
 
 /* Page chrome — workspace pages render as one rounded, bordered card inside the shell's
@@ -6186,7 +6201,8 @@ button.wf-reference-select {
 }
 
 html[data-theme="black-glass"] .wf-page,
-html[data-theme="black-glass"] .wf-editor {
+html[data-theme="black-glass"] .wf-editor,
+html[data-theme="black-glass"] .wf-tokens {
   --wf-panel: var(--studio-glass-bg-strong);
   --wf-panel-muted: var(--studio-glass-bg-soft);
   --wf-canvas: var(--studio-bg);
@@ -6230,7 +6246,8 @@ html[data-theme="black-glass"] .wf-editor {
 
 /* Light-mode glass canvas base — pale endpoints instead of the deep dark fill. */
 html[data-theme="black-glass"][data-theme-mode="light"] .wf-page,
-html[data-theme="black-glass"][data-theme-mode="light"] .wf-editor {
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-editor,
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-tokens {
   --wf-glass-canvas-base: linear-gradient(135deg,
     color-mix(in srgb, white 30%, var(--studio-bg)),
     color-mix(in srgb, white 75%, var(--studio-bg)) 58%,
@@ -6386,7 +6403,8 @@ html[data-theme="black-glass"] .wf-row-select input {
 }
 
 html[data-theme-material] .wf-page,
-html[data-theme-material] .wf-editor {
+html[data-theme-material] .wf-editor,
+html[data-theme-material] .wf-tokens {
   --wf-panel: var(--studio-material-panel-bg-strong);
   --wf-panel-muted: var(--studio-material-panel-bg-soft);
   --wf-canvas: var(--studio-bg);

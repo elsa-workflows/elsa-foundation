@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
+import { Boxes, Check, ChevronRight, Code2, Download, GitBranch, ListTree, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
@@ -311,7 +311,6 @@ export function WorkflowEditor({
     catalog,
     catalogByVersion,
     isUnsupportedDesigner,
-    isFlowchartDesigner,
     isBpmnDesigner,
     canAddActivitiesToCanvas,
     selectedNodeId,

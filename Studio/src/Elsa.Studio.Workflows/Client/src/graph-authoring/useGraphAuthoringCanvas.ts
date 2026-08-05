@@ -18,6 +18,7 @@ import {
   undoActivityGraph
 } from "../activityGraphHistory";
 import type { GraphDocumentAdapter } from "./graphDocumentAdapter";
+import type { GraphCanvasCommitOptions } from "./useGraphCanvasInteractions";
 
 export interface GraphAuthoringCanvasModel {
   nodes: Node<WorkflowNodeData>[];
@@ -28,6 +29,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   document,
   adapter,
   resetKey,
+  selectedNodeId = null,
   buildModel,
   applyModel,
   onChange
@@ -35,12 +37,31 @@ export function useGraphAuthoringCanvas<TDocument>({
   document: TDocument;
   adapter: GraphDocumentAdapter<TDocument>;
   resetKey: string;
+  /**
+   * Re-applied whenever the canvas is rebuilt from the document, so a node stays visibly selected
+   * across an inspector edit. Read through a ref: making it a dependency would rebuild (and discard
+   * uncommitted canvas state) on every selection change.
+   */
+  selectedNodeId?: string | null;
   buildModel(root: ReturnType<GraphDocumentAdapter<TDocument>["readRoot"]>, layout: ReturnType<GraphDocumentAdapter<TDocument>["readLayout"]>): GraphAuthoringCanvasModel;
-  applyModel(document: TDocument, nodes: Node<WorkflowNodeData>[], edges: WorkflowEdge[]): TDocument;
+  applyModel(
+    document: TDocument,
+    nodes: Node<WorkflowNodeData>[],
+    edges: WorkflowEdge[],
+    options?: GraphCanvasCommitOptions
+  ): TDocument;
   onChange(document: TDocument): void;
 }) {
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
   const derive = useCallback(
-    (source: TDocument) => buildModel(adapter.readRoot(source), adapter.readLayout(source)),
+    (source: TDocument): GraphAuthoringCanvasModel => {
+      const model = buildModel(adapter.readRoot(source), adapter.readLayout(source));
+      return {
+        ...model,
+        nodes: model.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current }))
+      };
+    },
     [adapter, buildModel]
   );
   const initial = useMemo(() => derive(document), [derive, document]);
@@ -85,9 +106,10 @@ export function useGraphAuthoringCanvas<TDocument>({
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
-    nextEdges: WorkflowEdge[] = edges
+    nextEdges: WorkflowEdge[] = edges,
+    options?: GraphCanvasCommitOptions
   ) => {
-    emit(applyModel(documentRef.current, nextNodes, nextEdges));
+    emit(applyModel(documentRef.current, nextNodes, nextEdges, options));
   }, [applyModel, edges, emit]);
 
   const undo = useCallback(() => {

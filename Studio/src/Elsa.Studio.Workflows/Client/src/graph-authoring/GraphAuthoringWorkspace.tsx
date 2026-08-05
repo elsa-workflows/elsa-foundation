@@ -16,6 +16,10 @@ export interface GraphAuthoringWorkspaceProps {
  * Shared workbench composition for graph resources. The resource host supplies controlled content
  * and retains persistence/lifecycle ownership; this component fixes the common palette/canvas/
  * inspector landmark order used by workflow and Activity Definition graph authoring.
+ *
+ * The root carries `wf-tokens` so the shared palette/canvas/inspector chrome resolves the module's
+ * design tokens regardless of the host page shell it is embedded in. Hosts must not rely on their
+ * own page root for those tokens — see the token scope comment at the top of styles.css.
  */
 export function GraphAuthoringWorkspace({
   resourceKind,
@@ -29,7 +33,7 @@ export function GraphAuthoringWorkspace({
 }: GraphAuthoringWorkspaceProps) {
   return (
     <div
-      className={["graph-authoring-workspace", className].filter(Boolean).join(" ")}
+      className={["graph-authoring-workspace", "wf-tokens", className].filter(Boolean).join(" ")}
       style={style}
       data-graph-authoring-resource={resourceKind}
     >

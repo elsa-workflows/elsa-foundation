@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  addEdge,
-  type Connection,
-  type Edge,
-  type Node
-} from "@xyflow/react";
-import { ArrowLeft, ArrowRight, Boxes, ChevronRight, ListTree, Network, Redo2, Trash2, Undo2 } from "lucide-react";
+import type { Node, XYPosition } from "@xyflow/react";
+import { ArrowLeft, ArrowRight, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import type {
   StudioActivityDefinitionContract,
   StudioActivityDefinitionImplementationEditorProps,
@@ -24,6 +19,8 @@ import {
   syncCanvasToScope,
   updateActivity,
   withFlowchartConnections,
+  type ChildSlot,
+  type ScopeFrame,
   type WorkflowNodeData
 } from "./workflowAdapter";
 import { createNodeId } from "./workflow-editor/editorHelpers";
@@ -36,10 +33,17 @@ import { activityGraphDocumentAdapter, activityGraphLayoutToDesign } from "./act
 import type { WorkflowEdge, WorkflowEditorPanelTab } from "./workflow-editor/editorTypes";
 import { GraphAuthoringWorkbench } from "./graph-authoring/GraphAuthoringWorkbench";
 import { useGraphAuthoringCanvas } from "./graph-authoring/useGraphAuthoringCanvas";
+import {
+  useGraphCanvasInteractions,
+  type GraphCanvasCommitOptions,
+  type GraphCanvasMode
+} from "./graph-authoring/useGraphCanvasInteractions";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
-import { decorateWorkflowCanvasElements } from "./workflow-editor/workflowAccessibility";
+import { ScopeBreadcrumb } from "./workflow-editor/ScopeBreadcrumb";
+import { SlotEmptyState } from "./workflow-editor/SlotEmptyState";
+import { ConnectMenu } from "./workflow-editor/graph";
 import { listExpressionDescriptors } from "./api/expressions";
 import { WorkflowReferenceAuthoringProvider } from "./workflowReferenceAuthoring";
 import {
@@ -56,7 +60,6 @@ import {
 } from "./workflow-editor/InspectorPanel";
 import { compareWorkflowPanelTabs } from "./workflow-editor/PanelTabList";
 import { supportsScopedVariables } from "./scopedVariables";
-import { computeAutoLayout } from "./workflowLayout";
 
 export interface ActivityGraphOutcomeMapping {
   sourceOutcomeReferenceKey: string;
@@ -168,7 +171,7 @@ export function ActivityGraphPublicInterfaceEditor({
   const unresolvedOutcomes = outcomeMappingOptions.boundaryOutcomes.filter(outcome => !mappedOutcomeTargets.has(outcome.referenceKey));
 
   return (
-    <div className="ad-graph-public-interface">
+    <div className="ad-graph-public-interface wf-tokens">
       <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Boundary output mappings</h3>
         <p>Supply public outputs from public inputs, graph variables, node outputs, or another supported expression.</p>
@@ -243,7 +246,6 @@ export function ActivityGraphImplementationEditor({
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
-  const draggedActivityRef = useRef<ActivityCatalogItem | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const pendingDiagnosticFocusRef = useRef<{
     target: "root" | string;
@@ -266,7 +268,8 @@ export function ActivityGraphImplementationEditor({
   const applyModel = useCallback((
     document: typeof value,
     nextNodes: Node<WorkflowNodeData>[],
-    nextEdges: WorkflowEdge[]
+    nextEdges: WorkflowEdge[],
+    options?: GraphCanvasCommitOptions
   ) => {
     const documentRoot = activityGraphDocumentAdapter.readRoot(document);
     const documentOwner = findNodeByPath(documentRoot, scopePath, catalogByVersion) ?? documentRoot;
@@ -275,7 +278,14 @@ export function ActivityGraphImplementationEditor({
       ? getChildSlots(documentOwner, catalogByVersion)[0]
       : undefined;
     if (!documentSlot) return document;
-    let nextOwner = syncCanvasToScope({ owner: documentOwner, slot: documentSlot }, nextNodes, nextEdges);
+    // Activities the shared canvas layer created in place (edge splice, connect menu) are not in the
+    // slot yet; without them the sync would drop the node it just placed.
+    let nextOwner = syncCanvasToScope(
+      { owner: documentOwner, slot: documentSlot },
+      nextNodes,
+      nextEdges,
+      options?.createdActivities ?? []
+    );
     if (documentSlot.mode === "flowchart") nextOwner = withFlowchartConnections(nextOwner, nextEdges);
     const nextRoot = updateActivity(documentRoot, documentOwner.nodeId, () => nextOwner, catalogByVersion);
     return activityGraphDocumentAdapter.replaceGraph(
@@ -289,11 +299,12 @@ export function ActivityGraphImplementationEditor({
     document: value,
     adapter: activityGraphDocumentAdapter,
     resetKey: historyResetKey,
+    selectedNodeId,
     buildModel,
     applyModel,
     onChange
   });
-  const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
+  const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
   const payload = normalizePayload(value.payload);
   const root = payload.rootActivity;
   const owner = findNodeByPath(root, scopePath, catalogByVersion) ?? root;
@@ -301,6 +312,7 @@ export function ActivityGraphImplementationEditor({
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
   const slot = ownerSupported ? getChildSlots(owner, catalogByVersion)[0] : undefined;
   const activities = slot?.activities ?? emptyActivities;
+  const scopeFrames = useMemo(() => toScopeFrames(root, scopePath, catalogByVersion), [catalogByVersion, root, scopePath]);
   const selected = activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
   const selectedCatalogItem = selected ? catalogByVersion.get(selected.activityVersionId) : undefined;
   const selectedIndex = selected ? activities.findIndex(activity => activity.nodeId === selected.nodeId) : -1;
@@ -335,22 +347,69 @@ export function ActivityGraphImplementationEditor({
     () => payload.variables.flatMap(toVisibleGraphVariable),
     [payload.variables]
   );
-  const accessibleCanvas = useMemo(() => {
-    const decorated = decorateWorkflowCanvasElements(
-      nodes.map(node => ({ ...node, selected: node.id === selectedNodeId })),
-      edges
+  const commitRoot = useCallback((nextRoot: ActivityNode, pinned?: PinnedGraphNodePosition) => {
+    commitDocument(activityGraphDocumentAdapter.replaceGraph(
+      value,
+      nextRoot,
+      reconcileGraphLayout(nextRoot, catalogByVersion, activityGraphDocumentAdapter.readLayout(value), pinned)
+    ));
+  }, [catalogByVersion, commitDocument, value]);
+
+  const updateOwnerActivities = useCallback((nextActivities: ActivityNode[], pinned?: PinnedGraphNodePosition) => {
+    if (!slot) return;
+    commitRoot(
+      updateActivity(root, owner.nodeId, current => replaceSlotActivities(current, slot, nextActivities), catalogByVersion),
+      pinned
     );
-    return {
-      ...decorated,
-      nodes: decorated.nodes.map(node => ({
-        ...node,
-        domAttributes: {
-          ...node.domAttributes,
-          "data-graph-node-id": node.id
-        }
-      }))
-    };
-  }, [edges, nodes, selectedNodeId]);
+  }, [catalogByVersion, commitRoot, owner.nodeId, root, slot]);
+
+  // The Activity Definition graph's answer to the workflow editor's drop routing: a graph with no root
+  // yet adopts the first composition dropped on it, otherwise the activity appends to the open slot at
+  // the cursor position.
+  const placeActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition) => {
+    if (readOnly) return null;
+    if (!root.activityVersionId) {
+      if (getChildSlots(createActivityNode(activity, "root"), activity).length === 0) return null;
+      const nextRoot = createActivityNode(activity, root.nodeId || "root");
+      setScopePath([]);
+      setSelectedNodeId(null);
+      commitDocument({
+        ...activityGraphDocumentAdapter.replaceGraph(value, nextRoot, []),
+        payload: { ...(isRecord(value.payload) ? value.payload : {}), ...payload, rootActivity: nextRoot, outcomeMappings: [] }
+      });
+      return null;
+    }
+    if (!slot) return null;
+    const next = createActivityNode(activity, createNodeId(activity));
+    updateOwnerActivities(
+      [...activities, next],
+      position ? { nodeId: next.nodeId, x: position.x, y: position.y } : undefined
+    );
+    setSelectedNodeId(next.nodeId);
+    return next;
+  }, [activities, commitDocument, payload, readOnly, root.activityVersionId, root.nodeId, slot, updateOwnerActivities, value]);
+
+  const interactions = useGraphCanvasInteractions({
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    mode: toGraphCanvasMode(slot),
+    scopeKey: scopePath.length === 0 ? "root" : scopePath.join("/"),
+    canAddActivities: !readOnly,
+    selectedNodeId,
+    catalogByVersion,
+    select: setSelectedNodeId,
+    commitCanvas,
+    placeActivity
+  });
+
+  // The provider-owned diagnostic focus seam addresses canvas nodes by document node id, which React
+  // Flow does not put on the DOM.
+  const accessibleNodes = useMemo(() => interactions.accessibleNodes.map(node => ({
+    ...node,
+    domAttributes: { ...node.domAttributes, "data-graph-node-id": node.id }
+  })), [interactions.accessibleNodes]);
 
   useEffect(() => {
     if (!selectedNodeId || activities.some(activity => activity.nodeId === selectedNodeId)) return;
@@ -415,13 +474,6 @@ export function ActivityGraphImplementationEditor({
     pendingDiagnosticFocusRef.current = null;
   }, []);
 
-  const commitRoot = (nextRoot: ActivityNode) => {
-    commitDocument(activityGraphDocumentAdapter.replaceGraph(
-      value,
-      nextRoot,
-      reconcileGraphLayout(nextRoot, catalogByVersion, activityGraphDocumentAdapter.readLayout(value))
-    ));
-  };
   const chooseRoot = (activityVersionId: string) => {
     const activity = catalogByVersion.get(activityVersionId);
     if (!activity || !supportsActivityGraphAuthoring(activity) || activityVersionId === root.activityVersionId) return;
@@ -433,19 +485,6 @@ export function ActivityGraphImplementationEditor({
       ...activityGraphDocumentAdapter.replaceGraph(value, nextRoot, []),
       payload: { ...(isRecord(value.payload) ? value.payload : {}), ...payload, rootActivity: nextRoot, outcomeMappings: [] }
     });
-  };
-  const updateOwnerActivities = (nextActivities: ActivityNode[]) => {
-    if (!slot) return;
-    const nextRoot = updateActivity(root, owner.nodeId, current => replaceSlotActivities(current, slot, nextActivities), catalogByVersion);
-    commitRoot(nextRoot);
-  };
-  const addActivity = () => {
-    const activity = draggedActivityRef.current;
-    if (!activity || !slot) return;
-    const next = createActivityNode(activity, createNodeId(activity));
-    updateOwnerActivities([...activities, next]);
-    setSelectedNodeId(next.nodeId);
-    draggedActivityRef.current = null;
   };
   const deleteSelected = () => {
     if (!selected) return;
@@ -475,34 +514,6 @@ export function ActivityGraphImplementationEditor({
       }
     });
   };
-  const deleteCanvasNodes = (deleted: Node<WorkflowNodeData>[]) => {
-    const deletedIds = new Set(deleted.map(node => node.id));
-    const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
-    const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
-    setEdges(nextEdges);
-    commitCanvas(nextNodes, nextEdges);
-    if (selectedNodeId && deletedIds.has(selectedNodeId)) setSelectedNodeId(null);
-  };
-  const deleteCanvasEdges = (deleted: Edge[]) => {
-    const deletedIds = new Set(deleted.map(edge => edge.id));
-    commitCanvas(nodes, edges.filter(edge => !deletedIds.has(edge.id)));
-  };
-  const connectCanvas = (connection: Connection) => {
-    const nextEdges = addEdge({ ...connection, type: "workflow" }, edges) as WorkflowEdge[];
-    setEdges(nextEdges);
-    commitCanvas(nodes, nextEdges);
-  };
-  const autoLayoutCanvas = () => {
-    if (!slot || nodes.length === 0) return;
-    const positions = computeAutoLayout(nodes, edges, slot.mode === "sequence" ? "sequence" : "flowchart");
-    const nextNodes = nodes.map(node => {
-      const position = positions.get(node.id);
-      return position ? { ...node, position } : node;
-    });
-    setNodes(nextNodes);
-    commitCanvas(nextNodes, edges);
-  };
-
   const inspectedNode = selected ?? owner;
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
@@ -562,18 +573,10 @@ export function ActivityGraphImplementationEditor({
               else next.add(category);
               return next;
             })}
-            onActivityClick={activity => {
-              draggedActivityRef.current = activity;
-              addActivity();
-            }}
-            onActivityDragStart={(event, activity) => {
-              draggedActivityRef.current = activity;
-              event.dataTransfer.effectAllowed = "copy";
-            }}
-            onActivityDragEnd={() => {
-              draggedActivityRef.current = null;
-            }}
-            onActivityPointerDown={() => undefined}
+            onActivityClick={interactions.onPaletteClick}
+            onActivityDragStart={interactions.onPaletteDragStart}
+            onActivityDragEnd={interactions.onPaletteDragEnd}
+            onActivityPointerDown={interactions.onPalettePointerDown}
           />
         </div>
       )
@@ -659,19 +662,23 @@ export function ActivityGraphImplementationEditor({
         onSelect: setActiveLeftPanelId
       }}
       canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer">
-        <nav className="ad-graph-breadcrumb" aria-label="Graph scope"><button type="button" onClick={() => { setScopePath([]); setSelectedNodeId(null); }} disabled={scopePath.length === 0}>Root</button>{scopePath.map((nodeId, index) => <span key={nodeId}><ChevronRight size={14} /><button type="button" onClick={() => { setScopePath(path => path.slice(0, index + 1)); setSelectedNodeId(null); }}>{nodeLabel(findNodeByPath(root, scopePath.slice(0, index + 1), catalogByVersion), catalogByVersion)}</button></span>)}</nav>
-        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={autoLayoutCanvas} disabled={readOnly || nodes.length === 0}><Network size={16} /></button></div></div>
-        {slot ? <GraphAuthoringCanvas
-          canvasProps={{
-            onDragOver: event => {
-              if (!readOnly && draggedActivityRef.current) event.preventDefault();
-            },
-            onDrop: event => {
-              event.preventDefault();
-              if (!readOnly) addActivity();
-            }
+        <ScopeBreadcrumb
+          frames={scopeFrames}
+          onNavigate={nextFrames => {
+            setScopePath(nextFrames.map(frame => frame.ownerNodeId));
+            setSelectedNodeId(null);
           }}
-          slotNavigation={(ownerNodeId, ownerLabel, childSlot) => {
+        />
+        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
+        {slot ? <GraphAuthoringCanvas
+          canvasRef={interactions.canvasRef}
+          canvasProps={{
+            onDragOver: interactions.onCanvasDragOver,
+            onDragLeave: interactions.onCanvasDragLeave,
+            onDrop: interactions.onCanvasDrop
+          }}
+          edgeActions={interactions.edgeActions}
+          slotNavigation={(ownerNodeId, _ownerLabel, childSlot) => {
             if (readOnly) return;
             const child = activities.find(activity => activity.nodeId === ownerNodeId);
             if (!child || !getChildSlots(child, catalogByVersion).some(candidate => candidate.id === childSlot.id)) return;
@@ -679,26 +686,64 @@ export function ActivityGraphImplementationEditor({
             setSelectedNodeId(null);
           }}
           reactFlowProps={{
-            nodes: accessibleCanvas.nodes,
-            edges: accessibleCanvas.edges,
-            onNodesChange,
-            onEdgesChange,
-            onNodesDelete: deleteCanvasNodes,
-            onEdgesDelete: deleteCanvasEdges,
-            onConnect: slot.mode === "flowchart" ? connectCanvas : undefined,
+            nodes: accessibleNodes,
+            edges: interactions.accessibleEdges,
+            onInit: interactions.setReactFlowInstance,
+            onNodesChange: interactions.onNodesChange,
+            onEdgesChange: interactions.onEdgesChange,
+            onNodesDelete: interactions.onNodesDelete,
+            onEdgesDelete: interactions.onEdgesDelete,
+            onConnect: interactions.onConnect,
+            onConnectStart: interactions.canCreateActivityFromPort ? interactions.onConnectStart : undefined,
+            onConnectEnd: interactions.canCreateActivityFromPort ? interactions.onConnectEnd : undefined,
+            onReconnect: slot.mode === "flowchart" || slot.mode === "bpmn" ? interactions.onReconnect : undefined,
+            isValidConnection: interactions.isValidConnection,
+            onDragOver: interactions.onCanvasDragOver,
+            onDragLeave: interactions.onCanvasDragLeave,
+            onDrop: interactions.onCanvasDrop,
             onPaneClick: () => setSelectedNodeId(null),
             onNodeClick: (_, node) => setSelectedNodeId(node.id),
-            onNodeDragStop: (_, node) => {
-              const nextNodes = nodes.map(current => current.id === node.id ? { ...current, position: node.position } : current);
-              setNodes(nextNodes);
-              commitCanvas(nextNodes);
-            },
-            nodesConnectable: !readOnly && slot.mode === "flowchart",
+            onNodeDragStop: interactions.commitLayout,
+            nodesConnectable: interactions.canCreateActivityFromPort,
             nodesDraggable: !readOnly,
             deleteKeyCode: readOnly ? null : ["Backspace", "Delete"]
           }}
-          overlays={nodes.length === 0 ? <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>Choose an authorized activity from the palette to compose this graph.</span></div> : null}
-        /> : <div className="ad-graph-empty"><strong>{root.activityVersionId ? "Leaf implementation" : "Choose a composition"}</strong><span>{root.activityVersionId ? "This activity does not own a child graph scope." : "Select Flowchart, Sequence, or BPMN to begin."}</span></div>}
+          overlays={<>
+            {nodes.length === 0 ? (
+              scopePath.length > 0 ? (
+                <SlotEmptyState
+                  slotLabel={slot.label}
+                  catalog={availableActivities}
+                  onPickActivity={activity => placeActivity(activity)}
+                  onBrowseAll={interactions.openEmptyConnectMenu}
+                />
+              ) : slot.mode === "flowchart" ? (
+                <button type="button" className="wf-empty-canvas-add" onClick={() => interactions.openEmptyConnectMenu()} disabled={readOnly}>
+                  <Plus size={15} /> Add activity
+                </button>
+              ) : (
+                <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>Choose an authorized activity from the palette to compose this graph.</span></div>
+              )
+            ) : null}
+            {interactions.connectMenu ? (
+              <ConnectMenu
+                clientX={interactions.connectMenu.clientX}
+                clientY={interactions.connectMenu.clientY}
+                activities={availableActivities}
+                onPick={interactions.onConnectMenuPick}
+                onClose={() => interactions.setConnectMenu(null)}
+              />
+            ) : null}
+          </>}
+        /> : <div
+          ref={interactions.canvasRef}
+          className="wf-canvas ad-graph-canvas-placeholder"
+          onDragOver={interactions.onCanvasDragOver}
+          onDragLeave={interactions.onCanvasDragLeave}
+          onDrop={interactions.onCanvasDrop}
+        >
+          <div className="ad-graph-empty"><strong>{root.activityVersionId ? "Leaf implementation" : "Choose a composition"}</strong><span>{root.activityVersionId ? "This activity does not own a child graph scope." : "Drop a Flowchart, Sequence, or BPMN activity here — or pick one from the palette — to begin."}</span></div>
+        </div>}
       </main>}
       inspector={{
         ariaLabel: "Inspector panel",
@@ -931,10 +976,17 @@ function mergeCanvasLayout(
   return [...byNodeId.values()];
 }
 
+export interface PinnedGraphNodePosition {
+  nodeId: string;
+  x: number;
+  y: number;
+}
+
 function reconcileGraphLayout(
   root: ActivityNode,
   catalog: Map<string, ActivityCatalogItem>,
-  current: ReturnType<typeof activityGraphLayoutToDesign>
+  current: ReturnType<typeof activityGraphLayoutToDesign>,
+  pinned?: PinnedGraphNodePosition
 ) {
   const activeNodeIds: string[] = [];
   const visit = (owner: ActivityNode) => {
@@ -945,11 +997,40 @@ function reconcileGraphLayout(
   };
   visit(root);
   const currentByNodeId = new Map(current.map(record => [record.nodeId, record]));
-  return activeNodeIds.map((nodeId, index) => currentByNodeId.get(nodeId) ?? {
-    nodeId,
-    x: 80 + index % 4 * 240,
-    y: 80 + Math.floor(index / 4) * 160
+  return activeNodeIds.map((nodeId, index) => {
+    // A cursor-placed node keeps exactly where it was dropped; everything else falls back to its
+    // recorded position, then to the grid.
+    if (pinned && pinned.nodeId === nodeId) {
+      return { nodeId, x: Math.round(pinned.x), y: Math.round(pinned.y) };
+    }
+    return currentByNodeId.get(nodeId) ?? {
+      nodeId,
+      x: 80 + index % 4 * 240,
+      y: 80 + Math.floor(index / 4) * 160
+    };
   });
+}
+
+// The Activity Definition graph descends one single-slot container at a time, so a scope path of node
+// ids maps 1:1 onto the shared breadcrumb's frame model.
+function toScopeFrames(
+  root: ActivityNode,
+  scopePath: string[],
+  catalog: Map<string, ActivityCatalogItem>
+): ScopeFrame[] {
+  return scopePath.map((ownerNodeId, index) => {
+    const owner = findNodeByPath(root, scopePath.slice(0, index + 1), catalog);
+    return {
+      ownerNodeId,
+      slotId: (owner ? getChildSlots(owner, catalog)[0]?.id : undefined) ?? "",
+      label: nodeLabel(owner, catalog)
+    };
+  });
+}
+
+function toGraphCanvasMode(slot: ChildSlot | undefined): GraphCanvasMode {
+  if (!slot) return "none";
+  return slot.mode === "flowchart" || slot.mode === "sequence" || slot.mode === "bpmn" ? slot.mode : "none";
 }
 
 function readTypeAlias(value: unknown) {

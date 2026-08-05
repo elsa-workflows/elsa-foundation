@@ -12,6 +12,8 @@ import {
   ActivityGraphPublicInterfaceEditor
 } from "../ActivityGraphImplementationEditor";
 import { inputReferenceContribution } from "../inputReferenceContribution";
+import { flowchartStructureKind } from "../flowchartStartNode";
+import { activityDragDataType } from "../workflow-editor/constants";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
 vi.mock("../api/activityDesign", () => ({
@@ -197,6 +199,64 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     const rendered = renderDesigner({ readOnly: true });
 
     expect(rendered.container.querySelector<HTMLFieldSetElement>(".wf-inspector-tab-panels")?.disabled).toBe(true);
+  });
+
+  // The whole --wf-* token layer is scoped to this class. Without it every shared node/palette/
+  // inspector rule is invalid at computed-value time and the designer renders as unstyled boxes.
+  it("stamps the module token scope on the shared workspace", () => {
+    catalogItems = [flowchartCatalogItem()];
+    const rendered = renderDesigner();
+
+    const workspace = rendered.container.querySelector("[data-graph-authoring-resource='activity-definition-graph']");
+    expect(workspace?.classList.contains("wf-tokens")).toBe(true);
+  });
+
+  it("navigates scopes through the shared breadcrumb rather than a host-local copy", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const rendered = renderDesigner();
+
+    expect(rendered.container.querySelector(".wf-breadcrumb")).not.toBeNull();
+    expect(rendered.container.querySelector(".ad-graph-breadcrumb")).toBeNull();
+  });
+
+  it("offers the shared empty-canvas picker and places the chosen activity", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind), onChange });
+
+    click(buttonByText(rendered.container, "Add activity"));
+    const option = [...rendered.container.querySelectorAll<HTMLButtonElement>(".wf-connect-menu [role='option']")]
+      .find(candidate => candidate.querySelector("strong")?.textContent === "Write line");
+    click(option!);
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        rootActivity: expect.objectContaining({
+          structure: expect.objectContaining({
+            payload: expect.objectContaining({
+              activities: [expect.objectContaining({ activityVersionId: "write-line-v1" })]
+            })
+          })
+        })
+      })
+    }));
+  });
+
+  it("honours the cursor position when an activity is dropped onto the canvas", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind), onChange });
+
+    const canvas = rendered.container.querySelector<HTMLElement>(".wf-canvas")!;
+    stubRect(canvas, { left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600 });
+    const dataTransfer = dragDataTransfer();
+    dataTransfer.setData(activityDragDataType, "write-line-v1");
+    dispatchDragEvent(canvas, "drop", { dataTransfer, clientX: 360, clientY: 300 });
+
+    const layout = onChange.mock.calls.at(-1)?.[0].layout as { nodeId: string; x: number; y: number }[];
+    expect(layout).toHaveLength(1);
+    // The grid fallback would put the first node at (80, 80); a positioned drop must not land there.
+    expect({ x: layout[0].x, y: layout[0].y }).not.toEqual({ x: 80, y: 80 });
   });
 });
 
@@ -421,7 +481,9 @@ function inputLeafCatalogItem() {
   };
 }
 
-function flowchartImplementationValue() {
+// `kind` defaults to the plain label used by the older fixtures (which resolves to a generic slot);
+// pass `flowchartStructureKind` when the test needs the real flowchart editing model.
+function flowchartImplementationValue(kind = "Flowchart") {
   return {
     payload: {
       rootActivity: {
@@ -430,7 +492,7 @@ function flowchartImplementationValue() {
         inputs: [],
         outputs: [],
         structure: {
-          kind: "Flowchart",
+          kind,
           schemaVersion: "1.0.0",
           payload: {
             activities: [],
@@ -447,6 +509,48 @@ function flowchartImplementationValue() {
     },
     layout: []
   };
+}
+
+function dragDataTransfer() {
+  const values = new Map<string, string>();
+  return {
+    effectAllowed: "all",
+    dropEffect: "none",
+    setData: (type: string, value: string) => values.set(type, value),
+    getData: (type: string) => values.get(type) ?? "",
+    clearData: (type?: string) => {
+      if (type) values.delete(type);
+      else values.clear();
+    }
+  };
+}
+
+function dispatchDragEvent(
+  element: Element,
+  type: string,
+  options: { dataTransfer: ReturnType<typeof dragDataTransfer>; clientX: number; clientY: number }
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    dataTransfer: { value: options.dataTransfer },
+    clientX: { value: options.clientX },
+    clientY: { value: options.clientY }
+  });
+  flushSync(() => element.dispatchEvent(event));
+}
+
+function stubRect(element: HTMLElement, rect: Partial<DOMRect>) {
+  element.getBoundingClientRect = () => ({
+    x: rect.left ?? 0,
+    y: rect.top ?? 0,
+    left: rect.left ?? 0,
+    top: rect.top ?? 0,
+    right: rect.right ?? 0,
+    bottom: rect.bottom ?? 0,
+    width: rect.width ?? 0,
+    height: rect.height ?? 0,
+    toJSON: () => ({})
+  } as DOMRect);
 }
 
 function buttonByText(container: HTMLElement, text: string, attribute?: string) {
