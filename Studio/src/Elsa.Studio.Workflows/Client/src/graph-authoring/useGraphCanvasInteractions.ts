@@ -57,6 +57,19 @@ export interface GraphCanvasPlacement {
   node: Node<WorkflowNodeData>;
 }
 
+/**
+ * Places an already-positioned node on the canvas — see `stampCanvasNode`. Named so a host can hold it
+ * in a ref when its own placement path is constructed before the interaction layer.
+ */
+export type GraphCanvasStamp = (
+  node: Node<WorkflowNodeData>,
+  plan?: {
+    createdActivities?: ActivityNode[];
+    order?(cleared: Node<WorkflowNodeData>[]): Node<WorkflowNodeData>[];
+    wire?(nextNodes: Node<WorkflowNodeData>[]): WorkflowEdge[];
+  }
+) => void;
+
 export interface GraphCanvasCommitOptions {
   /**
    * Activities created on the canvas that are not yet in the document's slot. Hosts must thread these
@@ -267,24 +280,28 @@ export function useGraphCanvasInteractions({
    * Places an already-positioned node on the canvas, clearing the previous selection, selecting and
    * focusing the newcomer, and committing it with whatever edge rewiring the caller decided on.
    * `order` reshuffles the node list (sequence insertion); `wire` derives the next edges from the
-   * resulting node order.
+   * resulting node order. `createdActivities` is what the host must thread into its sync call — a pure
+   * BPMN shape is the one placement that carries none, since it binds no activity.
    */
+  const stampCanvasNode = useCallback<GraphCanvasStamp>((node, plan) => {
+    const cleared = nodes.map(candidate => candidate.selected ? { ...candidate, selected: false } : candidate);
+    const nextNodes = plan?.order ? plan.order(cleared) : [...cleared, node];
+    const nextEdges = plan?.wire ? plan.wire(nextNodes) : edges;
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    select(node.id);
+    commitCanvas(nextNodes, nextEdges, { createdActivities: plan?.createdActivities });
+    queueCanvasNodeFocus(node.id);
+  }, [commitCanvas, edges, nodes, queueCanvasNodeFocus, select, setEdges, setNodes]);
+
   const placeOnCanvas = useCallback((
     placement: GraphCanvasPlacement,
     plan?: {
       order?(cleared: Node<WorkflowNodeData>[]): Node<WorkflowNodeData>[];
       wire?(nextNodes: Node<WorkflowNodeData>[]): WorkflowEdge[];
     }
-  ) => {
-    const cleared = nodes.map(node => node.selected ? { ...node, selected: false } : node);
-    const nextNodes = plan?.order ? plan.order(cleared) : [...cleared, placement.node];
-    const nextEdges = plan?.wire ? plan.wire(nextNodes) : edges;
-    setNodes(nextNodes);
-    setEdges(nextEdges);
-    select(placement.node.id);
-    commitCanvas(nextNodes, nextEdges, { createdActivities: [placement.activityNode] });
-    queueCanvasNodeFocus(placement.node.id);
-  }, [commitCanvas, edges, nodes, queueCanvasNodeFocus, select, setEdges, setNodes]);
+  ) => stampCanvasNode(placement.node, { ...plan, createdActivities: [placement.activityNode] }),
+  [stampCanvasNode]);
 
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
     if (!canvasRef.current) return null;
@@ -723,6 +740,7 @@ export function useGraphCanvasInteractions({
     setConnectMenu,
     edgeActions,
     queueCanvasNodeFocus,
+    stampCanvasNode,
     onNodesChange,
     onEdgesChange,
     onNodesDelete,

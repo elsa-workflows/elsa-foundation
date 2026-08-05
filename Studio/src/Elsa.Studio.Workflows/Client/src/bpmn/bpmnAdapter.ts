@@ -175,6 +175,12 @@ export function createBpmnElementId(elementType: string) {
   return `${elementType}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+// Where the next shape or bound element lands when the author placed it from a palette rather than at a
+// cursor position: a grid inset from the origin so it does not sit under the canvas toolbar.
+export function nextBpmnPlacementPosition(placedCount: number): XYPosition {
+  return { x: 120 + placedCount % 5 * 220, y: 120 + Math.floor(placedCount / 5) * 140 };
+}
+
 // Canvas node for a pure BPMN shape stamped from the shape palette (no bound activity).
 export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosition): Node<BpmnNodeData> {
   const element: BpmnElement = {

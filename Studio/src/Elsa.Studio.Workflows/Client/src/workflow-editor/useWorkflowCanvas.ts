@@ -24,6 +24,7 @@ import {
   createBpmnBoundNode,
   createBpmnFlowEdge,
   createBpmnShapeNode,
+  nextBpmnPlacementPosition,
   syncBpmnCanvasToScope,
   type BpmnNodeData
 } from "../bpmn/bpmnAdapter";
@@ -39,7 +40,8 @@ import {
   useGraphCanvasInteractions,
   type GraphCanvasCommitOptions,
   type GraphCanvasMode,
-  type GraphCanvasPlacement
+  type GraphCanvasPlacement,
+  type GraphCanvasStamp
 } from "../graph-authoring/useGraphCanvasInteractions";
 
 const rootScopeViewportKey = "root";
@@ -214,24 +216,19 @@ export function useWorkflowCanvas({
     };
   }, [isBpmnDesigner]);
 
-  // Focus is owned by the shared interaction layer, which is constructed below (it needs `addActivity`).
-  // A ref breaks that cycle for the BPMN placement path.
-  const queueCanvasNodeFocusRef = useRef<(nodeId: string) => void>(() => {});
+  // The canvas stamp is owned by the shared interaction layer, which is constructed below (it needs
+  // `addActivity`). A ref breaks that cycle for the BPMN placement path.
+  const stampCanvasNodeRef = useRef<GraphCanvasStamp>(() => {});
 
   // BPMN placements cannot go through the document routing below: buildBpmnCanvas renders nodes from
   // the process ELEMENTS, so an activity added to the slot alone would be invisible and dropped by the
   // next syncBpmnCanvasToScope. Stamp the bound element onto the canvas and commit it instead.
   const addCatalogActivityToBpmn = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
-    const fallback: XYPosition = { x: 120 + (nodes.length % 5) * 220, y: 120 + Math.floor(nodes.length / 5) * 140 };
-    const placement = createPlacement(activity, position ?? fallback);
+    const placement = createPlacement(activity, position ?? nextBpmnPlacementPosition(nodes.length));
     if (!placement) return null;
-    const nextNodes = [...nodes.map(node => node.selected ? { ...node, selected: false } : node), placement.node];
-    setNodes(nextNodes);
-    select(placement.node.id);
-    commitCanvas(nextNodes, edges, { createdActivities: [placement.activityNode] });
-    queueCanvasNodeFocusRef.current(placement.node.id);
+    stampCanvasNodeRef.current(placement.node, { createdActivities: [placement.activityNode] });
     return placement.activityNode;
-  }, [commitCanvas, createPlacement, edges, nodes, select]);
+  }, [createPlacement, nodes.length]);
 
   // Returns the created ActivityNode when it became the root or landed in the current scope's slot (so
   // callers can restore focus or chain navigation); null for wrapping and rejected/stale outcomes.
@@ -352,21 +349,17 @@ export function useWorkflowCanvas({
     onStatus: setStatus,
     onActivityPlaced: observeReusablePlacement
   });
-  queueCanvasNodeFocusRef.current = interactions.queueCanvasNodeFocus;
+  const { stampCanvasNode } = interactions;
+  stampCanvasNodeRef.current = stampCanvasNode;
 
   // Stamps a pure BPMN shape (event/gateway/unbound task) from the shape palette onto the canvas.
-  // Shapes carry no ActivityNode, so this is the one placement the shared layer cannot express.
+  // Shapes carry no ActivityNode, which is why this goes through the placement-free canvas stamp.
   const addBpmnShape = useCallback((shape: BpmnShapeDescriptor, position?: XYPosition) => {
     if (!isBpmnDesigner) return;
-    const fallback: XYPosition = { x: 120 + (nodes.length % 5) * 220, y: 120 + Math.floor(nodes.length / 5) * 140 };
-    const placedNode = createBpmnShapeNode(shape, position ?? fallback) as unknown as Node<WorkflowNodeData>;
-    const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
-    const nextNodes = [...clearedNodes, placedNode];
-    setNodes(nextNodes);
-    select(placedNode.id);
-    commitCanvas(nextNodes, edges);
-    queueCanvasNodeFocusRef.current(placedNode.id);
-  }, [commitCanvas, edges, isBpmnDesigner, nodes, select]);
+    stampCanvasNode(
+      createBpmnShapeNode(shape, position ?? nextBpmnPlacementPosition(nodes.length)) as unknown as Node<WorkflowNodeData>
+    );
+  }, [isBpmnDesigner, nodes.length, stampCanvasNode]);
 
   const { accessibleNodes, accessibleEdges, ...rest } = interactions;
 

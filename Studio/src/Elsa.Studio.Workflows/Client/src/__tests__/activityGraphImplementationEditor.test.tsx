@@ -333,6 +333,117 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")?.textContent).toContain("Version");
     expect(buttonByText(rendered.container, "Move activity left", "aria-label").disabled).toBe(true);
   });
+
+  // Without the shape palette the host can only bind activities to tasks, which ADR-0019 says is not a
+  // BPMN process at all — events and gateways are what make the scope one.
+  it("stamps a pure shape from the BPMN palette as an unbound element", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: bpmnImplementationValue(), onChange });
+
+    click(buttonByText(rendered.container, "Exclusive gateway"));
+
+    const payload = lastPayload(onChange);
+    const gateway = payload.elements.find(element => element.elementType === "exclusiveGateway");
+    expect(gateway).toBeDefined();
+    expect(gateway?.childNodeId).toBeUndefined();
+    // A shape binds nothing, so it must not invent a slot activity for syncBpmnCanvasToScope to keep.
+    expect(payload.activities).toHaveLength(0);
+    expect(payload.elements.map(element => element.elementId)).toContain("start");
+  });
+
+  it("offers BPMN shapes only in a BPMN scope, and never on a locked draft", () => {
+    catalogItems = [bpmnCatalogItem(), flowchartCatalogItem(), leafCatalogItem()];
+
+    const flowchart = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind) });
+    expect(flowchart.container.querySelector("[aria-label='BPMN shapes']")).toBeNull();
+
+    const locked = renderDesigner({ value: bpmnImplementationValue(), readOnly: true });
+    expect(buttonByText(locked.container, "Exclusive gateway").disabled).toBe(true);
+  });
+
+  it("inspects a pure structure element instead of falling back to the scope owner", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value: bpmnImplementationValue([{ elementId: "gateway-1", elementType: "exclusiveGateway" }]),
+      onChange
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
+
+    // The activity inspector does not apply: the element binds no activity to inspect.
+    expect(rendered.container.querySelector("[aria-label='Activity inspector sections']")).toBeNull();
+    setInput(rendered.container.querySelector<HTMLInputElement>(".wf-inspector-content input[type='text']")!, "Approved?");
+
+    expect(lastPayload(onChange).elements).toEqual([
+      expect.objectContaining({ elementId: "gateway-1", name: "Approved?" })
+    ]);
+  });
+
+  it("edits an outbound sequence flow's condition and default from the element inspector", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value: bpmnImplementationValue(
+        [
+          { elementId: "gateway-1", elementType: "exclusiveGateway" },
+          { elementId: "end-1", elementType: "endEvent" }
+        ],
+        [],
+        [{ flowId: "flow-1", sourceRef: "gateway-1", targetRef: "end-1" }]
+      ),
+      onChange
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
+    setInput(rendered.container.querySelector<HTMLInputElement>("input[aria-label='Condition outcome for flow to End event']")!, "Approved");
+
+    expect(lastPayload(onChange).sequenceFlows).toEqual([
+      expect.objectContaining({ flowId: "flow-1", conditionOutcome: "Approved" })
+    ]);
+
+    click(rendered.container.querySelector<HTMLInputElement>("input[aria-label='Default flow to End event']")!);
+
+    const payload = lastPayload(onChange);
+    // A default flow carries no condition, and the gateway names the flow it falls back to.
+    expect(payload.sequenceFlows).toEqual([
+      expect.objectContaining({ flowId: "flow-1", isDefault: true, conditionOutcome: null })
+    ]);
+    expect(payload.elements.find(element => element.elementId === "gateway-1")?.defaultFlowId).toBe("flow-1");
+  });
+
+  it("removes a pure structure element along with its sequence flows", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({
+      value: {
+        ...bpmnImplementationValue(
+          [
+            { elementId: "start", elementType: "startEvent" },
+            { elementId: "gateway-1", elementType: "exclusiveGateway" }
+          ],
+          [],
+          [{ flowId: "flow-1", sourceRef: "start", targetRef: "gateway-1" }]
+        ),
+        layout: [
+          { nodeId: "start", data: { x: 0, y: 0 } },
+          { nodeId: "gateway-1", data: { x: 200, y: 0 } }
+        ]
+      },
+      onChange
+    });
+
+    click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+
+    const payload = lastPayload(onChange);
+    expect(payload.elements.map(element => element.elementId)).toEqual(["start"]);
+    expect(payload.sequenceFlows).toEqual([]);
+    const layout = onChange.mock.calls.at(-1)?.[0].layout as Array<{ nodeId: string }>;
+    expect(layout.map(record => record.nodeId)).toEqual(["start"]);
+  });
 });
 
 describe("reconcileGraphLayout", () => {
@@ -665,7 +776,8 @@ function bpmnCatalogItem() {
 
 function bpmnImplementationValue(
   elements: Array<Record<string, unknown>> = [{ elementId: "start", elementType: "startEvent" }],
-  activities: Array<Record<string, unknown>> = []
+  activities: Array<Record<string, unknown>> = [],
+  sequenceFlows: Array<Record<string, unknown>> = []
 ) {
   return {
     payload: {
@@ -677,7 +789,7 @@ function bpmnImplementationValue(
         structure: {
           kind: bpmnStructureKind,
           schemaVersion: "1.0.0",
-          payload: { elements, sequenceFlows: [], activities }
+          payload: { elements, sequenceFlows, activities }
         }
       },
       variables: [],
@@ -691,9 +803,18 @@ function bpmnImplementationValue(
 function lastPayload(onChange: ReturnType<typeof vi.fn>) {
   const structure = onChange.mock.calls.at(-1)?.[0].payload.rootActivity.structure.payload;
   return {
-    elements: (structure.elements ?? []) as Array<{ elementId: string; elementType: string; childNodeId?: string }>,
-    activities: (structure.activities ?? []) as Array<{ nodeId: string }>
+    elements: (structure.elements ?? []) as Array<{ elementId: string; elementType: string; name?: string | null; childNodeId?: string; defaultFlowId?: string | null }>,
+    activities: (structure.activities ?? []) as Array<{ nodeId: string }>,
+    sequenceFlows: (structure.sequenceFlows ?? []) as Array<{ flowId: string; conditionOutcome?: string | null; isDefault?: boolean }>
   };
+}
+
+function setInput(element: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 function dragDataTransfer() {

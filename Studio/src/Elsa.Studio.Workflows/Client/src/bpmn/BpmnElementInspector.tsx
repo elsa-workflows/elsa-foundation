@@ -8,6 +8,7 @@ interface BpmnElementInspectorProps {
   onChangeFlow(flowId: string, patch: Partial<BpmnSequenceFlow>): void;
   onSetDefaultFlow(sourceElementId: string, flowId: string | null): void;
   targetLabelFor(flow: BpmnSequenceFlow): string;
+  readOnly?: boolean;
 }
 
 // Inspector for a pure BPMN structure element (event/gateway/unbound task) — these have no underlying
@@ -21,7 +22,8 @@ export function BpmnElementInspector({
   onChangeElement,
   onChangeFlow,
   onSetDefaultFlow,
-  targetLabelFor
+  targetLabelFor,
+  readOnly = false
 }: BpmnElementInspectorProps) {
   return (
     <div className="wf-inspector-content">
@@ -38,6 +40,7 @@ export function BpmnElementInspector({
           type="text"
           value={element.name ?? ""}
           placeholder={bpmnElementTypeLabel(element)}
+          disabled={readOnly}
           onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })}
         />
       </label>
@@ -54,7 +57,7 @@ export function BpmnElementInspector({
                   value={flow.conditionOutcome ?? ""}
                   placeholder="Any outcome"
                   aria-label={`Condition outcome for flow to ${targetLabelFor(flow)}`}
-                  disabled={isDefault}
+                  disabled={readOnly || isDefault}
                   onChange={event => onChangeFlow(flow.flowId, { conditionOutcome: event.target.value || null })}
                 />
                 <label className="wf-bpmn-flow-default">
@@ -62,6 +65,7 @@ export function BpmnElementInspector({
                     type="checkbox"
                     checked={isDefault}
                     aria-label={`Default flow to ${targetLabelFor(flow)}`}
+                    disabled={readOnly}
                     onChange={event => onSetDefaultFlow(element.elementId, event.target.checked ? flow.flowId : null)}
                   />
                   <span>Default</span>
