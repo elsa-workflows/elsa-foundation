@@ -52,8 +52,15 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // local/CI dist skew noted above no longer applies to the entry), Definitions 379.12 kB, upgrades
 // 370.61 kB. The heavy surfaces all stay deferred; the growth is the shared code-editor shell's
 // authorization handling plus the designer's shared editor constants.
+// Checklist inputs reopened as "Object" after autosave, losing the checkbox list to a raw JSON summary.
+// Fixing it makes the descriptor-aware collection/dictionary detectors (previously deferred-only, in
+// collectionInputDescriptor.ts) shared with the eagerly-registered Object expression editor, which needs
+// them to recognize a #945 element-alias descriptor. That moves the entry to 125.23 kB — detectors alone
+// already measure 124.73 kB, so the growth is not avoidable by splitting the fix. Deferring the Object
+// editor's surfaces would reclaim it, but that restructuring is out of scope here. Re-baselined to 125.70 kB
+// to keep the usual sub-0.5 kB review margin.
 const budgets = {
-  entryJavaScript: 124_700,
+  entryJavaScript: 125_700,
   stylesheet: 185_000,
   definitionsLandingTotal: 381_500,
   upgradeLandingTotal: 373_000,

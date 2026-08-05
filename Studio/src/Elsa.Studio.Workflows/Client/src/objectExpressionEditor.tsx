@@ -10,7 +10,12 @@ import type {
   StudioExpressionEditorContribution,
   StudioExpressionEditorProps
 } from "@elsa-workflows/studio-sdk";
-import { describeCollectionType, describeDictionaryType, isRepeaterOptOut } from "./activityProperties";
+import {
+  conflictsWithStructuredEditor,
+  describeCollectionForInput,
+  describeDictionaryForInput,
+  isRepeaterOptOut
+} from "./activityProperties";
 import { CollectionValueEditor } from "./CollectionValueEditor";
 import { DictionaryValueEditor } from "./DictionaryValueEditor";
 
@@ -28,8 +33,15 @@ export function ObjectInlineEditor({
   propertyEditors
 }: StudioExpressionEditorProps & { propertyEditors: StudioActivityPropertyEditorContribution[] }) {
   const summaryRef = useRef<HTMLDivElement>(null);
-  const dictionaryType = !isRepeaterOptOut(descriptor) ? describeDictionaryType(descriptor.typeName) : null;
-  const collectionType = !isRepeaterOptOut(descriptor) ? describeCollectionType(descriptor.typeName) : null;
+  // Shape-checked: an array on a dictionary input (or an object on a collection input) must stay in the
+  // JSON editor below, or the structured editor would coerce the authored value away on first edit.
+  const structured = !isRepeaterOptOut(descriptor);
+  const dictionaryType = structured && !conflictsWithStructuredEditor("dictionary", value)
+    ? describeDictionaryForInput(descriptor)
+    : null;
+  const collectionType = structured && !conflictsWithStructuredEditor("collection", value)
+    ? describeCollectionForInput(descriptor)
+    : null;
 
   useEffect(() => {
     if (initialFocus && !dictionaryType && !collectionType) summaryRef.current?.focus();
@@ -93,7 +105,9 @@ export function ObjectExpandedEditor({
   onChange,
   propertyEditors = []
 }: StudioExpressionEditorProps & { propertyEditors?: StudioActivityPropertyEditorContribution[] }) {
-  const dictionaryType = !isRepeaterOptOut(descriptor) ? describeDictionaryType(descriptor.typeName) : null;
+  const dictionaryType = !isRepeaterOptOut(descriptor) && !conflictsWithStructuredEditor("dictionary", value)
+    ? describeDictionaryForInput(descriptor)
+    : null;
   if (dictionaryType) {
     return (
       <DictionaryValueEditor
@@ -277,6 +291,6 @@ export function createObjectExpressionEditorContribution(
       inline: props => <ObjectInlineEditor {...props} propertyEditors={getPropertyEditors()} />,
       expanded: props => <ObjectExpandedEditor {...props} propertyEditors={getPropertyEditors()} />
     },
-    createDefaultValue: context => describeCollectionType(context.descriptor.typeName) ? [] : {}
+    createDefaultValue: context => describeCollectionForInput(context.descriptor) ? [] : {}
   };
 }

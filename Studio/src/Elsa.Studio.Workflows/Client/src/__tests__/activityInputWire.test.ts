@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { readWrappedInput } from "../activityProperties";
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
@@ -96,6 +97,25 @@ describe("activity input wire adapter", () => {
       { referenceKey: "lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
       { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } }
     ]);
+  });
+
+  it("returns a structured literal to the editor as a Literal after a full save/load round-trip", () => {
+    // The Object promotion above is a serialization detail. `expandStateFromWire` has no descriptors, so it
+    // faithfully reports what the wire holds; `readWrappedInput` — which does have the descriptor — is where
+    // the authored syntax comes back, keeping the checklist/repeater rather than the raw JSON editor.
+    const state = stateOf(writeLine("write-one", { lines: wrapped(["Hello", "world"], "Literal") }));
+    const descriptor = {
+      name: "Lines",
+      referenceKey: "lines",
+      typeName: "System.String",
+      collectionKind: "List",
+      isWrapped: true
+    };
+
+    const node = expandStateFromWire(canonicalizeStateForWire(state)).rootActivity!;
+
+    expect((node.lines as { expression: unknown }).expression).toEqual({ type: "Object", value: '["Hello","world"]' });
+    expect(readWrappedInput(node, descriptor).expression).toEqual({ type: "Literal", value: ["Hello", "world"] });
   });
 
   it("leaves non-input extras and structure untouched while canonicalizing nested activities", () => {

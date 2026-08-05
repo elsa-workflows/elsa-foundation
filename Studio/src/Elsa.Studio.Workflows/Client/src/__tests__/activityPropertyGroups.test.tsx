@@ -368,6 +368,31 @@ describe("activity property organization", () => {
     expect(expandedContext.document?.source).toBe(inlineContext.document?.source);
   });
 
+  // Regression: ticking a checklist box saved fine, but autosave promoted the structured Literal to an
+  // "Object" expression on the wire and nothing reversed it, so the row reopened with the picker reading
+  // "Object" and the checklist replaced by the raw JSON summary.
+  it("reopens a saved checklist input as Literal with its checklist intact, not the Object JSON summary", () => {
+    const checklistEditor: StudioActivityPropertyEditorContribution = {
+      id: "test.multiselect",
+      supports: (_descriptor, editorContext) => editorContext.scope === "collection",
+      component: ({ value }) => <div className="test-checklist">{(value as unknown[]).join(",")}</div>
+    };
+    const container = renderPanel([
+      input("SupportedMethods", { typeName: "System.String", collectionKind: "List", isWrapped: true })
+    ], {
+      editors: [checklistEditor],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [checklistEditor])],
+      // Exactly what a save round-trip leaves behind: expressionType "Object", value a JSON string.
+      activity: activity({
+        supportedMethods: { typeName: "", expression: { type: "Object", value: '["GET"]' } }
+      })
+    });
+
+    expect(container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.textContent).toContain("Literal");
+    expect(container.querySelector(".test-checklist")?.textContent).toBe("GET");
+    expect(container.textContent).not.toContain("Open the expanded editor to edit JSON.");
+  });
+
   it("focuses the replacement textbox when selecting a text expression mode", () => {
     const container = renderPanel([
       input("Template", { isWrapped: true })

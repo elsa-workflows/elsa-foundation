@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
-import { describeCollectionForInput, describeDictionaryForInput } from "../collectionInputDescriptor";
 import {
   camelize,
+  conflictsWithStructuredEditor,
   defaultCollectionItem,
+  describeCollectionForInput,
+  describeDictionaryForInput,
   describeDictionaryType,
   describeCollectionType,
   formatTypeName,
@@ -335,6 +337,14 @@ describe("dictionary literal authoring", () => {
       typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]"
     })).toEqual({});
   });
+
+  // Under #945 the typeName is the element alias, so a typeName-only parse would hand back a scalar ""
+  // and switching an element-alias collection into Literal mode would start it as text, not a list.
+  it("uses the descriptor's collectionKind, not its typeName, for element-alias defaults", () => {
+    expect(getLiteralDefaultValue({ name: "SupportedMethods", typeName: "System.String", collectionKind: "List" })).toEqual([]);
+    expect(getLiteralDefaultValue({ name: "Headers", typeName: "System.String", collectionKind: "Dictionary" })).toEqual({});
+    expect(getLiteralDefaultValue({ name: "Path", typeName: "System.String", collectionKind: "Single" })).toBe("");
+  });
 });
 
 describe("descriptor-aware collection/dictionary detection (collectionKind, #945)", () => {
@@ -371,6 +381,102 @@ describe("descriptor-aware collection/dictionary detection (collectionKind, #945
     expect(describeDictionaryForInput(input({ typeName: "System.Collections.Generic.IDictionary`2[System.String,System.Int32]" })))
       .toEqual({ valueTypeName: "System.Int32" });
     expect(describeCollectionForInput(input({ typeName: "System.Int32" }))).toBeNull();
+  });
+});
+
+// `toWireArgument` promotes a structured Literal to an "Object" expression so the backend can deserialize
+// it into ICollection<T>. Nothing reversed that on load, so every saved list input reopened as "Object" —
+// the syntax picker read "Object" and the checklist was replaced by the raw JSON summary. Reading restores
+// the authored syntax for the inputs where Literal and Object describe the identical value.
+describe("Object-to-Literal demotion on read", () => {
+  const listInput: StudioActivityInputDescriptor = {
+    name: "SupportedMethods",
+    referenceKey: "supportedMethods",
+    typeName: "System.String",
+    collectionKind: "List",
+    isWrapped: true
+  };
+  const objectExpression = (value: unknown) => ({
+    ...activity("http"),
+    supportedMethods: { typeName: "", expression: { type: "Object", value } }
+  });
+
+  it("restores Literal and parses the JSON array the wire round-trip left behind", () => {
+    expect(readWrappedInput(objectExpression('["GET","POST"]'), listInput).expression)
+      .toEqual({ type: "Literal", value: ["GET", "POST"] });
+  });
+
+  it("restores Literal for an already-structured value that never reached the wire", () => {
+    expect(readWrappedInput(objectExpression(["GET"]), listInput).expression)
+      .toEqual({ type: "Literal", value: ["GET"] });
+  });
+
+  it("restores Literal for a dictionary input's JSON object", () => {
+    const dictionaryInput = { ...listInput, collectionKind: "Dictionary" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(objectExpression('{"a":1}'), dictionaryInput).expression)
+      .toEqual({ type: "Literal", value: { a: 1 } });
+  });
+
+  // A shape that disagrees with the descriptor would be silently rewritten by the Literal editor the
+  // moment the row rendered — `toLiteralCollection({})` yields `[{}]`, and the dictionary editor
+  // flattens an array to `{}`. Opening and saving a workflow must never alter an authored value.
+  it("keeps a collection input's non-array Object value as Object", () => {
+    expect(readWrappedInput(objectExpression('{"a":1}'), listInput).expression)
+      .toEqual({ type: "Object", value: '{"a":1}' });
+  });
+
+  it("keeps a dictionary input's array Object value as Object", () => {
+    const dictionaryInput = { ...listInput, collectionKind: "Dictionary" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(objectExpression("[]"), dictionaryInput).expression)
+      .toEqual({ type: "Object", value: "[]" });
+  });
+
+  it("reports a shape conflict through the JSON string an Object value carries", () => {
+    expect(conflictsWithStructuredEditor("dictionary", "[]")).toBe(true);
+    expect(conflictsWithStructuredEditor("dictionary", [])).toBe(true);
+    expect(conflictsWithStructuredEditor("collection", '{"a":1}')).toBe(true);
+    expect(conflictsWithStructuredEditor("collection", { a: 1 })).toBe(true);
+  });
+
+  // Half-typed JSON has no confirmable shape, so the structured editors must not touch it — the
+  // repeater would otherwise wrap the broken text into a one-item list on sight.
+  it("reports a conflict for JSON-looking text that does not parse", () => {
+    for (const value of ['["GET"', "{", '{"a":', "[1,2,"]) {
+      expect(conflictsWithStructuredEditor("collection", value)).toBe(true);
+      expect(conflictsWithStructuredEditor("dictionary", value)).toBe(true);
+    }
+  });
+
+  it("reports no conflict for matching shapes, scalars, or absent values", () => {
+    expect(conflictsWithStructuredEditor("collection", '["GET"]')).toBe(false);
+    expect(conflictsWithStructuredEditor("dictionary", '{"a":1}')).toBe(false);
+    // Scalars and empties keep the editors' long-standing coercions (a bare string becomes one row).
+    for (const value of ["", null, undefined, "GET", 42]) {
+      expect(conflictsWithStructuredEditor("collection", value)).toBe(false);
+      expect(conflictsWithStructuredEditor("dictionary", value)).toBe(false);
+    }
+  });
+
+  it("leaves an unparsable value as Object so it stays repairable in the JSON editor", () => {
+    expect(readWrappedInput(objectExpression('["GET"'), listInput).expression)
+      .toEqual({ type: "Object", value: '["GET"' });
+  });
+
+  it("leaves a scalar input's Object expression untouched", () => {
+    const scalarInput = { ...listInput, collectionKind: "Single" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(objectExpression('["GET"]'), scalarInput).expression)
+      .toEqual({ type: "Object", value: '["GET"]' });
+  });
+
+  it("keeps Object for a repeater opt-out, the persistent raw-JSON affordance", () => {
+    const jsonInput = { ...listInput, uiHint: "json" } as StudioActivityInputDescriptor;
+    expect(readWrappedInput(objectExpression('["GET"]'), jsonInput).expression)
+      .toEqual({ type: "Object", value: '["GET"]' });
+  });
+
+  it("does not disturb computed expressions, whose values are strings", () => {
+    const node = { ...activity("http"), supportedMethods: { typeName: "", expression: { type: "JavaScript", value: "getVerbs()" } } };
+    expect(readWrappedInput(node, listInput).expression).toEqual({ type: "JavaScript", value: "getVerbs()" });
   });
 });
 

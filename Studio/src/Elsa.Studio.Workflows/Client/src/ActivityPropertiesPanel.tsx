@@ -33,6 +33,9 @@ import {
   formatTypeName,
   getInputPropertyName,
   getLiteralEditorValue,
+  conflictsWithStructuredEditor,
+  describeCollectionForInput,
+  describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
   planExpressionModeTransition,
@@ -56,7 +59,6 @@ import {
   type ConversionProfileReference
 } from "./conversionSettings";
 import { listConversionProfiles } from "./api/expressions";
-import { describeCollectionForInput, describeDictionaryForInput } from "./collectionInputDescriptor";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 import {
   readWorkflowInputs,
@@ -439,10 +441,14 @@ function PropertyRow({
     toolingAuthorizationConfirmationRequired,
     onToolingAuthorizationConfirmed
   );
+  // A value whose shape disagrees with the editor is left to the generic Object editor — routing it here
+  // would let that editor coerce the authored value away on first edit.
   const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
+    && !conflictsWithStructuredEditor("dictionary", value)
     ? describeDictionaryForInput(effectiveInput)
     : null;
   const collectionType = wrapped && editingMode === "literal" && !isRepeaterOptOut(effectiveInput)
+    && !conflictsWithStructuredEditor("collection", value)
     ? describeCollectionForInput(effectiveInput)
     : null;
   const makeExpressionContext = (
@@ -992,6 +998,7 @@ function ExpandedPropertyEditor({
   const diagnostics = diagnosticProvider ? getExpressionEditorDiagnostics(diagnosticProvider, expressionContext, value) : [];
   const useTextFallback = editingMode === "text";
   const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
+    && !conflictsWithStructuredEditor("dictionary", value)
     ? describeDictionaryForInput(input)
     : null;
   const fallbackHint = useTextFallback && !ExpressionEditorComponent

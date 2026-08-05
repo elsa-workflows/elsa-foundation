@@ -127,8 +127,10 @@ export function isEmptyExpressionValue(value: unknown): boolean {
 
 export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
   if (descriptor.defaultValue != null) return descriptor.defaultValue;
-  if (describeDictionaryType(descriptor.typeName)) return {};
-  if (describeCollectionType(descriptor.typeName)) return [];
+  // Descriptor-aware, not a `typeName` parse: under #945 a collection input's typeName is the element
+  // alias, so parsing it would hand back a scalar "" instead of [] when switching into Literal mode.
+  if (describeDictionaryForInput(descriptor)) return {};
+  if (describeCollectionForInput(descriptor)) return [];
   const typeName = descriptor.typeName.trim().toLowerCase();
   return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
 }
@@ -154,14 +156,93 @@ export function getLiteralEditorValue(activity: ActivityNode, descriptor: Studio
   return readWrappedInput(activity, descriptor).expression.value;
 }
 
+// --- "Object" demotion -------------------------------------------------------------------------
+//
+// `toWireArgument` (activityInputWire.ts) promotes a Literal holding a structured value to an "Object"
+// expression, because the backend's literal converter only handles scalars — the Object handler is what
+// JSON-deserializes a list into ICollection<T>. That promotion is a *serialization* detail, but nothing
+// reversed it on the way back in, so every saved list input reopened as "Object": the syntax picker read
+// "Object" and, since `editingMode` was then "structured", the checklist/repeater was replaced by the raw
+// JSON summary.
+//
+// Restore the authored syntax here, at the single seam every reader goes through. Scoped to
+// collection/dictionary inputs, where Literal and Object describe the identical value and Literal is the
+// mode that owns structured editing; a scalar input's Object expression is left alone. Authors who
+// genuinely want raw JSON keep it persistently via `isRepeaterOptOut` (uiHint json/code), and Object
+// remains selectable per-session for anything else.
+//
+// This is presentation-only: `withLiteralValue` keeps the Literal type and `toWireArgument` re-promotes on
+// save, so the bytes sent to the backend are unchanged.
+function resolveAuthoredExpression(
+  expression: ActivityExpression,
+  descriptor: StudioActivityInputDescriptor
+): ActivityExpression {
+  if (expression.type !== "Object" || isRepeaterOptOut(descriptor)) return expression;
+  const structured = asStructuredValue(expression.value);
+  if (structured === undefined) return expression;
+  const kind = structuredEditorKind(descriptor);
+  if (!kind || conflictsWithStructuredEditor(kind, structured)) return expression;
+  return { type: "Literal", value: structured };
+}
+
+/** Which structured editor a descriptor authors with, or null for a scalar input. */
+export function structuredEditorKind(
+  descriptor: StudioActivityInputDescriptor
+): "collection" | "dictionary" | null {
+  if (describeCollectionForInput(descriptor)) return "collection";
+  return describeDictionaryForInput(descriptor) ? "dictionary" : null;
+}
+
+/**
+ * Whether a value's shape disagrees with the structured editor that would author it.
+ *
+ * Those editors coerce on sight, so merely rendering the row would rewrite an authored value:
+ * `toLiteralCollection` wraps a stray object into a one-item list, and the dictionary editor flattens a
+ * stray array to `{}`. A mismatch means the value is genuinely malformed, so it belongs in the generic
+ * Object/JSON editor until the author repairs it — which is why every site that routes a value into a
+ * collection or dictionary editor has to ask this, not just the Object-to-Literal demotion. Sees through
+ * the JSON string an Object-syntax value carries after a wire round-trip.
+ *
+ * Scalars and absent values return false: the editors' coercions for those (a bare string becoming a
+ * single row, an empty value starting an empty list) are intended and long-standing. Text that is
+ * *meant* to be JSON but does not parse conflicts too — the shape cannot be confirmed, so coercing it
+ * would destroy a half-typed value the author still needs to repair.
+ */
+export function conflictsWithStructuredEditor(kind: "collection" | "dictionary", value: unknown): boolean {
+  const structured = asStructuredValue(value);
+  if (structured === undefined) return looksLikeJsonText(value);
+  return kind === "collection" ? !Array.isArray(structured) : Array.isArray(structured);
+}
+
+/** Text opening with a JSON container token — an author's attempt at structured JSON, parsable or not. */
+function looksLikeJsonText(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return trimmed.startsWith("[") || trimmed.startsWith("{");
+}
+
+// Mirrors `toWireArgument`'s `isRecord` test (arrays and plain objects), seeing through the JSON string
+// the wire round-trip leaves behind. `undefined` means "not structured" — leave the expression as Object
+// so an unparsable value stays repairable in the JSON editor instead of being silently reshaped.
+function asStructuredValue(value: unknown): unknown {
+  if (typeof value === "object" && value !== null) return value;
+  if (!looksLikeJsonText(value)) return undefined;
+  try {
+    const parsed = JSON.parse(value.trim());
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function readWrappedInputValue(value: unknown, descriptor: StudioActivityInputDescriptor): WrappedActivityInputValue {
   if (isWrappedInputValue(value)) {
     return {
       typeName: value.typeName || descriptor.typeName,
-      expression: {
+      expression: resolveAuthoredExpression({
         type: value.expression.type || descriptor.defaultSyntax || "Literal",
         value: value.expression.value
-      },
+      }, descriptor),
       ...(value.memoryReference ? { memoryReference: value.memoryReference } : {}),
       ...(value.conversion != null ? { conversion: value.conversion } : {}),
       ...(value.argumentExtras ? { argumentExtras: value.argumentExtras } : {})
@@ -247,6 +328,48 @@ function extractFirstGenericArgument(genericPart: string): string | null {
   if (assemblyQualified) return assemblyQualified[1];
   const shortForm = /\[([\w.+]+)/.exec(genericPart);
   return shortForm ? shortForm[1] : null;
+}
+
+// --- descriptor-aware collection/dictionary detection (elsa-foundation#945) ----------------------
+//
+// The authoring catalog reports a truthful `collectionKind` (Single/Array/List/HashSet/Dictionary)
+// alongside `typeName` — for a collection input `typeName` is the ELEMENT-type alias (#924's scalar-lie
+// fix). When present it authoritatively selects the list/dictionary editor; when absent (older backend)
+// we fall back to parsing the CLR `typeName`, preserving the pre-#945 behavior exactly.
+//
+// Every surface that asks "is this input a list/dictionary?" must go through these two helpers rather
+// than the raw `typeName` parsers above — a `typeName`-only check silently misses element-alias
+// descriptors, which is what stranded the Object surface on its JSON fallback.
+
+const listCollectionKinds = new Set(["array", "list", "hashset"]);
+
+function readCollectionKind(input: StudioActivityInputDescriptor): string | null {
+  const kind = input.collectionKind;
+  return typeof kind === "string" && kind.trim() ? kind.trim().toLowerCase() : null;
+}
+
+/** Collection detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeCollectionForInput(input: StudioActivityInputDescriptor): CollectionTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary" || kind === "single") return null;
+  if (kind && listCollectionKinds.has(kind)) {
+    // Prefer a full collection type name when the backend still sends one; otherwise `typeName` is the
+    // element alias itself (the #945 contract).
+    return describeCollectionType(input.typeName) ?? { elementTypeName: input.typeName?.trim() || null };
+  }
+  return describeCollectionType(input.typeName);
+}
+
+/** Dictionary detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeDictionaryForInput(input: StudioActivityInputDescriptor): DictionaryTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary") {
+    // A full dictionary type name yields the value type directly; otherwise treat `typeName` as the value
+    // alias (dictionary keys are string-typed in every supported family).
+    return describeDictionaryType(input.typeName) ?? { valueTypeName: input.typeName?.trim() || "System.String" };
+  }
+  if (kind && (kind === "single" || listCollectionKinds.has(kind))) return null;
+  return describeDictionaryType(input.typeName);
 }
 
 /** Authors opt out of the repeater (back to a raw text/JSON box) via a hint or a uiSpecifications flag. */
