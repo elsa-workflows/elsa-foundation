@@ -184,3 +184,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | Implemented | - | 25 | 0 | superseded, retained, out of scope |
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Draft | - | 18 | 78 | superseded, retained, out of scope |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
+| [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | out of scope |

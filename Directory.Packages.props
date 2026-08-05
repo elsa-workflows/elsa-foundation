@@ -42,46 +42,46 @@
       directly by at least one project.
     -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Abstractions" Version="2.3.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authorization" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authorization" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authorization.Policy" Version="2.3.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Routing" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Routing.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" Condition="'$(MSBuildProjectName)' != 'Elsa.Samples.Nuplane.Activities.Tests'" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" Condition="'$(MSBuildProjectName)' == 'Elsa.Samples.Nuplane.Activities.Tests'" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <!--
       Transitive pin: no project references Microsoft.OpenApi directly. Because
       CentralPackageTransitivePinningEnabled is true (above), a PackageVersion with no matching
       PackageReference is how this repo pins a transitive dependency's version — here the one
-      Microsoft.AspNetCore.OpenApi pulls in. Deleting it silently changes what restores.
+      Microsoft.AspNetCore.OpenApi pulls in. Deleting it silently changes what restores: without it
+      the graph resolves 2.0.0, which carries a high-severity advisory (GHSA-v5pm-xwqc-g5wc).
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
@@ -100,7 +100,9 @@
     <!--
       Transitive pin: no project references SQLitePCLRaw.bundle_e_sqlite3 directly. It is the native
       SQLite bundle that Microsoft.Data.Sqlite pulls in; pinned here so the native provider version
-      is deliberate rather than whatever the graph resolves. See the Microsoft.OpenApi note above.
+      is deliberate rather than whatever the graph resolves. Without it the graph resolves 2.1.11,
+      whose SQLitePCLRaw.lib.e_sqlite3 carries a high-severity advisory (GHSA-2m69-gcr7-jv3q).
+      See the Microsoft.OpenApi note above.
     -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
@@ -109,10 +111,8 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.12.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
     <PackageVersion Include="Ulid" Version="1.4.1" />
-    <PackageVersion Include="xunit" Version="2.9.0" Condition="'$(MSBuildProjectName)' != 'Elsa.Samples.Nuplane.Activities.Tests'" />
-    <PackageVersion Include="xunit" Version="2.9.3" Condition="'$(MSBuildProjectName)' == 'Elsa.Samples.Nuplane.Activities.Tests'" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" Condition="'$(MSBuildProjectName)' != 'Elsa.Samples.Nuplane.Activities.Tests'" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" Condition="'$(MSBuildProjectName)' == 'Elsa.Samples.Nuplane.Activities.Tests'" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
   </ItemGroup>
 </Project>
