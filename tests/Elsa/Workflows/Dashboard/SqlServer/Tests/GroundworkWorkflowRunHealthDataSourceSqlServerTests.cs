@@ -22,9 +22,9 @@ public sealed class GroundworkWorkflowRunHealthDataSourceSqlServerTests(SqlServe
     [SkippableFact]
     public async Task SqlServerAdapterPagesPastOneHundredExecutionsAndReturnsTheirIncidentsExactly()
     {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var driver = await fixture.RequireCleanDriverAsync();
 
-        await using var client = await fixture.Driver.OpenClientAsync(
+        await using var client = await driver.OpenClientAsync(
             ElsaRuntimeStorageManifest.Create(),
             DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
         var store = client.DocumentStore;
@@ -42,7 +42,7 @@ public sealed class GroundworkWorkflowRunHealthDataSourceSqlServerTests(SqlServe
         await incidentStore.SaveAsync(Incident("incident-1", "run-124"));
 
         var source = new GroundworkWorkflowRunHealthDataSource(
-            () => fixture.Driver.CreateRawConnection(),
+            () => driver.CreateRawConnection(),
             GroundworkRunHealthDialect.SqlServer);
         var service = new WorkflowRunHealthService(source);
         var snapshot = await service.QueryAsync(new(

@@ -35,6 +35,27 @@ public sealed class SqlServerDashboardContainerFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Skips the calling test when Docker is unavailable, then drops and recreates the shared container's
+    /// database so the test starts against an empty one.
+    /// </summary>
+    /// <remarks>
+    /// The whole collection shares one container <i>and</i> one database, and SQL Server materialization
+    /// admits a manifest against that database as a whole: <c>BackfillOrValidateIdentityRowsAsync</c> scans
+    /// every row in <c>groundwork_documents</c> regardless of storage scope and rejects any storage unit the
+    /// incoming manifest does not declare. So a class that admits the design manifest and writes
+    /// <c>workflowDefinition</c> rows would make the next class's runtime-manifest admission fail, even
+    /// though the two use different tenants. Resetting per test keeps each admission honest.
+    /// Safe because xUnit runs the classes of a single collection sequentially. Never reset a driver that
+    /// another test could still be using.
+    /// </remarks>
+    public async Task<SqlServerGroundworkProviderDriver> RequireCleanDriverAsync()
+    {
+        Skip.IfNot(IsAvailable, SkipReason ?? "Docker unavailable.");
+        await Driver.ResetAsync();
+        return Driver;
+    }
+
     public async Task DisposeAsync() => await Driver.DisposeAsync();
 }
 

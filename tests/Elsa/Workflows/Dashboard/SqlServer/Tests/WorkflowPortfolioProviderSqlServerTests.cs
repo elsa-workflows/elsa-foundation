@@ -31,9 +31,9 @@ public sealed class WorkflowPortfolioProviderSqlServerTests(SqlServerDashboardCo
     [SkippableFact]
     public async Task GroundworkSqlServerReturnsTheCompleteIdenticalPortfolioFixture()
     {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var driver = await fixture.RequireCleanDriverAsync();
 
-        await using var client = await fixture.Driver.OpenClientAsync(
+        await using var client = await driver.OpenClientAsync(
             new GroundworkAllFeaturesDeploymentSchema().CreateManifest(),
             DocumentStoreAccess.Scoped(new StorageScope("tenant-b")));
         var store = client.DocumentStore;
@@ -48,7 +48,7 @@ public sealed class WorkflowPortfolioProviderSqlServerTests(SqlServerDashboardCo
             await referenceStore.SaveAsync(Reference(index));
 
         var source = new GroundworkWorkflowPortfolioDataSource(
-            () => fixture.Driver.CreateRawConnection(),
+            () => driver.CreateRawConnection(),
             GroundworkRunHealthDialect.SqlServer,
             PayloadSerializer);
 
