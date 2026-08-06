@@ -49,6 +49,11 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
                 services.AddSingleton(observations);
                 services.AddScoped<IRuntimeCheckpointCommitEnricher, AmbientAuthorityObservingEnricher>();
                 DecorateCheckpointStoreWithBoundaryCrash(services, boundaryCrash, physicalFolds);
+                CoalescingDurableCheckpointStoreTestDecorator.Decorate(
+                    services,
+                    inner => new PreparedFoldObservingCheckpointStore(
+                        (IRuntimeCheckpointPreparedLedgerStore)inner,
+                        beforeFold: physicalFolds.Record));
             })
             .Build(Enumerable.Range(0, 12).Select(index => $"actexec-{index}"));
 
@@ -425,4 +430,5 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
             CancellationToken cancellationToken = default) =>
             inner.CommitAsync(commit, decision, cancellationToken);
     }
+
 }

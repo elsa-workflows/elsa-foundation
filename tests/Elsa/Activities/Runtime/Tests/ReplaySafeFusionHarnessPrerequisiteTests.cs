@@ -6,6 +6,7 @@ using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
@@ -63,7 +64,7 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
         {
             builder = builder
                 .WithCoalescing()
-                .ConfigureServices(services => DecoratePreparedLedger(services, foldObserver));
+                .ConfigureServices(services => DecorateDurableCheckpointProvider(services, foldObserver));
         }
 
         await using var harness = builder.Build(ActivityExecutionIds);
@@ -73,55 +74,21 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
         return (run.WorkflowState?.Status == WorkflowExecutionStatus.Completed, commitCount, foldObserver.Count);
     }
 
-    private static void DecoratePreparedLedger(IServiceCollection services, PreparedFoldObserver observer)
-    {
-        var descriptor = services.Last(item => item.ServiceType == typeof(IRuntimeCheckpointPreparedLedgerStore));
-        services.Remove(descriptor);
-        services.Add(new ServiceDescriptor(
-            typeof(IRuntimeCheckpointPreparedLedgerStore),
-            serviceProvider => new ObservingPreparedLedgerStore(
-                (IRuntimeCheckpointPreparedLedgerStore)CreateFromDescriptor(descriptor, serviceProvider),
-                observer),
-            descriptor.Lifetime));
-    }
-
-    private static object CreateFromDescriptor(ServiceDescriptor descriptor, IServiceProvider serviceProvider) =>
-        descriptor.ImplementationInstance ??
-        descriptor.ImplementationFactory?.Invoke(serviceProvider) ??
-        ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType!);
+    private static void DecorateDurableCheckpointProvider(IServiceCollection services, PreparedFoldObserver observer) =>
+        CoalescingDurableCheckpointStoreTestDecorator.Decorate(
+            services,
+            inner => new PreparedFoldObservingCheckpointStore(
+                (IRuntimeCheckpointPreparedLedgerStore)inner,
+                afterFold: (_, result) =>
+                {
+                    if (result.Status == RuntimeCheckpointCommitStoreStatus.Committed)
+                        observer.Record();
+                }));
 
     private sealed class PreparedFoldObserver
     {
         public int Count { get; private set; }
         public void Record() => Count++;
-    }
-
-    private sealed class ObservingPreparedLedgerStore(
-        IRuntimeCheckpointPreparedLedgerStore inner,
-        PreparedFoldObserver observer) : IRuntimeCheckpointPreparedLedgerStore
-    {
-        public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(RuntimeCheckpointPrepareRequest request, CancellationToken cancellationToken = default) =>
-            inner.PrepareAsync(request, cancellationToken);
-
-        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
-            inner.CommitAsync(commit, decision, cancellationToken);
-
-        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(RuntimeCheckpointPreparationToken token, RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
-            inner.CommitPreparedAsync(token, commit, decision, cancellationToken);
-
-        public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default) =>
-            inner.PagePreparedAsync(query, cancellationToken);
-
-        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(RuntimeCheckpointPreparedAdoptionRequest request, CancellationToken cancellationToken = default) =>
-            inner.AdoptPreparedAsync(request, cancellationToken);
-
-        public async ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(RuntimeCheckpointPreparedFoldRequest request, CancellationToken cancellationToken = default)
-        {
-            var result = await inner.CommitPreparedFoldAsync(request, cancellationToken);
-            if (result.Status == RuntimeCheckpointCommitStoreStatus.Committed)
-                observer.Record();
-            return result;
-        }
     }
 
     private static WorkflowExecutable BuildReplaySafeStraightLineFlowchart()
@@ -153,4 +120,79 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
 
         return WorkflowExecutionHarness.NewExecutable(root);
     }
+}
+
+internal static class CoalescingDurableCheckpointStoreTestDecorator
+{
+    public static void Decorate(
+        IServiceCollection services,
+        Func<IRuntimeCheckpointCommitStore, IRuntimeCheckpointCommitStore> decorate)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(decorate);
+
+        var serviceType = typeof(CoalescingInner<IRuntimeCheckpointCommitStore>);
+        var descriptor = services.Last(item => item.ServiceType == serviceType);
+        services.Remove(descriptor);
+        services.Add(new ServiceDescriptor(
+            serviceType,
+            serviceProvider =>
+            {
+                var captured = (CoalescingInner<IRuntimeCheckpointCommitStore>)CreateFromDescriptor(
+                    descriptor,
+                    serviceProvider);
+                return new CoalescingInner<IRuntimeCheckpointCommitStore>(decorate(captured.Value));
+            },
+            descriptor.Lifetime));
+    }
+
+    private static object CreateFromDescriptor(ServiceDescriptor descriptor, IServiceProvider serviceProvider) =>
+        descriptor.ImplementationInstance ??
+        descriptor.ImplementationFactory?.Invoke(serviceProvider) ??
+        ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType!);
+}
+
+internal sealed class PreparedFoldObservingCheckpointStore(
+    IRuntimeCheckpointPreparedLedgerStore inner,
+    Action<RuntimeCheckpointPreparedFoldRequest>? beforeFold = null,
+    Action<RuntimeCheckpointPreparedFoldRequest, RuntimeCheckpointPreparedFoldResult>? afterFold = null) :
+    IRuntimeCheckpointPreparedLedgerStore
+{
+    public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+        RuntimeCheckpointPrepareRequest request,
+        CancellationToken cancellationToken = default) =>
+        inner.PrepareAsync(request, cancellationToken);
+
+    public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+        RuntimeCheckpointPreparationToken token,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken = default) =>
+        inner.CommitPreparedAsync(token, commit, decision, cancellationToken);
+
+    public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(
+        RuntimeCheckpointPreparedQuery query,
+        CancellationToken cancellationToken = default) =>
+        inner.PagePreparedAsync(query, cancellationToken);
+
+    public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+        RuntimeCheckpointPreparedAdoptionRequest request,
+        CancellationToken cancellationToken = default) =>
+        inner.AdoptPreparedAsync(request, cancellationToken);
+
+    public async ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+        RuntimeCheckpointPreparedFoldRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        beforeFold?.Invoke(request);
+        var result = await inner.CommitPreparedFoldAsync(request, cancellationToken);
+        afterFold?.Invoke(request, result);
+        return result;
+    }
+
+    public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken = default) =>
+        inner.CommitAsync(commit, decision, cancellationToken);
 }
