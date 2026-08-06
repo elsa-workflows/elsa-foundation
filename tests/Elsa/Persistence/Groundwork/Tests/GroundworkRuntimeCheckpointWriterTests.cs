@@ -116,17 +116,9 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
         var writer = CreateWriter(store);
-        var commit = BuildCommit("commit-dispatch", includeDispatch: true);
         var outbox = PendingDispatchOutbox("commit-dispatch", "wf-1");
-        commit = commit with
-        {
-            StateChanges = commit.StateChanges.WithPostCommitOutbox(
-            [
-                Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)
-            ])
-        };
 
-        var result = await writer.CommitAsync(commit, Decision);
+        var result = await writer.CommitAsync(BuildDispatchCommit("commit-dispatch"), Decision);
 
         var dispatch = await new GroundworkWorkflowDispatchStore(
             store,
@@ -447,6 +439,66 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             "commit-timeout"));
     }
 
+    // Two writers committing the same commit id concurrently both attempt the create-only marker. The loser is told the
+    // create conflicted, but the winner's marker is not visible to an out-of-transaction read until the winner commits,
+    // so the loser can reconcile against nothing. That is a transient window, not an unreconcilable outcome: the loser
+    // retries and either wins the create itself (here) or observes the winner's marker (the next test).
+    [Fact]
+    public async Task MarkerConflict_Without_A_Visible_Marker_Retries_And_Wins_The_Create()
+    {
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var store = new MarkerConflictDocumentStore(inner, conflictingAttempts: 1);
+        var writer = CreateWriter(store);
+
+        var result = await writer.CommitAsync(BuildCommit("commit-marker-race"), Decision);
+
+        Assert.Equal(2, store.MarkerCreateAttempts);
+        Assert.Empty(result.PendingPostCommitWorkIds);
+        Assert.NotNull(await inner.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-marker-race"));
+        Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(
+            inner,
+            GroundworkTestSerialization.Serializer).FindAsync("wf-1", "inc-1"))!.Status);
+    }
+
+    [Fact]
+    public async Task MarkerConflict_Resolves_As_A_Replay_When_The_Concurrent_Marker_Becomes_Visible()
+    {
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var store = new MarkerConflictDocumentStore(inner, conflictingAttempts: int.MaxValue, publishAfterReload: true);
+        var writer = CreateWriter(store);
+        var commit = BuildDispatchCommit("commit-marker-race-replay");
+        var outboxItemId = PendingDispatchOutbox("commit-marker-race-replay", "wf-1").OutboxItemId;
+
+        var result = await writer.CommitAsync(commit, Decision);
+
+        // The retry reconciles to the winner's marker, so the pending work comes from that marker and this writer
+        // applied nothing of its own durably.
+        Assert.Equal(2, store.MarkerCreateAttempts);
+        Assert.Equal([outboxItemId], result.PendingPostCommitWorkIds);
+        Assert.NotNull(await inner.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, commit.CommitId));
+        Assert.Null(await inner.LoadAsync(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, outboxItemId));
+    }
+
+    [Fact]
+    public async Task MarkerConflict_Without_A_Visible_Marker_FailsClosed_After_The_Retry_Budget()
+    {
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var store = new MarkerConflictDocumentStore(inner, conflictingAttempts: int.MaxValue);
+        var writer = CreateWriter(store);
+
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(async () =>
+            await writer.CommitAsync(BuildCommit("commit-marker-unreconcilable"), Decision));
+
+        // The retry is bounded: one initial attempt plus the writer's reconciliation budget, then the original
+        // fail-closed outcome. A conflict that never resolves must not spin on the durable commit path.
+        Assert.Equal(4, store.MarkerCreateAttempts);
+        Assert.Contains("no committed marker could be reloaded", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Null(await inner.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            "commit-marker-unreconcilable"));
+    }
+
     private static GroundworkRuntimeCheckpointWriter CreateWriter(
         IDocumentStore store,
         IPersistenceAccessContextAccessor? accessContextAccessor = null,
@@ -470,18 +522,21 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
 
     private static async Task CommitDispatchAsync(
         GroundworkDocumentStoreFixture fixture,
-        string commitId)
+        string commitId) =>
+        await CreateWriter(fixture.DocumentStore).CommitAsync(BuildDispatchCommit(commitId), Decision);
+
+    // A dispatching checkpoint plus the pending start-outbox item the dispatch continuation is driven from.
+    private static RuntimeCheckpointCommit BuildDispatchCommit(string commitId)
     {
         var commit = BuildCommit(commitId, includeDispatch: true);
         var outbox = PendingDispatchOutbox(commitId, "wf-1");
-        commit = commit with
+        return commit with
         {
             StateChanges = commit.StateChanges.WithPostCommitOutbox(
             [
                 Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)
             ])
         };
-        await CreateWriter(fixture.DocumentStore).CommitAsync(commit, Decision);
     }
 
     private static RuntimePostCommitOutboxProcessor NewProcessor(
@@ -878,96 +933,37 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
 
     private sealed class UncertainAfterCommitDocumentStore(
         IDocumentStore inner,
-        CancellationTokenSource callerCancellation) : IDocumentStore
+        CancellationTokenSource callerCancellation) : DelegatingDocumentStore(inner)
     {
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-        public DocumentStoreAccess Access => inner.Access;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // IDocumentStore compatibility surface delegated by the fault-injection wrapper.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentQueryResult> QueryAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public async Task<IDocumentUnitOfWork> BeginAsync(
+        public override async Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,
             CancellationToken cancellationToken = default) =>
             new UncertainAfterCommitUnitOfWork(
-                await inner.BeginAsync(scope, cancellationToken),
+                await base.BeginAsync(scope, cancellationToken),
                 callerCancellation);
     }
 
     private sealed class UncertainAfterCommitUnitOfWork(
         IDocumentUnitOfWork inner,
-        CancellationTokenSource callerCancellation) : IDocumentUnitOfWork
+        CancellationTokenSource callerCancellation) : DelegatingDocumentUnitOfWork(inner)
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        public override async Task CommitAsync(CancellationToken cancellationToken = default)
         {
-            await inner.CommitAsync(cancellationToken);
+            await base.CommitAsync(cancellationToken);
             await callerCancellation.CancelAsync();
             throw new DocumentCommitAcknowledgementUncertainException(
                 [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind]);
         }
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            inner.RollbackAsync(cancellationToken);
-
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
-    private sealed class UncertainWithoutCommitDocumentStore(IDocumentStore inner) : IDocumentStore
+    private sealed class UncertainWithoutCommitDocumentStore(IDocumentStore inner) : DelegatingDocumentStore(inner)
     {
         private int _markerLoads;
 
         public TaskCompletionSource ReconciliationStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-        public DocumentStoreAccess Access => inner.Access;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
-
-        public async Task<DocumentEnvelope?> LoadAsync(
+        public override async Task<DocumentEnvelope?> LoadAsync(
             string documentKind,
             string id,
             CancellationToken cancellationToken = default)
@@ -979,60 +975,75 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             }
 
-            return await inner.LoadAsync(documentKind, id, cancellationToken);
+            return await base.LoadAsync(documentKind, id, cancellationToken);
         }
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // IDocumentStore compatibility surface delegated by the fault-injection wrapper.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentQueryResult> QueryAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public async Task<IDocumentUnitOfWork> BeginAsync(
+        public override async Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,
             CancellationToken cancellationToken = default) =>
-            new UncertainWithoutCommitUnitOfWork(await inner.BeginAsync(scope, cancellationToken));
+            new UncertainWithoutCommitUnitOfWork(await base.BeginAsync(scope, cancellationToken));
     }
 
-    private sealed class UncertainWithoutCommitUnitOfWork(IDocumentUnitOfWork inner) : IDocumentUnitOfWork
+    private sealed class UncertainWithoutCommitUnitOfWork(IDocumentUnitOfWork inner) : DelegatingDocumentUnitOfWork(inner)
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+        public override Task CommitAsync(CancellationToken cancellationToken = default) =>
             throw new DocumentCommitAcknowledgementUncertainException(
                 [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind]);
+    }
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            inner.RollbackAsync(cancellationToken);
+    // Forces the create-only marker race deterministically. The marker create inside the unit-of-work is denied with a
+    // ConcurrencyConflict for the first <paramref name="conflictingAttempts"/> attempts - what a provider reports when a
+    // concurrent writer already inserted the same commit id inside its own still-uncommitted transaction - while the
+    // out-of-transaction reload that follows still sees nothing. With publishAfterReload the denied marker is made
+    // durable exactly between that failed reload and the next attempt, modelling the concurrent writer committing.
+    private sealed class MarkerConflictDocumentStore(
+        IDocumentStore inner,
+        int conflictingAttempts,
+        bool publishAfterReload = false) : DelegatingDocumentStore(inner)
+    {
+        private SaveDocumentRequest? _deniedMarker;
+        private int _markerCreateAttempts;
 
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
+        public int MarkerCreateAttempts => Volatile.Read(ref _markerCreateAttempts);
+
+        public override async Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default)
+        {
+            var envelope = await base.LoadAsync(documentKind, id, cancellationToken);
+            if (envelope is null && IsMarker(documentKind) && Interlocked.Exchange(ref _deniedMarker, null) is { } denied)
+                await Inner.SaveAsync(denied, cancellationToken);
+            return envelope;
+        }
+
+        public override async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new MarkerConflictUnitOfWork(this, await base.BeginAsync(scope, cancellationToken));
+
+        private static bool IsMarker(string documentKind) =>
+            string.Equals(documentKind, ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, StringComparison.Ordinal);
+
+        private DocumentStoreWriteResult? TryDenyMarkerCreate(SaveDocumentRequest request)
+        {
+            if (!IsMarker(request.DocumentKind) || Interlocked.Increment(ref _markerCreateAttempts) > conflictingAttempts)
+                return null;
+            if (publishAfterReload)
+                Interlocked.Exchange(ref _deniedMarker, request);
+            return DocumentStoreWriteResult.ConcurrencyConflict;
+        }
+
+        private sealed class MarkerConflictUnitOfWork(MarkerConflictDocumentStore owner, IDocumentUnitOfWork inner)
+            : DelegatingDocumentUnitOfWork(inner)
+        {
+            public override Task<DocumentStoreWriteResult> SaveAsync(
+                SaveDocumentRequest request,
+                CancellationToken cancellationToken = default) =>
+                owner.TryDenyMarkerCreate(request) is { } denied
+                    ? Task.FromResult(denied)
+                    : base.SaveAsync(request, cancellationToken);
+        }
     }
 
     private sealed class ManualTimerTimeProvider : TimeProvider
