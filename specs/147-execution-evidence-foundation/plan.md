@@ -63,10 +63,12 @@ guardrail fingerprint to exclude only transient post-commit intents/outbox as ca
 requires; all six REDs remain and now isolate durable `ActivityExecutionInspection.FirstCheckpointId` drift. These checks remain required by the
 canonical [spec 123](../123-replaysafe-hop-fusion/spec.md) guardrails and are reserved as T029a–T029d reconciliation work:
 amended RED review, independent/control-room approval, implementation, then unfiltered verification. Reopened T029b
-passed independent/control-room review. T029c is paused at a source-owner gate: its current two-file production
-approach is unapproved until a reviewed RED proves whether one Path-A materialized frontier removes the remaining
-ON/OFF persistence asymmetry or a narrowly generic inspection-state seam is required. The amended T029a inventory also owns a generic Runtime exact-materialized-source
-lifecycle RED: 8 focused cases contain 7 protective green cases and 1 intentional new-`Committed` live-session RED.
+passed independent/control-room review. A further reviewed Path-A RED proves the live session has exactly one completed
+materialized frontier: same-authority, unclaimed-successor, and exact live-claimed-successor cases preserve authority and
+remain Deferred after the first committed frontier. The focused lifecycle inventory is 11 total: 10 PASS / 1 intentional
+RED where the current candidate returns Immediate for the exact later claimed successor. T029c is authorized to remove
+only that second-frontier exception in its two-file boundary, then must rerun the six durable-state guardrails. The amended T029a inventory also owns a generic Runtime exact-materialized-source
+lifecycle RED.
 T029c may change only `src/Elsa/Workflows/Runtime/Services/Coalescing/{CoalescingRuntimeCheckpointCommitStore.cs,RuntimeCoalescingSession.cs}`;
 fusion driver, committer, policy, providers, Evidence, and public contracts are excluded. No Evidence or provider branch
 is an acceptable reconciliation mechanism.

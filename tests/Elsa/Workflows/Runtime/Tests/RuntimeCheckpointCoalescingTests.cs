@@ -1063,6 +1063,81 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(fixture.RecoveryAuthority, replayLedger.RecoveryAuthority);
     }
 
+    [Fact]
+    public async Task CompletedMaterializedRecoverySource_SameAuthorityRetryRemainsDeferredWithoutRematerializing()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(prepared)).Status);
+
+        var retry = await fixture.PrepareAsync(
+            fixture.RecoveryAuthority,
+            NewSchedulerContinuationBoundaryCommit(fixture.Source, 2, "retry"));
+
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, retry.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, retry.Token.InitialPersistenceMode);
+        Assert.Equal(fixture.RecoveryAuthority, retry.Token.RecoveryAuthority);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+    }
+
+    [Fact]
+    public async Task CompletedMaterializedRecoverySource_UnclaimedDistinctSuccessorRemainsDeferredWithoutSecondFrontier()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(prepared)).Status);
+
+        var successor = NewSchedulerWorkItem(
+            fixture.WorkflowExecutionId,
+            "unclaimed-successor",
+            WorkflowExecutionCommandKind.ScheduleActivity);
+        var successorAuthority = new RuntimeCheckpointRecoveryAuthorityCodec().Encode(successor);
+        await fixture.EnqueueOverlayAsync(successor);
+
+        var successorPreparation = await fixture.PrepareAsync(
+            successorAuthority,
+            NewSchedulerContinuationBoundaryCommit(successor, 2, "next"));
+
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
+        Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+    }
+
+    [Fact]
+    public async Task CompletedMaterializedRecoverySource_LiveClaimedDistinctSuccessorRemainsDeferredWithoutSecondFrontier()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(prepared)).Status);
+        await fixture.CompleteOverlayClaimAsync(fixture.OverlayClaim);
+
+        var successor = NewSchedulerWorkItem(
+            fixture.WorkflowExecutionId,
+            "claimed-successor",
+            WorkflowExecutionCommandKind.ScheduleActivity);
+        var successorAuthority = new RuntimeCheckpointRecoveryAuthorityCodec().Encode(successor);
+        await fixture.EnqueueOverlayAsync(successor);
+        var successorClaim = await fixture.ClaimOverlayAsync();
+        Assert.Equal(successor.WorkItemId, successorClaim.Item.WorkItemId);
+
+        var successorPreparation = await fixture.PrepareAsync(
+            successorAuthority,
+            NewSchedulerContinuationBoundaryCommit(successor, 2, "next"));
+
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
+        Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.IsActive);
+        Assert.False(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+        Assert.True(fixture.Session.OwnsOverlayClaim(successorClaim));
+    }
+
     [Theory]
     [InlineData(RuntimeCheckpointCommitStoreStatus.Conflict)]
     [InlineData(RuntimeCheckpointCommitStoreStatus.OwnershipLost)]
@@ -1769,6 +1844,25 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                 prepared.Token,
                 prepared.Commit,
                 new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        }
+
+        public async ValueTask EnqueueOverlayAsync(RuntimeSchedulerWorkItem item)
+        {
+            using var scope = Accessor.Push(Session);
+            await Queue.EnqueueAsync(item);
+        }
+
+        public async ValueTask<RuntimeSchedulerWorkClaim> ClaimOverlayAsync()
+        {
+            using var scope = Accessor.Push(Session);
+            return Assert.IsType<RuntimeSchedulerWorkClaim>(
+                await Queue.ClaimAsync(NewClaimRequest(WorkflowExecutionId)));
+        }
+
+        public async ValueTask CompleteOverlayClaimAsync(RuntimeSchedulerWorkClaim claim)
+        {
+            using var scope = Accessor.Push(Session);
+            await Queue.CompleteClaimAsync(claim);
         }
 
         public RuntimeCheckpointCommit NewNonqualifyingBoundary() =>
