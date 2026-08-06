@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
@@ -93,6 +94,7 @@ public sealed class RuntimeCheckpointCommitter
         // Ownership and the raw logical proposal are captured before enrichment. The store must durably reserve
         // replay-stable generic provenance before any enricher observes the checkpoint.
         commit = AttachExpectedFence(commit);
+        var inProcessHopCandidates = CaptureInProcessHopCandidates(commit);
         var prepareRequest = RuntimeCheckpointPrepareRequest.From(commit) with
         {
             RecoveryAuthority = _recoveryAuthorityAccessor?.Current
@@ -188,38 +190,99 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
             _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
 
-        // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
-        // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
-        // drain-scoped carrier so the scheduler intent dispatcher can enqueue them without re-deserializing the payload
-        // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
-        PublishInProcessHopWorkItems(commit);
+        // WU-3 / spec 109 (ADR 0031 follow-up (a)): a conduit exists only on the raw pre-prepare proposal. The
+        // rehydrated final commit deliberately retains the durable payload and strips that in-memory object. Publish a
+        // candidate only after a new durable commit and only when it exactly matches the final durable intent.
+        if (storeResult.Status == RuntimeCheckpointCommitStoreStatus.Committed)
+            PublishInProcessHopWorkItems(commit, inProcessHopCandidates);
 
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 
-    // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
-    // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
-    // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
-    // (the coalescing overlay is authoritative on continuation delivery, mirroring spec 106 FR-003). When any guard
-    // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
-    private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
+    // Captures only the non-durable conduits from the raw proposal. They remain local to this call: the rehydrated
+    // durable intent and its payload stay authoritative and are never modified to restore a conduit.
+    private IReadOnlyCollection<InProcessHopCandidate> CaptureInProcessHopCandidates(RuntimeCheckpointCommit commit)
+    {
+        if (!_inProcessHopFastPathOptions.Enabled || commit.PostCommitIntents.Count == 0)
+            return [];
+        if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
+            return [];
+        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
+            return [];
+
+        List<InProcessHopCandidate>? candidates = null;
+        foreach (var intent in commit.PostCommitIntents)
+        {
+            if (!StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) ||
+                intent.MaterializedSchedulerWorkItem is not { } workItem)
+            {
+                continue;
+            }
+
+            (candidates ??= []).Add(new InProcessHopCandidate(intent, workItem));
+        }
+
+        return candidates ?? [];
+    }
+
+    // Publishes each new committed EnqueueSchedulerWork candidate onto the owning live drain's in-process-hop carrier.
+    // Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS execution (so the
+    // dispatcher will look here rather than deserialize); no coalescing session owns the execution; and exactly one
+    // final durable intent has the candidate's identity/association and structural payload. When any guard fails the
+    // carrier stays empty and delivery deserializes the authoritative durable payload.
+    private void PublishInProcessHopWorkItems(
+        RuntimeCheckpointCommit commit,
+        IReadOnlyCollection<InProcessHopCandidate> candidates)
     {
         if (!_inProcessHopFastPathOptions.Enabled)
             return;
-        if (commit.PostCommitIntents.Count == 0)
+        if (candidates.Count == 0)
             return;
         if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
             return;
         if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
             return;
 
-        foreach (var intent in commit.PostCommitIntents)
+        foreach (var candidate in candidates)
         {
-            if (intent.MaterializedSchedulerWorkItem is { } workItem &&
-                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
-                scope.PublishHopWorkItem(intent.IntentId, workItem);
+            var durableIntents = commit.PostCommitIntents
+                .Where(intent => HasSameDurableIdentityAndAssociation(candidate.Intent, intent))
+                .ToArray();
+            if (durableIntents.Length != 1)
+                continue;
+
+            var durableIntent = durableIntents[0];
+            if (candidate.Intent.Payload is not { } candidatePayload ||
+                durableIntent.Payload is not { } durablePayload ||
+                !JsonElement.DeepEquals(candidatePayload, durablePayload) ||
+                !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(candidate.WorkItem), durablePayload))
+            {
+                continue;
+            }
+
+            scope.PublishHopWorkItem(durableIntent.IntentId, candidate.WorkItem);
         }
     }
+
+    private static bool HasSameDurableIdentityAndAssociation(
+        RuntimePostCommitIntent candidate,
+        RuntimePostCommitIntent durable) =>
+        StringComparer.Ordinal.Equals(candidate.IntentId, durable.IntentId) &&
+        StringComparer.Ordinal.Equals(candidate.WorkflowExecutionId, durable.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(candidate.Kind, durable.Kind) &&
+        candidate.RecordedAt == durable.RecordedAt &&
+        StringComparer.Ordinal.Equals(candidate.ActivityExecutionId, durable.ActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(candidate.IdempotencyKey, durable.IdempotencyKey) &&
+        StringComparer.Ordinal.Equals(candidate.DependsOnWaitRegistrationId, durable.DependsOnWaitRegistrationId) &&
+        candidate.WaitFailurePolicy == durable.WaitFailurePolicy &&
+        candidate.Metadata.Count == durable.Metadata.Count &&
+        candidate.Metadata.All(entry =>
+            durable.Metadata.TryGetValue(entry.Key, out var value) &&
+            StringComparer.Ordinal.Equals(entry.Value, value));
+
+    private sealed record InProcessHopCandidate(
+        RuntimePostCommitIntent Intent,
+        RuntimeSchedulerWorkItem WorkItem);
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&

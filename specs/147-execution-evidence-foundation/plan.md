@@ -61,8 +61,20 @@ guardrails and are reserved as blocked T029a–T029d reconciliation work: RED, i
 implementation, then unfiltered verification. No Evidence or provider branch is an acceptable reconciliation mechanism.
 Independent final review: **PASS**, with no finding; control-room approval: **PASS**. Evidence: root slice **38/38**;
 full Runtime **1830/1831**, with only the clean-baseline T029e RED; no T027 regression; full Groundwork remains
-**844/853** with nine known pre-T029 REDs. T029e owns the live-carrier RED and its bounded resolution; it must not be
-claimed closed by T029. T030 remains blocked until that work is separately authorized and complete.
+**844/853** with nine known pre-T029 REDs. T029e owned the live-carrier RED and was deliberately kept separate from
+T029.
+
+### T029e live-carrier resolution disposition (complete, 2026-08-06)
+
+Source-owner review: **PASS**; independent RED review: **PASS**; control-room approval: **APPROVED**. An initial
+implementation review found one P2 allocation issue; the corrected two-file implementation passed independent final
+review with no open finding. The committer captures a raw `EnqueueSchedulerWork` conduit only for the owning live drain
+and only publishes it after the prepared finalization returns a new `Committed` result with exactly one corresponding
+durable intent. Identity/association plus candidate-intent payload and independently serialized candidate work-item
+payload must structurally match the final durable payload. The durable payload remains authoritative; replay, skip,
+failure, exception, mismatch, coalescing ownership, and unrelated commits do not publish. Verification: focused
+`RuntimeInProcessHopFastPathTests` **19/19**; preparation/committer subset **50/50**; root full Runtime **1838/1838**.
+T029a is released. T030 remains blocked until T029a–T029d complete.
 
 ## Project structure
 
@@ -197,7 +209,7 @@ The ledger is a Runtime correctness mechanism, not an Evidence concept and not a
 |---|---|
 | Core contracts | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Core/Tests/Elsa.Workflows.ExecutionEvidence.Core.Tests.csproj` — descriptor/ID/order/cursor/wire validation, disjoint typed/unknown envelope, unknown payload, and no values. |
 | Base + InMemory | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj` and `dotnet test tests/Elsa/Workflows/ExecutionEvidence/InMemory/Tests/Elsa.Workflows.ExecutionEvidence.InMemory.Tests.csproj` — gating; reservation/attach/freeze races; active drain; two sessions; uncertain retry; start failure reconciliation; cutoff reconciliation; dedupe/wait/delete. |
-| Runtime seams | `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj` and Groundwork tests — v1 authority canonicalization/bounds; actual outer D1 dispatch authority plus ambient nesting; all six router results including claimed-but-durable exactness; immutable original versus mutable current fence/revision; exact-set adoption success, idempotent replay, every rejection, and injected all-member rollback/no-dispatch for source-bound and source-free routes; exact three-member D1 Prepared identity/token/provenance/order/source assertions; current 27-caller/21-file matrix plus separate provider-atomic prepared-fold gate; fingerprint/fold/compaction; explicit skipped/failed orders; unchanged after-enrichment Immediate override; qualifying scheduler-only import/continued session; nonqualifying deactivation; live-overlay delayed acknowledgement plus crash-before/after-inline ordinary durable-redrive convergence; skip-with-work; six-status paging; full T027 recovery non-regression. T029e owns the live-carrier RED, rather than treating it as a T029 closure. |
+| Runtime seams | `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj` and Groundwork tests — v1 authority canonicalization/bounds; actual outer D1 dispatch authority plus ambient nesting; all six router results including claimed-but-durable exactness; immutable original versus mutable current fence/revision; exact-set adoption success, idempotent replay, every rejection, and injected all-member rollback/no-dispatch for source-bound and source-free routes; exact three-member D1 Prepared identity/token/provenance/order/source assertions; current 27-caller/21-file matrix plus separate provider-atomic prepared-fold gate; fingerprint/fold/compaction; explicit skipped/failed orders; unchanged after-enrichment Immediate override; qualifying scheduler-only import/continued session; nonqualifying deactivation; live-overlay delayed acknowledgement plus crash-before/after-inline ordinary durable-redrive convergence; skip-with-work; six-status paging; full T027 recovery non-regression. T029e completed the separate live-carrier resolution, rather than treating it as a T029 closure. |
 | Fusion continuity (blocked T029a–T029d) | Preserve the original spec 123 tests as guardrails, not rewritten substitutes: all five ON/OFF byte-identical shapes (straight line, multi-outcome branch, fan-in join fallback, suspend/resume, External); non-vacuous D1 `FusedSpans` and D2 `InlineCascadeDispatches` counters plus join-fallback counter; D1-only counter separation; and all eight original Groundwork kill ordinals `2,3,4,7,9,10,11,12`, including D2→D1 recursion. The seven Activity REDs are reconciled through their separate RED → review → implementation → verification gates; they are not T029 acceptance tests. The additive three-member Prepared assertions must not replace original convergence, join, External-parent, suspend, or no-fusion coverage. |
 | API integration | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Api/Tests/Elsa.Workflows.ExecutionEvidence.Api.Tests.csproj` — scopes, disjoint typed/unknown records, correlation-pair/range validation, bounded scan/timeout cursor advancement, cursor reuse/access/filter/page-size binding, lifecycle/integrity outcomes. |
 | Architecture/reference | `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` — Core/API/InMemory direction, server composition, and absence assertions. |
@@ -205,7 +217,7 @@ The ledger is a Runtime correctness mechanism, not an Evidence concept and not a
 | Benchmark | `dotnet test benchmarks/Elsa/Workflows/ExecutionEvidence/Benchmarks/Elsa.Workflows.ExecutionEvidence.Benchmarks.csproj --filter "FullyQualifiedName~ExecutionEvidence" --logger "console;verbosity=detailed"` — absent, enabled-unscoped, scoped metadata-only results plus reservation throughput/allocation and canonical-input storage size before/after safe compaction. |
 | Plan/OpenAPI | `git diff --check`; YAML parse; Redocly/OpenAPI lint or the repository-provided equivalent; `.specify/scripts/bash/check-prerequisites.sh --json --paths-only`. |
 
-After T029e and T029a–T029d complete, the final regression gate also runs every project named by spec 123 SC-008, without filters or substitutions. T030 may not start before those prerequisites are separately authorized and complete. The known full Groundwork baseline remains 844/853 with nine pre-T029 REDs until T029d records the unfiltered/kill-gate result; it must not be described as green:
+After T029a–T029d complete, the final regression gate also runs every project named by spec 123 SC-008, without filters or substitutions. T030 may not start before those prerequisites are separately authorized and complete. The known full Groundwork baseline remains 844/853 with nine pre-T029 REDs until T029d records the unfiltered/kill-gate result; it must not be described as green:
 
 ```bash
 dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj

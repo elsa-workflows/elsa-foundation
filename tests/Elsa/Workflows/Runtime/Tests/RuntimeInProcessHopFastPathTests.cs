@@ -204,6 +204,171 @@ public sealed class RuntimeInProcessHopFastPathTests
         Assert.Equal("work-next", published.WorkItemId);
     }
 
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenRehydratedPayloadChangesWithSameWorkItemId()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var (intent, rawCommit) = NewCommitWithContinuation("work-next");
+        var changedWorkItem = NewWorkItem("work-next", commandId: "command-changed");
+        var finalCommit = rawCommit with
+        {
+            PostCommitIntents = [NewDurableContinuationIntent(intent, changedWorkItem)]
+        };
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Committed),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(finalCommit, Immediate));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await committer.CommitAsync(rawCommit);
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenCandidateObjectDoesNotMatchDurablePayload()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var candidate = NewWorkItem("work-candidate");
+        var intent = new RuntimePostCommitIntent(
+            "intent-candidate-payload-mismatch",
+            Wfid,
+            RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            Now,
+            "actexec-1",
+            "checkpoint:intent-candidate-payload-mismatch",
+            JsonSerializer.SerializeToElement(NewWorkItem("work-durable")),
+            materializedSchedulerWorkItem: candidate);
+        var rawCommit = NewCommitWithIntent("candidate-payload-mismatch", intent);
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Committed),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(rawCommit, Immediate));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await committer.CommitAsync(rawCommit);
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenCandidateIntentPayloadDoesNotMatchFinalPayload()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var workItem = NewWorkItem("work-next");
+        var intent = new RuntimePostCommitIntent(
+            "intent-candidate-intent-payload-mismatch",
+            Wfid,
+            RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            Now,
+            "actexec-1",
+            "checkpoint:intent-candidate-intent-payload-mismatch",
+            JsonSerializer.SerializeToElement(NewWorkItem("work-durable")),
+            materializedSchedulerWorkItem: workItem);
+        var rawCommit = NewCommitWithIntent("candidate-intent-payload-mismatch", intent);
+        var finalCommit = rawCommit with
+        {
+            PostCommitIntents = [NewDurableContinuationIntent(intent, workItem)]
+        };
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Committed),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(finalCommit, Immediate));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await committer.CommitAsync(rawCommit);
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotRepublish_OnReplay()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var committer = NewCommitter(store, liveDrain, enabled: true, coalescing: null);
+        var (intent, commit) = NewCommitWithContinuation("work-next");
+        var firstScope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(firstScope))
+            await committer.CommitAsync(commit);
+        Assert.True(firstScope.TryTakeHopWorkItem(intent.IntentId, out _));
+
+        var replayScope = new RuntimeLiveDrainDeliveryScope(Wfid);
+        using (liveDrain.Push(replayScope))
+            await committer.CommitAsync(commit);
+
+        Assert.False(replayScope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenFinalizationSkips()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var (intent, rawCommit) = NewCommitWithContinuation("work-next");
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Skipped),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(
+                rawCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Skip)));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await committer.CommitAsync(rawCommit);
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenFinalizationFails()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var (intent, rawCommit) = NewCommitWithContinuation("work-next");
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Failed),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(rawCommit, Immediate));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await committer.CommitAsync(rawCommit);
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
+    [Fact]
+    public async Task Committer_DoesNotPublish_WhenFinalizationThrows()
+    {
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var (intent, rawCommit) = NewCommitWithContinuation("work-next");
+        var committer = NewCommitter(
+            new FinalizationStore(RuntimeCheckpointCommitStoreStatus.Committed, throwOnFinalize: true),
+            liveDrain,
+            enabled: true,
+            coalescing: null,
+            preparationReplayer: new FixedPreparedCommitReplayer(rawCommit, Immediate));
+        var scope = new RuntimeLiveDrainDeliveryScope(Wfid);
+
+        using (liveDrain.Push(scope))
+            await Assert.ThrowsAsync<InvalidOperationException>(() => committer.CommitAsync(rawCommit).AsTask());
+
+        Assert.False(scope.TryTakeHopWorkItem(intent.IntentId, out _));
+    }
+
     // No publish when the fast path is disabled: the durable outbox item is still committed, but the carrier stays empty
     // so delivery deserializes.
     [Fact]
@@ -259,10 +424,11 @@ public sealed class RuntimeInProcessHopFastPathTests
     }
 
     private static RuntimeCheckpointCommitter NewCommitter(
-        InMemoryRuntimeCheckpointCommitStore store,
+        IRuntimeCheckpointCommitStore store,
         IRuntimeLiveDrainDeliveryAccessor liveDrain,
         bool enabled,
-        IRuntimeCoalescingSessionAccessor? coalescing) =>
+        IRuntimeCoalescingSessionAccessor? coalescing,
+        IRuntimeCheckpointPreparationReplayer? preparationReplayer = null) =>
         new(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             store,
@@ -273,17 +439,22 @@ public sealed class RuntimeInProcessHopFastPathTests
             consumedWorkClaimAccessor: null,
             coalescingSessionAccessor: coalescing,
             liveDrainDeliveryAccessor: liveDrain,
-            inProcessHopFastPathOptions: new RuntimeInProcessHopFastPathOptions { Enabled = enabled });
+            inProcessHopFastPathOptions: new RuntimeInProcessHopFastPathOptions { Enabled = enabled },
+            preparationReplayer: preparationReplayer);
 
     private static (RuntimePostCommitIntent Intent, RuntimeCheckpointCommit Commit) NewCommitWithContinuation(string continuationWorkItemId)
     {
         var source = NewWorkItem("work-source");
         var continuation = NewWorkItem(continuationWorkItemId);
         var intent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(source, "actexec-1", continuation, Now);
-        var commit = new RuntimeCheckpointCommit(
-            CommitId: $"commit-{continuationWorkItemId}",
+        return (intent, NewCommitWithIntent(continuationWorkItemId, intent));
+    }
+
+    private static RuntimeCheckpointCommit NewCommitWithIntent(string suffix, RuntimePostCommitIntent intent) =>
+        new(
+            CommitId: $"commit-{suffix}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint-{continuationWorkItemId}",
+                CheckpointId: $"checkpoint-{suffix}",
                 Name: RuntimeCheckpointNames.ActivityCompleted,
                 WorkflowExecutionId: Wfid,
                 OccurredAt: Now,
@@ -299,16 +470,15 @@ public sealed class RuntimeInProcessHopFastPathTests
                 operational: []),
             PostCommitIntents: [intent],
             Metadata: new Dictionary<string, string>());
-        return (intent, commit);
-    }
 
-    private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId) => NewWorkItemForExecution(workItemId, Wfid);
+    private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId, string? commandId = null) =>
+        NewWorkItemForExecution(workItemId, Wfid, commandId);
 
-    private static RuntimeSchedulerWorkItem NewWorkItemForExecution(string workItemId, string workflowExecutionId) =>
+    private static RuntimeSchedulerWorkItem NewWorkItemForExecution(string workItemId, string workflowExecutionId, string? commandId = null) =>
         new(
             workItemId: workItemId,
             workflowExecutionId: workflowExecutionId,
-            commandId: $"command-{workItemId}",
+            commandId: commandId ?? $"command-{workItemId}",
             commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
             envelopeId: $"envelope-{workItemId}",
             idempotencyKey: $"{workflowExecutionId}:{workItemId}",
@@ -325,4 +495,74 @@ public sealed class RuntimeInProcessHopFastPathTests
             activityExecutionId: null,
             idempotencyKey: $"checkpoint:{intentId}",
             payload: JsonSerializer.SerializeToElement(NewWorkItem(payloadWorkItemId)));
+
+    private static RuntimePostCommitIntent NewDurableContinuationIntent(
+        RuntimePostCommitIntent source,
+        RuntimeSchedulerWorkItem payloadWorkItem) =>
+        new(
+            source.IntentId,
+            source.WorkflowExecutionId,
+            source.Kind,
+            source.RecordedAt,
+            source.ActivityExecutionId,
+            source.IdempotencyKey,
+            JsonSerializer.SerializeToElement(payloadWorkItem),
+            source.Metadata,
+            source.DependsOnWaitRegistrationId,
+            source.WaitFailurePolicy);
+
+    private static readonly RuntimeCheckpointPersistenceDecision Immediate =
+        new(RuntimeCheckpointPersistenceMode.Immediate);
+
+    private sealed class FixedPreparedCommitReplayer(
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision) : IRuntimeCheckpointPreparationReplayer
+    {
+        public ValueTask<RuntimeCheckpointPreparedCommit> RehydrateAsync(
+            RuntimeCheckpointPreparedReservation reservation,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeCheckpointPreparedCommit(reservation.Token, commit, decision));
+    }
+
+    private sealed class FinalizationStore(
+        RuntimeCheckpointCommitStoreStatus finalStatus,
+        bool throwOnFinalize = false) : IRuntimeCheckpointCommitStore
+    {
+        public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+            RuntimeCheckpointPrepareRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var token = new RuntimeCheckpointPreparationToken(
+                request.Commit.CommitId,
+                "test-ledger",
+                new RuntimeCheckpointProvenance(RuntimeExecutionContextSnapshot.Empty, 1),
+                1,
+                0,
+                request.Commit.ExpectedFence,
+                new RuntimeCheckpointPreparationPayloadCodec().Encode(request).PayloadSha256,
+                "test-canonical",
+                request.InitialPersistenceMode);
+            return ValueTask.FromResult(RuntimeCheckpointPreparationResult.Prepared(token));
+        }
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+            RuntimeCheckpointPreparationToken token,
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (throwOnFinalize)
+                throw new InvalidOperationException("Injected finalization failure.");
+
+            return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]) { Status = finalStatus });
+        }
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 }
