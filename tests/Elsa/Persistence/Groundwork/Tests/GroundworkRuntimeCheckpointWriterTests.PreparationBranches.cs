@@ -238,7 +238,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     [Theory]
     [InlineData("prepare")]
     [InlineData("commit")]
-    public async Task NonPrepared_NonTerminal_Ledger_Status_Returns_Conflict(string phase)
+    public async Task Unknown_Ledger_Status_Returns_Conflict(string phase)
     {
         var store = NewDocumentStore();
         var commit = BuildCommit($"failed-ledger-{phase}");
@@ -248,7 +248,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             store,
             ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
             $"prepared:{commit.CommitId}",
-            root => root["entry"]!["status"] = (int)RuntimeLogicalCheckpointLedgerStatus.Failed);
+            root => root["entry"]!["status"] = 999);
 
         if (phase == "prepare")
             Assert.Equal(RuntimeCheckpointPreparationStatus.Conflict, (await CreateWriter(store).PrepareAsync(request)).Status);

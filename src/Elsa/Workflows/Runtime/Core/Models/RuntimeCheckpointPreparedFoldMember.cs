@@ -15,6 +15,8 @@ public enum RuntimeCheckpointPreparedDisposition
 public sealed record RuntimeCheckpointPreparedFoldMember(
     RuntimeCheckpointPreparationToken Token,
     RuntimeCheckpointPreparedDisposition Disposition,
+    RuntimeExecutionFence? ExpectedCurrentAuthorityFence,
+    long ExpectedAuthorityRevision,
     RuntimeCheckpointPreparedCommit? PreparedCommit = null,
     string? FailureCode = null,
     string? FailureMessage = null)
@@ -34,6 +36,8 @@ public sealed record RuntimeCheckpointPreparedFoldMember(
         Token.Validate();
         if (!Enum.IsDefined(Disposition))
             throw new ArgumentOutOfRangeException(nameof(Disposition), Disposition, "The prepared-checkpoint disposition is invalid.");
+        if (ExpectedAuthorityRevision < 1)
+            throw new ArgumentOutOfRangeException(nameof(ExpectedAuthorityRevision));
 
         if (Disposition == RuntimeCheckpointPreparedDisposition.Failed)
         {

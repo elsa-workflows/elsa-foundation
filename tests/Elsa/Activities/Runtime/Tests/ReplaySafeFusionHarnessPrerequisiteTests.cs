@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,8 +37,8 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
 
         // The coalesced path genuinely folds the per-hop checkpoint storm into strictly fewer durable commits — this is
         // the burst the fusion pass engages inside. Without it, fusion never fires and the guardrail is meaningless.
-        Assert.True(coalesced.CommitCount < immediate.CommitCount,
-            $"Expected coalesced commits ({coalesced.CommitCount}) < immediate ({immediate.CommitCount}).");
+        Assert.True(coalesced.PhysicalFoldCount > 0,
+            "Expected the coalesced run to complete at least one provider-atomic prepared fold.");
     }
 
     [Fact]
@@ -53,18 +54,74 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
         Assert.Equal(SideEffectProfile.External, external.ActivityContract!.SideEffectProfile);
     }
 
-    private static async Task<(bool Completed, int CommitCount)> DriveAsync(bool coalescing)
+    private static async Task<(bool Completed, int CommitCount, int PhysicalFoldCount)> DriveAsync(bool coalescing)
     {
+        var foldObserver = new PreparedFoldObserver();
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services));
         if (coalescing)
-            builder = builder.WithCoalescing();
+        {
+            builder = builder
+                .WithCoalescing()
+                .ConfigureServices(services => DecoratePreparedLedger(services, foldObserver));
+        }
 
         await using var harness = builder.Build(ActivityExecutionIds);
 
         var run = await harness.RunAsync(BuildReplaySafeStraightLineFlowchart());
         var commitCount = harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
-        return (run.WorkflowState?.Status == WorkflowExecutionStatus.Completed, commitCount);
+        return (run.WorkflowState?.Status == WorkflowExecutionStatus.Completed, commitCount, foldObserver.Count);
+    }
+
+    private static void DecoratePreparedLedger(IServiceCollection services, PreparedFoldObserver observer)
+    {
+        var descriptor = services.Last(item => item.ServiceType == typeof(IRuntimeCheckpointPreparedLedgerStore));
+        services.Remove(descriptor);
+        services.Add(new ServiceDescriptor(
+            typeof(IRuntimeCheckpointPreparedLedgerStore),
+            serviceProvider => new ObservingPreparedLedgerStore(
+                (IRuntimeCheckpointPreparedLedgerStore)CreateFromDescriptor(descriptor, serviceProvider),
+                observer),
+            descriptor.Lifetime));
+    }
+
+    private static object CreateFromDescriptor(ServiceDescriptor descriptor, IServiceProvider serviceProvider) =>
+        descriptor.ImplementationInstance ??
+        descriptor.ImplementationFactory?.Invoke(serviceProvider) ??
+        ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType!);
+
+    private sealed class PreparedFoldObserver
+    {
+        public int Count { get; private set; }
+        public void Record() => Count++;
+    }
+
+    private sealed class ObservingPreparedLedgerStore(
+        IRuntimeCheckpointPreparedLedgerStore inner,
+        PreparedFoldObserver observer) : IRuntimeCheckpointPreparedLedgerStore
+    {
+        public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(RuntimeCheckpointPrepareRequest request, CancellationToken cancellationToken = default) =>
+            inner.PrepareAsync(request, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            inner.CommitAsync(commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(RuntimeCheckpointPreparationToken token, RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            inner.CommitPreparedAsync(token, commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default) =>
+            inner.PagePreparedAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(RuntimeCheckpointPreparedAdoptionRequest request, CancellationToken cancellationToken = default) =>
+            inner.AdoptPreparedAsync(request, cancellationToken);
+
+        public async ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(RuntimeCheckpointPreparedFoldRequest request, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitPreparedFoldAsync(request, cancellationToken);
+            if (result.Status == RuntimeCheckpointCommitStoreStatus.Committed)
+                observer.Record();
+            return result;
+        }
     }
 
     private static WorkflowExecutable BuildReplaySafeStraightLineFlowchart()

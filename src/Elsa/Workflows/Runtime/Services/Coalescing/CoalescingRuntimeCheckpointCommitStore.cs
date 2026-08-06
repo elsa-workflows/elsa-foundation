@@ -7,14 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// <summary>
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/> (E3-6, RT-10). While a coalescing session owns
 /// the target workflow execution, deferrable checkpoints may be buffered into an in-memory working set. Terminal
-/// Prepared folding is a separately reviewed work unit, so any boundary, cap, or quiescence path that would require
-/// it fails closed before mutating durable state. When no session is active this decorator passes through to the
-/// durable inner store, so the default (Immediate) path is unaffected.
+/// Prepared folding finalizes a buffered segment through the durable provider's one exact atomic operation. When no
+/// session is active this decorator passes through to the durable inner store, so the default path is unaffected.
 /// </summary>
-/// <remarks>
-/// This stage deliberately exposes no executable terminal-fold path. Durable Prepared reservations remain untouched
-/// when the stage gate is reached.
-/// </remarks>
 public sealed class CoalescingRuntimeCheckpointCommitStore(
     CoalescingInner<IRuntimeCheckpointCommitStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimeCheckpointCommitStore, IRuntimeCheckpointPreparedLedgerStore
@@ -48,26 +43,56 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (sessionAccessor.Current is not { } session || !session.AppliesTo(commit.WorkflowExecutionId))
             return await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
 
+        var reservation = await FindPreparedReservationAsync(commit.WorkflowExecutionId, token.CommitId, cancellationToken);
+        if (reservation is null)
+            return await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
+        var preparedCommit = new RuntimeCheckpointPreparedCommit(token, commit, decision)
+        {
+            CurrentAuthorityFence = reservation.CurrentAuthorityFence,
+            AuthorityRevision = reservation.AuthorityRevision
+        };
+
         var deferrable = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred && !HasBoundaryState(commit);
         var capReached = session.HopCount + 1 > session.MaxSegmentCheckpoints;
         if (deferrable && !capReached)
         {
-            session.BufferDeferred(new RuntimeCheckpointPreparedCommit(token, commit, decision));
+            session.BufferDeferred(preparedCommit);
             return OwnOutbox(commit);
         }
 
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
         var continueAfterBoundary = capReached || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
+        RuntimeCheckpointCommitStoreResult passthrough;
+        RuntimeCheckpointPreparedFoldRequest? foldRequest = null;
         if (session.BufferedPreparedCommits.Count > 0)
-            throw new NotSupportedException(
-                "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+        {
+            foldRequest = session.CreatePreparedFoldRequest(preparedCommit);
+            var foldResult = await _preparedLedger.CommitPreparedFoldAsync(foldRequest, cancellationToken);
+            passthrough = foldResult.Receipts.TryGetValue(token.CommitId, out var receipt)
+                ? receipt
+                : new RuntimeCheckpointCommitStoreResult([]) { Status = foldResult.Status };
+        }
+        else
+        {
+            passthrough = await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
+        }
 
-        var passthrough = await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
+        // Preserve the buffered segment and its queue/outbox ownership when durable finalization did not succeed.
+        // The committer will surface Conflict/OwnershipLost to its caller, which may then retry or recover safely.
+        if (passthrough.Status is not (RuntimeCheckpointCommitStoreStatus.Committed or RuntimeCheckpointCommitStoreStatus.Replay))
+            return passthrough;
+
         session.InvalidateInspectionBaselines();
-        if (continueAfterBoundary)
+        if (capReached)
+        {
+            session.RecordCapFlushState(commit.StateChanges);
+            session.MarkOutboxDurablyPersisted(
+                foldRequest?.FoldedStateChanges.PostCommitOutbox ?? commit.StateChanges.PostCommitOutbox);
+        }
+        else if (continueAfterBoundary)
             session.RecordDurableBoundaryState(commit.StateChanges);
         await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: !continueAfterBoundary, cancellationToken);
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: capReached || !continueAfterBoundary, cancellationToken);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();
@@ -79,15 +104,15 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         CancellationToken cancellationToken = default) =>
         _preparedLedger.PagePreparedAsync(query, cancellationToken);
 
+    public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+        RuntimeCheckpointPreparedAdoptionRequest request,
+        CancellationToken cancellationToken = default) =>
+        _preparedLedger.AdoptPreparedAsync(request, cancellationToken);
+
     public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
         RuntimeCheckpointPreparedFoldRequest request,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
-        throw new NotSupportedException(
-            "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
-    }
+        => _preparedLedger.CommitPreparedFoldAsync(request, cancellationToken);
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
@@ -120,5 +145,28 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
     private static RuntimeCheckpointCommitStoreResult OwnOutbox(RuntimeCheckpointCommit commit) =>
         new(commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray());
+
+    private async ValueTask<RuntimeCheckpointPreparedReservation?> FindPreparedReservationAsync(
+        string workflowExecutionId,
+        string commitId,
+        CancellationToken cancellationToken)
+    {
+        string? cursor = null;
+        do
+        {
+            var page = await _preparedLedger.PagePreparedAsync(
+                new RuntimeCheckpointPreparedQuery(
+                    workflowExecutionId,
+                    RuntimeCheckpointPreparedQuery.MaximumPageSize,
+                    cursor),
+                cancellationToken);
+            var reservation = page.Reservations.SingleOrDefault(item => StringComparer.Ordinal.Equals(item.CommitId, commitId));
+            if (reservation is not null)
+                return reservation;
+            cursor = page.NextCursor;
+        } while (cursor is not null);
+
+        return null;
+    }
 
 }

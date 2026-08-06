@@ -114,7 +114,16 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         Assert.Equal(
             3,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind));
+
+    [Fact]
+    public void Runtime_checkpoint_ledger_authority_shape_is_explicitly_versioned_at_v2()
+    {
+        Assert.Equal(2, ElsaRuntimeDocumentVersions.CurrentFor(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind));
+        Assert.Equal(2, ElsaRuntimeDocumentVersions.MinimumReadableFor(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind));
+    }
 
     [Fact]
     public void Durable_timer_claim_shape_is_explicitly_versioned_at_v2() =>

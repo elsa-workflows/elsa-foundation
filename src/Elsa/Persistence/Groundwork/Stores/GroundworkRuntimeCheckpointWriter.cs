@@ -324,15 +324,289 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         return new RuntimeCheckpointPreparedPage(query, pageReservations, nextCursor);
     }
 
-    /// <summary>Fail-closed scaffold for the separately reviewed prepared-checkpoint adoption/fold work.</summary>
-    public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
-        RuntimeCheckpointPreparedFoldRequest request,
+    /// <summary>
+    /// Atomically adopts one complete, ordered durable Prepared scope.  This deliberately changes only the mutable
+    /// current-authority binding; preparation identity and recovery input remain byte-for-byte provider-owned.
+    /// </summary>
+    public async ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+        RuntimeCheckpointPreparedAdoptionRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        throw new NotSupportedException(
-            "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+
+        if (!IsAdoptionRequestWellFormed(request))
+            return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Conflict, request);
+
+        // Groundwork queries are store-level rather than UoW-bound. Observe both the coordination version and exact
+        // Prepared membership before opening the transaction, then prove that observation is still current inside it.
+        // Every Prepare/finalization updates the coordination row, so the version check closes the scan/begin window.
+        var observedCoordination = await LoadCoordinationAsync(_commitLedger, request.WorkflowExecutionId, cancellationToken);
+        if (observedCoordination is null)
+            return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Conflict, request);
+        var entries = await LoadPreparedEntriesThroughAsync(
+            _commitLedger,
+            request.WorkflowExecutionId,
+            request.ThroughWorkflowCheckpointOrder,
+            cancellationToken);
+
+        try
+        {
+            await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+            var store = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
+            var coordination = await LoadCoordinationAsync(store, request.WorkflowExecutionId, cancellationToken)
+                ?? throw new PreparedDocumentConcurrencyException();
+            if (coordination.Version != observedCoordination.Version ||
+                !Equals(coordination.Document, observedCoordination.Document))
+                throw new PreparedDocumentConcurrencyException();
+
+            if (!AdoptionScopeMatches(entries, request))
+                return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Conflict, request);
+
+            var currentBindingsMatch = entries.All(entry =>
+                Equals(entry.CurrentAuthorityFence, request.Members.Single(member => StringComparer.Ordinal.Equals(member.CommitId, entry.CommitId)).ExpectedCurrentAuthorityFence) &&
+                entry.AuthorityRevision == request.Members.Single(member => StringComparer.Ordinal.Equals(member.CommitId, entry.CommitId)).ExpectedAuthorityRevision);
+            if (!currentBindingsMatch)
+                return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Conflict, request);
+
+            if (entries.All(entry => Equals(entry.CurrentAuthorityFence, request.TargetAuthorityFence)))
+            {
+                await unitOfWork.CommitAsync(cancellationToken);
+                return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Replay, request);
+            }
+
+            if (!CanAdvanceAuthorityFence(entries, request.TargetAuthorityFence))
+                return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.OwnershipLost, request);
+
+            try
+            {
+                await ValidateAndTouchExpectedFenceAsync(
+                    store,
+                    CreatePreparedLedgerAuthorityCommit(request.WorkflowExecutionId, request.TargetAuthorityFence),
+                    cancellationToken);
+            }
+            catch (RuntimeStaleFencingTokenException)
+            {
+                return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.OwnershipLost, request);
+            }
+
+            foreach (var entry in entries)
+            {
+                var loaded = await LoadLedgerAsync(store, entry.CommitId, cancellationToken)
+                    ?? throw new PreparedDocumentConcurrencyException();
+                if (loaded.Document.Entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared ||
+                    !StringComparer.Ordinal.Equals(loaded.Document.Entry.LedgerToken, entry.LedgerToken) ||
+                    loaded.Document.Entry.Provenance.WorkflowCheckpointOrder != entry.Provenance.WorkflowCheckpointOrder ||
+                    !StringComparer.Ordinal.Equals(loaded.Document.Entry.InputFingerprint, entry.InputFingerprint) ||
+                    !StringComparer.Ordinal.Equals(loaded.Document.Entry.CanonicalInputReference, entry.CanonicalInputReference) ||
+                    !Equals(loaded.Document.Entry.CurrentAuthorityFence, entry.CurrentAuthorityFence) ||
+                    loaded.Document.Entry.AuthorityRevision != entry.AuthorityRevision)
+                    throw new PreparedDocumentConcurrencyException();
+
+                var adopted = entry with
+                {
+                    CurrentAuthorityFence = request.TargetAuthorityFence,
+                    AuthorityRevision = checked(entry.AuthorityRevision + 1)
+                };
+                await SaveLedgerAsync(store, new RuntimeCheckpointLedgerDocument(adopted), loaded.Version, cancellationToken);
+            }
+
+            // The bounded membership scan is supplied by the owner store because Groundwork's document UoW exposes
+            // only read-by-id. CAS-touching the authoritative coordination row in this same transaction closes both
+            // sides of that scan: every hidden insertion or terminal removal also changes this row and conflicts.
+            await SaveCoordinationAsync(store, coordination.Document, coordination.Version, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Adopted, request);
+        }
+        catch (PreparedDocumentConcurrencyException)
+        {
+            return AdoptionReceipt(RuntimeCheckpointPreparedAdoptionStatus.Conflict, request);
+        }
+    }
+
+    /// <summary>Atomically assigns explicit terminal dispositions and applies the folded durable effects once.</summary>
+    public async ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+        RuntimeCheckpointPreparedFoldRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!RuntimeCheckpointPreparedFoldBuilder.Matches(request))
+            return FoldConflict();
+
+        var foldFingerprint = RuntimeCheckpointCommitFingerprint.ComputePreparedFold(request);
+        var observedCoordination = await LoadCoordinationAsync(_commitLedger, request.WorkflowExecutionId, cancellationToken);
+        if (observedCoordination is null)
+            return FoldConflict();
+        var observedPreparedScope = await LoadPreparedEntriesThroughAsync(
+            _commitLedger,
+            request.WorkflowExecutionId,
+            request.MaxWorkflowCheckpointOrder,
+            cancellationToken);
+        try
+        {
+            await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+            var store = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
+            var coordination = await LoadCoordinationAsync(store, request.WorkflowExecutionId, cancellationToken)
+                ?? throw new PreparedDocumentConcurrencyException();
+            if (coordination.Version != observedCoordination.Version ||
+                !Equals(coordination.Document, observedCoordination.Document))
+                throw new PreparedDocumentConcurrencyException();
+            var loaded = new List<VersionedLedger>(request.Members.Count);
+            foreach (var member in request.Members)
+            {
+                var ledger = await LoadLedgerAsync(store, member.CommitId, cancellationToken);
+                if (ledger is null || !TokenMatches(ledger.Document.Entry, member.Token))
+                    return FoldConflict();
+                loaded.Add(ledger);
+            }
+
+            if (loaded.Any(item => !StringComparer.Ordinal.Equals(item.Document.Entry.WorkflowExecutionId, request.WorkflowExecutionId)) ||
+                loaded.Any(item => item.Document.Entry.Provenance.WorkflowCheckpointOrder > request.MaxWorkflowCheckpointOrder))
+                return FoldConflict();
+
+            if (loaded.All(item => item.Document.Entry.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed))
+            {
+                if (loaded.Any(item => !StringComparer.Ordinal.Equals(item.Document.Entry.TerminalFoldFingerprint, foldFingerprint)))
+                    return FoldConflict();
+                var replays = loaded.ToDictionary(
+                    item => item.Document.Entry.CommitId,
+                    item => item.Document.Entry.Receipt ?? new RuntimeCheckpointCommitStoreResult([]),
+                    StringComparer.Ordinal);
+                await unitOfWork.CommitAsync(cancellationToken);
+                return new RuntimeCheckpointPreparedFoldResult(RuntimeCheckpointCommitStoreStatus.Replay, replays);
+            }
+
+            if (loaded.Any(item => item.Document.Entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared))
+                return FoldConflict();
+            if (!FoldMembersMatch(loaded, request))
+                return FoldConflict();
+            if (!IsExactFoldScope(observedPreparedScope, request))
+                return FoldConflict();
+
+            var committedMembers = request.Members
+                .Where(member => member.Disposition == RuntimeCheckpointPreparedDisposition.Committed)
+                .ToArray();
+            if (committedMembers.Length == 0)
+            {
+                try
+                {
+                    await ValidateAndTouchExpectedFenceAsync(
+                        store,
+                        CreatePreparedLedgerAuthorityCommit(request.WorkflowExecutionId, request.TargetAuthorityFence),
+                        cancellationToken);
+                }
+                catch (RuntimeStaleFencingTokenException)
+                {
+                    return FoldConflict();
+                }
+            }
+            if (committedMembers.Length > 0)
+            {
+                var effectCarrier = committedMembers[^1].PreparedCommit!;
+                // The replayed member retains its immutable original preparation fence. Durable application is owned
+                // by the provider-validated current/target fold authority, so the synthetic effect carrier must touch
+                // the active successor lease without mutating any member token or canonical preparation identity.
+                var foldedCommit = effectCarrier.Commit with
+                {
+                    ExpectedFence = request.TargetAuthorityFence,
+                    StateChanges = request.FoldedStateChanges
+                };
+                EnsureTenantScope(foldedCommit);
+                EnsureAtomicBoundary(foldedCommit);
+                ValidateCheckpointStateChanges(foldedCommit);
+                await ApplyStagedAsync(
+                    store,
+                    foldedCommit,
+                    effectCarrier.VerifiedCommitFingerprint,
+                    cancellationToken,
+                    writeCommitMarker: false);
+
+                foreach (var member in committedMembers)
+                {
+                    var prepared = member.PreparedCommit!;
+                    await MarkCommittedAsync(store, prepared.Commit, prepared.VerifiedCommitFingerprint, cancellationToken);
+                }
+            }
+
+            if (coordination.Document.ReservedOrder < request.MaxWorkflowCheckpointOrder ||
+                coordination.Document.CommittedOrder >= request.MaxWorkflowCheckpointOrder)
+                return FoldConflict();
+            var receipts = new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal);
+            for (var index = 0; index < request.Members.Count; index++)
+            {
+                var member = request.Members[index];
+                var entry = loaded[index].Document.Entry;
+                var status = member.Disposition switch
+                {
+                    RuntimeCheckpointPreparedDisposition.Committed => RuntimeLogicalCheckpointLedgerStatus.Committed,
+                    RuntimeCheckpointPreparedDisposition.Skipped => RuntimeLogicalCheckpointLedgerStatus.Skipped,
+                    RuntimeCheckpointPreparedDisposition.Failed => RuntimeLogicalCheckpointLedgerStatus.Failed,
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+                var receipt = member.Disposition switch
+                {
+                    RuntimeCheckpointPreparedDisposition.Committed => new RuntimeCheckpointCommitStoreResult(
+                        member.PreparedCommit!.Commit.StateChanges.PostCommitOutbox
+                            .Select(change => change.State.OutboxItemId)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray())
+                    {
+                        Status = RuntimeCheckpointCommitStoreStatus.Committed,
+                        CommitFingerprint = member.PreparedCommit.VerifiedCommitFingerprint,
+                        ConsumedSchedulerWorkItemIds = member.PreparedCommit.Commit.StateChanges.ConsumedSchedulerWorkItems
+                            .Select(item => item.WorkItemId)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray()
+                    },
+                    RuntimeCheckpointPreparedDisposition.Skipped => new RuntimeCheckpointCommitStoreResult([])
+                    {
+                        Status = RuntimeCheckpointCommitStoreStatus.Skipped,
+                        CommitFingerprint = member.PreparedCommit!.VerifiedCommitFingerprint
+                    },
+                    RuntimeCheckpointPreparedDisposition.Failed => new RuntimeCheckpointCommitStoreResult([]) { Status = RuntimeCheckpointCommitStoreStatus.Failed, FailureCode = member.FailureCode, FailureMessage = member.FailureMessage },
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+                var fingerprint = member.PreparedCommit?.VerifiedCommitFingerprint;
+                var terminalAuthority = request.RecoveryRoute == RuntimeCheckpointRecoveryRoute.SourceFree
+                    ? entry with
+                    {
+                        CurrentAuthorityFence = request.TargetAuthorityFence,
+                        AuthorityRevision = checked(entry.AuthorityRevision + 1)
+                    }
+                    : entry;
+                var terminal = terminalAuthority.CompactTerminal(status, receipt, fingerprint, foldFingerprint, request.WorkflowExecutionId);
+                await SaveLedgerAsync(store, new RuntimeCheckpointLedgerDocument(terminal), loaded[index].Version, cancellationToken);
+                receipts.Add(member.CommitId, receipt);
+            }
+
+            var terminalContext = committedMembers.Length > 0
+                ? committedMembers[^1].PreparedCommit!.Token.Provenance.ExecutionContext ??
+                  throw new InvalidOperationException("A committed prepared fold member has no execution context.")
+                : coordination.Document.ExecutionContext;
+            var contextChanged = !coordination.Document.ExecutionContext.Equals(terminalContext);
+            var nextCoordination = coordination.Document with
+            {
+                CommittedOrder = Math.Max(coordination.Document.CommittedOrder, request.MaxWorkflowCheckpointOrder),
+                OrderRevision = checked(coordination.Document.OrderRevision + 1),
+                ExecutionContext = terminalContext,
+                ContextRevision = contextChanged
+                    ? checked(coordination.Document.ContextRevision + 1)
+                    : coordination.Document.ContextRevision
+            };
+            await SaveCoordinationAsync(store, nextCoordination, coordination.Version, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return new RuntimeCheckpointPreparedFoldResult(RuntimeCheckpointCommitStoreStatus.Committed, receipts);
+        }
+        catch (PreparedDocumentConcurrencyException)
+        {
+            return FoldConflict();
+        }
+
+        RuntimeCheckpointPreparedFoldResult FoldConflict() =>
+            new(RuntimeCheckpointCommitStoreStatus.Conflict, new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal));
     }
 
     /// <summary>Atomically finalizes a durable checkpoint preparation with its state, outbox, context, and marker.</summary>
@@ -439,7 +713,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 OrderRevision = checked(coordination.Document.OrderRevision + 1),
                 ExecutionContext = finalStatus == RuntimeLogicalCheckpointLedgerStatus.Committed &&
                                    !preparedRequest.RequestedExecutionContext.IsEmpty
-                    ? token.Provenance.ExecutionContext
+                    ? token.Provenance.ExecutionContext ??
+                      throw new InvalidOperationException("A committed prepared checkpoint has no execution context.")
                     : coordination.Document.ExecutionContext,
                 ContextRevision = finalStatus == RuntimeLogicalCheckpointLedgerStatus.Committed &&
                                   !preparedRequest.RequestedExecutionContext.IsEmpty &&
@@ -1394,6 +1669,202 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         return RuntimeCheckpointPreparationResult.Replay(ToToken(refreshed), refreshed.Receipt);
     }
 
+    private async ValueTask<IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry>> LoadPreparedEntriesThroughAsync(
+        IDocumentStore store,
+        string workflowExecutionId,
+        long throughWorkflowCheckpointOrder,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<RuntimeLogicalCheckpointLedgerEntry>();
+        var query = new RuntimeCheckpointPreparedQuery(
+            workflowExecutionId,
+            RuntimeCheckpointPreparedQuery.MaximumPageSize);
+        while (true)
+        {
+            var page = await PagePreparedAsync(query, cancellationToken);
+            foreach (var reservation in page.Reservations)
+            {
+                if (reservation.Provenance.WorkflowCheckpointOrder > throughWorkflowCheckpointOrder)
+                    return entries;
+                var loaded = await LoadLedgerAsync(store, reservation.CommitId, cancellationToken)
+                    ?? throw new PreparedDocumentConcurrencyException();
+                var entry = loaded.Document.Entry;
+                if (entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared ||
+                    !StringComparer.Ordinal.Equals(entry.WorkflowExecutionId, workflowExecutionId) ||
+                    entry.Provenance.WorkflowCheckpointOrder != reservation.Provenance.WorkflowCheckpointOrder)
+                    throw new PreparedDocumentConcurrencyException();
+                entries.Add(entry);
+            }
+            if (page.NextCursor is null)
+                return entries;
+            query = query with { Cursor = page.NextCursor };
+        }
+    }
+
+    private static bool IsAdoptionRequestWellFormed(RuntimeCheckpointPreparedAdoptionRequest request)
+    {
+        if (String.IsNullOrWhiteSpace(request.WorkflowExecutionId) ||
+            request.TargetAuthorityFence is null ||
+            request.Members is null ||
+            request.Members.Count == 0 ||
+            request.ThroughWorkflowCheckpointOrder < 1 ||
+            !Enum.IsDefined(request.Route))
+            return false;
+
+        long previousOrder = 0;
+        var commits = new HashSet<string>(StringComparer.Ordinal);
+        var ledgerTokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var member in request.Members)
+        {
+            if (member is null ||
+                String.IsNullOrWhiteSpace(member.CommitId) ||
+                String.IsNullOrWhiteSpace(member.LedgerToken) ||
+                String.IsNullOrWhiteSpace(member.CanonicalInputFingerprint) ||
+                String.IsNullOrWhiteSpace(member.CanonicalInputReference) ||
+                member.WorkflowCheckpointOrder <= previousOrder ||
+                member.OriginalOrderRevision < 0 ||
+                member.OriginalContextRevision < 0 ||
+                member.ExpectedAuthorityRevision < 1 ||
+                !commits.Add(member.CommitId) ||
+                !ledgerTokens.Add(member.LedgerToken))
+                return false;
+            previousOrder = member.WorkflowCheckpointOrder;
+        }
+        return previousOrder == request.ThroughWorkflowCheckpointOrder;
+    }
+
+    private static bool AdoptionScopeMatches(
+        IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry> entries,
+        RuntimeCheckpointPreparedAdoptionRequest request)
+    {
+        if (entries.Count != request.Members.Count)
+            return false;
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var member = request.Members[index];
+            if (entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared ||
+                !StringComparer.Ordinal.Equals(entry.CommitId, member.CommitId) ||
+                !StringComparer.Ordinal.Equals(entry.LedgerToken, member.LedgerToken) ||
+                entry.Provenance.WorkflowCheckpointOrder != member.WorkflowCheckpointOrder ||
+                !StringComparer.Ordinal.Equals(entry.InputFingerprint, member.CanonicalInputFingerprint) ||
+                !StringComparer.Ordinal.Equals(entry.CanonicalInputReference, member.CanonicalInputReference) ||
+                !Equals(entry.ExpectedFence, member.OriginalFence) ||
+                entry.ExpectedOrderRevision != member.OriginalOrderRevision ||
+                entry.ExpectedContextRevision != member.OriginalContextRevision ||
+                !Equals(entry.RecoveryAuthority, member.RecoveryAuthority) ||
+                (request.Route == RuntimeCheckpointRecoveryRoute.SourceBound && entry.RecoveryAuthority is null) ||
+                (request.Route == RuntimeCheckpointRecoveryRoute.SourceFree && entry.RecoveryAuthority is not null))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool CanAdvanceAuthorityFence(
+        IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry> entries,
+        RuntimeExecutionFence target)
+    {
+        var current = entries[0].CurrentAuthorityFence;
+        var revision = entries[0].AuthorityRevision;
+        if (entries.Any(entry =>
+                !Equals(entry.CurrentAuthorityFence, current) ||
+                entry.AuthorityRevision != revision))
+            return false;
+        return new RuntimeCheckpointAuthorityBinding(current, revision).CanAdvanceTo(target);
+    }
+
+    private static RuntimeCheckpointCommit CreatePreparedLedgerAuthorityCommit(
+        string workflowExecutionId,
+        RuntimeExecutionFence? targetAuthorityFence) =>
+        new(
+            $"prepared-ledger-authority:{workflowExecutionId}",
+            new RuntimeCheckpoint(
+                $"prepared-ledger-authority:{workflowExecutionId}",
+                "PreparedLedgerAuthority",
+                workflowExecutionId,
+                DateTimeOffset.UnixEpoch,
+                [],
+                new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+            [],
+            new Dictionary<string, string>())
+        {
+            ExpectedFence = targetAuthorityFence
+        };
+
+    private static RuntimeCheckpointPreparedAdoptionReceipt AdoptionReceipt(
+        RuntimeCheckpointPreparedAdoptionStatus status,
+        RuntimeCheckpointPreparedAdoptionRequest request) =>
+        new(
+            status,
+            request.WorkflowExecutionId,
+            request.Route,
+            request.ThroughWorkflowCheckpointOrder,
+            request.TargetAuthorityFence,
+            request.Members?.Select(member => member.CommitId).ToArray() ?? []);
+
+    private static bool FoldMembersMatch(
+        IReadOnlyList<VersionedLedger> loaded,
+        RuntimeCheckpointPreparedFoldRequest request)
+    {
+        if (loaded.Count != request.Members.Count)
+            return false;
+        for (var index = 0; index < loaded.Count; index++)
+        {
+            var entry = loaded[index].Document.Entry;
+            var member = request.Members[index];
+            if (!StringComparer.Ordinal.Equals(entry.CommitId, member.CommitId) ||
+                !TokenMatches(entry, member.Token) ||
+                !Equals(entry.CurrentAuthorityFence, member.ExpectedCurrentAuthorityFence) ||
+                entry.AuthorityRevision != member.ExpectedAuthorityRevision)
+                return false;
+            if (member.PreparedCommit is { } prepared &&
+                (!Equals(prepared.CurrentAuthorityFence, member.ExpectedCurrentAuthorityFence) ||
+                 prepared.AuthorityRevision != member.ExpectedAuthorityRevision ||
+                 !StringComparer.Ordinal.Equals(prepared.VerifiedCommitFingerprint, RuntimeCheckpointCommitFingerprint.Compute(prepared.Commit)) ||
+                 !StringComparer.Ordinal.Equals(prepared.Commit.WorkflowExecutionId, request.WorkflowExecutionId) ||
+                 !Equals(prepared.Commit.Checkpoint.Provenance, member.Token.Provenance)))
+                return false;
+        }
+        return request.RecoveryRoute != RuntimeCheckpointRecoveryRoute.SourceFree ||
+               loaded.All(item => item.Document.Entry.RecoveryAuthority is null);
+    }
+
+    private static bool IsExactFoldScope(
+        IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry> entries,
+        RuntimeCheckpointPreparedFoldRequest request)
+    {
+        if (entries.Count != request.Members.Count)
+            return false;
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var member = request.Members[index];
+            if (!StringComparer.Ordinal.Equals(entry.CommitId, member.CommitId) ||
+                entry.Provenance.WorkflowCheckpointOrder != member.WorkflowCheckpointOrder ||
+                !TokenMatches(entry, member.Token))
+                return false;
+        }
+        return true;
+    }
+
+    private static void ValidateCheckpointStateChanges(RuntimeCheckpointCommit commit)
+    {
+        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        ValidateSchedulerStateChange(commit);
+        ValidateActivityExecutionStateChanges(commit);
+        ValidateActivityExecutionInspectionChanges(commit);
+        ValidateBookmarkStateChanges(commit);
+        ValidateDurableValueStateChanges(commit);
+        ValidateIncidentStateChanges(commit);
+        ValidateOperationalStateChanges(commit);
+        ValidateActivityScopeCleanups(commit);
+        ValidateConsumedSchedulerWorkItems(commit);
+        ValidateWorkflowDispatchChanges(commit);
+        ValidateWorkflowDispatchCancellations(commit);
+    }
+
     private RuntimeCheckpointPrepareRequest DecodePreparation(RuntimeLogicalCheckpointLedgerEntry entry) =>
         _preparationPayloadCodec.Decode(new RuntimeCheckpointPreparationPayloadEnvelope(
             RuntimeCheckpointPreparationPayloadCodec.CurrentVersion,
@@ -1426,7 +1897,9 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             RuntimeCheckpointCommitFingerprint.ComputeInput(candidate));
 
     private static bool TokenMatches(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token) =>
-        StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
+        entry.TerminalPreparationToken is { } terminal
+            ? terminal.Equals(token)
+            : StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
         StringComparer.Ordinal.Equals(entry.LedgerToken, token.LedgerToken) &&
         entry.Provenance.Equals(token.Provenance) &&
         entry.ExpectedOrderRevision == token.ExpectedOrderRevision &&

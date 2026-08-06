@@ -231,7 +231,20 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
-        services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
+        // Explicitly select the complete composition constructor. ActivatorUtilities may otherwise choose a shorter
+        // compatibility overload before optional coalescing/recovery collaborators are registered by a later feature.
+        services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider => new WorkflowDrainOrchestrator(
+            serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
+            serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
+            serviceProvider.GetServices<IWorkflowSchedulerDrainObserver>(),
+            serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),
+            serviceProvider.GetService<IRuntimeExecutionOwnershipService>(),
+            serviceProvider.GetService<IRuntimeExecutionOwnershipContextAccessor>(),
+            serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
+            serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
+            serviceProvider.GetRequiredService<TimeProvider>(),
+            serviceProvider.GetService<IRuntimeCheckpointCadenceResolver>(),
+            serviceProvider.GetService<IRuntimeCheckpointPreparedRecoveryCoordinator>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();

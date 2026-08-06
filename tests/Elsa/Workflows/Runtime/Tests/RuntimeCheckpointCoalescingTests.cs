@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -44,6 +45,15 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+        using var scope = provider.CreateScope();
+        var orchestrator = Assert.IsType<WorkflowDrainOrchestrator>(
+            scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>());
+        Assert.NotNull(typeof(WorkflowDrainOrchestrator)
+            .GetField("_coalescingScopeFactory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(orchestrator));
+        Assert.NotNull(typeof(WorkflowDrainOrchestrator)
+            .GetField("_preparedRecoveryCoordinator", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(orchestrator));
     }
 
     [Fact]

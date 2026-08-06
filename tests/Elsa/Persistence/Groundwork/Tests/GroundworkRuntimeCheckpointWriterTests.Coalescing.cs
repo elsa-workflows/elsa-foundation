@@ -1,7 +1,9 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Groundwork.Documents.Store;
 using System.Reflection;
 using System.Text.Json;
@@ -20,6 +22,8 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     {
         var fixture = await GroundworkAdoptionFixture.CreateAsync(route, 2);
         var writer = fixture.Writer;
+        var target = new RuntimeExecutionFence($"groundwork-{route}", "adoption", 2);
+        await fixture.ActivateFenceAsync(target);
         var before = await SnapshotPreparedAsync(writer);
         var beforeNormalized = fixture.NormalizedRawSnapshot();
         var members = before.Reservations.Select(reservation => new RuntimeCheckpointPreparedAdoptionMember(
@@ -34,7 +38,6 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             reservation.RecoveryAuthority,
             reservation.CurrentAuthorityFence,
             reservation.AuthorityRevision)).ToArray();
-        var target = new RuntimeExecutionFence($"groundwork-{route}", "adoption", 2);
         var request = new RuntimeCheckpointPreparedAdoptionRequest("wf-1", route, members[^1].WorkflowCheckpointOrder, target, members);
 
         var receipt = await InvokeAdoptionAsync(writer, request);
@@ -66,6 +69,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     {
         var fixture = await GroundworkAdoptionFixture.CreateAsync(route, 2);
         var current = new RuntimeExecutionFence("lease-current", "owner-current", 5);
+        await fixture.ActivateFenceAsync(current);
         Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
             (await InvokeAdoptionAsync(fixture.Writer, fixture.Request(current))).Status);
         var adoptedAtFive = fixture.RawSnapshot();
@@ -75,6 +79,7 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         Assert.Equal(adoptedAtFive, fixture.RawSnapshot());
 
         var newer = new RuntimeExecutionFence("lease-current", "owner-current", 6);
+        await fixture.ActivateFenceAsync(newer);
         Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
             (await InvokeAdoptionAsync(fixture.Writer, fixture.Request(newer, currentMembers))).Status);
         var adoptedAtSix = fixture.RawSnapshot();
@@ -93,6 +98,59 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             Assert.True(receipt.Status is RuntimeCheckpointPreparedAdoptionStatus.Conflict or RuntimeCheckpointPreparedAdoptionStatus.OwnershipLost);
             Assert.Equal(adoptedAtSix, fixture.RawSnapshot());
         }
+    }
+
+    [Theory]
+    [InlineData(RuntimeCheckpointRecoveryRoute.SourceBound)]
+    [InlineData(RuntimeCheckpointRecoveryRoute.SourceFree)]
+    public async Task Groundwork_successive_active_owners_with_higher_global_tokens_adopt_revision_two(
+        RuntimeCheckpointRecoveryRoute route)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var original = new RuntimeExecutionLease("lease-a", "wf-1", "owner-a", now, now.AddHours(1), 1);
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(route, 2, originalLease: original);
+        var ownerB = new RuntimeExecutionFence("lease-b", "owner-b", 2);
+        await fixture.ActivateFenceAsync(ownerB);
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(ownerB))).Status);
+
+        var revisionTwo = await fixture.ReadMembersAsync();
+        var ownerC = new RuntimeExecutionFence("lease-c", "owner-c", 3);
+        await fixture.ActivateFenceAsync(ownerC);
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(ownerC, revisionTwo))).Status);
+        Assert.All(await fixture.ReadMembersAsync(), member =>
+        {
+            Assert.Equal(ownerC, member.ExpectedCurrentAuthorityFence);
+            Assert.Equal(3, member.ExpectedAuthorityRevision);
+        });
+    }
+
+    [Theory]
+    [InlineData(RuntimeCheckpointRecoveryRoute.SourceBound)]
+    [InlineData(RuntimeCheckpointRecoveryRoute.SourceFree)]
+    public async Task Groundwork_replay_needs_no_active_old_lease_and_forged_higher_target_is_byte_identical(
+        RuntimeCheckpointRecoveryRoute route)
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(route, 2);
+        var adoptedFence = GroundworkFence("adopted", 2);
+        await fixture.ActivateFenceAsync(adoptedFence);
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(adoptedFence))).Status);
+        var members = await fixture.ReadMembersAsync();
+
+        var now = DateTimeOffset.UtcNow;
+        await SaveOwnershipAsync(fixture.Documents, new RuntimeExecutionLease(
+            adoptedFence.LeaseId, "wf-1", adoptedFence.OwnerId, now.AddHours(-2), now.AddHours(-1), adoptedFence.FencingToken));
+        var beforeReplay = fixture.RawSnapshot();
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Replay,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(adoptedFence, members))).Status);
+        Assert.Equal(beforeReplay, fixture.RawSnapshot());
+
+        var forged = GroundworkFence("forged", 3);
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.OwnershipLost,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(forged, members))).Status);
+        Assert.Equal(beforeReplay, fixture.RawSnapshot());
     }
 
     [Theory]
@@ -126,14 +184,320 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             InvokeAdoptionAsync(fixture.Writer, fixture.Request(GroundworkFence("cancelled", 2)), cancellation.Token));
         Assert.Equal(before, fixture.RawSnapshot());
 
+        var failedTarget = GroundworkFence("failed", 2);
+        await fixture.ActivateFenceAsync(failedTarget);
+        var beforeFailure = fixture.RawSnapshot();
         var saves = 0;
         fixture.Interceptor.OnSaveResult = _ => ++saves == 2
             ? throw new InvalidOperationException("mid-adoption-document-write")
             : null;
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            InvokeAdoptionAsync(fixture.Writer, fixture.Request(GroundworkFence("failed", 2))));
+            InvokeAdoptionAsync(fixture.Writer, fixture.Request(failedTarget)));
 
         Assert.True(saves >= 2, "The injected failure must occur after at least one staged document write.");
+        Assert.Equal(beforeFailure, fixture.RawSnapshot());
+    }
+
+    [Fact]
+    public async Task Groundwork_source_free_fold_rejects_stale_binding_and_current_rebuild_succeeds()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(RuntimeCheckpointRecoveryRoute.SourceFree, 2);
+        var firstTarget = new RuntimeExecutionFence("lease-recovery", "recovery", 1);
+        var finalTarget = new RuntimeExecutionFence(firstTarget.LeaseId, firstTarget.OwnerId, 2);
+        var staleFold = await fixture.CreateFoldRequestAsync(finalTarget);
+        await fixture.ActivateFenceAsync(firstTarget);
+
+        Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+            (await fixture.Writer.AdoptPreparedAsync(fixture.Request(firstTarget))).Status);
+        var afterAdoption = fixture.RawSnapshot();
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+            (await fixture.Writer.CommitPreparedFoldAsync(staleFold)).Status);
+        Assert.Equal(afterAdoption, fixture.RawSnapshot());
+
+        var currentFold = await fixture.CreateFoldRequestAsync(finalTarget);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed,
+            (await fixture.Writer.CommitPreparedFoldAsync(currentFold)).Status);
+        Assert.Empty((await fixture.Writer.PagePreparedAsync(
+            new RuntimeCheckpointPreparedQuery("wf-1", 250))).Reservations);
+    }
+
+    [Fact]
+    public async Task Groundwork_source_free_fold_uses_different_active_successor_while_retaining_original_fence_identity()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var original = new RuntimeExecutionLease(
+            "lease-original", "wf-1", "owner-original", now, now.AddHours(1), 7);
+        var successor = new RuntimeExecutionLease(
+            "lease-successor", "wf-1", "owner-successor", now, now.AddHours(1), 8);
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree,
+            2,
+            originalLease: original);
+        await SaveOwnershipAsync(fixture.Documents, successor);
+        var request = await fixture.CreateFoldRequestAsync(successor.ToFence());
+
+        var result = await fixture.Writer.CommitPreparedFoldAsync(request);
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, result.Status);
+        var terminal = fixture.ReadLedgerEntries()
+            .Where(entry => request.Members.Any(member => member.CommitId == entry.CommitId))
+            .ToArray();
+        Assert.All(terminal, entry =>
+        {
+            Assert.Equal(original.ToFence(), entry.TerminalPreparationToken!.ExpectedFence);
+            Assert.Equal(successor.ToFence(), entry.CurrentAuthorityFence);
+            Assert.Equal(2, entry.AuthorityRevision);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Groundwork_hidden_prepare_racing_exact_membership_conflicts_without_mutating_requested_rows(bool fold)
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(RuntimeCheckpointRecoveryRoute.SourceFree, 2);
+        var before = await SnapshotPreparedAsync(fixture.Writer);
+        var target = new RuntimeExecutionFence("lease-race", "race", 1);
+        fixture.Interceptor.OnBeforeBegin = async _ =>
+        {
+            var concurrentWriter = CreateWriter(fixture.Documents);
+            Assert.Equal(RuntimeCheckpointPreparationStatus.Prepared,
+                (await concurrentWriter.PrepareAsync(RuntimeCheckpointPrepareRequest.From(
+                    BuildCommit(fold ? "hidden-during-fold" : "hidden-during-adoption")))).Status);
+        };
+
+        if (fold)
+        {
+            var request = await fixture.CreateFoldRequestAsync(target);
+            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+                (await fixture.Writer.CommitPreparedFoldAsync(request)).Status);
+        }
+        else
+        {
+            Assert.Equal(RuntimeCheckpointPreparedAdoptionStatus.Conflict,
+                (await fixture.Writer.AdoptPreparedAsync(fixture.Request(target))).Status);
+        }
+
+        var after = await SnapshotPreparedAsync(fixture.Writer);
+        Assert.Equal(before.Reservations, after.Reservations.Take(before.Reservations.Length));
+        Assert.Equal(before.ImmutablePreparedBytes,
+            JsonSerializer.Serialize(after.Reservations.Take(before.Reservations.Length).Select(reservation => new
+            {
+                reservation.Status,
+                reservation.Token.CommitId,
+                reservation.Token.LedgerToken,
+                reservation.Provenance,
+                reservation.Token.CanonicalInputReference,
+                reservation.Token.CanonicalInputFingerprint,
+                reservation.ExpectedFence,
+                reservation.ExpectedOrderRevision,
+                reservation.ExpectedContextRevision,
+                reservation.RecoveryAuthority,
+                reservation.CanonicalEnvelope
+            })));
+        Assert.Equal(before.Reservations.Length + 1, after.Reservations.Length);
+    }
+
+    [Fact]
+    public async Task Groundwork_fold_commits_skips_and_fails_exact_members_with_receipts_watermark_compaction_and_replay()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, includeFoldOutbox: true);
+        var target = new RuntimeExecutionFence("lease-fold", "fold", 1);
+        var request = await fixture.CreateMixedFoldRequestAsync(target);
+
+        var committed = await fixture.Writer.CommitPreparedFoldAsync(request);
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Status);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Receipts[request.Members[0].CommitId].Status);
+        Assert.Single(committed.Receipts[request.Members[0].CommitId].PendingPostCommitWorkIds);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Skipped, committed.Receipts[request.Members[1].CommitId].Status);
+        Assert.Equal(
+            request.Members[1].PreparedCommit!.VerifiedCommitFingerprint,
+            committed.Receipts[request.Members[1].CommitId].CommitFingerprint);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Failed, committed.Receipts[request.Members[2].CommitId].Status);
+        Assert.Equal("trusted-terminal", committed.Receipts[request.Members[2].CommitId].FailureCode);
+        Assert.Empty((await fixture.Writer.PagePreparedAsync(new RuntimeCheckpointPreparedQuery("wf-1", 250))).Reservations);
+
+        var ledgers = fixture.ReadLedgerEntries();
+        Assert.Equal(
+            [RuntimeLogicalCheckpointLedgerStatus.Committed, RuntimeLogicalCheckpointLedgerStatus.Skipped, RuntimeLogicalCheckpointLedgerStatus.Failed],
+            ledgers.Where(entry => request.Members.Any(member => member.CommitId == entry.CommitId))
+                .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder).Select(entry => entry.Status));
+        Assert.All(ledgers.Where(entry => request.Members.Any(member => member.CommitId == entry.CommitId)), entry =>
+        {
+            Assert.Null(entry.RawCheckpoint);
+            Assert.Null(entry.RawStateChanges);
+            Assert.Null(entry.CanonicalInputPayload);
+            Assert.NotNull(entry.TerminalPreparationToken);
+            Assert.Equal(target, entry.CurrentAuthorityFence);
+            Assert.Equal(2, entry.AuthorityRevision);
+        });
+        Assert.NotNull(await fixture.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, request.Members[0].CommitId));
+        Assert.Null(await fixture.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, request.Members[1].CommitId));
+        Assert.Null(await fixture.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, request.Members[2].CommitId));
+        var bookmark = await new GroundworkBookmarkStateStore(
+            fixture.Documents,
+            GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
+        Assert.Equal("fold-committed", bookmark!.ExecutableNodeId);
+        Assert.Equal(request.MaxWorkflowCheckpointOrder, fixture.ReadCommittedOrder());
+
+        var replay = await fixture.Writer.CommitPreparedFoldAsync(request);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Replay, replay.Status);
+        Assert.Equal(committed.Receipts, replay.Receipts);
+    }
+
+    [Fact]
+    public async Task Groundwork_fold_rejects_omitted_committed_and_injected_noncommitted_scope_cleanups_byte_identically()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, includeFoldOutbox: true, includeFoldScopeCleanups: true);
+        var request = await fixture.CreateMixedFoldRequestAsync(GroundworkFence("effects", 2));
+        var before = fixture.RawSnapshot();
+
+        Assert.Single(request.FoldedStateChanges.ActivityScopeCleanups);
+        var omitted = request with { FoldedStateChanges = WithActivityScopeCleanups(request.FoldedStateChanges, []) };
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+            (await fixture.Writer.CommitPreparedFoldAsync(omitted)).Status);
+        Assert.Equal(before, fixture.RawSnapshot());
+
+        var skippedCleanups = request.Members[1].PreparedCommit!.Commit.StateChanges.ActivityScopeCleanups;
+        Assert.NotEmpty(skippedCleanups);
+        var injected = request with
+        {
+            FoldedStateChanges = WithActivityScopeCleanups(
+                request.FoldedStateChanges,
+                request.FoldedStateChanges.ActivityScopeCleanups.Concat(skippedCleanups).ToArray())
+        };
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+            (await fixture.Writer.CommitPreparedFoldAsync(injected)).Status);
+        Assert.Equal(before, fixture.RawSnapshot());
+    }
+
+    private static RuntimeCheckpointStateChangeSet WithActivityScopeCleanups(
+        RuntimeCheckpointStateChangeSet stateChanges,
+        IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups) =>
+        new(
+            stateChanges.WorkflowExecution,
+            stateChanges.Scheduler,
+            stateChanges.ActivityExecutions,
+            stateChanges.Bookmarks,
+            stateChanges.DurableValues,
+            stateChanges.Incidents,
+            stateChanges.Operational,
+            stateChanges.WorkflowDispatches,
+            stateChanges.ActivityExecutionInspections,
+            stateChanges.PostCommitOutbox,
+            cleanups,
+            stateChanges.WorkflowDispatchCancellations,
+            stateChanges.ConsumedSchedulerWorkItems,
+            stateChanges.AlterationJobTerminalChange);
+
+    [Fact]
+    public async Task Groundwork_recovery_authority_tampering_conflicts_for_single_and_fold_without_mutation()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(RuntimeCheckpointRecoveryRoute.SourceBound, 1);
+        var reservation = Assert.Single((await fixture.Writer.PagePreparedAsync(
+            new RuntimeCheckpointPreparedQuery("wf-1", 250))).Reservations);
+        var prepared = await new RuntimeCheckpointPreparationReplayer(
+            new ImmediateRuntimeCheckpointPersistencePolicy(), [], []).RehydrateAsync(reservation);
+        var tamperedToken = prepared.Token with { RecoveryAuthority = GroundworkAuthority("tampered") };
+        var before = fixture.RawSnapshot();
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+            (await fixture.Writer.CommitPreparedAsync(tamperedToken, prepared.Commit, prepared.Decision)).Status);
+        Assert.Equal(before, fixture.RawSnapshot());
+
+        var tamperedPrepared = prepared with { Token = tamperedToken };
+        var member = new RuntimeCheckpointPreparedFoldMember(
+            tamperedToken,
+            RuntimeCheckpointPreparedDisposition.Committed,
+            reservation.CurrentAuthorityFence,
+            reservation.AuthorityRevision,
+            tamperedPrepared);
+        var fold = new RuntimeCheckpointPreparedFoldRequest(
+            "wf-1",
+            [member],
+            member.WorkflowCheckpointOrder,
+            RuntimeCheckpointFold.FoldPrepared([tamperedPrepared]),
+            reservation.CurrentAuthorityFence);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict,
+            (await fixture.Writer.CommitPreparedFoldAsync(fold)).Status);
+        Assert.Equal(before, fixture.RawSnapshot());
+    }
+
+    [Fact]
+    public async Task Groundwork_mixed_fold_uses_last_committed_context_and_all_noncommitted_retains_current_context()
+    {
+        RuntimeExecutionContextSnapshot[] contexts =
+        [
+            new(1, new Dictionary<string, string> { ["member"] = "committed" }),
+            new(1, new Dictionary<string, string> { ["member"] = "skipped" }),
+            new(1, new Dictionary<string, string> { ["member"] = "failed" })
+        ];
+
+        var mixed = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, preparedContexts: contexts);
+        var mixedRequest = await mixed.CreateMixedFoldRequestAsync(GroundworkFence("mixed-context", 2));
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed,
+            (await mixed.Writer.CommitPreparedFoldAsync(mixedRequest)).Status);
+        Assert.Equal(contexts[0], (await LoadCoordinationAsync(mixed.Documents, "wf-1")).ExecutionContext);
+
+        var noncommitted = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, preparedContexts: contexts);
+        var before = await LoadCoordinationAsync(noncommitted.Documents, "wf-1");
+        var noncommittedRequest = await noncommitted.CreateAllNoncommittedFoldRequestAsync(
+            GroundworkFence("noncommitted-context", 2));
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed,
+            (await noncommitted.Writer.CommitPreparedFoldAsync(noncommittedRequest)).Status);
+        var after = await LoadCoordinationAsync(noncommitted.Documents, "wf-1");
+        Assert.Equal(before.ExecutionContext, after.ExecutionContext);
+        Assert.Equal(before.ContextRevision, after.ContextRevision);
+    }
+
+    [Fact]
+    public async Task Groundwork_fold_mid_transaction_failure_rolls_back_all_documents()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, includeFoldOutbox: true);
+        var request = await fixture.CreateMixedFoldRequestAsync(new RuntimeExecutionFence("lease-fold-failure", "fold", 1));
+        var before = fixture.RawSnapshot();
+        var saves = 0;
+        fixture.Interceptor.OnSaveResult = _ => ++saves == 2
+            ? throw new InvalidOperationException("mid-fold-write")
+            : null;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Writer.CommitPreparedFoldAsync(request).AsTask());
+
+        Assert.True(saves >= 2);
+        Assert.Equal(before, fixture.RawSnapshot());
+    }
+
+    [Fact]
+    public async Task Groundwork_fold_cancellation_after_a_staged_mutation_rolls_back_all_documents()
+    {
+        var fixture = await GroundworkAdoptionFixture.CreateAsync(
+            RuntimeCheckpointRecoveryRoute.SourceFree, 3, includeFoldOutbox: true);
+        var request = await fixture.CreateMixedFoldRequestAsync(
+            new RuntimeExecutionFence("lease-fold-cancel", "fold", 1));
+        var before = fixture.RawSnapshot();
+        using var cancellation = new CancellationTokenSource();
+        var saves = 0;
+        fixture.Interceptor.OnSaveResult = _ =>
+        {
+            if (++saves == 2)
+                cancellation.Cancel();
+            return null;
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            fixture.Writer.CommitPreparedFoldAsync(request, cancellation.Token).AsTask());
+
+        Assert.True(saves >= 2, "Cancellation must occur after at least one document mutation was staged.");
         Assert.Equal(before, fixture.RawSnapshot());
     }
 
@@ -196,14 +560,19 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         public RuntimeCheckpointRecoveryRoute Route { get; }
         public RuntimeCheckpointPreparedAdoptionMember[] Members { get; }
 
-        public static async Task<GroundworkAdoptionFixture> CreateAsync(RuntimeCheckpointRecoveryRoute route, int entryCount)
+        public static async Task<GroundworkAdoptionFixture> CreateAsync(
+            RuntimeCheckpointRecoveryRoute route,
+            int entryCount,
+            bool includeFoldOutbox = false,
+            bool includeFoldScopeCleanups = false,
+            RuntimeExecutionLease? originalLease = null,
+            IReadOnlyList<RuntimeExecutionContextSnapshot>? preparedContexts = null)
         {
+            if (preparedContexts is not null && preparedContexts.Count != entryCount)
+                throw new ArgumentException("Prepared context count must match the requested entry count.", nameof(preparedContexts));
             var documents = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
             var interceptor = new InterceptingDocumentStore(documents);
             var writer = CreateWriter(interceptor);
-            var authority = route == RuntimeCheckpointRecoveryRoute.SourceBound
-                ? EncodeRecoveryAuthority(BuildRecoveryAuthorityWorkItem())
-                : null;
 
             // Seed every durability family before adoption: domain state, execution context, outbox, dispatch,
             // marker/receipt, ledger compaction, and checkpoint-order high-watermarks. Adoption may change only the
@@ -227,11 +596,48 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
                 RuntimeCheckpointCommitStoreStatus.Committed,
                 (await writer.CommitPreparedAsync(seedToken, enrichedSeed, Decision)).Status);
 
+            if (originalLease is not null)
+                await SaveOwnershipAsync(documents, originalLease);
+
             for (var index = 1; index <= entryCount; index++)
             {
-                var request = RuntimeCheckpointPrepareRequest.From(BuildCommit($"groundwork-negative-{route}-{index}"));
-                if (authority is not null)
-                    request = WithRecoveryAuthority(request, authority);
+                var commit = BuildCommit(
+                    $"groundwork-negative-{route}-{index}",
+                    bookmarkNode: index == 1 && includeFoldOutbox ? "fold-committed" : "node-bm-1");
+                commit = commit with { ExpectedFence = originalLease?.ToFence() };
+                if (includeFoldScopeCleanups)
+                {
+                    commit = commit with
+                    {
+                        StateChanges = WithActivityScopeCleanups(commit.StateChanges,
+                        [
+                            new ActivityScopeCleanupRequest(
+                                "wf-1",
+                                $"scope-{index}",
+                                [],
+                                [],
+                                [],
+                                [])
+                        ])
+                    };
+                }
+                if (includeFoldOutbox)
+                {
+                    var outbox = PendingDispatchOutbox(commit.CommitId, "wf-1");
+                    commit = commit with
+                    {
+                        StateChanges = commit.StateChanges.WithPostCommitOutbox(
+                            [Change(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox)])
+                    };
+                }
+                var request = new RuntimeCheckpointPrepareRequest(
+                    commit,
+                    commit.Checkpoint.Name,
+                    commit.Checkpoint.CheckpointId,
+                    preparedContexts?[index - 1] ?? RuntimeExecutionContextSnapshot.Empty,
+                    RecoveryAuthority: route == RuntimeCheckpointRecoveryRoute.SourceBound
+                        ? GroundworkAuthority($"work-adoption-{index}")
+                        : null);
                 Assert.Equal(RuntimeCheckpointPreparationStatus.Prepared, (await writer.PrepareAsync(request)).Status);
             }
 
@@ -250,6 +656,135 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
             var reservations = (await Writer.PagePreparedAsync(new RuntimeCheckpointPreparedQuery("wf-1", 250)))
                 .Reservations.OrderBy(reservation => reservation.Provenance.WorkflowCheckpointOrder);
             return reservations.Select(ToAdoptionMember).ToArray();
+        }
+
+        public async Task<RuntimeCheckpointPreparedFoldRequest> CreateFoldRequestAsync(RuntimeExecutionFence target)
+        {
+            await ActivateFenceAsync(target);
+            var reservations = (await Writer.PagePreparedAsync(new RuntimeCheckpointPreparedQuery("wf-1", 250)))
+                .Reservations.OrderBy(reservation => reservation.Provenance.WorkflowCheckpointOrder).ToArray();
+            var replayer = new RuntimeCheckpointPreparationReplayer(
+                new ImmediateRuntimeCheckpointPersistencePolicy(), [], []);
+            var prepared = new List<RuntimeCheckpointPreparedCommit>(reservations.Length);
+            foreach (var reservation in reservations)
+                prepared.Add(await replayer.RehydrateAsync(reservation));
+            var members = prepared.Select((commit, index) => new RuntimeCheckpointPreparedFoldMember(
+                commit.Token,
+                RuntimeCheckpointPreparedDisposition.Committed,
+                reservations[index].CurrentAuthorityFence,
+                reservations[index].AuthorityRevision,
+                commit)).ToArray();
+            return new RuntimeCheckpointPreparedFoldRequest(
+                "wf-1",
+                members,
+                members[^1].WorkflowCheckpointOrder,
+                RuntimeCheckpointFold.FoldPrepared(prepared),
+                target,
+                RuntimeCheckpointRecoveryRoute.SourceFree);
+        }
+
+        public async Task<RuntimeCheckpointPreparedFoldRequest> CreateMixedFoldRequestAsync(RuntimeExecutionFence target)
+        {
+            await ActivateFenceAsync(target);
+            var reservations = (await Writer.PagePreparedAsync(new RuntimeCheckpointPreparedQuery("wf-1", 250)))
+                .Reservations.OrderBy(reservation => reservation.Provenance.WorkflowCheckpointOrder).ToArray();
+            Assert.Equal(3, reservations.Length);
+            var replayer = new RuntimeCheckpointPreparationReplayer(
+                new ImmediateRuntimeCheckpointPersistencePolicy(), [], []);
+            var prepared = new List<RuntimeCheckpointPreparedCommit>(reservations.Length);
+            foreach (var reservation in reservations)
+                prepared.Add(await replayer.RehydrateAsync(reservation));
+            var skipped = new RuntimeCheckpointPreparedCommit(
+                prepared[1].Token,
+                prepared[1].Commit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Skip))
+            {
+                CurrentAuthorityFence = prepared[1].CurrentAuthorityFence,
+                AuthorityRevision = prepared[1].AuthorityRevision
+            };
+            RuntimeCheckpointPreparedFoldMember[] members =
+            [
+                new(prepared[0].Token, RuntimeCheckpointPreparedDisposition.Committed,
+                    reservations[0].CurrentAuthorityFence, reservations[0].AuthorityRevision, prepared[0]),
+                new(skipped.Token, RuntimeCheckpointPreparedDisposition.Skipped,
+                    reservations[1].CurrentAuthorityFence, reservations[1].AuthorityRevision, skipped),
+                new(prepared[2].Token, RuntimeCheckpointPreparedDisposition.Failed,
+                    reservations[2].CurrentAuthorityFence, reservations[2].AuthorityRevision,
+                    FailureCode: "trusted-terminal", FailureMessage: "trusted terminal disposition")
+            ];
+            return new RuntimeCheckpointPreparedFoldRequest(
+                "wf-1",
+                members,
+                members[^1].WorkflowCheckpointOrder,
+                RuntimeCheckpointFold.FoldPrepared([prepared[0]]),
+                target,
+                RuntimeCheckpointRecoveryRoute.SourceFree);
+        }
+
+        public async Task<RuntimeCheckpointPreparedFoldRequest> CreateAllNoncommittedFoldRequestAsync(
+            RuntimeExecutionFence target)
+        {
+            await ActivateFenceAsync(target);
+            var reservations = (await Writer.PagePreparedAsync(new RuntimeCheckpointPreparedQuery("wf-1", 250)))
+                .Reservations.OrderBy(reservation => reservation.Provenance.WorkflowCheckpointOrder).ToArray();
+            Assert.Equal(3, reservations.Length);
+            var replayer = new RuntimeCheckpointPreparationReplayer(
+                new ImmediateRuntimeCheckpointPersistencePolicy(), [], []);
+            var prepared = new List<RuntimeCheckpointPreparedCommit>(reservations.Length);
+            foreach (var reservation in reservations)
+                prepared.Add(await replayer.RehydrateAsync(reservation));
+            var skipped = prepared[0] with
+            {
+                Decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Skip)
+            };
+            RuntimeCheckpointPreparedFoldMember[] members =
+            [
+                new(skipped.Token, RuntimeCheckpointPreparedDisposition.Skipped,
+                    reservations[0].CurrentAuthorityFence, reservations[0].AuthorityRevision, skipped),
+                new(prepared[1].Token, RuntimeCheckpointPreparedDisposition.Failed,
+                    reservations[1].CurrentAuthorityFence, reservations[1].AuthorityRevision,
+                    FailureCode: "terminal-1"),
+                new(prepared[2].Token, RuntimeCheckpointPreparedDisposition.Failed,
+                    reservations[2].CurrentAuthorityFence, reservations[2].AuthorityRevision,
+                    FailureCode: "terminal-2")
+            ];
+            return new RuntimeCheckpointPreparedFoldRequest(
+                "wf-1",
+                members,
+                members[^1].WorkflowCheckpointOrder,
+                RuntimeCheckpointFold.FoldPrepared([]),
+                target,
+                RuntimeCheckpointRecoveryRoute.SourceFree);
+        }
+
+        public async Task ActivateFenceAsync(RuntimeExecutionFence target)
+        {
+            var now = DateTimeOffset.UtcNow;
+            await SaveOwnershipAsync(Documents, new RuntimeExecutionLease(
+                target.LeaseId,
+                "wf-1",
+                target.OwnerId,
+                now,
+                now.AddHours(1),
+                target.FencingToken));
+        }
+
+        public RuntimeLogicalCheckpointLedgerEntry[] ReadLedgerEntries()
+        {
+            var serializer = new GroundworkRuntimeDocumentSerializer();
+            return Documents.Snapshot(ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind)
+                .Cast<DocumentEnvelope>()
+                .Select(envelope => serializer.Deserialize<NormalizableRuntimeCheckpointLedgerDocument>(envelope).Entry)
+                .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+                .ToArray();
+        }
+
+        public long ReadCommittedOrder()
+        {
+            var envelope = Assert.IsType<DocumentEnvelope>(Assert.Single(
+                Documents.Snapshot(ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind)));
+            using var document = JsonDocument.Parse(envelope.ContentJson);
+            return document.RootElement.GetProperty("committedOrder").GetInt64();
         }
 
         public string RawSnapshot()
@@ -278,30 +813,45 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
 
         private static string NormalizeAuthorityBinding(object document)
         {
-            var root = JsonNode.Parse(JsonSerializer.Serialize(document))!;
-            Normalize(root);
-            return root.ToJsonString();
+            if (document is not DocumentEnvelope envelope)
+                return JsonSerializer.Serialize(document);
 
-            static void Normalize(JsonNode? node)
+            var normalizedEnvelope = envelope;
+            if (StringComparer.Ordinal.Equals(
+                    envelope.DocumentKind,
+                    ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind))
             {
-                if (node is JsonObject obj)
+                var serializer = new GroundworkRuntimeDocumentSerializer();
+                var ledger = serializer.Deserialize<NormalizableRuntimeCheckpointLedgerDocument>(envelope);
+                var normalized = ledger with
                 {
-                    foreach (var name in obj.Select(property => property.Key).ToArray())
-                    {
-                        if (StringComparer.OrdinalIgnoreCase.Equals(name, "CurrentAuthorityFence"))
-                            obj[name] = null;
-                        else if (StringComparer.OrdinalIgnoreCase.Equals(name, "AuthorityRevision"))
-                            obj[name] = 0;
-                        else
-                            Normalize(obj[name]);
-                    }
-                }
-                else if (node is JsonArray array)
-                {
-                    foreach (var item in array)
-                        Normalize(item);
-                }
+                    Entry = ledger.Entry with { CurrentAuthorityFence = null, AuthorityRevision = 0 }
+                };
+                var serialized = serializer.Serialize(
+                    ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+                    normalized);
+                normalizedEnvelope = envelope with { ContentJson = serialized.ContentJson };
             }
+            else if (!StringComparer.Ordinal.Equals(
+                         envelope.DocumentKind,
+                         ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind) &&
+                     !StringComparer.Ordinal.Equals(
+                         envelope.DocumentKind,
+                         ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind))
+                return JsonSerializer.Serialize(document);
+
+            // Adoption deliberately CAS-touches the semantic-neutral coordination row in the same UoW. Normalize
+            // only provider envelope metadata here; ContentJson remains exact and would expose collateral mutation.
+            var root = JsonNode.Parse(JsonSerializer.Serialize(
+                normalizedEnvelope with { Version = 0 }))!.AsObject();
+            foreach (var property in root.ToArray())
+            {
+                if (property.Value is JsonValue value &&
+                    value.TryGetValue<string>(out var text) &&
+                    DateTimeOffset.TryParse(text, out _))
+                    root[property.Key] = DateTimeOffset.UnixEpoch;
+            }
+            return root.ToJsonString();
         }
 
         private static RuntimeCheckpointPreparedAdoptionMember ToAdoptionMember(RuntimeCheckpointPreparedReservation reservation) =>
@@ -318,6 +868,8 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
                 reservation.CurrentAuthorityFence,
                 reservation.AuthorityRevision);
     }
+
+    private sealed record NormalizableRuntimeCheckpointLedgerDocument(RuntimeLogicalCheckpointLedgerEntry Entry);
 
     private static async Task<(RuntimeCheckpointPreparedReservation[] Reservations, string ImmutablePreparedBytes)> SnapshotPreparedAsync(
         GroundworkRuntimeCheckpointWriter writer)

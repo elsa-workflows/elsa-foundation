@@ -61,8 +61,14 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>();
         services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>();
 
-        // The drain scope factory presence is what makes the coordinator select its coalescing constructor.
-        services.TryAddSingleton<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
+        // Recovery must run against the explicit durable Prepared capability before a coalescing session establishes
+        // overlay authority or dispatches a scheduler source.
+        services.TryAddScoped<CoalescingRuntimeCheckpointRecoveryCoordinator>();
+        services.TryAddScoped<IRuntimeCheckpointPreparedRecoveryCoordinator>(serviceProvider =>
+            serviceProvider.GetRequiredService<CoalescingRuntimeCheckpointRecoveryCoordinator>());
+
+        // The orchestrator's explicit composition resolves this opt-in scope factory together with the recovery gate.
+        services.TryAddScoped<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
         services.AddSingleton<CoalescingRegistrationMarker>();
 
         return services;

@@ -121,6 +121,22 @@ public static class RuntimeCheckpointCommitFingerprint
         return Compute(commit with { Checkpoint = rawCheckpoint });
     }
 
+    /// <summary>Computes a canonical identity for one workflow's provider-facing state changes.</summary>
+    public static string ComputeStateChanges(string workflowExecutionId, RuntimeCheckpointStateChangeSet stateChanges)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(stateChanges);
+        // Do not route this through Compute. That method deliberately retains historical marker shapes for backward
+        // compatibility, including a legacy branch that predates activity-scope cleanups. Prepared-fold validation
+        // instead needs a complete, purpose-specific identity for every provider-facing state-change family.
+        return ComputeCanonicalHash(new
+        {
+            Domain = "elsa.runtime.checkpoint.prepared-fold-state.v1",
+            WorkflowExecutionId = workflowExecutionId,
+            StateChanges = CreateFullStateChangesPayload(stateChanges)
+        });
+    }
+
     /// <summary>Computes the canonical identity of every caller-supplied preparation field.</summary>
     public static string ComputeInput(RuntimeCheckpointPrepareRequest request)
     {
@@ -149,6 +165,8 @@ public static class RuntimeCheckpointCommitFingerprint
                 member.Token.LedgerToken,
                 member.WorkflowCheckpointOrder,
                 member.Token.CanonicalInputFingerprint,
+                member.ExpectedCurrentAuthorityFence,
+                member.ExpectedAuthorityRevision,
                 member.Disposition,
                 CommitFingerprint = member.PreparedCommit is null
                     ? null
@@ -156,18 +174,12 @@ public static class RuntimeCheckpointCommitFingerprint
                 member.FailureCode,
                 member.FailureMessage
             }).ToArray(),
-            FoldedStateFingerprint = Compute(new RuntimeCheckpointCommit(
-                "prepared-fold-state",
-                new RuntimeCheckpoint(
-                    "prepared-fold-state",
-                    "PreparedFold",
-                    request.WorkflowExecutionId,
-                    DateTimeOffset.UnixEpoch,
-                    [],
-                    new Dictionary<string, string>()),
-                request.FoldedStateChanges,
-                [],
-                new Dictionary<string, string>()))
+            request.TargetAuthorityFence,
+            request.RecoveryRoute,
+            DeliveredPostCommitOutboxItemIds = (request.DeliveredPostCommitOutboxItemIds ?? [])
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
+            FoldedStateFingerprint = ComputeStateChanges(request.WorkflowExecutionId, request.FoldedStateChanges)
         });
     }
 
@@ -211,6 +223,31 @@ public static class RuntimeCheckpointCommitFingerprint
             .OrderBy(x => x.StateId, StringComparer.Ordinal)
             .ThenBy(x => x.Operation)
             .ToArray();
+
+    private static object CreateFullStateChangesPayload(RuntimeCheckpointStateChangeSet stateChanges) => new
+    {
+        stateChanges.WorkflowExecution,
+        stateChanges.Scheduler,
+        ActivityExecutions = Order(stateChanges.ActivityExecutions),
+        ActivityExecutionInspections = Order(stateChanges.ActivityExecutionInspections),
+        Bookmarks = Order(stateChanges.Bookmarks),
+        DurableValues = Order(stateChanges.DurableValues),
+        Incidents = Order(stateChanges.Incidents),
+        Operational = Order(stateChanges.Operational),
+        WorkflowDispatches = Order(stateChanges.WorkflowDispatches),
+        WorkflowDispatchCancellations = stateChanges.WorkflowDispatchCancellations
+            .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
+            .ToArray(),
+        ActivityScopeCleanups = stateChanges.ActivityScopeCleanups
+            .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+            .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
+            .ToArray(),
+        ConsumedSchedulerWorkItems = stateChanges.ConsumedSchedulerWorkItems
+            .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
+            .ToArray(),
+        stateChanges.AlterationJobTerminalChange,
+        PostCommitOutbox = Order(stateChanges.PostCommitOutbox)
+    };
 
     private static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
     {

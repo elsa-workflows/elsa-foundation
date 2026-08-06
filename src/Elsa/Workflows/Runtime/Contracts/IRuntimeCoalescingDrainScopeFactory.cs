@@ -19,8 +19,8 @@ public interface IRuntimeCoalescingDrainScopeFactory
 
 /// <summary>
 /// A coalescing session scope. While alive, the ambient coalescing session redirects the runtime store decorators onto
-/// an in-memory working set. Empty sessions reconcile queue consumption; sessions requiring a terminal Prepared fold
-/// fail closed until the separately reviewed adoption/fold work is enabled. Disposing pops the ambient scope.
+/// an in-memory working set. Empty sessions reconcile queue consumption, and buffered sessions terminally fold their
+/// exact Prepared membership through the durable provider. Disposing pops the ambient scope.
 /// </summary>
 public interface IRuntimeCoalescingDrainScope : IAsyncDisposable
 {
@@ -28,8 +28,8 @@ public interface IRuntimeCoalescingDrainScope : IAsyncDisposable
     RuntimeCoalescingSession Session { get; }
 
     /// <summary>
-    /// Reconciles an empty session or fails closed without mutation when buffered Prepared state requires terminal
-    /// folding. A no-op if the session was already deactivated. Not called when the drain threw.
+    /// Reconciles an empty session or atomically terminal-folds its buffered Prepared state. A no-op if the session was
+    /// already deactivated. Not called when the drain threw.
     /// </summary>
     ValueTask FlushAtQuiescenceAsync(CancellationToken cancellationToken = default);
 }

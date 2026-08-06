@@ -1,0 +1,62 @@
+{
+  "entry": {
+    "authorityRevision": 1,
+    "canonicalInputPayload": "{\u0022initialPersistenceMode\u0022:0,\u0022operationIdentity\u0022:\u0022cp-commit-1\u0022,\u0022rawCommit\u0022:{\u0022checkpoint\u0022:{\u0022activityExecutionIds\u0022:[\u0022ae-1\u0022],\u0022checkpointId\u0022:\u0022cp-commit-1\u0022,\u0022metadata\u0022:{},\u0022name\u0022:\u0022checkpoint\u0022,\u0022occurredAt\u0022:\u00221970-01-01T00:00:00\\u002B00:00\u0022,\u0022workflowExecutionId\u0022:\u0022wf-1\u0022},\u0022commitId\u0022:\u0022commit-1\u0022,\u0022metadata\u0022:{},\u0022postCommitIntents\u0022:[],\u0022stateChanges\u0022:{\u0022activityExecutionInspections\u0022:[],\u0022activityExecutions\u0022:[],\u0022activityScopeCleanups\u0022:[],\u0022alterationJobTerminalChange\u0022:null,\u0022bookmarks\u0022:[],\u0022consumedSchedulerWorkItems\u0022:[],\u0022durableValues\u0022:[],\u0022incidents\u0022:[],\u0022operational\u0022:[],\u0022postCommitOutbox\u0022:[],\u0022scheduler\u0022:null,\u0022workflowDispatchCancellations\u0022:[],\u0022workflowDispatches\u0022:[],\u0022workflowExecution\u0022:null}},\u0022recoveryAuthority\u0022:null,\u0022requestedExecutionContext\u0022:{\u0022entries\u0022:{},\u0022isEmpty\u0022:true,\u0022version\u0022:1},\u0022schemaVersion\u0022:1,\u0022sourceIdentity\u0022:\u0022checkpoint\u0022}",
+    "canonicalInputReference": "groundwork-runtime-checkpoint:wf-1:commit-1",
+    "commitFingerprint": null,
+    "commitId": "commit-1",
+    "expectedContextRevision": 0,
+    "expectedFence": null,
+    "expectedOrderRevision": 1,
+    "initialPersistenceMode": 0,
+    "inputFingerprint": "7e7341868a0c0dde0b022f0e36b53d5f8a1be89741cc237d4a6c5d27485c7201",
+    "ledgerToken": "groundwork:v1:578d3cb27722760136e24e8084ba53a13628a134b5c8c8f2f7f2d46af250f8e8",
+    "operationIdentity": "cp-commit-1",
+    "provenance": {
+      "executionContext": {
+        "entries": {},
+        "isEmpty": true,
+        "version": 1
+      },
+      "workflowCheckpointOrder": 1
+    },
+    "rawCheckpoint": {
+      "activityExecutionIds": [
+        "ae-1"
+      ],
+      "checkpointId": "cp-commit-1",
+      "metadata": {},
+      "name": "checkpoint",
+      "occurredAt": "1970-01-01T00:00:00\u002B00:00",
+      "workflowExecutionId": "wf-1"
+    },
+    "rawCommitMetadata": {},
+    "rawPostCommitIntents": [],
+    "rawStateChanges": {
+      "activityExecutionInspections": [],
+      "activityExecutions": [],
+      "activityScopeCleanups": [],
+      "alterationJobTerminalChange": null,
+      "bookmarks": [],
+      "consumedSchedulerWorkItems": [],
+      "durableValues": [],
+      "incidents": [],
+      "operational": [],
+      "postCommitOutbox": [],
+      "scheduler": null,
+      "workflowDispatchCancellations": [],
+      "workflowDispatches": [],
+      "workflowExecution": null
+    },
+    "receipt": null,
+    "reconciledLegacyMarker": false,
+    "requestedExecutionContext": {
+      "entries": {},
+      "isEmpty": true,
+      "version": 1
+    },
+    "sourceIdentity": "checkpoint",
+    "status": 0,
+    "workflowExecutionId": "wf-1"
+  }
+}

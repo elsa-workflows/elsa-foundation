@@ -15,6 +15,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
+    private readonly IRuntimeCheckpointPreparedRecoveryCoordinator? _preparedRecoveryCoordinator;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
@@ -90,7 +91,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
         TimeProvider timeProvider,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimeCheckpointPreparedRecoveryCoordinator? preparedRecoveryCoordinator = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -103,9 +105,17 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;
+        _preparedRecoveryCoordinator = preparedRecoveryCoordinator;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _cadenceResolver = cadenceResolver;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+        if (_coalescingScopeFactory is not null && _preparedRecoveryCoordinator is null)
+        {
+            throw new ArgumentException(
+                "A coalescing drain scope requires a prepared-checkpoint recovery coordinator.",
+                nameof(preparedRecoveryCoordinator));
+        }
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -227,6 +237,21 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence.
         if (_coalescingScopeFactory is null)
             return await DrainImmediateAsync(envelope, request, cancellationToken);
+
+        // Every coalescing composition must inspect/reconcile durable Prepared state before selecting authored cadence,
+        // creating an overlay, or dispatching scheduler/source work. An authored Immediate execution still shares the
+        // same durable provider and therefore cannot bypass this gate.
+        var recovery = await _preparedRecoveryCoordinator!.RecoverPreparedAsync(request.WorkflowExecutionId, cancellationToken);
+        if (!recovery.CanDispatch)
+        {
+            var now = _timeProvider.GetUtcNow();
+            return new RuntimeSchedulerDrainResult(
+                request.WorkflowExecutionId,
+                now,
+                now,
+                [],
+                stopReason: RuntimeSchedulerDrainStopReason.Quiesced);
+        }
 
         // Coalescing host, but cadence is resolved per execution (ADR 0032 R5). A workflow that authored Immediate must
         // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the

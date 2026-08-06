@@ -34,7 +34,7 @@ public sealed class ColdStartSchemaOperationCountTests(ITestOutputHelper output)
     // Pinned fresh-database operation count for the reference deployment schema on SQLite. When a feature adds
     // or removes a storage unit / index this number changes on purpose — update it together with the baseline
     // report (docs/reports/cold-start-readiness-2026-07.md) and re-review the cold-start budget.
-    private const int ExpectedFreshDatabaseOperationCount = 963;
+    private const int ExpectedFreshDatabaseOperationCount = 974;
 
     private static IReadOnlyList<IGroundworkStorageManifestSource> ReferenceDeploymentSources() =>
     [

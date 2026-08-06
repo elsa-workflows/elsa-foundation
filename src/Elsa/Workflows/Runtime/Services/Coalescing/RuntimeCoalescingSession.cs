@@ -712,6 +712,63 @@ public sealed class RuntimeCoalescingSession
         return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]));
     }
 
+    /// <summary>
+    /// Creates the exact terminal fold for the current prepared segment, optionally including one trailing boundary.
+    /// Every logical member keeps its own explicit disposition while the provider receives one folded state/outbox
+    /// application for the successful transaction.
+    /// </summary>
+    public RuntimeCheckpointPreparedFoldRequest CreatePreparedFoldRequest(
+        RuntimeCheckpointPreparedCommit? trailing = null)
+    {
+        if (_bufferedPreparedCommits.Count == 0 && trailing is null)
+            throw new InvalidOperationException("A prepared fold requires at least one logical checkpoint.");
+
+        var prepared = trailing is null
+            ? _bufferedPreparedCommits.ToArray()
+            : [.. _bufferedPreparedCommits, trailing];
+        var members = prepared.Select(item => new RuntimeCheckpointPreparedFoldMember(
+            item.Token,
+            item.Decision.Mode == RuntimeCheckpointPersistenceMode.Skip
+                ? RuntimeCheckpointPreparedDisposition.Skipped
+                : RuntimeCheckpointPreparedDisposition.Committed,
+            item.CurrentAuthorityFence,
+            item.AuthorityRevision,
+            item)).ToArray();
+
+        var folded = trailing is null
+            ? FoldBufferedStateChanges()
+            : trailing.Decision.Mode == RuntimeCheckpointPersistenceMode.Skip
+                ? FoldBufferedStateChanges()
+                : FoldBufferedStateChangesWith(trailing.Commit.StateChanges);
+        var pendingOutbox = RemainingPendingOutboxChanges()
+            .Concat(trailing is null || trailing.Decision.Mode == RuntimeCheckpointPersistenceMode.Skip
+                ? []
+                : trailing.Commit.StateChanges.PostCommitOutbox)
+            .GroupBy(change => change.StateId, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToArray();
+        folded = folded.WithPostCommitOutbox(pendingOutbox);
+        var retainedOutboxIds = pendingOutbox
+            .Select(change => change.State.OutboxItemId)
+            .ToHashSet(StringComparer.Ordinal);
+        var deliveredOutboxIds = members
+            .Where(member => member.Disposition == RuntimeCheckpointPreparedDisposition.Committed)
+            .SelectMany(member => member.PreparedCommit!.Commit.StateChanges.PostCommitOutbox)
+            .Select(change => change.State.OutboxItemId)
+            .Where(id => !retainedOutboxIds.Contains(id))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return new RuntimeCheckpointPreparedFoldRequest(
+            WorkflowExecutionId,
+            members,
+            members[^1].WorkflowCheckpointOrder,
+            folded,
+            members[0].ExpectedCurrentAuthorityFence,
+            DeliveredPostCommitOutboxItemIds: deliveredOutboxIds);
+    }
+
     private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded)
     {
         if (_workflowDispatchUpserts.Count == 0)

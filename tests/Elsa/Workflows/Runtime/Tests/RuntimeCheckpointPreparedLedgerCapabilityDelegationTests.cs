@@ -60,11 +60,13 @@ public sealed class RuntimeCheckpointPreparedLedgerCapabilityDelegationTests
 
         var boundaryRequest = Request("commit-boundary");
         var boundaryPrepared = await store.PrepareAsync(boundaryRequest);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitPreparedAsync(
+        var boundaryResult = await store.CommitPreparedAsync(
             boundaryPrepared.Token!,
             Attach(boundaryRequest.Commit, boundaryPrepared.Token!),
-            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Conflict, boundaryResult.Status);
+        Assert.Equal(1, durable.FoldCalls);
         Assert.Equal(0, durable.LegacyCommitCalls);
         Assert.Equal(0, durable.CommitPreparedCalls);
         Assert.Equal(0, durable.MarkerOrStateMutationCalls);
@@ -101,15 +103,19 @@ public sealed class RuntimeCheckpointPreparedLedgerCapabilityDelegationTests
     /// </summary>
     private sealed class CountingPreparedLedgerStore : IRuntimeCheckpointCommitStore, IRuntimeCheckpointPreparedLedgerStore
     {
+        private readonly Dictionary<string, RuntimeCheckpointPreparedReservation> _prepared = new(StringComparer.Ordinal);
+
         public int PrepareCalls { get; private set; }
         public int CommitPreparedCalls { get; private set; }
         public int LegacyCommitCalls { get; private set; }
         public int PageCalls { get; private set; }
         public int MarkerOrStateMutationCalls { get; private set; }
+        public int FoldCalls { get; private set; }
 
         public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(RuntimeCheckpointPrepareRequest request, CancellationToken cancellationToken = default)
         {
             PrepareCalls++;
+            var envelope = new RuntimeCheckpointPreparationPayloadCodec().Encode(request);
             var token = new RuntimeCheckpointPreparationToken(
                 request.Commit.CommitId,
                 $"ledger:{request.Commit.CommitId}",
@@ -117,9 +123,15 @@ public sealed class RuntimeCheckpointPreparedLedgerCapabilityDelegationTests
                 PrepareCalls - 1,
                 0,
                 request.Commit.ExpectedFence,
-                new RuntimeCheckpointPreparationPayloadCodec().Encode(request).PayloadSha256,
+                envelope.PayloadSha256,
                 $"canonical:{request.Commit.CommitId}",
                 request.InitialPersistenceMode);
+            _prepared.Add(request.Commit.CommitId, new RuntimeCheckpointPreparedReservation(
+                token,
+                envelope,
+                RuntimeLogicalCheckpointLedgerStatus.Prepared,
+                request.Commit.ExpectedFence,
+                1));
             return ValueTask.FromResult(RuntimeCheckpointPreparationResult.Prepared(token));
         }
 
@@ -131,7 +143,11 @@ public sealed class RuntimeCheckpointPreparedLedgerCapabilityDelegationTests
         {
             CommitPreparedCalls++;
             MarkerOrStateMutationCalls++;
-            return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]));
+            _prepared.Remove(token.CommitId);
+            return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([])
+            {
+                Status = RuntimeCheckpointCommitStoreStatus.Committed
+            });
         }
 
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
@@ -147,12 +163,28 @@ public sealed class RuntimeCheckpointPreparedLedgerCapabilityDelegationTests
         public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default)
         {
             PageCalls++;
-            return ValueTask.FromResult(new RuntimeCheckpointPreparedPage(query.Validate(), [], null));
+            query.Validate();
+            var reservations = _prepared.Values
+                .OrderBy(item => item.Provenance.WorkflowCheckpointOrder)
+                .ThenBy(item => item.CommitId, StringComparer.Ordinal)
+                .Take(query.PageSize)
+                .ToArray();
+            return ValueTask.FromResult(new RuntimeCheckpointPreparedPage(query, reservations, null));
         }
+
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+            RuntimeCheckpointPreparedAdoptionRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
             RuntimeCheckpointPreparedFoldRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            FoldCalls++;
+            return ValueTask.FromResult(new RuntimeCheckpointPreparedFoldResult(
+                RuntimeCheckpointCommitStoreStatus.Conflict,
+                new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal)));
+        }
     }
 }

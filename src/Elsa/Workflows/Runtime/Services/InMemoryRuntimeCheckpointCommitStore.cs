@@ -314,14 +314,141 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return ValueTask.FromResult(new RuntimeCheckpointPreparedPage(query, reservations, nextCursor));
     }
 
-    public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
-        RuntimeCheckpointPreparedFoldRequest request,
+    public async ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+        RuntimeCheckpointPreparedAdoptionRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        throw new NotSupportedException(
-            "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+
+        if (!CanCreateAdoptionPlan(request))
+            return AdoptionConflict(request);
+
+        var authorityCommit = CreateLedgerMutationCommit(request.WorkflowExecutionId, request.TargetAuthorityFence);
+        var plan = new InMemoryCheckpointMutationPlan(
+            authorityCommit,
+            commitIds: request.Members.Select(member => member.CommitId).ToArray());
+        await using var transaction = await _transactionCoordinator.BeginAsync(plan, BuildTransactionRoots(plan), cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            RuntimeCheckpointPreparedAdoptionReceipt receipt;
+            lock (_state.SyncRoot)
+                receipt = AdoptPreparedCore(request, apply: false);
+            if (receipt.Status == RuntimeCheckpointPreparedAdoptionStatus.Adopted)
+            {
+                try
+                {
+                    await EnsureExpectedFenceAsync(authorityCommit, cancellationToken);
+                }
+                catch (RuntimeStaleFencingTokenException)
+                {
+                    transaction.Commit();
+                    return receipt with { Status = RuntimeCheckpointPreparedAdoptionStatus.OwnershipLost };
+                }
+                lock (_state.SyncRoot)
+                    receipt = AdoptPreparedCore(request, apply: true);
+            }
+            transaction.Commit();
+            return receipt;
+        }
+        catch (Exception exception)
+        {
+            throw transaction.Rollback(exception);
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
+    }
+
+    public async ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+        RuntimeCheckpointPreparedFoldRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!RuntimeCheckpointPreparedFoldBuilder.Matches(request))
+            return PreparedFoldConflict();
+
+        var foldedCommit = CreatePreparedFoldCommit(request);
+        var plan = new InMemoryCheckpointMutationPlan(
+            foldedCommit,
+            request.FoldedStateChanges.PostCommitOutbox.Select(change => change.State).ToArray(),
+            request.Members.Select(member => member.CommitId).ToArray());
+        await using var transaction = await _transactionCoordinator.BeginAsync(plan, BuildTransactionRoots(plan), cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            RuntimeCheckpointPreparedFoldResult? result = null;
+            lock (_state.SyncRoot)
+            {
+                var entries = ResolvePreparedFoldEntries(request);
+                if (entries is null)
+                {
+                    transaction.Commit();
+                    return PreparedFoldConflict();
+                }
+
+                var foldFingerprint = RuntimeCheckpointCommitFingerprint.ComputePreparedFold(request);
+                if (entries.All(entry => entry.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed))
+                {
+                    if (entries.Any(entry => !StringComparer.Ordinal.Equals(entry.TerminalFoldFingerprint, foldFingerprint)))
+                    {
+                        transaction.Commit();
+                        return PreparedFoldConflict();
+                    }
+
+                    transaction.Commit();
+                    return new RuntimeCheckpointPreparedFoldResult(
+                        RuntimeCheckpointCommitStoreStatus.Replay,
+                        entries.ToDictionary(entry => entry.CommitId, entry => entry.Receipt!, StringComparer.Ordinal));
+                }
+
+                if (entries.Any(entry => entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared) ||
+                    !IsExactPreparedPrefix(request, entries))
+                {
+                    transaction.Commit();
+                    return PreparedFoldConflict();
+                }
+
+                var validation = ValidatePreparedFoldMembers(request, entries);
+                if (!validation.Succeeded)
+                {
+                    transaction.Commit();
+                    return PreparedFoldConflict();
+                }
+
+                result = new RuntimeCheckpointPreparedFoldResult(
+                    RuntimeCheckpointCommitStoreStatus.Committed,
+                    CreateFoldReceipts(request, validation.PreparedCommits!));
+            }
+
+            await CommitNewAsync(
+                foldedCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate),
+                cancellationToken,
+                validateFence: true,
+                finalize: _ => FinalizePreparedFold(request, result!),
+                writeCommitRecord: false);
+            transaction.Commit();
+            return result!;
+        }
+        catch (RuntimeStaleFencingTokenException)
+        {
+            transaction.Commit();
+            return PreparedFoldConflict();
+        }
+        catch (Exception exception)
+        {
+            throw transaction.Rollback(exception);
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
     }
 
     private static RuntimeCheckpointPreparedReservation ToPreparedReservation(RuntimeLogicalCheckpointLedgerEntry entry) =>
@@ -334,6 +461,379 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             entry.Status,
             entry.CurrentAuthorityFence,
             entry.AuthorityRevision);
+
+    private RuntimeCheckpointPreparedAdoptionReceipt AdoptPreparedCore(
+        RuntimeCheckpointPreparedAdoptionRequest request,
+        bool apply)
+    {
+        if (!CanCreateAdoptionPlan(request))
+            return AdoptionConflict(request);
+
+        var requestedMembers = request.Members;
+        if (request.Route == RuntimeCheckpointRecoveryRoute.SourceBound &&
+            requestedMembers.Any(member => member.RecoveryAuthority is null))
+            return AdoptionConflict(request);
+
+        var prepared = _state.LogicalCheckpointLedger.Values
+            .Where(entry => entry.Status == RuntimeLogicalCheckpointLedgerStatus.Prepared)
+            .Where(entry => StringComparer.Ordinal.Equals(entry.WorkflowExecutionId, request.WorkflowExecutionId))
+            .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+            .ThenBy(entry => entry.CommitId, StringComparer.Ordinal)
+            .ToArray();
+        var scope = prepared
+            .Where(entry => entry.Provenance.WorkflowCheckpointOrder <= request.ThroughWorkflowCheckpointOrder)
+            .ToArray();
+
+        if (scope.Length != requestedMembers.Count ||
+            scope.Length == 0 ||
+            scope[^1].Provenance.WorkflowCheckpointOrder != request.ThroughWorkflowCheckpointOrder ||
+            !scope.Select(ToAdoptionMember).SequenceEqual(requestedMembers))
+        {
+            return AdoptionConflict(request);
+        }
+
+        if (request.Route == RuntimeCheckpointRecoveryRoute.SourceFree && scope.Any(entry => entry.RecoveryAuthority is not null) ||
+            request.Route == RuntimeCheckpointRecoveryRoute.SourceBound && scope.Any(entry => entry.RecoveryAuthority is null))
+        {
+            return AdoptionConflict(request);
+        }
+
+        var currentBinding = new RuntimeCheckpointAuthorityBinding(scope[0].CurrentAuthorityFence, scope[0].AuthorityRevision).Validate();
+        if (scope.Any(entry =>
+                !Equals(entry.CurrentAuthorityFence, currentBinding.CurrentAuthorityFence) ||
+                entry.AuthorityRevision != currentBinding.AuthorityRevision))
+        {
+            return AdoptionConflict(request);
+        }
+
+        if (Equals(currentBinding.CurrentAuthorityFence, request.TargetAuthorityFence))
+            return AdoptionReplay(request);
+        if (!currentBinding.CanAdvanceTo(request.TargetAuthorityFence))
+            return AdoptionConflict(request);
+
+        if (!apply)
+        {
+            return new RuntimeCheckpointPreparedAdoptionReceipt(
+                RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+                request.WorkflowExecutionId,
+                request.Route,
+                request.ThroughWorkflowCheckpointOrder,
+                request.TargetAuthorityFence,
+                scope.Select(entry => entry.CommitId).ToArray());
+        }
+
+        foreach (var entry in scope)
+        {
+            _state.LogicalCheckpointLedger[entry.CommitId] = entry with
+            {
+                CurrentAuthorityFence = request.TargetAuthorityFence,
+                AuthorityRevision = checked(entry.AuthorityRevision + 1)
+            };
+        }
+
+        return new RuntimeCheckpointPreparedAdoptionReceipt(
+            RuntimeCheckpointPreparedAdoptionStatus.Adopted,
+            request.WorkflowExecutionId,
+            request.Route,
+            request.ThroughWorkflowCheckpointOrder,
+            request.TargetAuthorityFence,
+            scope.Select(entry => entry.CommitId).ToArray());
+    }
+
+    private static bool CanCreateAdoptionPlan(RuntimeCheckpointPreparedAdoptionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.WorkflowExecutionId) ||
+            request.TargetAuthorityFence is null ||
+            !Enum.IsDefined(request.Route) ||
+            request.ThroughWorkflowCheckpointOrder < 1 ||
+            request.Members is null ||
+            request.Members.Count == 0)
+        {
+            return false;
+        }
+
+        var commitIds = new HashSet<string>(StringComparer.Ordinal);
+        var ledgerTokens = new HashSet<string>(StringComparer.Ordinal);
+        long priorOrder = 0;
+        foreach (var member in request.Members)
+        {
+            if (member is null ||
+                string.IsNullOrWhiteSpace(member.CommitId) ||
+                string.IsNullOrWhiteSpace(member.LedgerToken) ||
+                string.IsNullOrWhiteSpace(member.CanonicalInputFingerprint) ||
+                string.IsNullOrWhiteSpace(member.CanonicalInputReference) ||
+                member.WorkflowCheckpointOrder <= priorOrder ||
+                member.OriginalOrderRevision < 0 ||
+                member.OriginalContextRevision < 0 ||
+                member.ExpectedAuthorityRevision < 1 ||
+                !commitIds.Add(member.CommitId) ||
+                !ledgerTokens.Add(member.LedgerToken))
+            {
+                return false;
+            }
+
+            priorOrder = member.WorkflowCheckpointOrder;
+        }
+
+        return priorOrder == request.ThroughWorkflowCheckpointOrder;
+    }
+
+    private static RuntimeCheckpointPreparedAdoptionMember ToAdoptionMember(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        new(
+            entry.CommitId,
+            entry.LedgerToken,
+            entry.Provenance.WorkflowCheckpointOrder,
+            entry.InputFingerprint,
+            entry.CanonicalInputReference ?? string.Empty,
+            entry.ExpectedFence,
+            entry.ExpectedOrderRevision ?? -1,
+            entry.ExpectedContextRevision ?? -1,
+            entry.RecoveryAuthority,
+            entry.CurrentAuthorityFence,
+            entry.AuthorityRevision);
+
+    private RuntimeLogicalCheckpointLedgerEntry[]? ResolvePreparedFoldEntries(RuntimeCheckpointPreparedFoldRequest request)
+    {
+        var entries = new RuntimeLogicalCheckpointLedgerEntry[request.Members.Count];
+        for (var index = 0; index < request.Members.Count; index++)
+        {
+            var member = request.Members[index];
+            if (!_state.LogicalCheckpointLedger.TryGetValue(member.CommitId, out var entry) ||
+                !StringComparer.Ordinal.Equals(entry.WorkflowExecutionId, request.WorkflowExecutionId) ||
+                entry.Provenance.WorkflowCheckpointOrder != member.WorkflowCheckpointOrder ||
+                !TokenMatches(entry, member.Token))
+            {
+                return null;
+            }
+
+            entries[index] = entry;
+        }
+
+        return entries;
+    }
+
+    private bool IsExactPreparedPrefix(
+        RuntimeCheckpointPreparedFoldRequest request,
+        IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry> entries)
+    {
+        var allPrepared = _state.LogicalCheckpointLedger.Values
+            .Where(entry => entry.Status == RuntimeLogicalCheckpointLedgerStatus.Prepared)
+            .Where(entry => StringComparer.Ordinal.Equals(entry.WorkflowExecutionId, request.WorkflowExecutionId))
+            .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+            .ThenBy(entry => entry.CommitId, StringComparer.Ordinal)
+            .ToArray();
+        var expected = allPrepared
+            .TakeWhile(entry => entry.Provenance.WorkflowCheckpointOrder <= request.MaxWorkflowCheckpointOrder)
+            .ToArray();
+        return expected.Length == entries.Count && expected.SequenceEqual(entries);
+    }
+
+    private static PreparedFoldValidation ValidatePreparedFoldMembers(
+        RuntimeCheckpointPreparedFoldRequest request,
+        IReadOnlyList<RuntimeLogicalCheckpointLedgerEntry> entries)
+    {
+        var preparedCommits = new RuntimeCheckpointPreparedCommit?[request.Members.Count];
+        for (var index = 0; index < request.Members.Count; index++)
+        {
+            var member = request.Members[index];
+            var entry = entries[index];
+            try
+            {
+                member.Validate();
+            }
+            catch (ArgumentException)
+            {
+                return PreparedFoldValidation.Invalid;
+            }
+
+            if (member.Disposition == RuntimeCheckpointPreparedDisposition.Failed)
+            {
+                if (!CurrentBindingMatches(entry, member))
+                    return PreparedFoldValidation.Invalid;
+                continue;
+            }
+
+            var prepared = member.PreparedCommit!;
+            if (!CurrentBindingMatches(entry, member) ||
+                !Equals(prepared.CurrentAuthorityFence, member.ExpectedCurrentAuthorityFence) ||
+                prepared.AuthorityRevision != member.ExpectedAuthorityRevision ||
+                !StringComparer.Ordinal.Equals(prepared.Commit.CommitId, entry.CommitId) ||
+                !StringComparer.Ordinal.Equals(prepared.Commit.WorkflowExecutionId, request.WorkflowExecutionId) ||
+                !Equals(prepared.Commit.Checkpoint.Provenance, entry.Provenance) ||
+                !StringComparer.Ordinal.Equals(prepared.VerifiedCommitFingerprint, RuntimeCheckpointCommitFingerprint.Compute(prepared.Commit)))
+            {
+                return PreparedFoldValidation.Invalid;
+            }
+
+            preparedCommits[index] = prepared;
+        }
+
+        if (request.RecoveryRoute == RuntimeCheckpointRecoveryRoute.SourceFree &&
+            entries.Any(entry => entry.RecoveryAuthority is not null))
+            return PreparedFoldValidation.Invalid;
+
+        return new PreparedFoldValidation(preparedCommits);
+    }
+
+    private static bool CurrentBindingMatches(
+        RuntimeLogicalCheckpointLedgerEntry entry,
+        RuntimeCheckpointPreparedFoldMember member) =>
+        Equals(entry.CurrentAuthorityFence, member.ExpectedCurrentAuthorityFence) &&
+        entry.AuthorityRevision == member.ExpectedAuthorityRevision;
+
+    private static IReadOnlyDictionary<string, RuntimeCheckpointCommitStoreResult> CreateFoldReceipts(
+        RuntimeCheckpointPreparedFoldRequest request,
+        IReadOnlyList<RuntimeCheckpointPreparedCommit?> preparedCommits)
+    {
+        var receipts = new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal);
+        for (var index = 0; index < request.Members.Count; index++)
+        {
+            var member = request.Members[index];
+            var prepared = preparedCommits[index];
+            receipts.Add(member.CommitId, member.Disposition switch
+            {
+                RuntimeCheckpointPreparedDisposition.Committed => new RuntimeCheckpointCommitStoreResult(
+                    prepared!.Commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray())
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Committed,
+                    CommitFingerprint = prepared.VerifiedCommitFingerprint,
+                    ConsumedSchedulerWorkItemIds = prepared.Commit.StateChanges.ConsumedSchedulerWorkItems.Select(item => item.WorkItemId).ToArray()
+                },
+                RuntimeCheckpointPreparedDisposition.Skipped => new RuntimeCheckpointCommitStoreResult([])
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Skipped,
+                    CommitFingerprint = prepared!.VerifiedCommitFingerprint
+                },
+                RuntimeCheckpointPreparedDisposition.Failed => new RuntimeCheckpointCommitStoreResult([])
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Failed,
+                    FailureCode = member.FailureCode,
+                    FailureMessage = member.FailureMessage
+                },
+                _ => throw new InvalidOperationException("The prepared-checkpoint disposition is invalid.")
+            });
+        }
+
+        return receipts;
+    }
+
+    private void FinalizePreparedFold(
+        RuntimeCheckpointPreparedFoldRequest request,
+        RuntimeCheckpointPreparedFoldResult result)
+    {
+        var foldFingerprint = RuntimeCheckpointCommitFingerprint.ComputePreparedFold(request);
+        var entries = ResolvePreparedFoldEntries(request) ??
+                      throw new InvalidOperationException("Prepared checkpoint fold membership changed before finalization.");
+        if (entries.Where((entry, index) => !CurrentBindingMatches(entry, request.Members[index])).Any())
+            throw new InvalidOperationException("Prepared checkpoint fold authority changed before finalization.");
+        var order = ReadCheckpointOrderState(request.WorkflowExecutionId);
+        if (order.Reserved < request.MaxWorkflowCheckpointOrder || order.Committed >= request.MaxWorkflowCheckpointOrder)
+            throw new InvalidOperationException("Prepared checkpoint fold order authority changed before finalization.");
+
+        var context = _state.ExecutionContexts.GetValueOrDefault(request.WorkflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+        var lastCommittedIndex = -1;
+        for (var index = request.Members.Count - 1; index >= 0; index--)
+        {
+            if (request.Members[index].Disposition != RuntimeCheckpointPreparedDisposition.Committed)
+                continue;
+            lastCommittedIndex = index;
+            break;
+        }
+
+        if (lastCommittedIndex >= 0)
+        {
+            var terminalContext = entries[lastCommittedIndex].Provenance.ExecutionContext ??
+                                  throw new InvalidOperationException("Prepared checkpoint fold has no committed execution context.");
+            if (!context.Snapshot.Equals(terminalContext))
+                _state.ExecutionContexts[request.WorkflowExecutionId] = new(terminalContext, checked(context.Revision + 1));
+        }
+        _state.CheckpointOrders[request.WorkflowExecutionId] = new(
+            order.Reserved,
+            Math.Max(order.Committed, request.MaxWorkflowCheckpointOrder),
+            checked(order.Revision + 1));
+
+        for (var index = 0; index < request.Members.Count; index++)
+        {
+            var member = request.Members[index];
+            var entry = entries[index];
+            var receipt = result.Receipts[member.CommitId];
+            var status = member.Disposition switch
+            {
+                RuntimeCheckpointPreparedDisposition.Committed => RuntimeLogicalCheckpointLedgerStatus.Committed,
+                RuntimeCheckpointPreparedDisposition.Skipped => RuntimeLogicalCheckpointLedgerStatus.Skipped,
+                RuntimeCheckpointPreparedDisposition.Failed => RuntimeLogicalCheckpointLedgerStatus.Failed,
+                _ => throw new InvalidOperationException("The prepared-checkpoint disposition is invalid.")
+            };
+            var fingerprint = member.PreparedCommit?.VerifiedCommitFingerprint;
+            var terminalAuthority = request.RecoveryRoute == RuntimeCheckpointRecoveryRoute.SourceFree
+                ? entry with
+                {
+                    CurrentAuthorityFence = request.TargetAuthorityFence,
+                    AuthorityRevision = checked(entry.AuthorityRevision + 1)
+                }
+                : entry;
+            _state.LogicalCheckpointLedger[entry.CommitId] = terminalAuthority.CompactTerminal(
+                status,
+                receipt,
+                fingerprint,
+                foldFingerprint,
+                request.WorkflowExecutionId);
+
+            if (status != RuntimeLogicalCheckpointLedgerStatus.Committed)
+                continue;
+
+            var prepared = member.PreparedCommit!;
+            _state.Commits.Add(entry.CommitId, new RuntimeCheckpointCommitRecord(
+                prepared.Commit,
+                prepared.Decision,
+                receipt.PendingPostCommitWorkIds,
+                receipt.ConsumedSchedulerWorkItemIds));
+        }
+    }
+
+    private static RuntimeCheckpointCommit CreatePreparedFoldCommit(RuntimeCheckpointPreparedFoldRequest request) =>
+        new(
+            $"prepared-fold:{request.WorkflowExecutionId}:{request.MaxWorkflowCheckpointOrder}",
+            new RuntimeCheckpoint(
+                $"prepared-fold:{request.WorkflowExecutionId}:{request.MaxWorkflowCheckpointOrder}",
+                "PreparedFold",
+                request.WorkflowExecutionId,
+                DateTimeOffset.UnixEpoch,
+                [],
+                new Dictionary<string, string>()),
+            request.FoldedStateChanges,
+            [],
+            new Dictionary<string, string>())
+        {
+            ExpectedFence = request.TargetAuthorityFence
+        };
+
+    private sealed record PreparedFoldValidation(IReadOnlyList<RuntimeCheckpointPreparedCommit?>? PreparedCommits)
+    {
+        public static PreparedFoldValidation Invalid { get; } = new((IReadOnlyList<RuntimeCheckpointPreparedCommit?>?)null);
+        public bool Succeeded => PreparedCommits is not null;
+    }
+
+    private static RuntimeCheckpointPreparedFoldResult PreparedFoldConflict() =>
+        new(RuntimeCheckpointCommitStoreStatus.Conflict, new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal));
+
+    private static RuntimeCheckpointPreparedAdoptionReceipt AdoptionConflict(RuntimeCheckpointPreparedAdoptionRequest request) =>
+        new(
+            RuntimeCheckpointPreparedAdoptionStatus.Conflict,
+            request.WorkflowExecutionId,
+            request.Route,
+            request.ThroughWorkflowCheckpointOrder,
+            request.TargetAuthorityFence,
+            request.Members?.Select(member => member?.CommitId ?? string.Empty).ToArray() ?? []);
+
+    private static RuntimeCheckpointPreparedAdoptionReceipt AdoptionReplay(RuntimeCheckpointPreparedAdoptionRequest request) =>
+        new(
+            RuntimeCheckpointPreparedAdoptionStatus.Replay,
+            request.WorkflowExecutionId,
+            request.Route,
+            request.ThroughWorkflowCheckpointOrder,
+            request.TargetAuthorityFence,
+            request.Members.Select(member => member.CommitId).ToArray());
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
         RuntimeCheckpointPreparationToken token,
@@ -667,6 +1167,37 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    private static InMemoryCheckpointMutationPlan CreateLedgerMutationPlan(
+        string workflowExecutionId,
+        IEnumerable<string> commitIds,
+        RuntimeExecutionFence? expectedFence = null)
+    {
+        var commit = CreateLedgerMutationCommit(workflowExecutionId, expectedFence);
+        return new InMemoryCheckpointMutationPlan(commit, commitIds: commitIds.ToArray());
+    }
+
+    private static RuntimeCheckpointCommit CreateLedgerMutationCommit(
+        string workflowExecutionId,
+        RuntimeExecutionFence? expectedFence)
+    {
+        var commit = new RuntimeCheckpointCommit(
+            $"prepared-ledger:{workflowExecutionId}",
+            new RuntimeCheckpoint(
+                $"prepared-ledger:{workflowExecutionId}",
+                "PreparedLedger",
+                workflowExecutionId,
+                DateTimeOffset.UnixEpoch,
+                [],
+                new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+            [],
+            new Dictionary<string, string>())
+        {
+            ExpectedFence = expectedFence
+        };
+        return commit;
+    }
+
     /// <summary>Test seam that throws once after reserving an order but before adding the prepared ledger entry.</summary>
     public void InjectPreparationFailureForTesting(Exception exception)
     {
@@ -942,16 +1473,22 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                context.Revision == token.ExpectedContextRevision;
     }
 
-    private static bool TokenMatches(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token) =>
-        StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
-        StringComparer.Ordinal.Equals(entry.LedgerToken, token.LedgerToken) &&
-        entry.Provenance.Equals(token.Provenance) &&
-        entry.ExpectedOrderRevision == token.ExpectedOrderRevision &&
-        entry.ExpectedContextRevision == token.ExpectedContextRevision &&
-        Equals(entry.ExpectedFence, token.ExpectedFence) &&
-        StringComparer.Ordinal.Equals(entry.InputFingerprint, token.CanonicalInputFingerprint) &&
-        StringComparer.Ordinal.Equals(entry.CanonicalInputReference, token.CanonicalInputReference) &&
-        entry.InitialPersistenceMode == token.InitialPersistenceMode;
+    private static bool TokenMatches(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token)
+    {
+        var identity = entry.TerminalPreparationToken;
+        return identity is not null
+            ? identity.Equals(token)
+            : StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
+              StringComparer.Ordinal.Equals(entry.LedgerToken, token.LedgerToken) &&
+              entry.Provenance.Equals(token.Provenance) &&
+              entry.ExpectedOrderRevision == token.ExpectedOrderRevision &&
+              entry.ExpectedContextRevision == token.ExpectedContextRevision &&
+              Equals(entry.ExpectedFence, token.ExpectedFence) &&
+              StringComparer.Ordinal.Equals(entry.InputFingerprint, token.CanonicalInputFingerprint) &&
+              StringComparer.Ordinal.Equals(entry.CanonicalInputReference, token.CanonicalInputReference) &&
+              entry.InitialPersistenceMode == token.InitialPersistenceMode &&
+              Equals(entry.RecoveryAuthority, token.RecoveryAuthority);
+    }
 
     private bool RawCommitMatchesEntry(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointCommit commit)
     {

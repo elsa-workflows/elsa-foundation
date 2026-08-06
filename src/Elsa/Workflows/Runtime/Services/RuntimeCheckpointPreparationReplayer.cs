@@ -81,6 +81,10 @@ public sealed class RuntimeCheckpointPreparationReplayer : IRuntimeCheckpointPre
                 "Generic checkpoint context or post-commit work requires an immediate atomic commit.");
         }
 
-        return new RuntimeCheckpointPreparedCommit(reservation.Token, commit, decision);
+        return new RuntimeCheckpointPreparedCommit(reservation.Token, commit, decision)
+        {
+            CurrentAuthorityFence = reservation.CurrentAuthorityFence,
+            AuthorityRevision = reservation.AuthorityRevision
+        };
     }
 }

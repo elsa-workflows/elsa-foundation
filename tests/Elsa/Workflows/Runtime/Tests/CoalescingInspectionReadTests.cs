@@ -63,7 +63,9 @@ public sealed class CoalescingInspectionReadTests
     {
         var durableInspections = new InMemoryActivityExecutionInspectionStore();
         var countingInspections = new CountingInspectionStore(durableInspections);
-        var innerCommits = new InMemoryRuntimeCheckpointCommitStore(activityExecutionInspectionWriter: durableInspections);
+        var innerCommits = new InMemoryRuntimeCheckpointCommitStore(
+            activityExecutionStateStore: new InMemoryActivityExecutionStateStore(),
+            activityExecutionInspectionWriter: durableInspections);
         var options = new CoalescingRuntimeCheckpointPersistenceOptions { CoalesceInspectionReads = coalesceInspectionReads };
         var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), options);
         var accessor = new FixedCoalescingSessionAccessor(session);
@@ -88,9 +90,25 @@ public sealed class CoalescingInspectionReadTests
             var state = NewActivityState(activityExecutionId, status, sequence);
             var projection = await accumulator.BuildProjectionAsync(state, $"checkpoint-{checkpoint:D2}", Now.AddTicks(checkpoint));
             built.Add(JsonSerializer.Serialize(projection));
-            await commitStore.CommitAsync(
+            await CommitPreparedAsync(
                 NewHopCommit(checkpoint, state, projection),
                 new(RuntimeCheckpointPersistenceMode.Deferred));
+        }
+
+        async Task CommitPreparedAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision)
+        {
+            var preparation = await commitStore.PrepareAsync(
+                RuntimeCheckpointPrepareRequest.From(commit) with { InitialPersistenceMode = decision.Mode });
+            var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
+            var preparedCommit = commit with
+            {
+                Checkpoint = commit.Checkpoint with { Provenance = token.Provenance },
+                ExpectedFence = token.ExpectedFence
+            };
+            var result = await commitStore.CommitPreparedAsync(token, preparedCommit, decision);
+            Assert.True(result.Status is RuntimeCheckpointCommitStoreStatus.Committed or RuntimeCheckpointCommitStoreStatus.Replay);
         }
 
         // Segment 1: two builds per activity — the first build of each pair is the intermediate the fold discards,
@@ -104,7 +122,7 @@ public sealed class CoalescingInspectionReadTests
         // Mid-drain attempt boundary: flushes the folded segment durably and keeps the session active. The flush must
         // invalidate the memo so segment 2 observes the durably flushed rows, exactly like the per-hop-read control.
         checkpoint++;
-        await commitStore.CommitAsync(
+        await CommitPreparedAsync(
             NewCommit(checkpoint, RuntimeCheckpointNames.ActivityAttemptClaimed),
             new(RuntimeCheckpointPersistenceMode.Immediate));
         Assert.True(session.IsActive);
@@ -115,7 +133,7 @@ public sealed class CoalescingInspectionReadTests
 
         // Terminal boundary folds segment 2 and deactivates the session.
         checkpoint++;
-        await commitStore.CommitAsync(
+        await CommitPreparedAsync(
             NewCommit(checkpoint, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
         Assert.False(session.IsActive);

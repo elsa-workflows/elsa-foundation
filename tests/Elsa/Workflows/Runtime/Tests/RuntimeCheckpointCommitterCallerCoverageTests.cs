@@ -24,8 +24,8 @@ public sealed partial class RuntimeCheckpointCommitterCallerCoverageTests
         var actual = ScanDirectCommitterCalls().Select(ToIdentity).Order(StringComparer.Ordinal).ToArray();
 
         Assert.Equal(expected, actual);
-        Assert.Equal(28, actual.Length);
-        Assert.Equal(22, actual.Select(identity => identity[..identity.LastIndexOf(':')]).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(27, actual.Length);
+        Assert.Equal(21, actual.Select(identity => identity[..identity.LastIndexOf(':')]).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Theory]
@@ -87,7 +87,7 @@ public sealed partial class RuntimeCheckpointCommitterCallerCoverageTests
         var mappings = MapInventoryPathsToAssemblies();
         var inventoryPaths = ReadInventory().Select(row => row.Path).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(22, mappings.Length);
+        Assert.Equal(21, mappings.Length);
         Assert.Equal(inventoryPaths, mappings.Select(mapping => mapping.SourcePath).Order(StringComparer.Ordinal));
         Assert.All(mappings, mapping =>
         {
@@ -134,8 +134,8 @@ public sealed partial class RuntimeCheckpointCommitterCallerCoverageTests
                 match.Groups["path"].Value,
                 int.Parse(match.Groups["line"].Value)))
             .ToArray();
-        Assert.Equal(28, rows.Length);
-        Assert.Equal(22, rows.Select(row => row.Path).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(27, rows.Length);
+        Assert.Equal(21, rows.Select(row => row.Path).Distinct(StringComparer.Ordinal).Count());
         return rows;
     }
 

@@ -146,6 +146,33 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     }
 
     [Fact]
+    public void Coalesced_composition_resolves_from_a_scope_with_scope_validation_enabled()
+    {
+        var services = CreateRuntimeServices();
+        var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
+        {
+            Mode = CheckpointPersistenceMode.Coalesced
+        };
+        feature.ConfigureServices(services);
+        ReplaceCheckpointProvider(services);
+        feature.PostConfigureServices(services);
+
+        var scopeFactoryDescriptor = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IRuntimeCoalescingDrainScopeFactory));
+        Assert.Equal(ServiceLifetime.Scoped, scopeFactoryDescriptor.Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointPreparedRecoveryCoordinator>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>());
+    }
+
+    [Fact]
     public async Task Recovery_services_are_explicit_and_the_resolver_observes_durable_work_hidden_by_the_overlay()
     {
         var resolverContract = RecoveryAuthorityTestContract.RequiredType(

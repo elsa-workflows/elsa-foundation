@@ -8,6 +8,7 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -57,8 +58,10 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
     [Fact]
     public async Task Source_bound_exact_recovery_never_replays_or_folds_and_leaves_prepared_for_the_original_source()
     {
-        var fixture = await DurableD1Fixture.CreateAsync();
+        var fixture = await SourceFreePrefixFixture.CreateAsync("source-bound-exact");
         var before = fixture.Snapshot();
+        var originalAuthorities = before.Prepared.Select(item => item.RecoveryAuthority).ToArray();
+        var workItemsBefore = (await fixture.ReadWorkItemsAsync()).Select(item => item.WorkItemId).Order().ToArray();
         var replayer = new CountingReplayer();
         var foldObserver = new CountingFoldObserver();
 
@@ -68,11 +71,20 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         Assert.Equal(0, replayer.CallCount);
         Assert.Equal(0, foldObserver.CallCount);
         Assert.Equal(before, fixture.Snapshot());
-        Assert.All(fixture.Store.ListLogicalCheckpointLedgerEntries(), entry =>
+        var entries = fixture.Store.ListLogicalCheckpointLedgerEntries()
+            .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+            .ToArray();
+        Assert.Equal(3, entries.Select(entry => entry.RecoveryAuthority).Distinct().Count());
+        Assert.All(entries, entry =>
         {
             Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared, entry.Status);
-            Assert.Contains(entry.RecoveryAuthority, fixture.Authorities);
+            Assert.Contains(entry.RecoveryAuthority, originalAuthorities);
+            Assert.Equal(2, entry.AuthorityRevision);
+            Assert.NotEqual(entry.ExpectedFence, entry.CurrentAuthorityFence);
         });
+        Assert.Single(entries.Select(entry => entry.CurrentAuthorityFence).Distinct());
+        Assert.All(entries, entry => Assert.Equal(fixture.RecoveryLease.ToFence(), entry.CurrentAuthorityFence));
+        Assert.Equal(workItemsBefore, (await fixture.ReadWorkItemsAsync()).Select(item => item.WorkItemId).Order());
     }
 
     [Fact]
@@ -84,18 +96,28 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         var foldObserver = new CountingFoldObserver();
 
         var recovery = RequireT027RecoveryOperation();
-        await InvokeRecoveryAsync(recovery, fixture, replayer, foldObserver);
+        var firstPass = await InvokeRecoveryAsync(recovery, fixture, replayer, foldObserver);
 
+        Assert.False(firstPass.CanDispatch);
         Assert.Equal(2, replayer.CallCount);
         Assert.Equal(1, foldObserver.CallCount);
-        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared, fixture.Store.ListLogicalCheckpointLedgerEntries().Single(entry => entry.CommitId == "source-bound-gap").Status);
+        var suffix = fixture.Store.ListLogicalCheckpointLedgerEntries().Single(entry => entry.CommitId == "source-bound-gap");
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared, suffix.Status);
+        Assert.Equal(1, suffix.AuthorityRevision);
         Assert.NotEqual(before, fixture.Snapshot());
+
+        var secondPass = await InvokeRecoveryAsync(recovery, fixture, replayer, foldObserver);
+        Assert.True(secondPass.CanDispatch);
+        suffix = fixture.Store.ListLogicalCheckpointLedgerEntries().Single(entry => entry.CommitId == "source-bound-gap");
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared, suffix.Status);
+        Assert.Equal(2, suffix.AuthorityRevision);
+        Assert.Equal(2, replayer.CallCount);
+        Assert.Equal(1, foldObserver.CallCount);
     }
 
     [Theory]
     [InlineData("hidden-source-bound-gap")]
     [InlineData("noncontiguous-source-free-prefix")]
-    [InlineData("mixed-source")]
     [InlineData("missing-source")]
     [InlineData("unsupported-source")]
     [InlineData("ambiguous-source")]
@@ -107,11 +129,212 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         var foldObserver = new CountingFoldObserver();
 
         var recovery = RequireT027RecoveryOperation();
-        await InvokeRecoveryAsync(recovery, fixture, replayer, foldObserver);
+        await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+            InvokeRecoveryAsync(recovery, fixture, replayer, foldObserver));
 
         Assert.Equal(0, replayer.CallCount);
         Assert.Equal(0, foldObserver.CallCount);
         Assert.Equal(before, fixture.Snapshot());
+    }
+
+    [Fact]
+    public async Task Recovery_failure_propagates_before_orchestrator_dispatch_or_scope_creation()
+    {
+        var drainer = new CountingSchedulerDrainer();
+        var scopeFactory = new RejectingScopeFactory();
+        var coordinator = new RejectingRecoveryCoordinator();
+        var orchestrator = new WorkflowDrainOrchestrator(
+            drainer,
+            EmptyOutboxProcessor.Instance,
+            [],
+            new WorkflowDrainOrchestratorOptions(),
+            ownershipService: null,
+            ownershipContextAccessor: null,
+            scopeFactory,
+            liveDrainDeliveryAccessor: null,
+            TimeProvider.System,
+            cadenceResolver: null,
+            coordinator);
+        var envelope = NewEnvelope("workflow-fail-closed");
+
+        await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+            orchestrator.DrainAsync(
+                envelope,
+                new RuntimeSchedulerDrainRequest(envelope.WorkflowExecutionId)).AsTask());
+
+        Assert.Equal(0, drainer.CallCount);
+        Assert.Equal(0, scopeFactory.CallCount);
+    }
+
+    [Fact]
+    public async Task Retry_required_returns_before_orchestrator_dispatch_or_scope_creation()
+    {
+        var drainer = new CountingSchedulerDrainer();
+        var scopeFactory = new RejectingScopeFactory();
+        var orchestrator = new WorkflowDrainOrchestrator(
+            drainer,
+            EmptyOutboxProcessor.Instance,
+            [],
+            new WorkflowDrainOrchestratorOptions(),
+            ownershipService: null,
+            ownershipContextAccessor: null,
+            scopeFactory,
+            liveDrainDeliveryAccessor: null,
+            TimeProvider.System,
+            cadenceResolver: null,
+            new RetryRequiredRecoveryCoordinator());
+        var envelope = NewEnvelope("workflow-retry-required");
+
+        var result = await orchestrator.DrainAsync(
+            envelope,
+            new RuntimeSchedulerDrainRequest(envelope.WorkflowExecutionId));
+
+        Assert.Empty(result.Items);
+        Assert.Equal(0, drainer.CallCount);
+        Assert.Equal(0, scopeFactory.CallCount);
+    }
+
+    [Fact]
+    public void Coalescing_composition_without_recovery_coordinator_is_rejected_at_construction()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowDrainOrchestrator(
+            new CountingSchedulerDrainer(),
+            EmptyOutboxProcessor.Instance,
+            [],
+            new WorkflowDrainOrchestratorOptions(),
+            ownershipService: null,
+            ownershipContextAccessor: null,
+            new RejectingScopeFactory(),
+            liveDrainDeliveryAccessor: null,
+            TimeProvider.System,
+            cadenceResolver: null,
+            preparedRecoveryCoordinator: null));
+
+        Assert.Contains("recovery coordinator", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Authored_immediate_still_runs_recovery_before_scheduler_dispatch()
+    {
+        var drainer = new CountingSchedulerDrainer();
+        var scopeFactory = new RejectingScopeFactory();
+        var coordinator = new CountingRecoveryCoordinator();
+        var orchestrator = new WorkflowDrainOrchestrator(
+            drainer,
+            EmptyOutboxProcessor.Instance,
+            [],
+            new WorkflowDrainOrchestratorOptions(),
+            ownershipService: null,
+            ownershipContextAccessor: null,
+            scopeFactory,
+            liveDrainDeliveryAccessor: null,
+            TimeProvider.System,
+            new ImmediateCadenceResolver(),
+            coordinator);
+        var envelope = NewEnvelope("workflow-authored-immediate");
+
+        await orchestrator.DrainAsync(
+            envelope,
+            new RuntimeSchedulerDrainRequest(envelope.WorkflowExecutionId));
+
+        Assert.Equal(1, coordinator.CallCount);
+        Assert.Equal(1, drainer.CallCount);
+        Assert.Equal(0, scopeFactory.CallCount);
+    }
+
+    [Fact]
+    public async Task Recovery_without_matching_active_ownership_fails_before_read_or_mutation()
+    {
+        var fixture = await SourceFreePrefixFixture.CreateAsync();
+        var before = fixture.Snapshot();
+        var coordinator = new CoalescingRuntimeCheckpointRecoveryCoordinator(
+            fixture.Store,
+            fixture.Resolver,
+            new CountingReplayer(),
+            fixture.OwnershipAccessor);
+
+        await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+            coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId).AsTask());
+        Assert.Equal(before, fixture.Snapshot());
+
+        var mismatched = new RuntimeExecutionLease(
+            "lease-other-workflow",
+            "workflow-other",
+            "owner-other",
+            DateTimeOffset.UnixEpoch,
+            DateTimeOffset.UnixEpoch.AddHours(1),
+            101);
+        using (fixture.OwnershipAccessor.Push(mismatched))
+            await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+                coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId).AsTask());
+        Assert.Equal(before, fixture.Snapshot());
+    }
+
+    [Fact]
+    public async Task Source_free_replayer_failure_leaves_all_durable_surfaces_unchanged()
+    {
+        var fixture = await SourceFreePrefixFixture.CreateAsync();
+        var before = fixture.Snapshot();
+        var coordinator = new CoalescingRuntimeCheckpointRecoveryCoordinator(
+            fixture.Store,
+            fixture.Resolver,
+            new FailingReplayer(failOnCall: 2),
+            fixture.OwnershipAccessor);
+
+        using (fixture.PushOwnership())
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId).AsTask());
+
+        Assert.Equal(before, fixture.Snapshot());
+    }
+
+    [Fact]
+    public async Task Source_free_provider_rejection_leaves_binding_and_all_durable_surfaces_unchanged()
+    {
+        var fixture = await SourceFreePrefixFixture.CreateAsync();
+        var before = fixture.Snapshot();
+        var store = new ScriptedPreparedLedgerStore(fixture.Store) { RejectFold = true };
+        var coordinator = new CoalescingRuntimeCheckpointRecoveryCoordinator(
+            store,
+            fixture.Resolver,
+            new CountingReplayer(),
+            fixture.OwnershipAccessor);
+
+        using (fixture.PushOwnership())
+            await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+                coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId).AsTask());
+
+        Assert.Equal(1, store.FoldCallCount);
+        Assert.Equal(0, store.AdoptionCallCount);
+        Assert.Equal(before, fixture.Snapshot());
+    }
+
+    [Fact]
+    public async Task Mixed_prefix_first_pass_never_adopts_suffix_and_rejected_second_pass_preserves_folded_state()
+    {
+        var fixture = await SourceFreePrefixFixture.CreateAsync();
+        var store = new ScriptedPreparedLedgerStore(fixture.Store);
+        var replayer = new CountingReplayer();
+        var coordinator = new CoalescingRuntimeCheckpointRecoveryCoordinator(
+            store, fixture.Resolver, replayer, fixture.OwnershipAccessor);
+
+        RuntimeCheckpointPreparedRecoveryResult first;
+        using (fixture.PushOwnership())
+            first = await coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId);
+        Assert.False(first.CanDispatch);
+        Assert.Equal(1, store.FoldCallCount);
+        Assert.Equal(0, store.AdoptionCallCount);
+        var afterPrefix = fixture.Snapshot();
+
+        store.RejectAdoption = true;
+        using (fixture.PushOwnership())
+            await Assert.ThrowsAsync<RuntimeCheckpointPreparedRecoveryException>(() =>
+                coordinator.RecoverPreparedAsync(fixture.WorkflowExecutionId).AsTask());
+
+        Assert.Equal(1, store.FoldCallCount);
+        Assert.Equal(1, store.AdoptionCallCount);
+        Assert.Equal(2, replayer.CallCount);
+        Assert.Equal(afterPrefix, fixture.Snapshot());
     }
 
     // Compile-safe only at the absent T027 boundary. The fixture itself is fully typed and durable; this reflection
@@ -127,7 +350,7 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         return operation!;
     }
 
-    private static async Task InvokeRecoveryAsync(
+    private static async Task<RuntimeCheckpointPreparedRecoveryResult> InvokeRecoveryAsync(
         MethodInfo operation,
         DurableRecoveryFixture fixture,
         CountingReplayer? replayer = null,
@@ -136,10 +359,12 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         // T027 supplies one coordinator constructor that takes the explicit ledger, source resolver/router, shared
         // replayer, and fold capability. The named argument map rejects a service-locator/synthetic-source shortcut.
         var instance = CreateCoordinator(operation.DeclaringType!, fixture, replayer, foldObserver);
+        using var ownership = fixture.PushOwnership();
         var result = operation.Invoke(instance, [fixture.WorkflowExecutionId, CancellationToken.None]);
         Assert.NotNull(result);
         var task = (Task)result!.GetType().GetMethod("AsTask")!.Invoke(result, [])!;
         await task;
+        return (RuntimeCheckpointPreparedRecoveryResult)task.GetType().GetProperty("Result")!.GetValue(task)!;
     }
 
     private static object CreateCoordinator(
@@ -160,6 +385,8 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
                 return fixture.Resolver;
             if (parameter.ParameterType == typeof(IRuntimeCheckpointCommitStore))
                 return fixture.Store;
+            if (parameter.ParameterType == typeof(IRuntimeExecutionOwnershipContextAccessor))
+                return fixture.OwnershipAccessor;
             if (parameter.ParameterType.IsInstanceOfType(fixture.Queue))
                 return fixture.Queue;
             if (parameter.ParameterType.IsInstanceOfType(fixture.Store))
@@ -182,12 +409,28 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
             Queue = queue;
             Resolver = resolver;
             WorkflowExecutionId = workflowExecutionId;
+            OwnershipAccessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
+            var now = DateTimeOffset.UtcNow;
+            RecoveryLease = new RuntimeExecutionLease(
+                $"recovery-lease:{workflowExecutionId}",
+                workflowExecutionId,
+                "recovery-owner",
+                now,
+                now.AddHours(1),
+                100);
         }
 
         public InMemoryRuntimeCheckpointCommitStore Store { get; }
         public IWorkflowSchedulerWorkQueue Queue { get; }
         public IRuntimeSchedulerWorkItemResolver Resolver { get; }
         public string WorkflowExecutionId { get; }
+        public AsyncLocalRuntimeExecutionOwnershipContextAccessor OwnershipAccessor { get; }
+        public RuntimeExecutionLease RecoveryLease { get; }
+
+        public IDisposable PushOwnership() => OwnershipAccessor.Push(RecoveryLease);
+
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ReadWorkItemsAsync() =>
+            Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
 
         public DurableSnapshot Snapshot() => new(
             Store.ListLogicalCheckpointLedgerEntries()
@@ -195,7 +438,7 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
                 .Select(entry => new PreparedSnapshot(
                     entry.CommitId,
                     entry.LedgerToken,
-                    entry.RawCheckpoint!.Name,
+                    entry.RawCheckpoint?.Name,
                     entry.Provenance.WorkflowCheckpointOrder,
                     entry.RecoveryAuthority,
                     entry.InputFingerprint,
@@ -265,7 +508,9 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         public static async Task<SourceFreePrefixFixture> CreateAsync(string? shape = null)
         {
             const string workflowExecutionId = "workflow-source-free";
-            var store = new InMemoryRuntimeCheckpointCommitStore();
+            var liveness = new InMemoryExecutionLivenessStateStore();
+            var store = new InMemoryRuntimeCheckpointCommitStore(operationalStateStore: liveness);
+            await SaveRecoveryLeaseAsync(liveness, workflowExecutionId);
             var queue = new InMemoryWorkflowSchedulerWorkQueue();
             var source = NewSource(workflowExecutionId, "source-primary");
             var alternateSource = NewSource(workflowExecutionId, "source-alternate");
@@ -304,6 +549,17 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
                     await PrepareAsync(store, workflowExecutionId, "second-source-bound", alternateAuthority);
                     resolver.SetExact(authority, source);
                     resolver.SetExact(alternateAuthority, alternateSource);
+                    break;
+                case "source-bound-exact":
+                    var thirdSource = NewSource(workflowExecutionId, "source-third");
+                    await queue.EnqueueAsync(thirdSource);
+                    var thirdAuthority = codec.Encode(thirdSource);
+                    await PrepareAsync(store, workflowExecutionId, "first-source-bound", authority);
+                    await PrepareAsync(store, workflowExecutionId, "second-source-bound", alternateAuthority);
+                    await PrepareAsync(store, workflowExecutionId, "third-source-bound", thirdAuthority);
+                    resolver.SetExact(authority, source);
+                    resolver.SetExact(alternateAuthority, alternateSource);
+                    resolver.SetExact(thirdAuthority, thirdSource);
                     break;
                 case "missing-source":
                     await PrepareAsync(store, workflowExecutionId, "source-free-before-missing", authority: null);
@@ -396,13 +652,15 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
             {
                 RootVariableFrame = rootFrame
             });
+            var liveness = new InMemoryExecutionLivenessStateStore();
+            await SaveRecoveryLeaseAsync(liveness, workflowExecutionId);
             var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
                 workflowStateStore,
                 innerActivityStore,
                 bookmarkStateStore: null,
                 durableValueStore,
                 incidentStore,
-                operationalStateStore: null,
+                operationalStateStore: liveness,
                 schedulerStateStore: null,
                 inspectionStore);
             var sessionAccessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
@@ -597,6 +855,27 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         }
     }
 
+    private static async Task SaveRecoveryLeaseAsync(
+        InMemoryExecutionLivenessStateStore liveness,
+        string workflowExecutionId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var lease = new RuntimeExecutionLease(
+            $"recovery-lease:{workflowExecutionId}",
+            workflowExecutionId,
+            "recovery-owner",
+            now,
+            now.AddHours(1),
+            100);
+        await liveness.SaveAsync(new ExecutionLivenessState(
+            $"ownership:{workflowExecutionId}",
+            workflowExecutionId,
+            lease,
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null));
+    }
+
     private static async Task PrepareAsync(
         InMemoryRuntimeCheckpointCommitStore store,
         string workflowExecutionId,
@@ -634,7 +913,7 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
     private sealed record PreparedSnapshot(
         string CommitId,
         string LedgerToken,
-        string CheckpointName,
+        string? CheckpointName,
         long WorkflowCheckpointOrder,
         RuntimeCheckpointRecoveryAuthority? RecoveryAuthority,
         string Fingerprint,
@@ -642,10 +921,28 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
         string ProvenanceBytes,
         RuntimeLogicalCheckpointLedgerStatus Status);
 
-    private sealed record DurableSnapshot(
-        IReadOnlyList<PreparedSnapshot> Prepared,
-        string Commits,
-        (long Reserved, long Committed, long Revision) HighWatermarks);
+    private sealed class DurableSnapshot(
+        IReadOnlyList<PreparedSnapshot> prepared,
+        string commits,
+        (long Reserved, long Committed, long Revision) highWatermarks) : IEquatable<DurableSnapshot>
+    {
+        public IReadOnlyList<PreparedSnapshot> Prepared { get; } = prepared;
+        public string Commits { get; } = commits;
+        public (long Reserved, long Committed, long Revision) HighWatermarks { get; } = highWatermarks;
+
+        public bool Equals(DurableSnapshot? other) =>
+            other is not null &&
+            Prepared.SequenceEqual(other.Prepared) &&
+            StringComparer.Ordinal.Equals(Commits, other.Commits) &&
+            HighWatermarks == other.HighWatermarks;
+
+        public override bool Equals(object? obj) => obj is DurableSnapshot other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(
+            Prepared.Aggregate(0, (hash, item) => HashCode.Combine(hash, item)),
+            StringComparer.Ordinal.GetHashCode(Commits),
+            HighWatermarks);
+    }
 
     private static void AssertPreparedEvidenceUnchanged(DurableSnapshot expected, DurableSnapshot actual)
     {
@@ -667,6 +964,18 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
             CallCount++;
             return await _inner.RehydrateAsync(reservation, cancellationToken);
         }
+    }
+
+    private sealed class FailingReplayer(int failOnCall) : IRuntimeCheckpointPreparationReplayer
+    {
+        private readonly CountingReplayer _inner = new();
+
+        public ValueTask<RuntimeCheckpointPreparedCommit> RehydrateAsync(
+            RuntimeCheckpointPreparedReservation reservation,
+            CancellationToken cancellationToken = default) =>
+            _inner.CallCount + 1 == failOnCall
+                ? throw new InvalidOperationException("rehydration failed")
+                : _inner.RehydrateAsync(reservation, cancellationToken);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
@@ -696,6 +1005,9 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
 
         public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default) =>
             inner.PagePreparedAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(RuntimeCheckpointPreparedAdoptionRequest request, CancellationToken cancellationToken = default) =>
+            inner.AdoptPreparedAsync(request, cancellationToken);
 
         public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(RuntimeCheckpointPreparedFoldRequest request, CancellationToken cancellationToken = default)
         {
@@ -737,5 +1049,143 @@ public sealed class RuntimeCheckpointCoalescingRecoveryTests
                 ? new(RuntimeCheckpointRecoveryStatus.Missing)
                 : new(RuntimeCheckpointRecoveryStatus.Exact, authority, item);
         }
+    }
+
+    private sealed class RejectingRecoveryCoordinator : IRuntimeCheckpointPreparedRecoveryCoordinator
+    {
+        public ValueTask<RuntimeCheckpointPreparedRecoveryResult> RecoverPreparedAsync(
+            string workflowExecutionId,
+            CancellationToken cancellationToken = default) =>
+            throw new RuntimeCheckpointPreparedRecoveryException(workflowExecutionId, "test rejection");
+    }
+
+    private sealed class RetryRequiredRecoveryCoordinator : IRuntimeCheckpointPreparedRecoveryCoordinator
+    {
+        public ValueTask<RuntimeCheckpointPreparedRecoveryResult> RecoverPreparedAsync(
+            string workflowExecutionId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(RuntimeCheckpointPreparedRecoveryResult.RetryRequired);
+    }
+
+    private sealed class CountingRecoveryCoordinator : IRuntimeCheckpointPreparedRecoveryCoordinator
+    {
+        public int CallCount { get; private set; }
+
+        public ValueTask<RuntimeCheckpointPreparedRecoveryResult> RecoverPreparedAsync(
+            string workflowExecutionId,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return ValueTask.FromResult(RuntimeCheckpointPreparedRecoveryResult.Ready);
+        }
+    }
+
+    private sealed class ImmediateCadenceResolver : IRuntimeCheckpointCadenceResolver
+    {
+        public ValueTask<ResolvedCheckpointCadence> ResolveAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(ResolvedCheckpointCadence.Immediate);
+
+        public ResolvedCheckpointCadence Resolve(WorkflowExecutable? executable) =>
+            ResolvedCheckpointCadence.Immediate;
+    }
+
+    private sealed class ScriptedPreparedLedgerStore(IRuntimeCheckpointPreparedLedgerStore inner) : IRuntimeCheckpointPreparedLedgerStore
+    {
+        public bool RejectFold { get; set; }
+        public bool RejectAdoption { get; set; }
+        public int FoldCallCount { get; private set; }
+        public int AdoptionCallCount { get; private set; }
+
+        public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(RuntimeCheckpointPrepareRequest request, CancellationToken cancellationToken = default) =>
+            inner.PrepareAsync(request, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            inner.CommitAsync(commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(RuntimeCheckpointPreparationToken token, RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            inner.CommitPreparedAsync(token, commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default) =>
+            inner.PagePreparedAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(RuntimeCheckpointPreparedAdoptionRequest request, CancellationToken cancellationToken = default)
+        {
+            AdoptionCallCount++;
+            return RejectAdoption
+                ? ValueTask.FromResult(new RuntimeCheckpointPreparedAdoptionReceipt(
+                    RuntimeCheckpointPreparedAdoptionStatus.Conflict,
+                    request.WorkflowExecutionId,
+                    request.Route,
+                    request.ThroughWorkflowCheckpointOrder,
+                    request.TargetAuthorityFence,
+                    []))
+                : inner.AdoptPreparedAsync(request, cancellationToken);
+        }
+
+        public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(RuntimeCheckpointPreparedFoldRequest request, CancellationToken cancellationToken = default)
+        {
+            FoldCallCount++;
+            return RejectFold
+                ? ValueTask.FromResult(new RuntimeCheckpointPreparedFoldResult(
+                    RuntimeCheckpointCommitStoreStatus.Conflict,
+                    new Dictionary<string, RuntimeCheckpointCommitStoreResult>(StringComparer.Ordinal)))
+                : inner.CommitPreparedFoldAsync(request, cancellationToken);
+        }
+    }
+
+    private sealed class RejectingScopeFactory : IRuntimeCoalescingDrainScopeFactory
+    {
+        public int CallCount { get; private set; }
+
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
+        {
+            CallCount++;
+            throw new InvalidOperationException("Recovery must run before coalescing scope creation.");
+        }
+    }
+
+    private sealed class CountingSchedulerDrainer : IWorkflowSchedulerDrainer
+    {
+        public int CallCount { get; private set; }
+
+        public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
+            RuntimeSchedulerDrainRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            var now = DateTimeOffset.UnixEpoch;
+            return ValueTask.FromResult(new RuntimeSchedulerDrainResult(request.WorkflowExecutionId, now, now, []));
+        }
+    }
+
+    private sealed class EmptyOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public static EmptyOutboxProcessor Instance { get; } = new();
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
+    }
+
+    private static WorkflowExecutionCommandEnvelope NewEnvelope(string workflowExecutionId)
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var command = new WorkflowExecutionCommand(
+            "command-recovery",
+            workflowExecutionId,
+            WorkflowExecutionCommandKind.RunSchedulerWork,
+            now,
+            JsonSerializer.SerializeToElement(new { workItemId = "work-recovery" }),
+            new Dictionary<string, string>());
+        return new WorkflowExecutionCommandEnvelope(
+            "envelope-recovery",
+            workflowExecutionId,
+            command,
+            $"{workflowExecutionId}:recovery",
+            WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            now);
     }
 }

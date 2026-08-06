@@ -363,6 +363,11 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
             CancellationToken cancellationToken = default) =>
             PreparedLedger.PagePreparedAsync(query, cancellationToken);
 
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(
+            RuntimeCheckpointPreparedAdoptionRequest request,
+            CancellationToken cancellationToken = default) =>
+            PreparedLedger.AdoptPreparedAsync(request, cancellationToken);
+
         public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
             RuntimeCheckpointPreparedFoldRequest request,
             CancellationToken cancellationToken = default)

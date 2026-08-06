@@ -5,13 +5,14 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
 /// Default <see cref="IRuntimeCoalescingDrainScopeFactory"/>. Creates a <see cref="RuntimeCoalescingSession"/> per drain,
-/// pushes it onto the ambient <see cref="IRuntimeCoalescingSessionAccessor"/>, and fails closed at quiescence when the
-/// session requires the separately reviewed terminal Prepared-fold work.
+/// pushes it onto the ambient <see cref="IRuntimeCoalescingSessionAccessor"/>, and terminally folds a buffered
+/// Prepared segment through the durable provider at quiescence.
 /// </summary>
 public sealed class RuntimeCoalescingDrainScopeFactory(
     IRuntimeCoalescingSessionAccessor sessionAccessor,
     CoalescingInner<IWorkflowSchedulerWorkQueue> innerQueue,
     CoalescingInner<IRuntimePostCommitOutboxStore> innerOutboxStore,
+    IRuntimeCheckpointPreparedLedgerStore preparedLedgerStore,
     CoalescingRuntimeCheckpointPersistenceOptions options) : IRuntimeCoalescingDrainScopeFactory
 {
     public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
@@ -26,11 +27,12 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
         var handle = sessionAccessor.Push(session);
-        return new Scope(session, handle);
+        return new Scope(session, preparedLedgerStore, handle);
     }
 
     private sealed class Scope(
         RuntimeCoalescingSession session,
+        IRuntimeCheckpointPreparedLedgerStore preparedLedgerStore,
         IDisposable scopeHandle) : IRuntimeCoalescingDrainScope
     {
         public RuntimeCoalescingSession Session => session;
@@ -53,8 +55,26 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 return;
             }
 
-            throw new NotSupportedException(
-                "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+            if (!session.HasBufferedChanges)
+            {
+                throw new InvalidOperationException(
+                    "A durably persisted post-commit outcome cannot be acknowledged without a later durable checkpoint fold.");
+            }
+
+            var request = session.CreatePreparedFoldRequest();
+            var result = await preparedLedgerStore.CommitPreparedFoldAsync(request, cancellationToken);
+            if (result.Status is not (RuntimeCheckpointCommitStoreStatus.Committed or RuntimeCheckpointCommitStoreStatus.Replay))
+            {
+                throw new InvalidOperationException(
+                    $"Prepared checkpoint fold for workflow execution '{session.WorkflowExecutionId}' failed with '{result.Status}'.");
+            }
+
+            session.InvalidateInspectionBaselines();
+            var recordedAt = session.BufferedPreparedCommits[^1].Commit.Checkpoint.OccurredAt;
+            await session.ReconcileDurablyPersistedOutboxAsync(recordedAt, cancellationToken);
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            session.ClearBuffer();
+            session.Deactivate();
         }
 
         public ValueTask DisposeAsync()
