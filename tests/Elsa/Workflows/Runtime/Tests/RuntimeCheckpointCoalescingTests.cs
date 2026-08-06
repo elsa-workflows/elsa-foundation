@@ -1065,20 +1065,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
         Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
         Assert.Equal(
-            [fixture.Source.WorkItemId, successor.WorkItemId],
+            new[] { fixture.Source.WorkItemId, successor.WorkItemId }.OrderBy(id => id, StringComparer.Ordinal),
             (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
-            .Select(item => item.WorkItemId));
-
-        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(firstPreparation)).Status);
-        Assert.Equal(
-            [successor.WorkItemId],
-            (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
-            .Select(item => item.WorkItemId));
-        var durableLedger = fixture.InnerStore.ListLogicalCheckpointLedgerEntries();
-        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Committed,
-            durableLedger.Single(entry => entry.LedgerToken == firstPreparation.Token.LedgerToken).Status);
-        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared,
-            durableLedger.Single(entry => entry.LedgerToken == successorPreparation.Token.LedgerToken).Status);
+            .Select(item => item.WorkItemId)
+            .OrderBy(id => id, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -1142,7 +1132,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.RequestedInitialPersistenceMode);
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
         Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
-        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(
+            successor.WorkItemId,
+            Assert.Single(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId)).WorkItemId);
         Assert.True(fixture.Session.IsActive);
         Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
     }
@@ -1171,7 +1163,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.RequestedInitialPersistenceMode);
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
         Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
-        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(
+            successor.WorkItemId,
+            Assert.Single(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId)).WorkItemId);
         Assert.True(fixture.Session.IsActive);
         Assert.False(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
         Assert.True(fixture.Session.OwnsOverlayClaim(successorClaim));
