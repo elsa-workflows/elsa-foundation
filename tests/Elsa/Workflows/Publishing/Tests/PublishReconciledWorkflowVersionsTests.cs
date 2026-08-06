@@ -165,6 +165,39 @@ public sealed class PublishReconciledWorkflowVersionsTests
     }
 
     [Fact]
+    public async Task Cancellation_of_the_provided_token_propagates()
+    {
+        // Host shutdown is not a per-definition failure: the pass must observe cancellation instead
+        // of the handler swallowing it and continuing to publish during teardown.
+        using var cts = new CancellationTokenSource();
+        var sender = new SpySender { FailFor = "ver-a", FailWith = new OperationCanceledException(cts.Token) };
+        var handler = NewHandler(sender, definitions: [Definition("wf-a")], versions: [Version("wf-a", "1.0.0", "ver-a")]);
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), cts.Token));
+    }
+
+    [Fact]
+    public async Task An_OperationCanceledException_without_a_cancelled_token_is_isolated_like_any_failure()
+    {
+        // A dependency throwing OCE on its own (token not cancelled) is an operational failure, not a
+        // shutdown signal — the catch-all fallback keeps shell activation alive (reviewed on #1161).
+        var logger = new CapturingLogger<PublishReconciledWorkflowVersions>();
+        var sender = new SpySender { FailFor = "ver-a", FailWith = new OperationCanceledException() };
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a"), Definition("wf-b")],
+            versions: [Version("wf-a", "1.0.0", "ver-a"), Version("wf-b", "1.0.0", "ver-b")],
+            logger: logger);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-b", "1.0.0")), CancellationToken.None);
+
+        Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a"));
+    }
+
+    [Fact]
     public async Task No_claims_means_no_work()
     {
         var sender = new SpySender();
@@ -207,11 +240,12 @@ public sealed class PublishReconciledWorkflowVersionsTests
     {
         public List<object> Sent { get; } = [];
         public string? FailFor { get; init; }
+        public Exception? FailWith { get; init; }
 
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             if (request is PublishWorkflow publish && publish.VersionId == FailFor)
-                throw new InvalidOperationException($"Simulated publish failure for '{publish.VersionId}'.");
+                throw FailWith ?? new InvalidOperationException($"Simulated publish failure for '{publish.VersionId}'.");
 
             Sent.Add(request);
             if (request is PublishWorkflow p)

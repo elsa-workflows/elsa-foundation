@@ -49,10 +49,17 @@ public sealed class PublishReconciledWorkflowVersions(
             {
                 await PublishLatestVersion(claim, cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Host shutdown/cancellation is not a per-definition failure — the pass is being
+                // cancelled and must observe it; swallowing would keep publishing during teardown.
+                throw;
+            }
             catch (Exception exception)
             {
-                // Never escape: a throw here would fail the reconcile pass and shell activation
-                // (Sequential delivery). Surface, isolate, continue with the next definition.
+                // Deliberately catch-all (reviewed on #1161): any other exception — expected or not —
+                // must never escape, because Sequential delivery would fail the reconcile pass and
+                // shell activation with it. Surface, isolate, continue with the next definition.
                 LogPublishFailed(claim, exception);
             }
         }
