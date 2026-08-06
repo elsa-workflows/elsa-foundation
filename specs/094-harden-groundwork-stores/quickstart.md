@@ -527,11 +527,13 @@ Three things worth knowing before repeating this:
    `GroundworkRuntimeCheckpointWriterException: Runtime checkpoint marker 'commit-current' conflicted but
    no committed marker could be reloaded`. An isolated re-run of
    `RuntimeFenceContractTests.Runtime_fence_contract_is_enforced_by_every_persistent_provider` then passed
-   on all four providers. It is a real timing-dependent race, not a flake to ignore:
-   `GroundworkRuntimeCheckpointWriter.ApplyAtomicallyAsync` retries on `FenceConcurrencyException` via
-   `continue` but **throws** on `CheckpointMarkerConcurrencyException` when the marker is not yet
-   loadable, so a concurrent double-commit of the same commit id can fail instead of resolving as an
-   idempotent replay. Tracked separately.
+   on all four providers. It was a real timing-dependent race, not a flake:
+   `GroundworkRuntimeCheckpointWriter.ApplyAtomicallyAsync` retried on `FenceConcurrencyException` via
+   `continue` but **threw** on `CheckpointMarkerConcurrencyException` when the marker was not yet
+   loadable, so a concurrent double-commit of the same commit id failed instead of resolving as an
+   idempotent replay. **Fixed by `cf3354481` (PR #1165)**, which gives the marker branch the same bounded
+   retry; only MongoDB reproduces it, because SQL Server and PostgreSQL block the conflicting insert on
+   the rival transaction instead of failing it fast. A publisher run before that commit can still hit it.
 3. **Do not add the imported version to the importer's `HistoricalGenerations`.** That list is the
    generations *before* the current one; the importer's own tests import the current version as their
    target, and adding `preview.103` broke 20 of them. It joins the list when a later Groundwork version

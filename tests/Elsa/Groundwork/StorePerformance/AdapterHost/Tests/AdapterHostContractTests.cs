@@ -118,6 +118,61 @@ public sealed class AdapterHostContractTests : IDisposable
     }
 
     /// <summary>
+    /// The runner accepts an artifact directory that is already partly populated, so "document present,
+    /// raw plans absent" is a reachable state rather than a hypothetical. Reconciling raw plans only on the
+    /// child that happened to copy the document would leave the rest missing, and correctness would then
+    /// fail naming the raw plan instead of the real gap.
+    /// </summary>
+    [Fact]
+    public void A_missing_raw_plan_is_restored_even_when_the_document_is_already_present()
+    {
+        var staging = Path.Combine(_directory, "routed-staging");
+        var rawPlan = "checkpoint-commit.sqlite.route-a.txt";
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, rawPlan), "SCAN TABLE groundwork_documents USING INDEX ix_a");
+        var reference = NativePlanEvidenceStaging.ReferenceFor(WorkloadId, Provider);
+        NativePlanEvidenceStaging.Write(staging, CreateDocument() with
+        {
+            Routes = [new NativeRouteEvidence("route-a", rawPlan, new string('c', 64), "index-scan", "ix_a", 1, true, true, 10, 1)]
+        });
+        // CreateRequest stages the routeless document and repoints the staging variable, so the routed
+        // staging directory has to win afterwards rather than before.
+        var request = CreateRequest(ProcessKind.Measured, 1) with
+        {
+            NativePlanContentSha256 = NativePlanEvidenceStaging.Sha256(Path.Combine(staging, reference))
+        };
+        Environment.SetEnvironmentVariable(NativePlanEvidenceStaging.StagingDirectoryVariable, staging);
+        NativePlanEvidenceStaging.PublishInto(_directory, request);
+        File.Delete(Path.Combine(_directory, rawPlan));
+
+        NativePlanEvidenceStaging.PublishInto(_directory, request);
+
+        Assert.True(File.Exists(Path.Combine(_directory, rawPlan)), "the raw provider plan was not reconciled");
+    }
+
+    /// <summary>
+    /// Malformed and duplicated settings must surface as contract failures, which the CLI turns into a
+    /// clean message and exit code 2. Anything else escapes the handler as an unhandled exception and the
+    /// operator gets a stack trace instead of the typo.
+    /// </summary>
+    [Theory]
+    [InlineData("journalMode")]
+    [InlineData("journalMode=")]
+    public void A_malformed_provider_setting_is_a_contract_failure(string setting) =>
+        Assert.Throws<PerformanceContractException>(
+            () => HostArguments.Settings(["--provider-setting", setting], "--provider-setting"));
+
+    [Fact]
+    public void A_duplicated_provider_setting_is_rejected_rather_than_silently_overwritten()
+    {
+        string[] args = ["--provider-setting", "journalMode=wal", "--provider-setting", "journalMode=delete"];
+
+        var exception = Assert.Throws<PerformanceContractException>(() => HostArguments.Settings(args, "--provider-setting"));
+
+        Assert.Contains("journalMode", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// An unregistered workload must be a hard failure. The harness's contract — "a missing adapter is a
     /// blocked run, never a simulated result" — only holds if the host refuses to improvise.
     /// </summary>

@@ -32,8 +32,19 @@ internal static class HostArguments
     /// <c>RunRequest.ProviderConfiguration</c>, which <c>ArtifactSafety</c> screens for connection
     /// material — so a rejected key here is a contract violation, not a typo to work around.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> Settings(string[] args, string name) =>
-        Options(args, name).Select(value => Pair(value, name)).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    public static IReadOnlyDictionary<string, string> Settings(string[] args, string name)
+    {
+        var settings = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in Options(args, name).Select(entry => Pair(entry, name)))
+        {
+            // Rejected rather than last-one-wins: the observed configuration must match the staged
+            // document's entry for entry, so a silently dropped setting surfaces much later as an opaque
+            // correctness rejection instead of as the operator typo it is.
+            if (!settings.TryAdd(key, value))
+                throw new PerformanceContractException($"{name} '{key}' was supplied more than once.");
+        }
+        return settings;
+    }
 
     private static KeyValuePair<string, string> Pair(string value, string option)
     {

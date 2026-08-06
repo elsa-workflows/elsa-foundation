@@ -49,27 +49,22 @@ internal static class NativePlanEvidenceStaging
         var reference = request.NativePlanEvidenceReference;
         var destination = Path.Combine(outputDirectory, reference);
         if (!File.Exists(destination))
-        {
-            var staging = Environment.GetEnvironmentVariable(StagingDirectoryVariable);
-            if (string.IsNullOrWhiteSpace(staging))
-                throw new PerformanceContractException(
-                    $"Native-plan evidence '{reference}' is not in the artifact directory and {StagingDirectoryVariable} is unset. " +
-                    "Run 'capture-plan' first and point that variable at its output directory.");
-            var source = Path.Combine(staging, reference);
-            if (!File.Exists(source))
-                throw new PerformanceContractException($"Staged native-plan evidence '{reference}' was not found under {staging}.");
-            Directory.CreateDirectory(outputDirectory);
-            File.Copy(source, destination);
-            foreach (var rawPlan in RawPlanReferences(source))
-                CopyRawPlan(staging, outputDirectory, rawPlan);
-        }
+            CopyFromStaging(outputDirectory, reference);
 
         var digest = Sha256(destination);
         if (!string.Equals(digest, request.NativePlanContentSha256, StringComparison.Ordinal))
             throw new PerformanceContractException(
                 $"Staged native-plan evidence '{reference}' hashes to {digest}, not the requested --native-plan-sha256 {request.NativePlanContentSha256}. " +
                 "Recapture the plan or correct the matrix argument; the harness will not accept a mismatched commitment.");
-        return Read(destination);
+
+        // Raw plans are reconciled on every child, not only on the one that copied the document.
+        // ProcessMatrixRunner supports resuming a cohort whose directory is already partly populated, so a
+        // document that arrived without its raw plans is a reachable state; leaving them uncopied would
+        // fail correctness with a message pointing at the raw plan rather than at the real gap.
+        var document = Read(destination);
+        foreach (var route in document.Routes)
+            EnsureRawPlan(outputDirectory, route.RawPlanReference);
+        return document;
     }
 
     public static NativePlanEvidenceDocument Read(string path)
@@ -83,16 +78,32 @@ internal static class NativePlanEvidenceStaging
     public static string Sha256(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
-    private static IEnumerable<string> RawPlanReferences(string evidencePath) =>
-        Read(evidencePath).Routes.Select(route => route.RawPlanReference).Distinct(StringComparer.Ordinal);
-
-    private static void CopyRawPlan(string staging, string outputDirectory, string reference)
+    private static void CopyFromStaging(string outputDirectory, string reference)
     {
-        var destination = Path.Combine(outputDirectory, reference);
-        if (File.Exists(destination)) return;
-        var source = Path.Combine(staging, reference);
-        if (!File.Exists(source))
-            throw new PerformanceContractException($"Staged raw provider-plan '{reference}' was not found under {staging}.");
-        File.Copy(source, destination);
+        Directory.CreateDirectory(outputDirectory);
+        File.Copy(Path.Combine(RequireStaging(reference), reference), Path.Combine(outputDirectory, reference));
+    }
+
+    private static void EnsureRawPlan(string outputDirectory, string reference)
+    {
+        if (File.Exists(Path.Combine(outputDirectory, reference))) return;
+        CopyFromStaging(outputDirectory, reference);
+    }
+
+    /// <summary>
+    /// Resolves the staging directory, and is reached only when something is actually missing — a fully
+    /// populated artifact directory must not require the variable at all, because the runner re-invokes
+    /// children long after <c>capture-plan</c> ran.
+    /// </summary>
+    private static string RequireStaging(string reference)
+    {
+        var staging = Environment.GetEnvironmentVariable(StagingDirectoryVariable);
+        if (string.IsNullOrWhiteSpace(staging))
+            throw new PerformanceContractException(
+                $"'{reference}' is not in the artifact directory and {StagingDirectoryVariable} is unset. " +
+                "Run 'capture-plan' first and point that variable at its output directory.");
+        if (!File.Exists(Path.Combine(staging, reference)))
+            throw new PerformanceContractException($"Staged evidence '{reference}' was not found under {staging}.");
+        return staging;
     }
 }
