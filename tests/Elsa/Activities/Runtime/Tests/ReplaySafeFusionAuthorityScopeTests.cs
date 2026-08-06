@@ -14,9 +14,9 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Path-A source-domain guardrail: the durable ScheduleActivity dispatch remains the recovery authority while the
-/// shipped D2 pump enters nested D1 spans. The future authority contract is deliberately read by reflection so this
-/// RED test compiles before that contract exists.
+/// Path-A source-domain guardrails that distinguish a true D2-to-nested-D1 pump dispatch from a resumption barrier.
+/// The exact dispatcher is observed through the test-decorated ScheduleActivity handler and the existing scoped
+/// consumed-claim accessor; authority itself is read by reflection so the RED tests remain source-domain owned.
 /// </summary>
 public sealed class ReplaySafeFusionAuthorityScopeTests
 {
@@ -31,43 +31,51 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
     ];
 
     [Fact]
-    public async Task Nested_D2_to_D1_preparations_inherit_the_outer_durable_schedule_authority()
+    public async Task Nested_D2_to_D1_pump_dispatch_inherits_the_outer_durable_schedule_authority()
     {
         var observations = new AuthorityObservationSink();
+        var dispatches = new ScheduleActivityDispatchObservationSink();
+        var drainObservations = new ResumptionDrainObservationSink();
         var boundaryCrash = new ArmedPostCommitBoundaryCrash();
         var physicalFolds = new PhysicalFoldObserver();
-        await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-            .WithCoalescing()
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(new RuntimeReplaySafeFusionOptions
-                {
-                    Enabled = true,
-                    FuseCompletionCascade = true
-                });
-                services.AddSingleton(observations);
-                services.AddScoped<IRuntimeCheckpointCommitEnricher, AmbientAuthorityObservingEnricher>();
-                DecorateCheckpointStoreWithBoundaryCrash(services, boundaryCrash, physicalFolds);
-                CoalescingDurableCheckpointStoreTestDecorator.Decorate(
-                    services,
-                    inner => new PreparedFoldObservingCheckpointStore(
-                        (IRuntimeCheckpointPreparedLedgerStore)inner,
-                        beforeFold: physicalFolds.Record));
-            })
-            .Build(Enumerable.Range(0, 12).Select(index => $"actexec-{index}"));
+        await using var harness = CreateHarness(observations, dispatches, drainObservations, boundaryCrash, physicalFolds);
 
         var outerScheduleWorkItem = await StageOuterLeafScheduleAsync(harness, boundaryCrash);
         var diagnostics = harness.Services.GetRequiredService<RuntimeSchedulerDispatchDiagnostics>();
         observations.Clear();
+        dispatches.Clear();
+        drainObservations.Clear();
         diagnostics.Reset();
         boundaryCrash.Disarm();
 
-        await ResolveResumptionService(harness.Services).SweepAsync(new RuntimeResumptionSweepRequest());
+        var workQueue = harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var stagedQueue = await workQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId));
+        var resumptionBarrier = Assert.Single(stagedQueue, item =>
+            item.CommandKind == WorkflowExecutionCommandKind.RunSchedulerWork);
+        Assert.True(await workQueue.DeleteAsync(
+            WorkflowExecutionHarness.WorkflowExecutionId,
+            resumptionBarrier.WorkItemId));
+        var queuedBeforeDrain = await workQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId));
+        Assert.Collection(queuedBeforeDrain, item => Assert.Equal(outerScheduleWorkItem.WorkItemId, item.WorkItemId));
+
+        var drainResult = await harness.Services.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(
+                NewEnvelope(outerScheduleWorkItem),
+                new RuntimeSchedulerDrainRequest(WorkflowExecutionHarness.WorkflowExecutionId));
         var workflowState = await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>()
             .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
 
         Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        var isolatedDrain = Assert.Single(drainObservations.Snapshot());
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, isolatedDrain.Envelope.Command.Kind);
+        Assert.DoesNotContain(drainResult.Items, item =>
+            item.CommandKind == WorkflowExecutionCommandKind.RunSchedulerWork);
+        var outerDrainItem = Assert.Single(drainResult.Items, item =>
+            item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity);
+        Assert.Equal(outerScheduleWorkItem.WorkItemId, outerDrainItem.WorkItemId);
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, outerDrainItem.CommandKind);
         Assert.True(diagnostics.FusedSpans >= 2,
             $"Expected the outer leaf and its nested ReplaySafe successor to fuse, saw {diagnostics.FusedSpans} spans.");
         Assert.True(diagnostics.InlineCascadeDispatches > 0,
@@ -79,23 +87,17 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
         Assert.True(physicalFolds.MaximumMemberCount > 1,
             $"Expected a physical prepared fold with more than one member, saw {physicalFolds.MaximumMemberCount}.");
 
-        var relevant = observations.Snapshot()
-            .Where(item => item.ExecutableNodeId is FirstSuccessorNodeId or NestedSuccessorNodeId)
-            .Where(item => PreparationNames.Contains(item.CheckpointName, StringComparer.Ordinal))
-            .ToArray();
-        foreach (var nodeId in new[] { FirstSuccessorNodeId, NestedSuccessorNodeId })
-        foreach (var checkpointName in PreparationNames)
-            Assert.Single(relevant, item =>
-                StringComparer.Ordinal.Equals(item.ExecutableNodeId, nodeId) &&
-                StringComparer.Ordinal.Equals(item.CheckpointName, checkpointName));
+        var scheduleDispatches = dispatches.Snapshot();
+        var outerDispatch = Assert.Single(scheduleDispatches, item => item.ExecutableNodeId == FirstSuccessorNodeId);
+        Assert.Equal(outerScheduleWorkItem.WorkItemId, outerDispatch.WorkItemId);
+        Assert.Equal(outerScheduleWorkItem.WorkItemId, outerDispatch.PendingConsumeWorkItemId);
+        var nestedPumpDispatch = Assert.Single(scheduleDispatches, item => item.ExecutableNodeId == NestedSuccessorNodeId);
+        Assert.NotEqual(outerScheduleWorkItem.WorkItemId, nestedPumpDispatch.WorkItemId);
+        Assert.Equal(outerScheduleWorkItem.WorkItemId, nestedPumpDispatch.PendingConsumeWorkItemId);
+        Assert.DoesNotContain(drainResult.Items, item => item.WorkItemId == nestedPumpDispatch.WorkItemId);
 
-        // Intentional RED boundary: all real fusion/preparation assertions above must remain non-vacuous before the
-        // missing production accessor is reported. No test-owned dispatch or fusion surrogate can satisfy this.
-        Assert.True(observations.AccessorContractFound,
-            "Missing Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointRecoveryAuthorityAccessor.");
-        Assert.True(observations.AccessorRegistrationFound,
-            "IRuntimeCheckpointRecoveryAuthorityAccessor exists but is not registered in the active runtime scope.");
-        Assert.Null(observations.ReflectionFailure);
+        var relevant = AssertPreparationMatrix(observations);
+        AssertAuthorityAccessorAvailable(observations);
 
         var outerScheduled = Assert.Single(relevant, item =>
             item.ExecutableNodeId == FirstSuccessorNodeId && item.CheckpointName == RuntimeCheckpointNames.ActivityScheduled);
@@ -107,11 +109,149 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
         Assert.Equal(outerScheduleWorkItem.WorkItemId, outerAuthority.WorkItemId);
         Assert.Matches("^sha256:[0-9a-f]{64}$", outerAuthority.Fingerprint);
 
-        foreach (var observation in relevant)
+        var nestedScheduled = Assert.Single(relevant, item =>
+            item.ExecutableNodeId == NestedSuccessorNodeId && item.CheckpointName == RuntimeCheckpointNames.ActivityScheduled);
+        Assert.Equal(nestedPumpDispatch.WorkItemId, nestedScheduled.SchedulerWorkItemId);
+
+        AssertPreparationsUseAuthority(relevant, FirstSuccessorNodeId, outerAuthority);
+        AssertPreparationsUseAuthority(relevant, NestedSuccessorNodeId, outerAuthority);
+    }
+
+    [Fact]
+    public async Task Resumption_barrier_drains_RunSchedulerWork_before_later_durable_schedule_without_authority_leakage()
+    {
+        var observations = new AuthorityObservationSink();
+        var dispatches = new ScheduleActivityDispatchObservationSink();
+        var drainObservations = new ResumptionDrainObservationSink();
+        var boundaryCrash = new ArmedPostCommitBoundaryCrash();
+        var physicalFolds = new PhysicalFoldObserver();
+        await using var harness = CreateHarness(observations, dispatches, drainObservations, boundaryCrash, physicalFolds);
+
+        var outerScheduleWorkItem = await StageOuterLeafScheduleAsync(harness, boundaryCrash);
+        var diagnostics = harness.Services.GetRequiredService<RuntimeSchedulerDispatchDiagnostics>();
+        observations.Clear();
+        dispatches.Clear();
+        drainObservations.Clear();
+        diagnostics.Reset();
+        boundaryCrash.Disarm();
+
+        await ResolveResumptionService(harness.Services).SweepAsync(new RuntimeResumptionSweepRequest());
+        var workflowState = await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        var resumption = Assert.Single(drainObservations.Snapshot());
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, resumption.Envelope.Command.Kind);
+        Assert.Equal(
+            [WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity],
+            resumption.Result.Items.Take(2).Select(item => item.CommandKind).ToArray());
+
+        var scheduleDispatches = dispatches.Snapshot();
+        var resumedOuter = Assert.Single(scheduleDispatches, item => item.ExecutableNodeId == FirstSuccessorNodeId);
+        Assert.Equal(outerScheduleWorkItem.WorkItemId, resumedOuter.WorkItemId);
+        Assert.Equal(resumedOuter.WorkItemId, resumedOuter.PendingConsumeWorkItemId);
+        var laterDurable = Assert.Single(scheduleDispatches, item => item.ExecutableNodeId == NestedSuccessorNodeId);
+        Assert.Equal(laterDurable.WorkItemId, laterDurable.PendingConsumeWorkItemId);
+        Assert.NotEqual(resumedOuter.PendingConsumeWorkItemId, laterDurable.PendingConsumeWorkItemId);
+
+        var relevant = AssertPreparationMatrix(observations);
+        AssertAuthorityAccessorAvailable(observations);
+        var outerAuthority = Assert.IsType<AuthoritySnapshot>(Assert.Single(relevant, item =>
+            item.ExecutableNodeId == FirstSuccessorNodeId &&
+            item.CheckpointName == RuntimeCheckpointNames.ActivityScheduled).Authority);
+        var laterAuthority = Assert.IsType<AuthoritySnapshot>(Assert.Single(relevant, item =>
+            item.ExecutableNodeId == NestedSuccessorNodeId &&
+            item.CheckpointName == RuntimeCheckpointNames.ActivityScheduled).Authority);
+        Assert.Equal(resumedOuter.WorkItemId, outerAuthority.WorkItemId);
+        Assert.Equal(laterDurable.WorkItemId, laterAuthority.WorkItemId);
+        Assert.NotEqual(outerAuthority, laterAuthority);
+
+        AssertPreparationsUseAuthority(relevant, FirstSuccessorNodeId, outerAuthority);
+        AssertPreparationsUseAuthority(relevant, NestedSuccessorNodeId, laterAuthority);
+    }
+
+    private static WorkflowExecutionHarness CreateHarness(
+        AuthorityObservationSink observations,
+        ScheduleActivityDispatchObservationSink dispatches,
+        ResumptionDrainObservationSink drainObservations,
+        ArmedPostCommitBoundaryCrash boundaryCrash,
+        PhysicalFoldObserver physicalFolds) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithCoalescing()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(new RuntimeReplaySafeFusionOptions
+                {
+                    Enabled = true,
+                    FuseCompletionCascade = true
+                });
+                services.AddSingleton(observations);
+                services.AddSingleton(dispatches);
+                services.AddSingleton<IWorkflowSchedulerDrainObserver>(drainObservations);
+                services.AddScoped<IRuntimeCheckpointCommitEnricher, AmbientAuthorityObservingEnricher>();
+                DecorateScheduleActivityHandler(services);
+                DecorateCheckpointStoreWithBoundaryCrash(services, boundaryCrash, physicalFolds);
+                CoalescingDurableCheckpointStoreTestDecorator.Decorate(
+                    services,
+                    inner => new PreparedFoldObservingCheckpointStore(
+                        (IRuntimeCheckpointPreparedLedgerStore)inner,
+                        beforeFold: physicalFolds.Record));
+            })
+            .Build(Enumerable.Range(0, 12).Select(index => $"actexec-{index}"));
+
+    private static AuthorityObservation[] AssertPreparationMatrix(AuthorityObservationSink observations)
+    {
+        var relevant = observations.Snapshot()
+            .Where(item => item.ExecutableNodeId is FirstSuccessorNodeId or NestedSuccessorNodeId)
+            .Where(item => PreparationNames.Contains(item.CheckpointName, StringComparer.Ordinal))
+            .ToArray();
+        foreach (var nodeId in new[] { FirstSuccessorNodeId, NestedSuccessorNodeId })
+        foreach (var checkpointName in PreparationNames)
+            Assert.Single(relevant, item =>
+                StringComparer.Ordinal.Equals(item.ExecutableNodeId, nodeId) &&
+                StringComparer.Ordinal.Equals(item.CheckpointName, checkpointName));
+        return relevant;
+    }
+
+    private static void AssertAuthorityAccessorAvailable(AuthorityObservationSink observations)
+    {
+        Assert.True(observations.AccessorContractFound,
+            "Missing Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointRecoveryAuthorityAccessor.");
+        Assert.True(observations.AccessorRegistrationFound,
+            "IRuntimeCheckpointRecoveryAuthorityAccessor exists but is not registered in the active runtime scope.");
+        Assert.Null(observations.ReflectionFailure);
+    }
+
+    private static void AssertPreparationsUseAuthority(
+        IEnumerable<AuthorityObservation> observations,
+        string executableNodeId,
+        AuthoritySnapshot expectedAuthority)
+    {
+        foreach (var checkpointName in PreparationNames)
         {
-            var authority = Assert.IsType<AuthoritySnapshot>(observation.Authority);
-            Assert.Equal(outerAuthority, authority);
+            var observation = Assert.Single(observations, item =>
+                item.ExecutableNodeId == executableNodeId &&
+                item.CheckpointName == checkpointName);
+            Assert.Equal(expectedAuthority, Assert.IsType<AuthoritySnapshot>(observation.Authority));
         }
+    }
+
+    private static void DecorateScheduleActivityHandler(IServiceCollection services)
+    {
+        var index = services.IndexOf(services.Last(item =>
+            item.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            item.ImplementationType == typeof(WorkflowScheduleActivitySchedulerWorkHandler)));
+        var descriptor = services[index];
+        services[index] = new ServiceDescriptor(
+            typeof(IWorkflowSchedulerWorkHandler),
+            serviceProvider => new ScheduleActivityDispatchObservingHandler(
+                (IWorkflowSchedulerWorkHandler)ActivatorUtilities.CreateInstance(
+                    serviceProvider,
+                    descriptor.ImplementationType!),
+                serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
+                serviceProvider.GetRequiredService<ScheduleActivityDispatchObservationSink>()),
+            descriptor.Lifetime);
     }
 
     private static void DecorateCheckpointStoreWithBoundaryCrash(
@@ -193,6 +333,23 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
             provider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<IWorkflowExecutionStateStore>());
+
+    private static WorkflowExecutionCommandEnvelope NewEnvelope(RuntimeSchedulerWorkItem workItem) =>
+        new(
+            envelopeId: workItem.EnvelopeId,
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            command: new WorkflowExecutionCommand(
+                workItem.CommandId,
+                workItem.WorkflowExecutionId,
+                workItem.CommandKind,
+                workItem.EnqueuedAt,
+                workItem.Payload,
+                workItem.CommandMetadata),
+            idempotencyKey: workItem.IdempotencyKey,
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: workItem.EnqueuedAt,
+            sequence: workItem.Sequence,
+            metadata: workItem.EnvelopeMetadata);
 
     private static WorkflowExecutable BuildStraightLineExecutable()
     {
@@ -330,11 +487,115 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
         }
     }
 
+    private sealed class ScheduleActivityDispatchObservingHandler(
+        IWorkflowSchedulerWorkHandler inner,
+        IRuntimeConsumedSchedulerWorkClaimAccessor consumedClaimAccessor,
+        ScheduleActivityDispatchObservationSink sink) :
+        IWorkflowSchedulerWorkHandler,
+        IRuntimePipelineWorkHandler
+    {
+        public string Name => inner.Name;
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => inner.CanHandle(workItem);
+
+        public async ValueTask HandleAsync(
+            RuntimeSchedulerWorkItem workItem,
+            CancellationToken cancellationToken = default)
+        {
+            Observe(workItem);
+            await inner.HandleAsync(workItem, cancellationToken);
+        }
+
+        public async ValueTask HandleAsync(
+            RuntimeSchedulerWorkItem workItem,
+            IRuntimePipelineContext pipelineContext,
+            CancellationToken cancellationToken = default)
+        {
+            Observe(workItem);
+            if (inner is IRuntimePipelineWorkHandler pipelineHandler)
+                await pipelineHandler.HandleAsync(workItem, pipelineContext, cancellationToken);
+            else
+                await inner.HandleAsync(workItem, cancellationToken);
+        }
+
+        private void Observe(RuntimeSchedulerWorkItem workItem)
+        {
+            var executableNodeId = workItem.Payload is { } payload
+                ? payload.Deserialize<RuntimeScheduleActivityCommandPayload>()?.ExecutableNodeId
+                : null;
+            sink.Add(new ScheduleActivityDispatchObservation(
+                workItem.WorkItemId,
+                executableNodeId,
+                consumedClaimAccessor.PendingConsume?.WorkItemId));
+        }
+    }
+
+    private sealed class ScheduleActivityDispatchObservationSink
+    {
+        private readonly object _gate = new();
+        private readonly List<ScheduleActivityDispatchObservation> _observations = [];
+
+        public void Add(ScheduleActivityDispatchObservation observation)
+        {
+            lock (_gate)
+                _observations.Add(observation);
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+                _observations.Clear();
+        }
+
+        public ScheduleActivityDispatchObservation[] Snapshot()
+        {
+            lock (_gate)
+                return _observations.ToArray();
+        }
+    }
+
+    private sealed class ResumptionDrainObservationSink : IWorkflowSchedulerDrainObserver
+    {
+        private readonly object _gate = new();
+        private readonly List<ResumptionDrainObservation> _observations = [];
+
+        public ValueTask OnDrainedAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeSchedulerDrainResult result,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+                _observations.Add(new ResumptionDrainObservation(envelope, result));
+            return ValueTask.CompletedTask;
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+                _observations.Clear();
+        }
+
+        public ResumptionDrainObservation[] Snapshot()
+        {
+            lock (_gate)
+                return _observations.ToArray();
+        }
+    }
+
     private sealed record AuthorityObservation(
         string CheckpointName,
         string? ExecutableNodeId,
         string? SchedulerWorkItemId,
         AuthoritySnapshot? Authority);
+
+    private sealed record ScheduleActivityDispatchObservation(
+        string WorkItemId,
+        string? ExecutableNodeId,
+        string? PendingConsumeWorkItemId);
+
+    private sealed record ResumptionDrainObservation(
+        WorkflowExecutionCommandEnvelope Envelope,
+        RuntimeSchedulerDrainResult Result);
 
     private sealed record AuthoritySnapshot(
         int Version,
