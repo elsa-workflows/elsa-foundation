@@ -103,9 +103,8 @@ public sealed class PublishReconciledWorkflowVersions(
     {
         var slots = await slotStore.ListByDefinitionAsync(definitionId, cancellationToken);
 
-        foreach (var slot in slots.Where(x => x.ActivePublicationId is not null))
+        foreach (var publicationId in slots.Where(x => x.ActivePublicationId is not null).Select(x => x.ActivePublicationId!))
         {
-            var publicationId = slot.ActivePublicationId!;
             var record = await recordStore.FindAsync(publicationId, cancellationToken);
             if (record is { Status: PublicationStatus.Active } && record.WorkflowDefinitionVersionId == versionId)
                 return true;
