@@ -8,7 +8,7 @@ The ownership and lifecycle rules are specified in [`specs/092-domain-owned-apis
 
 Add `WorkflowsDesignApiFeature` to the active shell and compose a Workflow Design persistence provider. The feature registers its FastEndpoints slice, mediator handlers, scoped-variable authoring services, and contextual input-option resolver. Activity input options also read the Activity Design definition/version stores, so a host exposing that operation must compose Activity Design persistence.
 
-This package does not reference or depend on `Elsa.Server`; the server application is only one possible reference composition.
+This package does not reference or depend on `Elsa.Workbench`; the server application is only one possible reference composition.
 
 ## Supported routes
 

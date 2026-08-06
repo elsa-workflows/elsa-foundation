@@ -77,7 +77,7 @@ The contribution contract itself does not provide persistence, retries, de-dupli
 
 ## Groundwork persistence
 
-Without a persistence feature, `InMemoryOpenTelemetryStore` remains the default. The reference `Elsa.Server`
+Without a persistence feature, `InMemoryOpenTelemetryStore` remains the default. The reference `Elsa.Workbench`
 composition selects `DiagnosticsGroundworkPersistence` alongside the diagnostics domain features. That aggregate
 atomically installs the two concrete Groundwork persistence features; the OpenTelemetry feature replaces
 `IOpenTelemetryStore` with `GroundworkOpenTelemetryStore`, contributes its immutable signal streams, and joins
@@ -99,7 +99,7 @@ the diagnostics DbContext's logging to `NullLoggerFactory` to prevent capture fe
 `IDbContextFactory<OpenTelemetryDbContext>`. The SQLite provider runs migrations before starting the bounded
 drain; graceful shell termination flushes that drain before the DbContext factory is disposed, with async
 store disposal as the fallback when shell terminators do not run. This retained path is not selected by the
-reference `Elsa.Server` composition.
+reference `Elsa.Workbench` composition.
 
 ## Deferred (kept behind contracts/options)
 

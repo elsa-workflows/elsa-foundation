@@ -6,7 +6,7 @@
 
 Add `ExpressionsApiFeature` to the active shell. It depends on the `Expressions` feature, whose registries aggregate descriptor providers. Expression-language modules contribute descriptors through the core provider seams; the API does not maintain a second descriptor catalog.
 
-The package has no dependency on `Elsa.Server` and can be composed directly by a custom host.
+The package has no dependency on `Elsa.Workbench` and can be composed directly by a custom host.
 
 ## Supported routes and authorization
 

@@ -81,7 +81,7 @@ public sealed class VariableTypeDescriptorCatalogTests
         Assert.Contains("DateTime", aliases);
     }
 
-    // The descriptors/variables endpoint host (Elsa.Server) is internal and only reachable via full
+    // The descriptors/variables endpoint host (Elsa.Workbench) is internal and only reachable via full
     // hosting (out of scope per §2.23.6). This asserts the catalog → wire DTO mapping the handler
     // performs: only { alias, displayName, category, defaultEditor } reach the wire — never ClrType.
     [Fact]

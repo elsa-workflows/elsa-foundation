@@ -5,7 +5,7 @@
 # Measures the wall time a fresh Elsa host takes to reach each cold-start milestone: process launch → healthy,
 # the first authenticated call, and the first workflow execute — plus the mid-activation contention tail (a second
 # request that arrives while the shell is still activating). It attaches to an already-running server (--base-url)
-# or launches a fresh-database local Elsa.Server (--launch) with the boot phase-timing instrument enabled, and it
+# or launches a fresh-database local Elsa.Workbench (--launch) with the boot phase-timing instrument enabled, and it
 # scrapes the server's emitted phase table into the artifacts.
 #
 # Wall numbers are host-load sensitive; the schema operation COUNT (873 on the reference SQLite deployment schema)
@@ -22,11 +22,11 @@ Usage:
   measure-cold-start.sh (--launch | --base-url URL) [options]
 
 Mode (one required):
-  --launch                    Start a fresh-database local Elsa.Server with the boot instrument enabled.
+  --launch                    Start a fresh-database local Elsa.Workbench with the boot instrument enabled.
   --base-url URL              Attach to an already-running server root (e.g. https://localhost:7030).
 
 Options:
-  --project PATH              Elsa.Server.csproj path for --launch (default: src/Apps/Elsa.Server/Elsa.Server.csproj).
+  --project PATH              Elsa.Workbench.csproj path for --launch (default: src/Apps/Elsa.Workbench/Elsa.Workbench.csproj).
   --data-dir PATH             Fresh working directory for --launch SQLite databases (default: a temp dir).
   --health-path PATH          Health endpoint used to detect readiness (default: /).
   --authed-url URL            First authenticated call to time (optional).
@@ -45,7 +45,7 @@ EOF
 mode=""
 base_url=""
 launch=false
-project="src/Apps/Elsa.Server/Elsa.Server.csproj"
+project="src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
 data_dir=""
 health_path="/"
 authed_url=""
@@ -123,7 +123,7 @@ if [[ "$launch" == true ]]; then
   fi
   mkdir -p "$data_dir"
   server_log="$data_dir/elsa-server-boot.log"
-  printf 'Launching fresh Elsa.Server (data dir: %s)\n' "$data_dir" >&2
+  printf 'Launching fresh Elsa.Workbench (data dir: %s)\n' "$data_dir" >&2
   # Fresh databases + boot instrument on. The server inherits a clean CWD so its CWD-relative SQLite files are new.
   (
     cd "$data_dir"

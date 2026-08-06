@@ -13,7 +13,7 @@ namespace Elsa.Diagnostics.ConsoleLogStreaming;
 /// This is <em>not</em> a CShells shell feature. Console capture is a process-global concern (a static tee on
 /// <see cref="System.Console.Out"/>) and the live stream is a long-lived SignalR connection, so the whole stack —
 /// the console hook, the capture options (<see cref="ConfigureHost"/>), and the recent/sources/hub endpoints
-/// (<see cref="ConfigureEndpoints"/>) — is composed once on the application root (see <c>Elsa.Server/Program.cs</c>),
+/// (<see cref="ConfigureEndpoints"/>) — is composed once on the application root (see <c>Elsa.Workbench/Program.cs</c>),
 /// never inside a shell container: a shell-hosted hub would capture the shell's <see cref="IServiceProvider"/> and
 /// throw <see cref="ObjectDisposedException"/> on disconnect when that shell is recycled on feature enable. The host
 /// gates that composition on a plain config switch, <see cref="EnabledConfigKey"/> (defaults to off). Because

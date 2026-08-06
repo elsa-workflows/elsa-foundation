@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Elsa.Server.Readiness;
+using Elsa.Workbench.Readiness;
 
 namespace Elsa.Modularity.Tests;
 

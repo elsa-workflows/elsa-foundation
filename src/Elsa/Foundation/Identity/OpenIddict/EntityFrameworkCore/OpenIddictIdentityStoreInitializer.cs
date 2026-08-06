@@ -15,7 +15,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// </summary>
 /// <remarks>
 /// Implemented as both an <see cref="IHostedService"/> (plain hosts / tests) and a CShells
-/// <see cref="IShellInitializer"/> (the shell-composed Elsa.Server host, where shell-scoped hosted services
+/// <see cref="IShellInitializer"/> (the shell-composed Elsa.Workbench host, where shell-scoped hosted services
 /// do not run). Ensure-created / migrate are idempotent, so running under either hook is safe.
 /// </remarks>
 public sealed class OpenIddictIdentityStoreInitializer(

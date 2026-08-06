@@ -21,7 +21,7 @@
        only the documented poison-paused state: child Running with a system-authored
        WaitForIntervention/PoisonedSchedulerWork outcome and parent Running.
 
-    Requires the DispatchWorkflow + Bpmn features composed in the server (default Elsa.Server shells.json
+    Requires the DispatchWorkflow + Bpmn features composed in the server (default Elsa.Workbench shells.json
     has 'ActivitiesBpmn' + 'ActivitiesDispatchWorkflowRuntime'/'ActivitiesDispatchWorkflowDesign').
 .EXAMPLE
     pwsh ./e2e-tests/bpmn/Test-BpmnCallActivity.ps1

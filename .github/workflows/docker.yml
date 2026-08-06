@@ -1,6 +1,8 @@
 name: Docker Image
 
-# Builds and pushes the Elsa 4 server image to Docker Hub as elsaworkflows/elsa-server.
+# Builds and pushes the Elsa 4 workbench image to Docker Hub as elsaworkflows/elsa-workbench.
+# The workbench is a development and demo host, not the shipped product; the
+# elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
@@ -27,7 +29,7 @@ concurrency:
 
 jobs:
   build-and-push:
-    name: Build & push elsa-server
+    name: Build & push elsa-workbench
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
       contents: read
@@ -36,19 +38,19 @@ jobs:
       output: image
       push: true
       context: .
-      file: src/Apps/Elsa.Server/Dockerfile
+      file: src/Apps/Elsa.Workbench/Dockerfile
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max
-      cache-scope: elsa-server
-      meta-images: elsaworkflows/elsa-server
+      cache-scope: elsa-workbench
+      meta-images: elsaworkflows/elsa-workbench
       meta-tags: |
         type=sha
         type=raw,value=latest
         type=raw,value=4.0.0-preview.${{ github.run_number }}
       labels: |
-        org.opencontainers.image.title=Elsa Server
-        org.opencontainers.image.description=Elsa 4 workflow server
+        org.opencontainers.image.title=Elsa Workbench
+        org.opencontainers.image.description=Elsa 4 development and demo workbench host
     secrets:
       registry-auths: |
         - registry: docker.io

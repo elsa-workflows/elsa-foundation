@@ -5,7 +5,7 @@
     The end-to-end durability proof the in-process C# crash tests cannot give (they stub the store in memory and
     drive the sweep by hand). Root Sequence is [ Set(Msg=<token>) -> Event wait -> SetOutput(Echo = Variable Msg) ]:
       1. execute -> Set runs, the instance suspends at the Event (persisted to SQLite on disk);
-      2. **kill the Elsa.Server process and relaunch it** against the same SQLite database (-RestartServer, default on);
+      2. **kill the Elsa.Workbench process and relaunch it** against the same SQLite database (-RestartServer, default on);
       3. after restart, the instance is still Suspended with identical state (Set ran exactly once - no duplicate
          replay - and SetOutput has not run);
       4. a ResumeOnly stimulus (with input, #1014) resumes it to completion and the post-wait SetOutput reads the

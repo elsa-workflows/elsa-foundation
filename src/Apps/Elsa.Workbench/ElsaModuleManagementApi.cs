@@ -14,7 +14,7 @@ using Nuplane.Admin;
 using Nuplane.Reconciliation;
 using Nuplane.Store.Cleanup;
 
-namespace Elsa.Server;
+namespace Elsa.Workbench;
 
 internal static class ElsaModuleManagementApi
 {
@@ -52,7 +52,7 @@ internal static class ElsaModuleManagementApi
         var dropFolder = ResolveDropFolder(environment, config);
 
         return Results.Ok(new ModuleManagementRegistryResponse(
-            new("server", "Server", "Elsa.Server", environment.ContentRootPath),
+            new("server", "Server", "Elsa.Workbench", environment.ContentRootPath),
             DateTimeOffset.UtcNow,
             modules,
             ListDropFolderPackages(dropFolder),
@@ -128,7 +128,7 @@ internal static class ElsaModuleManagementApi
         QueueReconciliation(
             scopeFactory,
             applicationLifetime,
-            loggerFactory.CreateLogger("Elsa.Server.ModuleManagementDelete"),
+            loggerFactory.CreateLogger("Elsa.Workbench.ModuleManagementDelete"),
             "package deletion");
 
         return Results.Ok(new ModuleManagementDeleteResponse(
@@ -591,9 +591,9 @@ internal static class ModuleManagementRegistryBuilder
 
     private static ModuleManagementModule BuildServerModule(IReadOnlyList<FeatureCatalogItem> features) =>
         new(
-            "Elsa.Server",
-            "Elsa.Server",
-            "Elsa.Server",
+            "Elsa.Workbench",
+            "Elsa.Workbench",
+            "Elsa.Workbench",
             "",
             "server",
             "",

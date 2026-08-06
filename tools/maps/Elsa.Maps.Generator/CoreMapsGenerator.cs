@@ -82,7 +82,7 @@ public static partial class CoreMapsGenerator
 
     /// <summary>
     /// This layer's grouping, which differs from the domain map's: a bare <c>Server</c> project stays
-    /// <c>Server</c> rather than being folded into <c>Elsa.Server</c>.
+    /// <c>Server</c> rather than being folded into <c>Elsa.Workbench</c>.
     /// </summary>
     private static string DomainGroup(string project)
     {

@@ -2,7 +2,7 @@ using System.Reflection;
 using CShells.Features;
 using Nuplane.Loading;
 
-namespace Elsa.Server;
+namespace Elsa.Workbench;
 
 internal sealed class NuplaneAssemblyProvider(IPackageAssemblyCatalog packageAssemblyCatalog) : IFeatureAssemblyProvider
 {

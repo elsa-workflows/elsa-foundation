@@ -3,7 +3,7 @@
 `Elsa.Workflows.Publishing.Api` is the supported management-client surface for compiling, preflighting,
 publishing, inspecting, unpublishing, restoring, and test-running workflows. It belongs to the Publishing
 domain rather than a reference server, so custom Elsa hosts and Elsa Studio can compose the same behavior
-without copying endpoints from `Elsa.Server`.
+without copying endpoints from `Elsa.Workbench`.
 
 The canonical authority decision is [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 Use the [Elsa glossary](../../../../../docs/glossary/elsa.md) and

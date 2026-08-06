@@ -1,6 +1,6 @@
 # Extension points — Workflow Runtime API
 
-`WorkflowsRuntimeApiFeature` is the host-independent composition root for the supported Runtime management-client routes documented in [README.md](README.md). It does not depend on `Elsa.Server`.
+`WorkflowsRuntimeApiFeature` is the host-independent composition root for the supported Runtime management-client routes documented in [README.md](README.md). It does not depend on `Elsa.Workbench`.
 
 ## API-facing replacement contracts
 

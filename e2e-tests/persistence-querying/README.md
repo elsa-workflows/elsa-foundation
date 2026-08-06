@@ -2,7 +2,7 @@
 
 Backend REST tests for Foundation's **read-only runtime query surface**: listing/filtering workflow instances,
 cursor paging, and incident retrieval. Shared helper: `_PersistenceCommon.ps1`. Runs against a from-source
-`Elsa.Server` (see ../README.md).
+`Elsa.Workbench` (see ../README.md).
 
 ## Surface
 

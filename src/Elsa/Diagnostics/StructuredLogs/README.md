@@ -53,11 +53,11 @@ All three endpoints call `ConfigurePermissions("Diagnostics:StructuredLogs")` (t
 
 ## Capture scope (host-wide logging)
 
-`StructuredLogCaptureProvider` is registered as an `ILoggerProvider` in the feature's `ConfigureServices`. Because the CShells default shell shares the host's root `ILoggerFactory`, this captures **host-wide** log events — validated against `Elsa.Server`, where the feed surfaces EF Core, FastEndpoints, and other host-level logs, not just the feature's own scope. If a future deployment topology gives a shell an isolated logger factory and capture only sees that scope, register the provider at the host level instead (on the host `builder.Services`).
+`StructuredLogCaptureProvider` is registered as an `ILoggerProvider` in the feature's `ConfigureServices`. Because the CShells default shell shares the host's root `ILoggerFactory`, this captures **host-wide** log events — validated against `Elsa.Workbench`, where the feed surfaces EF Core, FastEndpoints, and other host-level logs, not just the feature's own scope. If a future deployment topology gives a shell an isolated logger factory and capture only sees that scope, register the provider at the host level instead (on the host `builder.Services`).
 
 ## Persistence
 
-`DiagnosticsGroundworkPersistence` is the catalog-discoverable, first-party durable diagnostics feature. It is the reference `Elsa.Server` composition and atomically installs the domain-owned Groundwork Structured Logs and OpenTelemetry features. `GroundworkStructuredLogsPersistenceFeature` replaces `IStructuredLogStore` with `GroundworkStructuredLogStore` and contributes the immutable diagnostic-record stream to the combined Groundwork deployment manifest. Capture, the in-process live wake feed, and the UI remain unchanged.
+`DiagnosticsGroundworkPersistence` is the catalog-discoverable, first-party durable diagnostics feature. It is the reference `Elsa.Workbench` composition and atomically installs the domain-owned Groundwork Structured Logs and OpenTelemetry features. `GroundworkStructuredLogsPersistenceFeature` replaces `IStructuredLogStore` with `GroundworkStructuredLogStore` and contributes the immutable diagnostic-record stream to the combined Groundwork deployment manifest. Capture, the in-process live wake feed, and the UI remain unchanged.
 
 `GroundworkStructuredLogStore` uses Groundwork diagnostic records for durable committed cursors, bounded read-after pages, and lifetime logical high-water independent of retention. Its bounded drain completes accepted appends only after durable acknowledgement.
 

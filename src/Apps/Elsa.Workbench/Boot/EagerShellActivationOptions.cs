@@ -1,4 +1,4 @@
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>
 /// Opt-in eager shell-activation configuration (spec 132, First-Request/Cold-Start Readiness, program unit 4).

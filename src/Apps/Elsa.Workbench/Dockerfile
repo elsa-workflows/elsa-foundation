@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.20
 
 # =============================================================================
-# Elsa.Server production image
+# Elsa.Workbench container image (development and demo host, not the shipped product)
 #
 # Build context MUST be the repository root, because the build relies on
 # repo-root configuration (Directory.Packages.props, NuGet.config) and the
 # project references reach across the whole src/ tree. Example:
 #
-#   docker build -f src/Apps/Elsa.Server/Dockerfile -t elsa-server:local .
+#   docker build -f src/Apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
 #
 # Runtime configuration is supplied via environment variables (standard .NET
 # double-underscore layering, e.g. Elsa__ModuleManagement__ApiKey) and an
@@ -61,7 +61,7 @@ COPY --parents src/**/*.csproj src/**/*.targets ./
 # Map BuildKit's TARGETARCH (amd64/arm64) to the .NET RID (linux-x64/linux-arm64).
 # Restore is RID-specific because R2R needs the target's crossgen2 + runtime pack.
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
-    && dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
+    && dotnet restore src/Apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
@@ -79,7 +79,7 @@ COPY src/ ./src/
 # is deliberately NOT enabled: the host does auth + culture-sensitive work, so
 # dropping ICU is unsafe (see specs/134-container-readytorun-publish/research.md).
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
-    && dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
+    && dotnet publish src/Apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -c Release \
         -r "$RID" \
         --self-contained false \
@@ -121,4 +121,4 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=10 \
 # Run as the non-root user provided by the base image.
 USER $APP_UID
 
-ENTRYPOINT ["dotnet", "Elsa.Server.dll"]
+ENTRYPOINT ["dotnet", "Elsa.Workbench.dll"]

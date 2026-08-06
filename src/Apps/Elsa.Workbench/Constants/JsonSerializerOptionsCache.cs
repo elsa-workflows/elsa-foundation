@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Server.Constants;
+namespace Elsa.Workbench.Constants;
 
 internal static class JsonSerializerOptionsCache
 {

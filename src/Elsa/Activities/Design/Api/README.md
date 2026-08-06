@@ -8,7 +8,7 @@ See the [domain-owned API specification](../../../../../specs/092-domain-owned-a
 
 Add `ActivitiesDesignApiFeature` to the active shell together with an Activity Design persistence provider and the reconciliation features that populate its definitions. The feature supplies default availability evaluation, diagnostics projection, and an in-memory availability-settings store; durable hosts should replace that store as appropriate.
 
-The package has no dependency on `Elsa.Server`. Custom hosts expose the same routes by composing the feature in their own shell.
+The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell.
 
 ## Supported routes
 

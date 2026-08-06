@@ -1,6 +1,6 @@
 # write-endpoints — POST/PUT/PATCH/DELETE coverage
 
-Systematic backend coverage of the mutating endpoints on the default `Elsa.Server`, one script per API area,
+Systematic backend coverage of the mutating endpoints on the default `Elsa.Workbench`, one script per API area,
 with valid + negative (400/404/409) cases. Shared harness: `_WriteCommon.ps1` (`Invoke-Write` / `Assert-Write`
 / `Complete-WriteSuite` / `New-WorkflowState`). All fixtures are created by the tests, so destructive ops
 (permanent delete, discard) only touch throwaway data; `PUT diagnostics/settings` is a read -> put-same

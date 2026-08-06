@@ -5,7 +5,7 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Term | Canonical meaning |
 |---|---|
 | Elsa foundation workspace | The repository role where foundation libraries, architecture gates, maps, skills, and glossary knowledge make Elsa navigable and verifiable. |
-| Elsa host | The `Elsa.Server` ASP.NET Core application instance that composes selected Elsa features. |
+| Elsa host | An ASP.NET Core application instance that composes selected Elsa features. In this repository that is `Elsa.Workbench`, a development and demo host; the shipped host is not yet built. |
 | Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
 | Elsa foundation repo | `elsa-foundation`, this repository: the transitional baseline for Elsa foundation libraries, architecture knowledge, maps, specs, and default implementation work. |
 | Weaver | The user-facing AI assistant experience in Elsa Studio. It is implemented through provider-neutral agent contracts, but Weaver is not the AI provider, SDK adapter, or workflow execution agent. |

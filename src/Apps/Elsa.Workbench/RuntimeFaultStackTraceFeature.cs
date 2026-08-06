@@ -1,7 +1,7 @@
 using CShells.Features;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Server;
+namespace Elsa.Workbench;
 
 /// <summary>
 /// Opts every shell into workflow-fault stack-trace capture. The server defaults to capturing (its historical

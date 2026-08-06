@@ -4,7 +4,7 @@
 .DESCRIPTION
     Dot-sources ../_ElsaCommon.ps1 and adds:
       - a mid-flow Event wait node + a ResumeOnly stimulus dispatcher (resume delivery needs a non-empty input, #1014);
-      - server process lifecycle control (stop / start / restart) so a test can KILL the running Elsa.Server mid-suspend
+      - server process lifecycle control (stop / start / restart) so a test can KILL the running Elsa.Workbench mid-suspend
         and relaunch it against the same on-disk SQLite database, proving durable checkpoint recovery end-to-end.
 
     The reference server persists to SQLite on disk (GroundworkUnifiedPersistenceSqlite) and composes
@@ -13,13 +13,13 @@
     C# crash tests stub out (in-memory store + hand-driven sweep); only an e2e restart exercises the real substrate.
 
     Server restart uses `dotnet run --no-build` (the server must already be built) against the same content root,
-    so the SQLite files under src/Apps/Elsa.Server/ are reused. After a restart, re-authenticate (Connect-Elsa):
+    so the SQLite files under src/Apps/Elsa.Workbench/ are reused. After a restart, re-authenticate (Connect-Elsa):
     the identity cookie does not necessarily survive a fresh process.
 #>
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
 $script:RepoRoot      = (Resolve-Path "$PSScriptRoot/../..").Path
-$script:ServerProject = Join-Path $script:RepoRoot "src/Apps/Elsa.Server/Elsa.Server.csproj"
+$script:ServerProject = Join-Path $script:RepoRoot "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
 
 # StimulusHash = "sha256:" + lowercase-hex(SHA256(utf8(eventName))).
 function Get-EventHash([string] $Name) {
@@ -79,18 +79,18 @@ function Stop-ElsaServer {
 function Start-ElsaServer {
     # Launches the ALREADY-BUILT server DLL directly (dotnet <dll>) rather than `dotnet run`, which would
     # re-evaluate this large solution's MSBuild graph on every relaunch (minutes). The content root is the
-    # project directory (set as the working dir) so the on-disk SQLite files under src/Apps/Elsa.Server/ are
+    # project directory (set as the working dir) so the on-disk SQLite files under src/Apps/Elsa.Workbench/ are
     # reused across the restart; ASPNETCORE_URLS + ASPNETCORE_ENVIRONMENT replicate the `http` launch profile.
     param([int] $Port = 5095, [string] $Project = $script:ServerProject, [int] $TimeoutSec = 90)
     $projDir = Split-Path $Project
-    $dll = Join-Path $projDir "bin/Debug/net10.0/Elsa.Server.dll"
+    $dll = Join-Path $projDir "bin/Debug/net10.0/Elsa.Workbench.dll"
     if (-not (Test-Path $dll)) { throw "Server DLL not found at $dll - build the server first (dotnet build)." }
     $tmp = [System.IO.Path]::GetTempPath()
     $out = Join-Path $tmp "elsa-durability-server.out.log"
     $err = Join-Path $tmp "elsa-durability-server.err.log"
     $env:ASPNETCORE_URLS = "http://localhost:$Port"
     $env:ASPNETCORE_ENVIRONMENT = "Development"
-    Write-Host "  [server] starting: dotnet <Elsa.Server.dll> (ASPNETCORE_URLS=$env:ASPNETCORE_URLS)"
+    Write-Host "  [server] starting: dotnet <Elsa.Workbench.dll> (ASPNETCORE_URLS=$env:ASPNETCORE_URLS)"
     $start = @{
         FilePath = 'dotnet'
         ArgumentList = $dll
@@ -105,7 +105,7 @@ function Start-ElsaServer {
         try { if (Invoke-RestMethod "http://localhost:$Port/" -TimeoutSec 3) { Write-Host "  [server] healthy on $Port"; return $true } } catch {}
         Start-Sleep -Seconds 1
     }
-    throw "Elsa.Server did not become healthy on port $Port within ${TimeoutSec}s (logs: $out / $err)"
+    throw "Elsa.Workbench did not become healthy on port $Port within ${TimeoutSec}s (logs: $out / $err)"
 }
 
 function Restart-ElsaServer {

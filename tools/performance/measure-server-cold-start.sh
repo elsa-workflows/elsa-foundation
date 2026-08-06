@@ -7,7 +7,7 @@ usage() {
 Usage: measure-server-cold-start.sh [options]
 
 Required:
-  --server-dll PATH             Prebuilt Elsa.Server DLL.
+  --server-dll PATH             Prebuilt Elsa.Workbench DLL.
   --content-root PATH           Frozen server configuration/content directory.
   --baseline-dir PATH           Frozen data files copied into every boot.
   --base-url URL                Loopback server URL, for example http://127.0.0.1:7243.

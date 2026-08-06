@@ -64,7 +64,7 @@ PY
 }
 
 server_output_dir="$temporary_directory/server-output"
-server_dll="$server_output_dir/Elsa.Server.dll"
+server_dll="$server_output_dir/Elsa.Workbench.dll"
 content_root="$temporary_directory/content-root"
 baseline_dir="$temporary_directory/baseline"
 fake_bin="$temporary_directory/bin"

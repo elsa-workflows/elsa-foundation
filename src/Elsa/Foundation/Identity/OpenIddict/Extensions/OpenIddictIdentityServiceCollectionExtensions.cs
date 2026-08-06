@@ -48,7 +48,7 @@ public static class OpenIddictIdentityServiceCollectionExtensions
             .AddCore(core => core.UseEntityFrameworkCore().UseDbContext<OpenIddictIdentityDbContext>());
 
         // Expose the store initializer under both lifecycle hooks: IHostedService for plain hosts/tests and
-        // the CShells IShellInitializer for the shell-composed Elsa.Server host (see the initializer's
+        // the CShells IShellInitializer for the shell-composed Elsa.Workbench host (see the initializer's
         // remarks). It migrates the relational store (durable path) or ensure-creates the in-memory one
         // (dev/demo); idempotent under either hook. It runs on BOTH paths because the token store must exist
         // before the first issuance — unlike the identity substrate, there is no seed step to migrate it.

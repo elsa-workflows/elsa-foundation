@@ -15,7 +15,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 
 /// <summary>
 /// Proves the <see cref="DevelopmentOrDemoGuard"/> fires on its <b>real production path</b>: the CShells
-/// shell-activation lifecycle. In the composed <c>Elsa.Server</c> host, shell-scoped
+/// shell-activation lifecycle. In the composed <c>Elsa.Workbench</c> host, shell-scoped
 /// <see cref="IHostedService"/>s do NOT run — only <see cref="IShellInitializer"/>s do, resolved from a scope
 /// off the shell's provider. This test drives exactly that path (a real CShells host, a shell activated via
 /// <see cref="IShellRegistry.GetOrActivateAsync"/> → <c>RunInitializersAsync</c> → the guard's

@@ -16,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
 
 /// <summary>
-/// B2/B4 integration: with only the OpenIddict feature registered (no Elsa.Server wiring), the validation
+/// B2/B4 integration: with only the OpenIddict feature registered (no Elsa.Workbench wiring), the validation
 /// handler — reached through the default selector scheme — authenticates <c>Authorization: Bearer</c> calls
 /// to a protected endpoint with freshly issued tokens and rejects missing/tampered/expired/revoked ones.
 /// </summary>

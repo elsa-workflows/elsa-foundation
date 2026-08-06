@@ -1,18 +1,18 @@
 # =============================================================================
-# Elsa reference stack: PostgreSQL + Elsa.Server + Elsa Studio
+# Elsa reference stack: PostgreSQL + Elsa.Workbench + Elsa Studio
 #
 # This is THE reference example for running the full stack with Postgres-backed
 # persistence. Bring it up from this directory:
 #
-#   docker compose up --build            # postgres + elsa-server
+#   docker compose up --build            # postgres + elsa-workbench
 #   docker compose --profile studio up   # also start Elsa Studio (see notes below)
 #
 # URLs (host):
-#   Elsa.Server : http://localhost:13000   (root returns Healthy JSON)
+#   Elsa.Workbench : http://localhost:13000   (root returns Healthy JSON)
 #   Elsa Studio : http://localhost:14000
 #
-# Persistence: elsa-server is composed with GroundworkUnifiedPersistencePostgreSql
-# via the mounted ./elsa-server.shells.json, so runtime + workflows-design +
+# Persistence: elsa-workbench is composed with GroundworkUnifiedPersistencePostgreSql
+# via the mounted ./elsa-workbench.shells.json, so runtime + workflows-design +
 # activities-design all live in the 'postgres' service's database.
 #
 # Verify Postgres is actually used:
@@ -41,12 +41,12 @@ services:
       retries: 20
       start_period: 10s
 
-  elsa-server:
+  elsa-workbench:
     build:
       # Build context MUST be the repository root (two levels up from docker/compose).
       context: ../..
-      dockerfile: src/Apps/Elsa.Server/Dockerfile
-    image: elsa-server:local
+      dockerfile: src/Apps/Elsa.Workbench/Dockerfile
+    image: elsa-workbench:local
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,7 +64,7 @@ services:
       - "13000:8080"
     volumes:
       # Curated demo composition (Postgres unified persistence). Read-only.
-      - ./elsa-server.shells.json:/app/shells.json:ro
+      - ./elsa-workbench.shells.json:/app/shells.json:ro
       # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
       - server-packages:/app/packages
 
@@ -92,7 +92,7 @@ services:
     #   context: ../../../elsa-foundation-studio
     #   dockerfile: src/Elsa.Studio.Web/Dockerfile
     depends_on:
-      elsa-server:
+      elsa-workbench:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -101,8 +101,8 @@ services:
       # NOT the compose service name. Use the server's published host port.
       Studio__BackendBaseUrl: "http://localhost:13000"
       # Elsa host management key used server-side by the Studio management bridge
-      # when calling elsa-server. Never sent to the browser.
-      # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
+      # when calling elsa-workbench. Never sent to the browser.
+      # MUST match elsa-workbench's Elsa__ModuleManagement__ApiKey.
       Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
     ports:
       - "14000:8080"

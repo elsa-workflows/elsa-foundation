@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>
 /// Opt-in boot / first-request phase-timing recorder (spec 129, First-Request/Cold-Start Readiness).

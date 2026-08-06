@@ -7,9 +7,9 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
-using Elsa.Server;
-using Elsa.Server.Boot;
-using Elsa.Server.Readiness;
+using Elsa.Workbench;
+using Elsa.Workbench.Boot;
+using Elsa.Workbench.Readiness;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -371,7 +371,7 @@ if (bootTimeline is not null)
 
 app.UseCors(studioCorsPolicy);
 
-app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }));
 app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)

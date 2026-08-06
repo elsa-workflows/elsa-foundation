@@ -1,4 +1,4 @@
-namespace Elsa.Server.Readiness;
+namespace Elsa.Workbench.Readiness;
 
 public sealed class ShellReadinessOptions
 {

@@ -1,6 +1,6 @@
 using System.Net;
 using CShells.Lifecycle;
-using Elsa.Server.Readiness;
+using Elsa.Workbench.Readiness;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;

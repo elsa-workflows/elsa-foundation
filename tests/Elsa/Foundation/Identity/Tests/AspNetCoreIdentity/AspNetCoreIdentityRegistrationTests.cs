@@ -44,7 +44,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
     public void Dev_Seeder_Runs_Under_Both_Lifecycle_Hooks()
     {
         // The seeder must run in plain hosts (IHostedService) AND when composed inside a CShells shell
-        // (IShellInitializer) — the Elsa.Server host does not run shell-scoped hosted services. Registering
+        // (IShellInitializer) — the Elsa.Workbench host does not run shell-scoped hosted services. Registering
         // it under only one hook is the exact regression that left the enabled shell unseeded. The dev/demo
         // seed account now comes from config just like any other, so supply the credentials here.
         var services = new ServiceCollection();
