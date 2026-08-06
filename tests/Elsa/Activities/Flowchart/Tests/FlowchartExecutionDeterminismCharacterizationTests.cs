@@ -3,6 +3,9 @@ using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Activities.Flowchart.Tests;
@@ -18,17 +21,19 @@ namespace Elsa.Activities.Flowchart.Tests;
 /// loudly. They are written to be green on the pre-refactor engine (green-on-revert), before any extraction.
 /// </para>
 /// <list type="bullet">
-/// <item><b>CT-1</b> — full persisted-blob byte-lock over a multi-feature run (a backward loop iteration,
-/// a named-outcome decision, and a fork/implicit-join), the strongest guard: it pins the whole id sequence.</item>
+/// <item><b>CT-1</b> — full canonical persisted-blob byte-lock over a multi-feature run (a backward loop
+/// iteration, a named-outcome decision, and a fork/implicit-join), the strongest guard: it pins the whole id
+/// sequence.</item>
 /// <item><b>CT-2</b> — the ordered <c>(DiagnosticId, Kind)</c> sequence for that same multi-feature run.</item>
 /// <item><b>CT-3</b> — first-wins race scope-id determinism plus the losing-path cancellation diagnostics.</item>
 /// </list>
 /// </summary>
 public sealed class FlowchartExecutionDeterminismCharacterizationTests
 {
-    // CT-1: byte-identical persisted blob for the multi-feature run below. Any reordered/added/dropped
-    // Sequence bump corrupts an id and fails this. The > (>) and ' (') escapes are the Web
-    // serializer's own output — pinned literally. Re-frozen after the backward-edge fix (DFS back-edge
+    // CT-1: fixed semantic golden state for the multi-feature run below. Its recursively property-ordered
+    // UTF-8 JSON is the approved canonical durable representation and is byte-compared to persistence.
+    // Any reordered/added/dropped Sequence bump corrupts an id and fails this. Re-frozen after the backward-edge
+    // fix (DFS back-edge
     // classification): only the genuine loop-closing edge node-b →("again") node-a is a backward edge, so a
     // single loop-iteration scope (scope:12, owner node-a) is minted for the one loopback. The forward edge
     // node-a → node-b no longer (wrongly) mints an owner "node-b" iteration scope on each pass, so the
@@ -40,7 +45,7 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
         """{"rootExecutionScopeId":"scope:root","scopes":[{"executionScopeId":"scope:root","kind":0,"parentExecutionScopeId":null,"createdByNodeId":null,"startConnectionId":null,"ownerNodeId":"node-a","loopIterationKey":null,"status":0,"metadata":{}},{"executionScopeId":"scope:12","kind":3,"parentExecutionScopeId":"scope:root","createdByNodeId":"node-b","startConnectionId":"node-b:again-\u003Enode-a","ownerNodeId":"node-a","loopIterationKey":"node-a:1","status":0,"metadata":{}}],"executionPaths":[{"executionPathId":"path:root","parentExecutionPathId":null,"executionScopeId":"scope:root","currentNodeId":"node-a","incomingConnectionId":null,"schedulingActivityExecutionId":null,"status":2,"iterationKey":null,"lastOutcomeNames":["Done"]},{"executionPathId":"path:69","parentExecutionPathId":null,"executionScopeId":"scope:12","currentNodeId":"node-f","incomingConnectionId":"node-e:Done-\u003Enode-f","schedulingActivityExecutionId":"actexec-e","status":0,"iterationKey":"node-a:1","lastOutcomeNames":[]}],"arrivals":[],"activeChildren":[{"childActivityExecutionId":null,"nodeId":"node-f","executionPathId":"path:69","executionScopeId":"scope:12","schedulingCause":"join"}],"diagnostics":[{"diagnosticId":"diag:8","kind":0,"nodeId":"node-b","connectionId":"node-a:Done-\u003Enode-b","executionPathId":"path:7","executionScopeId":"scope:root","message":"Flowchart scheduled node \u0027node-b\u0027.","details":{}},{"diagnosticId":"diag:13","kind":4,"nodeId":"node-a","connectionId":"node-b:again-\u003Enode-a","executionPathId":"path:7","executionScopeId":"scope:12","message":"Flowchart created loop iteration scope \u0027scope:12\u0027 for loopback to \u0027node-a\u0027.","details":{}},{"diagnosticId":"diag:19","kind":0,"nodeId":"node-a","connectionId":"node-b:again-\u003Enode-a","executionPathId":"path:18","executionScopeId":"scope:12","message":"Flowchart scheduled node \u0027node-a\u0027.","details":{}},{"diagnosticId":"diag:28","kind":0,"nodeId":"node-b","connectionId":"node-a:Done-\u003Enode-b","executionPathId":"path:27","executionScopeId":"scope:12","message":"Flowchart scheduled node \u0027node-b\u0027.","details":{}},{"diagnosticId":"diag:37","kind":0,"nodeId":"node-c","connectionId":"node-b:done-\u003Enode-c","executionPathId":"path:36","executionScopeId":"scope:12","message":"Flowchart scheduled node \u0027node-c\u0027.","details":{}},{"diagnosticId":"diag:46","kind":0,"nodeId":"node-d","connectionId":"node-c:Done-\u003Enode-d","executionPathId":"path:45","executionScopeId":"scope:12","message":"Flowchart scheduled node \u0027node-d\u0027.","details":{}},{"diagnosticId":"diag:53","kind":0,"nodeId":"node-e","connectionId":"node-c:Done-\u003Enode-e","executionPathId":"path:52","executionScopeId":"scope:12","message":"Flowchart scheduled node \u0027node-e\u0027.","details":{}},{"diagnosticId":"diag:60","kind":1,"nodeId":"node-f","connectionId":"node-d:Done-\u003Enode-f","executionPathId":"path:57","executionScopeId":"scope:12","message":"Flowchart path \u0027path:57\u0027 is waiting at implicit join \u0027node-f\u0027.","details":{}},{"diagnosticId":"diag:70","kind":2,"nodeId":"node-f","connectionId":"node-e:Done-\u003Enode-f","executionPathId":"path:69","executionScopeId":"scope:12","message":"Implicit join \u0027node-f\u0027 fired after 2 active arrival(s).","details":{}}],"sequence":72,"loopIterationCounters":{"node-a":1}}""";
 
     [Fact]
-    public async Task CT1_MultiFeatureRun_PersistedBlobIsByteIdentical()
+    public async Task CT1_MultiFeatureRun_PersistedBlobMatchesCanonicalGoldenBytes()
     {
         var (fixture, executable) = await BuildMultiFeatureRunAsync();
         await using var _ = fixture;
@@ -48,7 +53,7 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
         await fixture.ExecuteAsync(executable);
 
         var serialized = await fixture.GetRawFlowchartStateAsync();
-        Assert.Equal(MultiFeatureGoldenJson, serialized);
+        Assert.Equal(CanonicalizeJson(MultiFeatureGoldenJson), serialized);
     }
 
     [Fact]
@@ -111,6 +116,43 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
 
     private static readonly string[] ExpectedRaceScopeIds = ["scope:3"];
     private static readonly string[] ExpectedRaceCancellationDiagnosticIds = ["diag:21", "diag:33"];
+
+    private static string CanonicalizeJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        using var buffer = new MemoryStream();
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = JavaScriptEncoder.Default });
+        WriteCanonicalJson(document.RootElement, writer);
+        writer.Flush();
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+    }
+
+    private static void WriteCanonicalJson(JsonElement element, Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonicalJson(property.Value, writer);
+                }
+
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteCanonicalJson(item, writer);
+
+                writer.WriteEndArray();
+                break;
+            default:
+                element.WriteTo(writer);
+                break;
+        }
+    }
 
     /// <summary>
     /// A single flowchart exercising three engine features in one run. node-a is the loop head (single
