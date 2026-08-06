@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Reconciliation.Json.Exceptions;
 using Elsa.Workflows.Design.Reconciliation.Json.Options;
 using Elsa.Workflows.Design.Reconciliation.Json.Services;
 using Elsa.Workflows.Design.Reconciliation.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -26,7 +27,7 @@ public sealed class JsonWorkflowReconciliationSourceTests
     public async Task Read_WithSingleFilePath_ReadsThatFile()
     {
         var reader = new StubReader { ["only.json"] = [Model("a", "1.0.0")] };
-        var source = new JsonWorkflowReconciliationSource(reader, Opts(new() { SourceId = "s", FilePath = "only.json" }));
+        var source = NewSource(reader, new() { SourceId = "s", FilePath = "only.json" });
 
         var result = (await source.Read(CancellationToken.None)).ToArray();
 
@@ -52,12 +53,104 @@ public sealed class JsonWorkflowReconciliationSourceTests
                 new JsonWorkflowReconciliationFileOption(1, "first.json"),
             ],
         };
-        var source = new JsonWorkflowReconciliationSource(reader, Opts(options));
+        var source = NewSource(reader, options);
 
         var result = (await source.Read(CancellationToken.None)).ToArray();
 
         Assert.Equal(new[] { "a", "b", "c" }, result.Select(m => m.DefinitionId));
         Assert.Equal(new[] { "first.json", "second.json" }, reader.ReadPaths); // ordered by Order, not declaration
+    }
+
+    [Fact]
+    public async Task Read_WithFolderPath_ScansTopLevelJsonInOrdinalNameOrder()
+    {
+        var folder = Directory.CreateDirectory(Path.Join(Path.GetTempPath(), $"wf-defs-{Guid.NewGuid():N}")).FullName;
+        try
+        {
+            // Ordinal name order: "10.json" < "2.json" ('1' < '2'), then "a.json" < "b.json".
+            File.WriteAllText(Path.Join(folder, "b.json"), "[]");
+            File.WriteAllText(Path.Join(folder, "10.json"), "[]");
+            File.WriteAllText(Path.Join(folder, "a.json"), "[]");
+            File.WriteAllText(Path.Join(folder, "2.json"), "[]");
+            File.WriteAllText(Path.Join(folder, "notes.txt"), "ignored — not *.json");
+            var nested = Directory.CreateDirectory(Path.Join(folder, "nested")).FullName;
+            File.WriteAllText(Path.Join(nested, "sub.json"), "[]"); // ignored — scan is non-recursive
+
+            var reader = new StubReader();
+            var source = NewSource(reader, new() { SourceId = "s", FolderPath = folder });
+
+            await source.Read(CancellationToken.None);
+
+            Assert.Equal(
+                new[] { "10.json", "2.json", "a.json", "b.json" },
+                reader.ReadPaths.Select(Path.GetFileName));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Read_WithEmptyFolder_ContributesNothingWithoutThrowing()
+    {
+        var folder = Directory.CreateDirectory(Path.Join(Path.GetTempPath(), $"wf-defs-{Guid.NewGuid():N}")).FullName;
+        try
+        {
+            var reader = new StubReader();
+            var source = NewSource(reader, new() { SourceId = "s", FolderPath = folder });
+
+            var result = await source.Read(CancellationToken.None);
+
+            Assert.Empty(result);
+            Assert.Empty(reader.ReadPaths);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Read_WithMissingFolder_ThrowsInvalidWorkflowCatalogJson()
+    {
+        var missing = Path.Join(Path.GetTempPath(), $"wf-defs-nope-{Guid.NewGuid():N}");
+        var source = NewSource(new StubReader(), new() { SourceId = "s", FolderPath = missing });
+
+        var ex = await Assert.ThrowsAsync<InvalidWorkflowCatalogJsonException>(
+            async () => await source.Read(CancellationToken.None));
+        Assert.Equal(missing, ex.FilePath);
+    }
+
+    [Fact]
+    public async Task Read_EntryWithoutDefinitionId_LogsAPinYourIdWarning()
+    {
+        // An omitted definitionId mints a fresh random id per restart → duplicate definitions. The
+        // import proceeds, but the source must surface the footgun (spec 147 edge case).
+        var reader = new StubReader { ["only.json"] = [Model(null!, "1.0.0") with { Name = "anon" }] };
+        var logger = new CapturingLogger<JsonWorkflowReconciliationSource>();
+        var source = new JsonWorkflowReconciliationSource(reader, Opts(new() { SourceId = "s", FilePath = "only.json" }), logger);
+
+        var result = (await source.Read(CancellationToken.None)).ToArray();
+
+        Assert.Single(result); // still imported
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Warning && e.Message.Contains("definitionId") && e.Message.Contains("anon"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RequestsPublication_MirrorsThePublishOnReconcileOption(bool publishOnReconcile)
+    {
+        var source = NewSource(new StubReader(), new()
+        {
+            SourceId = "s",
+            FilePath = "only.json",
+            PublishOnReconcile = publishOnReconcile,
+        });
+
+        Assert.Equal(publishOnReconcile, source.RequestsPublication);
     }
 
     [Fact]
@@ -108,6 +201,20 @@ public sealed class JsonWorkflowReconciliationSourceTests
     }
 
     private static IOptions<JsonWorkflowReconciliationOptions> Opts(JsonWorkflowReconciliationOptions o) => Options.Create(o);
+
+    private static JsonWorkflowReconciliationSource NewSource(IJsonWorkflowCatalogReader reader, JsonWorkflowReconciliationOptions options) =>
+        new(reader, Opts(options), NullLogger<JsonWorkflowReconciliationSource>.Instance);
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
+
+        private sealed class NullScope : IDisposable { public static readonly NullScope Instance = new(); public void Dispose() { } }
+    }
 
     private sealed class StubReader : IJsonWorkflowCatalogReader
     {

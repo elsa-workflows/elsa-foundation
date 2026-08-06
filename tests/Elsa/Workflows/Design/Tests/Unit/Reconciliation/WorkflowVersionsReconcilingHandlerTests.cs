@@ -91,6 +91,58 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         Assert.Contains(evt.Versions, v => v.Definition.Id == "wf-b");
     }
 
+    [Fact]
+    public async Task Claims_carry_source_identity_and_publish_request_per_entry()
+    {
+        // Provenance is not persisted on design entities: the claim beside each version is the only
+        // carrier of (SourceId, PublishRequested) into the post-pass publish step (spec 147).
+        var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")], requestsPublication: true);
+        var sourceB = new StubSource("git", "b", [Entry("wf-b", "Workflow B", version: "2.0.0")]);
+        var handler = NewHandler(sourceA, sourceB);
+        var evt = new OnWorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Equal(evt.Versions.Count, evt.Claims.Count);
+        var claimA = Assert.Single(evt.Claims, c => c.DefinitionId == "wf-a");
+        Assert.Equal("a", claimA.SourceId);
+        Assert.Equal("Json", claimA.SourceKind);
+        Assert.Equal("1.0.0", claimA.Version);
+        Assert.True(claimA.PublishRequested);
+        Assert.False(claimA.Deleted);
+        var claimB = Assert.Single(evt.Claims, c => c.DefinitionId == "wf-b");
+        Assert.Equal("b", claimB.SourceId);
+        Assert.False(claimB.PublishRequested);
+    }
+
+    [Fact]
+    public async Task Claim_records_the_factory_generated_id_when_the_entry_omits_DefinitionId()
+    {
+        var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")], requestsPublication: true);
+        var handler = NewHandler(source);
+        var evt = new OnWorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var version = Assert.Single(evt.Versions);
+        var claim = Assert.Single(evt.Claims);
+        // The claim must point at the definition the pass will actually materialize — the generated id.
+        Assert.Equal(version.Definition.Id, claim.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Claim_preserves_the_entry_deletion_marker()
+    {
+        var deleted = Entry("wf-del", "Deleted", version: "1.0.0") with { Deleted = true };
+        var handler = NewHandler(new StubSource("Json", "test", [deleted], requestsPublication: true));
+        var evt = new OnWorkflowVersionsReconciling();
+
+        await handler.Handle(evt, CancellationToken.None);
+
+        var claim = Assert.Single(evt.Claims);
+        Assert.True(claim.Deleted);
+    }
+
     private static WorkflowVersionsReconcilingHandler NewHandler(params IWorkflowReconciliationSource[] sources)
     {
         var idGenerator = new SequentialIdGenerator();
@@ -108,10 +160,11 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         State: new WorkflowDefinitionState([], null, [], [], null)
     );
 
-    private sealed class StubSource(string kind, string id, IEnumerable<WorkflowVersionReconciliationModel> entries) : IWorkflowReconciliationSource
+    private sealed class StubSource(string kind, string id, IEnumerable<WorkflowVersionReconciliationModel> entries, bool requestsPublication = false) : IWorkflowReconciliationSource
     {
         public string SourceKind { get; } = kind;
         public string SourceId { get; } = id;
+        public bool RequestsPublication { get; } = requestsPublication;
         private readonly IEnumerable<WorkflowVersionReconciliationModel> _entries = entries;
         public ValueTask<IEnumerable<WorkflowVersionReconciliationModel>> Read(CancellationToken cancellationToken)
             => ValueTask.FromResult(_entries);

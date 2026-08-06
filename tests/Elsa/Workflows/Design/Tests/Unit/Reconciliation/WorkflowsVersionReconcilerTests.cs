@@ -361,6 +361,43 @@ public sealed class WorkflowsVersionReconcilerTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Successful_pass_publishes_the_reconciled_event_carrying_the_claims()
+    {
+        var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
+        var claim = new WorkflowVersionSourceClaim("wf-new", "1.0.0", Elsa.Primitives.Versioning.SemVer.ToSortKey("1.0.0"), "src-1", "Json", PublishRequested: true, Deleted: false);
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+
+        var reconciler = NewReconciler(
+            sender, new StubDefinitionStore(), new StubVersionStore(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        var carried = Assert.Single(reconciled.Claims);
+        Assert.Equal(claim, carried);
+        // Ordering: the completion event is published after the contribution event, i.e. after the pass.
+        Assert.Equal(sender.Published.Count - 1, sender.Published.IndexOf(reconciled));
+    }
+
+    [Fact]
+    public async Task Failed_pass_does_not_publish_the_reconciled_event()
+    {
+        // Duplicate + Throw aborts the per-version loop — the completion notification must not fire
+        // for a failed pass (a subscriber would otherwise publish partially reconciled state).
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-dup", Name = "Dup" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-dup", "1.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Throw);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
+        Assert.Empty(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+    }
+
     private static WorkflowsVersionReconciler NewReconciler(
         IInlineEventPublisher sender,
         IWorkflowDefinitionStore defs,
@@ -455,11 +492,19 @@ public sealed class WorkflowsVersionReconcilerTests
     private sealed class CapturingSender : IInlineEventPublisher
     {
         public List<IWorkflowDefinitionVersion> ToContribute { get; init; } = new();
+        public List<WorkflowVersionSourceClaim> ToContributeClaims { get; init; } = new();
+        public List<IEvent> Published { get; } = new();
+
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
+            Published.Add(@event);
             if (@event is OnWorkflowVersionsReconciling rec)
+            {
                 foreach (var v in ToContribute)
                     rec.Versions.Add(v);
+                foreach (var c in ToContributeClaims)
+                    rec.Claims.Add(c);
+            }
             return Task.CompletedTask;
         }
     }

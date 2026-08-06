@@ -144,6 +144,9 @@ The Activity Graph implementation and its feature registration are documented in
 - Runtime executable artifacts, source references, trigger extraction/indexing, projection observers, and
   recurring schedules: [Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md).
 - Design version and layout reads used by compilation: [Workflows Design extension points](../Design/Api/EXTENSION_POINTS.md).
+- Design reconciliation completion (`OnWorkflowVersionsReconciled`), subscribed by the engine's
+  `PublishReconciledWorkflowVersions` for publish-on-reconcile (spec 147):
+  [Workflows Design Reconciliation extension points](../Design/Reconciliation/EXTENSION_POINTS.md).
 
 ## References
 

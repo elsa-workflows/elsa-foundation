@@ -47,6 +47,11 @@ public sealed class WorkflowsVersionReconciler(
         {
             await ReconcileVersion(version, cancellationToken);
         }
+
+        // Pass completed without error ⇒ notify independent subscribers (Sequential, so e.g. the
+        // publish-on-reconcile step finishes inside this startup task, before readiness turns ready).
+        // A failed pass throws out of the loop above and this is never published.
+        await eventPublisher.Publish(new OnWorkflowVersionsReconciled([.. @event.Claims]), cancellationToken);
     }
 
     private async Task ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
