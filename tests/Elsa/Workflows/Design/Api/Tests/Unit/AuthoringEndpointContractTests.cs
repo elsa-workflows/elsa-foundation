@@ -11,7 +11,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 /// <summary>
-/// Canonical replacements for the route objectives still covered against Elsa.Server by the Modularity tests.
+/// Canonical replacements for the route objectives still covered against Elsa.Workbench by the Modularity tests.
 /// These remain RED until Workflow Design owns both context-sensitive authoring operations.
 /// </summary>
 public sealed class AuthoringEndpointContractTests

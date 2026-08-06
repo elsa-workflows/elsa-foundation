@@ -94,7 +94,7 @@ explicit observers are rejected with a configuration diagnostic.
 
 `AddDiagnosticsPersistenceLifecycle<TDrain>` contributes the same selected singleton store instance
 to one coordinator registered under `IHostedService`, `IShellInitializer`, and `IShellTerminator`.
-Plain hosts and CShell-composed Elsa.Server therefore execute the same start/stop logic. The stop
+Plain hosts and CShell-composed Elsa.Workbench therefore execute the same start/stop logic. The stop
 path deliberately uses each drain's own bounded shutdown timeout instead of abandoning accepted
 captures when an outer host cancellation token fires.
 

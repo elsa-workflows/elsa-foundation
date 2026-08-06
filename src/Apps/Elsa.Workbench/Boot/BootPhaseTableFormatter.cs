@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>Renders the recorded boot phases as a fixed-width console table for the cold-start baseline.</summary>
 internal static class BootPhaseTableFormatter

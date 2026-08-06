@@ -8,7 +8,7 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Server;
+namespace Elsa.Workbench;
 
 /// <summary>
 /// Host-local composition seam that bridges the workflow engine's self-instrumentation (MS-9) into the OpenTelemetry

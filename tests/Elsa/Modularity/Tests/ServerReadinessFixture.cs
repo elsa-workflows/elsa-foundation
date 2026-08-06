@@ -5,7 +5,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Server.Readiness;
+using Elsa.Workbench.Readiness;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;

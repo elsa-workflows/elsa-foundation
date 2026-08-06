@@ -1,28 +1,28 @@
 # =============================================================================
-# Elsa published-image stack: Elsa.Server + Elsa Studio — no clone, no build.
+# Elsa published-image stack: Elsa.Workbench + Elsa Studio — no clone, no build.
 #
-# Runs the images published to Docker Hub by CI (elsaworkflows/elsa-server and
+# Runs the images published to Docker Hub by CI (elsaworkflows/elsa-workbench and
 # elsaworkflows/elsa-studio). Download just this file and start it:
 #
 #   docker compose -f docker-compose.images.yml up
 #
 # URLs (host):
-#   Elsa.Server : http://localhost:13000   (root returns Healthy JSON)
+#   Elsa.Workbench : http://localhost:13000   (root returns Healthy JSON)
 #   Elsa Studio : http://localhost:14000
 #
 # Persistence: the server image's baked-in default composition is SQLite, written
-# under the content root (/app). It is EPHEMERAL here — removing the elsa-server
+# under the content root (/app). It is EPHEMERAL here — removing the elsa-workbench
 # container discards it. For durable, Postgres-backed persistence (or to build from
 # source), use the reference stack in docker-compose.yml instead.
 #
-# Pin a version for reproducible runs, e.g. elsaworkflows/elsa-server:4 or :4.0.0.
+# Pin a version for reproducible runs, e.g. elsaworkflows/elsa-workbench:4 or :4.0.0.
 # =============================================================================
 
 name: elsa-stack
 
 services:
-  elsa-server:
-    image: elsaworkflows/elsa-server:latest
+  elsa-workbench:
+    image: elsaworkflows/elsa-workbench:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       # Elsa host management key accepted on the server's module-management API.
@@ -40,17 +40,17 @@ services:
   elsa-studio:
     image: elsaworkflows/elsa-studio:latest
     depends_on:
-      elsa-server:
+      elsa-workbench:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       # Consumed by the Studio client IN THE BROWSER, so it must be the server's
-      # host-reachable URL — NOT the compose service name (http://elsa-server:8080),
+      # host-reachable URL — NOT the compose service name (http://elsa-workbench:8080),
       # which only resolves inside the Docker network.
       Studio__BackendBaseUrl: "http://localhost:13000"
       # Elsa host management key used server-side by the Studio management bridge
-      # when calling elsa-server. Never sent to the browser.
-      # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
+      # when calling elsa-workbench. Never sent to the browser.
+      # MUST match elsa-workbench's Elsa__ModuleManagement__ApiKey.
       Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
     ports:
       - "14000:8080"

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
-using Elsa.Server.Readiness;
+using Elsa.Workbench.Readiness;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;

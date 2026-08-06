@@ -633,14 +633,14 @@ public sealed class EfCoreSurfaceRatchetTests
         fixture.Write("docker/compose/comments.json", """
             { "//": "EFCore is intentionally absent" }
             """);
-        fixture.Write("docker/compose/elsa-server.shells.json", """
+        fixture.Write("docker/compose/elsa-workbench.shells.json", """
             { "Features": { "PersistenceEFCoreSqlite": {} } }
             """);
 
         var entries = new EfCoreSurfaceScanner(fixture.Path).Scan().HostConfigurationFiles;
 
         Assert.DoesNotContain(entries, entry => entry.StartsWith("docker/compose/comments.json -> ", StringComparison.Ordinal));
-        Assert.Contains(entries, entry => entry.StartsWith("docker/compose/elsa-server.shells.json -> ", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.StartsWith("docker/compose/elsa-workbench.shells.json -> ", StringComparison.Ordinal));
     }
 
     [Fact]

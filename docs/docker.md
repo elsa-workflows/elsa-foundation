@@ -1,14 +1,14 @@
-# Running Elsa.Server in Docker
+# Running Elsa.Workbench in Docker
 
-This guide covers the production-style container image for `src/Apps/Elsa.Server` and the
-`docker/compose/` reference stack that runs **PostgreSQL + Elsa.Server + Elsa Studio** with
+The workbench is a development and demo host, not the shipped Elsa product. This guide covers its container image (`src/Apps/Elsa.Workbench`) and the
+`docker/compose/` reference stack that runs **PostgreSQL + Elsa.Workbench + Elsa Studio** with
 Postgres-backed persistence.
 
-- Image: `src/Apps/Elsa.Server/Dockerfile` (multi-stage, `net10.0`, non-root, port 8080)
+- Image: `src/Apps/Elsa.Workbench/Dockerfile` (multi-stage, `net10.0`, non-root, port 8080)
 - Reference stack: `docker/compose/docker-compose.yml`
-- Curated demo composition: `docker/compose/elsa-server.shells.json`
+- Curated demo composition: `docker/compose/elsa-workbench.shells.json`
 
-The repo default `src/Apps/Elsa.Server/shells.json` (SQLite) is intentionally left untouched; the
+The repo default `src/Apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the
 compose stack mounts its own curated `shells.json` instead.
 
 > Just want to run the prebuilt images from Docker Hub with plain `docker run` (no checkout, no
@@ -28,14 +28,14 @@ docker compose --profile studio up --build
 
 | Service      | URL                     | Notes                                   |
 |--------------|-------------------------|-----------------------------------------|
-| Elsa.Server  | http://localhost:13000  | Root path returns `{"status":"Healthy"}`|
+| Elsa.Workbench  | http://localhost:13000  | Root path returns `{"status":"Healthy"}`|
 | Elsa Studio  | http://localhost:14000  | Management UI (Blazor WebAssembly)      |
 | PostgreSQL   | localhost:5432          | user/pw/db: `elsa` / `elsa` / `elsa`    |
 
 Without the Studio image, run just the backend subset:
 
 ```bash
-docker compose up --build        # postgres + elsa-server only
+docker compose up --build        # postgres + elsa-workbench only
 ```
 
 Prove persistence actually hits Postgres:
@@ -61,8 +61,8 @@ The build context **must be the repository root** — the project references spa
 tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and a NuGet config.
 
 ```bash
-docker build -f src/Apps/Elsa.Server/Dockerfile -t elsa-server:local .
-docker run --rm -p 13000:8080 elsa-server:local
+docker build -f src/Apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+docker run --rm -p 13000:8080 elsa-workbench:local
 ```
 
 The image:
@@ -109,14 +109,14 @@ server outside Docker; the compose file adds the Studio container origin.
 
 | Container path | Purpose |
 |---|---|
-| `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-server.shells.json`. |
+| `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
 
 ---
 
 ## Demo persistence composition
 
-`docker/compose/elsa-server.shells.json` swaps the repo default (SQLite) for a single Groundwork
+`docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for a single Groundwork
 PostgreSQL document store:
 
 - **`GroundworkUnifiedPersistencePostgreSql`** backs the **runtime**, **workflows-design** and
@@ -150,7 +150,7 @@ PostgreSQL document store:
 
 `GroundworkUnifiedPersistencePostgreSql` declares `DependsOn "WorkflowsRuntimeResumption"`; CShells
 auto-enables that dependency, so it does not need a `shells.json` entry (its assembly is referenced
-by the host — see the note in `Elsa.Server.csproj`).
+by the host — see the note in `Elsa.Workbench.csproj`).
 
 ---
 
@@ -172,7 +172,7 @@ Studio wiring (see `docker-compose.yml`):
 - **`Studio__BackendBaseUrl` must be a host-reachable URL** (`http://localhost:13000`), **not** the
   compose service name. Studio is a Blazor WebAssembly app: the browser downloads the client and
   calls the backend directly, using the value surfaced at `GET /studio-runtime.js`. A compose
-  service name like `http://elsa-server:8080` is not resolvable from the browser.
+  service name like `http://elsa-workbench:8080` is not resolvable from the browser.
 - **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
   This is the Elsa host management key, and it stays server-side in the Studio container — it is
   never published to the browser. Browser-facing host-control reads (module management, Extension
@@ -186,7 +186,7 @@ Studio wiring (see `docker-compose.yml`):
 
 - **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
   missing the `Elsa.Workflows.Runtime.Resumption` project reference that every Groundwork
-  persistence provider depends on. It is wired in `Elsa.Server.csproj` / `Program.cs`; rebuild the
+  persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the
   image if you see this.
 - **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
   connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property

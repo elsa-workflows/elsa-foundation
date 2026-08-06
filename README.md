@@ -38,7 +38,7 @@ dotnet build Elsa.Server.slnx
 ## Supported management APIs
 
 Management-client APIs are owned by their Elsa domains and can be composed directly by custom applications.
-`Elsa.Server` is a reference composition, not the implementation home of a server-wide management facade.
+`Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
 [API Capabilities](src/Elsa/Api/Capabilities/README.md). An authenticated client loads one shell-relative
@@ -58,8 +58,8 @@ curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/do
 docker compose -f docker-compose.images.yml up
 ```
 
-This starts **Elsa.Server** (`http://localhost:13000`) and **Elsa Studio**
-(`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-server` and
+This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
+(`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and
 `elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
 covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
 Studio to the server backend (`Studio__BackendBaseUrl`, the Elsa host management key, CORS). For the

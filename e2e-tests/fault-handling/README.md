@@ -1,7 +1,7 @@
 # fault-handling — faults, propagation, terminal status
 
 Backend REST tests for how activity faults behave. Shared helper: `_FaultCommon.ps1`. Runs against a from-source
-`Elsa.Server` (see ../README.md).
+`Elsa.Workbench` (see ../README.md).
 
 ## Scripts
 

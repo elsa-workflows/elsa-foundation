@@ -2,7 +2,7 @@
 
 These are true backend e2e scripts for the durable runtime-alteration API. They exercise the public REST API,
 Groundwork persistence, the hosted orchestration pump, and the runtime checkpoint path against a source-built
-`Elsa.Server`; no script reaches into server DI or invokes a pump directly.
+`Elsa.Workbench`; no script reaches into server DI or invokes a pump directly.
 
 Run after rebuilding the server with a fresh development database as described in [`../README.md`](../README.md):
 

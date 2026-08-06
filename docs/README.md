@@ -15,7 +15,7 @@ This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer th
 
 ## Worked references
 
-- [Docker & compose](docker.md) - production image for Elsa.Server plus the PostgreSQL + Elsa.Server + Elsa Studio reference stack.
+- [Docker & compose](docker.md) - production image for Elsa.Workbench plus the PostgreSQL + Elsa.Workbench + Elsa Studio reference stack.
 - [Docker Hub quickstart](docker-hub-quickstart.md) - run the prebuilt Docker Hub images with plain `docker run`, supply a custom `shells.json`, and understand how Studio feature toggles persist.
 - [Seams and bridges](seams.md) - worked activities/workflows boundary example.
 - [Serialization rule](serialization.md) - canonical payload-serialization rule and exceptions.

@@ -1,6 +1,6 @@
 # Docker quickstart
 
-Go from a fresh clone to a running Elsa stack — **PostgreSQL + Elsa.Server + Elsa Studio** —
+Go from a fresh clone to a running Elsa stack — **PostgreSQL + Elsa.Workbench + Elsa Studio** —
 by following this one document, top to bottom.
 
 Everything here runs from this directory:
@@ -11,10 +11,10 @@ cd docker/compose
 
 Three ways to run, fastest first:
 
-- **Published images** — pull `elsaworkflows/elsa-server` + `elsaworkflows/elsa-studio` from Docker
+- **Published images** — pull `elsaworkflows/elsa-workbench` + `elsaworkflows/elsa-studio` from Docker
   Hub and run them; no clone, no build. See [Quick start — published images](#quick-start--published-images-no-clone-or-build)
   right below. Best for just trying the stack.
-- **Fast path (build)** — Postgres + Elsa.Server only, built from this repo. Good for API/backend work.
+- **Fast path (build)** — Postgres + Elsa.Workbench only, built from this repo. Good for API/backend work.
 - **Full stack (build)** — adds the Elsa Studio management UI, whose image is built from a *sibling* repo.
 
 > This is a quickstart. For the full container/image reference — the complete environment-variable
@@ -25,12 +25,12 @@ Three ways to run, fastest first:
 
 ## Quick start — published images (no clone or build)
 
-CI publishes two images to Docker Hub — **`elsaworkflows/elsa-server`** and
+CI publishes two images to Docker Hub — **`elsaworkflows/elsa-workbench`** and
 **`elsaworkflows/elsa-studio`** — tagged with the Elsa major version (`4`, `4.0`, `4.0.0`), plus
 `latest` and `4.0.0-preview.<n>` from `main`. Run the whole stack straight from them.
 
 > **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
-> (written under `/app`), which is discarded when the `elsa-server` container is removed. For
+> (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
 > durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
 > below.
 
@@ -48,14 +48,14 @@ docker compose -f docker-compose.images.yml up
 Same result without Compose — start the server, then Studio pointed at it:
 
 ```bash
-# Elsa.Server (SQLite default composition; the volume is the Nuplane package feed)
-docker run -d --name elsa-server \
+# Elsa.Workbench (SQLite default composition; the volume is the Nuplane package feed)
+docker run -d --name elsa-workbench \
   -p 13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
-  -v elsa-server-packages:/app/packages \
-  elsaworkflows/elsa-server:latest
+  -v elsa-workbench-packages:/app/packages \
+  elsaworkflows/elsa-workbench:latest
 
 # Elsa Studio, pointed at the server backend
 docker run -d --name elsa-studio \
@@ -74,12 +74,12 @@ Four environment variables wire the two containers together (double-underscore =
 
 | Setting | On | Value | Why |
 |---|---|---|---|
-| `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* the compose service name `http://elsa-server:8080`, which only resolves inside the Docker network. |
+| `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* the compose service name `http://elsa-workbench:8080`, which only resolves inside the Docker network. |
 | `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | The Elsa host management key the Studio management bridge attaches server-side when calling the server's module-management API. Never sent to the browser. **Must match** the server key below. |
 | `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The Elsa host management key the server accepts. |
 | `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
 
-To pin a version instead of `latest`, use a version tag, e.g. `elsaworkflows/elsa-server:4` or
+To pin a version instead of `latest`, use a version tag, e.g. `elsaworkflows/elsa-workbench:4` or
 `:4.0.0`. Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
 
 > ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on both
@@ -107,7 +107,7 @@ builds are cached.
 
 ---
 
-## 2. Fast path — Elsa.Server + PostgreSQL
+## 2. Fast path — Elsa.Workbench + PostgreSQL
 
 From `docker/compose`:
 
@@ -115,8 +115,8 @@ From `docker/compose`:
 docker compose up --build
 ```
 
-This builds the `elsa-server:local` image (context is the repo root) and starts two services:
-`postgres` and `elsa-server`. Compose waits for Postgres to be healthy before starting the server.
+This builds the `elsa-workbench:local` image (context is the repo root) and starts two services:
+`postgres` and `elsa-workbench`. Compose waits for Postgres to be healthy before starting the server.
 
 Once the server reports healthy, hit its root endpoint:
 
@@ -127,14 +127,14 @@ curl http://localhost:13000/
 Expected output:
 
 ```json
-{"status":"Healthy","service":"elsa-server"}
+{"status":"Healthy","service":"elsa-workbench"}
 ```
 
-That's the fast path — a running Elsa.Server backed by PostgreSQL. To also run the Studio UI,
+That's the fast path — a running Elsa.Workbench backed by PostgreSQL. To also run the Studio UI,
 continue to step 3.
 
 > Tip: add `-d` (`docker compose up --build -d`) to run detached and get your terminal back;
-> use `docker compose logs -f elsa-server` to follow logs.
+> use `docker compose logs -f elsa-workbench` to follow logs.
 
 ---
 
@@ -174,11 +174,11 @@ those go through the server-side Studio management bridge, which holds the Elsa 
 
 | Service      | Host URL / port          | What it is                                              |
 |--------------|--------------------------|--------------------------------------------------------|
-| Elsa.Server  | `http://localhost:13000` | Workflow server API. Root path returns `Healthy` JSON. |
+| Elsa.Workbench  | `http://localhost:13000` | Workflow server API. Root path returns `Healthy` JSON. |
 | Elsa Studio  | `http://localhost:14000` | Management UI (Blazor WebAssembly). `studio` profile.  |
 | PostgreSQL   | `localhost:5432`         | Persistence. Exposed for inspection only.              |
 
-**Demo credentials & keys** (defined in `docker-compose.yml` / `elsa-server.shells.json`):
+**Demo credentials & keys** (defined in `docker-compose.yml` / `elsa-workbench.shells.json`):
 
 | What | Value |
 |---|---|
@@ -197,8 +197,8 @@ leaves the two containers — the browser neither sees nor sends it.
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Server with unified Postgres persistence (via the mounted
-`elsa-server.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The stack composes Elsa.Workbench with unified Postgres persistence (via the mounted
+`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
@@ -221,7 +221,7 @@ docker compose exec postgres psql -U elsa -d elsa \
 
 For the full explanation of the demo composition (which persistence lanes are included/omitted and
 why), see [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition) and the header notes
-in [`elsa-server.shells.json`](elsa-server.shells.json).
+in [`elsa-workbench.shells.json`](elsa-workbench.shells.json).
 
 ---
 
@@ -242,11 +242,11 @@ docker compose --profile studio down -v
 **View logs:**
 
 ```bash
-docker compose logs -f elsa-server        # or: postgres, elsa-studio
+docker compose logs -f elsa-workbench        # or: postgres, elsa-studio
 ```
 
 **Override the Postgres connection string** without editing the mounted `shells.json` — set the env
-var on the `elsa-server` service (there is a commented-out example in `docker-compose.yml`):
+var on the `elsa-workbench` service (there is a commented-out example in `docker-compose.yml`):
 
 ```
 CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
@@ -255,7 +255,7 @@ CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__Conn
 **Override the Elsa host management key** — change it on **both** services so they still match:
 
 ```
-# elsa-server
+# elsa-workbench
 Elsa__ModuleManagement__ApiKey=<your-key>
 # elsa-studio
 Studio__BackendModuleManagementApiKey=<your-key>

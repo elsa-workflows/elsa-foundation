@@ -1,7 +1,7 @@
 using CShells.Lifecycle;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Server.Readiness;
+namespace Elsa.Workbench.Readiness;
 
 public static class ShellReadinessEndpointExtensions
 {

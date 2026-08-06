@@ -1,6 +1,6 @@
 # Extension points — Activity Design API
 
-`ActivitiesDesignApiFeature` is the host-independent composition root for the supported Activity Design management-client routes documented in [README.md](README.md). It does not depend on `Elsa.Server`.
+`ActivitiesDesignApiFeature` is the host-independent composition root for the supported Activity Design management-client routes documented in [README.md](README.md). It does not depend on `Elsa.Workbench`.
 
 ## Replacement contracts
 
@@ -27,7 +27,7 @@ documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_PO
 
 ## Sources and reconciliation
 
-Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Server`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). Groundwork persistence-specific seams are documented in their own catalog:
+Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). Groundwork persistence-specific seams are documented in their own catalog:
 
 - [`Persistence/Groundwork/EXTENSION_POINTS.md`](../Persistence/Groundwork/EXTENSION_POINTS.md)
 

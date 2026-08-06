@@ -1,6 +1,6 @@
 # Extension points — Expressions API
 
-`ExpressionsApiFeature` projects the registries owned by the Expressions domain through the canonical routes documented in [README.md](README.md). The API layer has no separate contributor system and no `Elsa.Server` dependency.
+`ExpressionsApiFeature` projects the registries owned by the Expressions domain through the canonical routes documented in [README.md](README.md). The API layer has no separate contributor system and no `Elsa.Workbench` dependency.
 
 ## Descriptor Sources
 

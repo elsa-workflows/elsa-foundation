@@ -136,7 +136,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 ### Backend e2e tests
 
 `e2e-tests/` holds backend, REST-driven end-to-end tests (PowerShell) that exercise a from-source
-`Elsa.Server` through the real HTTP + persistence + runtime path — the black-box complement to the in-process
+`Elsa.Workbench` through the real HTTP + persistence + runtime path — the black-box complement to the in-process
 C# tests under `tests/`. See [e2e-tests/README.md](e2e-tests/README.md) for the runner, per-suite categorization,
 and setup gotchas (fresh-DB-on-rebuild; opt-in `scheduling`/`DispatchWorkflow` features).
 

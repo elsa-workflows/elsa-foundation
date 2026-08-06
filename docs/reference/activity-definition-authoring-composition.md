@@ -17,7 +17,7 @@ publish engine, not the `WorkflowsPublishingApi` transport, so an authoring host
 provider without mounting the publish HTTP endpoints. When active, its provider contribution appears in
 `GET /design/activities/authoring-capabilities`.
 
-The stock `Elsa.Server` catalogs both graph assemblies and enables both graph features because its
+The stock `Elsa.Workbench` catalogs both graph assemblies and enables both graph features because its
 default shell supports authoring and execution. A custom authoring host opts in by adding
 `GraphActivitiesDesignFeature`'s assembly to its CShells catalog and enabling
 `ActivitiesGraphDesign` in that shell. Enable the feature once; do not also register

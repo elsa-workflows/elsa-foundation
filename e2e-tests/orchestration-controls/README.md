@@ -3,7 +3,7 @@
 Backend REST tests for Foundation's **runtime orchestration controls**. Scope is deliberately the
 **suspend/resume + bookmark/stimulus + in-workflow terminate** surface. Cancel and Retry/redrive are **out of
 scope here** (see "Deferred" below). Shared helper: `_ControlsCommon.ps1`. Runs against a from-source
-`Elsa.Server` (see ../README.md).
+`Elsa.Workbench` (see ../README.md).
 
 ## The control surface (verified in source)
 

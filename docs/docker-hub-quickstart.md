@@ -6,7 +6,7 @@ no checkout, no build. For building the images yourself or the full PostgreSQL c
 
 | Service     | Image                          | URL                    | Login                    |
 |-------------|--------------------------------|------------------------|--------------------------|
-| Elsa Server | `elsaworkflows/elsa-server`    | http://localhost:13000 | —                        |
+| Elsa Server | `elsaworkflows/elsa-workbench`    | http://localhost:13000 | —                        |
 | Elsa Studio | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
 
 The login is the demo admin seeded by the image's built-in `shells.json` (Development posture).
@@ -17,18 +17,18 @@ Demo credentials and API key throughout — do not expose this setup beyond your
 ```bash
 docker network create elsa-demo
 
-docker pull elsaworkflows/elsa-server:latest
+docker pull elsaworkflows/elsa-workbench:latest
 docker pull elsaworkflows/elsa-studio:latest
 
-docker run -d --name elsa-server \
+docker run -d --name elsa-workbench \
   --network elsa-demo \
   -p 13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
-  -v elsa-server-packages:/app/packages \
-  elsaworkflows/elsa-server:latest
+  -v elsa-workbench-packages:/app/packages \
+  elsaworkflows/elsa-workbench:latest
 
 docker run -d --name elsa-studio \
   --network elsa-demo \
@@ -36,7 +36,7 @@ docker run -d --name elsa-studio \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Studio__Auth__Enabled=true \
   -e Studio__BackendBaseUrl=http://localhost:13000 \
-  -e Studio__BackendServerBaseUrl=http://elsa-server:8080 \
+  -e Studio__BackendServerBaseUrl=http://elsa-workbench:8080 \
   -e Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
   elsaworkflows/elsa-studio:latest
 ```
@@ -48,13 +48,13 @@ The non-obvious settings:
 - `Studio__BackendBaseUrl` is used by the Blazor WebAssembly client **in your browser**, so it must
   be the host-published server URL (`http://localhost:13000`), never the container name.
 - `Studio__BackendServerBaseUrl` is used by Studio's server-side management bridge **inside the
-  Docker network**, so it uses the container name (`http://elsa-server:8080`).
+  Docker network**, so it uses the container name (`http://elsa-workbench:8080`).
 - `Studio__BackendModuleManagementApiKey` must equal the server's
   `Elsa__ModuleManagement__ApiKey`. It stays server-side (never sent to the browser) and gates the
   module *package* management API.
 - `Cors__AllowedOrigins__0` and `...AllowedReturnUrlOrigins__0` both point at the Studio origin so
   the browser can call the API and the login flow can redirect back to Studio.
-- `elsa-server-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
+- `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
 
 ## Custom `shells.json`: controlling which features are enabled
@@ -87,18 +87,18 @@ Don't write the file from scratch — extract the image's default (SQLite-backed
 and prune it:
 
 ```bash
-docker run --rm --entrypoint cat elsaworkflows/elsa-server:latest /app/shells.json > shells.json
+docker run --rm --entrypoint cat elsaworkflows/elsa-workbench:latest /app/shells.json > shells.json
 ```
 
 A Postgres-flavored curated example lives in the repo at
-[`docker/compose/elsa-server.shells.json`](../docker/compose/elsa-server.shells.json).
+[`docker/compose/elsa-workbench.shells.json`](../docker/compose/elsa-workbench.shells.json).
 
 > Keep the identity features (`FoundationIdentity*`) and `FastEndpoints` if you want to log in from
 > Studio; the seeded admin comes from `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`.
 
 ### Mount it — two modes
 
-Add **one** of these to the `elsa-server` run command:
+Add **one** of these to the `elsa-workbench` run command:
 
 ```bash
 # Mode A — writable: Studio feature toggles persist into YOUR file
@@ -167,7 +167,7 @@ Note this is separate from module *package* management (upload/feeds, gated by t
 ## Cleanup
 
 ```bash
-docker rm -f elsa-server elsa-studio
+docker rm -f elsa-workbench elsa-studio
 docker network rm elsa-demo
-docker volume rm elsa-server-packages
+docker volume rm elsa-workbench-packages
 ```

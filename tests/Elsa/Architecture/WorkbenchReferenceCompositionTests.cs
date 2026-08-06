@@ -2,7 +2,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
-public sealed class ElsaServerReferenceCompositionTests
+public sealed class WorkbenchReferenceCompositionTests
 {
     private static readonly string LegacyRoute = string.Join('/', "", "_elsa", "workflow-management");
     private static readonly string FacadeTypeName = string.Concat("ElsaWorkflow", "ManagementApi");
@@ -11,7 +11,7 @@ public sealed class ElsaServerReferenceCompositionTests
     [Fact]
     public void Elsa_Server_contains_no_workflow_management_endpoint_implementation_or_legacy_route()
     {
-        var serverDirectory = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server");
+        var serverDirectory = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench");
         var violations = Directory
             .EnumerateFiles(serverDirectory, "*.cs", SearchOption.AllDirectories)
             .Select(file => (Path: file, Source: File.ReadAllText(file)))
@@ -21,7 +21,7 @@ public sealed class ElsaServerReferenceCompositionTests
 
         Assert.True(
             violations.Length == 0,
-            "Elsa.Server must compose domain APIs, not implement the supported workflow-management API:" +
+            "Elsa.Workbench must compose domain APIs, not implement the supported workflow-management API:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 

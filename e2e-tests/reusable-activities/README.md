@@ -6,7 +6,7 @@ Backend REST tests for Foundation's "workflows used as activities". In Foundatio
 (workflow or another reusable activity) by **exact `activityVersionId`**. The consumer **inlines** the child at
 publish time (content-addressed template placement) — this is *not* the runtime `DispatchWorkflow` sub-execution.
 
-All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Server` (see ../README.md).
+All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Workbench` (see ../README.md).
 
 ## Authoring lifecycle (over REST)
 

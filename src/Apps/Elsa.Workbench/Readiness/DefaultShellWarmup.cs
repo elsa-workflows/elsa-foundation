@@ -4,7 +4,7 @@ using CShells.Lifecycle;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Server.Readiness;
+namespace Elsa.Workbench.Readiness;
 
 public sealed class DefaultShellWarmup(
     IHostApplicationLifetime applicationLifetime,

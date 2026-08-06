@@ -78,7 +78,7 @@ public static partial class ProjectGraph
     /// <summary>The top-level grouping a project belongs to.</summary>
     public static string DomainGroup(string project)
     {
-        if (project is "Elsa.Server" or "Server") return "Elsa.Server";
+        if (project is "Elsa.Workbench" or "Workbench") return "Elsa.Workbench";
         if (project.StartsWith("Test.", StringComparison.Ordinal)) return "Test";
         if (project.StartsWith("Elsa3.", StringComparison.Ordinal)) return "Elsa3";
 
@@ -91,7 +91,7 @@ public static partial class ProjectGraph
 
     private static string SubDomain(string project, string domain)
     {
-        if (domain is "Elsa.Server" or "Test" or "Elsa3" or "Other") return "-";
+        if (domain is "Elsa.Workbench" or "Test" or "Elsa3" or "Other") return "-";
 
         var tail = project.StartsWith(domain, StringComparison.Ordinal) ? project[domain.Length..] : project;
         tail = tail.StartsWith('.') ? tail[1..] : tail;
@@ -101,7 +101,7 @@ public static partial class ProjectGraph
     private static string Role(string project, string kind)
     {
         if (kind == "test") return "test";
-        if (project is "Elsa.Server" or "Server") return "host";
+        if (project is "Elsa.Workbench" or "Workbench") return "host";
         if (project.EndsWith(".Core", StringComparison.Ordinal)) return "contract";
 
         if (EndsWithAny(project, ".Strategies", ".Schedules", ".Libraries")) return "helper";

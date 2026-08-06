@@ -40,33 +40,33 @@ jobs:
         run: dotnet tool restore
 
       - name: Build server
-        run: dotnet build src/Apps/Elsa.Server/Elsa.Server.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       - name: Deploy fresh SQLite schema
         run: |
-          rm -f src/Apps/Elsa.Server/elsa-groundwork.db*
+          rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db*
           dotnet tool run groundwork -- apply \
-            --manifest-assembly src/Apps/Elsa.Server/bin/Release/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+            --manifest-assembly src/Apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
             --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
             --provider sqlite \
-            --connection 'Data Source=src/Apps/Elsa.Server/elsa-groundwork.db' \
+            --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
             --output json \
             --safe
 
       - name: Start server
         run: |
-          cd src/Apps/Elsa.Server
+          cd src/Apps/Elsa.Workbench
           ASPNETCORE_URLS=http://127.0.0.1:5095 \
           ASPNETCORE_ENVIRONMENT=Development \
           DOTNET_ENVIRONMENT=Development \
           Logging__LogLevel__Default=Warning \
-          dotnet bin/Release/net10.0/Elsa.Server.dll > "$RUNNER_TEMP/elsa-server.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/elsa-server.pid"
+          dotnet bin/Release/net10.0/Elsa.Workbench.dll > "$RUNNER_TEMP/elsa-workbench.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/elsa-workbench.pid"
           for attempt in {1..240}; do
             curl --silent --fail http://127.0.0.1:5095/health/ready >/dev/null && exit 0
             sleep 0.25
           done
-          cat "$RUNNER_TEMP/elsa-server.log"
+          cat "$RUNNER_TEMP/elsa-workbench.log"
           exit 1
 
       - name: Publish benchmark workflow
@@ -85,7 +85,7 @@ jobs:
             --policy default-on \
             --segment-cap 256 \
             --provider Groundwork-SQLite \
-            --groundwork-db src/Apps/Elsa.Server/elsa-groundwork.db \
+            --groundwork-db src/Apps/Elsa.Workbench/elsa-groundwork.db \
             --output-json artifacts/http-workflow-performance/report.json \
             --output-markdown artifacts/http-workflow-performance/report.md \
             --output-samples artifacts/http-workflow-performance/samples.txt \
@@ -95,8 +95,8 @@ jobs:
       - name: Stop server
         if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/elsa-server.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/elsa-server.pid")" 2>/dev/null || true
+          if [ -f "$RUNNER_TEMP/elsa-workbench.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/elsa-workbench.pid")" 2>/dev/null || true
           fi
 
       - name: Upload evidence
@@ -106,4 +106,4 @@ jobs:
           name: http-workflow-performance-${{ github.run_id }}
           path: |
             artifacts/http-workflow-performance
-            ${{ runner.temp }}/elsa-server.log
+            ${{ runner.temp }}/elsa-workbench.log

@@ -1,6 +1,6 @@
 ### Seam walk — drive the activity-construction bridge over HTTP.
 ###
-### Run the host:  dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
+### Run the host:  dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
 ### Use with the REST Client (VS Code / Visual Studio / Rider).
 ###
 ### On boot, the CLR reconciliation source scans the host output folder. With the Publishing Groundwork

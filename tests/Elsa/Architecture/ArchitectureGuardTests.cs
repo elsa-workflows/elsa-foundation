@@ -27,9 +27,9 @@ public sealed class ArchitectureGuardTests
         // lives in its own module (Elsa.Modularity.ExtensionBuilder) which exposes those internals to
         // the shared modularity test project (MD-3, Elsa 4 architecture review 2026-07).
         ("Elsa.Modularity.ExtensionBuilder", "Elsa.Modularity.Tests"),
-        // Elsa.Server keeps a narrow exception for the host-only module-management registry builder
+        // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Server", "Elsa.Modularity.Tests")
+        ("Elsa.Workbench", "Elsa.Modularity.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
@@ -187,7 +187,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Docker_reference_shell_enables_graph_authoring_with_activity_design()
     {
-        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-server.shells.json");
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json");
         var features = ReadDefaultShellFeatures(path);
 
         Assert.True(features.ContainsKey("ActivitiesDesignApi"));
@@ -197,7 +197,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
     {
-        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Dockerfile"));
         var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
         var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
 
@@ -311,9 +311,9 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
     {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
@@ -325,9 +325,9 @@ public sealed class ArchitectureGuardTests
     [InlineData("shells.baseline.json")]
     public void Server_catalogs_and_enables_dashboard_dependencies_in_the_default_shell(string fileName)
     {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.Contains("Elsa.Workflows.Design.Validations", references);
@@ -361,7 +361,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Docker_reference_shell_enables_the_publish_engine_alongside_its_transport()
     {
-        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "docker", "compose", "elsa-server.shells.json"));
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json"));
 
         Assert.True(features.ContainsKey("WorkflowsPublishingApi"));
         Assert.True(features.ContainsKey("WorkflowsPublishing"));
@@ -370,9 +370,9 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_catalogs_graph_design_separately_from_graph_runtime()
     {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
 
         Assert.Contains("Elsa.Activities.Graph.Design", references);
         Assert.Contains("Elsa.Activities.Graph.Runtime", references);
@@ -383,9 +383,9 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_catalogs_workflow_design_validations_required_by_dashboard()
     {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
         var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
 
         Assert.Contains("Elsa.Workflows.Design.Validations", references);
         Assert.Contains(
@@ -397,12 +397,12 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_exposes_distinct_root_liveness_and_readiness_paths()
     {
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
         var endpoints = File.ReadAllText(Path.Combine(
             RepoRoot,
             "src",
             "Apps",
-            "Elsa.Server",
+            "Elsa.Workbench",
             "Readiness",
             "ShellReadinessEndpointExtensions.cs"));
 
@@ -420,7 +420,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Server_excludes_both_health_paths_from_cshells_resolution()
     {
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
         var webRouting = Regex.Match(
             program,
             @"\.WithWebRouting\(options\s*=>\s*\{(?<body>.*?)\}\)",
@@ -808,7 +808,7 @@ public sealed class ArchitectureGuardTests
         if (Path.IsPathRooted(fileName) || !StringComparer.Ordinal.Equals(Path.GetFileName(fileName), fileName))
             throw new ArgumentException("The server configuration name must be a relative file name.", nameof(fileName));
 
-        return Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", fileName);
+        return Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", fileName);
     }
 
     private static string StripCommentsAndStringLiterals(string text)
@@ -1061,8 +1061,8 @@ public sealed class ArchitectureGuardTests
 
     private static string ExpectedProjectPath(ProjectInfo project)
     {
-        if (project.Name == "Elsa.Server")
-            return "src/Apps/Elsa.Server/Elsa.Server.csproj";
+        if (project.Name == "Elsa.Workbench")
+            return "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj";
 
         if (project.Name == "Elsa.Architecture.Tests")
             return "tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj";
@@ -1087,7 +1087,7 @@ public sealed class ArchitectureGuardTests
 
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
-        if (project.Name == "Elsa.Server")
+        if (project.Name == "Elsa.Workbench")
             return "/src/Apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');

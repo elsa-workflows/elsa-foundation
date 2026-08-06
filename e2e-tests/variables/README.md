@@ -1,7 +1,7 @@
 # variables — typed variables, value conversion, coercion, inputs/outputs
 
 Backend REST tests for the value/typing layer. Shared helper: `_VarCommon.ps1`. Runs against a from-source
-`Elsa.Server` (see ../README.md).
+`Elsa.Workbench` (see ../README.md).
 
 ## Scripts
 

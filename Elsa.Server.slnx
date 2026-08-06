@@ -30,7 +30,7 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Apps/">
-    <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
+    <Project Path="src/Apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/">
     <Project Path="src/Elsa/Git/Elsa.Git.csproj" />

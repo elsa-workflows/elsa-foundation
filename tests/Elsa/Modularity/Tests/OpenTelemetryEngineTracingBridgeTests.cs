@@ -4,7 +4,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
-using Elsa.Server;
+using Elsa.Workbench;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,7 +14,7 @@ using Xunit;
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// Behavior of the host-local engine tracing bridge (lives in Elsa.Server, hence this project — the only test assembly
+/// Behavior of the host-local engine tracing bridge (lives in Elsa.Workbench, hence this project — the only test assembly
 /// with internals access): per-cycle batches for multi-cycle synchronous drains that merge into one store summary, and
 /// sweep-publication (not dropping) of drainless engine spans such as the coalescing quiescence flush commit.
 /// </summary>

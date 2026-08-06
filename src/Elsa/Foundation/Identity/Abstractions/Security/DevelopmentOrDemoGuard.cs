@@ -27,7 +27,7 @@ namespace Elsa.Foundation.Identity.Abstractions.Security;
 /// </para>
 /// <para>
 /// Registered under both lifecycle hooks, like the seeder: <see cref="IHostedService"/> for plain hosts/tests
-/// and the CShells <see cref="IShellInitializer"/> for the shell-composed <c>Elsa.Server</c> host (whose
+/// and the CShells <see cref="IShellInitializer"/> for the shell-composed <c>Elsa.Workbench</c> host (whose
 /// shell-scoped hosted services do not run — only initializers do). CShells resolves initializers from a scope
 /// off the shell's provider, which copies the root service descriptors, so a real web host's
 /// <see cref="IHostEnvironment"/> is resolvable there; the fail-closed behaviour is the backstop if it is not.

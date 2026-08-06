@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace Elsa.Server.Readiness;
+namespace Elsa.Workbench.Readiness;
 
 public static class ShellActivationTelemetry
 {
-    public const string ActivitySourceName = "Elsa.Server.Readiness";
+    public const string ActivitySourceName = "Elsa.Workbench.Readiness";
     public const string MeterName = ActivitySourceName;
     public const string ActivityName = "elsa.shell.activation";
     public const string DurationInstrumentName = "elsa.shell.activation.duration";

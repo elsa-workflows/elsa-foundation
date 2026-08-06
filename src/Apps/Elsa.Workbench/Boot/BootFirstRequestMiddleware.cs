@@ -1,4 +1,4 @@
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>
 /// Times the first HTTP request end-to-end and emits the boot phase table once it completes (spec 129). Placed at

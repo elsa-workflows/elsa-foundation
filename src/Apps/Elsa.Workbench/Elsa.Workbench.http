@@ -1,7 +1,7 @@
 ### Elsa Server workflow REST loop
 ###
 ### Run the server first:
-###   dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
+###   dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
 ###
 ### The default CShell is mounted under /default.
 ###

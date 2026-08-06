@@ -1,5 +1,5 @@
 using CShells.Lifecycle;
-using Elsa.Server.Boot;
+using Elsa.Workbench.Boot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Elsa.Modularity.Core.Models;
-using Elsa.Server;
+using Elsa.Workbench;
 using Nuplane.Abstractions;
 using Xunit;
 
@@ -42,7 +42,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
         var modules = ModuleManagementRegistryBuilder.BuildModules([feature], []);
 
         var module = Assert.Single(modules);
-        Assert.Equal("Elsa.Server", module.Id);
+        Assert.Equal("Elsa.Workbench", module.Id);
         Assert.Equal("server", module.SourceKind);
         Assert.Equal("loaded", module.Status);
         Assert.Equal("RuntimeFeature", Assert.Single(module.Features).Id);

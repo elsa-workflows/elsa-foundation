@@ -1,7 +1,7 @@
 # Identity configuration (first-party auth & bearer issuance)
 
 This is the operator-facing configuration reference for the Elsa Foundation identity stack that secures the
-`Elsa.Server` API and issues the bearer tokens the Studio shell consumes. It covers the features you enable,
+`Elsa.Workbench` API and issues the bearer tokens the Studio shell consumes. It covers the features you enable,
 the settings each one takes, the development defaults, and the **go-live checklist** you must complete before
 running outside `Development`.
 
@@ -23,7 +23,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `src/Apps/Elsa.Server/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `src/Apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc

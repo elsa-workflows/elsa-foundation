@@ -1,13 +1,13 @@
 # Elsa.Samples.Nuplane.Activities
 
-Sample package-loaded shell feature for `Elsa.Server`.
+Sample package-loaded shell feature for `Elsa.Workbench`.
 
 ## Build And Drop
 
 ```bash
 dotnet pack samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj \
   -c Release \
-  -o src/Apps/Elsa.Server/packages
+  -o src/Apps/Elsa.Workbench/packages
 ```
 
 Enable the feature on a shell:

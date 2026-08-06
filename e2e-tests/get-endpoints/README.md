@@ -1,6 +1,6 @@
 # get-endpoints — GET-endpoint coverage
 
-Systematic backend coverage of the **reachable GET endpoints** on the default `Elsa.Server`, one script per API
+Systematic backend coverage of the **reachable GET endpoints** on the default `Elsa.Workbench`, one script per API
 area. Each script builds a controlled fixture, hits every GET endpoint in its area with valid + edge/negative
 parameters, and asserts the HTTP status (and a light body predicate). Shared harness: `_GetCommon.ps1`
 (`Invoke-Get` / `Assert-Get` / `Complete-GetSuite`). Runs against a from-source server (see ../README.md).
@@ -30,7 +30,7 @@ Every area also asserts negative `{bogus-id} -> 404` cases where applicable.
 
 ## Scope
 
-Only endpoints **composed on the default `Elsa.Server`** are covered. Studio/Nuplane/tooling GET endpoints that
+Only endpoints **composed on the default `Elsa.Workbench`** are covered. Studio/Nuplane/tooling GET endpoints that
 exist in the codebase but aren't composed by the reference server (workspaces, projects, builds, migration,
 opentelemetry diagnostics, studio preferences, javascript document rendering, secrets descriptors, …) are out of
 scope. POST/PUT/DELETE coverage is a separate future effort.

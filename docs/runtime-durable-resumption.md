@@ -177,7 +177,7 @@ runs after persistence-provider registration, so it decorates whichever runtime 
 `Mode` is `Immediate` by default and is the configuration-only rollback switch. `Coalesced` reduces physical
 checkpoint writes and request latency for straight-line synchronous workflows, at the cost of replaying up to one
 unflushed segment after a crash. `MaxSegmentCheckpoints` (default 50, positive values only) bounds that replay and
-memory window; lower values flush more frequently, while higher values favor write reduction. The Elsa.Server
+memory window; lower values flush more frequently, while higher values favor write reduction. The Elsa.Workbench
 reference composition explicitly selects `Coalesced` with cap 50; other hosts remain `Immediate` unless configured.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a

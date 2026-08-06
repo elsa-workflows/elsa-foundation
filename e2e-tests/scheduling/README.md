@@ -13,7 +13,7 @@ Backend tests for the three `Elsa.Activities.Scheduling` activities, driven thro
 
 These activities are **discoverable in the design catalog by default, but do not run** unless the scheduling
 features are composed - a `Delay` faults at construction (`IDurableTimerScheduler` unresolved) and `Timer`/`Cron`
-never fire. The `src/Apps/Elsa.Server/shells.json` default shell must enable:
+never fire. The `src/Apps/Elsa.Workbench/shells.json` default shell must enable:
 
 ```json
 "ActivitiesScheduling": {},

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using CShells.Lifecycle;
 
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>
 /// Host-level hosted service that eagerly activates the configured shell(s) at boot (spec 132, program unit 4).

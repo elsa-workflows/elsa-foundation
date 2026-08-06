@@ -20,7 +20,7 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// <summary>
 /// Deterministic cold-start schema baseline (spec 129, First-Request/Cold-Start Readiness).
 ///
-/// The reference <c>Elsa.Server</c> host admits <see cref="RuntimeGroundworkStorageManifestSource"/> plus the
+/// The reference <c>Elsa.Workbench</c> host admits <see cref="RuntimeGroundworkStorageManifestSource"/> plus the
 /// seven other feature families selected by <c>GroundworkAllFeaturesDeploymentSchema</c> against one SQLite file
 /// on the FIRST matching request (default <c>AutoApplyOnStartup = true</c>). This test reconstructs the exact
 /// SQLite physical target from that same manifest-source set and pins the number of DDL operations that fresh-DB

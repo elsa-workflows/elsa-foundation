@@ -4,7 +4,7 @@
 .DESCRIPTION
     Simplest end-to-end backend flow. Builds a one-node WriteLine workflow, runs it, and prints
     the resulting instance (status + activity executions). Requires the server running from source:
-        dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj --launch-profile http
+        dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 .EXAMPLE
     pwsh ./e2e-tests/Test-WorkflowFlow.ps1
     pwsh ./e2e-tests/Test-WorkflowFlow.ps1 -Message "Hi there"

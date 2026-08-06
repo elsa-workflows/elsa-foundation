@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using CShells.Lifecycle;
 
-namespace Elsa.Server.Boot;
+namespace Elsa.Workbench.Boot;
 
 /// <summary>
 /// Times the lazy shell-activation wall from the host side (spec 129). CShells activates each shell on its first

@@ -1,5 +1,5 @@
 # .dockerignore (repo root) — applies to Docker builds that use the repository
-# root as context (e.g. src/Apps/Elsa.Server/Dockerfile).
+# root as context (e.g. src/Apps/Elsa.Workbench/Dockerfile).
 #
 # Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
 # config (Directory.Packages.props, NuGet.config, *.slnx) and the src/ tree with
@@ -44,11 +44,11 @@ tools/
 **/*.sqlite-wal
 # Nuplane reconciliation state and directory-feed contents
 **/.nuplane/
-src/Apps/Elsa.Server/packages/
+src/Apps/Elsa.Workbench/packages/
 # ExtensionBuilder runtime workspace (lowercase; source lives in ExtensionBuilder/)
-src/Apps/Elsa.Server/extension-builder/
+src/Apps/Elsa.Workbench/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
-src/Apps/Elsa.Server/.elsa/
+src/Apps/Elsa.Workbench/.elsa/
 
 # --- Docker / compose assets ------------------------------------------------
 docker/

@@ -1,6 +1,6 @@
 # e2e-tests - backend end-to-end REST tests
 
-Pure backend (no Studio, no Docker) **end-to-end** tests that drive the `Elsa.Server` REST API through the
+Pure backend (no Studio, no Docker) **end-to-end** tests that drive the `Elsa.Workbench` REST API through the
 full workflow lifecycle (login -> design/submit -> publish -> execute/runtime -> observe) against the default
 **SQLite** composition. These are the black-box counterpart to the in-process C# tests under `tests/`: they
 exercise the real HTTP + persistence + runtime-pump path that unit/integration tests stub out. .NET 10.
@@ -11,15 +11,15 @@ Build the server, deploy the complete reference-composition schema to the fresh 
 server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
 
 ```bash
-dotnet build src/Apps/Elsa.Server/Elsa.Server.csproj
+dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
 dotnet tool run groundwork -- apply \
-  --manifest-assembly src/Apps/Elsa.Server/bin/Debug/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-assembly src/Apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
   --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
   --provider sqlite \
-  --connection 'Data Source=src/Apps/Elsa.Server/elsa-groundwork.db' \
+  --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
   --output json \
   --safe
-dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj --launch-profile http
+dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
@@ -32,7 +32,7 @@ where all feature assemblies needed by the complete deployment schema are coloca
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Server/`; stop the server /
+  (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Workbench/`; stop the server /
   free port 5095 first), then re-run the Groundwork schema deployment command above before starting the server.
   Old documents carry an older schema version a newer build refuses to read, which surfaces as spurious `500`s
   on publish.
@@ -236,8 +236,8 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
-- `src/Apps/Elsa.Server/Elsa.Server.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
-- `src/Apps/Elsa.Server/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
+- `src/Apps/Elsa.Workbench/Elsa.Workbench.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
+- `src/Apps/Elsa.Workbench/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
 - No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with

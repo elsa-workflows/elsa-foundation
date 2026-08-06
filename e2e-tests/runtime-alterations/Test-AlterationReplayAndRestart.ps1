@@ -2,7 +2,7 @@
 .SYNOPSIS
     Real-server replay/restart proof for durable alteration plans.
 .DESCRIPTION
-    Uses an idempotency-key replay to prove one durable plan identity, then restarts Elsa.Server while a second plan
+    Uses an idempotency-key replay to prove one durable plan identity, then restarts Elsa.Workbench while a second plan
     is eligible for capture/execution. The final public job evidence proves the post-restart worker reconciled the
     acknowledged terminal checkpoint rather than duplicating an observable cancellation. This is the black-box
     acknowledgement/reconciliation proof available to a normal host: fault injection remains covered by the focused
@@ -54,7 +54,7 @@ if ($captureProgress.Json.counts.capturedSoFar -ne 100 -or $captureProgress.Json
 }
 
 if ($RestartServer) {
-    Invoke-Step 'restart Elsa.Server during durable plan progression' { Restart-ElsaServer -Port $Port }
+    Invoke-Step 'restart Elsa.Workbench during durable plan progression' { Restart-ElsaServer -Port $Port }
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 } else {
     Write-Host '(restart skipped; -RestartServer:$false gives a weaker replay/reconciliation run)' -ForegroundColor Yellow
