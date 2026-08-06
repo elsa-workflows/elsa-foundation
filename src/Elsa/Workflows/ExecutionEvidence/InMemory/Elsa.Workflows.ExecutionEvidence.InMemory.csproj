@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Workflows.ExecutionEvidence.Core.csproj" />
+    <ProjectReference Include="../Elsa.Workflows.ExecutionEvidence.csproj" />
+  </ItemGroup>
+
+</Project>

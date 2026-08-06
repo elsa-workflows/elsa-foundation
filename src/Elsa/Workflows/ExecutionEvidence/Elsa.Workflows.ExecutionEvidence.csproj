@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Core/Elsa.Workflows.ExecutionEvidence.Core.csproj" />
+    <ProjectReference Include="../Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../Tasks/Core/Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Api/**/*;Core/**/*;InMemory/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Core/**/*;InMemory/**/*" />
+    <None Remove="Api/**/*;Core/**/*;InMemory/**/*" />
+  </ItemGroup>
+
+</Project>

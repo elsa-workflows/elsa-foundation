@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../../../src/Elsa/Workflows/ExecutionEvidence/Api/Elsa.Workflows.ExecutionEvidence.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../../TestUtilities/MethodCallInspector.cs" Link="TestUtilities/MethodCallInspector.cs" />
+  </ItemGroup>
+
+</Project>

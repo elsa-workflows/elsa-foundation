@@ -13,6 +13,17 @@ runtime facts and exposes them through a neutral API for deterministic automated
 goal coordinates the complete multi-session path from a process-local vertical slice through durable
 distributed storage and J-Test consumer conformance.
 
+## Reviewed E2.1 module-row amendment — #1133
+
+This Draft constitution amendment was reviewed for #1133 implementation readiness on 2026-08-05.
+No ratification evidence was accepted, so it remains Draft and unratified. #1133 proposes
+`Elsa.Workflows.ExecutionEvidence.Core` as contracts only,
+`Elsa.Workflows.ExecutionEvidence` as the provider-neutral session/capture/Runtime-adapter base,
+`Elsa.Workflows.ExecutionEvidence.InMemory` as the explicit process-local provider leaf, and
+`Elsa.Workflows.ExecutionEvidence.Api` as transport. The public API feature may inherit the base
+feature registration and calls `base.ConfigureServices`; it references Core/base, never InMemory.
+Groundwork remains the later durable provider owned by #1137.
+
 ## In Scope
 
 - The Execution Evidence `.Core`, default implementation, API, and Groundwork provider modules.

@@ -18,12 +18,16 @@ relationships across workflow boundaries.
 
 ## Decision
 
-Every workflow instance has a strict monotonic evidence sequence. When one runtime checkpoint creates
-multiple evidence records for that workflow, each record also has a stable checkpoint-local ordinal.
+Every workflow instance has a strict order expressed as `(WorkflowCheckpointOrder,
+CheckpointOrdinal)`: generic Runtime assigns the positive, stable monotonic checkpoint order before
+enrichment, and each record in that checkpoint has a distinct deterministic ordinal. Timestamps,
+hashes, lexical IDs, session counters, mutable reads, and delivery arrival order do not establish
+semantic order.
 
 Cross-workflow relationships use explicit causation references, such as the evidence identity of a
-parent dispatch that caused a child workflow start. Correlation metadata groups related work without
-claiming that grouping establishes order.
+parent dispatch that caused a child workflow start. #1133 reserves the optional envelope field but
+does not emit child/stimulus/scheduling causation; #1135 owns that coverage. Correlation metadata
+groups related work without claiming that grouping establishes order.
 
 Timestamps are diagnostic attributes and do not establish distributed semantic order. An opaque API
 cursor provides stable query continuation but does not promise that unrelated records were committed

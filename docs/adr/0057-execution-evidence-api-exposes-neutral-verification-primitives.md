@@ -25,8 +25,12 @@ It exposes provider-neutral HTTP endpoints for:
 - filtered evidence queries by session, kind, workflow, activity, subject, correlation, and
   sequence;
 - cursor-based waiting for matching evidence without client polling sleeps; and
-- evidence integrity and completeness information, including duplicates, gaps, and value
-  dispositions.
+- evidence integrity observations, including duplicate suppression and delivery state.
+
+For #1133, the API can expose an inconclusive timeout, incomplete delivery, terminal integrity
+failure, and an observable completed-range-without-match result. It does not claim #1134 settled
+barriers, gap-free completeness, or definitive-negative semantics, and it does not implement #1136
+value/disposition behavior.
 
 Responses expose typed baseline contracts where appropriate and preserve common-envelope access for
 registered kinds unknown to a particular client. Continuation uses an opaque evidence cursor rather
@@ -36,8 +40,10 @@ The API does not provide a fluent assertion language, test-case lifecycle, frame
 semantics, or pass/fail outcomes. J-Test and other consumers build those facilities over the neutral
 API.
 
-The `.Api` module owns transport and endpoint concerns. The `.Core` contract module does not depend
-on ASP.NET Core or a test framework.
+The `.Api` module owns transport and endpoint concerns. Its public feature may inherit the base
+feature registration and calls `base.ConfigureServices`; the module depends on Core/base and never
+the concrete InMemory provider. The `.Core` contract module does not depend on ASP.NET Core or a test
+framework.
 
 ## Considered options
 

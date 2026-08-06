@@ -15,7 +15,7 @@ status would omit the activity, state, stimulus, and causation facts needed to d
 
 ## Decision
 
-The baseline catalog is organized around committed semantic transition families:
+The end-state baseline catalog is organized around committed semantic transition families:
 
 - workflow lifecycle: started, suspended, resumed, completed, faulted, and cancelled;
 - activity lifecycle: scheduled, started, completed, faulted, cancelled, and skipped;
@@ -31,8 +31,12 @@ log messages, method calls, and exceptions whose effects do not commit. Multiple
 become true in one checkpoint remain distinct typed evidence records with stable checkpoint-local
 ordinals.
 
-Exact kind strings, payload contracts, and rollout allocation are specified by feature work units
-and compatibility fixtures rather than frozen by this architectural decision.
+For #1133, the emitted catalog is deliberately only `workflow.started`, `workflow.completed`,
+`activity.started`, and `activity.completed`, all schema version 1 with metadata-only payloads.
+#1134 expands lifecycle/completeness coverage, #1135 owns stimulus/scheduling/child causation, and
+#1136 owns state/value payload behavior. Exact kind strings, payload contracts, and rollout
+allocation are specified by feature work units; compatibility fixtures are owned by #1138 rather than
+this first-slice decision.
 
 ## Considered options
 

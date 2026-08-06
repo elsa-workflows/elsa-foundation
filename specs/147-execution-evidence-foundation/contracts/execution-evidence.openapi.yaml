@@ -1,0 +1,580 @@
+openapi: 3.1.0
+info:
+  title: Elsa Execution Evidence API
+  version: 1.0.0-draft
+  description: >-
+    Authorization-scoped, process-local Execution Evidence protocol. It exposes committed facts,
+    lifecycle, and integrity observations; it is not a test assertion API and never exposes provider offsets.
+servers:
+  - url: /
+security:
+  - elsaPermissions: []
+paths:
+  /execution-evidence/sessions:
+    post:
+      operationId: createExecutionEvidenceSession
+      summary: Open an explicit metadata-only evidence session.
+      security:
+        - elsaPermissions: [execution-evidence.manage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSessionRequest' }
+      responses:
+        '201':
+          description: Session opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSession' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /execution-evidence/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getExecutionEvidenceSession
+      summary: Inspect lifecycle, frozen associations, cutoffs, and integrity.
+      security:
+        - elsaPermissions: [execution-evidence.read]
+      responses:
+        '200':
+          description: Current session observation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteExecutionEvidenceSession
+      summary: Delete a delivery-settled completed session as one unit.
+      security:
+        - elsaPermissions: [execution-evidence.manage]
+      responses:
+        '204':
+          description: >-
+            Session, associations, records, cursors, and observations are deleted together.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DeletePreconditionFailed' }
+  /execution-evidence/sessions/{sessionId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: completeExecutionEvidenceSession
+      summary: Atomically freeze associations and reconcile terminal cutoffs/delivery.
+      description: >-
+        Freezing succeeds even when completion remains incomplete. It rejects later associations. Completed is reported
+        only when every frozen workflow has a committed terminal checkpoint cutoff and every relevant intent through
+        that cutoff is Delivered.
+      security:
+        - elsaPermissions: [execution-evidence.manage]
+      responses:
+        '200':
+          description: Frozen/completed/integrity state after reconciliation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /execution-evidence/sessions/{sessionId}/workflows:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: associateAndStartEvidenceWorkflow
+      summary: Associate and start a workflow through the Evidence-owned bridge.
+      description: >-
+        The bridge creates a generic opaque immutable execution-context snapshot before ordinary Runtime dispatch.
+        The Runtime execute endpoint remains unmodified and unscoped unless this bridge is used. The required
+        Idempotency-Key binds normalized caller access context, session, target, and canonical request material. An exact retry
+        returns the authoritative prior result, including after a lost acknowledgement; reusing the key with any of
+        those materials changed returns 409 without a mutation.
+      security:
+        - elsaPermissions: [execution-evidence.manage]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssociateAndStartWorkflowRequest' }
+      responses:
+        '202':
+          description: >-
+            Start admitted, or the authoritative prior result of an exact idempotent replay; association becomes
+            effective at the first committed workflow checkpoint.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowAssociation' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AssociationOrIdempotencyConflict' }
+  /execution-evidence/sessions/{sessionId}/workflows/{workflowExecutionId}/attach:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/WorkflowExecutionIdPath'
+    post:
+      operationId: attachExecutionEvidenceWorkflowIfAbsent
+      summary: Late-associate an existing execution at a generic checkpoint boundary.
+      description: >-
+        Success linearizes only at a committed generic AttachIfAbsent checkpoint and returns its effective order.
+        Failed/skipped checkpoints create no association. A conflicting attach or an already frozen session fails. The
+        required Idempotency-Key binds normalized caller access context, session, target, and canonical request material. An
+        exact retry returns the authoritative prior result, including after a lost acknowledgement; reusing the key
+        with any of those materials changed returns 409 without a mutation.
+      security:
+        - elsaPermissions: [execution-evidence.manage]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LateAttachRequest' }
+      responses:
+        '200':
+          description: >-
+            Attachment committed, or the authoritative prior result of an exact idempotent replay; only facts at or
+            after effective order are eligible.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowAssociation' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AssociationOrIdempotencyConflict' }
+        '422': { $ref: '#/components/responses/CheckpointNotCommitted' }
+  /execution-evidence/sessions/{sessionId}/records:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/Kind'
+      - $ref: '#/components/parameters/WorkflowExecutionId'
+      - $ref: '#/components/parameters/ActivityExecutionId'
+      - $ref: '#/components/parameters/SubjectId'
+      - $ref: '#/components/parameters/CorrelationKey'
+      - $ref: '#/components/parameters/CorrelationValue'
+      - $ref: '#/components/parameters/CheckpointOrderFrom'
+      - $ref: '#/components/parameters/CheckpointOrderTo'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/PageSize'
+    get:
+      operationId: queryExecutionEvidenceRecords
+      summary: Query typed baseline records or registered-unknown envelopes with opaque continuation.
+      description: >-
+        Correlation key and value are required together. The server rejects an order range whose from value exceeds
+        its to value. The cursor is bound to normalized filters, caller access scope, and page size; it resumes at
+        the last examined stream position, including filtered nonmatches.
+      security:
+        - elsaPermissions: [execution-evidence.read]
+      responses:
+        '200':
+          description: Authorization-scoped matching page and current integrity observation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceRecordPage' }
+        '400': { $ref: '#/components/responses/InvalidCursorOrRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /execution-evidence/sessions/{sessionId}/wait:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: waitForExecutionEvidence
+      summary: Wait for matching evidence or a precise non-match/integrity outcome.
+      description: >-
+        The bounded candidate scan resumes at the cursor's last examined position. Correlation key and value are
+        required together, and the server rejects an order range whose from value exceeds its to value.
+      security:
+        - elsaPermissions: [execution-evidence.read]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WaitRequest' }
+      responses:
+        '200':
+          description: Match, timeout, incomplete delivery, terminal integrity failure, or completed-range observation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WaitResult' }
+        '400': { $ref: '#/components/responses/InvalidCursorOrRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    elsaPermissions:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /_elsa/identity/connect/token
+          scopes:
+            execution-evidence.read: Read authorized execution-evidence sessions, records, and wait results.
+            execution-evidence.manage: Create, associate, complete, and delete authorized execution-evidence sessions.
+  parameters:
+    SessionId:
+      in: path
+      name: sessionId
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 256 }
+    WorkflowExecutionIdPath:
+      in: path
+      name: workflowExecutionId
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 512 }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: >-
+        Caller-supplied reusable operation key. It must be 1–256 characters and contain a non-whitespace character.
+        Missing or invalid values return stable 400 invalid-request. The durable binding includes normalized caller access
+        context, session, target, and canonical request material: an exact retry returns the authoritative prior
+        result, while a mismatch returns 409 idempotency-conflict without mutation.
+      schema:
+        type: string
+        minLength: 1
+        pattern: ".*\\S.*"
+        maxLength: 256
+    Kind:
+      in: query
+      name: kind
+      schema: { type: string, minLength: 1, maxLength: 230 }
+    WorkflowExecutionId:
+      in: query
+      name: workflowExecutionId
+      schema: { type: string, minLength: 1, maxLength: 512 }
+    ActivityExecutionId:
+      in: query
+      name: activityExecutionId
+      schema: { type: string, minLength: 1, maxLength: 512 }
+    SubjectId:
+      in: query
+      name: subjectId
+      schema: { type: string, minLength: 1, maxLength: 512 }
+    CorrelationKey:
+      in: query
+      name: correlationKey
+      description: Required together with correlationValue; omitted together when correlation is not filtered.
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    CorrelationValue:
+      in: query
+      name: correlationValue
+      description: Required together with correlationKey; omitted together when correlation is not filtered.
+      schema: { type: string, minLength: 1, maxLength: 1024 }
+    CheckpointOrderFrom:
+      in: query
+      name: workflowCheckpointOrderFrom
+      description: Must not exceed workflowCheckpointOrderTo when both are supplied.
+      schema: { type: integer, format: int64, minimum: 1 }
+    CheckpointOrderTo:
+      in: query
+      name: workflowCheckpointOrderTo
+      description: Must not be less than workflowCheckpointOrderFrom when both are supplied.
+      schema: { type: integer, format: int64, minimum: 1 }
+    Cursor:
+      in: query
+      name: cursor
+      schema: { type: string, minLength: 1, maxLength: 4096 }
+    PageSize:
+      in: query
+      name: pageSize
+      description: Bound to the returned cursor; continuation with a different page size is rejected.
+      schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
+  responses:
+    InvalidRequest:
+      description: >-
+        Stable 400 invalid-request: input fails bounds, a filter is inconsistent, the request cannot select a
+        registered contract, or Idempotency-Key is missing, blank, or outside its 1–256-character bound.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    InvalidCursorOrRequest:
+      description: Cursor is malformed, deleted, or not bound to this authorization-scoped normalized query shape.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unauthorized: { description: Authentication required. }
+    Forbidden: { description: Caller lacks the required scope or owner tenant/access-context scope. }
+    NotFound: { description: Session is absent or not visible to the caller. }
+    AssociationOrIdempotencyConflict:
+      description: >-
+        Session is frozen, workflow is already associated, or a competing attach won. Reusing an Idempotency-Key
+        with different normalized caller access context, session, target, or canonical request material returns stable 409
+        idempotency-conflict and makes no mutation.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    CheckpointNotCommitted:
+      description: The requested late-attach checkpoint failed or skipped; no association was made.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    DeletePreconditionFailed:
+      description: Session is not completed with Delivered evidence intents through all terminal cutoffs.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    CreateSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        captureProfile: { $ref: '#/components/schemas/CaptureProfile' }
+        correlation: { $ref: '#/components/schemas/CorrelationMetadata' }
+    CaptureProfile:
+      type: object
+      description: Reserved metadata-only extension room. This version captures no values.
+      additionalProperties: false
+      properties:
+        allowedSubjects:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 512 }
+        requestedValueDispositions:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items: { type: string, enum: [captured, redacted, omitted, truncated] }
+    CorrelationMetadata:
+      type: object
+      maxProperties: 32
+      propertyNames: { minLength: 1, maxLength: 128 }
+      additionalProperties: { type: string, maxLength: 1024 }
+    EvidenceSession:
+      type: object
+      additionalProperties: false
+      required: [sessionId, lifecycle, completionState, associations, integrity]
+      properties:
+        sessionId: { type: string }
+        lifecycle: { type: string, enum: [open, frozen, completed] }
+        completionState:
+          type: string
+          enum: [not-requested, incomplete-delivery, completed, terminal-integrity-failure]
+        completedAt: { type: [string, 'null'], format: date-time }
+        associations:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowAssociation' }
+        integrity: { $ref: '#/components/schemas/IntegrityState' }
+    WorkflowAssociation:
+      type: object
+      additionalProperties: false
+      required: [sessionId, workflowExecutionId, state]
+      properties:
+        sessionId: { type: string }
+        workflowExecutionId: { type: string }
+        state: { type: string, enum: [starting, active, frozen] }
+        effectiveFromWorkflowCheckpointOrder: { type: [integer, 'null'], format: int64, minimum: 1 }
+        terminalCutoffWorkflowCheckpointOrder: { type: [integer, 'null'], format: int64, minimum: 1 }
+        terminalWorkflowStatus: { type: [string, 'null'], enum: [completed, faulted, cancelled, null] }
+    IntegrityState:
+      type: object
+      additionalProperties: false
+      required: [processLocalOnly, deliveryState, pendingCount, deliveringCount, retryableFailureCount, finalFailureCount, cancelledCount, duplicateSuppressionCount, limitations]
+      properties:
+        processLocalOnly: { type: boolean, const: true }
+        deliveryState: { type: string, enum: [delivery-settled, incomplete-delivery, terminal-integrity-failure] }
+        pendingCount: { type: integer, minimum: 0 }
+        deliveringCount: { type: integer, minimum: 0 }
+        retryableFailureCount: { type: integer, minimum: 0 }
+        finalFailureCount: { type: integer, minimum: 0 }
+        cancelledCount: { type: integer, minimum: 0 }
+        duplicateSuppressionCount: { type: integer, minimum: 0 }
+        limitations:
+          type: array
+          items: { type: string }
+    AssociateAndStartWorkflowRequest:
+      type: object
+      additionalProperties: false
+      required: [workflowArtifactId]
+      properties:
+        workflowArtifactId: { type: string, minLength: 1, maxLength: 512 }
+        sourceReferenceId: { type: [string, 'null'], maxLength: 512 }
+        correlation: { $ref: '#/components/schemas/CorrelationMetadata' }
+    LateAttachRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        correlation: { $ref: '#/components/schemas/CorrelationMetadata' }
+    EvidenceRecordPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor, integrity]
+      properties:
+        items:
+          type: array
+          maxItems: 250
+          items: { $ref: '#/components/schemas/EvidenceRecord' }
+        nextCursor: { type: [string, 'null'] }
+        integrity: { $ref: '#/components/schemas/IntegrityState' }
+    EvidenceRecord:
+      oneOf:
+        - $ref: '#/components/schemas/TypedEvidenceRecord'
+        - $ref: '#/components/schemas/RegisteredUnknownEvidenceEnvelope'
+      discriminator:
+        propertyName: recordShape
+        mapping:
+          typed: '#/components/schemas/TypedEvidenceRecord'
+          registered-unknown: '#/components/schemas/RegisteredUnknownEvidenceEnvelope'
+    TypedEvidenceRecord:
+      oneOf:
+        - $ref: '#/components/schemas/WorkflowStartedEvidenceRecord'
+        - $ref: '#/components/schemas/WorkflowCompletedEvidenceRecord'
+        - $ref: '#/components/schemas/ActivityStartedEvidenceRecord'
+        - $ref: '#/components/schemas/ActivityCompletedEvidenceRecord'
+      discriminator:
+        propertyName: kind
+        mapping:
+          workflow.started: '#/components/schemas/WorkflowStartedEvidenceRecord'
+          workflow.completed: '#/components/schemas/WorkflowCompletedEvidenceRecord'
+          activity.started: '#/components/schemas/ActivityStartedEvidenceRecord'
+          activity.completed: '#/components/schemas/ActivityCompletedEvidenceRecord'
+    EvidenceRecordEnvelope:
+      type: object
+      additionalProperties: false
+      required: [recordShape, recordId, sessionId, kind, schemaVersion, workflowExecutionId, workflowCheckpointOrder, checkpointOrdinal, checkpointId, occurredAt, correlation, payload]
+      properties:
+        recordShape: { type: string, enum: [typed, registered-unknown] }
+        recordId: { type: string }
+        sessionId: { type: string }
+        kind: { type: string }
+        schemaVersion: { type: integer, minimum: 1 }
+        workflowExecutionId: { type: string }
+        workflowCheckpointOrder: { type: integer, format: int64, minimum: 1 }
+        checkpointOrdinal: { type: integer, minimum: 0 }
+        checkpointId: { type: string }
+        occurredAt: { type: string, format: date-time }
+        activityExecutionId: { type: [string, 'null'] }
+        subjectId: { type: [string, 'null'] }
+        causationId: { type: [string, 'null'] }
+        correlation: { $ref: '#/components/schemas/CorrelationMetadata' }
+        payload: {}
+    WorkflowStartedEvidenceRecord:
+      allOf:
+        - $ref: '#/components/schemas/EvidenceRecordEnvelope'
+        - type: object
+          required: [recordShape, kind, schemaVersion, payload]
+          properties:
+            recordShape: { const: typed }
+            kind: { const: workflow.started }
+            schemaVersion: { const: 1 }
+            payload: { $ref: '#/components/schemas/WorkflowStartedPayloadV1' }
+    WorkflowCompletedEvidenceRecord:
+      allOf:
+        - $ref: '#/components/schemas/EvidenceRecordEnvelope'
+        - type: object
+          required: [recordShape, kind, schemaVersion, payload]
+          properties:
+            recordShape: { const: typed }
+            kind: { const: workflow.completed }
+            schemaVersion: { const: 1 }
+            payload: { $ref: '#/components/schemas/WorkflowCompletedPayloadV1' }
+    ActivityStartedEvidenceRecord:
+      allOf:
+        - $ref: '#/components/schemas/EvidenceRecordEnvelope'
+        - type: object
+          required: [recordShape, kind, schemaVersion, payload]
+          properties:
+            recordShape: { const: typed }
+            kind: { const: activity.started }
+            schemaVersion: { const: 1 }
+            payload: { $ref: '#/components/schemas/ActivityStartedPayloadV1' }
+    ActivityCompletedEvidenceRecord:
+      allOf:
+        - $ref: '#/components/schemas/EvidenceRecordEnvelope'
+        - type: object
+          required: [recordShape, kind, schemaVersion, payload]
+          properties:
+            recordShape: { const: typed }
+            kind: { const: activity.completed }
+            schemaVersion: { const: 1 }
+            payload: { $ref: '#/components/schemas/ActivityCompletedPayloadV1' }
+    RegisteredUnknownEvidenceEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/EvidenceRecordEnvelope'
+        - type: object
+          description: Registered kind/schema not understood by this client; payload is intentionally uninterpreted.
+          required: [recordShape]
+          properties:
+            recordShape: { const: registered-unknown }
+            payload: {}
+    WorkflowStartedPayloadV1:
+      type: object
+      additionalProperties: false
+      required: [workflowExecutionId, transition]
+      properties:
+        workflowExecutionId: { type: string }
+        transition: { const: workflow-started }
+        workflowArtifactId: { type: [string, 'null'] }
+    WorkflowCompletedPayloadV1:
+      type: object
+      additionalProperties: false
+      required: [workflowExecutionId, transition]
+      properties:
+        workflowExecutionId: { type: string }
+        transition: { const: workflow-completed }
+    ActivityStartedPayloadV1:
+      type: object
+      additionalProperties: false
+      required: [workflowExecutionId, activityExecutionId, transition]
+      properties:
+        workflowExecutionId: { type: string }
+        activityExecutionId: { type: string }
+        executableNodeId: { type: [string, 'null'] }
+        transition: { const: activity-started }
+    ActivityCompletedPayloadV1:
+      type: object
+      additionalProperties: false
+      required: [workflowExecutionId, activityExecutionId, transition]
+      properties:
+        workflowExecutionId: { type: string }
+        activityExecutionId: { type: string }
+        executableNodeId: { type: [string, 'null'] }
+        transition: { const: activity-completed }
+    WaitRequest:
+      type: object
+      additionalProperties: false
+      required: [deadline, pageSize]
+      description: >-
+        correlationKey and correlationValue are both present or both absent. The server rejects a checkpoint-order
+        range whose from value exceeds its to value. pageSize is bound to cursor continuation.
+      dependentRequired:
+        correlationKey: [correlationValue]
+        correlationValue: [correlationKey]
+      properties:
+        kind: { type: [string, 'null'], maxLength: 230 }
+        workflowExecutionId: { type: [string, 'null'] }
+        activityExecutionId: { type: [string, 'null'] }
+        subjectId: { type: [string, 'null'] }
+        correlationKey: { type: [string, 'null'] }
+        correlationValue: { type: [string, 'null'] }
+        workflowCheckpointOrderFrom: { type: [integer, 'null'], format: int64, minimum: 1 }
+        workflowCheckpointOrderTo: { type: [integer, 'null'], format: int64, minimum: 1 }
+        cursor: { type: [string, 'null'], maxLength: 4096 }
+        pageSize: { type: integer, minimum: 1, maximum: 250 }
+        deadline: { type: string, format: date-time }
+    WaitResult:
+      type: object
+      additionalProperties: false
+      required: [outcome, records, nextCursor, integrity, isDefinitiveNegative]
+      properties:
+        outcome:
+          type: string
+          enum: [matched, timed-out-inconclusive, incomplete-delivery, terminal-integrity-failure, completed-range-without-match]
+        records:
+          type: array
+          maxItems: 250
+          items: { $ref: '#/components/schemas/EvidenceRecord' }
+        nextCursor: { type: [string, 'null'] }
+        integrity: { $ref: '#/components/schemas/IntegrityState' }
+        isDefinitiveNegative: { type: boolean, const: false }
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [title, status, code]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum: [invalid-request, invalid-cursor, association-conflict, idempotency-conflict, checkpoint-not-committed, incomplete-delivery, terminal-integrity-failure, delete-precondition-failed]
+        detail: { type: [string, 'null'] }

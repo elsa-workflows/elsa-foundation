@@ -19,7 +19,9 @@ contracts, capture and query behavior, adapters, providers, and APIs.
 ## Decision
 
 Execution Evidence is an Elsa domain composed of its own modules and host-composition features. Its
-`.Core` module owns evidence contracts. Integration adapters owned by the Execution Evidence domain
+`.Core` module owns contracts only. #1133 uses a provider-neutral base for session/capture and
+Runtime adapters, an explicit InMemory provider leaf, and a transport-only API that depends on
+Core/base rather than the provider. Integration adapters owned by the Execution Evidence domain
 observe generic extension seams published by existing domains and translate committed facts into
 registered evidence kinds.
 
@@ -47,7 +49,7 @@ Execution Evidence terminology and justified independently of this consumer.
 - Installing no Execution Evidence modules leaves existing domain contracts and composition
   unchanged.
 - The new domain may need several narrow adapters and provider modules rather than one monolithic
-  project.
+  project; #1133 does not create a provider-agnostic umbrella for its sole concrete provider.
 - Generic source-domain seams remain governed by their source domains and must preserve runtime
   semantics whether or not any evidence adapter is installed.
 - Future modules can opt into richer evidence without making the foundational catalog know them.

@@ -1,0 +1,171 @@
+# Feature Specification: Execution Evidence foundation vertical slice
+
+**Feature Branch**: `779-execution-evidence-foundation`
+
+**Created**: 2026-08-05
+
+**Status**: Approved
+
+**Input**: Deliver GitHub issue #1133's process-local Execution Evidence foundation. An authorized caller explicitly opens an evidence session and associates a workflow; the workflow produces deterministic committed workflow/activity evidence that is available through a neutral HTTP API. Runtime remains free of Execution Evidence concepts while supplying narrow generic checkpoint-provenance and outbox-status surfaces needed to make capture reliable.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Enable isolated capture and associate work deliberately (Priority: P1)
+
+A shell composer wants to enable Execution Evidence only in selected hosts, and a test runner wants to associate a workflow before it starts or at a later checkpoint boundary, so that unrelated workloads do not produce or leak evidence and the capture start point is unambiguous.
+
+**Why this priority**: Explicit activation and association are the isolation boundary. A mutable lookup during enrichment or retrospective reconstruction would make replayed evidence unreliable.
+
+**Independent Test**: Compose a host with the base, InMemory, and API modules and another without the domain. In the enabled host, start one workflow through the association operation, run an unscoped workflow, and late-associate another workflow after earlier unscoped checkpoints. Confirm that only facts from the associated workflow at or after the returned effective checkpoint order are present.
+
+**Acceptance Scenarios**:
+
+1. **Given** a host without Execution Evidence composition, **When** workflows execute normally, **Then** Runtime has no evidence-specific registration, branch, allocation, serialization, persistence work, key, type, setting, or configuration.
+2. **Given** an enabled host and an open authorized session, **When** a caller uses associate-and-start, **Then** the workflow begins with a write-once immutable generic execution-context snapshot that makes the association commit-visible before capture.
+3. **Given** a workflow that has already committed unscoped work, **When** a caller performs the authorized checkpoint-boundary `AttachIfAbsent`-style association, **Then** success linearizes only with its committed checkpoint and reports that effective-from `WorkflowCheckpointOrder`; earlier work is not reconstructed and only facts at or after that order can be captured.
+4. **Given** the attach checkpoint fails or is skipped, **When** the association attempt completes, **Then** no association exists. **Given** competing attaches, **When** they target the same execution, **Then** exactly one committed checkpoint-boundary attach wins and every conflicting reattachment fails explicitly.
+5. **Given** an absent session, unauthorized caller, completed/frozen session, or conflicting association, **When** association is attempted, **Then** it fails explicitly and does not alter an existing association.
+
+---
+
+### User Story 2 - Capture committed facts with stable provenance and ordering (Priority: P1)
+
+A test author wants every baseline checkpoint to expose replay-stable generic provenance before enrichers run and wants the first evidence records to represent only committed semantic facts in strict checkpoint order, so that retries, skips, and delivery timing cannot create false positives or ambiguous ordering.
+
+**Why this priority**: Hashes, timestamps, mutable reads, lexical IDs, session counters, and delivery arrival order are not semantic substitutes for immutable checkpoint provenance and a monotonic checkpoint order.
+
+**Independent Test**: Run an associated workflow through multiple transitions in one checkpoint; repeat enrichment; inject a later skip decision, preparation and checkpoint-persistence failures, a post-commit materialization failure, and duplicate delivery. Inspect provenance, intents, record identities, ordering pairs, checkpoint outcome, and materialized record count.
+
+**Acceptance Scenarios**:
+
+1. **Given** any baseline Runtime checkpoint, **When** it reaches checkpoint enrichment, **Then** it carries a bounded, versioned opaque immutable execution-context snapshot and a durable, stable, monotonic `WorkflowCheckpointOrder`, both populated before enrichers and reused on replay.
+2. **Given** an eligible checkpoint with several committed transitions, **When** evidence is materialized, **Then** every record has the same `WorkflowCheckpointOrder`, a distinct deterministic `CheckpointOrdinal`, and strict workflow-local order is `(WorkflowCheckpointOrder, CheckpointOrdinal)`.
+3. **Given** the same checkpoint commit is enriched more than once, **When** batches are compared, **Then** their identities, provenance, payloads, ordering pairs, and fingerprints are identical and no new semantic occurrence is created.
+4. **Given** an eligible enricher prepared post-commit work, **When** the later persistence decision skips the checkpoint, **Then** the generic committer rejects skip-with-post-commit-work and neither checkpoint nor evidence is persisted or exposed; the enricher was not required to predict the later decision.
+5. **Given** required evidence preparation or intent persistence fails before checkpoint commit, **When** the checkpoint is attempted, **Then** it does not succeed and no evidence intent or record is exposed for that attempt.
+6. **Given** a checkpoint committed but evidence materialization fails, **When** delivery retries or redelivers, **Then** workflow state remains committed, duplicate delivery creates no duplicate record, and integrity remains visibly inconclusive until delivery is reconciled.
+
+---
+
+### User Story 3 - Reconcile delivery and use a neutral API (Priority: P1)
+
+A remote test runner wants to manage a session, retrieve relevant evidence, and wait for committed facts without fixed sleeps, so that it can distinguish a match from an inconclusive delivery state without relying on a store implementation or test framework.
+
+**Why this priority**: A completed session cannot make a meaningful completed-range observation while association remains open, an associated workflow can still commit, or related delivery is pending or failed. The API must expose stable protocol shapes without becoming an assertion framework.
+
+**Independent Test**: Use the authorized HTTP surface to create, inspect, associate-and-start, late-associate, complete, query, await, and delete a process-local session while driving ordinary workflows. Test concurrent association versus completion, per-workflow terminal cutoff orders, all generic outbox statuses, filters, opaque continuations, typed baseline payloads, an unknown registered-kind envelope, authorization boundaries, and completion/deletion preconditions.
+
+**Acceptance Scenarios**:
+
+1. **Given** an authorized caller, **When** it completes an evidence session, **Then** completion atomically freezes the association set: a concurrent new association is either included in that frozen set or rejected, and no association is admitted after the freeze. The lifecycle response reports the current completion/integrity state.
+2. **Given** a session containing workflow and activity evidence, **When** the caller queries by session, kind, workflow, activity, subject, correlation, or checkpoint order and continues with the returned cursor, **Then** it receives only matching records and an opaque cursor.
+3. **Given** a frozen association set, **When** each associated workflow has committed a terminal workflow checkpoint, **Then** session completion records that workflow's observed-through `WorkflowCheckpointOrder` as its stable cutoff. A workflow that can still commit a later checkpoint keeps completion incomplete or causes it to be rejected; ordinary suspension or an idle state is not a sufficient cutoff in #1133.
+4. **Given** a wait for matching evidence, **When** a record is materialized, the deadline expires, or the session is complete with all relevant intents at or before every terminal cutoff delivered, **Then** the API distinguishes a match, an inconclusive timeout, and completed-range-without-match. The latter is observable but not definitive negative proof; #1134 adds settled barriers, general gap detection, gap-free completeness, and definitive-negative semantics for long-running workflows.
+5. **Given** relevant outbox delivery is `Pending`, `Delivering`, or `FailedRetryable`, **When** a caller waits, completes a session, or requests deletion, **Then** its status is reconciled and visible in integrity state and completion remains incomplete/inconclusive. **Given** `FailedFinal` or `Cancelled`, **Then** the result is an explicit terminal integrity failure. Only `Delivered` intents permit completion-dependent success and later deletion.
+6. **Given** a baseline kind or a registered kind unknown to the caller, **When** it is read through the API, **Then** baseline records use typed, versioned wire shapes and an unknown registered kind uses the deliberate common-envelope shape without payload interpretation.
+
+---
+
+### User Story 4 - Compose a governed provider-neutral foundation (Priority: P2)
+
+A module author wants a small contract surface and governed kind catalog, while a host composer wants to select the sole process-local provider explicitly, so that Core, API, and Runtime are not coupled to a concrete store.
+
+**Why this priority**: The four composition modules separate contracts, provider-neutral capture/adapters, the InMemory provider leaf, and transport. This keeps a later durable provider separate without creating a premature provider umbrella.
+
+**Independent Test**: Compose base, InMemory, and API in the required host shape; verify registrations resolve, API has no InMemory dependency, and Core remains contracts only. Register baseline kinds and one additional typed kind, then try a conflicting registration and an unregistered ad hoc payload. Read the added kind using only the common envelope.
+
+**Acceptance Scenarios**:
+
+1. **Given** a host that composes the base, InMemory, and API modules, **When** registrations are validated, **Then** the process-local provider is available; a host omitting the domain has no Execution Evidence behavior.
+2. **Given** a baseline or contributed kind registration with a stable string, schema version, typed payload contract, and capture metadata, **When** the host starts, **Then** the registration is available through the catalog.
+3. **Given** conflicting kind/schema registrations, **When** the host starts, **Then** startup fails deterministically rather than selecting one implicitly.
+4. **Given** an unregistered arbitrary dictionary payload, **When** it is submitted as evidence, **Then** it is rejected.
+5. **Given** the process-local store loses state because its process ends, **When** a caller reconnects, **Then** the slice makes no crash-completeness or recovery claim.
+
+### Edge Cases
+
+- A generic checkpoint provenance snapshot is missing, malformed, oversized, unsupported-versioned, or inconsistent with replay; capture fails rather than inferring context from mutable state.
+- `WorkflowCheckpointOrder` is absent or non-monotonic, or a timestamp, hash, lexical checkpoint ID, session counter, mutable enricher read, or delivery order is proposed instead; the checkpoint cannot satisfy this contract.
+- A checkpoint contains several transitions; each record has that checkpoint's order and a unique deterministic ordinal. A skipped checkpoint persists neither checkpoint nor evidence, even if an eligible enricher prepared an intent before the later skip decision.
+- A late `AttachIfAbsent` succeeds only with a committed checkpoint and has no effect when its checkpoint fails or is skipped. Competing attaches have one winner; the loser reports explicit conflict.
+- Session completion atomically freezes its association set. A racing association is either included in the frozen set or rejected; no association is admitted after freeze. Every frozen workflow must reach a terminal workflow checkpoint with a recorded observed-through order, not merely be suspended or temporarily idle.
+- A relevant outbox intent is `Pending`, `Delivering`, `FailedRetryable`, `FailedFinal`, `Cancelled`, or delivered more than once. Pending/delivering/retryable keeps the session incomplete; final/cancelled is an explicit terminal integrity failure; duplicate materialization is idempotent. Query, wait, completion, and deletion reconcile status at or before every cutoff.
+- A cursor is malformed, bound to another session/query shape, or reused after deletion; the API rejects it explicitly.
+- A caller operates outside tenant/access scope; the API does not expose another session or its records.
+- A value-capture request is present; this metadata-only slice captures no state, input, output, or payload value. #1136 owns enforcement, sanitization, redaction, truncation, and disposition behavior.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: The slice MUST establish four separately composable modules: `Elsa.Workflows.ExecutionEvidence.Core` for contracts only; `Elsa.Workflows.ExecutionEvidence` for provider-neutral session, capture, and Runtime-adapter behavior; `Elsa.Workflows.ExecutionEvidence.InMemory` as the sole #1133 process-local store implementation and registration leaf; and `Elsa.Workflows.ExecutionEvidence.Api` for the neutral HTTP surface. API MUST depend on Core and the base module, never InMemory; a host MUST explicitly compose base + InMemory + API. This follows Framework Constitution §2.20 without creating a provider-agnostic umbrella for a concrete provider.
+- **FR-002**: Runtime MUST provide an evidence-agnostic checkpoint-provenance surface for every baseline checkpoint before enrichers run: a bounded, versioned opaque immutable execution-context snapshot and a durable stable monotonic `WorkflowCheckpointOrder`. Both MUST participate in replay identity and be reused on replay. Runtime MUST NOT define, parse, branch on, configure, or reference Execution Evidence keys, types, sessions, payloads, or policies.
+- **FR-003**: The host MUST require explicit Execution Evidence activation and an explicitly opened authorized evidence session before capture. `EvidenceSessionId` is the Execution Evidence-domain association identity carried inside opaque generic execution context; Runtime MUST neither name nor interpret it. Test-run and test-case identifiers MAY be correlation metadata but MUST NOT replace it.
+- **FR-004**: The neutral API MUST support authorized associate-and-start before execution and authorized late association of an existing workflow. Late association MUST use a generic checkpoint-boundary write-once `AttachIfAbsent`-style operation. It succeeds and linearizes only with a committed checkpoint, returns that checkpoint's effective-from `WorkflowCheckpointOrder`, and has no association effect if that checkpoint fails or is skipped; competing attaches have one winner and every conflicting reattachment fails explicitly. It MUST NOT reconstruct earlier unscoped facts: only facts at or after its effective-from order are eligible for capture. Evidence capture MUST read association only from immutable commit-visible provenance.
+- **FR-005**: The common envelope MUST expose stable evidence identity, session identity, kind and schema version, workflow identity, `WorkflowCheckpointOrder`, `CheckpointOrdinal`, checkpoint identity, diagnostic occurred time, optional activity and causation identities, bounded correlation metadata, and a typed payload. Strict workflow-local order MUST be `(WorkflowCheckpointOrder, CheckpointOrdinal)`; same-checkpoint records share the order and have distinct deterministic ordinals. Timestamps, hashes, lexical IDs, session counters, mutable reads, and delivery order MUST NOT establish semantic order or identity.
+- **FR-006**: The catalog MUST define `workflow.started`, `workflow.completed`, `activity.started`, and `activity.completed`, each schema version `1` with a typed metadata-only payload identifying its affected workflow/activity and committed transition. It MUST NOT claim the later full lifecycle catalog.
+- **FR-007**: The catalog MUST support provider-neutral registration of additional typed versioned kinds with capture metadata. Conflicting registrations MUST fail deterministically at startup, unregistered arbitrary payloads MUST be rejected, and registered unknown kinds MUST remain inspectable through their common envelope.
+- **FR-008**: Core MUST include provider-neutral session, capture-profile, cursor, query, store, integrity, contribution, and outbox-reconciliation contracts. It MUST reserve `captured`, `redacted`, `omitted`, and `truncated` as future value dispositions while remaining metadata-only; #1136 owns all value behavior.
+- **FR-009**: For every eligible committed checkpoint, capture MUST produce at most one complete bounded evidence batch and opaque post-commit intent. Intent, batch, and record identities MUST be deterministic from stable commit identity, fixed discriminators, immutable commit-visible provenance, and canonical catalog data; enrichment MUST NOT read current time, randomness, mutable external state, or a mutable association index.
+- **FR-010**: An eligible enricher MAY prepare an opaque post-commit intent before the later persistence decision. If that decision skips the checkpoint, the generic committer MUST reject skip-with-post-commit-work and persist or expose neither checkpoint nor evidence; the enricher MUST NOT predict the later decision. Preparation or persistence failure MUST prevent checkpoint success; canonical evidence MUST NOT be best-effort.
+- **FR-011**: An evidence-owned post-commit path MUST materialize records into the process-local store with at-least-once semantics and idempotency by stable evidence identity. Delivery failure MUST NOT roll back committed workflow state, and delivery state MUST remain visible until `Delivered` or an explicit terminal integrity status, including `FailedFinal` or `Cancelled`.
+- **FR-012**: Runtime MUST provide a generic bounded/paged outbox-status read surface filterable at least by workflow execution and intent kind. It MUST expose `Pending`, `Delivering`, `Delivered`, `FailedRetryable`, `FailedFinal`, and `Cancelled`; it remains evidence-agnostic and does not expose provider offsets as a public evidence contract.
+- **FR-013**: Session completion MUST atomically freeze its association set: a concurrent association is either included in the frozen set or rejected, and none may be admitted after freeze. For each frozen associated workflow, completion MUST establish an observed-through `WorkflowCheckpointOrder` only at a committed terminal workflow checkpoint; a workflow that can still commit later checkpoints keeps the session incomplete or causes completion to be rejected. Ordinary temporary suspension, idleness, and a merely quiescent state are not sufficient #1133 cutoffs; #1134 owns explicit settled barriers for long-running workflows.
+- **FR-014**: Before a completion-dependent result, completed-range-without-match, or deletion, the evidence domain MUST reconcile every relevant generic outbox intent at or before each frozen workflow cutoff. `Pending`, `Delivering`, and `FailedRetryable` keep completion incomplete and outcomes inconclusive. `FailedFinal` and `Cancelled` are explicit terminal integrity failures. Only `Delivered` for all relevant intents permits completed session state, completed-range-without-match, and later deletion.
+- **FR-015**: Authorized HTTP endpoints MUST support session creation, inspection, completion, associate-and-start, late association, filtered query, opaque cursor continuation, cursor-based wait, integrity reporting, and deletion of a reconciled completed session. Lifecycle/integrity responses MUST distinguish incomplete delivery from terminal integrity failure. Existing tenant/access-context rules apply. Baseline records MUST use typed/versioned payload wire shapes; registered unknown kinds MUST use the common-envelope wire shape. The API MUST NOT expose provider offsets or require a test-framework assertion model.
+- **FR-016**: Wait responses MUST distinguish match, inconclusive timeout, completed-range-without-match, incomplete delivery, and terminal integrity failure. Timeout or `Pending`/`Delivering`/`FailedRetryable` delivery MUST never prove absence. #1134 exclusively owns settled barriers, general gap detection, gap-free completeness, and definitive-negative semantics.
+- **FR-017**: The initial InMemory store MUST be process-local. It MUST preserve commit visibility, stable identity, ordering pairs, filtering, cursor binding, wait outcomes, frozen association/cutoff state, reconciled integrity, and complete-session deletion, but makes no crash, restart, failover, distributed durability, or provider-conformance claim; #1137 owns those responsibilities.
+- **FR-018**: #1133 MAY test its own DTO and wire compatibility. It MUST NOT publish shared protocol/conformance fixtures or J-Test assertions; #1138 owns those artifacts, its assertion DSL, lifecycle, retry policy, and adapter integration.
+- **FR-019**: Contract, registration, Runtime seam, API integration, and backend end-to-end tests MUST verify four-module composition, module absence, session gating, both association modes including failed/skipped and competing late attaches, immutable provenance, ordering pairs, skip-with-post-commit-work rejection, deterministic enrichment, checkpoint failure behavior, six-status outbox reconciliation, frozen association/cutoff behavior, idempotent delivery, authorization, query/wait semantics, and cleanup through ordinary workflow APIs. Documentation and maps are implementation-stage deliverables governed by explicit refresh authorization.
+- **FR-020**: Benchmarks MUST record reproducible first-slice throughput and allocation observations for Execution Evidence absent, enabled-unscoped, and enabled scoped metadata-only capture without becoming a later regression budget.
+
+### Key Entities
+
+- **Runtime checkpoint provenance**: The generic bounded/versioned opaque immutable execution-context snapshot and `WorkflowCheckpointOrder` supplied before enrichment for every baseline checkpoint. It is replay-stable and contains no Execution Evidence-specific Runtime contract.
+- **Evidence session**: An explicitly opened authorized capture scope with lifecycle, correlation metadata, an atomically frozen association set at completion, terminal per-workflow cutoffs, reconciled delivery state, and process-local integrity limitations.
+- **Workflow association**: The one write-once association of an execution with a session, established before start or by `AttachIfAbsent` only with a committed checkpoint. The latter reports its effective checkpoint order; a failed/skipped checkpoint creates no association, and competing attaches have one winner.
+- **Session completion cutoff**: The observed-through `WorkflowCheckpointOrder` for one workflow in a frozen association set, established only by its committed terminal workflow checkpoint. It proves that the execution cannot commit a later checkpoint in this slice; ordinary suspension, idleness, or temporary quiescence does not qualify.
+- **Evidence record**: One immutable typed fact about a committed transition, identified by stable identity and positioned by its checkpoint-order/ordinal pair.
+- **Evidence kind registration**: The governed declaration of a stable kind string, schema version, typed payload contract, and capture metadata.
+- **Evidence batch and intent**: The bounded deterministic records from one eligible checkpoint and the opaque recoverable delivery unit committed with it.
+- **Runtime outbox intent status**: The generic delivery observation for one workflow/intent kind: `Pending`, `Delivering`, `Delivered`, `FailedRetryable`, `FailedFinal`, or `Cancelled`.
+- **Evidence cursor**: An opaque continuation position bound to an authorized session query or wait request.
+- **Evidence capture profile**: Provider-neutral future value-selection/disposition contract; it enables no value capture in this slice.
+- **Evidence integrity state**: Explicit reconciled delivery, duplicate, frozen-association/cutoff, completion, and process-local status. Pending/delivering/retryable is incomplete; final/cancelled is terminal integrity failure. It does not establish #1134's gap-free completeness or a definitive negative.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: A host composes Core, base, InMemory, and API according to their dependency envelopes; Core is contracts only, API has no InMemory dependency, and an absent domain causes zero evidence-specific Runtime registration, setting, branch, model, serialization, or persistence work.
+- **SC-002**: In one process, an authorized caller can create, inspect, associate-and-start, late-associate, complete, query, await, and delete a session. A late association succeeds only with its committed checkpoint, returns its effective checkpoint order, captures facts only at or after that order, and leaves no association when that checkpoint fails or skips.
+- **SC-003**: Every baseline checkpoint presented to enrichers has replay-stable generic provenance and stable monotonic `WorkflowCheckpointOrder`; a successful associated minimal path produces at least one workflow and one activity record with stable kind/schema, stable identity, and deterministic `(WorkflowCheckpointOrder, CheckpointOrdinal)`. Repeated enrichment yields the same batches and records.
+- **SC-004**: An enabled unscoped workflow produces zero evidence; a failed checkpoint exposes zero intents/records; and a skipped checkpoint with prepared post-commit work is rejected without persisting a checkpoint or evidence.
+- **SC-005**: Failure-injection and concurrency tests prove preparation/persistence failure prevents checkpoint success, post-commit materialization failure leaves the checkpoint committed, duplicate delivery yields one record per identity, and completion atomically freezes association against concurrent attachment. Every frozen workflow must have a terminal checkpoint cutoff before completion-dependent outcomes are possible.
+- **SC-006**: The generic outbox-status surface provides bounded/paged reads by workflow execution and intent kind with all six required statuses. `Pending`, `Delivering`, and `FailedRetryable` keep the session incomplete/inconclusive; `FailedFinal` and `Cancelled` are terminal integrity failures; completed-range-without-match occurs only after explicit completion, a terminal cutoff for every frozen workflow, and `Delivered` for every relevant intent at/before its cutoff.
+- **SC-007**: The API supports required session/kind/workflow/activity/subject/correlation/checkpoint-order filters with opaque continuations; rejects cursor misuse; applies authorization; exposes typed/versioned baseline payloads and registered-unknown common envelopes; and has no J-Test assertion model or provider-offset leak.
+- **SC-008**: Tests prove governed catalog conflict handling, unregistered-payload rejection, forward inspection of unknown registered kinds, four-module composition, module-absence isolation, provenance-only enrichment, both association modes including commit-linearized late attach, and the ordinary workflow path. #1133 maintains only local DTO/wire compatibility tests and publishes no shared fixture.
+- **SC-009**: The benchmark records absent, enabled-unscoped, and scoped metadata-only throughput/allocation baselines. Feature documentation, extension-point catalog, host examples, and authorized generated-map updates are ready before implementation review without changing E2.1 or ADR governance during this specification amendment.
+
+## Assumptions
+
+- Existing generic Runtime checkpoint-enricher and opaque post-commit intent seams remain available. This slice adds only source-justified generic checkpoint-provenance and outbox-status surfaces; Execution Evidence adapters consume generic contracts and Runtime gains no evidence-specific concept.
+- Generic provenance provides the immutable snapshot and `WorkflowCheckpointOrder` for every baseline checkpoint before enrichment, participates in replay identity, and is the only source for association and ordering. Implementation detail belongs to the next plan revision.
+- The first slice uses `Elsa.Workflows.ExecutionEvidence.InMemory`. Groundwork persistence, recovery, distributed completeness, conformance, retention cleanup, quotas, and crash durability are #1137 work.
+- The baseline is only successful workflow/activity transitions. Bookmarks, incidents, user-visible checkpoint facts, full lifecycle variants, stimuli, scheduling, child causation, state mutation, and values are later slices.
+- Existing authorization, tenant scope, and access-context rules protect lifecycle, association, query, wait, and deletion; no separate evidence authorization engine is created.
+- Session completion is a stable #1133 cutoff only when it atomically freezes associations and each frozen workflow has committed a terminal workflow checkpoint that prevents later checkpoints. A suspended, idle, or merely quiescent workflow is not a completion cutoff; #1134 owns explicit settled barriers for long-running workflows.
+- Completion reconciles each relevant outbox intent at/before its workflow cutoff. Pending/delivering/retryable delivery remains incomplete/inconclusive; final/cancelled delivery is an explicit integrity failure; only all-delivered intent sets permit completion-dependent outcomes. This is still not a definitive negative proof in #1133.
+- Typed/versioned baseline payloads and registered-unknown common envelopes are #1133 behavior. Shared fixtures and J-Test integration are #1138 behavior.
+- The constitutions and ADRs remain draft/proposed. The approved Elsa E2.1 domain row/module list and ADR amendments are governance work in a later plan/implementation stage; this specify-only amendment changes neither.
+
+## Out of Scope
+
+- Groundwork query-store persistence, recovery, restart/failover, distributed provider behavior, provider conformance, and retention cleanup (#1137).
+- Settled barriers, general gap detection, gap-free ranges, and definitive-negative wait semantics (#1134).
+- Treating ordinary temporary suspension, idleness, or temporary quiescence as a #1133 session-completion cutoff; #1134 owns long-running workflow settlement barriers.
+- Full lifecycle, bookmarks, incidents, checkpoint/barrier catalog facts, stimuli, scheduling, timers, child workflows, and cross-workflow causation.
+- State/value evidence, profile enforcement, sanitization, redaction, truncation, and generalized data-classification policy (#1136).
+- Shared protocol/conformance fixtures, J-Test assertions, test lifecycle/pass-fail/retry model, and J-Test implementation (#1138).
+- UI; replacement of inspection projections, logs, metrics, traces, or OpenTelemetry; always-on or retroactive capture; reconstruction of pre-association work; global session ordering; exactly-once delivery; cross-store ACID; quotas; storage-pressure eviction; indefinite retention.
+- Evidence-specific Runtime contracts, settings, models, events, branches, keys, registrations, parsing, configuration, or type references.

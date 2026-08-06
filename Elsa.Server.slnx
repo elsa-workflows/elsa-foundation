@@ -286,6 +286,12 @@
     <Project Path="src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Workflows/ExecutionEvidence/">
+    <Project Path="src/Elsa/Workflows/ExecutionEvidence/Api/Elsa.Workflows.ExecutionEvidence.Api.csproj" />
+    <Project Path="src/Elsa/Workflows/ExecutionEvidence/Core/Elsa.Workflows.ExecutionEvidence.Core.csproj" />
+    <Project Path="src/Elsa/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
+    <Project Path="src/Elsa/Workflows/ExecutionEvidence/InMemory/Elsa.Workflows.ExecutionEvidence.InMemory.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Workflows/Publishing/">
     <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
@@ -570,6 +576,18 @@
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/ExecutionEvidence/">
+    <Project Path="tests/Elsa/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/ExecutionEvidence/Api/">
+    <Project Path="tests/Elsa/Workflows/ExecutionEvidence/Api/Tests/Elsa.Workflows.ExecutionEvidence.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/ExecutionEvidence/Core/">
+    <Project Path="tests/Elsa/Workflows/ExecutionEvidence/Core/Tests/Elsa.Workflows.ExecutionEvidence.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/ExecutionEvidence/InMemory/">
+    <Project Path="tests/Elsa/Workflows/ExecutionEvidence/InMemory/Tests/Elsa.Workflows.ExecutionEvidence.InMemory.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/">
     <Project Path="tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj" />

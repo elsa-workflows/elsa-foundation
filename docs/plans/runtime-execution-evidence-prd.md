@@ -5,7 +5,7 @@
 **Tracking:** [GitHub epic #1132](https://github.com/elsa-workflows/elsa-foundation/issues/1132)
 **Program goal:** [Runtime Execution Evidence](../program-goals/runtime-execution-evidence.md)
 **Terminology:** [Elsa glossary](../glossary/elsa.md)
-**Architecture decisions:** [ADR 0052](../adr/0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md) through [ADR 0062](../adr/0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md)
+**Architecture decisions:** [ADR 0052](../adr/0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md) through [ADR 0061](../adr/0061-baseline-execution-evidence-records-committed-semantic-transitions.md), plus [ADR 0063](../adr/0063-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md). ADR 0062 remains the JavaScript binding-grammar decision.
 
 ## Problem Statement
 
