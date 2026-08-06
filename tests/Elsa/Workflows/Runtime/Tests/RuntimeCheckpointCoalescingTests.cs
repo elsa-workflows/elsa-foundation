@@ -1043,6 +1043,45 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task PreparedMaterializedRecoverySource_DistinctSuccessorIsDurableBeforeFirstBoundaryAdvancesOnlyFirstSource()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var firstPreparation = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+        var successor = NewSchedulerWorkItem(
+            fixture.WorkflowExecutionId,
+            "prepared-successor",
+            WorkflowExecutionCommandKind.ScheduleActivity);
+        var successorAuthority = new RuntimeCheckpointRecoveryAuthorityCodec().Encode(successor);
+        await fixture.EnqueueOverlayAsync(successor);
+
+        var successorPreparation = await fixture.PrepareAsync(
+            successorAuthority,
+            NewSchedulerContinuationBoundaryCommit(successor, 2, "next"));
+
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, firstPreparation.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, firstPreparation.Token.InitialPersistenceMode);
+        Assert.True(fixture.Session.RequiresDurableRecoveryHandoff);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, successorPreparation.Token.InitialPersistenceMode);
+        Assert.Equal(successorAuthority, successorPreparation.Token.RecoveryAuthority);
+        Assert.Equal(
+            [fixture.Source.WorkItemId, successor.WorkItemId],
+            (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
+            .Select(item => item.WorkItemId));
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(firstPreparation)).Status);
+        Assert.Equal(
+            [successor.WorkItemId],
+            (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
+            .Select(item => item.WorkItemId));
+        var durableLedger = fixture.InnerStore.ListLogicalCheckpointLedgerEntries();
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Committed,
+            durableLedger.Single(entry => entry.LedgerToken == firstPreparation.Token.LedgerToken).Status);
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared,
+            durableLedger.Single(entry => entry.LedgerToken == successorPreparation.Token.LedgerToken).Status);
+    }
+
+    [Fact]
     public async Task ExactMaterializedRecoverySource_ReplayRetiresWithoutASecondDurableEffect()
     {
         await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
