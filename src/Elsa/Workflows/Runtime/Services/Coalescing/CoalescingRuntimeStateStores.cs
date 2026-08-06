@@ -271,13 +271,12 @@ internal static class CoalescingRuntimeStorePageMerger
 }
 
 /// <summary>
-/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. Unlike its sibling overlays it never
-/// serves the session's buffered (unflushed) state: <see cref="FindAsync"/> memoizes the <b>durable baseline</b> per
-/// activity execution for the duration of a coalesced window, so the per-hop inspection-projection build stops paying
-/// a durable store read for every intermediate hop the fold discards, while every read stays byte-identical to a
-/// fresh durable read (serving buffered state would flip the accumulator's FromState/Merge branch and change the
-/// flushed projection document). The memo is invalidated at every durable flush; the single-writer ownership lease
-/// guarantees the durable rows cannot change between flushes. Disabled (per-hop pass-through) via
+/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. A matching active session first
+/// serves its ordered logical projection, which gives the next inspection build the same merge input regardless of
+/// an equivalent Deferred or Immediate transport boundary. When no logical projection exists, <see cref="FindAsync"/>
+/// memoizes the <b>durable baseline</b> per activity execution for the duration of a coalesced window. The memo is
+/// invalidated at every durable flush; the single-writer ownership lease guarantees the durable rows cannot change
+/// between flushes. Disabled (per-hop durable reads) via
 /// <see cref="CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads"/>.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
@@ -290,8 +289,20 @@ public sealed class CoalescingActivityExecutionInspectionStore(
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        if (!options.CoalesceInspectionReads ||
-            sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+        if (sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+            return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        if (session.TryGetInspectionProjection(activityExecutionId, out var logicalProjection))
+        {
+            // Keep the disabled mode's per-build durable-read observability without allowing a physical durable
+            // boundary to replace the active session's logical composition input.
+            if (!options.CoalesceInspectionReads)
+                await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+            return logicalProjection;
+        }
+
+        if (!options.CoalesceInspectionReads)
             return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
 
         if (session.TryGetInspectionBaseline(activityExecutionId, out var baseline))

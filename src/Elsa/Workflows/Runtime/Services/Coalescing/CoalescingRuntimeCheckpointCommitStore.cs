@@ -26,21 +26,32 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         ArgumentNullException.ThrowIfNull(request);
         if (sessionAccessor.Current is { } session && session.AppliesTo(request.Commit.WorkflowExecutionId))
         {
-            if (request.RecoveryAuthority is { } recoveryAuthority)
-                await session.MaterializeOverlayRecoverySourceAsync(recoveryAuthority, cancellationToken);
+            var hasMaterializedRecoverySource = request.RecoveryAuthority is { } recoveryAuthority &&
+                                                await session.MaterializeOverlayRecoverySourceForPreparationAsync(
+                                                    recoveryAuthority,
+                                                    request.Commit.CommitId,
+                                                    cancellationToken);
 
             // Keep the current overlay claim active through its checkpoint commit. Otherwise the committer would try
             // to consume an overlay-issued claim from the durable queue it never claimed. The immediate boundary below
-            // is the handoff point that retires this session after the commit succeeds.
+            // is the handoff point that advances the exact materialized source after the commit succeeds.
 
-            return await _preparedLedger.PrepareAsync(
+            var preparation = await _preparedLedger.PrepareAsync(
                 request with
                 {
-                    InitialPersistenceMode = session.RequiresDurableRecoveryHandoff
+                    InitialPersistenceMode = hasMaterializedRecoverySource
                         ? RuntimeCheckpointPersistenceMode.Immediate
                         : RuntimeCheckpointPersistenceMode.Deferred
                 },
                 cancellationToken);
+            if (hasMaterializedRecoverySource &&
+                preparation.Status == RuntimeCheckpointPreparationStatus.Prepared &&
+                preparation.Token is { } preparationToken)
+            {
+                session.BindMaterializedRecoverySource(preparationToken);
+            }
+
+            return preparation;
         }
 
         return await _preparedLedger.PrepareAsync(request, cancellationToken);
@@ -93,10 +104,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
         RuntimeCheckpointCommitStoreResult passthrough;
         RuntimeCheckpointPreparedFoldRequest? foldRequest = null;
+        RuntimeCheckpointPreparedFoldResult? foldResult = null;
         if (session.BufferedPreparedCommits.Count > 0)
         {
             foldRequest = session.CreatePreparedFoldRequest(preparedCommit);
-            var foldResult = await _preparedLedger.CommitPreparedFoldAsync(foldRequest, cancellationToken);
+            foldResult = await _preparedLedger.CommitPreparedFoldAsync(foldRequest, cancellationToken);
             passthrough = foldResult.Receipts.TryGetValue(token.CommitId, out var receipt)
                 ? receipt
                 : new RuntimeCheckpointCommitStoreResult([]) { Status = foldResult.Status };
@@ -108,16 +120,42 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         // Preserve the buffered segment and its queue/outbox ownership when durable finalization did not succeed.
         // The committer will surface Conflict/OwnershipLost to its caller, which may then retry or recover safely.
-        if (passthrough.Status is not (RuntimeCheckpointCommitStoreStatus.Committed or RuntimeCheckpointCommitStoreStatus.Replay))
+        if (passthrough.Status != RuntimeCheckpointCommitStoreStatus.Committed &&
+            passthrough.Status != RuntimeCheckpointCommitStoreStatus.Replay)
             return passthrough;
+
+        if (passthrough.Status == RuntimeCheckpointCommitStoreStatus.Replay)
+        {
+            // A replayed finalization owns no new logical contribution. Its durable state already exists, so retire
+            // this live frontier without importing the candidate or repeating a durable effect.
+            session.InvalidateInspectionBaselines();
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            session.ClearBuffer();
+            session.Deactivate();
+            return passthrough;
+        }
 
         var continuationOutbox = commit.StateChanges.PostCommitOutbox;
         var qualifyingSchedulerContinuation = passthrough.Status == RuntimeCheckpointCommitStoreStatus.Committed &&
                                                QualifiesAsSchedulerContinuation(preparedCommit, continuationOutbox);
-        var continueAfterBoundary = !session.RequiresDurableRecoveryHandoff &&
-                                    (capReached ||
-                                    qualifyingSchedulerContinuation ||
-                                    CanContinueAfterBoundary(commit, remainingPendingOutbox.Count));
+        var committedMaterializedRecoverySourceToken = foldRequest is null
+            ? passthrough.Status == RuntimeCheckpointCommitStoreStatus.Committed &&
+              session.IsMaterializedRecoverySourcePreparation(token)
+                ? token
+                : null
+            : foldResult!.Status == RuntimeCheckpointCommitStoreStatus.Committed
+                ? foldRequest.Members.FirstOrDefault(member =>
+                  member.Disposition == RuntimeCheckpointPreparedDisposition.Committed &&
+                  session.IsMaterializedRecoverySourcePreparation(member.Token) &&
+                  foldResult.Receipts.TryGetValue(member.CommitId, out var memberReceipt) &&
+                  memberReceipt.Status == RuntimeCheckpointCommitStoreStatus.Committed)?.Token
+                : null;
+        var committedMaterializedRecoverySource = committedMaterializedRecoverySourceToken is not null;
+        var continueAfterBoundary = committedMaterializedRecoverySource ||
+                                    (!session.RequiresDurableRecoveryHandoff &&
+                                     (capReached ||
+                                      qualifyingSchedulerContinuation ||
+                                      CanContinueAfterBoundary(commit, remainingPendingOutbox.Count)));
 
         session.InvalidateInspectionBaselines();
         if (capReached)
@@ -138,8 +176,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             session.RecordDurableBoundaryState(commit.StateChanges);
         await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
         await session.AdvanceInnerQueueAsync(
-            consumeInFlightClaims: capReached || qualifyingSchedulerContinuation || !continueAfterBoundary,
+            consumeInFlightClaims: committedMaterializedRecoverySource || capReached || qualifyingSchedulerContinuation || !continueAfterBoundary,
             cancellationToken);
+        if (committedMaterializedRecoverySourceToken is not null)
+            session.CompleteMaterializedRecoverySourcePreparation(committedMaterializedRecoverySourceToken);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();

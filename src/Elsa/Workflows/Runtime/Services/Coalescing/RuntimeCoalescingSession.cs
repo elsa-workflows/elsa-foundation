@@ -26,7 +26,8 @@ public sealed class RuntimeCoalescingSession
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
-    private bool _requiresDurableRecoveryHandoff;
+    private string? _completedMaterializedRecoverySourceWorkItemId;
+    private MaterializedRecoverySource? _materializedRecoverySource;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
     private readonly List<RuntimeCheckpointPreparedCommit> _bufferedPreparedCommits = [];
@@ -77,10 +78,15 @@ public sealed class RuntimeCoalescingSession
 
     public int HopCount { get; private set; }
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
-    public bool RequiresDurableRecoveryHandoff => _requiresDurableRecoveryHandoff;
+    public bool RequiresDurableRecoveryHandoff => _materializedRecoverySource is not null;
     public IReadOnlyList<RuntimeCheckpointPreparedCommit> BufferedPreparedCommits => _bufferedPreparedCommits;
 
-    public void Deactivate() => IsActive = false;
+    public void Deactivate()
+    {
+        IsActive = false;
+        _inspectionUpserts.Clear();
+        InvalidateInspectionBaselines();
+    }
 
     /// <summary>Returns <see langword="true"/> when this session owns the supplied workflow execution and is active.</summary>
     public bool AppliesTo(string workflowExecutionId) =>
@@ -100,6 +106,26 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public async ValueTask<bool> MaterializeOverlayRecoverySourceAsync(
         RuntimeCheckpointRecoveryAuthority recoveryAuthority,
+        CancellationToken cancellationToken) =>
+        await MaterializeOverlayRecoverySourceAsync(recoveryAuthority, commitId: null, cancellationToken);
+
+    /// <summary>
+    /// Materializes the exact source for one originating preparation. Nested checkpoints inherit the same ambient
+    /// source authority but remain independently deferrable; only a retry of the originating preparation reuses its
+    /// Immediate materialization handoff.
+    /// </summary>
+    internal async ValueTask<bool> MaterializeOverlayRecoverySourceForPreparationAsync(
+        RuntimeCheckpointRecoveryAuthority recoveryAuthority,
+        string commitId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        return await MaterializeOverlayRecoverySourceAsync(recoveryAuthority, commitId, cancellationToken);
+    }
+
+    private async ValueTask<bool> MaterializeOverlayRecoverySourceAsync(
+        RuntimeCheckpointRecoveryAuthority recoveryAuthority,
+        string? commitId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(recoveryAuthority);
@@ -107,13 +133,95 @@ public sealed class RuntimeCoalescingSession
 
         var item = (await _overlayQueue.ListAllAsync(WorkflowExecutionId, cancellationToken))
             .SingleOrDefault(candidate => _recoveryAuthorityCodec.Encode(candidate).Equals(recoveryAuthority));
-        if (item is null || _seededWorkItemIds.Contains(item.WorkItemId))
+        if (item is null)
+            return false;
+        if (_completedMaterializedRecoverySourceWorkItemId is not null)
+        {
+            if (StringComparer.Ordinal.Equals(_completedMaterializedRecoverySourceWorkItemId, item.WorkItemId))
+                return false;
+
+            await SeedRecoverySourceIfNeededAsync(item, cancellationToken);
+
+            return false;
+        }
+        if (_materializedRecoverySource is { } materialized)
+        {
+            var isMaterializedSourceRetry = StringComparer.Ordinal.Equals(materialized.WorkItemId, item.WorkItemId) &&
+                                            materialized.RecoveryAuthority.Equals(recoveryAuthority) &&
+                                            (commitId is null || StringComparer.Ordinal.Equals(materialized.CommitId, commitId));
+            if (isMaterializedSourceRetry)
+                return true;
+
+            await SeedRecoverySourceIfNeededAsync(item, cancellationToken);
+
+            return false;
+        }
+        if (!await SeedRecoverySourceIfNeededAsync(item, cancellationToken))
+            return false;
+
+        _materializedRecoverySource = new MaterializedRecoverySource(item.WorkItemId, recoveryAuthority, commitId);
+        return true;
+    }
+
+    private async ValueTask<bool> SeedRecoverySourceIfNeededAsync(
+        RuntimeSchedulerWorkItem item,
+        CancellationToken cancellationToken)
+    {
+        if (_seededWorkItemIds.Contains(item.WorkItemId))
             return false;
 
         await _innerQueue.EnqueueAsync(item, cancellationToken);
         _seededWorkItemIds.Add(item.WorkItemId);
-        _requiresDurableRecoveryHandoff = true;
         return true;
+    }
+
+    /// <summary>
+    /// Binds a materialized source to the exact provider-issued preparation that may consume it. The binding remains
+    /// private to Runtime coalescing: it is neither a new recovery authority nor a source-domain progression signal.
+    /// </summary>
+    internal void BindMaterializedRecoverySource(RuntimeCheckpointPreparationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (_materializedRecoverySource is not { } materialized ||
+            token.RecoveryAuthority is not { } recoveryAuthority ||
+            !materialized.RecoveryAuthority.Equals(recoveryAuthority) ||
+            !StringComparer.Ordinal.Equals(materialized.CommitId, token.CommitId))
+        {
+            return;
+        }
+
+        if (materialized.PreparationToken is null)
+        {
+            _materializedRecoverySource = materialized with { PreparationToken = token };
+            return;
+        }
+
+        if (!materialized.PreparationToken.Equals(token))
+            throw new InvalidOperationException("A materialized recovery source is already bound to a conflicting checkpoint preparation.");
+    }
+
+    /// <summary>Returns whether this is the exact provider-issued preparation bound to the materialized source.</summary>
+    internal bool IsMaterializedRecoverySourcePreparation(RuntimeCheckpointPreparationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        return _materializedRecoverySource?.PreparationToken?.Equals(token) == true;
+    }
+
+    /// <summary>
+    /// Records this live session's one completed materialized frontier. Every later preparation retains its exact
+    /// recovery authority and remains deferrable; no later overlay source can establish another materialization
+    /// handoff.
+    /// </summary>
+    internal void CompleteMaterializedRecoverySourcePreparation(RuntimeCheckpointPreparationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (_materializedRecoverySource is not { } materialized ||
+            materialized.PreparationToken?.Equals(token) != true)
+        {
+            throw new InvalidOperationException("Only the exact committed materialized-source preparation can complete its handoff.");
+        }
+
+        _completedMaterializedRecoverySourceWorkItemId = materialized.WorkItemId;
     }
 
     // ---- Buffering -------------------------------------------------------------------------------------------------
@@ -308,11 +416,18 @@ public sealed class RuntimeCoalescingSession
     }
 
     // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
-    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync (spec-110 family): the memo holds what the
-    // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized
-    // read is byte-identical to a fresh durable read. Validity rests on the single-writer ownership lease: while the
-    // session is active, the only path that can change durable inspection rows is this session's own flush, and every
-    // flush invalidates the memo via InvalidateInspectionBaselines.
+    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync (spec-110 family). The active session's
+    // logical projection is the construction input for its next checkpoint and therefore takes precedence over a
+    // durable baseline. When no logical projection exists, the memo holds what the durable store returned (a cached
+    // null records a durable miss). Validity rests on the single-writer ownership lease: while the session is active,
+    // the only path that can change durable inspection rows is this session's own flush, and every flush invalidates
+    // the memo via InvalidateInspectionBaselines.
+
+    /// <summary>
+    /// Returns the ordered logical inspection projection visible only inside this active coalescing session.
+    /// </summary>
+    internal bool TryGetInspectionProjection(string activityExecutionId, out ActivityExecutionInspectionProjection? projection) =>
+        _inspectionUpserts.TryGetValue(activityExecutionId, out projection);
 
     /// <summary>Returns a memoized durable-baseline inspection read. A hit may carry <see langword="null"/> (a cached durable miss).</summary>
     public bool TryGetInspectionBaseline(string activityExecutionId, out ActivityExecutionInspectionProjection? projection) =>
@@ -851,7 +966,7 @@ public sealed class RuntimeCoalescingSession
     {
         _bufferedChangeSets.Clear();
         _bufferedPreparedCommits.Clear();
-        _requiresDurableRecoveryHandoff = false;
+        _materializedRecoverySource = null;
         HopCount = 0;
     }
 
@@ -905,4 +1020,10 @@ public sealed class RuntimeCoalescingSession
         _seededWorkItemIds.Clear();
         _seededWorkItemIds.AddRange(remaining.Select(item => item.WorkItemId));
     }
+
+    private sealed record MaterializedRecoverySource(
+        string WorkItemId,
+        RuntimeCheckpointRecoveryAuthority RecoveryAuthority,
+        string? CommitId,
+        RuntimeCheckpointPreparationToken? PreparationToken = null);
 }
