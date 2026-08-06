@@ -165,7 +165,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [128-runtime-actor-terminal-eviction](../../specs/128-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Draft (implemented) | - | 0 | 0 | retained, deferred |
 | [129-cold-start-phase-instrument](../../specs/129-cold-start-phase-instrument/spec.md) | 129-cold-start-phase-instrument | unknown | - | 0 | 0 | deferred |
 | [130-runtime-envelope-build-cpu](../../specs/130-runtime-envelope-build-cpu/spec.md) | Per-hop envelope-building CPU — measure-first characterization | Complete — **KILL verdict** (envelope-building-CPU hypothesis refuted; instrument landed as permanent tripwire; store-read follow-up re-aimed). See [research.md](./research.md). | - | 0 | 0 | deferred |
-| [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | 131-coalesced-inspection-read-memo | unknown | - | 0 | 0 | retained, out of scope |
+| [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | 131-coalesced-inspection-read-memo | unknown | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [132-deferred-fault-absorption](../../specs/132-deferred-fault-absorption/spec.md) | 132-deferred-fault-absorption | unknown | - | 0 | 0 | deferred, out of scope |
 | [132-eager-shell-activation](../../specs/132-eager-shell-activation/spec.md) | 132-eager-shell-activation | unknown | - | 0 | 0 | - |
 | [133-bpmn-call-activity](../../specs/133-bpmn-call-activity/spec.md) | 133-bpmn-call-activity | unknown | - | 0 | 0 | out of scope |

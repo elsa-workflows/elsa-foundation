@@ -80,3 +80,26 @@ the off-control preserve the pre-unit shape byte-for-byte.
   divergence is ever judged a defect, fixing it is a separate behavioral unit.
 - No skip/deferral of the projection *builds* themselves: spec 130 measured pure construction CPU at 0.03–0.70% of
   in-memory hot-loop CPU; only the store read was worth removing.
+
+## Limited supersession — logical inspection composition (2026-08-06)
+
+This section records a later composition contract; it does **not** rewrite the 2026-07-22 evidence above. The
+original rejection in [Why memoize the durable baseline instead of serving buffered overlay state](#why-memoize-the-durable-baseline-instead-of-serving-buffered-overlay-state) and the first non-goal are superseded **only** where an equivalent logical checkpoint sequence crosses a physical persistence boundary differently. The triggering case is an intermediate checkpoint that is physically immediate because it has generic post-commit work while the equivalent fused path remains deferred because it elides only a transport continuation.
+
+For that case, the runtime-owned activity-execution inspection projection is a composition over the ordered
+**logical** checkpoint sequence, not over accidental immediate/deferred transport boundaries. Equivalent sequences
+must retain the same logical `FirstCheckpointId` and the defined cumulative outcome, bookmark, incident, value, and
+metadata semantics, and must produce byte-identical checkpoint and inspection-state documents. A successful durable
+checkpoint becomes the authoritative baseline for subsequent logical composition; no later composition may use a
+stale earlier durable baseline.
+
+The visibility and recovery boundaries remain strict. Readers outside the active coalesced session see durable
+inspection truth only. If a session ends or crashes before later logical accumulation becomes durable, recovery starts
+from durable truth and deterministically reconstructs the later logical accumulation through normal replay; volatile
+session state is neither exposed as durable truth nor retained as a recovery authority.
+
+This is a generic Runtime contract. It does not branch on fusion, Execution Evidence, provider, source authority, or
+checkpoint name, and it does not change inspection fields into evidence capture. Coalescing-read/memo and ReplaySafe
+fusion controls may change locality or transient transport bookkeeping but cannot change checkpoint/state documents.
+Spec 123's byte-identity guardrails therefore remain strict: the sole permitted comparison exclusion identified by
+spec-123 research §8.2 is transient post-commit intents and outbox rows, not any durable inspection or other state family.
