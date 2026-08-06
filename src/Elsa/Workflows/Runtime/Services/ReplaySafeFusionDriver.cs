@@ -39,6 +39,8 @@ public sealed class ReplaySafeFusionDriver
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly RuntimeSchedulerDispatchDiagnostics? _diagnostics;
     private readonly IReadOnlyCollection<IReplaySafeSuccessorRoutingProbe> _successorRoutingProbes;
+    private readonly List<PendingFusedSpan> _pendingFusedSpans = [];
+    private RuntimeSchedulerWorkItem? _pumpedScheduleSource;
     private bool _pumping;
 
     public ReplaySafeFusionDriver(
@@ -91,6 +93,19 @@ public sealed class ReplaySafeFusionDriver
     public async ValueTask ContinueFusedSpanAsync(RuntimeSchedulerWorkItem startWorkItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(startWorkItem);
+
+        // A schedule dispatched by the D2 pump must not run its D1 continuation ahead of an already-queued sibling
+        // schedule. The discrete queue appends every derived StartActivity after those siblings. Retain that locality
+        // here: collect the contiguous schedule cohort, then run all starts before any invokes once the queue prefix is
+        // exhausted. No durable state is rewritten; these are the same derived work items the immediate path uses.
+        if (_pumping)
+        {
+            if (_pumpedScheduleSource is { CommandKind: WorkflowExecutionCommandKind.ScheduleActivity })
+                _pendingFusedSpans.Add(new PendingFusedSpan(startWorkItem));
+            else
+                await _schedulerWorkQueue.EnqueueAsync(startWorkItem, cancellationToken);
+            return;
+        }
 
         var invokeWorkItem = await _startHandler.ExecuteFusedStartAsync(startWorkItem, _serviceProvider, cancellationToken);
         if (invokeWorkItem is null)
@@ -162,6 +177,13 @@ public sealed class ReplaySafeFusionDriver
                 var workItem = await session.PeekNextPumpableOverlayItemAsync(cancellationToken);
                 if (workItem is null)
                 {
+                    if (_pendingFusedSpans.Count > 0)
+                    {
+                        if (!await FlushPendingFusedCohortAsync(cancellationToken))
+                            break;
+                        continue;
+                    }
+
                     if (outboxResult.DeliveredCount == 0)
                         break;
                     continue;
@@ -182,6 +204,9 @@ public sealed class ReplaySafeFusionDriver
                 try
                 {
                     var handler = ResolveHandler(workItem);
+                    _pumpedScheduleSource = workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity
+                        ? workItem
+                        : null;
                     await handler.HandleAsync(workItem, cancellationToken);
                 }
                 catch (OperationCanceledException)
@@ -194,6 +219,10 @@ public sealed class ReplaySafeFusionDriver
                     // capture / poison machinery owns the outcome (redelivery resolves through the existing idempotency
                     // ladder, exactly as a claim-expiry redelivery would).
                     break;
+                }
+                finally
+                {
+                    _pumpedScheduleSource = null;
                 }
 
                 if (!await session.ConsumePumpedOverlayItemAsync(workItem.WorkItemId, cancellationToken))
@@ -212,8 +241,89 @@ public sealed class ReplaySafeFusionDriver
         }
         finally
         {
-            _pumping = false;
+            try
+            {
+                // The original durable ScheduleActivity sources remain untouched as crash authority until their
+                // successful boundary. A live pump exit instead releases the exact memory-only continuations already
+                // derived from them; this is the discrete queue state at the same point in execution.
+                if (_pendingFusedSpans.Count > 0)
+                    await EnqueuePendingContinuationsAsync(CancellationToken.None);
+            }
+            finally
+            {
+                _pumpedScheduleSource = null;
+                _pumping = false;
+            }
         }
+    }
+
+    /// <summary>
+    /// Runs a contiguous nested-schedule cohort in the same stage order as the discrete FIFO queue: every
+    /// <c>ActivityStarted</c> proposal first, followed by every <c>InvokeActivity</c> dispatch. If any start cannot
+    /// remain fused or any stage faults, all not-yet-dispatched continuations are returned to the existing queue.
+    /// </summary>
+    private async ValueTask<bool> FlushPendingFusedCohortAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Do not remove a span after its start commits Running: the returned InvokeActivity item is now its exact
+            // discrete-equivalent continuation and must survive every later failure/cancellation in this cohort.
+            foreach (var span in _pendingFusedSpans.ToArray())
+            {
+                var invoke = await _startHandler.ExecuteFusedStartAsync(span.Start, _serviceProvider, cancellationToken);
+                if (invoke is null)
+                {
+                    await EnqueuePendingContinuationsAsync(CancellationToken.None);
+                    return false;
+                }
+
+                span.Invoke = invoke;
+                _diagnostics?.RecordFusedSpan();
+            }
+
+            while (_pendingFusedSpans.Count > 0)
+            {
+                var span = _pendingFusedSpans[0];
+                await ResolveHandler(span.Invoke!).HandleAsync(span.Invoke!, cancellationToken);
+                _pendingFusedSpans.RemoveAt(0);
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            await EnqueuePendingContinuationsAsync(CancellationToken.None);
+            throw;
+        }
+        catch
+        {
+            await EnqueuePendingContinuationsAsync(CancellationToken.None);
+            return false;
+        }
+    }
+
+    private async ValueTask EnqueuePendingContinuationsAsync(CancellationToken cancellationToken)
+    {
+        // Match the discrete FIFO: sibling ScheduleActivity handlers append every StartActivity first; each completed
+        // start appends its InvokeActivity after those starts. Remove only after enqueue succeeds so a partial queue
+        // failure leaves the current and remaining continuations available to the pump's outer-finally retry.
+        foreach (var span in _pendingFusedSpans.Where(x => x.Invoke is null).ToArray())
+        {
+            await _schedulerWorkQueue.EnqueueAsync(span.Start, cancellationToken);
+            _pendingFusedSpans.Remove(span);
+        }
+
+        foreach (var span in _pendingFusedSpans.ToArray())
+        {
+            await _schedulerWorkQueue.EnqueueAsync(span.Invoke!, cancellationToken);
+            _pendingFusedSpans.Remove(span);
+        }
+    }
+
+    private sealed class PendingFusedSpan(RuntimeSchedulerWorkItem start)
+    {
+        public RuntimeSchedulerWorkItem Start { get; } = start;
+        public RuntimeSchedulerWorkItem? Invoke { get; set; }
     }
 
     private readonly record struct PumpDecision(bool Fuse, bool IsJoinFallback = false)

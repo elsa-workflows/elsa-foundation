@@ -124,11 +124,11 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(disabledRightSchedule.CommitId, enabledRightSchedule.CommitId);
         Assert.Equal(disabledRightSchedule.CheckpointId, enabledRightSchedule.CheckpointId);
         Assert.Equal(disabledRightSchedule.CheckpointName, enabledRightSchedule.CheckpointName);
-        Assert.Equal(16, enabledRightSchedule.WorkflowCheckpointOrder);
         Assert.Equal(13, disabledRightSchedule.WorkflowCheckpointOrder);
+        Assert.Equal(disabledRightSchedule.WorkflowCheckpointOrder, enabledRightSchedule.WorkflowCheckpointOrder);
 
-        // Intentional RED: fusion must eventually preserve the complete canonical proposal trace, including durable
-        // workflow-checkpoint order. Do not normalize or omit that order to make this assertion pass.
+        // Fusion preserves the complete canonical proposal trace, including durable workflow-checkpoint order.
+        // Keep this comparison unnormalized so any later ordering drift fails closed.
         Assert.Equal(disabled.ProposalTrace, enabled.ProposalTrace);
     }
 
