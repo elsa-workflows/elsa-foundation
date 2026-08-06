@@ -736,6 +736,49 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(id))!.Status);
     }
 
+    [Fact]
+    public async Task ActiveSessionReplayOfQualifyingBoundary_AdvancesAndDeactivatesWithoutRepeatingDurableEffects()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-continuation-replay");
+        var boundary = fixture.NewQualifyingBoundary(1, "replay");
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+
+        using (fixture.Accessor.Push(fixture.Session))
+        {
+            var preparation = await fixture.CheckpointStore.PrepareAsync(RuntimeCheckpointPrepareRequest.From(boundary));
+            var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
+            var preparedCommit = boundary with
+            {
+                Checkpoint = boundary.Checkpoint with { Provenance = token.Provenance },
+                ExpectedFence = token.ExpectedFence
+            };
+
+            var committed = await fixture.CheckpointStore.CommitPreparedAsync(
+                token,
+                preparedCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Status);
+            Assert.True(fixture.Session.IsActive);
+            Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+
+            // The replay finds no Prepared reservation, yet it must still retire the live frontier that the first
+            // successful continuation boundary left active. It may not import a second row or scheduler work item.
+            var replay = await fixture.CheckpointStore.CommitPreparedAsync(
+                token,
+                preparedCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Replay, replay.Status);
+        }
+
+        Assert.False(fixture.Session.IsActive);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+        Assert.Single(await fixture.InnerStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+            Now.AddMinutes(1),
+            10,
+            fixture.WorkflowExecutionId)));
+    }
+
     // T028 RED: inline delivery is an optimization inside an active coalescing drain, not a durable acknowledgement.
     // The live overlay is not a durable acknowledgement. Its row stays Pending until a later successful
     // checkpoint/fold incorporates the inline effect and reconciliation runs.
@@ -916,7 +959,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     public async Task FailedContinuationDelivery_DeactivatesIntoOrdinaryDurableProcessing()
     {
         await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-failed-delivery");
-        var boundary = fixture.NewQualifyingBoundary(1, "retryable");
+        var boundary = WithRetryPolicy(
+            fixture.NewQualifyingBoundary(1, "retryable"),
+            new RuntimePostCommitRetryPolicy(2, TimeSpan.FromSeconds(1)));
         var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
         await fixture.CommitAsync(boundary);
         Assert.True(fixture.Session.IsActive);
@@ -928,8 +973,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         using (fixture.Accessor.Push(fixture.Session))
             await failingProcessor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
 
-        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable,
-            (await fixture.OutboxStore.FindAsync(outboxItemId))!.Status);
+        Assert.True(fixture.Session.TryFindOutboxItem(outboxItemId, out var overlayItem));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, overlayItem!.Status);
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
         // After T029 retains the qualifying session, the retryable overlay delivery itself must deactivate it so that
         // the durable row becomes the ordinary processor's authority; a terminal checkpoint is not that transition.
@@ -939,6 +984,111 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var recovered = await ordinaryRedrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
         Assert.Equal(1, recovered.AttemptedCount);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task ExhaustedContinuationDelivery_DeactivatesIntoOrdinaryDurableProcessing()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-final-delivery");
+        var boundary = WithRetryPolicy(
+            fixture.NewQualifyingBoundary(1, "final"),
+            new RuntimePostCommitRetryPolicy(1, TimeSpan.FromSeconds(1)));
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+        await fixture.CommitAsync(boundary);
+
+        var failingProcessor = new RuntimePostCommitOutboxProcessor(
+            fixture.OutboxStore,
+            ThrowingSchedulerIntentDispatcher.Instance,
+            TimeProvider.System);
+        using (fixture.Accessor.Push(fixture.Session))
+            await failingProcessor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+
+        Assert.True(fixture.Session.TryFindOutboxItem(outboxItemId, out var overlayItem));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, overlayItem!.Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+        Assert.False(fixture.Session.IsActive);
+
+        var ordinaryRedrive = CreateOrdinaryDurableRedrive(fixture);
+        var recovered = await ordinaryRedrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+        Assert.Equal(1, recovered.AttemptedCount);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task OverlayOnlyRecoverySource_PrepareTimeHandoffIsDurableAndRetiresAfterTheSuccessfulBoundary()
+    {
+        const string workflowExecutionId = "wfexec-recovery-handoff";
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var innerStore = RuntimeCheckpointTestStores.Create(schedulerWorkQueue: innerQueue);
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            innerQueue,
+            new CoalescingRuntimeCheckpointPersistenceOptions(),
+            innerStore);
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(
+            new CoalescingInner<IWorkflowSchedulerWorkQueue>(innerQueue),
+            accessor);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            accessor);
+        var overlayOnlySource = NewSchedulerWorkItem(workflowExecutionId, "overlay-source", WorkflowExecutionCommandKind.StartActivity);
+        var codec = new RuntimeCheckpointRecoveryAuthorityCodec();
+        var recoveryAuthority = codec.Encode(overlayOnlySource);
+        var boundary = NewSchedulerContinuationBoundaryCommit(overlayOnlySource, 1, "next");
+
+        using (accessor.Push(session))
+        {
+            await queue.EnqueueAsync(overlayOnlySource);
+            var overlayClaim = Assert.IsType<RuntimeSchedulerWorkClaim>(
+                await queue.ClaimAsync(NewClaimRequest(workflowExecutionId)));
+
+            var preparation = await store.PrepareAsync(RuntimeCheckpointPrepareRequest.From(boundary) with
+            {
+                InitialPersistenceMode = RuntimeCheckpointPersistenceMode.Deferred,
+                RecoveryAuthority = recoveryAuthority
+            });
+            var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
+            Assert.Equal(RuntimeCheckpointPreparationStatus.Prepared, preparation.Status);
+            Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, token.InitialPersistenceMode);
+            Assert.True(session.RequiresDurableRecoveryHandoff);
+            Assert.True(session.OwnsOverlayClaim(overlayClaim));
+
+            // The recovery authority and its exact scheduler source are durable before any commit can depend on them.
+            var prepared = await innerStore.PagePreparedAsync(new RuntimeCheckpointPreparedQuery(
+                workflowExecutionId,
+                RuntimeCheckpointPreparedQuery.MaximumPageSize));
+            Assert.Equal(recoveryAuthority, Assert.Single(prepared.Reservations).RecoveryAuthority);
+            Assert.Equal([overlayOnlySource.WorkItemId], (await innerQueue.ListAllAsync(workflowExecutionId))
+                .Select(item => item.WorkItemId));
+
+            var preparedCommit = boundary with
+            {
+                Checkpoint = boundary.Checkpoint with { Provenance = token.Provenance },
+                ExpectedFence = token.ExpectedFence
+            };
+            var committed = await store.CommitPreparedAsync(
+                token,
+                preparedCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Status);
+            Assert.True(session.OwnsOverlayClaim(overlayClaim));
+            Assert.False(session.IsActive);
+            Assert.Empty(await innerQueue.ListAllAsync(workflowExecutionId));
+            var durableLedger = Assert.Single(innerStore.ListLogicalCheckpointLedgerEntries());
+            Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Committed, durableLedger.Status);
+            Assert.Equal(recoveryAuthority, durableLedger.RecoveryAuthority);
+
+            // Although the session has retired, the current overlay claim can still complete against its issuing
+            // overlay; the replay below then reaches the ordinary durable ledger path because AppliesTo is false.
+            Assert.True((await queue.CompleteClaimAsync(overlayClaim)).Succeeded);
+            var replay = await store.CommitPreparedAsync(
+                token,
+                preparedCommit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Replay, replay.Status);
+        }
     }
 
     [Fact]
@@ -1193,6 +1343,23 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         return commit with
         {
             StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit))
+        };
+    }
+
+    private static RuntimeCheckpointCommit WithRetryPolicy(
+        RuntimeCheckpointCommit commit,
+        RuntimePostCommitRetryPolicy retryPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(retryPolicy);
+        var contribution = new RuntimePostCommitIntentHandlerContribution(
+            RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            typeof(RuntimeSchedulerPostCommitIntentDispatcher),
+            retryPolicy);
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(
+                RuntimePostCommitOutboxItems.CreatePendingChanges(commit, [contribution]))
         };
     }
 

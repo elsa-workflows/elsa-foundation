@@ -185,4 +185,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Draft | - | 18 | 78 | superseded, retained, out of scope |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
 | [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | out of scope |
-| [147-execution-evidence-foundation](../../specs/147-execution-evidence-foundation/spec.md) | Execution Evidence foundation vertical slice | Approved | - | 28 | 54 | deferred, out of scope |
+| [147-execution-evidence-foundation](../../specs/147-execution-evidence-foundation/spec.md) | Execution Evidence foundation vertical slice | Approved | - | 29 | 58 | deferred, out of scope |

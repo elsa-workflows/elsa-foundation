@@ -20,11 +20,13 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 public sealed class RuntimeCoalescingSession
 {
     private readonly IWorkflowSchedulerWorkQueue _innerQueue;
+    private readonly RuntimeCheckpointRecoveryAuthorityCodec _recoveryAuthorityCodec = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _overlayQueue = new();
     private readonly List<string> _seededWorkItemIds = [];
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
+    private bool _requiresDurableRecoveryHandoff;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
     private readonly List<RuntimeCheckpointPreparedCommit> _bufferedPreparedCommits = [];
@@ -75,6 +77,7 @@ public sealed class RuntimeCoalescingSession
 
     public int HopCount { get; private set; }
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
+    public bool RequiresDurableRecoveryHandoff => _requiresDurableRecoveryHandoff;
     public IReadOnlyList<RuntimeCheckpointPreparedCommit> BufferedPreparedCommits => _bufferedPreparedCommits;
 
     public void Deactivate() => IsActive = false;
@@ -88,6 +91,29 @@ public sealed class RuntimeCoalescingSession
     {
         ArgumentNullException.ThrowIfNull(claim);
         return _overlayClaims.ContainsKey(claim);
+    }
+
+    /// <summary>
+    /// Materializes an overlay-only scheduler source before a source-bound preparation can depend on it. The durable
+    /// Pending outbox row remains the acknowledgement authority; this only makes its already-selected work-item
+    /// identity available to ordinary source redelivery after this live session is retired.
+    /// </summary>
+    public async ValueTask<bool> MaterializeOverlayRecoverySourceAsync(
+        RuntimeCheckpointRecoveryAuthority recoveryAuthority,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recoveryAuthority);
+        await EnsureQueueSeededAsync(cancellationToken);
+
+        var item = (await _overlayQueue.ListAllAsync(WorkflowExecutionId, cancellationToken))
+            .SingleOrDefault(candidate => _recoveryAuthorityCodec.Encode(candidate).Equals(recoveryAuthority));
+        if (item is null || _seededWorkItemIds.Contains(item.WorkItemId))
+            return false;
+
+        await _innerQueue.EnqueueAsync(item, cancellationToken);
+        _seededWorkItemIds.Add(item.WorkItemId);
+        _requiresDurableRecoveryHandoff = true;
+        return true;
     }
 
     // ---- Buffering -------------------------------------------------------------------------------------------------
@@ -138,6 +164,17 @@ public sealed class RuntimeCoalescingSession
     /// those items durably as the crash-redrive guarantee.
     /// </summary>
     public void RecordCapFlushState(RuntimeCheckpointStateChangeSet changes)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+        ApplyToOverlay(changes, includeOutbox: true);
+    }
+
+    /// <summary>
+    /// Imports the exact Pending scheduler-continuation rows of a successful Immediate boundary into this live
+    /// overlay. The rows are already durable; this session owns only their in-process delivery outcome until a later
+    /// fold reconciles it, so process loss still starts from the provider's original Pending rows.
+    /// </summary>
+    public void RecordDurableSchedulerContinuationState(RuntimeCheckpointStateChangeSet changes)
     {
         ArgumentNullException.ThrowIfNull(changes);
         ApplyToOverlay(changes, includeOutbox: true);
@@ -508,6 +545,9 @@ public sealed class RuntimeCoalescingSession
             lastFailureMessage: result.FailureMessage,
             metadata: existing.Metadata,
             deliveryFencingToken: existing.DeliveryFencingToken);
+
+        if (status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            Deactivate();
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)
@@ -518,7 +558,10 @@ public sealed class RuntimeCoalescingSession
         if (!_outboxItems.TryGetValue(claim.OutboxItemId, out var existing))
             throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found in the coalescing session.");
 
-        _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        var completed = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        _outboxItems[claim.OutboxItemId] = completed;
+        if (completed.Status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            Deactivate();
     }
 
     public void CompleteOutboxClaim(RuntimePostCommitOutboxClaimCompletion completion)
@@ -549,6 +592,8 @@ public sealed class RuntimeCoalescingSession
         }
 
         _outboxItems[completion.Claim.OutboxItemId] = completedOutbox;
+        if (completedOutbox.Status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            Deactivate();
         if (completion.WorkflowDispatch is { } workflowDispatch)
             _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
         if (completion.FollowUpOutboxItem is { } followUpOutboxItem)
@@ -740,7 +785,10 @@ public sealed class RuntimeCoalescingSession
             : trailing.Decision.Mode == RuntimeCheckpointPersistenceMode.Skip
                 ? FoldBufferedStateChanges()
                 : FoldBufferedStateChangesWith(trailing.Commit.StateChanges);
+        // Rows retained from a prior durable boundary are the crash-redrive backstop, not contributions of this new
+        // prepared-member set. Their in-memory delivery outcome is reconciled only after this fold succeeds.
         var pendingOutbox = RemainingPendingOutboxChanges()
+            .Where(change => !_durablyPersistedOutboxIds.Contains(change.StateId))
             .Concat(trailing is null || trailing.Decision.Mode == RuntimeCheckpointPersistenceMode.Skip
                 ? []
                 : trailing.Commit.StateChanges.PostCommitOutbox)
@@ -803,6 +851,7 @@ public sealed class RuntimeCoalescingSession
     {
         _bufferedChangeSets.Clear();
         _bufferedPreparedCommits.Clear();
+        _requiresDurableRecoveryHandoff = false;
         HopCount = 0;
     }
 

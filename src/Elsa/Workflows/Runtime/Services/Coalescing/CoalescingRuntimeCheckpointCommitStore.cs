@@ -19,15 +19,31 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         ?? throw new InvalidOperationException(
             $"Checkpoint coalescing requires the selected durable provider to implement {nameof(IRuntimeCheckpointPreparedLedgerStore)}.");
 
-    public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+    public async ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
         RuntimeCheckpointPrepareRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var candidateMode = sessionAccessor.Current is { } session && session.AppliesTo(request.Commit.WorkflowExecutionId)
-            ? RuntimeCheckpointPersistenceMode.Deferred
-            : request.InitialPersistenceMode;
-        return _preparedLedger.PrepareAsync(request with { InitialPersistenceMode = candidateMode }, cancellationToken);
+        if (sessionAccessor.Current is { } session && session.AppliesTo(request.Commit.WorkflowExecutionId))
+        {
+            if (request.RecoveryAuthority is { } recoveryAuthority)
+                await session.MaterializeOverlayRecoverySourceAsync(recoveryAuthority, cancellationToken);
+
+            // Keep the current overlay claim active through its checkpoint commit. Otherwise the committer would try
+            // to consume an overlay-issued claim from the durable queue it never claimed. The immediate boundary below
+            // is the handoff point that retires this session after the commit succeeds.
+
+            return await _preparedLedger.PrepareAsync(
+                request with
+                {
+                    InitialPersistenceMode = session.RequiresDurableRecoveryHandoff
+                        ? RuntimeCheckpointPersistenceMode.Immediate
+                        : RuntimeCheckpointPersistenceMode.Deferred
+                },
+                cancellationToken);
+        }
+
+        return await _preparedLedger.PrepareAsync(request, cancellationToken);
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
@@ -45,7 +61,21 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         var reservation = await FindPreparedReservationAsync(commit.WorkflowExecutionId, token.CommitId, cancellationToken);
         if (reservation is null)
-            return await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
+        {
+            var replay = await _preparedLedger.CommitPreparedAsync(token, commit, decision, cancellationToken);
+            if (replay.Status == RuntimeCheckpointCommitStoreStatus.Replay)
+            {
+                // A prior successful boundary has already made its state/outbox durable, but this live session may
+                // still own its overlay frontier. Retire that frontier exactly as an ordinary completed boundary;
+                // do not re-import the continuation or repeat any durable effect.
+                session.InvalidateInspectionBaselines();
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+                session.ClearBuffer();
+                session.Deactivate();
+            }
+
+            return replay;
+        }
         var preparedCommit = new RuntimeCheckpointPreparedCommit(token, commit, decision)
         {
             CurrentAuthorityFence = reservation.CurrentAuthorityFence,
@@ -61,7 +91,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         }
 
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
-        var continueAfterBoundary = capReached || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
         RuntimeCheckpointCommitStoreResult passthrough;
         RuntimeCheckpointPreparedFoldRequest? foldRequest = null;
         if (session.BufferedPreparedCommits.Count > 0)
@@ -82,6 +111,14 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (passthrough.Status is not (RuntimeCheckpointCommitStoreStatus.Committed or RuntimeCheckpointCommitStoreStatus.Replay))
             return passthrough;
 
+        var continuationOutbox = commit.StateChanges.PostCommitOutbox;
+        var qualifyingSchedulerContinuation = passthrough.Status == RuntimeCheckpointCommitStoreStatus.Committed &&
+                                               QualifiesAsSchedulerContinuation(preparedCommit, continuationOutbox);
+        var continueAfterBoundary = !session.RequiresDurableRecoveryHandoff &&
+                                    (capReached ||
+                                    qualifyingSchedulerContinuation ||
+                                    CanContinueAfterBoundary(commit, remainingPendingOutbox.Count));
+
         session.InvalidateInspectionBaselines();
         if (capReached)
         {
@@ -89,10 +126,20 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             session.MarkOutboxDurablyPersisted(
                 foldRequest?.FoldedStateChanges.PostCommitOutbox ?? commit.StateChanges.PostCommitOutbox);
         }
+        else if (qualifyingSchedulerContinuation)
+        {
+            // This boundary already committed the exact Pending rows durably. Keep that durable row as the crash
+            // backstop while importing the same row into the existing single-writer overlay for the D2 pump; a
+            // later successful fold is the first point at which its Delivered outcome can be reconciled durably.
+            session.RecordDurableSchedulerContinuationState(commit.StateChanges);
+            session.MarkOutboxDurablyPersisted(continuationOutbox);
+        }
         else if (continueAfterBoundary)
             session.RecordDurableBoundaryState(commit.StateChanges);
         await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: capReached || !continueAfterBoundary, cancellationToken);
+        await session.AdvanceInnerQueueAsync(
+            consumeInFlightClaims: capReached || qualifyingSchedulerContinuation || !continueAfterBoundary,
+            cancellationToken);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();
@@ -142,6 +189,17 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         pendingSegmentOutboxCount == 0 &&
         commit.StateChanges.PostCommitOutbox.Count == 0 &&
         StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
+
+    private static bool QualifiesAsSchedulerContinuation(
+        RuntimeCheckpointPreparedCommit preparedCommit,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> committedOutbox) =>
+        preparedCommit.Decision.Mode == RuntimeCheckpointPersistenceMode.Immediate &&
+        preparedCommit.Token.Provenance.ExecutionContext is { IsEmpty: true } &&
+        committedOutbox.Count > 0 &&
+        committedOutbox.All(change =>
+            change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State.Status == RuntimePostCommitOutboxStatus.Pending &&
+            StringComparer.Ordinal.Equals(change.State.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
 
     private static RuntimeCheckpointCommitStoreResult OwnOutbox(RuntimeCheckpointCommit commit) =>
         new(commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray());
