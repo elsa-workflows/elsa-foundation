@@ -1,6 +1,6 @@
 # Data Model: Execution Evidence Foundation
 
-**Status:** Plan-reviewed protocol/model design. The Path A recovery models and durable scheduler-continuation handoff are approved. The T029 construction-time logical-inspection-projection amendment passed independent and control-room plan review with no findings and is approved for task planning. Production remains blocked on amended task and RED reviews. The in-memory provider is not a database schema or a durability claim.
+**Status:** Plan-reviewed protocol/model design. The Path A recovery models and durable scheduler-continuation handoff are approved. The T029 construction-time logical-inspection-projection plan, tasks, and RED packet passed independent and control-room review. T029a produced 24 tests: 14 protective PASS / 10 intentional RED; materialized-source lifecycle is 8/8 PASS, and the unchanged guardrails are 1/7 PASS with six canonical `FirstCheckpointId` REDs. Independent RED review passed with no P0–P3 finding and the control room approved it. T029a/T029b are complete; T029c is authorized in exactly `CoalescingRuntimeCheckpointCommitStore`, `RuntimeCoalescingSession`, and `CoalescingRuntimeStateStores`, while implementation and T029d remain pending. This records no Draft-constitution or proposed-ADR ratification. The in-memory provider is not a database schema or a durability claim.
 
 ## Generic Runtime provenance and ledger (owned by Runtime)
 

@@ -2,7 +2,7 @@
 
 **Branch**: `779-execution-evidence-foundation` | **Date**: 2026-08-05 | **Spec**: [spec.md](spec.md)
 
-**Status:** Approved for task planning (T029 construction-time logical-inspection-projection amendment, 2026-08-06). The independent and control-room plan reviews passed with no findings. Production remains blocked until the amended tasks and RED packet pass their separate reviews. The 2026-08-05 plan, Path A recovery-authority amendment, and qualifying Immediate-boundary amendment also passed their applicable reviews. The constitution remains Draft and the referenced ADRs remain proposed until their separate governance review.
+**Status:** T029 construction-time logical-inspection-projection plan, tasks, and RED packet approved (2026-08-06). T029a produced 24 tests: 14 protective PASS / 10 intentional RED; materialized-source lifecycle is 8/8 PASS, and the unchanged guardrails are 1/7 PASS with six canonical `FirstCheckpointId` REDs. Independent RED review passed with no P0–P3 finding and the control room approved it. T029a/T029b are complete; T029c is authorized in exactly the three planned production files, while implementation and T029d remain pending. The 2026-08-05 plan, Path A recovery-authority amendment, and qualifying Immediate-boundary amendment also passed their applicable reviews. The constitution remains Draft and the referenced ADRs remain proposed until their separate governance review.
 
 ## Summary
 
@@ -53,7 +53,7 @@ T028/T029 own the generic Immediate-boundary crash and delayed-reconciliation pr
 proof is separately blocked for spec-123 reconciliation. This approval authorizes the amended task contract; it does not approve a RED artifact or production
 implementation and does not ratify the Draft constitution or proposed ADRs.
 
-### T029 construction-time logical-inspection-projection amendment (review pending, 2026-08-06)
+### T029 construction-time logical-inspection-projection amendment (RED approved; implementation pending, 2026-08-06)
 
 The generic scheduler-continuation handoff is complete and remains separate from this work. The current
 `ReplaySafeFusion` inventory is **11 total: 5 PASS / 6 RED**. The five PASS are the isolated D2-pump authority proof,
@@ -71,22 +71,25 @@ and only supersedes the prior spec-131 **control-read semantics**: it retains th
 durable-pass-through, and read-observability objectives, but no longer treats an active session's logical projection as
 ineligible for `FindAsync`.
 
-T029a must add reviewed RED/protective coverage before implementation. T029b independently reviews that packet; T029c
-may then change only
+T029a added the reviewed RED/protective packet and T029b independently reviewed it: 24 tests = 14 protective PASS /
+10 intentional RED; materialized-source lifecycle 8/8 PASS; unchanged guardrails 1/7 PASS with six canonical
+`FirstCheckpointId` REDs. Independent review passed with no P0–P3 finding and the control room approved it. T029c is
+now authorized to change only
 `src/Elsa/Workflows/Runtime/Services/Coalescing/{CoalescingRuntimeCheckpointCommitStore.cs,RuntimeCoalescingSession.cs,CoalescingRuntimeStateStores.cs}`.
 The implementation scope adds the state-store adapter solely to apply the generic construction-time precedence below.
 Fusion driver, committer, policy, providers, Evidence, public contracts, recovery authority, and checkpoint-name/source
 branches remain excluded. T029d reruns the unchanged six guardrails and then the unfiltered spec-123 gate. No Evidence,
 provider, Fusion, D1/D2, source-authority, or checkpoint-name branch is an acceptable reconciliation mechanism.
 
-**Reopened T029b review (2026-08-06, approved):** Later source review proved the single authority scenario still ran a
+**T029a/T029b RED disposition (2026-08-06, approved):** Later source review proved the single authority scenario still ran a
 queued `RunSchedulerWork` barrier ahead of the durable continuation. The test-only split now uses the existing scoped
 pending-consume claim to bind exact dispatch ownership: in the isolated real-orchestrator path the nested item differs
 from the outer claim and inherits its authority; in the sweep path `RunSchedulerWork` is first and the later drainer item
 equals its own claim and receives a distinct authority. The provider-fold observer remains on the captured durable
-provider and the outer boundary-crash behavior is unchanged. The resulting inventory is **11 total: 5 PASS / 6 RED**;
-the six byte-identity guardrails, including External, remain RED. Independent review passed and the control room approved
-T029c to resume; its two-file production boundary remains unchanged.
+provider and the outer boundary-crash behavior is unchanged. The completed amended packet is **24 total: 14 protective
+PASS / 10 intentional RED**; materialized-source lifecycle is **8/8 PASS**, and the unchanged guardrail lane is **1/7
+PASS** with six canonical `FirstCheckpointId` REDs. Independent review passed with no P0–P3 finding and the control room
+approved T029c in exactly the three planned production files.
 
 ### T029e live-carrier resolution disposition (complete, 2026-08-06)
 
@@ -98,7 +101,8 @@ durable intent. Identity/association plus candidate-intent payload and independe
 payload must structurally match the final durable payload. The durable payload remains authoritative; replay, skip,
 failure, exception, mismatch, coalescing ownership, and unrelated commits do not publish. Verification: focused
 `RuntimeInProcessHopFastPathTests` **19/19**; preparation/committer subset **50/50**; root full Runtime **1838/1838**.
-T029a is released. T030 remains blocked until T029a–T029d complete.
+T029a/T029b are complete. T029c is authorized only in the three planned production files; T030 remains blocked until
+T029c–T029d complete.
 
 ## Project structure
 
@@ -260,7 +264,7 @@ The ledger is a Runtime correctness mechanism, not an Evidence concept and not a
 | Core contracts | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Core/Tests/Elsa.Workflows.ExecutionEvidence.Core.Tests.csproj` — descriptor/ID/order/cursor/wire validation, disjoint typed/unknown envelope, unknown payload, and no values. |
 | Base + InMemory | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj` and `dotnet test tests/Elsa/Workflows/ExecutionEvidence/InMemory/Tests/Elsa.Workflows.ExecutionEvidence.InMemory.Tests.csproj` — gating; reservation/attach/freeze races; active drain; two sessions; uncertain retry; start failure reconciliation; cutoff reconciliation; dedupe/wait/delete. |
 | Runtime seams | `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj` and Groundwork tests — v1 authority canonicalization/bounds; actual outer D1 dispatch authority plus ambient nesting; all six router results including claimed-but-durable exactness; immutable original versus mutable current fence/revision; exact-set adoption success, idempotent replay, every rejection, and injected all-member rollback/no-dispatch for source-bound and source-free routes; exact three-member D1 Prepared identity/token/provenance/order/source assertions; current 27-caller/21-file matrix plus separate provider-atomic prepared-fold gate; fingerprint/fold/compaction; explicit skipped/failed orders; unchanged after-enrichment Immediate override; qualifying scheduler-only import/continued session; nonqualifying deactivation; live-overlay delayed acknowledgement plus crash-before/after-inline ordinary durable-redrive convergence; skip-with-work; six-status paging; full T027 recovery non-regression. `CoalescingInspectionReadTests` preserves its original durable pass-through and byte-identity objectives while adding direct RED/protective coverage for active logical-projection precedence, successful Immediate/fold update ordering, stale-baseline invalidation, both control settings, failed/conflict/ownership-lost/replay/skip behavior, cap/quiescence/deactivation, and crash/replay reconstruction. T029e remains a separate live-carrier resolution. |
-| Fusion continuity (blocked T029a–T029d) | Preserve the original spec-123 tests as unchanged guardrails, not rewritten substitutes: all five ON/OFF byte-identical shapes (straight line, multi-outcome branch, fan-in join fallback, suspend/resume, External); non-vacuous D1 `FusedSpans` and D2 `InlineCascadeDispatches` counters plus join-fallback counter; D1-only counter separation; and all eight original Groundwork kill ordinals `2,3,4,7,9,10,11,12`, including D2→D1 recursion. The current 5 PASS / 6 RED Activity result is reconciled through reviewed RED → implementation → verification gates. The six guardrails continue to compare durable checkpoint/state documents while excluding only transient intent/outbox transport. The two authority PASS cases prove exact pump ownership and resumption-barrier isolation; they do not replace original convergence, join, External-parent, suspend, or no-fusion coverage. |
+| Fusion continuity (T029c–T029d pending) | Preserve the original spec-123 tests as unchanged guardrails, not rewritten substitutes: all five ON/OFF byte-identical shapes (straight line, multi-outcome branch, fan-in join fallback, suspend/resume, External); non-vacuous D1 `FusedSpans` and D2 `InlineCascadeDispatches` counters plus join-fallback counter; D1-only counter separation; and all eight original Groundwork kill ordinals `2,3,4,7,9,10,11,12`, including D2→D1 recursion. The current 5 PASS / 6 RED Activity result is reconciled through reviewed RED → implementation → verification gates. The six guardrails continue to compare durable checkpoint/state documents while excluding only transient intent/outbox transport. The two authority PASS cases prove exact pump ownership and resumption-barrier isolation; they do not replace original convergence, join, External-parent, suspend, or no-fusion coverage. |
 | API integration | `dotnet test tests/Elsa/Workflows/ExecutionEvidence/Api/Tests/Elsa.Workflows.ExecutionEvidence.Api.Tests.csproj` — scopes, disjoint typed/unknown records, correlation-pair/range validation, bounded scan/timeout cursor advancement, cursor reuse/access/filter/page-size binding, lifecycle/integrity outcomes. |
 | Architecture/reference | `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` — Core/API/InMemory direction, server composition, and absence assertions. |
 | Server e2e | Rebuild and deploy a fresh enabled server composition, wait for readiness, then run `e2e-tests/execution-evidence/Test-ExecutionEvidenceFoundation.ps1` against the ordinary REST/persistence/runtime path; see [quickstart.md](quickstart.md). |
