@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -15,9 +16,10 @@ namespace Elsa.Workflows.Publishing.Tests;
 
 /// <summary>
 /// Branch coverage (§2.23.2) for the publish-on-reconcile subscriber (spec 147). The handler's
-/// contract: latest claim per definition, opted-in sources only, deleted never published, slot
-/// pre-check makes restarts idempotent, one failing definition never stops the rest, and no
-/// exception ever escapes <c>Handle</c> (Sequential delivery — a throw would fail shell activation).
+/// contract: latest claim per definition, opted-in sources only, deleted never published, a
+/// pre-check on the policy-resolved target slot (and only that slot) makes restarts idempotent,
+/// one failing definition never stops the rest, and no exception ever escapes <c>Handle</c>
+/// (Sequential delivery — a throw would fail shell activation).
 /// </summary>
 public sealed class PublishReconciledWorkflowVersionsTests
 {
@@ -131,6 +133,96 @@ public sealed class PublishReconciledWorkflowVersionsTests
     }
 
     [Fact]
+    public async Task Publishes_when_only_a_non_target_slot_holds_the_target_version()
+    {
+        // A side-by-side 'canary' publication of the same version says nothing about the slot the
+        // slot-less PublishWorkflow request updates — the default slot here has no publication at all,
+        // so skipping on the canary would leave the deployment unpublished (reviewed on #1161).
+        var sender = new SpySender();
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a")],
+            versions: [Version("wf-a", "1.0.0", "ver-1")],
+            slots: [new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)],
+            records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)]);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
+
+        var request = Assert.Single(sender.Sent.OfType<PublishWorkflow>());
+        Assert.Equal("ver-1", request.VersionId);
+    }
+
+    [Fact]
+    public async Task Publishes_when_the_target_slot_still_holds_an_older_version_than_a_non_target_slot()
+    {
+        // The default slot is stale at v1 while 'canary' already runs v2: the canary must not mask the
+        // default slot's staleness.
+        var sender = new SpySender();
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a")],
+            versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
+            slots:
+            [
+                new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow),
+                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+            ],
+            records:
+            [
+                Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active),
+                Record("pub-canary", "wf-a", "ver-2", PublicationStatus.Active)
+            ]);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
+
+        var request = Assert.Single(sender.Sent.OfType<PublishWorkflow>());
+        Assert.Equal("ver-2", request.VersionId);
+    }
+
+    [Fact]
+    public async Task Skips_when_the_policy_resolved_slot_is_a_non_default_one_holding_the_target_version()
+    {
+        // A workflow policy whose default slot is 'canary' moves the target: the pre-check follows the
+        // policy the publish request will be resolved against, not the literal 'default' name.
+        var sender = new SpySender();
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a")],
+            versions: [Version("wf-a", "1.0.0", "ver-1")],
+            slots:
+            [
+                new PublicationSlot("slot-1", "wf-a", "default", null, 1, DateTimeOffset.UtcNow),
+                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+            ],
+            records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)],
+            policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.ReplaceDefaultSlot, "canary", 1, DateTimeOffset.UtcNow)]);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
+
+        Assert.Empty(sender.Sent);
+    }
+
+    [Fact]
+    public async Task Sends_the_publish_request_when_the_policy_cannot_resolve_a_slot()
+    {
+        // An explicit-slot policy makes the pre-check unresolvable. It is an optimization, not a gate:
+        // the request is still sent so PublishWorkflow raises the authoritative 'explicit_slot_required'
+        // instead of the handler silently skipping (or throwing) on a policy it does not own.
+        var sender = new SpySender();
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a")],
+            versions: [Version("wf-a", "1.0.0", "ver-1")],
+            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
+            records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)],
+            policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.RequireExplicitSlot, "default", 1, DateTimeOffset.UtcNow)]);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
+
+        Assert.Single(sender.Sent.OfType<PublishWorkflow>());
+    }
+
+    [Fact]
     public async Task Publishes_when_the_slots_publication_is_retired_rather_than_active()
     {
         var sender = new SpySender();
@@ -214,14 +306,18 @@ public sealed class PublishReconciledWorkflowVersionsTests
         IReadOnlyList<WorkflowDefinitionVersion> versions,
         IReadOnlyList<PublicationSlot>? slots = null,
         IReadOnlyList<PublicationRecord>? records = null,
+        IReadOnlyList<PublicationPolicy>? policies = null,
         CapturingLogger<PublishReconciledWorkflowVersions>? logger = null) =>
         new(
             logger ?? new CapturingLogger<PublishReconciledWorkflowVersions>(),
             new StubDefinitionStore(definitions),
             new StubVersionStore(versions),
+            new StubPolicyStore(policies ?? []),
+            new PublicationPolicyResolver(),
             new StubSlotStore(slots ?? []),
             new StubRecordStore(records ?? []),
-            sender);
+            sender,
+            TimeProvider.System);
 
     private static OnWorkflowVersionsReconciled Reconciled(params WorkflowVersionSourceClaim[] claims) => new(claims);
 
@@ -297,13 +393,24 @@ public sealed class PublishReconciledWorkflowVersionsTests
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
+    private sealed class StubPolicyStore(IReadOnlyList<PublicationPolicy> items) : IPublicationPolicyStore
+    {
+        public ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(items.FirstOrDefault(x => x.WorkflowDefinitionId == workflowDefinitionId));
+
+        public ValueTask<PublicationPolicyWriteResult> TrySaveAsync(PublicationPolicy policy, long expectedRevision, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Not exercised by publish-on-reconcile tests.");
+    }
+
     private sealed class StubSlotStore(IReadOnlyList<PublicationSlot> items) : IPublicationSlotStore
     {
-        public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<IReadOnlyCollection<PublicationSlot>>(items.Where(x => x.WorkflowDefinitionId == workflowDefinitionId).ToList());
+        public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(items.FirstOrDefault(x => x.WorkflowDefinitionId == workflowDefinitionId && x.SlotName == slotName));
 
+        // The pre-check is slot-targeted: enumerating every slot of the definition would be the
+        // slot-agnostic behaviour this handler must not have.
         private const string Unused = "Not exercised by publish-on-reconcile tests.";
-        public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
         public ValueTask<PublicationSlotTransitionResult> TryActivateAsync(string workflowDefinitionId, string slotName, string publicationId, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
         public ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(string workflowDefinitionId, string slotName, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }

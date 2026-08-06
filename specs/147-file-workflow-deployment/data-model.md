@@ -80,7 +80,7 @@ Verb-named per the Publishing feature's own handler style (`CollectExecutableCom
 1. Group `Claims` by `DefinitionId`; per group take the claim with the highest `SemVerSortKey` (ordinal).
 2. Skip when `!PublishRequested` (debug log) or `Deleted` / definition `DeletedAt != null` (info log).
 3. Resolve target row: `ListByDefinitionAsync(DefinitionId)` filtered on `SemVerSortKey`; absent ⇒ warning (reconcile/publish disagreement), continue.
-4. Idempotency pre-check (FR-007): active `PublicationRecord` for the definition's slot with `WorkflowDefinitionVersionId == target.Id` ⇒ skip (debug log). (`PublishWorkflow`'s `WasCreated=false` short-circuit is the second net.)
+4. Idempotency pre-check (FR-007): resolve the slot a slot-less `PublishWorkflow` would update (workflow policy, else host policy, else the synthesized `default` host policy) and skip when *that* slot's active `PublicationRecord` has `WorkflowDefinitionVersionId == target.Id` (debug log). Checking every slot would let a side-by-side `canary` publication of the same version suppress a publish the target slot still needs. An unresolvable policy (`RequireExplicitSlot`) yields no target slot ⇒ no skip, and `PublishWorkflow` raises the authoritative error. (`PublishWorkflow`'s `WasCreated=false` short-circuit is the second net.)
 5. `await requestSender.Send(new PublishWorkflow(target.Id), ct)`; log info with `ArtifactId`/`WasCreated`.
 6. **Per-definition try/catch** (FR-009): failures logged as structured errors (`DefinitionId`, `Version`, `SourceId`, exception code where typed); loop continues; `Handle` never throws.
 
