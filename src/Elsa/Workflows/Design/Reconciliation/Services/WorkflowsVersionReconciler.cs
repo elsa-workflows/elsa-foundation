@@ -43,18 +43,36 @@ public sealed class WorkflowsVersionReconciler(
         var @event = new OnWorkflowVersionsReconciling();
         await eventPublisher.Publish(@event, cancellationToken);
 
+        var reconciled = new HashSet<(string DefinitionId, string SemVerSortKey)>();
+
         foreach (var version in @event.Versions)
         {
-            await ReconcileVersion(version, cancellationToken);
+            if (await ReconcileVersion(version, cancellationToken))
+                reconciled.Add((version.DefinitionId, SemVer.ToSortKey(version.Version)));
         }
+
+        // FR-008a corollary: a version skipped as outdated was never reconciled, so its claim must not
+        // travel on. Publish-on-reconcile picks the latest opted-in claim per definition and publishes
+        // that version row; carrying a skipped v1 while the catalog already holds v2 would move the
+        // active slot backward onto the older executable. Claims pair with their version by
+        // (definition, sort key) — the same identity the reconciler and the version store compare on.
+        var reconciledClaims = @event.Claims
+            .Where(claim => reconciled.Contains((claim.DefinitionId, claim.SemVerSortKey)))
+            .ToArray();
 
         // Pass completed without error ⇒ notify independent subscribers (Sequential, so e.g. the
         // publish-on-reconcile step finishes inside this startup task, before readiness turns ready).
         // A failed pass throws out of the loop above and this is never published.
-        await eventPublisher.Publish(new OnWorkflowVersionsReconciled([.. @event.Claims]), cancellationToken);
+        await eventPublisher.Publish(new OnWorkflowVersionsReconciled(reconciledClaims), cancellationToken);
     }
 
-    private async Task ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reconciles one contributed version. Returns <c>true</c> when the version is authoritative for its
+    /// definition — materialized here, or already present and verified as the current version — and
+    /// <c>false</c> when it was skipped as outdated (FR-008a). The caller uses that to decide whether the
+    /// version's provenance claim reaches <see cref="OnWorkflowVersionsReconciled"/>.
+    /// </summary>
+    private async Task<bool> ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {
         var definitionId = version.DefinitionId;
         var candidateSortKey = SemVer.ToSortKey(version.Version);
@@ -67,7 +85,7 @@ public sealed class WorkflowsVersionReconciler(
         if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
         {
             LogSkipOutdated(definitionId, version.Version);
-            return;
+            return false;
         }
 
         var definition = await FindDefinition(definitionId, cancellationToken);
@@ -98,11 +116,15 @@ public sealed class WorkflowsVersionReconciler(
                 ReconciliationKey("version", definitionId, candidateSortKey),
                 WorkflowDefinitionVersion.From(version),
                 cancellationToken);
-            return;
+            return true;
         }
 
         await SurfaceContentMismatch(definitionId, candidateSortKey, version, cancellationToken);
         HandleDuplicate(definitionId, version.Version);
+        // Already present and not outdated ⇒ authoritative. Its claim must still travel, or an
+        // unchanged source would stop republishing across restarts (publish-on-reconcile idempotency
+        // relies on the claim arriving and the handler's already-published pre-check skipping it).
+        return true;
     }
 
     /// <summary>

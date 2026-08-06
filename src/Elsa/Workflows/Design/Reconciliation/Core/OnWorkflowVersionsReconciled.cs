@@ -18,7 +18,9 @@ namespace Elsa.Workflows.Design.Reconciliation.Core;
 /// </remarks>
 public sealed class OnWorkflowVersionsReconciled(IReadOnlyList<WorkflowVersionSourceClaim> claims) : IEvent
 {
-    /// <summary>One claim per contributed envelope, in contribution order (source registration order,
-    /// then entry order within a source). See <see cref="WorkflowVersionSourceClaim"/>.</summary>
+    /// <summary>One claim per <em>reconciled</em> envelope, in contribution order (source registration
+    /// order, then entry order within a source). Envelopes the pass skipped as outdated — a newer version
+    /// is already in the catalog — contribute no claim, so a subscriber never acts on a version this pass
+    /// declined to import. See <see cref="WorkflowVersionSourceClaim"/>.</summary>
     public IReadOnlyList<WorkflowVersionSourceClaim> Claims { get; } = claims;
 }

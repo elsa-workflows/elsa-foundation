@@ -3,6 +3,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
+using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -365,7 +366,7 @@ public sealed class WorkflowsVersionReconcilerTests
     public async Task Successful_pass_publishes_the_reconciled_event_carrying_the_claims()
     {
         var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
-        var claim = new WorkflowVersionSourceClaim("wf-new", "1.0.0", Elsa.Primitives.Versioning.SemVer.ToSortKey("1.0.0"), "src-1", "Json", PublishRequested: true, Deleted: false);
+        var claim = NewClaim("wf-new", "1.0.0");
         var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
 
         var reconciler = NewReconciler(
@@ -378,6 +379,70 @@ public sealed class WorkflowsVersionReconcilerTests
         Assert.Equal(claim, carried);
         // Ordering: the completion event is published after the contribution event, i.e. after the pass.
         Assert.Equal(sender.Published.Count - 1, sender.Published.IndexOf(reconciled));
+    }
+
+    [Fact]
+    public async Task Outdated_entry_contributes_no_claim_to_the_reconciled_event()
+    {
+        // Regression (#1161): the catalog already holds 2.0.0 while the source still offers 1.0.0. The
+        // pass skips 1.0.0 as outdated, so its claim must not travel — publish-on-reconcile would
+        // otherwise republish the older, still-persisted 1.0.0 row and move the active slot backward.
+        var incoming = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Same");
+        var claim = NewClaim("wf-stale", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-stale", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-stale", "2.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        Assert.Empty(reconciled.Claims);
+    }
+
+    [Fact]
+    public async Task Already_present_current_version_still_contributes_its_claim()
+    {
+        // The other side of the filter: an unchanged source re-offering the version already in the catalog
+        // is authoritative, not outdated. Its claim must keep travelling or a restart would stop
+        // republishing — idempotency lives in the publish handler's already-published pre-check.
+        var incoming = BuildIncomingVersion(definitionId: "wf-same", version: "1.0.0", name: "Same");
+        var claim = NewClaim("wf-same", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [incoming], ToContributeClaims = [claim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-same", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-same", "1.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        Assert.Equal(claim, Assert.Single(reconciled.Claims));
+    }
+
+    [Fact]
+    public async Task Only_the_reconciled_definitions_claim_survives_a_mixed_pass()
+    {
+        // One source contributes a stale entry for one definition and a fresh one for another: the filter
+        // is per (definition, version), not all-or-nothing for the pass.
+        var stale = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Same");
+        var fresh = BuildIncomingVersion(definitionId: "wf-fresh", version: "1.0.0");
+        var staleClaim = NewClaim("wf-stale", "1.0.0");
+        var freshClaim = NewClaim("wf-fresh", "1.0.0");
+        var sender = new CapturingSender { ToContribute = [stale, fresh], ToContributeClaims = [staleClaim, freshClaim] };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-stale", Name = "Same" });
+        var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-stale", "2.0.0"));
+
+        var reconciler = NewReconciler(
+            sender, defs, versions,
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        Assert.Equal(freshClaim, Assert.Single(reconciled.Claims));
     }
 
     [Fact]
@@ -397,6 +462,9 @@ public sealed class WorkflowsVersionReconcilerTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
         Assert.Empty(sender.Published.OfType<OnWorkflowVersionsReconciled>());
     }
+
+    private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
+        new(definitionId, version, SemVer.ToSortKey(version), sourceId, "Json", PublishRequested: true, Deleted: false);
 
     private static WorkflowsVersionReconciler NewReconciler(
         IInlineEventPublisher sender,

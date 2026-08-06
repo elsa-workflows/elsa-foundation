@@ -21,8 +21,8 @@ public sealed class OnWorkflowVersionsReconciling : IEvent
     /// <summary>
     /// One provenance claim per contributed version, populated by the aggregating handler beside
     /// <see cref="Versions"/>. Source identity is not persisted on workflow-design entities, so the
-    /// reconciler carries these forward onto <see cref="OnWorkflowVersionsReconciled"/> after a
-    /// successful pass.
+    /// reconciler carries the ones whose version it actually reconciled forward onto
+    /// <see cref="OnWorkflowVersionsReconciled"/> after a successful pass.
     /// </summary>
     public ICollection<WorkflowVersionSourceClaim> Claims { get; } = [];
 }
