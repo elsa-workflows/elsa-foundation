@@ -58,10 +58,14 @@ implementation and does not ratify the Draft constitution or proposed ADRs.
 The approved generic continuation contract was incorrectly coupled to the Activity fusion/fold checks. T029 is limited to
 the Runtime coalescing handoff. The current `ReplaySafeFusion` inventory is **11 total: 5 PASS / 6 RED**. PASS are the
 isolated D2 pump authority proof, resumption-barrier authority isolation, provider-fold harness prerequisite, ReplaySafe
-contract probe, and deterministic fingerprint. RED are the six guardrail byte-identity failures, including External. These checks remain required by the
+contract probe, and deterministic fingerprint. RED are the six guardrail byte-identity failures, including External. A reopened T029a review corrected the
+guardrail fingerprint to exclude only transient post-commit intents/outbox as canonical spec 123 research §8.2
+requires; all six REDs remain and now isolate durable `ActivityExecutionInspection.FirstCheckpointId` drift. These checks remain required by the
 canonical [spec 123](../123-replaysafe-hop-fusion/spec.md) guardrails and are reserved as T029a–T029d reconciliation work:
 amended RED review, independent/control-room approval, implementation, then unfiltered verification. Reopened T029b
-passed independent/control-room review and T029c is authorized to resume. The amended T029a inventory also owns a generic Runtime exact-materialized-source
+passed independent/control-room review. T029c is paused at a source-owner gate: its current two-file production
+approach is unapproved until a reviewed RED proves whether one Path-A materialized frontier removes the remaining
+ON/OFF persistence asymmetry or a narrowly generic inspection-state seam is required. The amended T029a inventory also owns a generic Runtime exact-materialized-source
 lifecycle RED: 8 focused cases contain 7 protective green cases and 1 intentional new-`Committed` live-session RED.
 T029c may change only `src/Elsa/Workflows/Runtime/Services/Coalescing/{CoalescingRuntimeCheckpointCommitStore.cs,RuntimeCoalescingSession.cs}`;
 fusion driver, committer, policy, providers, Evidence, and public contracts are excluded. No Evidence or provider branch

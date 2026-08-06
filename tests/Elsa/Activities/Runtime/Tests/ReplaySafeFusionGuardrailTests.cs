@@ -217,7 +217,14 @@ public sealed class ReplaySafeFusionGuardrailTests
             "\n",
             commits
                 .OrderBy(record => record.Commit.CommitId, StringComparer.Ordinal)
-                .Select(record => JsonSerializer.Serialize(record.Commit))));
+                // Fusion deliberately consumes continuation transport inline. Exclude only its transient intent/outbox
+                // bookkeeping; checkpoint identity, metadata, and every durable state-change family remain compared.
+                .Select(record => record.Commit with
+                {
+                    PostCommitIntents = [],
+                    StateChanges = record.Commit.StateChanges.WithPostCommitOutbox([])
+                })
+                .Select(commit => JsonSerializer.Serialize(commit))));
 
     private static string FingerprintStates(WorkflowExecutionRun run)
     {
