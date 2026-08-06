@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace Elsa.Workflows.Publishing.Handlers;
 
@@ -100,11 +101,11 @@ public sealed class PublishReconciledWorkflowVersions(
 
     private async Task<bool> HasActivePublicationOf(string definitionId, string versionId, CancellationToken cancellationToken)
     {
-        foreach (var slot in await slotStore.ListByDefinitionAsync(definitionId, cancellationToken))
-        {
-            if (slot.ActivePublicationId is not { } publicationId)
-                continue;
+        var slots = await slotStore.ListByDefinitionAsync(definitionId, cancellationToken);
 
+        foreach (var slot in slots.Where(x => x.ActivePublicationId is not null))
+        {
+            var publicationId = slot.ActivePublicationId!;
             var record = await recordStore.FindAsync(publicationId, cancellationToken);
             if (record is { Status: PublicationStatus.Active } && record.WorkflowDefinitionVersionId == versionId)
                 return true;
