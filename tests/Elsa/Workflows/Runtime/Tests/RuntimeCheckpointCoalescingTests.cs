@@ -1015,80 +1015,121 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task OverlayOnlyRecoverySource_PrepareTimeHandoffIsDurableAndRetiresAfterTheSuccessfulBoundary()
+    public async Task ExactMaterializedRecoverySource_NewCommittedBoundaryAdvancesDurableSourceOnceAndKeepsOverlayLive()
     {
-        const string workflowExecutionId = "wfexec-recovery-handoff";
-        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
-        var innerStore = RuntimeCheckpointTestStores.Create(schedulerWorkQueue: innerQueue);
-        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
-        var session = new RuntimeCoalescingSession(
-            workflowExecutionId,
-            innerQueue,
-            new CoalescingRuntimeCheckpointPersistenceOptions(),
-            innerStore);
-        var queue = new CoalescingWorkflowSchedulerWorkQueue(
-            new CoalescingInner<IWorkflowSchedulerWorkQueue>(innerQueue),
-            accessor);
-        var store = new CoalescingRuntimeCheckpointCommitStore(
-            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
-            accessor);
-        var overlayOnlySource = NewSchedulerWorkItem(workflowExecutionId, "overlay-source", WorkflowExecutionCommandKind.StartActivity);
-        var codec = new RuntimeCheckpointRecoveryAuthorityCodec();
-        var recoveryAuthority = codec.Encode(overlayOnlySource);
-        var boundary = NewSchedulerContinuationBoundaryCommit(overlayOnlySource, 1, "next");
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
 
-        using (accessor.Push(session))
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, prepared.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, prepared.Token.InitialPersistenceMode);
+        Assert.Equal([fixture.Source.WorkItemId], (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
+            .Select(item => item.WorkItemId));
+        Assert.True(fixture.Session.RequiresDurableRecoveryHandoff);
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+
+        var committed = await fixture.CommitAsync(prepared);
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Status);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.AppliesTo(fixture.WorkflowExecutionId));
+
+        var durableLedger = Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries());
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Committed, durableLedger.Status);
+        Assert.Equal(prepared.Token.LedgerToken, durableLedger.LedgerToken);
+        Assert.Equal(prepared.Token.Provenance, durableLedger.Provenance);
+        Assert.Equal(fixture.RecoveryAuthority, durableLedger.RecoveryAuthority);
+    }
+
+    [Fact]
+    public async Task ExactMaterializedRecoverySource_ReplayRetiresWithoutASecondDurableEffect()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(prepared)).Status);
+
+        var durableLedger = Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries());
+        var durableCommitCount = fixture.InnerStore.ListCommits().Count;
+        var replay = await fixture.CommitAsync(prepared);
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Replay, replay.Status);
+        Assert.False(fixture.Session.IsActive);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(durableCommitCount, fixture.InnerStore.ListCommits().Count);
+        var replayLedger = Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries());
+        Assert.Equal(durableLedger.LedgerToken, replayLedger.LedgerToken);
+        Assert.Equal(durableLedger.Provenance, replayLedger.Provenance);
+        Assert.Equal(fixture.RecoveryAuthority, replayLedger.RecoveryAuthority);
+    }
+
+    [Theory]
+    [InlineData(RuntimeCheckpointCommitStoreStatus.Conflict)]
+    [InlineData(RuntimeCheckpointCommitStoreStatus.OwnershipLost)]
+    public async Task ExactMaterializedRecoverySource_UnsuccessfulFinalizationKeepsSourceAndClaimForRetry(
+        RuntimeCheckpointCommitStoreStatus finalizationStatus)
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync(finalizationStatus);
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+
+        var result = await fixture.CommitAsync(prepared);
+
+        Assert.Equal(finalizationStatus, result.Status);
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.AppliesTo(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+        Assert.Equal([fixture.Source.WorkItemId], (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
+            .Select(item => item.WorkItemId));
+        var durableLedger = Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries());
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared, durableLedger.Status);
+        Assert.Equal(fixture.RecoveryAuthority, durableLedger.RecoveryAuthority);
+    }
+
+    [Fact]
+    public async Task ExactMaterializedRecoverySource_ThrowingFinalizationKeepsSourceAndClaimForRetry()
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync(
+            finalizationException: new InvalidOperationException("Injected finalization failure."));
+        var prepared = await fixture.PrepareAsync(fixture.RecoveryAuthority);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.CommitAsync(prepared));
+
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.AppliesTo(fixture.WorkflowExecutionId));
+        Assert.True(fixture.Session.OwnsOverlayClaim(fixture.OverlayClaim));
+        Assert.Equal([fixture.Source.WorkItemId], (await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId))
+            .Select(item => item.WorkItemId));
+        Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Prepared,
+            Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries()).Status);
+    }
+
+    [Theory]
+    [InlineData("absent")]
+    [InlineData("mismatched")]
+    [InlineData("nonexact")]
+    public async Task NonExactRecoveryAuthority_DoesNotMaterializeOrRewriteTheSource_AndNormalBoundaryDeactivates(string authorityCase)
+    {
+        await using var fixture = await OverlayRecoverySourceFixture.CreateAsync();
+        var authority = authorityCase switch
         {
-            await queue.EnqueueAsync(overlayOnlySource);
-            var overlayClaim = Assert.IsType<RuntimeSchedulerWorkClaim>(
-                await queue.ClaimAsync(NewClaimRequest(workflowExecutionId)));
+            "absent" => null,
+            "mismatched" => new RuntimeCheckpointRecoveryAuthorityCodec().Encode(
+                NewSchedulerWorkItem(fixture.WorkflowExecutionId, "different-source", WorkflowExecutionCommandKind.StartActivity)),
+            "nonexact" => new RuntimeCheckpointRecoveryAuthorityCodec().Encode(
+                NewSchedulerWorkItem(fixture.WorkflowExecutionId, fixture.Source.WorkItemId, WorkflowExecutionCommandKind.ScheduleActivity)),
+            _ => throw new ArgumentOutOfRangeException(nameof(authorityCase))
+        };
+        var prepared = await fixture.PrepareAsync(authority, fixture.NewNonqualifyingBoundary());
 
-            var preparation = await store.PrepareAsync(RuntimeCheckpointPrepareRequest.From(boundary) with
-            {
-                InitialPersistenceMode = RuntimeCheckpointPersistenceMode.Deferred,
-                RecoveryAuthority = recoveryAuthority
-            });
-            var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
-            Assert.Equal(RuntimeCheckpointPreparationStatus.Prepared, preparation.Status);
-            Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, token.InitialPersistenceMode);
-            Assert.True(session.RequiresDurableRecoveryHandoff);
-            Assert.True(session.OwnsOverlayClaim(overlayClaim));
-
-            // The recovery authority and its exact scheduler source are durable before any commit can depend on them.
-            var prepared = await innerStore.PagePreparedAsync(new RuntimeCheckpointPreparedQuery(
-                workflowExecutionId,
-                RuntimeCheckpointPreparedQuery.MaximumPageSize));
-            Assert.Equal(recoveryAuthority, Assert.Single(prepared.Reservations).RecoveryAuthority);
-            Assert.Equal([overlayOnlySource.WorkItemId], (await innerQueue.ListAllAsync(workflowExecutionId))
-                .Select(item => item.WorkItemId));
-
-            var preparedCommit = boundary with
-            {
-                Checkpoint = boundary.Checkpoint with { Provenance = token.Provenance },
-                ExpectedFence = token.ExpectedFence
-            };
-            var committed = await store.CommitPreparedAsync(
-                token,
-                preparedCommit,
-                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
-
-            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, committed.Status);
-            Assert.True(session.OwnsOverlayClaim(overlayClaim));
-            Assert.False(session.IsActive);
-            Assert.Empty(await innerQueue.ListAllAsync(workflowExecutionId));
-            var durableLedger = Assert.Single(innerStore.ListLogicalCheckpointLedgerEntries());
-            Assert.Equal(RuntimeLogicalCheckpointLedgerStatus.Committed, durableLedger.Status);
-            Assert.Equal(recoveryAuthority, durableLedger.RecoveryAuthority);
-
-            // Although the session has retired, the current overlay claim can still complete against its issuing
-            // overlay; the replay below then reaches the ordinary durable ledger path because AppliesTo is false.
-            Assert.True((await queue.CompleteClaimAsync(overlayClaim)).Succeeded);
-            var replay = await store.CommitPreparedAsync(
-                token,
-                preparedCommit,
-                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
-            Assert.Equal(RuntimeCheckpointCommitStoreStatus.Replay, replay.Status);
-        }
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, prepared.RequestedInitialPersistenceMode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, prepared.Token.InitialPersistenceMode);
+        Assert.False(fixture.Session.RequiresDurableRecoveryHandoff);
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, (await fixture.CommitAsync(prepared)).Status);
+        Assert.False(fixture.Session.IsActive);
+        Assert.False(fixture.Session.AppliesTo(fixture.WorkflowExecutionId));
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(fixture.WorkflowExecutionId));
+        Assert.Equal(authority, Assert.Single(fixture.InnerStore.ListLogicalCheckpointLedgerEntries()).RecoveryAuthority);
     }
 
     [Fact]
@@ -1641,6 +1682,136 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             RuntimePostCommitOutboxProcessRequest request,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Injected crash before quiescence flush.");
+    }
+
+    private sealed class OverlayRecoverySourceFixture : IAsyncDisposable
+    {
+        private OverlayRecoverySourceFixture(
+            RuntimeCheckpointCommitStoreStatus? finalizationStatus,
+            Exception? finalizationException)
+        {
+            WorkflowExecutionId = "wfexec-recovery-handoff";
+            InnerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+            InnerStore = RuntimeCheckpointTestStores.Create(schedulerWorkQueue: InnerQueue);
+            Accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+            Session = new RuntimeCoalescingSession(
+                WorkflowExecutionId,
+                InnerQueue,
+                new CoalescingRuntimeCheckpointPersistenceOptions(),
+                InnerStore);
+            Queue = new CoalescingWorkflowSchedulerWorkQueue(
+                new CoalescingInner<IWorkflowSchedulerWorkQueue>(InnerQueue),
+                Accessor);
+            IRuntimeCheckpointCommitStore durableStore = finalizationStatus is null && finalizationException is null
+                ? InnerStore
+                : new FinalizationOutcomePreparedLedgerStore(InnerStore, finalizationStatus, finalizationException);
+            CheckpointStore = new CoalescingRuntimeCheckpointCommitStore(
+                new CoalescingInner<IRuntimeCheckpointCommitStore>(durableStore),
+                Accessor);
+            Source = NewSchedulerWorkItem(WorkflowExecutionId, "overlay-source", WorkflowExecutionCommandKind.StartActivity);
+            RecoveryAuthority = new RuntimeCheckpointRecoveryAuthorityCodec().Encode(Source);
+        }
+
+        public string WorkflowExecutionId { get; }
+        public InMemoryWorkflowSchedulerWorkQueue InnerQueue { get; }
+        public InMemoryRuntimeCheckpointCommitStore InnerStore { get; }
+        public AsyncLocalRuntimeCoalescingSessionAccessor Accessor { get; }
+        public RuntimeCoalescingSession Session { get; }
+        public CoalescingWorkflowSchedulerWorkQueue Queue { get; }
+        public CoalescingRuntimeCheckpointCommitStore CheckpointStore { get; }
+        public RuntimeSchedulerWorkItem Source { get; }
+        public RuntimeCheckpointRecoveryAuthority RecoveryAuthority { get; }
+        public RuntimeSchedulerWorkClaim OverlayClaim { get; private set; } = null!;
+
+        public static async ValueTask<OverlayRecoverySourceFixture> CreateAsync(
+            RuntimeCheckpointCommitStoreStatus? finalizationStatus = null,
+            Exception? finalizationException = null)
+        {
+            var fixture = new OverlayRecoverySourceFixture(finalizationStatus, finalizationException);
+            using (fixture.Accessor.Push(fixture.Session))
+            {
+                await fixture.Queue.EnqueueAsync(fixture.Source);
+                fixture.OverlayClaim = Assert.IsType<RuntimeSchedulerWorkClaim>(
+                    await fixture.Queue.ClaimAsync(NewClaimRequest(fixture.WorkflowExecutionId)));
+            }
+
+            return fixture;
+        }
+
+        public async ValueTask<PreparedRecoveryBoundary> PrepareAsync(
+            RuntimeCheckpointRecoveryAuthority? recoveryAuthority,
+            RuntimeCheckpointCommit? boundary = null)
+        {
+            boundary ??= NewSchedulerContinuationBoundaryCommit(Source, 1, "next");
+            using var scope = Accessor.Push(Session);
+            var preparation = await CheckpointStore.PrepareAsync(RuntimeCheckpointPrepareRequest.From(boundary) with
+            {
+                InitialPersistenceMode = RuntimeCheckpointPersistenceMode.Deferred,
+                RecoveryAuthority = recoveryAuthority
+            });
+            var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
+            Assert.Equal(RuntimeCheckpointPreparationStatus.Prepared, preparation.Status);
+            var preparedCommit = boundary with
+            {
+                Checkpoint = boundary.Checkpoint with { Provenance = token.Provenance },
+                ExpectedFence = token.ExpectedFence
+            };
+            return new PreparedRecoveryBoundary(
+                RuntimeCheckpointPersistenceMode.Deferred,
+                token,
+                preparedCommit);
+        }
+
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(PreparedRecoveryBoundary prepared)
+        {
+            using var scope = Accessor.Push(Session);
+            return await CheckpointStore.CommitPreparedAsync(
+                prepared.Token,
+                prepared.Commit,
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        }
+
+        public RuntimeCheckpointCommit NewNonqualifyingBoundary() =>
+            NewEmptyCommit(WorkflowExecutionId, 2, RuntimeCheckpointNames.ActivityStarted);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed record PreparedRecoveryBoundary(
+        RuntimeCheckpointPersistenceMode RequestedInitialPersistenceMode,
+        RuntimeCheckpointPreparationToken Token,
+        RuntimeCheckpointCommit Commit);
+
+    private sealed class FinalizationOutcomePreparedLedgerStore(
+        IRuntimeCheckpointPreparedLedgerStore inner,
+        RuntimeCheckpointCommitStoreStatus? finalizationStatus,
+        Exception? finalizationException) : IRuntimeCheckpointPreparedLedgerStore
+    {
+        public ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(RuntimeCheckpointPrepareRequest request, CancellationToken cancellationToken = default) =>
+            inner.PrepareAsync(request, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            inner.CommitAsync(commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+            RuntimeCheckpointPreparationToken token,
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            if (finalizationException is not null)
+                return ValueTask.FromException<RuntimeCheckpointCommitStoreResult>(finalizationException);
+            return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]) { Status = finalizationStatus!.Value });
+        }
+
+        public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(RuntimeCheckpointPreparedQuery query, CancellationToken cancellationToken = default) =>
+            inner.PagePreparedAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedAdoptionReceipt> AdoptPreparedAsync(RuntimeCheckpointPreparedAdoptionRequest request, CancellationToken cancellationToken = default) =>
+            inner.AdoptPreparedAsync(request, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(RuntimeCheckpointPreparedFoldRequest request, CancellationToken cancellationToken = default) =>
+            inner.CommitPreparedFoldAsync(request, cancellationToken);
     }
 
     private sealed class SchedulerContinuationFixture : IAsyncDisposable

@@ -55,10 +55,11 @@ implementation and does not ratify the Draft constitution or proposed ADRs.
 
 ### T029 ownership correction disposition (approved, 2026-08-06)
 
-The approved generic continuation contract was incorrectly coupled to seven Activity fusion/fold REDs. T029 is limited to
-the Runtime coalescing handoff. The Activity REDs remain required by the canonical [spec 123](../123-replaysafe-hop-fusion/spec.md)
-guardrails and are reserved as blocked T029a–T029d reconciliation work: RED, independent/control-room review,
-implementation, then unfiltered verification. No Evidence or provider branch is an acceptable reconciliation mechanism.
+The approved generic continuation contract was incorrectly coupled to seven Activity fusion/fold checks. T029 is limited to
+the Runtime coalescing handoff. The Activity inventory is five guardrail REDs, one authority-scope RED, and one
+provider-fold harness prerequisite that must be green before this reconciliation gate can pass; it remains required by the canonical [spec 123](../123-replaysafe-hop-fusion/spec.md)
+guardrails and is reserved as T029a–T029d reconciliation work: amended RED review, independent/control-room
+approval, implementation, then unfiltered verification. T029a and T029b have independent-review **PASS** and control-room **APPROVED** dispositions; T029c remains pending implementation. The amended T029a inventory also owns a generic Runtime exact-materialized-source lifecycle RED: 8 focused cases contain 7 protective green cases and 1 intentional new-`Committed` live-session RED; the Activity filter is 5 guardrail + 1 authority-scope + 1 provider-fold-harness RED, all currently RED including the harness. T029c may change only `src/Elsa/Workflows/Runtime/Services/Coalescing/{CoalescingRuntimeCheckpointCommitStore.cs,RuntimeCoalescingSession.cs}`; fusion driver, committer, policy, providers, Evidence, and public contracts are excluded. No Evidence or provider branch is an acceptable reconciliation mechanism.
 Independent final review: **PASS**, with no finding; control-room approval: **PASS**. Evidence: root slice **38/38**;
 full Runtime **1830/1831**, with only the clean-baseline T029e RED; no T027 regression; full Groundwork remains
 **844/853** with nine known pre-T029 REDs. T029e owned the live-carrier RED and was deliberately kept separate from
