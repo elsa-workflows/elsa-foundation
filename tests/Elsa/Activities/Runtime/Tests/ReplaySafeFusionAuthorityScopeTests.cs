@@ -35,6 +35,7 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
     {
         var observations = new AuthorityObservationSink();
         var boundaryCrash = new ArmedPostCommitBoundaryCrash();
+        var physicalFolds = new PhysicalFoldObserver();
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithCoalescing()
@@ -47,7 +48,7 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
                 });
                 services.AddSingleton(observations);
                 services.AddScoped<IRuntimeCheckpointCommitEnricher, AmbientAuthorityObservingEnricher>();
-                DecorateCheckpointStoreWithBoundaryCrash(services, boundaryCrash);
+                DecorateCheckpointStoreWithBoundaryCrash(services, boundaryCrash, physicalFolds);
             })
             .Build(Enumerable.Range(0, 12).Select(index => $"actexec-{index}"));
 
@@ -66,6 +67,12 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
             $"Expected the outer leaf and its nested ReplaySafe successor to fuse, saw {diagnostics.FusedSpans} spans.");
         Assert.True(diagnostics.InlineCascadeDispatches > 0,
             $"Expected the real D2 completion pump to dispatch nested work inline, saw {diagnostics.InlineCascadeDispatches} dispatches.");
+
+        // T028 RED: a non-zero fold count alone can be a one-member compatibility flush. The durable scheduler
+        // continuation handoff needs a real multi-member provider fold before the D2 completion pump is accepted as
+        // preserving the outer D1 authority. T029 owns the production behavior that makes this true.
+        Assert.True(physicalFolds.MaximumMemberCount > 1,
+            $"Expected a physical prepared fold with more than one member, saw {physicalFolds.MaximumMemberCount}.");
 
         var relevant = observations.Snapshot()
             .Where(item => item.ExecutableNodeId is FirstSuccessorNodeId or NestedSuccessorNodeId)
@@ -104,7 +111,8 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
 
     private static void DecorateCheckpointStoreWithBoundaryCrash(
         IServiceCollection services,
-        ArmedPostCommitBoundaryCrash boundaryCrash)
+        ArmedPostCommitBoundaryCrash boundaryCrash,
+        PhysicalFoldObserver physicalFolds)
     {
         var descriptor = services.Last(item => item.ServiceType == typeof(IRuntimeCheckpointCommitStore));
         services.Remove(descriptor);
@@ -114,7 +122,8 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
                 (IRuntimeCheckpointCommitStore)(descriptor.ImplementationInstance
                     ?? descriptor.ImplementationFactory?.Invoke(serviceProvider)
                     ?? ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType!)),
-                boundaryCrash),
+                boundaryCrash,
+                physicalFolds),
             descriptor.Lifetime));
     }
 
@@ -128,7 +137,20 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
         {
             await DeliverPendingOutboxAsync(harness.Services);
             if (await FindOuterLeafScheduleAsync(harness.Services) is { } staged)
+            {
+                // Normal outbox redrive is idempotent: processing the same durable delivery surface again must not
+                // create a second ScheduleActivity work item before the D2 pump takes over.
+                await DeliverPendingOutboxAsync(harness.Services);
+                var pending = await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                    .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId));
+                Assert.Single(pending, item =>
+                    item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
+                    item.Payload is { } payload &&
+                    StringComparer.Ordinal.Equals(
+                        payload.Deserialize<RuntimeScheduleActivityCommandPayload>()?.ExecutableNodeId,
+                        FirstSuccessorNodeId));
                 return staged;
+            }
 
             await Assert.ThrowsAsync<OperationCanceledException>(() =>
                 ResolveResumptionService(harness.Services)
@@ -325,9 +347,30 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
         public void Disarm() => Interlocked.Exchange(ref _armed, 0);
     }
 
+    private sealed class PhysicalFoldObserver
+    {
+        private int _maximumMemberCount;
+
+        public int MaximumMemberCount => Volatile.Read(ref _maximumMemberCount);
+
+        public void Record(RuntimeCheckpointPreparedFoldRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            var current = MaximumMemberCount;
+            while (request.Members.Count > current)
+            {
+                var observed = Interlocked.CompareExchange(ref _maximumMemberCount, request.Members.Count, current);
+                if (observed == current)
+                    return;
+                current = observed;
+            }
+        }
+    }
+
     private sealed class PostCommitBoundaryCrashStore(
         IRuntimeCheckpointCommitStore inner,
-        ArmedPostCommitBoundaryCrash boundaryCrash) :
+        ArmedPostCommitBoundaryCrash boundaryCrash,
+        PhysicalFoldObserver physicalFolds) :
         IRuntimeCheckpointCommitStore,
         IRuntimeCheckpointPreparedLedgerStore
     {
@@ -372,9 +415,8 @@ public sealed class ReplaySafeFusionAuthorityScopeTests
             RuntimeCheckpointPreparedFoldRequest request,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(request);
-            cancellationToken.ThrowIfCancellationRequested();
-            throw new NotSupportedException();
+            physicalFolds.Record(request);
+            return PreparedLedger.CommitPreparedFoldAsync(request, cancellationToken);
         }
 
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(

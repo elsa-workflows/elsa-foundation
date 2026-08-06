@@ -682,6 +682,265 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             workflowExecutionId: workflowExecutionId)));
     }
 
+    // T028 RED: an otherwise honest Immediate boundary may retain same-drain locality only when every committed
+    // outbox row is an EnqueueSchedulerWork continuation and the execution context is empty and unchanged. The
+    // boundary must be durable first, then its exact Pending rows move into the existing overlay; no new dispatcher
+    // path or synthetic work item is allowed.
+    [Fact]
+    public async Task QualifyingImmediateSchedulerContinuation_ImportsExactPendingRowsIntoTheActiveOverlay()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-continuation");
+        var boundary = fixture.NewQualifyingBoundary(1, "one", "two");
+        var expectedIds = boundary.StateChanges.PostCommitOutbox.Select(change => change.StateId).Order().ToArray();
+        var expectedWorkItemIds = boundary.PostCommitIntents
+            .Select(intent => intent.MaterializedSchedulerWorkItem!.WorkItemId)
+            .Order()
+            .ToArray();
+
+        var result = await fixture.CommitAsync(boundary);
+
+        Assert.Equal(RuntimeCheckpointCommitStoreStatus.Committed, result.Status);
+        var durableRows = await fixture.InnerStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+            Now.AddMinutes(1),
+            10,
+            fixture.WorkflowExecutionId));
+        Assert.Equal(expectedIds, durableRows.Select(item => item.OutboxItemId).Order());
+        Assert.All(durableRows, item => Assert.Equal(RuntimePostCommitOutboxStatus.Pending, item.Status));
+        Assert.Empty(await fixture.InnerQueue.ListAllAsync(new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId)));
+
+        // Intentional T028 RED: T029 must keep the existing session alive and move exactly these already durable
+        // rows into its outbox/scheduler overlay. T027 correctly leaves a normal Immediate boundary terminal.
+        Assert.True(fixture.Session.IsActive);
+        Assert.True(fixture.Session.TryGetActivity("actexec-continuation", out var activity, out var tombstoned));
+        Assert.False(tombstoned);
+        Assert.Equal(ActivityExecutionStatus.Running, activity!.Status);
+        Assert.All(expectedIds, id => Assert.True(fixture.Session.IsOutboxDurablyPersisted(id)));
+        Assert.Equal(expectedIds, fixture.Session.GetDeliverableOutbox(new RuntimePostCommitOutboxQuery(
+            Now.AddMinutes(1),
+            10,
+            fixture.WorkflowExecutionId)).Select(item => item.OutboxItemId).Order());
+
+        await fixture.ProcessOverlayAsync();
+        await fixture.ProcessOverlayAsync();
+
+        var overlayItems = await fixture.ListOverlayAsync();
+        Assert.Equal(expectedWorkItemIds, overlayItems
+            .Where(item => item.WorkItemId != fixture.Source.WorkItemId)
+            .Select(item => item.WorkItemId)
+            .Order());
+        foreach (var id in expectedIds)
+            Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(id))!.Status);
+
+        await fixture.CommitAsync(NewEmptyCommit(fixture.WorkflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted));
+        foreach (var id in expectedIds)
+            Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(id))!.Status);
+    }
+
+    // T028 RED: inline delivery is an optimization inside an active coalescing drain, not a durable acknowledgement.
+    // The live overlay is not a durable acknowledgement. Its row stays Pending until a later successful
+    // checkpoint/fold incorporates the inline effect and reconciliation runs.
+    [Fact]
+    public async Task QualifyingImmediateSchedulerContinuation_DelaysDeliveredAcknowledgementUntilLaterFold()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-continuation-delivery");
+        var boundary = fixture.NewQualifyingBoundary(1, "only");
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+        var continuation = Assert.Single(boundary.PostCommitIntents).MaterializedSchedulerWorkItem!;
+
+        await fixture.CommitAsync(boundary);
+
+        // Crash-before-inline-dispatch: the durable row is already a normal Pending redrive candidate.
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+        Assert.True(fixture.Session.OwnsOutboxItem(outboxItemId));
+
+        // Crash-after-inline-dispatch-before-fold: the normal processor/dispatcher enqueues the real serialized work
+        // through the coalescing queue, while its Delivered mark remains an overlay fact until a later fold.
+        await fixture.ProcessOverlayAsync();
+        Assert.Equal([continuation.WorkItemId], (await fixture.ListOverlayAsync())
+            .Where(item => item.WorkItemId != fixture.Source.WorkItemId)
+            .Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        await fixture.CommitAsync(NewEmptyCommit(fixture.WorkflowExecutionId, 3, RuntimeCheckpointNames.WorkflowCompleted));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task CrashBeforeInlineDispatch_OrdinaryDurableRedrive_QueuesOneItemAndAcknowledgesAfterDurableEnqueue()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-crash-before-inline");
+        var boundary = fixture.NewQualifyingBoundary(1, "redrive");
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+        var continuation = Assert.Single(boundary.PostCommitIntents).MaterializedSchedulerWorkItem!;
+
+        await fixture.CommitAsync(boundary);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        // The original drain/session is gone before it can deliver. A clean processor uses the ordinary durable
+        // outbox/queue path and the real scheduler dispatcher; it must not need a direct handler invocation.
+        var redrive = CreateOrdinaryDurableRedrive(fixture);
+        var firstSweep = await redrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+
+        Assert.Equal(1, firstSweep.AttemptedCount);
+        Assert.Equal(1, firstSweep.DeliveredCount);
+
+        Assert.Equal([continuation.WorkItemId], (await fixture.InnerQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        var secondSweep = await redrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+        Assert.Equal(0, secondSweep.AttemptedCount);
+        Assert.Equal([continuation.WorkItemId], (await fixture.InnerQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task CrashAfterInlineDispatchBeforeFold_OrdinaryDurableRedrive_ConvergesWithoutDuplicateWork()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-crash-after-inline");
+        var boundary = fixture.NewQualifyingBoundary(1, "redrive");
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+        var continuation = Assert.Single(boundary.PostCommitIntents).MaterializedSchedulerWorkItem!;
+
+        await fixture.CommitAsync(boundary);
+        await fixture.ProcessOverlayAsync();
+
+        Assert.Equal([continuation.WorkItemId], (await fixture.ListOverlayAsync())
+            .Where(item => item.WorkItemId != fixture.Source.WorkItemId)
+            .Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        // Simulate process loss after the overlay dispatch but before another checkpoint can fold/reconcile it.
+        // The first ordinary delivery reaches the durable queue, then loses the acknowledgement. The original Pending
+        // row is the only recoverable durable state; scheduler enqueue idempotency makes the subsequent redrive safe.
+        var interruptedRedrive = new RuntimePostCommitOutboxProcessor(
+            new ThrowOnceOnDeliveryResultOutboxStore(fixture.InnerStore),
+            new RuntimeSchedulerPostCommitIntentDispatcher(fixture.InnerQueue),
+            TimeProvider.System);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interruptedRedrive.ProcessAsync(
+            new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId)).AsTask());
+
+        Assert.Equal([continuation.WorkItemId], (await fixture.InnerQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        var redrive = CreateOrdinaryDurableRedrive(fixture);
+        var firstSweep = await redrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+
+        Assert.Equal(1, firstSweep.AttemptedCount);
+        Assert.Equal(1, firstSweep.DeliveredCount);
+        Assert.Equal([continuation.WorkItemId], (await fixture.InnerQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+
+        var secondSweep = await redrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+        Assert.Equal(0, secondSweep.AttemptedCount);
+        Assert.Equal([continuation.WorkItemId], (await fixture.InnerQueue.ListAllAsync(
+            new RuntimeSchedulerWorkQuery(fixture.WorkflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
+    [Theory]
+    [InlineData("mixed")]
+    [InlineData("external")]
+    [InlineData("no-continuation")]
+    public async Task NonQualifyingImmediateBoundaries_DeactivateInsteadOfWideningContinuationEligibility(string boundaryKind)
+    {
+        const string workflowExecutionId = "parent-dispatch";
+        var innerStore = RuntimeCheckpointTestStores.Create();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions(),
+            innerOutboxStore: innerStore);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var boundary = boundaryKind switch
+        {
+            "mixed" => NewMixedSchedulerAndExternalBoundaryCommit(workflowExecutionId, 1),
+            "external" => NewDispatchBoundaryCommit(),
+            "no-continuation" => NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
+            _ => throw new ArgumentOutOfRangeException(nameof(boundaryKind))
+        };
+
+        await CommitPreparedThroughStoreAsync(store, boundary, new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.False(session.IsActive);
+    }
+
+    [Theory]
+    [InlineData("context-only")]
+    [InlineData("context-mutating")]
+    public async Task ContextBearingImmediateBoundaries_DeactivateInsteadOfRetainingTheContinuationSession(string boundaryKind)
+    {
+        const string workflowExecutionId = "wfexec-context-boundary";
+        var innerStore = RuntimeCheckpointTestStores.Create();
+        var requestedContext = new RuntimeExecutionContextSnapshot(
+            RuntimeExecutionContextSnapshot.CurrentVersion,
+            new Dictionary<string, string> { ["continuation"] = boundaryKind });
+
+        if (boundaryKind == "context-mutating")
+        {
+            await CommitPreparedThroughStoreAsync(
+                innerStore,
+                NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityStarted),
+                new(RuntimeCheckpointPersistenceMode.Immediate),
+                new RuntimeExecutionContextSnapshot(
+                    RuntimeExecutionContextSnapshot.CurrentVersion,
+                    new Dictionary<string, string> { ["continuation"] = "before" }));
+        }
+
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions(),
+            innerOutboxStore: innerStore);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var source = NewSchedulerWorkItem(workflowExecutionId, $"source-{boundaryKind}", WorkflowExecutionCommandKind.ScheduleActivity);
+
+        await CommitPreparedThroughStoreAsync(
+            store,
+            NewSchedulerContinuationBoundaryCommit(source, 2, boundaryKind),
+            new(RuntimeCheckpointPersistenceMode.Immediate),
+            requestedContext);
+
+        Assert.False(session.IsActive);
+    }
+
+    [Fact]
+    public async Task FailedContinuationDelivery_DeactivatesIntoOrdinaryDurableProcessing()
+    {
+        await using var fixture = await SchedulerContinuationFixture.CreateAsync("wfexec-failed-delivery");
+        var boundary = fixture.NewQualifyingBoundary(1, "retryable");
+        var outboxItemId = Assert.Single(boundary.StateChanges.PostCommitOutbox).StateId;
+        await fixture.CommitAsync(boundary);
+        Assert.True(fixture.Session.IsActive);
+
+        var failingProcessor = new RuntimePostCommitOutboxProcessor(
+            fixture.OutboxStore,
+            ThrowingSchedulerIntentDispatcher.Instance,
+            TimeProvider.System);
+        using (fixture.Accessor.Push(fixture.Session))
+            await failingProcessor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable,
+            (await fixture.OutboxStore.FindAsync(outboxItemId))!.Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+        // After T029 retains the qualifying session, the retryable overlay delivery itself must deactivate it so that
+        // the durable row becomes the ordinary processor's authority; a terminal checkpoint is not that transition.
+        Assert.False(fixture.Session.IsActive);
+
+        var ordinaryRedrive = CreateOrdinaryDurableRedrive(fixture);
+        var recovered = await ordinaryRedrive.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, fixture.WorkflowExecutionId));
+        Assert.Equal(1, recovered.AttemptedCount);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await fixture.InnerStore.FindAsync(outboxItemId))!.Status);
+    }
+
     [Fact]
     public async Task Coalescing_FlushesDispatchRecordAndChildStartOutboxAtomicallyAfterBufferedWork()
     {
@@ -718,6 +977,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.False(session.IsActive);
     }
 
+    private static RuntimePostCommitOutboxProcessor CreateOrdinaryDurableRedrive(SchedulerContinuationFixture fixture) =>
+        new(
+            fixture.InnerStore,
+            new RuntimeSchedulerPostCommitIntentDispatcher(fixture.InnerQueue),
+            TimeProvider.System);
+
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State)> DriveAsync(
         bool coalescing,
         WorkflowExecutableCheckpointCadence? authoredCadence = null,
@@ -750,11 +1015,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     private static async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedThroughStoreAsync(
         IRuntimeCheckpointPreparedLedgerStore store,
         RuntimeCheckpointCommit commit,
-        RuntimeCheckpointPersistenceDecision decision)
+        RuntimeCheckpointPersistenceDecision decision,
+        RuntimeExecutionContextSnapshot? requestedExecutionContext = null)
     {
         var preparation = await store.PrepareAsync(RuntimeCheckpointPrepareRequest.From(commit) with
         {
-            InitialPersistenceMode = decision.Mode
+            InitialPersistenceMode = decision.Mode,
+            RequestedExecutionContext = requestedExecutionContext ?? RuntimeExecutionContextSnapshot.Empty
         });
         var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
         var preparedCommit = commit with
@@ -902,6 +1169,62 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         };
     }
 
+    private static RuntimeCheckpointCommit NewSchedulerContinuationBoundaryCommit(
+        RuntimeSchedulerWorkItem source,
+        int checkpoint,
+        params string[] suffixes)
+    {
+        var continuations = suffixes.Select(suffix => NewSchedulerWorkItem(
+            source.WorkflowExecutionId,
+            $"continuation-{suffix}",
+            WorkflowExecutionCommandKind.StartActivity)).ToArray();
+        var intents = continuations.Select(workItem =>
+            SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                source,
+                "actexec-continuation",
+                workItem,
+                Now.AddTicks(checkpoint))).ToArray();
+        var commit = NewEmptyCommit(source.WorkflowExecutionId, checkpoint, RuntimeCheckpointNames.ActivityCompleted) with
+        {
+            PostCommitIntents = intents,
+            StateChanges = ActivityUpsert(NewRunningActivityState(source.WorkflowExecutionId, "actexec-continuation"))
+        };
+
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit))
+        };
+    }
+
+    private static RuntimeCheckpointCommit NewMixedSchedulerAndExternalBoundaryCommit(
+        string workflowExecutionId,
+        int checkpoint)
+    {
+        var source = NewSchedulerWorkItem(workflowExecutionId, "source-mixed", WorkflowExecutionCommandKind.ScheduleActivity);
+        var continuation = NewSchedulerWorkItem(workflowExecutionId, "continuation-mixed", WorkflowExecutionCommandKind.StartActivity);
+        var commit = NewEmptyCommit(workflowExecutionId, checkpoint, RuntimeCheckpointNames.ActivityCompleted) with
+        {
+            PostCommitIntents =
+            [
+                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(source, "actexec-continuation", continuation, Now.AddTicks(checkpoint)),
+                new RuntimePostCommitIntent(
+                    "intent-mixed-external",
+                    workflowExecutionId,
+                    "test.external.side-effect",
+                    Now.AddTicks(checkpoint),
+                    activityExecutionId: null,
+                    idempotencyKey: $"{workflowExecutionId}:mixed:external",
+                    JsonSerializer.SerializeToElement(new { successor = "external" }))
+            ]
+        };
+
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit)),
+            PostCommitIntents = []
+        };
+    }
+
     private static RuntimeCheckpointCommit NewDispatchBoundaryCommit()
     {
         var identity = new WorkflowDispatchIdentity("parent-dispatch", "activity-dispatch");
@@ -1018,10 +1341,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     private static ActivityExecutionState NewRunningActivityState() =>
+        NewRunningActivityState("wfexec-1", "actexec-1");
+
+    private static ActivityExecutionState NewRunningActivityState(string workflowExecutionId, string activityExecutionId) =>
         new(
             Execution: new ActivityExecution(
-                ActivityExecutionId: "actexec-1",
-                WorkflowExecutionId: "wfexec-1",
+                ActivityExecutionId: activityExecutionId,
+                WorkflowExecutionId: workflowExecutionId,
                 ExecutableNodeId: "node-wait",
                 AuthoredActivityId: "authored-node-wait",
                 ActivityType: "test/activity",
@@ -1041,6 +1367,21 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             FaultCount: 0,
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
+
+    private static RuntimeSchedulerWorkItem NewSchedulerWorkItem(
+        string workflowExecutionId,
+        string workItemId,
+        WorkflowExecutionCommandKind commandKind) =>
+        new(
+            workItemId,
+            workflowExecutionId,
+            $"command-{workItemId}",
+            commandKind,
+            $"envelope-{workItemId}",
+            $"{workflowExecutionId}:{workItemId}",
+            Now,
+            Now,
+            sequence: 1);
 
     private static ActivityExecutionState Activity(string activityExecutionId) =>
         NewRunningActivityState() with
@@ -1133,6 +1474,109 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             RuntimePostCommitOutboxProcessRequest request,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Injected crash before quiescence flush.");
+    }
+
+    private sealed class SchedulerContinuationFixture : IAsyncDisposable
+    {
+        private SchedulerContinuationFixture(string workflowExecutionId)
+        {
+            WorkflowExecutionId = workflowExecutionId;
+            InnerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+            InnerStore = RuntimeCheckpointTestStores.Create(schedulerWorkQueue: InnerQueue);
+            Accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+            Session = new RuntimeCoalescingSession(
+                workflowExecutionId,
+                InnerQueue,
+                new CoalescingRuntimeCheckpointPersistenceOptions(),
+                InnerStore);
+            Queue = new CoalescingWorkflowSchedulerWorkQueue(
+                new CoalescingInner<IWorkflowSchedulerWorkQueue>(InnerQueue),
+                Accessor);
+            OutboxStore = new CoalescingRuntimePostCommitOutboxStore(
+                new CoalescingInner<IRuntimePostCommitOutboxStore>(InnerStore),
+                Accessor);
+            CheckpointStore = new CoalescingRuntimeCheckpointCommitStore(
+                new CoalescingInner<IRuntimeCheckpointCommitStore>(InnerStore),
+                Accessor);
+            Processor = new RuntimePostCommitOutboxProcessor(
+                OutboxStore,
+                new RuntimeSchedulerPostCommitIntentDispatcher(Queue),
+                TimeProvider.System);
+            Source = NewSchedulerWorkItem(workflowExecutionId, "source-continuation", WorkflowExecutionCommandKind.ScheduleActivity);
+        }
+
+        public string WorkflowExecutionId { get; }
+        public InMemoryWorkflowSchedulerWorkQueue InnerQueue { get; }
+        public InMemoryRuntimeCheckpointCommitStore InnerStore { get; }
+        public AsyncLocalRuntimeCoalescingSessionAccessor Accessor { get; }
+        public RuntimeCoalescingSession Session { get; }
+        public CoalescingWorkflowSchedulerWorkQueue Queue { get; }
+        public CoalescingRuntimePostCommitOutboxStore OutboxStore { get; }
+        public CoalescingRuntimeCheckpointCommitStore CheckpointStore { get; }
+        public RuntimePostCommitOutboxProcessor Processor { get; }
+        public RuntimeSchedulerWorkItem Source { get; }
+
+        public static async ValueTask<SchedulerContinuationFixture> CreateAsync(string workflowExecutionId)
+        {
+            var fixture = new SchedulerContinuationFixture(workflowExecutionId);
+            await fixture.InnerQueue.EnqueueAsync(fixture.Source);
+            using (fixture.Accessor.Push(fixture.Session))
+                Assert.NotNull(await fixture.Queue.ClaimAsync(NewClaimRequest(workflowExecutionId)));
+            return fixture;
+        }
+
+        public RuntimeCheckpointCommit NewQualifyingBoundary(int checkpoint, params string[] suffixes) =>
+            NewSchedulerContinuationBoundaryCommit(Source, checkpoint, suffixes);
+
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit)
+        {
+            using var scope = Accessor.Push(Session);
+            return await CommitPreparedThroughStoreAsync(
+                CheckpointStore,
+                commit,
+                new(RuntimeCheckpointPersistenceMode.Immediate));
+        }
+
+        public async ValueTask ProcessOverlayAsync()
+        {
+            using var scope = Accessor.Push(Session);
+            await Processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10, WorkflowExecutionId));
+        }
+
+        public async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListOverlayAsync()
+        {
+            using var scope = Accessor.Push(Session);
+            return (await Queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class ThrowingSchedulerIntentDispatcher : IRuntimePostCommitIntentDispatcher
+    {
+        public static readonly ThrowingSchedulerIntentDispatcher Instance = new();
+
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException(new InvalidOperationException("Injected retryable scheduler continuation delivery failure."));
+    }
+
+    private sealed class ThrowOnceOnDeliveryResultOutboxStore(IRuntimePostCommitOutboxStore inner) : IRuntimePostCommitOutboxStore
+    {
+        private int _remainingFailures = 1;
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
+            RuntimePostCommitOutboxQuery query,
+            CancellationToken cancellationToken = default) => inner.GetDeliverableAsync(query, cancellationToken);
+
+        public ValueTask RecordDeliveryResultAsync(
+            RuntimePostCommitOutboxDeliveryResult result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref _remainingFailures, 0) == 1)
+                return ValueTask.FromException(new InvalidOperationException("Injected outbox acknowledgement loss after durable dispatch."));
+
+            return inner.RecordDeliveryResultAsync(result, cancellationToken);
+        }
     }
 
     private sealed class FixedCoalescingSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor
