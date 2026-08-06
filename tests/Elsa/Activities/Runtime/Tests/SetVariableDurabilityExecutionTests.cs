@@ -363,6 +363,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var executableStore = new InMemoryWorkflowExecutableStore();
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         var activityStore = new InMemoryActivityExecutionStateStore();
+        var durableValueStore = new InMemoryDurableValueStateStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
         await executableStore.SaveAsync(executable);
@@ -372,6 +373,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var commitStore = new InMemoryRuntimeCheckpointCommitStore(
             workflowExecutionStateStore: workflowStore,
             activityExecutionStateStore: activityStore,
+            durableValueStateStore: durableValueStore,
             activityExecutionInspectionWriter: inspectionStore,
             rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
@@ -379,7 +381,7 @@ public sealed class SetVariableDurabilityExecutionTests
             workflowStore,
             activityStore,
             new RuntimeInputBindingResolver(),
-            new InMemoryDurableValueStateStore(),
+            durableValueStore,
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FixedTimeProvider(Now),
             portableExpressionEvaluator: portableExpressionEvaluator);

@@ -98,7 +98,11 @@ public sealed class FlowchartExecutionEngineTests
         // Simulate a worker crash after the atomic commit but before child-intent delivery. Replaying the
         // same logical commit on a replacement worker recovers the same single outbox item; the original
         // worker's lease fence is deliberately not part of replay identity.
-        var replayStore = new InMemoryRuntimeCheckpointCommitStore();
+        var replayActivityStateStore = new InMemoryActivityExecutionStateStore();
+        var replayInspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var replayStore = new InMemoryRuntimeCheckpointCommitStore(
+            activityExecutionStateStore: replayActivityStateStore,
+            activityExecutionInspectionWriter: replayInspectionStore);
         var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), replayStore);
         var failoverCommit = atomicCommit with { ExpectedFence = null };
         var first = await committer.CommitAsync(failoverCommit);

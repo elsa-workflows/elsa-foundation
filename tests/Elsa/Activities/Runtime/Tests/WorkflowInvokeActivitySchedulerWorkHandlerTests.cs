@@ -69,8 +69,10 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await _executableStore.SaveAsync(NewTypedExecutable());
         await _activityStateStore.SaveAsync(NewTypedRunningState());
         await using var provider = NewProvider(activator, includeInspection: false);
+        var handler = NewHandler(provider);
+        var workItem = NewInvokeWorkItem(NewIdentity());
 
-        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+        await handler.HandleAsync(workItem);
 
         var commit = Assert.Single(
             _checkpointWriter.ListCommits(),
@@ -81,11 +83,11 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Single(commit.PostCommitIntents);
         Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
 
-        var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
         var commitCount = _checkpointWriter.ListCommits().Count;
-        var replay = await committer.CommitAsync(commit);
-        Assert.Single(replay.PendingPostCommitWorkIds);
+        var intentCount = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count();
+        await handler.HandleAsync(workItem);
         Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
+        Assert.Equal(intentCount, _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count());
     }
 
     [Fact]
@@ -578,7 +580,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
 
-        await handler.HandleAsync(NewParentCallbackWorkItem("callback-work-newer", "command-newer"));
+        var workItem = NewParentCallbackWorkItem("callback-work-newer", "command-newer");
+        await handler.HandleAsync(workItem);
 
         var commit = Assert.Single(
             _checkpointWriter.ListCommits(),
@@ -589,11 +592,11 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Single(commit.PostCommitIntents);
         Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
 
-        var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
         var commitCount = _checkpointWriter.ListCommits().Count;
-        var replay = await committer.CommitAsync(commit);
-        Assert.Single(replay.PendingPostCommitWorkIds);
+        var intentCount = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count();
+        await handler.HandleAsync(workItem);
         Assert.Equal(commitCount, _checkpointWriter.ListCommits().Count);
+        Assert.Equal(intentCount, _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).Count());
     }
 
     [Fact]

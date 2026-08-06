@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -20,9 +21,11 @@ public sealed class EnqueuedWorkItemRecorder
 /// enqueued work item into an <see cref="EnqueuedWorkItemRecorder"/> before delegating. Used by the #989
 /// metadata-hygiene pin to inspect the <c>CommandMetadata</c> of work items derived from a fault evaluation.
 /// </summary>
-internal sealed class RecordingSchedulerWorkQueue(IWorkflowSchedulerWorkQueue inner, EnqueuedWorkItemRecorder recorder) : IWorkflowSchedulerWorkQueue
+internal sealed class RecordingSchedulerWorkQueue(IWorkflowSchedulerWorkQueue inner, EnqueuedWorkItemRecorder recorder) : IWorkflowSchedulerWorkQueue, IInMemoryCheckpointTransactionSource
 {
     public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
+
+    IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() => [inner];
 
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
