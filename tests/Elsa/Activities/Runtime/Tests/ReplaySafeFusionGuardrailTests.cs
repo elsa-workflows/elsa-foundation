@@ -100,6 +100,38 @@ public sealed class ReplaySafeFusionGuardrailTests
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
     }
 
+    [Fact]
+    public async Task MultiOutcomeBranch_EnabledVersusDisabled_HasCanonicalProposalOrder()
+    {
+        var enabled = await DriveAsync(BuildReplaySafeBranchShape, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildReplaySafeBranchShape, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+
+        var enabledCommitIds = enabled.ProposalTrace.Select(proposal => proposal.CommitId).ToArray();
+        var disabledCommitIds = disabled.ProposalTrace.Select(proposal => proposal.CommitId).ToArray();
+        Assert.Equal(24, enabledCommitIds.Length);
+        Assert.Equal(enabledCommitIds.Length, enabledCommitIds.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(disabledCommitIds.Length, disabledCommitIds.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(disabledCommitIds.Length, enabledCommitIds.Length);
+        Assert.Equal(
+            disabledCommitIds.OrderBy(commitId => commitId, StringComparer.Ordinal),
+            enabledCommitIds.OrderBy(commitId => commitId, StringComparer.Ordinal));
+
+        var enabledRightSchedule = Assert.Single(enabled.ProposalTrace, IsIndependentRightBranchSchedule);
+        var disabledRightSchedule = Assert.Single(disabled.ProposalTrace, IsIndependentRightBranchSchedule);
+        Assert.Equal(disabledRightSchedule.CommitId, enabledRightSchedule.CommitId);
+        Assert.Equal(disabledRightSchedule.CheckpointId, enabledRightSchedule.CheckpointId);
+        Assert.Equal(disabledRightSchedule.CheckpointName, enabledRightSchedule.CheckpointName);
+        Assert.Equal(16, enabledRightSchedule.WorkflowCheckpointOrder);
+        Assert.Equal(13, disabledRightSchedule.WorkflowCheckpointOrder);
+
+        // Intentional RED: fusion must eventually preserve the complete canonical proposal trace, including durable
+        // workflow-checkpoint order. Do not normalize or omit that order to make this assertion pass.
+        Assert.Equal(disabled.ProposalTrace, enabled.ProposalTrace);
+    }
+
     // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the D2 pump MUST
     // hand it back to the discrete cascade (ADR 0047 resolution #1) — proven via the join-fallback counter — and the
     // committed durable state must still be byte-identical.
@@ -206,11 +238,29 @@ public sealed class ReplaySafeFusionGuardrailTests
             Completed: run.WorkflowState?.Status == WorkflowExecutionStatus.Completed,
             CommitFingerprint: FingerprintCommits(commitStore.ListCommits()),
             StateFingerprint: FingerprintStates(run),
+            ProposalTrace: CaptureProposalTrace(commitStore.ListCommits()),
             FusedSpans: diagnostics.FusedSpans,
             Dispatches: diagnostics.Dispatches,
             InlineCascadeDispatches: diagnostics.InlineCascadeDispatches,
             CascadeJoinFallbacks: diagnostics.CascadeJoinFallbacks);
     }
+
+    private static IReadOnlyList<DurableCheckpointProposal> CaptureProposalTrace(
+        IReadOnlyCollection<RuntimeCheckpointCommitRecord> commits) =>
+        commits
+            .Select(record => new DurableCheckpointProposal(
+                record.Commit.CommitId,
+                record.Commit.Checkpoint.CheckpointId,
+                record.Commit.Checkpoint.Name,
+                record.Commit.Checkpoint.Provenance?.WorkflowCheckpointOrder
+                ?? throw new InvalidOperationException($"Commit '{record.Commit.CommitId}' has no durable checkpoint order.")))
+            .OrderBy(proposal => proposal.WorkflowCheckpointOrder)
+            .ThenBy(proposal => proposal.CommitId, StringComparer.Ordinal)
+            .ToArray();
+
+    private static bool IsIndependentRightBranchSchedule(DurableCheckpointProposal proposal) =>
+        proposal.CommitId.Contains(":schedule-child:node-right:", StringComparison.Ordinal) &&
+        proposal.CommitId.Contains(":activity-scheduled:", StringComparison.Ordinal);
 
     private static string FingerprintCommits(IReadOnlyCollection<RuntimeCheckpointCommitRecord> commits) =>
         Normalize(string.Join(
@@ -363,10 +413,17 @@ public sealed class ReplaySafeFusionGuardrailTests
         bool Completed,
         string CommitFingerprint,
         string StateFingerprint,
+        IReadOnlyList<DurableCheckpointProposal> ProposalTrace,
         long FusedSpans,
         long Dispatches,
         long InlineCascadeDispatches,
         long CascadeJoinFallbacks);
+
+    private sealed record DurableCheckpointProposal(
+        string CommitId,
+        string CheckpointId,
+        string CheckpointName,
+        long WorkflowCheckpointOrder);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
