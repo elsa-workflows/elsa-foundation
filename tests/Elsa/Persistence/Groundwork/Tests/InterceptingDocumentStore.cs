@@ -1,77 +1,28 @@
-using Groundwork.Core.Queries;
-using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
-internal sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore, IBoundedDocumentStore
+internal sealed class InterceptingDocumentStore(IDocumentStore inner) : DelegatingDocumentStore(inner)
 {
     public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
     public Func<DeleteDocumentRequest, Task>? OnBeforeDelete { get; set; }
     public Func<DocumentCommitScope, Task>? OnBeforeBegin { get; set; }
-    public DocumentStoreAccess Access => inner.Access;
-    public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
 
-    public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+    public override async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
     {
-        if (OnBeforeSave is { } hook)
-        {
-            OnBeforeSave = null;
-            await hook(request);
-        }
-
-        return await inner.SaveAsync(request, cancellationToken);
+        await RunOnBeforeSaveAsync(request);
+        return await base.SaveAsync(request, cancellationToken);
     }
 
-    public async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
+    public override async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
-        if (OnBeforeDelete is { } hook)
-        {
-            OnBeforeDelete = null;
-            await hook(request);
-        }
-
-        return await inner.DeleteAsync(request, cancellationToken);
+        await RunOnBeforeDeleteAsync(request);
+        return await base.DeleteAsync(request, cancellationToken);
     }
 
-    public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-        inner.LoadAsync(documentKind, id, cancellationToken);
-
-    public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
-        inner.QueryAsync(query, cancellationToken);
-
-    public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner.QueryAsync(query, cancellationToken);
-
-    public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner.FirstOrDefaultAsync(query, cancellationToken);
-
-    public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner.AnyAsync(query, cancellationToken);
-
-    public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner is IBoundedDocumentStore boundedStore
-            ? boundedStore.QueryAsync(query, cancellationToken)
-            : throw new NotSupportedException();
-
-    public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner is IBoundedDocumentStore boundedStore
-            ? boundedStore.CountAsync(query, cancellationToken)
-            : throw new NotSupportedException();
-
-    public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner is IBoundedDocumentStore boundedStore
-            ? boundedStore.FirstOrDefaultAsync(query, cancellationToken)
-            : throw new NotSupportedException();
-
-    public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-        inner is IBoundedDocumentStore boundedStore
-            ? boundedStore.AnyAsync(query, cancellationToken)
-            : throw new NotSupportedException();
-
-    public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+    public override async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
     {
         if (OnBeforeBegin is { } hook)
         {
@@ -79,45 +30,40 @@ internal sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumen
             await hook(scope);
         }
 
-        return new InterceptingDocumentUnitOfWork(this, await inner.BeginAsync(scope, cancellationToken));
+        return new InterceptingDocumentUnitOfWork(this, await base.BeginAsync(scope, cancellationToken));
+    }
+
+    // Each hook is one-shot: it is cleared before it runs so a hook that itself writes cannot re-enter itself.
+    private async Task RunOnBeforeSaveAsync(SaveDocumentRequest request)
+    {
+        if (OnBeforeSave is not { } hook)
+            return;
+        OnBeforeSave = null;
+        await hook(request);
+    }
+
+    private async Task RunOnBeforeDeleteAsync(DeleteDocumentRequest request)
+    {
+        if (OnBeforeDelete is not { } hook)
+            return;
+        OnBeforeDelete = null;
+        await hook(request);
     }
 
     private sealed class InterceptingDocumentUnitOfWork(
         InterceptingDocumentStore owner,
-        IDocumentUnitOfWork innerUnitOfWork) : IDocumentUnitOfWork
+        IDocumentUnitOfWork innerUnitOfWork) : DelegatingDocumentUnitOfWork(innerUnitOfWork)
     {
-        public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
+        public override async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
         {
-            if (owner.OnBeforeSave is { } hook)
-            {
-                owner.OnBeforeSave = null;
-                await hook(request);
-            }
-
-            return await innerUnitOfWork.SaveAsync(request, cancellationToken);
+            await owner.RunOnBeforeSaveAsync(request);
+            return await base.SaveAsync(request, cancellationToken);
         }
 
-        public async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
+        public override async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
         {
-            if (owner.OnBeforeDelete is { } hook)
-            {
-                owner.OnBeforeDelete = null;
-                await hook(request);
-            }
-
-            return await innerUnitOfWork.DeleteAsync(request, cancellationToken);
+            await owner.RunOnBeforeDeleteAsync(request);
+            return await base.DeleteAsync(request, cancellationToken);
         }
-
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-            innerUnitOfWork.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            innerUnitOfWork.CommitAsync(cancellationToken);
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            innerUnitOfWork.RollbackAsync(cancellationToken);
-
-        public ValueTask DisposeAsync() =>
-            innerUnitOfWork.DisposeAsync();
     }
 }
