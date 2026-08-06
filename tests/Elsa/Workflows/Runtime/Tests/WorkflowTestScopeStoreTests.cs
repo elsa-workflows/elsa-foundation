@@ -13,6 +13,31 @@ public sealed class WorkflowTestScopeStoreTests
     private static readonly DateTimeOffset ClosedAt = CreatedAt.AddMinutes(10);
 
     [Fact]
+    public async Task Shared_checkpoint_state_gate_blocks_public_scope_reads_and_writes_until_release()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var store = new InMemoryWorkflowTestScopeStore(state);
+        var existing = NewScope("scope-existing");
+        await store.CreateAsync(existing, CreatedAt);
+        var gate = state.TransactionGate.Enter();
+        Task<WorkflowTestScopeRecord?> read;
+        Task<WorkflowTestScopeRecord> write;
+        using (ExecutionContext.SuppressFlow())
+        {
+            read = Task.Run(async () => await store.FindAsync(existing.ScopeId));
+            write = Task.Run(async () => await store.CreateAsync(NewScope("scope-new"), CreatedAt));
+        }
+        await Task.Delay(50);
+
+        Assert.False(read.IsCompleted);
+        Assert.False(write.IsCompleted);
+        gate.Dispose();
+
+        Assert.NotNull(await read.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal("scope-new", (await write.WaitAsync(TimeSpan.FromSeconds(2))).Scope.ScopeId);
+    }
+
+    [Fact]
     public async Task Create_is_idempotent_for_equal_context_and_rejects_conflicts()
     {
         var stores = NewStores();

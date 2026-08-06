@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -90,21 +91,119 @@ public static class RuntimeCheckpointCommitFingerprint
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
             };
 
+        object checkpoint = commit.Checkpoint.Provenance is null
+            ? new
+            {
+                commit.Checkpoint.CheckpointId,
+                commit.Checkpoint.Name,
+                commit.Checkpoint.WorkflowExecutionId,
+                commit.Checkpoint.OccurredAt,
+                commit.Checkpoint.ActivityExecutionIds,
+                commit.Checkpoint.Metadata
+            }
+            : commit.Checkpoint;
         var payload = new
         {
             commit.CommitId,
-            commit.Checkpoint,
+            Checkpoint = checkpoint,
             StateChanges = stateChanges,
             PostCommitIntents = commit.PostCommitIntents.OrderBy(x => x.IntentId, StringComparer.Ordinal).ToArray(),
             commit.Metadata
         };
+        return ComputeCanonicalHash(payload);
+    }
 
+    /// <summary>Computes the canonical identity of the raw proposal before store-assigned provenance is attached.</summary>
+    public static string ComputeInput(RuntimeCheckpointCommit commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        var rawCheckpoint = commit.Checkpoint with { Provenance = null };
+        return Compute(commit with { Checkpoint = rawCheckpoint });
+    }
+
+    /// <summary>Computes the canonical identity of every caller-supplied preparation field.</summary>
+    public static string ComputeInput(RuntimeCheckpointPrepareRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Commit);
+        ArgumentNullException.ThrowIfNull(request.RequestedExecutionContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationIdentity);
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(SerializeInputPayload(request))));
+    }
+
+    /// <summary>Computes the canonical authority of an atomic prepared-checkpoint fold.</summary>
+    public static string ComputePreparedFold(RuntimeCheckpointPreparedFoldRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        return ComputeCanonicalHash(new
+        {
+            Domain = "elsa.runtime.checkpoint.prepared-fold.v1",
+            request.WorkflowExecutionId,
+            request.MaxWorkflowCheckpointOrder,
+            Members = request.Members.Select(member => new
+            {
+                member.CommitId,
+                member.Token.LedgerToken,
+                member.WorkflowCheckpointOrder,
+                member.Token.CanonicalInputFingerprint,
+                member.Disposition,
+                CommitFingerprint = member.PreparedCommit is null
+                    ? null
+                    : Compute(member.PreparedCommit.Commit),
+                member.FailureCode,
+                member.FailureMessage
+            }).ToArray(),
+            FoldedStateFingerprint = Compute(new RuntimeCheckpointCommit(
+                "prepared-fold-state",
+                new RuntimeCheckpoint(
+                    "prepared-fold-state",
+                    "PreparedFold",
+                    request.WorkflowExecutionId,
+                    DateTimeOffset.UnixEpoch,
+                    [],
+                    new Dictionary<string, string>()),
+                request.FoldedStateChanges,
+                [],
+                new Dictionary<string, string>()))
+        });
+    }
+
+    /// <summary>Serializes the complete canonical raw preparation input for deterministic recovery.</summary>
+    public static string SerializeInputPayload(RuntimeCheckpointPrepareRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Commit);
+        ArgumentNullException.ThrowIfNull(request.RequestedExecutionContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationIdentity);
+
+        var rawCommit = request.Commit with
+        {
+            Checkpoint = request.Commit.Checkpoint with { Provenance = null },
+            ExpectedFence = null
+        };
+        return SerializeCanonical(new
+        {
+            request.SourceIdentity,
+            request.OperationIdentity,
+            request.RequestedExecutionContext,
+            RawCommit = rawCommit
+        });
+    }
+
+    private static string ComputeCanonicalHash(object payload)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(SerializeCanonical(payload))));
+
+    private static string SerializeCanonical(object payload)
+    {
         var element = JsonSerializer.SerializeToElement(payload, SerializerOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);
-
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     private static RuntimeStateChange<TState>[] Order<TState>(IReadOnlyCollection<RuntimeStateChange<TState>> changes) =>

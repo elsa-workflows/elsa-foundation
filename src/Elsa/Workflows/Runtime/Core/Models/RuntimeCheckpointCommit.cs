@@ -80,6 +80,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     {
     }
 
+    [JsonConstructor]
     public RuntimeCheckpointStateChangeSet(
         RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
         RuntimeStateChange<SchedulerState>? scheduler,

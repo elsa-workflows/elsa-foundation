@@ -24,6 +24,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
     private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
     private readonly RuntimeSchedulerDispatchDiagnostics? _dispatchDiagnostics;
+    private readonly IRuntimeCheckpointRecoveryAuthorityAccessor? _recoveryAuthorityAccessor;
+    private readonly RuntimeCheckpointRecoveryAuthorityCodec _recoveryAuthorityCodec;
     private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
@@ -47,7 +49,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowEngineTracer? tracer = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
-        RuntimeSchedulerDispatchDiagnostics? dispatchDiagnostics = null)
+        RuntimeSchedulerDispatchDiagnostics? dispatchDiagnostics = null,
+        IRuntimeCheckpointRecoveryAuthorityAccessor? recoveryAuthorityAccessor = null,
+        RuntimeCheckpointRecoveryAuthorityCodec? recoveryAuthorityCodec = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -68,6 +72,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _claimOptions = claimOptions ?? new RuntimeSchedulerWorkClaimOptions();
         _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
         _dispatchDiagnostics = dispatchDiagnostics;
+        _recoveryAuthorityAccessor = recoveryAuthorityAccessor;
+        _recoveryAuthorityCodec = recoveryAuthorityCodec ?? new RuntimeCheckpointRecoveryAuthorityCodec();
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
     }
@@ -186,6 +192,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
         try
         {
+            using var recoveryAuthorityScope = _recoveryAuthorityAccessor?.Push(_recoveryAuthorityCodec.Encode(workItem));
             handler = FindHandler(workItem);
             activity?.SetTag(WorkflowEngineTelemetry.HandlerNameTag, handler.Name);
 

@@ -10,9 +10,10 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// </summary>
 public sealed class CoalescingWorkflowExecutionStateStore(
     CoalescingInner<IWorkflowExecutionStateStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowExecutionStateStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowExecutionStateStore, IInMemoryCheckpointTransactionSource
 {
     private readonly IWorkflowExecutionStateStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);
@@ -44,9 +45,10 @@ public sealed class CoalescingWorkflowExecutionStateStore(
 /// <summary>Coalescing-aware overlay for <see cref="IActivityExecutionStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
 public sealed class CoalescingActivityExecutionStateStore(
     CoalescingInner<IActivityExecutionStateStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionStateStore, IInMemoryCheckpointTransactionSource
 {
     private readonly IActivityExecutionStateStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);
@@ -132,9 +134,10 @@ public sealed class CoalescingActivityExecutionStateStore(
 /// <summary>Coalescing-aware overlay for <see cref="IDurableValueStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
 public sealed class CoalescingDurableValueStateStore(
     CoalescingInner<IDurableValueStateStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IDurableValueStateStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IDurableValueStateStore, IInMemoryCheckpointTransactionSource
 {
     private readonly IDurableValueStateStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);
@@ -280,9 +283,10 @@ internal static class CoalescingRuntimeStorePageMerger
 public sealed class CoalescingActivityExecutionInspectionStore(
     CoalescingInner<IActivityExecutionInspectionStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor,
-    CoalescingRuntimeCheckpointPersistenceOptions options) : IActivityExecutionInspectionStore
+    CoalescingRuntimeCheckpointPersistenceOptions options) : IActivityExecutionInspectionStore, IInMemoryCheckpointTransactionSource
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
@@ -307,9 +311,10 @@ public sealed class CoalescingActivityExecutionInspectionStore(
 /// <summary>Coalescing-aware overlay for <see cref="ISchedulerStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
 public sealed class CoalescingSchedulerStateStore(
     CoalescingInner<ISchedulerStateStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : ISchedulerStateStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : ISchedulerStateStore, IInMemoryCheckpointTransactionSource
 {
     private readonly ISchedulerStateStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);

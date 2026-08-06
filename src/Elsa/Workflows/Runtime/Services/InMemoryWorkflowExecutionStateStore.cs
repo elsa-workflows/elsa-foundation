@@ -10,6 +10,14 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateStore<string, WorkflowExecutionState>(StringComparer.Ordinal), IWorkflowExecutionStateStore
 {
+    public override bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.MutatesWorkflowExecution;
+
+    private protected override bool IsCheckpointKey(string key, InMemoryCheckpointMutationPlan scope) =>
+        scope.MutatesWorkflowExecution && StringComparer.Ordinal.Equals(key, scope.WorkflowExecutionId);
+
+    private protected override IEnumerable<string> CheckpointKeys(InMemoryCheckpointMutationPlan scope) =>
+        scope.MutatesWorkflowExecution ? [scope.WorkflowExecutionId] : [];
+
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

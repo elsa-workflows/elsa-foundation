@@ -23,6 +23,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             _state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var existing);
@@ -38,6 +39,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             _state.WorkflowTestScopes.TryGetValue(scopeId, out var record);
@@ -51,6 +53,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        await using var checkpointGate = await _state.TransactionGate.EnterAsync(cancellationToken);
         await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
@@ -76,6 +79,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             if (!_state.WorkflowTestScopes.TryGetValue(scopeId, out var existing))
@@ -93,6 +97,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var candidates = _state.WorkflowTestScopes.Values
@@ -120,6 +125,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
         if (observedAt == default)
             throw new ArgumentOutOfRangeException(nameof(observedAt));
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
@@ -152,6 +158,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
             throw new ArgumentException("The cleanup continuation token cannot be blank.", nameof(continuationToken));
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var scopeRecord) ||

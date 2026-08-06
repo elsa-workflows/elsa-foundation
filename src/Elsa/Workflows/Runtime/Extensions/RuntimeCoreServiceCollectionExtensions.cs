@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
@@ -214,6 +215,17 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<RuntimeCheckpointRecoveryAuthorityCodec>();
+        services.TryAddSingleton<IRuntimeCheckpointRecoveryAuthorityAccessor, AmbientCheckpointRecoveryAuthorityAccessor>();
+        services.TryAddScoped<IRuntimeSchedulerWorkItemResolver>(serviceProvider =>
+        {
+            var durableQueue = serviceProvider.GetService<CoalescingInner<IWorkflowSchedulerWorkQueue>>()?.Value ??
+                               serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+            return durableQueue as IRuntimeSchedulerWorkItemResolver ??
+                   throw new InvalidOperationException(
+                       $"The durable scheduler-work provider '{durableQueue.GetType().FullName}' does not implement {nameof(IRuntimeSchedulerWorkItemResolver)}.");
+        });
+        services.TryAddScoped<RuntimeCheckpointRecoveryRouter>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
@@ -274,9 +286,12 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowEngineTracer>(),
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
-                serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>()));
+                serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
+                serviceProvider.GetRequiredService<IRuntimeCheckpointRecoveryAuthorityAccessor>(),
+                serviceProvider.GetRequiredService<RuntimeCheckpointRecoveryAuthorityCodec>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.TryAddScoped<IRuntimeCheckpointPreparationReplayer, RuntimeCheckpointPreparationReplayer>();
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
@@ -299,7 +314,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>()));
+                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
+                serviceProvider.GetRequiredService<IRuntimeCheckpointPreparationReplayer>(),
+                serviceProvider.GetRequiredService<IRuntimeCheckpointRecoveryAuthorityAccessor>()));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();

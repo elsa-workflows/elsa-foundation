@@ -3,16 +3,16 @@ using System.Text;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Services.Alterations;
 
 /// <summary>Shared in-memory durability state. A production provider replaces this as one durable storage unit.</summary>
-public sealed class InMemoryWorkflowAlterationStoreState
+public sealed class InMemoryWorkflowAlterationStoreState : IInMemoryCheckpointTransactionParticipant
 {
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.AlterationJobId is not null;
     internal object SyncRoot { get; } = new();
-    // The alteration actor's checkpoint must hold this gate across validation, workflow-state persistence, and job
-    // terminalization. ClaimNext takes the same gate so an expired lease cannot be taken over in that gap.
-    internal SemaphoreSlim TerminalCheckpointGate { get; } = new(1, 1);
     internal Dictionary<string, WorkflowAlterationPlanState> Plans { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, string> ActivePlanOrderKeys { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowAlterationJobState> Jobs { get; } = new(StringComparer.Ordinal);
@@ -22,6 +22,50 @@ public sealed class InMemoryWorkflowAlterationStoreState
     internal Dictionary<string, SortedSet<(DateTimeOffset ClaimableAt, string JobId)>> RunningJobsByPlan { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, InMemoryUnsealedCaptureCleanup> UnsealedCaptureCleanups { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, string> PlansByTenantIdempotency { get; } = new(StringComparer.Ordinal);
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        lock (SyncRoot)
+        {
+            if (scope.AlterationJobId is null || !Jobs.TryGetValue(scope.AlterationJobId, out var job))
+                return CheckpointSnapshot.Empty;
+            return new CheckpointSnapshot(
+                job.JobId,
+                job.PlanId,
+                job,
+                JobCounts[job.PlanId],
+                new SortedSet<(DateTimeOffset, string)>(ClaimableJobsByPlan[job.PlanId], ClaimableJobsByPlan[job.PlanId].Comparer),
+                new SortedSet<(DateTimeOffset, string)>(RunningJobsByPlan[job.PlanId], RunningJobsByPlan[job.PlanId].Comparer));
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        var checkpoint = (CheckpointSnapshot)snapshot;
+        if (checkpoint.JobId is null)
+            return;
+        var planId = checkpoint.PlanId!;
+        var claimable = checkpoint.Claimable!;
+        var running = checkpoint.Running!;
+        lock (SyncRoot)
+        {
+            Jobs[checkpoint.JobId] = checkpoint.Job!;
+            JobCounts[planId] = checkpoint.Counts!;
+            ClaimableJobsByPlan[planId] = new(claimable, claimable.Comparer);
+            RunningJobsByPlan[planId] = new(running, running.Comparer);
+        }
+    }
+
+    private sealed record CheckpointSnapshot(
+        string? JobId,
+        string? PlanId,
+        WorkflowAlterationJobState? Job,
+        WorkflowAlterationJobCounts? Counts,
+        SortedSet<(DateTimeOffset ClaimableAt, string JobId)>? Claimable,
+        SortedSet<(DateTimeOffset ClaimableAt, string JobId)>? Running)
+    {
+        public static CheckpointSnapshot Empty { get; } = new(null, null, null, null, null, null);
+    }
 }
 
 internal sealed record InMemoryUnsealedCaptureCleanup(
@@ -30,15 +74,18 @@ internal sealed record InMemoryUnsealedCaptureCleanup(
     DateTimeOffset CompletedAt);
 
 /// <summary>In-memory conformance implementation for plan admission, capture, leasing, cancellation, and reconciliation.</summary>
-public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationStoreState? state = null) : IWorkflowAlterationStore
+public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationStoreState? state = null) : IWorkflowAlterationStore, IInMemoryCheckpointTransactionSource
 {
     private const int UnsealedCleanupPageSize = 100;
     private readonly InMemoryWorkflowAlterationStoreState _state = state ?? new();
+
+    IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() => [_state];
 
     public ValueTask<WorkflowAlterationPlanAdmissionResult> AdmitAsync(WorkflowAlterationPlanState plan, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var key = IdempotencyKey(plan.AuthorityScope.TenantPartition, plan.IdempotencyKeyHash);
@@ -67,6 +114,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
             return ValueTask.FromResult(_state.Plans.GetValueOrDefault(planId));
     }
@@ -78,6 +126,8 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         if (cursor is not null && string.IsNullOrWhiteSpace(cursor))
             throw new ArgumentException("The active alteration-plan cursor cannot be blank.", nameof(cursor));
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointAccess = _state.TransactionGate.Enter();
 
         lock (_state.SyncRoot)
         {
@@ -98,6 +148,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -112,6 +163,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentNullException.ThrowIfNull(targets);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -147,6 +199,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     public ValueTask<WorkflowAlterationPlanState> SealAsync(string planId, long expectedRevision, DateTimeOffset sealedAt, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -183,6 +236,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     public ValueTask<WorkflowAlterationPlanState> RequestCancellationAsync(string planId, DateTimeOffset requestedAt, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -202,6 +256,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -263,6 +318,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         if (maximumCount <= 0)
             throw new ArgumentOutOfRangeException(nameof(maximumCount));
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);
@@ -295,6 +351,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
             return ValueTask.FromResult(_state.Jobs.GetValueOrDefault(jobId));
     }
@@ -303,6 +360,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointCommitId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
             return ValueTask.FromResult(_state.Jobs.Values.FirstOrDefault(job =>
                 StringComparer.Ordinal.Equals(job.CheckpointCommitId, checkpointCommitId)));
@@ -312,6 +370,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             _ = GetPlan(planId);
@@ -325,6 +384,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         if (pageSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(pageSize));
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             _ = GetPlan(planId);
@@ -350,53 +410,46 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         if (leaseDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseDuration));
         cancellationToken.ThrowIfCancellationRequested();
-        await _state.TerminalCheckpointGate.WaitAsync(cancellationToken);
-        try
+        await using var checkpointGate = await _state.TransactionGate.EnterAsync(cancellationToken);
+        lock (_state.SyncRoot)
         {
-            lock (_state.SyncRoot)
+            var plan = GetPlan(planId);
+            WorkflowAlterationJobState? candidate = null;
+            // Reconcile in-flight work first. A successful re-claim grants a fresh lease, allowing pending
+            // jobs to progress while that actor remains non-due.
+            var runningJobs = _state.RunningJobsByPlan[planId];
+            if (runningJobs.Count > 0 && runningJobs.Min.ClaimableAt <= now)
+                candidate = _state.Jobs[runningJobs.Min.JobId];
+            if (candidate is null && plan.Status != WorkflowAlterationPlanStatus.Cancelling)
             {
-                var plan = GetPlan(planId);
-                WorkflowAlterationJobState? candidate = null;
-                // Reconcile in-flight work first. A successful re-claim grants a fresh lease, allowing pending
-                // jobs to progress while that actor remains non-due.
-                var runningJobs = _state.RunningJobsByPlan[planId];
-                if (runningJobs.Count > 0 && runningJobs.Min.ClaimableAt <= now)
-                    candidate = _state.Jobs[runningJobs.Min.JobId];
-                if (candidate is null && plan.Status != WorkflowAlterationPlanStatus.Cancelling)
+                foreach (var pending in _state.ClaimableJobsByPlan[planId])
                 {
-                    foreach (var pending in _state.ClaimableJobsByPlan[planId])
+                    if (pending.ClaimableAt > now)
+                        break;
+                    var job = _state.Jobs[pending.JobId];
+                    if (job.Status == WorkflowAlterationJobStatus.Pending)
                     {
-                        if (pending.ClaimableAt > now)
-                            break;
-                        var job = _state.Jobs[pending.JobId];
-                        if (job.Status == WorkflowAlterationJobStatus.Pending)
-                        {
-                            candidate = job;
-                            break;
-                        }
+                        candidate = job;
+                        break;
                     }
                 }
-                if (candidate is null)
-                    return null;
-                if (plan.Status is not (WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running) &&
-                    (plan.Status != WorkflowAlterationPlanStatus.Cancelling ||
-                     candidate.Status != WorkflowAlterationJobStatus.Running))
-                    return null;
-
-                var claim = new WorkflowAlterationJobClaim(ownerId, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), now + leaseDuration);
-                var claimed = CopyJob(candidate, status: WorkflowAlterationJobStatus.Running, claim: claim, attemptCount: candidate.AttemptCount + 1, startedAt: candidate.StartedAt ?? now, revision: candidate.Revision + 1);
-                _state.Jobs[candidate.JobId] = claimed;
-                RemoveClaimableJob(candidate);
-                AddClaimableJob(claimed);
-                AdjustJobCounts(candidate.PlanId, candidate.Status, claimed.Status);
-                if (plan.Status == WorkflowAlterationPlanStatus.Queued)
-                    _state.Plans[plan.PlanId] = CopyPlan(plan, status: WorkflowAlterationPlanStatus.Running, startedAt: plan.StartedAt ?? now, revision: plan.Revision + 1);
-                return claimed;
             }
-        }
-        finally
-        {
-            _state.TerminalCheckpointGate.Release();
+            if (candidate is null)
+                return null;
+            if (plan.Status is not (WorkflowAlterationPlanStatus.Queued or WorkflowAlterationPlanStatus.Running) &&
+                (plan.Status != WorkflowAlterationPlanStatus.Cancelling ||
+                 candidate.Status != WorkflowAlterationJobStatus.Running))
+                return null;
+
+            var claim = new WorkflowAlterationJobClaim(ownerId, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)), now + leaseDuration);
+            var claimed = CopyJob(candidate, status: WorkflowAlterationJobStatus.Running, claim: claim, attemptCount: candidate.AttemptCount + 1, startedAt: candidate.StartedAt ?? now, revision: candidate.Revision + 1);
+            _state.Jobs[candidate.JobId] = claimed;
+            RemoveClaimableJob(candidate);
+            AddClaimableJob(claimed);
+            AdjustJobCounts(candidate.PlanId, candidate.Status, claimed.Status);
+            if (plan.Status == WorkflowAlterationPlanStatus.Queued)
+                _state.Plans[plan.PlanId] = CopyPlan(plan, status: WorkflowAlterationPlanStatus.Running, startedAt: plan.StartedAt ?? now, revision: plan.Revision + 1);
+            return claimed;
         }
     }
 
@@ -404,6 +457,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentNullException.ThrowIfNull(change);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
             ValidateTerminalChange(change, GetJob(change.JobId));
         return ValueTask.CompletedTask;
@@ -413,6 +467,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         ArgumentNullException.ThrowIfNull(change);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var job = GetJob(change.JobId);
@@ -437,23 +492,19 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         ArgumentNullException.ThrowIfNull(commitWorkflowCheckpointAsync);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _state.TerminalCheckpointGate.WaitAsync(cancellationToken);
-        try
+        using (_state.TransactionGate.Enter())
         {
             lock (_state.SyncRoot)
                 ValidateTerminalChange(change, GetJob(change.JobId));
+        }
 
-            await commitWorkflowCheckpointAsync(cancellationToken);
-        }
-        finally
-        {
-            _state.TerminalCheckpointGate.Release();
-        }
+        await commitWorkflowCheckpointAsync(cancellationToken);
     }
 
     public ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointAccess = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var plan = GetPlan(planId);

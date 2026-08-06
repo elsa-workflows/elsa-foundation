@@ -19,6 +19,26 @@ public sealed class WorkflowDispatchRedriveTests
     private static readonly DateTimeOffset RedriveAt = Now.AddMinutes(2);
 
     [Fact]
+    public async Task Shared_checkpoint_state_gate_blocks_dispatch_redrive_until_release()
+    {
+        var fixture = await CreateFailureAsync();
+        var gate = fixture.State.TransactionGate.Enter();
+        Task<WorkflowDispatchRedriveResult> redrive;
+        using (ExecutionContext.SuppressFlow())
+            redrive = Task.Run(async () => await fixture.RedriveStore.RedriveAsync(
+                new WorkflowDispatchRedriveRequest(fixture.Identity.DispatchId, "request-gated", RedriveAt)));
+        await Task.Delay(50);
+
+        Assert.False(redrive.IsCompleted);
+        gate.Dispose();
+
+        var result = await redrive.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(WorkflowDispatchRedriveDisposition.Accepted, result.Disposition);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await fixture.DispatchStore.FindAsync(fixture.Identity.DispatchId))!.Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await fixture.Store.FindAsync(fixture.DeadLetter.OutboxItemId))!.Status);
+    }
+
+    [Fact]
     public async Task Eligible_detached_failure_reopens_the_same_dispatch_and_outbox_identity()
     {
         var fixture = await CreateFailureAsync();
@@ -402,7 +422,7 @@ public sealed class WorkflowDispatchRedriveTests
         var redriveStore = new ScopedWorkflowDispatchRedriveStore(
             store,
             new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"))));
-        return new(store, redriveStore, dispatchStore, identity, failed, deadLetter, claim);
+        return new(state, store, redriveStore, dispatchStore, identity, failed, deadLetter, claim);
     }
 
     private static WorkflowDispatchRecord NewDispatch(
@@ -472,6 +492,7 @@ public sealed class WorkflowDispatchRedriveTests
     }
 
     private sealed record FailureFixture(
+        InMemoryRuntimeCheckpointStoreState State,
         InMemoryRuntimeCheckpointCommitStore Store,
         IWorkflowDispatchRedriveStore RedriveStore,
         InMemoryWorkflowDispatchStore DispatchStore,

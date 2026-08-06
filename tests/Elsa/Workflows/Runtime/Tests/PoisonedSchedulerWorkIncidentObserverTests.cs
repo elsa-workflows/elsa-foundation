@@ -204,8 +204,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             _now = now;
             var activityStore = new InMemoryActivityExecutionStateStore();
             var inspectionStore = new InMemoryActivityExecutionInspectionStore();
-            CommitStore = new InMemoryRuntimeCheckpointCommitStore(
-                WorkflowStore,
+            CommitStore = RuntimeCheckpointTestStores.Create(
+                workflowExecutionStateStore: WorkflowStore,
                 activityExecutionStateStore: activityStore,
                 // Separate store for the commit-time incident write so a test can make persistence throw while the
                 // observer's own dedupe lookup (against IncidentStore) still succeeds.
@@ -299,9 +299,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     }
 
     /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>
-    private sealed class ThrowingIncidentStateStore : IIncidentStateStore
+    private sealed class ThrowingIncidentStateStore : IIncidentStateStore, IInMemoryCheckpointTransactionSource
     {
+        private readonly InMemoryIncidentStateStore _transactionParticipant = new();
         public int SaveAttempts { get; private set; }
+
+        IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() => [_transactionParticipant];
 
         public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) => throw Boom();
 

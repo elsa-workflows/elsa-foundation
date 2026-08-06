@@ -5,6 +5,15 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class InMemoryDurableValueStateStore : InMemoryKeyedStateStore<InMemoryDurableValueStateStore.DurableValueStateKey, DurableValueState>, IDurableValueStateStore
 {
+    public override bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.DurableValueIds.Count > 0;
+
+    private protected override bool IsCheckpointKey(DurableValueStateKey key, InMemoryCheckpointMutationPlan scope) =>
+        StringComparer.Ordinal.Equals(key.WorkflowExecutionId, scope.WorkflowExecutionId) &&
+        scope.DurableValueIds.Contains(key.DurableValueId);
+
+    private protected override IEnumerable<DurableValueStateKey> CheckpointKeys(InMemoryCheckpointMutationPlan scope) =>
+        scope.DurableValueIds.Select(id => new DurableValueStateKey(scope.WorkflowExecutionId, id));
+
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

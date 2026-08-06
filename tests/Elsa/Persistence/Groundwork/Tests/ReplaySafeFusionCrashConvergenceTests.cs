@@ -60,10 +60,11 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
         Assert.All(control, entry => Assert.Equal(ActivityExecutionStatus.Completed, entry.Status));
 
         var store = new InMemoryDocumentStore(manifest);
+        var crash = new CrashInjectionProbe(crashOnCommit);
 
         // Generation 1: crash inside a fused span. The checkpoint-commit store (wrapping the coalescing decorator)
-        // throws OperationCanceledException on the Nth commit — a process crash, not a handler fault, so the drainer
-        // rethrows it and never ack-deletes/poisons the source work item.
+        // throws OperationCanceledException after the Nth durable preparation — a process crash, not a
+        // handler fault, so the drainer rethrows it and never ack-deletes/poisons the source work item.
         await using (var crashed = BuildHarness(store, services =>
         {
             var descriptor = services.Last(d => d.ServiceType == typeof(IRuntimeCheckpointCommitStore));
@@ -71,10 +72,11 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
             services.AddScoped<IRuntimeCheckpointCommitStore>(sp => new CrashOnNthCommitStore(
                 (IRuntimeCheckpointCommitStore)(descriptor.ImplementationFactory?.Invoke(sp)
                     ?? ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType!)),
-                crashOnCommit));
+                crash));
         }))
         {
             await Assert.ThrowsAnyAsync<Exception>(() => crashed.RunAsync(BuildReplaySafeFlowchart()));
+            Assert.True(crash.Fired, $"Kill ordinal {crashOnCommit} did not fire.");
 
             // The durable scheduler backlog survives the crash (the fused span's intermediate items were never durably
             // enqueued, and the coalescing flush never advanced the durable queue), so the execution stays discoverable.
@@ -108,8 +110,10 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
 
         // Non-vacuous: the shipped defaults (D1 fusion + D2 inline completion pump) actually engaged in the control
         // run, so the kill points below land inside fused spans and the inline completion pass, not a discrete drain.
+        // Until T027 supplies prepared-checkpoint folding, fail-closed coalescing leaves FusedSpans at zero; this is
+        // the intentional T027 gate, not a reason to weaken the original non-vacuity assertion.
         var diagnostics = harness.Services.GetRequiredService<Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics>();
-        Assert.True(diagnostics.FusedSpans > 0, "Control run did not engage D1 fusion.");
+        Assert.True(diagnostics.FusedSpans > 0, "Control run did not engage D1 fusion (T027 prepared-checkpoint folding gate).");
         Assert.True(diagnostics.InlineCascadeDispatches > 0, "Control run did not engage the D2 inline completion pump.");
 
         return await SnapshotAsync(harness.Services);
@@ -180,22 +184,68 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    // Throws a process-crash signal on the Nth checkpoint commit; earlier commits pass through so the crash lands
-    // inside a fused span after some checkpoints have buffered. OperationCanceledException (not a domain fault) makes
-    // the drainer rethrow rather than poison + ack-delete the source item, mirroring GroundworkDurableResumptionCrash.
-    private sealed class CrashOnNthCommitStore(IRuntimeCheckpointCommitStore inner, int crashOnCommit) : IRuntimeCheckpointCommitStore
+    // Throws a process-crash signal after the Nth durable preparation lands. Earlier preparations pass through so
+    // the original ordinals still walk D1, the inline completion pass, and the D2→D1 recursion boundary.
+    // OperationCanceledException (not a domain fault) makes the drainer rethrow rather than poison + ack-delete the
+    // source item, mirroring GroundworkDurableResumptionCrash.
+    private sealed class CrashOnNthCommitStore(
+        IRuntimeCheckpointCommitStore inner,
+        CrashInjectionProbe crash) :
+        IRuntimeCheckpointCommitStore,
+        IRuntimeCheckpointPreparedLedgerStore
     {
-        private int _commits;
+        private IRuntimeCheckpointPreparedLedgerStore PreparedLedger =>
+            inner as IRuntimeCheckpointPreparedLedgerStore
+            ?? throw new InvalidOperationException("The crash wrapper requires the durable prepared-ledger capability.");
+
+        public async ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+            RuntimeCheckpointPrepareRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var preparation = await inner.PrepareAsync(request, cancellationToken);
+            if (preparation.Token is not null && crash.TryFire(request.Commit.CommitId))
+                throw new OperationCanceledException($"Simulated crash after durable preparation '{request.Commit.CommitId}'.");
+
+            return preparation;
+        }
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+            RuntimeCheckpointPreparationToken token,
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default) =>
+            inner.CommitPreparedAsync(token, commit, decision, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(
+            RuntimeCheckpointPreparedQuery query,
+            CancellationToken cancellationToken = default) =>
+            PreparedLedger.PagePreparedAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+            RuntimeCheckpointPreparedFoldRequest request,
+            CancellationToken cancellationToken = default) =>
+            PreparedLedger.CommitPreparedFoldAsync(request, cancellationToken);
 
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
             RuntimeCheckpointCommit commit,
             RuntimeCheckpointPersistenceDecision decision,
             CancellationToken cancellationToken = default)
-        {
-            if (Interlocked.Increment(ref _commits) == crashOnCommit)
-                throw new OperationCanceledException($"Simulated crash inside a fused span at commit '{commit.CommitId}'.");
+            => inner.CommitAsync(commit, decision, cancellationToken);
+    }
 
-            return inner.CommitAsync(commit, decision, cancellationToken);
+    private sealed class CrashInjectionProbe(int ordinal)
+    {
+        private int _preparations;
+        private string? _commitId;
+
+        public bool Fired => Volatile.Read(ref _commitId) is not null;
+
+        public bool TryFire(string commitId)
+        {
+            if (Interlocked.Increment(ref _preparations) != ordinal)
+                return false;
+
+            return Interlocked.CompareExchange(ref _commitId, commitId, null) is null;
         }
     }
 }

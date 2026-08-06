@@ -30,6 +30,8 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         var options = new CoalescingRuntimeCheckpointPersistenceOptions();
         configureOptions?.Invoke(options);
 
+        var checkpointStoreDescriptor = RequirePreparedLedgerProvider(services);
+
         services.RemoveAll<CoalescingRuntimeCheckpointPersistenceOptions>();
         services.AddSingleton(options);
 
@@ -43,6 +45,11 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         // Decorate the durable stores the coalescing session overlays. Each decorator passes through byte-for-byte when
         // no session is active; only an active session (established by the drain scope) redirects to the working set.
         services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>();
+        services.RemoveAll<IRuntimeCheckpointPreparedLedgerStore>();
+        services.Add(new ServiceDescriptor(
+            typeof(IRuntimeCheckpointPreparedLedgerStore),
+            serviceProvider => (IRuntimeCheckpointPreparedLedgerStore)serviceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>(),
+            checkpointStoreDescriptor.Lifetime));
         services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>();
         services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>();
         services.RemoveAll<IPostCommitOutboxLookupStore>();
@@ -59,6 +66,27 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         services.AddSingleton<CoalescingRegistrationMarker>();
 
         return services;
+    }
+
+    private static ServiceDescriptor RequirePreparedLedgerProvider(IServiceCollection services)
+    {
+        var descriptor = services.LastOrDefault(candidate => candidate.ServiceType == typeof(IRuntimeCheckpointCommitStore))
+            ?? throw new InvalidOperationException("Cannot enable checkpoint coalescing before a runtime checkpoint commit store is registered.");
+
+        var supportsCapability = descriptor.ImplementationInstance is null ||
+                                 descriptor.ImplementationInstance is IRuntimeCheckpointPreparedLedgerStore;
+        if (descriptor.ImplementationType is { } implementationType)
+            supportsCapability = typeof(IRuntimeCheckpointPreparedLedgerStore).IsAssignableFrom(implementationType);
+
+        if (!supportsCapability)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(CheckpointPersistenceMode.Coalesced)} checkpoint persistence requires the selected durable provider to implement {nameof(IRuntimeCheckpointPreparedLedgerStore)}; no compatibility or sequential fallback is available.");
+        }
+
+        // Factory registrations are validated when the decorator is constructed because their produced type is not
+        // knowable without activating the host. Instance/type registrations fail here during post-configuration.
+        return descriptor;
     }
 
     // Captures the currently-registered (durable) implementation of TService as CoalescingInner<TService> and replaces

@@ -3,8 +3,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
+public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter, IInMemoryCheckpointTransactionParticipant
 {
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.ActivityInspectionIds.Count > 0;
     private readonly object _syncRoot = new();
     private readonly Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> _projections = new();
 
@@ -12,6 +14,8 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
     {
         ArgumentNullException.ThrowIfNull(projection);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -27,6 +31,8 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             _projections.TryGetValue(new ActivityExecutionInspectionProjectionKey(workflowExecutionId, activityExecutionId), out var projection);
@@ -40,6 +46,8 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -82,4 +90,31 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
 
     private static string SortKey(ActivityExecutionInspectionSummaryProjection summary) =>
         $"{summary.ExecutionSequence:D20}:{summary.ScheduledAt.UtcTicks:D19}:{summary.ActivityExecutionId}";
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var keys = scope.ActivityInspectionIds.Select(id => new ActivityExecutionInspectionProjectionKey(scope.WorkflowExecutionId, id)).ToHashSet();
+            return new CheckpointSnapshot(keys, _projections.Where(entry => keys.Contains(entry.Key)).ToDictionary());
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var checkpoint = (CheckpointSnapshot)snapshot;
+            foreach (var key in checkpoint.Keys)
+                _projections.Remove(key);
+            foreach (var entry in checkpoint.Projections)
+                _projections[entry.Key] = entry.Value;
+        }
+    }
+
+    private sealed record CheckpointSnapshot(
+        HashSet<ActivityExecutionInspectionProjectionKey> Keys,
+        Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> Projections);
 }

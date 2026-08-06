@@ -12,6 +12,9 @@ using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -28,7 +31,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <item>The marker is committed in the same document unit-of-work as the runtime state changes.</item>
 /// </list>
 /// </remarks>
-public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
+public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommitStore, IRuntimeCheckpointPreparedLedgerStore
 {
     private static readonly TimeSpan CommitAcknowledgementReconciliationTimeout = TimeSpan.FromSeconds(10);
     private readonly IDocumentStore _commitLedger;
@@ -37,6 +40,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     private readonly IWorkflowExecutableRootWriteLeaseManager _rootWriteLeaseManager;
     private readonly TimeProvider _timeProvider;
     private readonly RuntimeGroupCommitCoordinator? _groupCommitCoordinator;
+    private readonly RuntimeCheckpointPreparationPayloadCodec _preparationPayloadCodec = new();
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
@@ -104,6 +108,375 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         _rootWriteLeaseManager = rootWriteLeaseManager;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _groupCommitCoordinator = groupCommitCoordinator;
+    }
+
+    /// <summary>Durably reserves generic checkpoint provenance and canonical recovery input.</summary>
+    /// <exception cref="ArgumentNullException">The request or one of its required values is null.</exception>
+    /// <exception cref="ArgumentException">A required identity is blank.</exception>
+    /// <exception cref="InvalidOperationException">The request is outside the active tenant scope.</exception>
+    /// <exception cref="OperationCanceledException">The operation is cancelled.</exception>
+    /// <exception cref="GroundworkRuntimeCheckpointWriterException">Groundwork cannot encode or atomically persist the preparation.</exception>
+    public async ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+        RuntimeCheckpointPrepareRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Commit);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationIdentity);
+        ArgumentNullException.ThrowIfNull(request.RequestedExecutionContext);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureTenantScope(request.Commit);
+        EnsureAtomicBoundary(request.Commit);
+
+        RuntimeCheckpointPreparationPayloadEnvelope envelope;
+        RuntimeCheckpointPrepareRequest frozenRequest;
+        try
+        {
+            envelope = _preparationPayloadCodec.Encode(request);
+            var decodedRequest = _preparationPayloadCodec.Decode(envelope);
+            frozenRequest = decodedRequest with
+            {
+                Commit = decodedRequest.Commit with { ExpectedFence = request.Commit.ExpectedFence }
+            };
+        }
+        catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException(
+                $"Failed to encode runtime checkpoint preparation '{request.Commit.CommitId}' for workflow execution '{request.Commit.WorkflowExecutionId}'.",
+                e);
+        }
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+                var store = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
+                var existingLedger = await LoadLedgerAsync(store, request.Commit.CommitId, cancellationToken);
+                if (existingLedger is not null)
+                {
+                    var result = await ResolvePreparedReplayAsync(store, existingLedger, frozenRequest, envelope, cancellationToken);
+                    await unitOfWork.CommitAsync(cancellationToken);
+                    return result;
+                }
+
+                var legacyMarker = await LoadMarkerAsync(store, request.Commit, cancellationToken);
+                var legacyFingerprint = RuntimeCheckpointCommitFingerprint.Compute(request.Commit);
+                if (legacyMarker is not null && !StringComparer.Ordinal.Equals(legacyMarker.Fingerprint, legacyFingerprint))
+                    return RuntimeCheckpointPreparationResult.Conflict();
+                var receipt = legacyMarker is null ? null : ResolveReplay(request.Commit, legacyFingerprint, legacyMarker);
+                if (legacyMarker is not null &&
+                    (!request.RequestedExecutionContext.IsEmpty ||
+                     !StringComparer.Ordinal.Equals(request.SourceIdentity, request.Commit.Checkpoint.Name) ||
+                     !StringComparer.Ordinal.Equals(request.OperationIdentity, request.Commit.Checkpoint.CheckpointId)))
+                {
+                    return RuntimeCheckpointPreparationResult.Conflict();
+                }
+                if (legacyMarker is null)
+                    await ValidateAndTouchExpectedFenceAsync(store, request.Commit, cancellationToken);
+                var coordination = await LoadCoordinationAsync(store, request.Commit.WorkflowExecutionId, cancellationToken);
+                var current = coordination?.Document ?? RuntimeCheckpointCoordinationDocument.Empty(request.Commit.WorkflowExecutionId);
+                var order = checked(current.ReservedOrder + 1);
+                var nextRevision = checked(current.OrderRevision + 1);
+                var provenance = new RuntimeCheckpointProvenance(
+                    request.RequestedExecutionContext.IsEmpty ? current.ExecutionContext : request.RequestedExecutionContext,
+                    order);
+                var status = legacyMarker is null
+                    ? RuntimeLogicalCheckpointLedgerStatus.Prepared
+                    : RuntimeLogicalCheckpointLedgerStatus.Committed;
+                var ledgerEntry = new RuntimeLogicalCheckpointLedgerEntry(
+                    request.Commit.CommitId,
+                    ComputeLedgerToken(
+                        request.Commit.CommitId,
+                        envelope.PayloadSha256,
+                        order,
+                        nextRevision,
+                        current.ContextRevision,
+                        request.Commit.ExpectedFence),
+                    provenance,
+                    request.SourceIdentity,
+                    request.OperationIdentity,
+                    frozenRequest.Commit.Checkpoint with { Provenance = null },
+                    frozenRequest.Commit.StateChanges,
+                    frozenRequest.Commit.PostCommitIntents,
+                    frozenRequest.Commit.Metadata,
+                    frozenRequest.RequestedExecutionContext,
+                    nextRevision,
+                    current.ContextRevision,
+                    request.Commit.ExpectedFence,
+                    envelope.PayloadSha256,
+                    envelope.CanonicalPayload,
+                    $"groundwork-runtime-checkpoint:{request.Commit.WorkflowExecutionId}:{request.Commit.CommitId}",
+                    frozenRequest.InitialPersistenceMode,
+                    status,
+                    legacyMarker?.Fingerprint,
+                    receipt,
+                    ReconciledLegacyMarker: legacyMarker is not null,
+                    WorkflowExecutionId: request.Commit.WorkflowExecutionId,
+                    RecoveryAuthority: frozenRequest.RecoveryAuthority,
+                    CurrentAuthorityFence: request.Commit.ExpectedFence,
+                    AuthorityRevision: 1);
+                var nextCoordination = current with
+                {
+                    ReservedOrder = order,
+                    CommittedOrder = legacyMarker is null ? current.CommittedOrder : Math.Max(current.CommittedOrder, order),
+                    OrderRevision = nextRevision
+                };
+                await SaveCoordinationAsync(store, nextCoordination, coordination?.Version ?? 0, cancellationToken);
+                await SaveLedgerAsync(store, new RuntimeCheckpointLedgerDocument(ledgerEntry), expectedVersion: 0, cancellationToken);
+                await unitOfWork.CommitAsync(cancellationToken);
+                var token = ToToken(ledgerEntry);
+                return legacyMarker is null
+                    ? RuntimeCheckpointPreparationResult.Prepared(token)
+                    : RuntimeCheckpointPreparationResult.Replay(token, receipt);
+            }
+            catch (PreparedDocumentConcurrencyException)
+            {
+                continue;
+            }
+            catch (RuntimeStaleFencingTokenException)
+            {
+                return RuntimeCheckpointPreparationResult.OwnershipLost();
+            }
+            catch (Exception e) when (e is not OperationCanceledException and
+                                      not RuntimeCheckpointReplayConflictException and
+                                      not GroundworkRuntimeCheckpointWriterException)
+            {
+                throw new GroundworkRuntimeCheckpointWriterException(
+                    $"Failed to prepare runtime checkpoint '{request.Commit.CommitId}' for workflow execution '{request.Commit.WorkflowExecutionId}'.",
+                    e);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads only durable <see cref="RuntimeLogicalCheckpointLedgerStatus.Prepared"/> reservations through the
+    /// manifest-declared workflow/status/order/commit route. The public cursor is intentionally a protocol cursor,
+    /// rather than a provider continuation, so it remains bound to the recovery protocol version and filter.
+    /// </summary>
+    public async ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(
+        RuntimeCheckpointPreparedQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_commitLedger is not IBoundedDocumentStore boundedStore)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException(
+                "The Groundwork document store does not expose the declared bounded prepared-checkpoint ledger route.",
+                new NotSupportedException(nameof(IBoundedDocumentStore)));
+        }
+
+        var cursor = query.DecodeCursor();
+        var clauses = new List<DocumentQueryClause>
+        {
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerWorkflowExecutionIdField,
+                query.WorkflowExecutionId)),
+            DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerStatusField,
+                ((int)RuntimeLogicalCheckpointLedgerStatus.Prepared).ToString(CultureInfo.InvariantCulture)))
+        };
+        if (cursor is not null)
+        {
+            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.GreaterThanOrEqual(
+                ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerWorkflowCheckpointOrderField,
+                cursor.WorkflowCheckpointOrder.ToString(CultureInfo.InvariantCulture))));
+        }
+
+        var result = await boundedStore.QueryAsync(
+            new DocumentQuery(
+                ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+                ElsaRuntimeStorageManifest.PagePreparedRuntimeCheckpointsQuery,
+                clauses,
+                [
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerWorkflowCheckpointOrderField),
+                    new DocumentQueryOrder(ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerCommitIdField)
+                ],
+                take: Math.Min(ElsaGroundworkQueryRoutes.MaximumResultCount, checked(query.PageSize + 1))),
+            cancellationToken);
+
+        var reservations = result.Documents
+            .Select(_serializer.Deserialize<RuntimeCheckpointLedgerDocument>)
+            .Select(document => document.Entry)
+            .Where(entry => entry.Status == RuntimeLogicalCheckpointLedgerStatus.Prepared)
+            .Where(entry => StringComparer.Ordinal.Equals(entry.WorkflowExecutionId ?? entry.RawCheckpoint?.WorkflowExecutionId, query.WorkflowExecutionId))
+            .Where(entry => cursor is null || IsAfter(entry, cursor))
+            .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+            .ThenBy(entry => entry.CommitId, StringComparer.Ordinal)
+            .Take(query.PageSize + 1)
+            .ToArray();
+
+        var hasNext = reservations.Length > query.PageSize;
+        var pageEntries = hasNext ? reservations[..query.PageSize] : reservations;
+        var pageReservations = pageEntries
+            .Select(ToPreparedReservation)
+            .ToArray();
+        var nextCursor = hasNext
+            ? query.EncodeCursor(
+                pageEntries[^1].Provenance.WorkflowCheckpointOrder,
+                pageEntries[^1].CommitId)
+            : null;
+        return new RuntimeCheckpointPreparedPage(query, pageReservations, nextCursor);
+    }
+
+    /// <summary>Fail-closed scaffold for the separately reviewed prepared-checkpoint adoption/fold work.</summary>
+    public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+        RuntimeCheckpointPreparedFoldRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new NotSupportedException(
+            "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+    }
+
+    /// <summary>Atomically finalizes a durable checkpoint preparation with its state, outbox, context, and marker.</summary>
+    /// <exception cref="ArgumentNullException">The token, commit, or persistence decision is null.</exception>
+    /// <exception cref="ArgumentException">The token is invalid.</exception>
+    /// <exception cref="InvalidOperationException">The commit is outside the active tenant scope.</exception>
+    /// <exception cref="OperationCanceledException">The operation is cancelled.</exception>
+    /// <exception cref="RuntimeSchedulerWorkConsumeConflictException">A scheduler work claim is no longer owned by this checkpoint.</exception>
+    /// <exception cref="GroundworkRuntimeCheckpointWriterException">Groundwork cannot read or atomically finalize the preparation.</exception>
+    public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+        RuntimeCheckpointPreparationToken token,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(decision);
+        token.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureTenantScope(commit);
+        EnsureAtomicBoundary(commit);
+
+        try
+        {
+            await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+            var store = new GroundworkDocumentUnitOfWorkStore(_commitLedger, unitOfWork);
+            var loadedLedger = await LoadLedgerAsync(store, token.CommitId, cancellationToken);
+            if (loadedLedger is null || !TokenMatches(loadedLedger.Document.Entry, token))
+                return Conflict();
+            var entry = loadedLedger.Document.Entry;
+            var preparedRequest = DecodePreparation(entry);
+            if (!StringComparer.Ordinal.Equals(commit.CommitId, entry.CommitId) ||
+                !StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, preparedRequest.Commit.WorkflowExecutionId) ||
+                !token.Provenance.Equals(commit.Checkpoint.Provenance))
+                return Conflict();
+            var finalFingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+            if (entry.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed)
+            {
+                if (entry.ReconciledLegacyMarker == false && !StringComparer.Ordinal.Equals(entry.CommitFingerprint, finalFingerprint))
+                    return Conflict();
+                if (entry.ReconciledLegacyMarker == true && !RawCommitMatches(preparedRequest.Commit, commit))
+                    return Conflict();
+                return (entry.Receipt ?? new RuntimeCheckpointCommitStoreResult([])) with
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Replay,
+                    CommitFingerprint = entry.CommitFingerprint
+                };
+            }
+            if (entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared)
+                return Conflict();
+            if (!Equals(entry.ExpectedFence, commit.ExpectedFence))
+                return Conflict();
+
+            var coordination = await LoadCoordinationAsync(store, commit.WorkflowExecutionId, cancellationToken);
+            if (coordination is null ||
+                coordination.Document.OrderRevision != token.ExpectedOrderRevision ||
+                coordination.Document.ContextRevision != token.ExpectedContextRevision ||
+                coordination.Document.ReservedOrder < token.Provenance.WorkflowCheckpointOrder ||
+                coordination.Document.CommittedOrder >= token.Provenance.WorkflowCheckpointOrder)
+                return Conflict();
+            var existingMarker = await LoadMarkerAsync(store, commit, cancellationToken);
+            RuntimeCheckpointCommitStoreResult receipt;
+            RuntimeLogicalCheckpointLedgerStatus finalStatus;
+            var replayedExistingMarker = existingMarker is not null;
+            if (existingMarker is not null)
+            {
+                if (!StringComparer.Ordinal.Equals(existingMarker.Fingerprint, finalFingerprint))
+                    return Conflict();
+                receipt = ResolveReplay(commit, finalFingerprint, existingMarker) with
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Committed,
+                    CommitFingerprint = finalFingerprint
+                };
+                finalStatus = RuntimeLogicalCheckpointLedgerStatus.Committed;
+            }
+            else if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
+            {
+                await ValidateAndTouchExpectedFenceAsync(store, commit, cancellationToken);
+                receipt = new RuntimeCheckpointCommitStoreResult([])
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Skipped,
+                    CommitFingerprint = finalFingerprint
+                };
+                finalStatus = RuntimeLogicalCheckpointLedgerStatus.Skipped;
+            }
+            else
+            {
+                receipt = await ApplyStagedAsync(store, commit, finalFingerprint, cancellationToken, writeCommitMarker: false);
+                receipt = receipt with
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Committed,
+                    CommitFingerprint = finalFingerprint
+                };
+                finalStatus = RuntimeLogicalCheckpointLedgerStatus.Committed;
+                await MarkCommittedAsync(store, commit, finalFingerprint, cancellationToken);
+            }
+
+            var nextCoordination = coordination.Document with
+            {
+                CommittedOrder = finalStatus == RuntimeLogicalCheckpointLedgerStatus.Committed
+                    ? Math.Max(coordination.Document.CommittedOrder, token.Provenance.WorkflowCheckpointOrder)
+                    : coordination.Document.CommittedOrder,
+                OrderRevision = checked(coordination.Document.OrderRevision + 1),
+                ExecutionContext = finalStatus == RuntimeLogicalCheckpointLedgerStatus.Committed &&
+                                   !preparedRequest.RequestedExecutionContext.IsEmpty
+                    ? token.Provenance.ExecutionContext
+                    : coordination.Document.ExecutionContext,
+                ContextRevision = finalStatus == RuntimeLogicalCheckpointLedgerStatus.Committed &&
+                                  !preparedRequest.RequestedExecutionContext.IsEmpty &&
+                                  !coordination.Document.ExecutionContext.Equals(token.Provenance.ExecutionContext)
+                    ? checked(coordination.Document.ContextRevision + 1)
+                    : coordination.Document.ContextRevision
+            };
+            var finalEntry = entry with
+            {
+                Status = finalStatus,
+                CommitFingerprint = finalFingerprint,
+                Receipt = receipt
+            };
+            await SaveCoordinationAsync(store, nextCoordination, coordination.Version, cancellationToken);
+            await SaveLedgerAsync(store, new RuntimeCheckpointLedgerDocument(finalEntry), loadedLedger.Version, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return replayedExistingMarker
+                ? receipt with { Status = RuntimeCheckpointCommitStoreStatus.Replay }
+                : receipt;
+        }
+        catch (RuntimeStaleFencingTokenException)
+        {
+            return new RuntimeCheckpointCommitStoreResult([]) { Status = RuntimeCheckpointCommitStoreStatus.OwnershipLost };
+        }
+        catch (PreparedDocumentConcurrencyException)
+        {
+            return Conflict();
+        }
+        catch (Exception e) when (e is not OperationCanceledException and
+                                  not RuntimeSchedulerWorkConsumeConflictException and
+                                  not RuntimeCheckpointReplayConflictException and
+                                  not GroundworkRuntimeCheckpointWriterException)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException(
+                $"Failed to atomically commit prepared runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}'.",
+                e);
+        }
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -196,10 +569,16 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             .ToArray();
 
     private async ValueTask<CheckpointCommitMarker?> LoadMarkerAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+        => await LoadMarkerAsync(_commitLedger, commit, cancellationToken);
+
+    private async ValueTask<CheckpointCommitMarker?> LoadMarkerAsync(
+        IDocumentStore store,
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var envelope = await _commitLedger.LoadAsync(
+            var envelope = await store.LoadAsync(
                 ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
                 GroundworkPhysicalDocumentId.FromLogicalId(commit.CommitId),
                 cancellationToken);
@@ -292,7 +671,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IDocumentStore transactionalStore,
         RuntimeCheckpointCommit commit,
         string fingerprint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool writeCommitMarker = true)
     {
         await ValidateAndTouchExpectedFenceAsync(transactionalStore, commit, cancellationToken);
         var stores = GroundworkApplyStores.Create(transactionalStore, _serializer, _accessContextAccessor);
@@ -313,7 +693,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         await ApplyWorkflowDispatchCancellationsAsync(stores.WorkflowDispatchStore, commit.StateChanges.WorkflowDispatchCancellations, cancellationToken);
         await ApplyAlterationJobTerminalChangeAsync(stores.AlterationStore, commit.StateChanges.AlterationJobTerminalChange, cancellationToken);
         await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
-        await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
+        if (writeCommitMarker)
+            await MarkCommittedAsync(transactionalStore, commit, fingerprint, cancellationToken);
         return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit))
         {
             ConsumedSchedulerWorkItemIds = ConsumedIds(commit)
@@ -337,7 +718,9 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind);
 
     private static async ValueTask ValidateAndTouchTestScopesAsync(
         GroundworkApplyStores stores,
@@ -882,6 +1265,221 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         }
     }
 
+    private void EnsureAtomicBoundary(RuntimeCheckpointCommit commit)
+    {
+        if (_commitLedger.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException(
+                $"The Groundwork document store cannot atomically prepare runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}' because it does not support cross-unit atomic transactions.",
+                new NotSupportedException($"Unsupported transaction boundary '{_commitLedger.TransactionBoundary}'."));
+        }
+    }
+
+    private void EnsureTenantScope(RuntimeCheckpointCommit commit)
+    {
+        if (commit.StateChanges.WorkflowExecution is { } workflowExecutionChange)
+            _accessContextAccessor.Current.EnsureTenantScope(workflowExecutionChange.State.TenantId);
+        foreach (var dispatch in commit.StateChanges.WorkflowDispatches)
+            _accessContextAccessor.Current.EnsureTenantScope(dispatch.State.TenantId);
+    }
+
+    private async ValueTask<VersionedLedger?> LoadLedgerAsync(
+        IDocumentStore store,
+        string commitId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+            PreparationDocumentId(commitId),
+            cancellationToken);
+        if (envelope is null)
+            return null;
+        var document = _serializer.Deserialize<RuntimeCheckpointLedgerDocument>(envelope);
+        if (!StringComparer.Ordinal.Equals(document.Entry.CommitId, commitId))
+            throw new InvalidOperationException($"Groundwork physical document identity collision detected for prepared runtime checkpoint '{commitId}'.");
+        return new(document, envelope.Version);
+    }
+
+    private async ValueTask<VersionedCoordination?> LoadCoordinationAsync(
+        IDocumentStore store,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind,
+            CoordinationDocumentId(workflowExecutionId),
+            cancellationToken);
+        if (envelope is null)
+            return null;
+        var document = _serializer.Deserialize<RuntimeCheckpointCoordinationDocument>(envelope);
+        if (!StringComparer.Ordinal.Equals(document.WorkflowExecutionId, workflowExecutionId))
+            throw new InvalidOperationException($"Groundwork physical document identity collision detected for runtime checkpoint coordination '{workflowExecutionId}'.");
+        return new(document, envelope.Version);
+    }
+
+    private async ValueTask SaveLedgerAsync(
+        IDocumentStore store,
+        RuntimeCheckpointLedgerDocument document,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var (schemaVersion, content) = _serializer.Serialize(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+            document);
+        var result = await store.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+            PreparationDocumentId(document.Entry.CommitId),
+            schemaVersion,
+            content,
+            expectedVersion), cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return;
+        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound)
+            throw new PreparedDocumentConcurrencyException();
+        throw new InvalidOperationException($"Groundwork rejected logical checkpoint ledger '{document.Entry.CommitId}' with status '{result.Status}'.");
+    }
+
+    private async ValueTask SaveCoordinationAsync(
+        IDocumentStore store,
+        RuntimeCheckpointCoordinationDocument document,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var (schemaVersion, content) = _serializer.Serialize(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind,
+            document);
+        var result = await store.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind,
+            CoordinationDocumentId(document.WorkflowExecutionId),
+            schemaVersion,
+            content,
+            expectedVersion), cancellationToken);
+        if (result.Status == DocumentStoreWriteStatus.Saved)
+            return;
+        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound)
+            throw new PreparedDocumentConcurrencyException();
+        throw new InvalidOperationException($"Groundwork rejected checkpoint coordination '{document.WorkflowExecutionId}' with status '{result.Status}'.");
+    }
+
+    private async ValueTask<RuntimeCheckpointPreparationResult> ResolvePreparedReplayAsync(
+        IDocumentStore store,
+        VersionedLedger loaded,
+        RuntimeCheckpointPrepareRequest request,
+        RuntimeCheckpointPreparationPayloadEnvelope payload,
+        CancellationToken cancellationToken)
+    {
+        var entry = loaded.Document.Entry;
+        if (!StringComparer.Ordinal.Equals(entry.InputFingerprint, payload.PayloadSha256))
+            return RuntimeCheckpointPreparationResult.Conflict();
+        if (entry.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed)
+            return RuntimeCheckpointPreparationResult.Replay(ToToken(entry), entry.Receipt);
+        _ = DecodePreparation(entry);
+        if (entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared || !Equals(entry.ExpectedFence, request.Commit.ExpectedFence))
+            return RuntimeCheckpointPreparationResult.Conflict();
+
+        await ValidateAndTouchExpectedFenceAsync(store, request.Commit, cancellationToken);
+        var coordination = await LoadCoordinationAsync(store, request.Commit.WorkflowExecutionId, cancellationToken);
+        if (coordination is null ||
+            coordination.Document.ReservedOrder < entry.Provenance.WorkflowCheckpointOrder ||
+            coordination.Document.CommittedOrder >= entry.Provenance.WorkflowCheckpointOrder ||
+            coordination.Document.ContextRevision != entry.ExpectedContextRevision)
+            return RuntimeCheckpointPreparationResult.Conflict();
+
+        var refreshed = entry with
+        {
+            ExpectedOrderRevision = coordination.Document.OrderRevision,
+            ExpectedContextRevision = coordination.Document.ContextRevision
+        };
+        await SaveLedgerAsync(store, new RuntimeCheckpointLedgerDocument(refreshed), loaded.Version, cancellationToken);
+        return RuntimeCheckpointPreparationResult.Replay(ToToken(refreshed), refreshed.Receipt);
+    }
+
+    private RuntimeCheckpointPrepareRequest DecodePreparation(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        _preparationPayloadCodec.Decode(new RuntimeCheckpointPreparationPayloadEnvelope(
+            RuntimeCheckpointPreparationPayloadCodec.CurrentVersion,
+            entry.CanonicalInputPayload ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical recovery input."),
+            entry.InputFingerprint));
+
+    private RuntimeCheckpointPreparedReservation ToPreparedReservation(RuntimeLogicalCheckpointLedgerEntry entry)
+    {
+        var envelope = new RuntimeCheckpointPreparationPayloadEnvelope(
+            RuntimeCheckpointPreparationPayloadCodec.CurrentVersion,
+            entry.CanonicalInputPayload ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical recovery input."),
+            entry.InputFingerprint);
+        _ = _preparationPayloadCodec.Decode(envelope);
+        return new RuntimeCheckpointPreparedReservation(
+            ToToken(entry),
+            envelope,
+            entry.Status,
+            entry.CurrentAuthorityFence,
+            entry.AuthorityRevision);
+    }
+
+    private static bool IsAfter(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparedCursor cursor) =>
+        entry.Provenance.WorkflowCheckpointOrder > cursor.WorkflowCheckpointOrder ||
+        (entry.Provenance.WorkflowCheckpointOrder == cursor.WorkflowCheckpointOrder &&
+         StringComparer.Ordinal.Compare(entry.CommitId, cursor.CommitId) > 0);
+
+    private static bool RawCommitMatches(RuntimeCheckpointCommit prepared, RuntimeCheckpointCommit candidate) =>
+        StringComparer.Ordinal.Equals(
+            RuntimeCheckpointCommitFingerprint.ComputeInput(prepared),
+            RuntimeCheckpointCommitFingerprint.ComputeInput(candidate));
+
+    private static bool TokenMatches(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token) =>
+        StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
+        StringComparer.Ordinal.Equals(entry.LedgerToken, token.LedgerToken) &&
+        entry.Provenance.Equals(token.Provenance) &&
+        entry.ExpectedOrderRevision == token.ExpectedOrderRevision &&
+        entry.ExpectedContextRevision == token.ExpectedContextRevision &&
+        Equals(entry.ExpectedFence, token.ExpectedFence) &&
+        StringComparer.Ordinal.Equals(entry.InputFingerprint, token.CanonicalInputFingerprint) &&
+        StringComparer.Ordinal.Equals(entry.CanonicalInputReference, token.CanonicalInputReference) &&
+        entry.InitialPersistenceMode == token.InitialPersistenceMode &&
+        Equals(entry.RecoveryAuthority, token.RecoveryAuthority);
+
+    private static RuntimeCheckpointPreparationToken ToToken(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        entry.TerminalPreparationToken ?? new RuntimeCheckpointPreparationToken(
+            entry.CommitId,
+            entry.LedgerToken,
+            entry.Provenance,
+            entry.ExpectedOrderRevision ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no order authority."),
+            entry.ExpectedContextRevision ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no context authority."),
+            entry.ExpectedFence,
+            entry.InputFingerprint,
+            entry.CanonicalInputReference ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical input reference."),
+            entry.InitialPersistenceMode ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no candidate persistence mode."),
+            entry.RecoveryAuthority).Validate();
+
+    private static RuntimeCheckpointCommitStoreResult Conflict() =>
+        new([]) { Status = RuntimeCheckpointCommitStoreStatus.Conflict };
+
+    private static string ComputeLedgerToken(
+        string commitId,
+        string inputFingerprint,
+        long order,
+        long orderRevision,
+        long contextRevision,
+        RuntimeExecutionFence? fence)
+    {
+        var authority = JsonSerializer.Serialize(new
+        {
+            Domain = "elsa.runtime.checkpoint.preparation.groundwork.v1",
+            CommitId = commitId,
+            InputFingerprint = inputFingerprint,
+            Order = order,
+            OrderRevision = orderRevision,
+            ContextRevision = contextRevision,
+            Fence = fence
+        });
+        return $"groundwork:v1:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(authority)))}";
+    }
+
+    internal static string PreparationDocumentId(string commitId) =>
+        GroundworkPhysicalDocumentId.FromLogicalId($"prepared:{commitId}");
+
+    internal static string CoordinationDocumentId(string workflowExecutionId) =>
+        GroundworkPhysicalDocumentId.FromLogicalId($"coordination:{workflowExecutionId}");
+
     private sealed record CheckpointCommitMarker(
         string CommitId,
         string WorkflowExecutionId,
@@ -892,11 +1490,32 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         // Nullable + defaulted so markers written before WU-1 (spec 105) deserialize with no consumed ids.
         IReadOnlyCollection<string>? ConsumedSchedulerWorkItemIds = null);
 
+    internal sealed record RuntimeCheckpointLedgerDocument(RuntimeLogicalCheckpointLedgerEntry Entry);
+
+    internal sealed record RuntimeCheckpointCoordinationDocument(
+        string WorkflowExecutionId,
+        long ReservedOrder,
+        long CommittedOrder,
+        long OrderRevision,
+        RuntimeExecutionContextSnapshot ExecutionContext,
+        long ContextRevision)
+    {
+        public static RuntimeCheckpointCoordinationDocument Empty(string workflowExecutionId) =>
+            new(workflowExecutionId, 0, 0, 0, RuntimeExecutionContextSnapshot.Empty, 0);
+    }
+
+    private sealed record VersionedLedger(RuntimeCheckpointLedgerDocument Document, long Version);
+    private sealed record VersionedCoordination(RuntimeCheckpointCoordinationDocument Document, long Version);
+
     private sealed class FenceConcurrencyException : Exception
     {
     }
 
     private sealed class CheckpointMarkerConcurrencyException : Exception
+    {
+    }
+
+    private sealed class PreparedDocumentConcurrencyException : Exception
     {
     }
 

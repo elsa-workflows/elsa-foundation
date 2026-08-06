@@ -16,9 +16,10 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// </remarks>
 public sealed class CoalescingWorkflowSchedulerWorkQueue(
     CoalescingInner<IWorkflowSchedulerWorkQueue> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowSchedulerWorkQueue
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowSchedulerWorkQueue, IInMemoryCheckpointTransactionSource
 {
     private readonly IWorkflowSchedulerWorkQueue _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
 
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;

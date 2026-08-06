@@ -4,22 +4,82 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
-public sealed class InMemoryRuntimeCheckpointStoreState
+public sealed class InMemoryRuntimeCheckpointStoreState : IInMemoryCheckpointTransactionParticipant
 {
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => true;
     internal object SyncRoot { get; } = new();
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, RuntimeLogicalCheckpointLedgerEntry> LogicalCheckpointLedger { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, InMemoryRuntimeCheckpointOrderState> CheckpointOrders { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, InMemoryRuntimeExecutionContextState> ExecutionContexts { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        lock (SyncRoot)
+        {
+            return new CheckpointSnapshot(
+                Capture(Commits, scope.CommitIds),
+                Capture(LogicalCheckpointLedger, scope.CommitIds),
+                Capture(CheckpointOrders, [scope.WorkflowExecutionId]),
+                Capture(ExecutionContexts, [scope.WorkflowExecutionId]),
+                Capture(OutboxItems, scope.OutboxItemIds),
+                Capture(WorkflowDispatches, scope.WorkflowDispatchIds));
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        var checkpoint = (CheckpointSnapshot)snapshot;
+        lock (SyncRoot)
+        {
+            Restore(Commits, checkpoint.Commits);
+            Restore(LogicalCheckpointLedger, checkpoint.LogicalCheckpointLedger);
+            Restore(CheckpointOrders, checkpoint.CheckpointOrders);
+            Restore(ExecutionContexts, checkpoint.ExecutionContexts);
+            Restore(OutboxItems, checkpoint.OutboxItems);
+            Restore(WorkflowDispatches, checkpoint.WorkflowDispatches);
+        }
+    }
+
+    private static ScopedSnapshot<T> Capture<T>(IReadOnlyDictionary<string, T> source, IEnumerable<string> keys)
+    {
+        var selected = keys.ToHashSet(StringComparer.Ordinal);
+        return new ScopedSnapshot<T>(
+            selected,
+            source.Where(entry => selected.Contains(entry.Key)).ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal));
+    }
+
+    private static void Restore<T>(IDictionary<string, T> target, ScopedSnapshot<T> snapshot)
+    {
+        foreach (var key in snapshot.Keys)
+            target.Remove(key);
+        foreach (var entry in snapshot.Values)
+            target[entry.Key] = entry.Value;
+    }
+
+    private sealed record CheckpointSnapshot(
+        ScopedSnapshot<RuntimeCheckpointCommitRecord> Commits,
+        ScopedSnapshot<RuntimeLogicalCheckpointLedgerEntry> LogicalCheckpointLedger,
+        ScopedSnapshot<InMemoryRuntimeCheckpointOrderState> CheckpointOrders,
+        ScopedSnapshot<InMemoryRuntimeExecutionContextState> ExecutionContexts,
+        ScopedSnapshot<RuntimePostCommitOutboxItem> OutboxItems,
+        ScopedSnapshot<WorkflowDispatchRecord> WorkflowDispatches);
+
+    private sealed record ScopedSnapshot<T>(HashSet<string> Keys, Dictionary<string, T> Values);
 }
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimeCheckpointPreparedLedgerStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
@@ -36,7 +96,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IWorkflowSchedulerWorkQueue? _schedulerWorkQueue;
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
     private readonly IWorkflowAlterationStore? _alterationStore;
+    private readonly InMemoryCheckpointTransactionCoordinator _transactionCoordinator = new();
+    private readonly RuntimeCheckpointPreparationPayloadCodec _preparationPayloadCodec = new();
     private readonly TimeProvider _timeProvider;
+    private Exception? _nextPreparationFailure;
 
     /// <summary>
     /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
@@ -108,6 +171,292 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    public async ValueTask<RuntimeCheckpointPreparationResult> PrepareAsync(
+        RuntimeCheckpointPrepareRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Commit);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationIdentity);
+        ArgumentNullException.ThrowIfNull(request.RequestedExecutionContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var payloadEnvelope = _preparationPayloadCodec.Encode(request);
+        var decodedRequest = _preparationPayloadCodec.Decode(payloadEnvelope);
+        var frozenRequest = decodedRequest with
+        {
+            Commit = decodedRequest.Commit with { ExpectedFence = request.Commit.ExpectedFence }
+        };
+        var commit = frozenRequest.Commit;
+        var inputFingerprint = payloadEnvelope.PayloadSha256;
+        var canonicalInputPayload = payloadEnvelope.CanonicalPayload;
+        var plan = new InMemoryCheckpointMutationPlan(commit, commit.StateChanges.PostCommitOutbox.Select(x => x.State).ToArray());
+        await using var preparationTransaction = await _transactionCoordinator.BeginAsync(plan, BuildTransactionRoots(plan), cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            RuntimeLogicalCheckpointLedgerEntry? preparedEntry = null;
+            lock (_state.SyncRoot)
+            {
+                if (_state.LogicalCheckpointLedger.TryGetValue(commit.CommitId, out var existing))
+                {
+                    if (!StringComparer.Ordinal.Equals(existing.InputFingerprint, inputFingerprint))
+                        return Complete(RuntimeCheckpointPreparationResult.Conflict());
+
+                    if (existing.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed)
+                        return Complete(RuntimeCheckpointPreparationResult.Replay(ToToken(existing), existing.Receipt));
+                    preparedEntry = existing;
+                }
+                else if (_state.Commits.TryGetValue(commit.CommitId, out var legacyMarker))
+                    return Complete(ReconcileLegacyMarker(frozenRequest, inputFingerprint, legacyMarker));
+            }
+
+            try
+            {
+                await EnsureExpectedFenceAsync(commit, cancellationToken);
+            }
+            catch (RuntimeStaleFencingTokenException)
+            {
+                return Complete(RuntimeCheckpointPreparationResult.OwnershipLost());
+            }
+
+            if (preparedEntry is not null)
+            {
+                lock (_state.SyncRoot)
+                    return Complete(RefreshPreparedReservation(preparedEntry, commit));
+            }
+
+            var (order, expectedOrderRevision) = ReserveCheckpointOrder(commit.WorkflowExecutionId);
+            ThrowInjectedPreparationFailure();
+            var contextState = ReadExecutionContextState(commit.WorkflowExecutionId);
+            var expectedContextRevision = contextState.Revision;
+            var provenance = new RuntimeCheckpointProvenance(
+                frozenRequest.RequestedExecutionContext.IsEmpty ? contextState.Snapshot : frozenRequest.RequestedExecutionContext,
+                order);
+            var ledgerToken = Guid.NewGuid().ToString("N");
+            var canonicalInputReference = $"runtime-checkpoint:{commit.WorkflowExecutionId}:{commit.CommitId}";
+            var entry = new RuntimeLogicalCheckpointLedgerEntry(
+                commit.CommitId,
+                ledgerToken,
+                provenance,
+                frozenRequest.SourceIdentity,
+                frozenRequest.OperationIdentity,
+                commit.Checkpoint with { Provenance = null },
+                commit.StateChanges,
+                commit.PostCommitIntents,
+                commit.Metadata,
+                frozenRequest.RequestedExecutionContext,
+                expectedOrderRevision,
+                expectedContextRevision,
+                commit.ExpectedFence,
+                inputFingerprint,
+                canonicalInputPayload,
+                canonicalInputReference,
+                frozenRequest.InitialPersistenceMode,
+                RuntimeLogicalCheckpointLedgerStatus.Prepared,
+                WorkflowExecutionId: commit.WorkflowExecutionId,
+                RecoveryAuthority: frozenRequest.RecoveryAuthority,
+                CurrentAuthorityFence: commit.ExpectedFence,
+                AuthorityRevision: 1);
+            lock (_state.SyncRoot)
+                _state.LogicalCheckpointLedger.Add(commit.CommitId, entry);
+            return Complete(RuntimeCheckpointPreparationResult.Prepared(ToToken(entry)));
+        }
+        catch (Exception exception)
+        {
+            throw preparationTransaction.Rollback(exception);
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
+
+        RuntimeCheckpointPreparationResult Complete(RuntimeCheckpointPreparationResult result)
+        {
+            preparationTransaction.Commit();
+            return result;
+        }
+    }
+
+    public ValueTask<RuntimeCheckpointPreparedPage> PagePreparedAsync(
+        RuntimeCheckpointPreparedQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+        var cursor = query.DecodeCursor();
+        RuntimeLogicalCheckpointLedgerEntry[] entries;
+        using (_state.TransactionGate.Enter())
+        {
+            lock (_state.SyncRoot)
+            {
+                entries = _state.LogicalCheckpointLedger.Values
+                    .Where(entry => entry.Status == RuntimeLogicalCheckpointLedgerStatus.Prepared)
+                    .Where(entry => StringComparer.Ordinal.Equals(DecodePreparation(entry).Commit.WorkflowExecutionId, query.WorkflowExecutionId))
+                    .OrderBy(entry => entry.Provenance.WorkflowCheckpointOrder)
+                    .ThenBy(entry => entry.CommitId, StringComparer.Ordinal)
+                    .Where(entry => cursor is null ||
+                                    entry.Provenance.WorkflowCheckpointOrder > cursor.WorkflowCheckpointOrder ||
+                                    entry.Provenance.WorkflowCheckpointOrder == cursor.WorkflowCheckpointOrder &&
+                                    StringComparer.Ordinal.Compare(entry.CommitId, cursor.CommitId) > 0)
+                    .Take(query.PageSize + 1)
+                    .ToArray();
+            }
+        }
+
+        var pageEntries = entries.Take(query.PageSize).ToArray();
+        var reservations = pageEntries.Select(ToPreparedReservation).ToArray();
+        var nextCursor = entries.Length > query.PageSize && pageEntries.Length > 0
+            ? query.EncodeCursor(pageEntries[^1].Provenance.WorkflowCheckpointOrder, pageEntries[^1].CommitId)
+            : null;
+        return ValueTask.FromResult(new RuntimeCheckpointPreparedPage(query, reservations, nextCursor));
+    }
+
+    public ValueTask<RuntimeCheckpointPreparedFoldResult> CommitPreparedFoldAsync(
+        RuntimeCheckpointPreparedFoldRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new NotSupportedException(
+            "Prepared checkpoint terminal folding is not enabled until the reviewed adoption/fold work unit is approved.");
+    }
+
+    private static RuntimeCheckpointPreparedReservation ToPreparedReservation(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        new(
+            ToToken(entry),
+            new RuntimeCheckpointPreparationPayloadEnvelope(
+                RuntimeCheckpointPreparationPayloadCodec.CurrentVersion,
+                entry.CanonicalInputPayload ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical recovery input."),
+                entry.InputFingerprint),
+            entry.Status,
+            entry.CurrentAuthorityFence,
+            entry.AuthorityRevision);
+
+    public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedAsync(
+        RuntimeCheckpointPreparationToken token,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(decision);
+        token.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var plan = new InMemoryCheckpointMutationPlan(commit, commit.StateChanges.PostCommitOutbox.Select(x => x.State).ToArray());
+        await using var transaction = await _transactionCoordinator.BeginAsync(plan, BuildTransactionRoots(plan), cancellationToken);
+        await _state.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            bool terminalReplay;
+            lock (_state.SyncRoot)
+                terminalReplay = _state.LogicalCheckpointLedger.TryGetValue(token.CommitId, out var existing) &&
+                                 existing.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed;
+            if (terminalReplay)
+                return await CommitPreparedCoreAsync(token, commit, decision, cancellationToken);
+
+            var result = await CommitPreparedCoreAsync(token, commit, decision, cancellationToken);
+            transaction.Commit();
+            return result;
+        }
+        catch (RuntimeStaleFencingTokenException)
+        {
+            transaction.Commit();
+            return OwnershipLost();
+        }
+        catch (Exception exception)
+        {
+            throw transaction.Rollback(exception);
+        }
+        finally
+        {
+            _state.WriteGate.Release();
+        }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedCoreAsync(
+        RuntimeCheckpointPreparationToken token,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken)
+    {
+        RuntimeLogicalCheckpointLedgerEntry entry;
+        lock (_state.SyncRoot)
+        {
+            if (!_state.LogicalCheckpointLedger.TryGetValue(token.CommitId, out entry!) || !TokenMatches(entry, token))
+                return Conflict();
+            var preparedInput = DecodePreparation(entry);
+            if (!StringComparer.Ordinal.Equals(commit.CommitId, entry.CommitId) ||
+                !StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, preparedInput.Commit.WorkflowExecutionId) ||
+                !token.Provenance.Equals(commit.Checkpoint.Provenance))
+                return Conflict();
+
+            var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+            if (entry.Status is RuntimeLogicalCheckpointLedgerStatus.Committed or RuntimeLogicalCheckpointLedgerStatus.Skipped or RuntimeLogicalCheckpointLedgerStatus.Failed)
+            {
+                if (entry.ReconciledLegacyMarker == false && !StringComparer.Ordinal.Equals(entry.CommitFingerprint, fingerprint))
+                    return Conflict();
+                if (entry.ReconciledLegacyMarker == true && !RawCommitMatchesEntry(entry, commit))
+                    return Conflict();
+                return (entry.Receipt ?? new RuntimeCheckpointCommitStoreResult([])) with
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Replay,
+                    CommitFingerprint = entry.CommitFingerprint
+                };
+            }
+
+            if (entry.Status != RuntimeLogicalCheckpointLedgerStatus.Prepared || !ProviderRevisionsMatch(entry, token))
+                return Conflict();
+            if (!Equals(entry.ExpectedFence, commit.ExpectedFence))
+                return Conflict();
+            if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
+            {
+                if (!StringComparer.Ordinal.Equals(RuntimeCheckpointCommitFingerprint.Compute(existing.Commit), fingerprint))
+                    return Conflict();
+                var replay = Replay(existing, fingerprint);
+                FinalizeLedger(entry, replay with { Status = RuntimeCheckpointCommitStoreStatus.Committed }, RuntimeLogicalCheckpointLedgerStatus.Committed, fingerprint, commitContext: true);
+                return replay;
+            }
+        }
+
+        await EnsureExpectedFenceAsync(commit, cancellationToken);
+        var commitFingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+        if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
+        {
+            lock (_state.SyncRoot)
+            {
+                var skipped = new RuntimeCheckpointCommitStoreResult([])
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Skipped,
+                    CommitFingerprint = commitFingerprint
+                };
+                FinalizeLedger(entry, skipped, RuntimeLogicalCheckpointLedgerStatus.Skipped, commitFingerprint, commitContext: false);
+                return skipped;
+            }
+        }
+
+        RuntimeCheckpointCommitStoreResult? committed = null;
+        await CommitNewAsync(
+            commit,
+            decision,
+            cancellationToken,
+            validateFence: false,
+            finalize: result =>
+            {
+                committed = result with
+                {
+                    Status = RuntimeCheckpointCommitStoreStatus.Committed,
+                    CommitFingerprint = commitFingerprint
+                };
+                FinalizeLedger(entry, committed, RuntimeLogicalCheckpointLedgerStatus.Committed, commitFingerprint, commitContext: true);
+            });
+        return committed ?? throw new InvalidOperationException($"Prepared runtime checkpoint '{commit.CommitId}' completed without a receipt.");
+    }
+
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore,
         IActivityExecutionStateStore? activityExecutionStateStore,
@@ -174,6 +523,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var plan = new InMemoryCheckpointMutationPlan(commit, commit.StateChanges.PostCommitOutbox.Select(x => x.State).ToArray());
+        await using var transaction = await _transactionCoordinator.BeginAsync(plan, BuildTransactionRoots(plan), cancellationToken);
         await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
@@ -190,23 +541,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     }
                     return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds)
                     {
-                        ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds
+                        ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds,
+                        Status = RuntimeCheckpointCommitStoreStatus.Replay,
+                        CommitFingerprint = fingerprint
                     };
                 }
             }
 
-            if (commit.ExpectedFence is null)
-                return await CommitNewAsync(commit, decision, cancellationToken);
-
-            if (_operationalStateStore is not InMemoryExecutionLivenessStateStore inMemoryOperationalStateStore)
-            {
-                throw new InvalidOperationException(
-                    "A fenced in-memory checkpoint requires the in-memory execution liveness-state store so ownership validation and checkpoint writes share one atomic boundary.");
-            }
-
-            return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
-                ct => CommitNewAsync(commit, decision, ct),
-                cancellationToken);
+            var result = await CommitNewAsync(commit, decision, cancellationToken);
+            transaction.Commit();
+            return result;
+        }
+        catch (Exception exception)
+        {
+            throw transaction.Rollback(exception);
         }
         finally
         {
@@ -217,14 +565,22 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool validateFence = true,
+        Action<RuntimeCheckpointCommitStoreResult>? finalize = null,
+        bool writeCommitRecord = true)
     {
-        await EnsureExpectedFenceAsync(commit, cancellationToken);
+        if (validateFence)
+            await EnsureExpectedFenceAsync(commit, cancellationToken);
 
         var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
         var consumedSchedulerWorkItemIds = commit.StateChanges.ConsumedSchedulerWorkItems
             .Select(item => item.WorkItemId)
             .ToArray();
+        var result = new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray())
+        {
+            ConsumedSchedulerWorkItemIds = consumedSchedulerWorkItemIds
+        };
         ValidatePendingOutboxItems(pendingOutboxItems);
         ValidateConsumedSchedulerWorkItems(commit);
         ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
@@ -241,8 +597,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
-            // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
-            // claimant's commit persists nothing (WU-1 / spec 105).
             await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
@@ -260,32 +614,72 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             try
             {
-                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
-                // are serialized by the write gate), so an exception here is a genuine partial-persistence
-                // risk — the projections above have been applied but the commit record/outbox may not be
-                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
                 lock (_state.SyncRoot)
                 {
                     foreach (var item in pendingOutboxItems)
                         SavePendingOutboxItem(item);
 
-                    _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
-                        commit,
-                        decision,
-                        pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
-                        consumedSchedulerWorkItemIds));
+                    if (writeCommitRecord)
+                    {
+                        _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
+                            commit,
+                            decision,
+                            pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
+                            consumedSchedulerWorkItemIds));
+                    }
+                    finalize?.Invoke(result);
                 }
             }
-            catch (Exception exception) when (exception is not RuntimeSchedulerWorkConsumeConflictException)
+            catch (Exception exception) when (writeCommitRecord && exception is not RuntimeSchedulerWorkConsumeConflictException)
             {
                 throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
             }
         }, cancellationToken);
 
-        return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray())
+        return result;
+    }
+
+    private IReadOnlyCollection<InMemoryCheckpointTransactionRoot> BuildTransactionRoots(InMemoryCheckpointMutationPlan plan)
+    {
+        var roots = new List<InMemoryCheckpointTransactionRoot>
         {
-            ConsumedSchedulerWorkItemIds = consumedSchedulerWorkItemIds
+            new("checkpoint-state", _state)
         };
+        Add(plan.MutatesWorkflowExecution, "workflow-execution-state", _workflowExecutionStateStore);
+        Add(plan.MutatesScheduler, "scheduler-state", _schedulerStateStore);
+        Add(plan.ActivityExecutionStateIds.Count > 0, "activity-execution-state", _activityExecutionStateStore);
+        Add(plan.ActivityInspectionIds.Count > 0, "activity-execution-inspection", _activityExecutionInspectionWriter);
+        Add(plan.ActivityHierarchyIds.Count > 0, "activity-execution-hierarchy", _activityExecutionHierarchyWriter);
+        Add(plan.BookmarkIds.Count > 0, "bookmark-state", _bookmarkStateStore);
+        Add(plan.DurableValueIds.Count > 0, "durable-value-state", _durableValueStateStore);
+        Add(plan.IncidentIds.Count > 0, "incident-state", _incidentStateStore);
+        Add(plan.OperationalStateIds.Count > 0 || plan.HasExpectedFence, "execution-liveness-state", _operationalStateStore);
+        Add(plan.HasActivityScopeCleanup, "activity-scope-cleanup", _activityScopeCleanupStore);
+        Add(plan.SchedulerWorkItemIds.Count > 0, "scheduler-work-queue", _schedulerWorkQueue);
+        Add(plan.WorkflowDispatchIds.Count > 0, "workflow-dispatch", _workflowDispatchStore);
+        Add(plan.AlterationJobId is not null, "workflow-alteration", _alterationStore);
+        return roots;
+
+        void Add(bool affected, string name, object? component)
+        {
+            if (affected)
+                roots.Add(new(name, component));
+        }
+    }
+
+    /// <summary>Test seam that throws once after reserving an order but before adding the prepared ledger entry.</summary>
+    public void InjectPreparationFailureForTesting(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        if (Interlocked.CompareExchange(ref _nextPreparationFailure, exception, null) is not null)
+            throw new InvalidOperationException("A preparation failure is already pending.");
+    }
+
+    private void ThrowInjectedPreparationFailure()
+    {
+        var exception = Interlocked.Exchange(ref _nextPreparationFailure, null);
+        if (exception is not null)
+            throw exception;
     }
 
     private async ValueTask ApplyConsumedSchedulerWorkItemsAsync(
@@ -403,11 +797,240 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     public IReadOnlyCollection<RuntimeCheckpointCommitRecord> ListCommits()
     {
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             return _state.Commits.Values.ToArray();
         }
     }
+
+    public IReadOnlyCollection<RuntimeLogicalCheckpointLedgerEntry> ListLogicalCheckpointLedgerEntries()
+    {
+        using var checkpointGate = _state.TransactionGate.Enter();
+        lock (_state.SyncRoot)
+            return _state.LogicalCheckpointLedger.Values.ToArray();
+    }
+
+    public (long Reserved, long Committed, long Revision) GetCheckpointOrderHighWatermarks(string workflowExecutionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        using var checkpointGate = _state.TransactionGate.Enter();
+        lock (_state.SyncRoot)
+        {
+            var current = ReadCheckpointOrderState(workflowExecutionId);
+            return (current.Reserved, current.Committed, current.Revision);
+        }
+    }
+
+    /// <summary>Test seam exposing the provider-owned generic context snapshot and revision.</summary>
+    public (RuntimeExecutionContextSnapshot Snapshot, long Revision) GetExecutionContextForTesting(string workflowExecutionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        using var checkpointGate = _state.TransactionGate.Enter();
+        lock (_state.SyncRoot)
+        {
+            var current = _state.ExecutionContexts.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+            return (current.Snapshot, current.Revision);
+        }
+    }
+
+    /// <summary>Test observation of successful provider-atomic fold transactions; unlike commit markers, this counts physical folds.</summary>
+
+    private (long Order, long ExpectedRevision) ReserveCheckpointOrder(string workflowExecutionId)
+    {
+        lock (_state.SyncRoot)
+        {
+            var current = ReadCheckpointOrderState(workflowExecutionId);
+            var order = checked(current.Reserved + 1);
+            var next = new InMemoryRuntimeCheckpointOrderState(order, current.Committed, checked(current.Revision + 1));
+            _state.CheckpointOrders[workflowExecutionId] = next;
+            return (order, next.Revision);
+        }
+    }
+
+    private InMemoryRuntimeCheckpointOrderState ReadCheckpointOrderState(string workflowExecutionId) =>
+        _state.CheckpointOrders.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeCheckpointOrderState.Empty;
+
+    private InMemoryRuntimeExecutionContextState ReadExecutionContextState(string workflowExecutionId)
+    {
+        lock (_state.SyncRoot)
+            return _state.ExecutionContexts.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+    }
+
+    private RuntimeCheckpointPreparationResult RefreshPreparedReservation(
+        RuntimeLogicalCheckpointLedgerEntry entry,
+        RuntimeCheckpointCommit commit)
+    {
+        var preparedInput = DecodePreparation(entry);
+        var workflowExecutionId = preparedInput.Commit.WorkflowExecutionId;
+        var order = ReadCheckpointOrderState(workflowExecutionId);
+        if (order.Reserved < entry.Provenance.WorkflowCheckpointOrder ||
+            order.Committed >= entry.Provenance.WorkflowCheckpointOrder)
+            return RuntimeCheckpointPreparationResult.Conflict();
+
+        var context = _state.ExecutionContexts.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+        if (context.Revision != entry.ExpectedContextRevision &&
+            !context.Snapshot.Equals(entry.Provenance.ExecutionContext))
+            return RuntimeCheckpointPreparationResult.Conflict();
+
+        var refreshed = entry with
+        {
+            LedgerToken = Guid.NewGuid().ToString("N"),
+            ExpectedOrderRevision = order.Revision,
+            ExpectedContextRevision = context.Revision,
+            ExpectedFence = commit.ExpectedFence
+        };
+        _state.LogicalCheckpointLedger[entry.CommitId] = refreshed;
+        return RuntimeCheckpointPreparationResult.Replay(ToToken(refreshed), refreshed.Receipt);
+    }
+
+    private RuntimeCheckpointPreparationResult ReconcileLegacyMarker(
+        RuntimeCheckpointPrepareRequest request,
+        string inputFingerprint,
+        RuntimeCheckpointCommitRecord marker)
+    {
+        if (!StringComparer.Ordinal.Equals(RuntimeCheckpointCommitFingerprint.ComputeInput(marker.Commit), RuntimeCheckpointCommitFingerprint.ComputeInput(request.Commit)) ||
+            !StringComparer.Ordinal.Equals(request.SourceIdentity, marker.Commit.Checkpoint.Name) ||
+            !StringComparer.Ordinal.Equals(request.OperationIdentity, marker.Commit.Checkpoint.CheckpointId) ||
+            !request.RequestedExecutionContext.IsEmpty)
+            return RuntimeCheckpointPreparationResult.Conflict();
+
+        var (order, expectedOrderRevision) = ReserveCheckpointOrder(request.Commit.WorkflowExecutionId);
+        var provenance = new RuntimeCheckpointProvenance(request.RequestedExecutionContext, order);
+        var entry = new RuntimeLogicalCheckpointLedgerEntry(
+            request.Commit.CommitId,
+            Guid.NewGuid().ToString("N"),
+            provenance,
+            request.SourceIdentity,
+            request.OperationIdentity,
+            request.Commit.Checkpoint with { Provenance = null },
+            request.Commit.StateChanges,
+            request.Commit.PostCommitIntents,
+            request.Commit.Metadata,
+            request.RequestedExecutionContext,
+            expectedOrderRevision,
+            ReadExecutionContextState(request.Commit.WorkflowExecutionId).Revision,
+            request.Commit.ExpectedFence,
+            inputFingerprint,
+            _preparationPayloadCodec.Encode(request).CanonicalPayload,
+            $"runtime-checkpoint:{request.Commit.WorkflowExecutionId}:{request.Commit.CommitId}",
+            marker.Decision.Mode,
+            RuntimeLogicalCheckpointLedgerStatus.Prepared,
+            ReconciledLegacyMarker: true,
+            WorkflowExecutionId: request.Commit.WorkflowExecutionId);
+        _state.LogicalCheckpointLedger.Add(entry.CommitId, entry);
+        var legacyFingerprint = RuntimeCheckpointCommitFingerprint.Compute(marker.Commit);
+        var receipt = new RuntimeCheckpointCommitStoreResult(marker.PendingPostCommitWorkIds)
+        {
+            ConsumedSchedulerWorkItemIds = marker.ConsumedSchedulerWorkItemIds,
+            Status = RuntimeCheckpointCommitStoreStatus.Committed,
+            CommitFingerprint = legacyFingerprint
+        };
+        FinalizeLedger(entry, receipt, RuntimeLogicalCheckpointLedgerStatus.Committed, legacyFingerprint, commitContext: false);
+        return RuntimeCheckpointPreparationResult.Replay(ToToken(_state.LogicalCheckpointLedger[entry.CommitId]), receipt);
+    }
+
+    private bool ProviderRevisionsMatch(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token)
+    {
+        var preparedInput = DecodePreparation(entry);
+        var workflowExecutionId = preparedInput.Commit.WorkflowExecutionId;
+        var order = ReadCheckpointOrderState(workflowExecutionId);
+        var context = _state.ExecutionContexts.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+        return order.Revision == token.ExpectedOrderRevision &&
+               order.Reserved >= token.Provenance.WorkflowCheckpointOrder &&
+               order.Committed < token.Provenance.WorkflowCheckpointOrder &&
+               context.Revision == token.ExpectedContextRevision;
+    }
+
+    private static bool TokenMatches(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointPreparationToken token) =>
+        StringComparer.Ordinal.Equals(entry.CommitId, token.CommitId) &&
+        StringComparer.Ordinal.Equals(entry.LedgerToken, token.LedgerToken) &&
+        entry.Provenance.Equals(token.Provenance) &&
+        entry.ExpectedOrderRevision == token.ExpectedOrderRevision &&
+        entry.ExpectedContextRevision == token.ExpectedContextRevision &&
+        Equals(entry.ExpectedFence, token.ExpectedFence) &&
+        StringComparer.Ordinal.Equals(entry.InputFingerprint, token.CanonicalInputFingerprint) &&
+        StringComparer.Ordinal.Equals(entry.CanonicalInputReference, token.CanonicalInputReference) &&
+        entry.InitialPersistenceMode == token.InitialPersistenceMode;
+
+    private bool RawCommitMatchesEntry(RuntimeLogicalCheckpointLedgerEntry entry, RuntimeCheckpointCommit commit)
+    {
+        var raw = DecodePreparation(entry).Commit;
+        return StringComparer.Ordinal.Equals(
+            RuntimeCheckpointCommitFingerprint.ComputeInput(raw),
+            RuntimeCheckpointCommitFingerprint.ComputeInput(commit));
+    }
+
+    private RuntimeCheckpointPrepareRequest DecodePreparation(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        _preparationPayloadCodec.Decode(new RuntimeCheckpointPreparationPayloadEnvelope(
+            RuntimeCheckpointPreparationPayloadCodec.CurrentVersion,
+            entry.CanonicalInputPayload ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical recovery input."),
+            entry.InputFingerprint));
+
+    private void FinalizeLedger(
+        RuntimeLogicalCheckpointLedgerEntry entry,
+        RuntimeCheckpointCommitStoreResult receipt,
+        RuntimeLogicalCheckpointLedgerStatus status,
+        string fingerprint,
+        bool commitContext)
+    {
+        var preparedInput = DecodePreparation(entry);
+        var workflowExecutionId = preparedInput.Commit.WorkflowExecutionId;
+        var order = ReadCheckpointOrderState(workflowExecutionId);
+        if (order.Revision != entry.ExpectedOrderRevision ||
+            order.Reserved < entry.Provenance.WorkflowCheckpointOrder ||
+            order.Committed >= entry.Provenance.WorkflowCheckpointOrder)
+            throw new InvalidOperationException($"Runtime checkpoint order revision changed while finalizing '{entry.CommitId}'.");
+        var context = _state.ExecutionContexts.GetValueOrDefault(workflowExecutionId) ?? InMemoryRuntimeExecutionContextState.Empty;
+        if (commitContext && context.Revision != entry.ExpectedContextRevision)
+            throw new InvalidOperationException($"Runtime execution-context revision changed while finalizing '{entry.CommitId}'.");
+
+        _state.CheckpointOrders[workflowExecutionId] = new(
+            order.Reserved,
+            status == RuntimeLogicalCheckpointLedgerStatus.Committed
+                ? Math.Max(order.Committed, entry.Provenance.WorkflowCheckpointOrder)
+                : order.Committed,
+            checked(order.Revision + 1));
+        if (commitContext)
+        {
+            if (!preparedInput.RequestedExecutionContext.IsEmpty && !context.Snapshot.Equals(entry.Provenance.ExecutionContext))
+                _state.ExecutionContexts[workflowExecutionId] = new(entry.Provenance.ExecutionContext!, checked(context.Revision + 1));
+        }
+
+        _state.LogicalCheckpointLedger[entry.CommitId] = entry with
+        {
+            Status = status,
+            CommitFingerprint = fingerprint,
+            Receipt = receipt
+        };
+    }
+
+    private static RuntimeCheckpointCommitStoreResult Conflict() =>
+        new([]) { Status = RuntimeCheckpointCommitStoreStatus.Conflict };
+
+    private static RuntimeCheckpointCommitStoreResult OwnershipLost() =>
+        new([]) { Status = RuntimeCheckpointCommitStoreStatus.OwnershipLost };
+
+    private static RuntimeCheckpointCommitStoreResult Replay(RuntimeCheckpointCommitRecord existing, string fingerprint) =>
+        new(existing.PendingPostCommitWorkIds)
+        {
+            ConsumedSchedulerWorkItemIds = existing.ConsumedSchedulerWorkItemIds,
+            Status = RuntimeCheckpointCommitStoreStatus.Replay,
+            CommitFingerprint = fingerprint
+        };
+
+    private static RuntimeCheckpointPreparationToken ToToken(RuntimeLogicalCheckpointLedgerEntry entry) =>
+        entry.TerminalPreparationToken ?? new RuntimeCheckpointPreparationToken(
+            entry.CommitId,
+            entry.LedgerToken,
+            entry.Provenance,
+            entry.ExpectedOrderRevision ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no order authority."),
+            entry.ExpectedContextRevision ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no context authority."),
+            entry.ExpectedFence,
+            entry.InputFingerprint,
+            entry.CanonicalInputReference ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no canonical input reference."),
+            entry.InitialPersistenceMode ?? throw new InvalidOperationException($"Prepared checkpoint '{entry.CommitId}' has no candidate persistence mode."),
+            entry.RecoveryAuthority).Validate();
 
     /// <summary>Test seam: seeds a pending outbox item directly, bypassing the commit path (§2.23.3).</summary>
     public ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
@@ -415,6 +1038,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(item);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             SavePendingOutboxItem(item);
@@ -431,6 +1055,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (query.OwnerId is not null)
             throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var items = _state.OutboxItems.Values
@@ -452,6 +1077,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             return new ValueTask<RuntimePostCommitOutboxItem?>(
@@ -464,6 +1090,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             if (!_state.OutboxItems.TryGetValue(result.OutboxItemId, out var existing))
@@ -506,6 +1133,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             var claimable = _state.OutboxItems.Values
@@ -536,6 +1164,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
@@ -554,16 +1183,17 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(completion);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var childExecution = completion.WorkflowDispatch is { } projectedDispatch &&
+                             _workflowExecutionStateStore is not null
+            ? await _workflowExecutionStateStore.FindAsync(
+                projectedDispatch.ChildWorkflowExecutionId,
+                cancellationToken)
+            : null;
+
+        await using var checkpointGate = await _state.TransactionGate.EnterAsync(cancellationToken);
         await _state.WriteGate.WaitAsync(cancellationToken);
         try
         {
-            var childExecution = completion.WorkflowDispatch is { } projectedDispatch &&
-                                 _workflowExecutionStateStore is not null
-                ? await _workflowExecutionStateStore.FindAsync(
-                    projectedDispatch.ChildWorkflowExecutionId,
-                    cancellationToken)
-                : null;
-
             lock (_state.SyncRoot)
             {
                 if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
@@ -641,6 +1271,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             _state.WorkflowDispatches.TryGetValue(request.DispatchId, out var dispatch);
@@ -1258,3 +1889,13 @@ public sealed record RuntimeCheckpointCommitRecord(
     RuntimeCheckpointPersistenceDecision Decision,
     IReadOnlyCollection<string> PendingPostCommitWorkIds,
     IReadOnlyCollection<string> ConsumedSchedulerWorkItemIds);
+
+internal sealed record InMemoryRuntimeCheckpointOrderState(long Reserved, long Committed, long Revision)
+{
+    public static InMemoryRuntimeCheckpointOrderState Empty { get; } = new(0, 0, 0);
+}
+
+internal sealed record InMemoryRuntimeExecutionContextState(RuntimeExecutionContextSnapshot Snapshot, long Revision)
+{
+    public static InMemoryRuntimeExecutionContextState Empty { get; } = new(RuntimeExecutionContextSnapshot.Empty, 0);
+}

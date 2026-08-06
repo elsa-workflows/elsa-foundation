@@ -8,8 +8,10 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// by this store is <b>not</b> restart-durable — a process restart forgets every pending timer. Compose a
 /// durable persistence provider (e.g. the Groundwork bridge) to make timers survive restarts.
 /// </summary>
-public sealed class InMemoryDurableTimerStore : IDurableTimerStore
+public sealed class InMemoryDurableTimerStore : IDurableTimerStore, IInMemoryCheckpointTransactionParticipant
 {
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.TimerIds.Count > 0;
     private readonly object _syncRoot = new();
     private readonly Dictionary<TimerKey, TimerState> _timers = new();
 
@@ -19,6 +21,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(timer);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -38,6 +42,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
             throw new ArgumentOutOfRangeException(nameof(limit), $"Due-timer listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -59,6 +65,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         ArgumentException.ThrowIfNullOrWhiteSpace(timerId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             return new ValueTask<DurableTimer?>(
@@ -77,6 +85,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -102,6 +112,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         ArgumentException.ThrowIfNullOrWhiteSpace(timerId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             _timers.Remove(new TimerKey(workflowExecutionId, timerId));
@@ -116,6 +128,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -155,6 +169,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
             throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Durable timer visibility timeout must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             if (!TryGetCurrentState(claim, out var state))
@@ -176,6 +192,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -200,6 +218,8 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -268,5 +288,42 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         public DateTimeOffset? ClaimedAt { get; set; }
         public DateTimeOffset? VisibleAfter { get; set; }
         public int FailureCount { get; set; }
+
+        public TimerState Clone() => new(Timer)
+        {
+            OwnerId = OwnerId,
+            FencingToken = FencingToken,
+            Revision = Revision,
+            ClaimedAt = ClaimedAt,
+            VisibleAfter = VisibleAfter,
+            FailureCount = FailureCount
+        };
     }
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var keys = scope.TimerIds.Select(id => new TimerKey(scope.WorkflowExecutionId, id)).ToHashSet();
+            return new CheckpointSnapshot(
+                keys,
+                _timers.Where(entry => keys.Contains(entry.Key)).ToDictionary(entry => entry.Key, entry => entry.Value.Clone()));
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var checkpoint = (CheckpointSnapshot)snapshot;
+            foreach (var key in checkpoint.Keys)
+                _timers.Remove(key);
+            foreach (var entry in checkpoint.Timers)
+                _timers[entry.Key] = entry.Value.Clone();
+        }
+    }
+
+    private sealed record CheckpointSnapshot(HashSet<TimerKey> Keys, Dictionary<TimerKey, TimerState> Timers);
 }

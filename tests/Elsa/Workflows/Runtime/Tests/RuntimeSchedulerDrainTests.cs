@@ -561,7 +561,9 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var checkpointWriter = RuntimeCheckpointTestStores.Create(
+            activityExecutionStateStore: activityStateStore,
+            schedulerWorkQueue: queue);
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var drainer = TestSchedulerDrainer.Create(
             queue,
@@ -602,7 +604,7 @@ public sealed class RuntimeSchedulerDrainTests
         // RT-6 (Move 2): the migrated Checkpoint handler's context-aware overload stages its commit on the workspace
         // for the Checkpoint slot instead of committing inline — mirroring the Cancel handler.
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var checkpointWriter = RuntimeCheckpointTestStores.Create(activityExecutionStateStore: activityStateStore);
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
         var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));
@@ -622,7 +624,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         // Behaviour-preserving fallback: dispatched without a pipeline it commits inline, as before Move 2.
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var checkpointWriter = RuntimeCheckpointTestStores.Create(activityExecutionStateStore: activityStateStore);
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
         var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));

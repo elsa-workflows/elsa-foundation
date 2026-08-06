@@ -1,7 +1,10 @@
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -410,6 +413,113 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.AlreadyApplied, (await queue.CompleteClaimAsync(retried)).Status);
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Recovery_resolver_finds_an_exact_durable_item_even_while_it_is_actively_claimed(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var resolverType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSchedulerWorkItemResolver");
+        var authorityType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointRecoveryAuthority");
+        var resolutionType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointRecoveryResolution");
+        Assert.Equal(250, Assert.IsType<int>(resolverType.GetField("MaximumPageSize")?.GetRawConstantValue()));
+        Assert.True(resolverType.IsInstanceOfType(queue));
+        var workItem = NewWorkItem(1);
+        await queue.EnqueueAsync(workItem);
+        Assert.NotNull(await queue.ClaimAsync(new("wfexec-1", "owner-claimed", Now, TimeSpan.FromMinutes(5))));
+        var authority = EncodeAuthority(workItem, authorityType);
+        var resolve = Assert.Single(resolverType.GetMethods());
+        var arguments = resolve.GetParameters().Select(parameter =>
+        {
+            if (parameter.ParameterType == authorityType)
+                return authority;
+            if (parameter.ParameterType == typeof(CancellationToken))
+                return CancellationToken.None;
+            if (parameter.HasDefaultValue)
+                return parameter.DefaultValue;
+            Assert.Fail($"Unexpected resolver parameter '{parameter.Name}:{parameter.ParameterType.FullName}'.");
+            return null;
+        }).ToArray();
+
+        var resolution = await ResolveAsync(queue, authority, resolverType, authorityType, resolutionType);
+
+        Assert.Equal("Exact", resolutionType.GetProperty("Status")!.GetValue(resolution)!.ToString());
+        AssertResolutionMatchesAuthority(workItem, resolution, authorityType, resolutionType);
+        Assert.Equal(["work-1"], (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Select(item => item.WorkItemId));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Recovery_resolver_pages_only_the_authority_workflow_in_stable_order_without_repeat_or_skip(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var setupQueue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer);
+        const string workflowExecutionId = "wfexec-fallback";
+        for (var index = 1; index <= 251; index++)
+            await setupQueue.EnqueueAsync(NewWorkItem(index, workflowExecutionId));
+        var target = NewWorkItem(252, workflowExecutionId);
+        await setupQueue.EnqueueAsync(target);
+        var claimed = await setupQueue.ClaimAsync(new(workflowExecutionId, "owner-claimed", Now, TimeSpan.FromMinutes(5)));
+        Assert.NotNull(claimed);
+        Assert.Equal("work-1", claimed.Item.WorkItemId);
+        var durableFirstPage = await setupQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, 250));
+        Assert.Equal(250, durableFirstPage.Items.Count);
+        Assert.Equal("work-1", durableFirstPage.Items.First().WorkItemId);
+
+        var bounded = new RecordingBoundedDocumentStore(fixture.BoundedDocumentStore);
+        var queue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            bounded);
+        var resolverType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSchedulerWorkItemResolver");
+        var authorityType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointRecoveryAuthority");
+        var resolutionType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointRecoveryResolution");
+        var authority = EncodeAuthority(target, authorityType);
+
+        var first = await ResolveAsync(queue, authority, resolverType, authorityType, resolutionType);
+        AssertFallbackSweep(workflowExecutionId, bounded.Queries, bounded.ReturnedDocumentIds);
+        bounded.Queries.Clear();
+        bounded.ReturnedDocumentCounts.Clear();
+        bounded.ReturnedDocumentIds.Clear();
+        var restarted = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            bounded);
+        var second = await ResolveAsync(restarted, authority, resolverType, authorityType, resolutionType);
+        AssertFallbackSweep(workflowExecutionId, bounded.Queries, bounded.ReturnedDocumentIds);
+
+        Assert.Equal("Exact", resolutionType.GetProperty("Status")!.GetValue(first)!.ToString());
+        Assert.Equal("Exact", resolutionType.GetProperty("Status")!.GetValue(second)!.ToString());
+        AssertResolutionMatchesAuthority(target, first, authorityType, resolutionType);
+        AssertResolutionMatchesAuthority(target, second, authorityType, resolutionType);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Recovery_resolver_wraps_bounded_provider_failures_with_scheduler_work_context(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var providerFailure = new IOException("requested bounded-store failure");
+        var queue = new GroundworkWorkflowSchedulerWorkQueue(
+            fixture.DocumentStore,
+            GroundworkTestSerialization.Serializer,
+            new ThrowingBoundedDocumentStore(providerFailure));
+        var item = NewWorkItem(1);
+        var authority = new RuntimeCheckpointRecoveryAuthorityCodec().Encode(item);
+
+        var exception = await Assert.ThrowsAsync<RuntimeSchedulerWorkRecoveryResolutionException>(() =>
+            ((IRuntimeSchedulerWorkItemResolver)queue).ResolveAsync(authority).AsTask());
+
+        Assert.Equal(item.WorkflowExecutionId, exception.WorkflowExecutionId);
+        Assert.Equal(item.WorkItemId, exception.WorkItemId);
+        Assert.Same(providerFailure, exception.InnerException);
+    }
+
     private static RuntimeSchedulerWorkItem NewWorkItem(
         int index,
         string workflowExecutionId = "wfexec-1",
@@ -433,4 +543,113 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    private static Type RequiredRuntimeType(string fullName)
+    {
+        var type = typeof(RuntimeSchedulerWorkItem).Assembly.GetType(fullName, throwOnError: false);
+        Assert.True(type is not null, $"Required Path A contract type '{fullName}' is missing.");
+        return type!;
+    }
+
+    private static object EncodeAuthority(RuntimeSchedulerWorkItem item, Type authorityType)
+    {
+        var codecType = RequiredRuntimeType("Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointRecoveryAuthorityCodec");
+        var method = codecType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .Single(candidate => candidate.ReturnType == authorityType &&
+                                 candidate.GetParameters() is [{ ParameterType: var parameterType }] &&
+                                 parameterType == typeof(RuntimeSchedulerWorkItem));
+        return method.Invoke(method.IsStatic ? null : Activator.CreateInstance(codecType), [item])!;
+    }
+
+    private static async Task<object> ResolveAsync(
+        object resolver,
+        object authority,
+        Type resolverType,
+        Type authorityType,
+        Type resolutionType)
+    {
+        var resolve = Assert.Single(resolverType.GetMethods());
+        var arguments = resolve.GetParameters().Select(parameter =>
+        {
+            if (parameter.ParameterType == authorityType)
+                return authority;
+            if (parameter.ParameterType == typeof(CancellationToken))
+                return (object)CancellationToken.None;
+            if (parameter.HasDefaultValue)
+                return parameter.DefaultValue;
+            Assert.Fail($"Unexpected resolver parameter '{parameter.Name}:{parameter.ParameterType.FullName}'.");
+            return null;
+        }).ToArray();
+        var awaitable = resolve.Invoke(resolver, arguments)!;
+        Assert.Equal(typeof(ValueTask<>).MakeGenericType(resolutionType), awaitable.GetType());
+        var task = (Task)awaitable.GetType().GetMethod("AsTask")!.Invoke(awaitable, null)!;
+        await task;
+        return task.GetType().GetProperty("Result")!.GetValue(task)!;
+    }
+
+    private static void AssertResolutionMatchesAuthority(
+        RuntimeSchedulerWorkItem expected,
+        object resolution,
+        Type authorityType,
+        Type resolutionType)
+    {
+        var actual = Assert.IsType<RuntimeSchedulerWorkItem>(resolutionType.GetProperty("WorkItem")!.GetValue(resolution));
+        Assert.Equal(expected.WorkItemId, actual.WorkItemId);
+        Assert.Equal(expected.WorkflowExecutionId, actual.WorkflowExecutionId);
+        Assert.Equal(expected.CommandId, actual.CommandId);
+        Assert.Equal(expected.EnvelopeId, actual.EnvelopeId);
+        Assert.Equal(expected.IdempotencyKey, actual.IdempotencyKey);
+        Assert.Equal(
+            authorityType.GetProperty("Fingerprint")!.GetValue(EncodeAuthority(expected, authorityType)),
+            authorityType.GetProperty("Fingerprint")!.GetValue(EncodeAuthority(actual, authorityType)));
+    }
+
+    private static void AssertFallbackSweep(
+        string workflowExecutionId,
+        IReadOnlyList<DocumentQuery> queries,
+        IReadOnlyList<IReadOnlyList<string>> returnedDocumentIds)
+    {
+        Assert.Equal(2, queries.Count);
+        Assert.Equal(queries.Count, returnedDocumentIds.Count);
+        Assert.Null(queries[0].Continuation);
+        Assert.NotNull(queries[1].Continuation);
+        foreach (var query in queries)
+        {
+            Assert.Equal(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, query.DocumentKind);
+            Assert.Equal(ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery, query.QueryIdentity);
+            Assert.NotNull(query.Take);
+            Assert.InRange(query.Take.Value, 1, 250);
+            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+            Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, comparison.Path);
+            Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+            Assert.Equal(workflowExecutionId, Assert.Single(comparison.Values));
+            var order = Assert.Single(query.Order);
+            Assert.Equal(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField, order.Path);
+            Assert.Equal(PhysicalSortDirection.Ascending, order.Direction);
+        }
+
+        Assert.Equal(250, queries[0].Take);
+        var observedIds = returnedDocumentIds.SelectMany(ids => ids).ToArray();
+        Assert.Equal(252, observedIds.Length);
+        Assert.Equal(252, observedIds.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    private sealed class ThrowingBoundedDocumentStore(Exception exception) : IBoundedDocumentStore
+    {
+        public Task<DocumentQueryResult> QueryAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<DocumentQueryResult>(exception);
+
+        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromException<long>(exception);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
+            DocumentQuery query,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<DocumentEnvelope?>(exception);
+
+        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
+            Task.FromException<bool>(exception);
+    }
 }

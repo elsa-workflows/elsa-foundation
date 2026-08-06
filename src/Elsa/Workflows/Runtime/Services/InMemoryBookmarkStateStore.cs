@@ -4,8 +4,10 @@ using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkStimulusIndex
+public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkStimulusIndex, IInMemoryCheckpointTransactionParticipant
 {
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.BookmarkIds.Count > 0;
     private readonly object _syncRoot = new();
     private readonly Dictionary<BookmarkStateKey, BookmarkState> _states = new();
 
@@ -15,6 +17,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.BookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -30,6 +34,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             return new ValueTask<bool>(_states.Remove(new BookmarkStateKey(workflowExecutionId, bookmarkId)));
@@ -41,6 +47,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -55,6 +63,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -88,6 +98,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             return new ValueTask<RuntimeStorePage<BookmarkState>>(PageStimulus(
@@ -105,6 +117,8 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -174,4 +188,29 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
 
     private sealed record BookmarkStimulusCursor(string WorkflowExecutionId, string BookmarkId);
     private readonly record struct BookmarkStateKey(string WorkflowExecutionId, string BookmarkId);
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var keys = scope.BookmarkIds.Select(id => new BookmarkStateKey(scope.WorkflowExecutionId, id)).ToHashSet();
+            return new CheckpointSnapshot(keys, _states.Where(entry => keys.Contains(entry.Key)).ToDictionary());
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var checkpoint = (CheckpointSnapshot)snapshot;
+            foreach (var key in checkpoint.Keys)
+                _states.Remove(key);
+            foreach (var entry in checkpoint.States)
+                _states[entry.Key] = entry.Value;
+        }
+    }
+
+    private sealed record CheckpointSnapshot(HashSet<BookmarkStateKey> Keys, Dictionary<BookmarkStateKey, BookmarkState> States);
 }

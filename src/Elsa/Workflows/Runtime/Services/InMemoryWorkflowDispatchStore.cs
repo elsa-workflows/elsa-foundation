@@ -4,17 +4,21 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>Application-wide in-memory workflow-dispatch projection.</summary>
-public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore, IWorkflowDispatchAdmissionStore, IWorkflowDispatchCancellationStore
+public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore, IWorkflowDispatchAdmissionStore, IWorkflowDispatchCancellationStore, IInMemoryCheckpointTransactionSource
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
 
     public InMemoryWorkflowDispatchStore(InMemoryRuntimeCheckpointStoreState? state = null) =>
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
 
+    IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() => [_state];
+
     public ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = _state.TransactionGate.Enter();
 
         lock (_state.SyncRoot)
         {
@@ -32,6 +36,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
+
         lock (_state.SyncRoot)
         {
             _state.WorkflowDispatches.TryGetValue(dispatchId, out var record);
@@ -48,6 +54,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         if (admittedAt == default)
             throw new ArgumentOutOfRangeException(nameof(admittedAt), "Child admission requires a recorded timestamp.");
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = _state.TransactionGate.Enter();
 
         lock (_state.SyncRoot)
         {
@@ -96,6 +104,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = _state.TransactionGate.Enter();
 
         lock (_state.SyncRoot)
         {
@@ -151,6 +161,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
+
         lock (_state.SyncRoot)
         {
             var records = _state.WorkflowDispatches.Values
@@ -168,6 +180,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = _state.TransactionGate.Enter();
 
         lock (_state.SyncRoot)
         {
@@ -200,6 +214,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         if (!WorkflowDispatchLifecycle.IsTerminal(expected.Status))
             return ValueTask.FromResult(false);
 
+        using var checkpointGate = _state.TransactionGate.Enter();
+
         lock (_state.SyncRoot)
         {
             if (!_state.WorkflowDispatches.TryGetValue(expected.DispatchId, out var current))
@@ -219,6 +235,8 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = _state.TransactionGate.Enter();
+
         lock (_state.SyncRoot)
             _state.WorkflowDispatches.Remove(dispatchId);
 
@@ -229,6 +247,7 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = _state.TransactionGate.Enter();
         lock (_state.SyncRoot)
         {
             IReadOnlyCollection<string> artifactIds = _state.WorkflowDispatches.Values

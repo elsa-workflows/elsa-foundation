@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -9,7 +11,12 @@ public sealed record RuntimeCheckpoint(
     string WorkflowExecutionId,
     DateTimeOffset OccurredAt,
     IReadOnlyCollection<string> ActivityExecutionIds,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    /// <summary>Generic replay-stable provenance. Null only before preparation or on legacy serialized checkpoints.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeCheckpointProvenance? Provenance { get; init; }
+}
 
 public sealed record RuntimeCheckpointPersistenceDecision(
     RuntimeCheckpointPersistenceMode Mode,

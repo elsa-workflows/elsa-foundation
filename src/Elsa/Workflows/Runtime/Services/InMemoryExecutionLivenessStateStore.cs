@@ -5,25 +5,48 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStore<InMemoryExecutionLivenessStateStore.ExecutionLivenessStateKey, ExecutionLivenessState>, IExecutionLivenessStateStore
 {
-    private readonly SemaphoreSlim _ownershipAtomicGate = new(1, 1);
     private readonly Dictionary<ExecutionLivenessStateKey, long> _revisions = new();
 
-    public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
+    public override bool IsAffected(InMemoryCheckpointMutationPlan plan) =>
+        plan.OperationalStateIds.Count > 0 || plan.HasExpectedFence;
+
+    private protected override bool IsCheckpointKey(ExecutionLivenessStateKey key, InMemoryCheckpointMutationPlan scope) =>
+        StringComparer.Ordinal.Equals(key.WorkflowExecutionId, scope.WorkflowExecutionId) &&
+        scope.OperationalStateIds.Contains(key.OperationalStateId);
+
+    private protected override IEnumerable<ExecutionLivenessStateKey> CheckpointKeys(InMemoryCheckpointMutationPlan scope) =>
+        scope.OperationalStateIds.Select(id => new ExecutionLivenessStateKey(scope.WorkflowExecutionId, id))
+            .Concat(scope.HasExpectedFence
+                ? [new ExecutionLivenessStateKey(scope.WorkflowExecutionId, GetOwnershipStateId(scope.WorkflowExecutionId))]
+                : []);
+
+    private protected override object CaptureCheckpointAdditionalState(InMemoryCheckpointMutationPlan scope, IReadOnlySet<ExecutionLivenessStateKey> keys) =>
+        new RevisionSnapshot(keys.ToHashSet(), _revisions.Where(entry => keys.Contains(entry.Key)).ToDictionary());
+
+    protected override void RestoreCheckpointAdditionalState(object? snapshot)
+    {
+        var revisions = (RevisionSnapshot)snapshot!;
+        foreach (var key in revisions.Keys)
+            _revisions.Remove(key);
+        foreach (var entry in revisions.Revisions)
+            _revisions[entry.Key] = entry.Value;
+    }
+
+    private sealed record RevisionSnapshot(
+        HashSet<ExecutionLivenessStateKey> Keys,
+        Dictionary<ExecutionLivenessStateKey, long> Revisions);
+
+    public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.OperationalStateId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!IsOwnershipState(state))
-            return SaveCore(state);
-
-        return await ExecuteOwnershipAtomicAsync(
-            _ => ValueTask.FromResult(SaveCore(state)),
-            cancellationToken);
+        return ValueTask.FromResult(SaveCore(state));
     }
 
-    public async ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(
+    public ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(
         ExecutionLivenessState state,
         long expectedRevision,
         CancellationToken cancellationToken = default)
@@ -33,28 +56,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!IsOwnershipState(state))
-            return TrySaveCore(state, expectedRevision);
-
-        return await ExecuteOwnershipAtomicAsync(
-            _ => ValueTask.FromResult(TrySaveCore(state, expectedRevision)),
-            cancellationToken);
-    }
-
-    internal async ValueTask<TResult> ExecuteOwnershipAtomicAsync<TResult>(
-        Func<CancellationToken, ValueTask<TResult>> action,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        await _ownershipAtomicGate.WaitAsync(cancellationToken);
-        try
-        {
-            return await action(cancellationToken);
-        }
-        finally
-        {
-            _ownershipAtomicGate.Release();
-        }
+        return ValueTask.FromResult(TrySaveCore(state, expectedRevision));
     }
 
     internal static string GetOwnershipStateId(string workflowExecutionId)
@@ -176,11 +178,6 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationalStateId);
     }
-
-    private static bool IsOwnershipState(ExecutionLivenessState state) =>
-        StringComparer.Ordinal.Equals(
-            state.OperationalStateId,
-            GetOwnershipStateId(state.WorkflowExecutionId));
 
     private static RuntimeStorePage<ExecutionLivenessState> CreatePage(
         RuntimeStorePageRequest query,

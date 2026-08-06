@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class ActivityScopeCleanupStore(
     IBookmarkStateStore bookmarkStateStore,
     IDurableTimerStore durableTimerStore,
-    IWorkflowSchedulerWorkQueue schedulerWorkQueue) : IActivityScopeCleanupStore
+    IWorkflowSchedulerWorkQueue schedulerWorkQueue) : IActivityScopeCleanupStore, IInMemoryCheckpointTransactionSource
 {
     public async ValueTask<ActivityScopeCleanupRequest> CaptureAsync(
         string workflowExecutionId,
@@ -57,4 +57,7 @@ public sealed class ActivityScopeCleanupStore(
         foreach (var workItemId in request.SchedulerWorkItemIds)
             await schedulerWorkQueue.DeleteAsync(request.WorkflowExecutionId, workItemId, cancellationToken);
     }
+
+    IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() =>
+        [bookmarkStateStore, durableTimerStore, schedulerWorkQueue];
 }

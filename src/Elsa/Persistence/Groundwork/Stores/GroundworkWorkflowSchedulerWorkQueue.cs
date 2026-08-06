@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
@@ -17,11 +18,63 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
     IBoundedDocumentStore? boundedStore = null)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, boundedStore), IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IRuntimeSchedulerWorkItemResolver
 {
     private const int MaxTransitionAttempts = 16;
+    private readonly RuntimeCheckpointRecoveryAuthorityCodec _recoveryAuthorityCodec = new();
 
     public bool SupportsClaimTransitions => true;
+
+    public async ValueTask<RuntimeCheckpointRecoveryResolution> ResolveAsync(
+        RuntimeCheckpointRecoveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (authority.Version != 1 || !StringComparer.Ordinal.Equals(authority.Kind, "runtime.scheduler-work"))
+            return new(RuntimeCheckpointRecoveryStatus.UnsupportedVersionOrKind, authority);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(authority.WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authority.WorkItemId);
+
+        try
+        {
+            var matches = new List<RuntimeSchedulerWorkItem>(2);
+            string? continuation = null;
+            do
+            {
+                var page = await ListAsync(
+                    new RuntimeSchedulerWorkQuery(
+                        authority.WorkflowExecutionId,
+                        IRuntimeSchedulerWorkItemResolver.MaximumPageSize,
+                        continuation),
+                    cancellationToken);
+                matches.AddRange(page.Items.Where(item =>
+                    StringComparer.Ordinal.Equals(item.WorkItemId, authority.WorkItemId)).Take(2 - matches.Count));
+                continuation = page.NextContinuationToken;
+            } while (continuation is not null && matches.Count < 2);
+
+            if (matches.Count == 0)
+                return new(RuntimeCheckpointRecoveryStatus.Missing, authority);
+            if (matches.Count > 1)
+                return new(RuntimeCheckpointRecoveryStatus.Ambiguous, authority);
+
+            var item = matches[0];
+            var actual = _recoveryAuthorityCodec.Encode(item);
+            return StringComparer.Ordinal.Equals(actual.Fingerprint, authority.Fingerprint)
+                ? new(RuntimeCheckpointRecoveryStatus.Exact, authority, item)
+                : new(RuntimeCheckpointRecoveryStatus.FingerprintMismatch, authority);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and
+                                          not RuntimeSchedulerWorkRecoveryResolutionException)
+        {
+            throw new RuntimeSchedulerWorkRecoveryResolutionException(
+                authority.WorkflowExecutionId,
+                authority.WorkItemId,
+                exception);
+        }
+    }
 
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {

@@ -1,12 +1,16 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
+public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection, IRuntimeSchedulerWorkItemResolver, IInMemoryCheckpointTransactionParticipant
 {
+    private readonly RuntimeCheckpointRecoveryAuthorityCodec _recoveryAuthorityCodec = new();
+    public InMemoryCheckpointParticipantGate TransactionGate { get; } = new();
+    public bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.SchedulerWorkItemIds.Count > 0;
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
     private readonly Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> _workItemsByScopedId = new();
@@ -14,10 +18,67 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
     public bool SupportsClaimTransitions => true;
 
+    public ValueTask<RuntimeCheckpointRecoveryResolution> ResolveAsync(
+        RuntimeCheckpointRecoveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (authority.Version != 1 || !StringComparer.Ordinal.Equals(authority.Kind, "runtime.scheduler-work"))
+            return ValueTask.FromResult(new RuntimeCheckpointRecoveryResolution(
+                RuntimeCheckpointRecoveryStatus.UnsupportedVersionOrKind,
+                authority));
+
+        ValidateResolutionAuthority(authority);
+
+        try
+        {
+            return ResolveCore(authority);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and
+                                          not RuntimeSchedulerWorkRecoveryResolutionException)
+        {
+            throw new RuntimeSchedulerWorkRecoveryResolutionException(
+                authority.WorkflowExecutionId,
+                authority.WorkItemId,
+                exception);
+        }
+    }
+
+    private ValueTask<RuntimeCheckpointRecoveryResolution> ResolveCore(RuntimeCheckpointRecoveryAuthority authority)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var matches = _queuesByWorkflowExecutionId.TryGetValue(authority.WorkflowExecutionId, out var queue)
+                ? queue.Where(item => StringComparer.Ordinal.Equals(item.WorkItemId, authority.WorkItemId)).Take(2).ToArray()
+                : [];
+            if (matches.Length == 0)
+                return ValueTask.FromResult(new RuntimeCheckpointRecoveryResolution(RuntimeCheckpointRecoveryStatus.Missing, authority));
+            if (matches.Length > 1)
+                return ValueTask.FromResult(new RuntimeCheckpointRecoveryResolution(RuntimeCheckpointRecoveryStatus.Ambiguous, authority));
+
+            var item = matches[0];
+            var actual = _recoveryAuthorityCodec.Encode(item);
+            return ValueTask.FromResult(StringComparer.Ordinal.Equals(actual.Fingerprint, authority.Fingerprint)
+                ? new RuntimeCheckpointRecoveryResolution(RuntimeCheckpointRecoveryStatus.Exact, authority, item)
+                : new RuntimeCheckpointRecoveryResolution(RuntimeCheckpointRecoveryStatus.FingerprintMismatch, authority));
+        }
+    }
+
+    private static void ValidateResolutionAuthority(RuntimeCheckpointRecoveryAuthority authority)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authority.WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authority.WorkItemId);
+    }
+
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -43,6 +104,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -81,6 +144,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue) || queue.Count == 0)
@@ -103,6 +168,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -127,6 +194,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             var executionIds = _queuesByWorkflowExecutionId.Keys
@@ -145,6 +214,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
+        using var checkpointGate = TransactionGate.Enter();
         lock (_syncRoot)
         {
             var claims = _claimsByScopedId
@@ -184,6 +254,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         ArgumentNullException.ThrowIfNull(skipWorkItemIds);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             if (!_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue))
@@ -205,6 +277,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -239,6 +313,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Scheduler work visibility timeout must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             if (!TryGetCurrentState(claim, out var state))
@@ -257,6 +333,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     {
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -291,6 +369,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
 
+        using var checkpointGate = TransactionGate.Enter();
+
         lock (_syncRoot)
         {
             var key = KeyOf(claim);
@@ -314,6 +394,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     {
         ArgumentNullException.ThrowIfNull(consumed);
         cancellationToken.ThrowIfCancellationRequested();
+
+        using var checkpointGate = TransactionGate.Enter();
 
         lock (_syncRoot)
         {
@@ -379,5 +461,69 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         public long Revision { get; set; } = 1;
         public DateTimeOffset? ClaimedAt { get; set; }
         public DateTimeOffset? VisibleAfter { get; set; }
+
+        public ClaimState Clone() => new()
+        {
+            OwnerId = OwnerId,
+            FencingToken = FencingToken,
+            Revision = Revision,
+            ClaimedAt = ClaimedAt,
+            VisibleAfter = VisibleAfter
+        };
     }
+
+    object IInMemoryCheckpointTransactionParticipant.CaptureCheckpointState(InMemoryCheckpointMutationPlan scope)
+    {
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var keys = scope.SchedulerWorkItemIds.Select(id => new SchedulerWorkItemKey(scope.WorkflowExecutionId, id)).ToHashSet();
+            var positions = _queuesByWorkflowExecutionId.TryGetValue(scope.WorkflowExecutionId, out var queue)
+                ? queue.Select((item, index) => (item, index))
+                    .Where(entry => scope.SchedulerWorkItemIds.Contains(entry.item.WorkItemId))
+                    .ToDictionary(entry => entry.item.WorkItemId, entry => entry.index, StringComparer.Ordinal)
+                : new Dictionary<string, int>(StringComparer.Ordinal);
+            return new CheckpointSnapshot(
+                scope.WorkflowExecutionId,
+                keys,
+                positions,
+                _workItemsByScopedId.Where(entry => keys.Contains(entry.Key)).ToDictionary(),
+                _claimsByScopedId.Where(entry => keys.Contains(entry.Key)).ToDictionary(entry => entry.Key, entry => entry.Value.Clone()));
+        }
+    }
+
+    void IInMemoryCheckpointTransactionParticipant.RestoreCheckpointState(object snapshot)
+    {
+        var checkpoint = (CheckpointSnapshot)snapshot;
+        using var checkpointGate = TransactionGate.Enter();
+        lock (_syncRoot)
+        {
+            var current = _queuesByWorkflowExecutionId.GetValueOrDefault(checkpoint.WorkflowExecutionId)?.ToList() ?? [];
+            current.RemoveAll(item => checkpoint.Keys.Contains(new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId)));
+            foreach (var original in checkpoint.WorkItems.Values.OrderBy(item => checkpoint.Positions.GetValueOrDefault(item.WorkItemId, int.MaxValue)))
+            {
+                var index = Math.Min(checkpoint.Positions.GetValueOrDefault(original.WorkItemId, current.Count), current.Count);
+                current.Insert(index, original);
+            }
+            if (current.Count == 0)
+                _queuesByWorkflowExecutionId.Remove(checkpoint.WorkflowExecutionId);
+            else
+                _queuesByWorkflowExecutionId[checkpoint.WorkflowExecutionId] = new Queue<RuntimeSchedulerWorkItem>(current);
+            foreach (var key in checkpoint.Keys)
+                _workItemsByScopedId.Remove(key);
+            foreach (var entry in checkpoint.WorkItems)
+                _workItemsByScopedId[entry.Key] = entry.Value;
+            foreach (var key in checkpoint.Keys)
+                _claimsByScopedId.Remove(key);
+            foreach (var entry in checkpoint.Claims)
+                _claimsByScopedId[entry.Key] = entry.Value.Clone();
+        }
+    }
+
+    private sealed record CheckpointSnapshot(
+        string WorkflowExecutionId,
+        HashSet<SchedulerWorkItemKey> Keys,
+        Dictionary<string, int> Positions,
+        Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> WorkItems,
+        Dictionary<SchedulerWorkItemKey, ClaimState> Claims);
 }

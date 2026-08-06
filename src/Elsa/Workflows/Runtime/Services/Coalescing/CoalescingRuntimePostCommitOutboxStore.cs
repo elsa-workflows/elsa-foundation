@@ -11,9 +11,10 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// </summary>
 public sealed class CoalescingRuntimePostCommitOutboxStore(
     CoalescingInner<IRuntimePostCommitOutboxStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore, IInMemoryCheckpointTransactionSource
 {
     private readonly IRuntimePostCommitOutboxStore _inner = inner.Value;
+    public IEnumerable<object?> GetCheckpointTransactionParticipants() => [_inner];
     private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore = inner.Value as IRuntimePostCommitOutboxClaimStore;
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore = inner.Value as IRuntimePostCommitOutboxClaimCompletionStore;
     private readonly IPostCommitOutboxLookupStore? _innerLookupStore = inner.Value as IPostCommitOutboxLookupStore;

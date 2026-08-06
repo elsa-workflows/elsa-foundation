@@ -421,6 +421,19 @@ public static class ElsaRuntimeStorageManifest
     public const string CheckpointCommitCollection = "checkpointCommit";
     public const string ListCheckpointCommitsQuery = ListAllQuery;
 
+    // Provider-neutral logical-checkpoint preparation state. These are deliberately separate from the
+    // committed-marker family: a durable Prepared reservation is recovery input, not a visible checkpoint.
+    public const string RuntimeCheckpointLedgerDocumentKind = "runtimeCheckpointLedger";
+    public const string RuntimeCheckpointCoordinationDocumentKind = "runtimeCheckpointCoordination";
+    public const string RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit =
+        "by-workflow-execution-status-order-and-commit";
+    public const string PagePreparedRuntimeCheckpointsQuery = "page-prepared-by-workflow-execution";
+    public const string RuntimeCheckpointLedgerWorkflowExecutionIdField = "entry.workflowExecutionId";
+    public const string RuntimeCheckpointLedgerStatusField = "entry.status";
+    public const string RuntimeCheckpointLedgerWorkflowCheckpointOrderField =
+        "entry.provenance.workflowCheckpointOrder";
+    public const string RuntimeCheckpointLedgerCommitIdField = "entry.commitId";
+
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
     public const string ListDeliverablePostCommitOutboxQuery = "list-deliverable";
     public const string ListDeliverablePostCommitOutboxByWorkflowQuery = "list-deliverable-by-workflow";
@@ -575,21 +588,168 @@ public static class ElsaRuntimeStorageManifest
     /// Creates the provider-facing runtime manifest, including every bounded composite route layered
     /// over the provider-neutral legacy declarations.
     /// </summary>
-    public static StorageManifest CreatePhysicalized() =>
-        ElsaGroundworkQueryRoutes.AddPhysicalRoutes(
-            WorkflowAlterationStoragePhysicalizer.AddRoutes(
-            WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(
-            ExecutionLivenessStatePagingPhysicalizer.AddRoutes(
-            ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(
-                PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(
-                    TestScopeStoragePhysicalizer.AddCompositeRoutes(
-                        WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                            BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                                WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(
-                                    DueWorkStoragePhysicalizer.AddRoutes(
-                                        SchedulerWorkStoragePhysicalizer.AddRoutes(
-                                            EnableCompatibilityCollectionPaging(
-                                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))))))))));
+    public static StorageManifest CreatePhysicalized()
+    {
+        // The portable declaration documents the capability for manifest consumers. The legacy bridge cannot
+        // physicalize its mixed-type four-part key, so remove that compatibility declaration before the bridge
+        // and replace it below with the explicit provider-neutral physical route.
+        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
+            RemovePreparedCheckpointLedgerPortableDeclarations(Create()));
+        manifest = EnableCompatibilityCollectionPaging(manifest);
+        manifest = PhysicalizePreparedCheckpointLedger(manifest);
+        manifest = SchedulerWorkStoragePhysicalizer.AddRoutes(manifest);
+        manifest = DueWorkStoragePhysicalizer.AddRoutes(manifest);
+        manifest = WorkflowDispatchGroundworkStoragePhysicalizer.AddCompositeRoutes(manifest);
+        manifest = BookmarkStateGroundworkStoragePhysicalizer.AddCompositeRoutes(manifest);
+        manifest = WorkflowTriggerBindingGroundworkStoragePhysicalizer.AddCompositeRoutes(manifest);
+        manifest = TestScopeStoragePhysicalizer.AddCompositeRoutes(manifest);
+        manifest = PostCommitOutboxGroundworkStoragePhysicalizer.AddBoundedDeliveryRoutes(manifest);
+        manifest = ExecutionLivenessRecoveryStoragePhysicalizer.AddRoutes(manifest);
+        manifest = ExecutionLivenessStatePagingPhysicalizer.AddRoutes(manifest);
+        manifest = WorkflowExecutionHistoryStoragePhysicalizer.AddRoute(manifest);
+        manifest = WorkflowAlterationStoragePhysicalizer.AddRoutes(manifest);
+        return ElsaGroundworkQueryRoutes.AddPhysicalRoutes(manifest);
+    }
+
+    private static StorageManifest PhysicalizePreparedCheckpointLedger(StorageManifest manifest) => manifest with
+    {
+        StorageUnits = manifest.StorageUnits.Select(unit =>
+            unit.Identity.Value == RuntimeCheckpointLedgerDocumentKind
+                ? PhysicalizePreparedCheckpointLedger(unit)
+                : unit).ToArray()
+    };
+
+    private static StorageManifest RemovePreparedCheckpointLedgerPortableDeclarations(StorageManifest manifest) => manifest with
+    {
+        StorageUnits = manifest.StorageUnits.Select(unit =>
+            unit.Identity.Value == RuntimeCheckpointLedgerDocumentKind
+                ? unit with { Indexes = [], Queries = [] }
+                : unit).ToArray()
+    };
+
+    private static StorageUnit PhysicalizePreparedCheckpointLedger(StorageUnit unit)
+    {
+        if (unit.PhysicalStorage is not { } storage ||
+            storage.Policy is not PhysicalStoragePolicy.ExplicitPolicy { Definition: var definition } ||
+            definition.Form != PhysicalStorageForm.SharedDocuments)
+        {
+            throw new InvalidOperationException(
+                "The prepared runtime-checkpoint ledger requires explicit shared-document physicalization.");
+        }
+
+        const string workflowExecutionIdColumn = "checkpoint_ledger_workflow_execution_id";
+        const string statusColumn = "checkpoint_ledger_status";
+        const string workflowCheckpointOrderColumn = "checkpoint_ledger_workflow_checkpoint_order";
+        const string commitIdColumn = "checkpoint_ledger_commit_id";
+        var indexedPaths = new HashSet<string>(StringComparer.Ordinal)
+        {
+            RuntimeCheckpointLedgerWorkflowExecutionIdField,
+            RuntimeCheckpointLedgerStatusField,
+            RuntimeCheckpointLedgerWorkflowCheckpointOrderField,
+            RuntimeCheckpointLedgerCommitIdField
+        };
+        var projected = definition.ProjectedColumns
+            .Where(column => !indexedPaths.Contains(column.Path))
+            .Concat(
+            [
+                new ProjectedColumnDefinition(
+                    workflowExecutionIdColumn,
+                    RuntimeCheckpointLedgerWorkflowExecutionIdField,
+                    PortablePhysicalType.String,
+                    Length: RuntimeExecutionIdProjectionLength),
+                new ProjectedColumnDefinition(
+                    statusColumn,
+                    RuntimeCheckpointLedgerStatusField,
+                    PortablePhysicalType.Int64),
+                new ProjectedColumnDefinition(
+                    workflowCheckpointOrderColumn,
+                    RuntimeCheckpointLedgerWorkflowCheckpointOrderField,
+                    PortablePhysicalType.Int64),
+                new ProjectedColumnDefinition(
+                    commitIdColumn,
+                    RuntimeCheckpointLedgerCommitIdField,
+                    PortablePhysicalType.String,
+                    Length: RuntimeExecutionIdProjectionLength)
+            ])
+            .ToArray();
+        var index = new LogicalIndexDeclaration(
+            RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit,
+            [
+                new IndexField(RuntimeCheckpointLedgerWorkflowExecutionIdField, IndexValueKind.Keyword),
+                new IndexField(RuntimeCheckpointLedgerStatusField, IndexValueKind.Number),
+                new IndexField(RuntimeCheckpointLedgerWorkflowCheckpointOrderField, IndexValueKind.Number),
+                new IndexField(RuntimeCheckpointLedgerCommitIdField, IndexValueKind.Keyword)
+            ],
+            IndexValueKind.Keyword,
+            isUnique: false,
+            MissingValueBehavior.Excluded);
+        var envelope = new DocumentEnvelopeDefinition();
+        var physical = PhysicalTableDefinition.SharedDocuments(
+            definition.SharedStorage!,
+            projected,
+            definition.Indexes
+                .Where(candidate => candidate.LogicalName != RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit)
+                .Concat(
+                [
+                    new PhysicalIndexDefinition(
+                        index.Identity,
+                        [
+                            new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
+                            new PhysicalIndexColumnDefinition(workflowExecutionIdColumn, 1),
+                            new PhysicalIndexColumnDefinition(statusColumn, 2),
+                            new PhysicalIndexColumnDefinition(workflowCheckpointOrderColumn, 3),
+                            new PhysicalIndexColumnDefinition(commitIdColumn, 4)
+                        ])
+                ])
+                .ToArray(),
+            definition.SchemaVersion,
+            definition.Evolution,
+            linkedProjectionLogicalName: "runtime_checkpoint_ledger_projection");
+        var page = new BoundedQueryDeclaration(
+            PagePreparedRuntimeCheckpointsQuery,
+            index.Identity,
+            new HashSet<PortableQueryOperation>
+            {
+                PortableQueryOperation.Equal,
+                PortableQueryOperation.GreaterThanOrEqual
+            },
+            QuerySortSupport.Ascending,
+            QueryPagingSupport.None,
+            BoundedQueryExecutionClass.ScaleBearing,
+            sortFields:
+            [
+                new BoundedQuerySortField(RuntimeCheckpointLedgerWorkflowCheckpointOrderField, PhysicalSortDirection.Ascending),
+                new BoundedQuerySortField(RuntimeCheckpointLedgerCommitIdField, PhysicalSortDirection.Ascending)
+            ],
+            predicateFields:
+            [
+                new BoundedQueryPredicateField(
+                    RuntimeCheckpointLedgerWorkflowExecutionIdField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+                new BoundedQueryPredicateField(
+                    RuntimeCheckpointLedgerStatusField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
+                new BoundedQueryPredicateField(
+                    RuntimeCheckpointLedgerWorkflowCheckpointOrderField,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.GreaterThanOrEqual })
+            ]);
+        return unit with
+        {
+            PhysicalStorage = new StorageUnitPhysicalStorage(
+                storage.ProvisioningMode,
+                PhysicalStoragePolicy.Explicit(physical),
+                storage.LogicalIndexes
+                    .Where(candidate => candidate.Identity != RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit)
+                    .Concat([index])
+                    .ToArray(),
+                storage.BoundedQueries
+                    .Where(candidate => candidate.Identity != PagePreparedRuntimeCheckpointsQuery)
+                    .Concat([page])
+                    .ToArray(),
+                storage.NameOverrides,
+                storage.BoundedMutations)
+        };
+    }
 
     private static StorageManifest EnableCompatibilityCollectionPaging(StorageManifest manifest) =>
         manifest with
@@ -877,6 +1037,46 @@ public static class ElsaRuntimeStorageManifest
                 "Checkpoint commit ledger",
                 [Keyword(CheckpointCommitByCollection, CollectionField)],
                 [Query(ListCheckpointCommitsQuery, CheckpointCommitByCollection)]),
+            Unit(
+                RuntimeCheckpointLedgerDocumentKind,
+                "Runtime logical-checkpoint ledger",
+                [
+                    new IndexDeclaration(
+                        RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit,
+                        [
+                            new IndexField(RuntimeCheckpointLedgerWorkflowExecutionIdField, IndexValueKind.Keyword),
+                            new IndexField(RuntimeCheckpointLedgerStatusField, IndexValueKind.Number),
+                            new IndexField(RuntimeCheckpointLedgerWorkflowCheckpointOrderField, IndexValueKind.Number),
+                            new IndexField(RuntimeCheckpointLedgerCommitIdField, IndexValueKind.Keyword)
+                        ],
+                        IndexValueKind.Keyword,
+                        false,
+                        true,
+                        MissingValueBehavior.Excluded,
+                        new HashSet<PortableQueryOperation>
+                        {
+                            PortableQueryOperation.Equal,
+                            PortableQueryOperation.GreaterThanOrEqual
+                        },
+                        IndexPhysicalizationPolicy.Optimized)
+                ],
+                [
+                    Query(
+                        PagePreparedRuntimeCheckpointsQuery,
+                        RuntimeCheckpointPreparedLedgerByWorkflowStatusOrderCommit,
+                        new HashSet<PortableQueryOperation>
+                        {
+                            PortableQueryOperation.Equal,
+                            PortableQueryOperation.GreaterThanOrEqual
+                        },
+                        QuerySortSupport.Ascending,
+                        QueryPagingSupport.Cursor)
+                ]),
+            Unit(
+                RuntimeCheckpointCoordinationDocumentKind,
+                "Runtime checkpoint coordination",
+                [],
+                []),
             Unit(
                 PostCommitOutboxDocumentKind,
                 "Post-commit outbox",

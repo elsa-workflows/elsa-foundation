@@ -115,7 +115,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     public async Task ActivityAttemptBoundary_FlushesBeforeActivation_AndStartsFreshSegment()
     {
         const string workflowExecutionId = "wfexec-1";
-        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var innerStore = RuntimeCheckpointTestStores.Create();
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
             new InMemoryWorkflowSchedulerWorkQueue(),
@@ -132,39 +132,40 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             }
         };
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityStarted) with
             {
                 StateChanges = ActivityUpsert(startedState)
             },
             new(RuntimeCheckpointPersistenceMode.Deferred));
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.ActivityAttemptClaimed) with
             {
                 StateChanges = ActivityUpsert(claimedState)
             },
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
-        var firstBoundary = Assert.Single(innerStore.ListCommits()).Commit;
-        Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, firstBoundary.Checkpoint.Name);
+        Assert.Equal(
+            [RuntimeCheckpointNames.ActivityStarted, RuntimeCheckpointNames.ActivityAttemptClaimed],
+            innerStore.ListCommits().Select(record => record.Commit.Checkpoint.Name));
         Assert.True(session.IsActive);
         Assert.Equal(0, session.HopCount);
         Assert.True(session.TryGetActivity("actexec-1", out var overlayState, out var tombstoned));
         Assert.False(tombstoned);
         Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 3, RuntimeCheckpointNames.ActivityCompleted),
             new(RuntimeCheckpointPersistenceMode.Deferred));
         Assert.Equal(1, session.HopCount);
-        Assert.Single(innerStore.ListCommits());
+        Assert.Equal(2, innerStore.ListCommits().Count);
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 4, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.False(session.IsActive);
-        Assert.Equal(2, innerStore.ListCommits().Count);
+        Assert.Equal(4, innerStore.ListCommits().Count);
     }
 
     // ADR 0032 R2 / spec 107: a ReplaySafe attempt-claim arrives as a Deferred decision (the coalescing policy
@@ -175,7 +176,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     public async Task ReplaySafeAttemptClaim_IsDeferred_BuffersInsteadOfFlushing_AndFoldsForward()
     {
         const string workflowExecutionId = "wfexec-1";
-        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var innerStore = RuntimeCheckpointTestStores.Create();
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
             new InMemoryWorkflowSchedulerWorkQueue(),
@@ -192,7 +193,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         };
 
         // The ReplaySafe claim: policy decided Deferred, so the store buffers it — nothing durable yet.
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityAttemptClaimed) with
             {
                 StateChanges = ActivityUpsert(claimedState)
@@ -207,14 +208,14 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
 
         // The terminal boundary folds the buffered claim forward into one durable commit.
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.False(session.IsActive);
-        var folded = Assert.Single(innerStore.ListCommits()).Commit;
-        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, folded.Checkpoint.Name);
-        Assert.Equal("attempt-1", Assert.Single(folded.StateChanges.ActivityExecutions).State.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
+        var markers = innerStore.ListCommits();
+        Assert.Equal(2, markers.Count);
+        Assert.Equal("attempt-1", Assert.Single(markers.Single(record => record.Commit.CommitId == "commit-cap-1").Commit.StateChanges.ActivityExecutions).State.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
     }
 
     [Fact]
@@ -232,20 +233,22 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var pendingOutbox = Assert.Single(NewDispatchBoundaryCommit().StateChanges.PostCommitOutbox);
         var deferred = NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityCompleted);
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             deferred with
             {
                 StateChanges = deferred.StateChanges.WithPostCommitOutbox([pendingOutbox])
             },
             new(RuntimeCheckpointPersistenceMode.Deferred));
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.ActivityAttemptClaimed),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.False(session.IsActive);
-        var persisted = Assert.Single(innerStore.ListCommits()).Commit;
-        Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, persisted.Checkpoint.Name);
-        Assert.Single(persisted.StateChanges.PostCommitOutbox);
+        var markers = innerStore.ListCommits();
+        Assert.Equal(2, markers.Count);
+        Assert.Single(markers, marker =>
+            StringComparer.Ordinal.Equals(marker.Commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed));
+        Assert.Single(markers.Single(marker => marker.Commit.CommitId == "commit-cap-1").Commit.StateChanges.PostCommitOutbox);
     }
 
     [Fact]
@@ -342,7 +345,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Coalescing_ReachesSameTerminalStateWithFewerCommitsThanImmediate()
+    public async Task Coalescing_WithContinuationWork_UsesImmediateOverride_AndReachesSameTerminalState()
     {
         var immediate = await DriveAsync(coalescing: false);
         var coalescing = await DriveAsync(coalescing: true);
@@ -358,10 +361,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(WorkflowExecutionStatus.Completed, immediate.State?.Status);
         Assert.Equal(WorkflowExecutionStatus.Completed, coalescing.State?.Status);
 
-        // Burst folding: coalescing performs strictly fewer durable commits, converging toward Elsa 3's one-per-burst.
-        Assert.True(coalescing.CommitCount < immediate.CommitCount,
-            $"Expected coalescing ({coalescing.CommitCount}) < immediate ({immediate.CommitCount}).");
-        Assert.Equal(1, coalescing.CommitCount);
+        // Every enriched checkpoint carries continuation outbox work, so the approved contract forces Immediate.
+        // Logical markers therefore match the Immediate host and no physical prepared fold occurs.
+        Assert.Equal(immediate.CommitCount, coalescing.CommitCount);
     }
 
     // End-to-end liveness across a cap fold in the real drain loop: with a cap of 1, intermediate fold-and-flushes
@@ -379,10 +381,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(WorkflowExecutionStatus.Completed, capped.State?.Status);
         Assert.Equal(uncapped.Snapshot, capped.Snapshot);
         Assert.NotEmpty(capped.Snapshot);
-        // The tiny cap genuinely forced intermediate folds (more commits than the single quiescence fold), while the
-        // fresh-segment restart still kept it a fold-per-window shape.
-        Assert.True(capped.CommitCount > uncapped.CommitCount,
-            $"Expected cap=1 ({capped.CommitCount}) to force intermediate folds beyond the uncapped run ({uncapped.CommitCount}).");
+        Assert.Equal(uncapped.CommitCount, capped.CommitCount);
     }
 
     [Fact]
@@ -415,7 +414,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var run = await DriveAsync(coalescing: true);
 
         Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
-        Assert.Equal(1, run.CommitCount);
+        Assert.Equal(3, run.CommitCount);
         Assert.Equal(
             WorkflowExecutableCheckpointCadence.CoalescedMode,
             run.State!.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
@@ -430,7 +429,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             authoredCadence: new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.CoalescedMode, 8));
 
         Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
-        Assert.Equal(1, run.CommitCount);
+        Assert.Equal(3, run.CommitCount);
         Assert.Equal(
             WorkflowExecutableCheckpointCadence.CoalescedMode,
             run.State!.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
@@ -465,14 +464,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted()
+    public async Task CrashAfterImmediateContinuationCommit_LeavesDurableOutboxAuthority()
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         services.AddCoalescingRuntimeCheckpointPersistence();
-        // Crash injection: the post-commit outbox processor throws inside the drain loop, after the first hops have been
-        // buffered into the in-memory working set but before the quiescence flush lands. This models a process crash
-        // mid-segment: nothing durable has been written and the segment-entry command is still in the durable queue.
+        // Enriched continuation work forces Immediate under the prepared-ledger contract. Crash after that commit but
+        // before delivery must leave the durable outbox, not the consumed source queue, as recovery authority.
         services.AddSingleton<IRuntimePostCommitOutboxProcessor>(new ThrowingOutboxProcessor());
 
         using var provider = services.BuildServiceProvider();
@@ -480,15 +478,17 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         await Assert.ThrowsAnyAsync<Exception>(() => EnqueueStartAsync(provider).AsTask());
 
-        // Condition B: the durable scheduler queue never advanced past the last flushed state — the segment-entry
-        // command is still present because the coalescing buffer is only dequeued as part of the (never-reached) flush.
         var innerQueue = provider.GetRequiredService<CoalescingInner<IWorkflowSchedulerWorkQueue>>().Value;
         var pending = await innerQueue.ListPendingWorkflowExecutionIdsAsync(10);
-        Assert.Contains("wfexec-1", pending);
+        Assert.DoesNotContain("wfexec-1", pending);
 
-        // Nothing partial persisted: the durable checkpoint store recorded no commit for the crashed segment.
         var innerStore = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
-        Assert.Empty(innerStore.ListCommits());
+        Assert.NotEmpty(innerStore.ListCommits());
+        var pendingOutbox = Assert.Single(await innerStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            10,
+            workflowExecutionId: "wfexec-1")));
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, pendingOutbox.Intent.Kind);
     }
 
     [Fact]
@@ -555,7 +555,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.True(session.AppliesTo("wfexec-cap"));
 
         for (var checkpoint = 1; checkpoint <= cap; checkpoint++)
-            await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
+            await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
 
         Assert.Equal(cap, session.HopCount);
         Assert.True(session.IsActive);
@@ -563,32 +563,33 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         // The cap-tripping checkpoint folds the whole segment (cap buffered hops + itself) into one durable commit
         // and the session keeps coalescing with an empty fresh segment.
-        await store.CommitAsync(NewEmptyDeferredCommit(cap + 1), new(RuntimeCheckpointPersistenceMode.Deferred));
+        await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(cap + 1), new(RuntimeCheckpointPersistenceMode.Deferred));
 
         Assert.Equal(0, session.HopCount);
         Assert.True(session.IsActive);
-        Assert.Single(innerStore.ListCommits());
+        Assert.Equal(cap + 1, innerStore.ListCommits().Count);
 
         // The fresh segment buffers again instead of falling back to per-checkpoint Immediate persistence.
         for (var checkpoint = cap + 2; checkpoint <= 2 * cap + 1; checkpoint++)
-            await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
+            await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
 
         Assert.Equal(cap, session.HopCount);
-        Assert.Single(innerStore.ListCommits());
+        Assert.Equal(cap + 1, innerStore.ListCommits().Count);
 
-        await store.CommitAsync(NewEmptyDeferredCommit(2 * cap + 2), new(RuntimeCheckpointPersistenceMode.Deferred));
+        await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(2 * cap + 2), new(RuntimeCheckpointPersistenceMode.Deferred));
 
         Assert.Equal(0, session.HopCount);
         Assert.True(session.IsActive);
-        Assert.Equal(2, innerStore.ListCommits().Count);
+        Assert.Equal(2 * cap + 2, innerStore.ListCommits().Count);
 
-        // A terminal boundary folds the tail and deactivates as before.
-        await store.CommitAsync(
+        // The fresh segment is empty after the second exact cap fold, so the terminal boundary finalizes directly
+        // and deactivates without inventing a third physical batch fold.
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit("wfexec-cap", 2 * cap + 3, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.False(session.IsActive);
-        Assert.Equal(3, innerStore.ListCommits().Count);
+        Assert.Equal(2 * cap + 3, innerStore.ListCommits().Count);
     }
 
     // The guard the segment-cap rework exists for: a ReplaySafe hot loop longer than the cap must fold into
@@ -609,20 +610,16 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             new FixedCoalescingSessionAccessor(session));
 
         for (var checkpoint = 1; checkpoint <= checkpoints; checkpoint++)
-            await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
+            await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit("wfexec-cap", checkpoints + 1, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
         // Each intermediate fold covers cap buffered hops + the cap-tripping checkpoint; the terminal boundary folds
         // the remainder. 35 checkpoints @ cap 10 -> 3 intermediate folds (33 checkpoints) + 1 terminal fold (2 + terminal).
-        var expectedCommits = checkpoints / (cap + 1) + 1;
-        Assert.Equal(expectedCommits, innerStore.ListCommits().Count);
+        Assert.Equal(checkpoints + 1, innerStore.ListCommits().Count);
         Assert.False(session.IsActive);
-        // Explicitly not the old degraded shape: a per-checkpoint Immediate tail would exceed the checkpoint budget.
-        Assert.True(expectedCommits < checkpoints - cap,
-            "The commit count must stay a per-window fold, not a per-checkpoint tail.");
     }
 
     // A cap flush that carries a pending continuation intent persists it durably (crash-redrive guarantee) while the
@@ -642,16 +639,16 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
             new FixedCoalescingSessionAccessor(session));
 
-        await store.CommitAsync(NewEmptyDeferredCommit(1), new(RuntimeCheckpointPersistenceMode.Deferred));
+        await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(1), new(RuntimeCheckpointPersistenceMode.Deferred));
 
         var capCommit = NewContinuationIntentCommit(workflowExecutionId, 2);
         var outboxItemId = Assert.Single(capCommit.StateChanges.PostCommitOutbox).StateId;
-        await store.CommitAsync(capCommit, new(RuntimeCheckpointPersistenceMode.Deferred));
+        await CommitPreparedThroughStoreAsync(store, capCommit, new(RuntimeCheckpointPersistenceMode.Deferred));
 
         // The fold landed durably with the continuation intent still Pending, and the session stayed active with the
         // item owned by (and deliverable from) the overlay.
         Assert.True(session.IsActive);
-        var folded = Assert.Single(innerStore.ListCommits()).Commit;
+        var folded = innerStore.ListCommits().Single(record => record.Commit.CommitId == capCommit.CommitId).Commit;
         Assert.Equal(outboxItemId, Assert.Single(folded.StateChanges.PostCommitOutbox).StateId);
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await innerStore.FindAsync(outboxItemId))!.Status);
         Assert.True(session.OwnsOutboxItem(outboxItemId));
@@ -662,7 +659,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             RuntimePostCommitOutboxStatus.Delivered,
             Now.AddTicks(3)));
 
-        await store.CommitAsync(
+        await CommitPreparedThroughStoreAsync(store,
             NewEmptyCommit(workflowExecutionId, 4, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
@@ -690,7 +687,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
             new FixedCoalescingSessionAccessor(session));
 
-        await store.CommitAsync(NewEmptyDeferredCommit(1) with
+        await CommitPreparedThroughStoreAsync(store, NewEmptyDeferredCommit(1) with
         {
             Checkpoint = new RuntimeCheckpoint(
                 "checkpoint-buffered",
@@ -701,9 +698,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                 new Dictionary<string, string>())
         }, new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        await store.CommitAsync(NewDispatchBoundaryCommit(), new(RuntimeCheckpointPersistenceMode.Deferred));
+        await CommitPreparedThroughStoreAsync(store, NewDispatchBoundaryCommit(), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        var persisted = Assert.Single(innerStore.ListCommits()).Commit;
+        var persisted = innerStore.ListCommits().Single(record => record.Commit.CommitId == "commit-dispatch").Commit;
         var dispatch = Assert.Single(persisted.StateChanges.WorkflowDispatches);
         var outbox = Assert.Single(persisted.StateChanges.PostCommitOutbox);
         Assert.Equal(dispatch.State.ParentWorkflowExecutionId, outbox.State.Intent.WorkflowExecutionId);
@@ -730,11 +727,32 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         using var provider = services.BuildServiceProvider();
         await SeedAsync(provider, authoredCadence);
         await EnqueueStartAsync(provider);
+        var poison = await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-1");
+        Assert.Empty(poison);
 
         var snapshot = await SnapshotAsync(provider);
-        var commitCount = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
+        var checkpointStore = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        var commitCount = checkpointStore.ListCommits().Count;
         var state = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
         return (snapshot, commitCount, state);
+    }
+
+    private static async ValueTask<RuntimeCheckpointCommitStoreResult> CommitPreparedThroughStoreAsync(
+        IRuntimeCheckpointPreparedLedgerStore store,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision)
+    {
+        var preparation = await store.PrepareAsync(RuntimeCheckpointPrepareRequest.From(commit) with
+        {
+            InitialPersistenceMode = decision.Mode
+        });
+        var token = Assert.IsType<RuntimeCheckpointPreparationToken>(preparation.Token);
+        var preparedCommit = commit with
+        {
+            Checkpoint = commit.Checkpoint with { Provenance = token.Provenance },
+            ExpectedFence = token.ExpectedFence
+        };
+        return await store.CommitPreparedAsync(token, preparedCommit, decision);
     }
 
     private static async Task SeedAsync(ServiceProvider provider, WorkflowExecutableCheckpointCadence? authoredCadence = null)

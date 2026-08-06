@@ -51,6 +51,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+        ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+        ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
@@ -68,13 +70,20 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     // store; transactional and checkpoint documents are driven through an in-memory store and read back.
     public static async Task<(string SchemaVersion, string ContentJson)> CaptureAsync(string kind)
     {
-        if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
+        if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind or
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind or
+            ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
         {
             var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
             await DriveSaveAsync(kind, store);
-            var documentId = kind == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind
-                ? CommitId
-                : ProjectionStateId;
+            var documentId = kind switch
+            {
+                ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
+                ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind => $"prepared:{CommitId}",
+                ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind => $"coordination:{Wf}",
+                _ => ProjectionStateId
+            };
             var envelope = await store.LoadAsync(kind, documentId);
             return (envelope!.SchemaVersion, envelope.ContentJson);
         }
@@ -191,6 +200,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
+            case ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind:
+            case ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind:
+                await CheckpointWriter(store).PrepareAsync(RuntimeCheckpointPrepareRequest.From(Commit()));
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.");
         }
@@ -271,6 +284,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
             await ReadCheckpointCommitIdAsync(store),
+        ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind =>
+            await ReadPreparationCommitIdAsync(store),
+        ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind =>
+            await ReadCoordinationWorkflowExecutionIdAsync(store),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
 
@@ -302,6 +319,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => "schedule-hash-1",
         ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind => "triggerBindings",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
+        ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind => CommitId,
+        ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind => Wf,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
 
@@ -313,6 +332,28 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
 
         using var document = JsonDocument.Parse(envelope.ContentJson);
         return document.RootElement.GetProperty("commitId").GetString();
+    }
+
+    private static async Task<object?> ReadPreparationCommitIdAsync(IDocumentStore store)
+    {
+        var envelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointLedgerDocumentKind,
+            $"prepared:{CommitId}");
+        if (envelope is null)
+            return null;
+        using var document = JsonDocument.Parse(envelope.ContentJson);
+        return document.RootElement.GetProperty("entry").GetProperty("commitId").GetString();
+    }
+
+    private static async Task<object?> ReadCoordinationWorkflowExecutionIdAsync(IDocumentStore store)
+    {
+        var envelope = await store.LoadAsync(
+            ElsaRuntimeStorageManifest.RuntimeCheckpointCoordinationDocumentKind,
+            $"coordination:{Wf}");
+        if (envelope is null)
+            return null;
+        using var document = JsonDocument.Parse(envelope.ContentJson);
+        return document.RootElement.GetProperty("workflowExecutionId").GetString();
     }
 
     private static async Task<object?> ReadProjectionKindAsync(IDocumentStore store)

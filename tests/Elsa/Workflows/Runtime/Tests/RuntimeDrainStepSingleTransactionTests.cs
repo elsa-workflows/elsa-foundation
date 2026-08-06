@@ -230,7 +230,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
             Metadata: new Dictionary<string, string>());
 
     private static InMemoryRuntimeCheckpointCommitStore NewStore(IWorkflowSchedulerWorkQueue queue) =>
-        new(schedulerWorkQueue: queue);
+        RuntimeCheckpointTestStores.Create(schedulerWorkQueue: queue);
 
     private static RuntimeCheckpointCommitter NewCommitter(
         IRuntimeCheckpointCommitStore store,
@@ -351,12 +351,14 @@ public sealed class RuntimeDrainStepSingleTransactionTests
     }
 
     /// <summary>Counting decorator over a claim-capable queue to observe which acknowledgement path ran.</summary>
-    private sealed class CountingWorkQueue(IWorkflowSchedulerWorkQueue inner) : IWorkflowSchedulerWorkQueue
+    private sealed class CountingWorkQueue(IWorkflowSchedulerWorkQueue inner) : IWorkflowSchedulerWorkQueue, IInMemoryCheckpointTransactionSource
     {
         public int ConsumeClaimedCalls { get; private set; }
         public int CompleteClaimCalls { get; private set; }
 
         public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
+
+        IEnumerable<object?> IInMemoryCheckpointTransactionSource.GetCheckpointTransactionParticipants() => [inner];
 
         public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             inner.EnqueueAsync(workItem, cancellationToken);

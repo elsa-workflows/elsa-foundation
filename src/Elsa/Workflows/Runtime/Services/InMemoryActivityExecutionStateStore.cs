@@ -5,6 +5,15 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStore<InMemoryActivityExecutionStateStore.ActivityExecutionStateKey, ActivityExecutionState>, IActivityExecutionStateStore
 {
+    public override bool IsAffected(InMemoryCheckpointMutationPlan plan) => plan.ActivityExecutionStateIds.Count > 0;
+
+    private protected override bool IsCheckpointKey(ActivityExecutionStateKey key, InMemoryCheckpointMutationPlan scope) =>
+        StringComparer.Ordinal.Equals(key.WorkflowExecutionId, scope.WorkflowExecutionId) &&
+        scope.ActivityExecutionStateIds.Contains(key.ActivityExecutionId);
+
+    private protected override IEnumerable<ActivityExecutionStateKey> CheckpointKeys(InMemoryCheckpointMutationPlan scope) =>
+        scope.ActivityExecutionStateIds.Select(id => new ActivityExecutionStateKey(scope.WorkflowExecutionId, id));
+
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

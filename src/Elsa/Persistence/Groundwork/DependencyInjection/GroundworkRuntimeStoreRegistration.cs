@@ -208,7 +208,15 @@ public static class GroundworkRuntimeStoreRegistration
         // process-local in-memory queue, and a crash after checkpoint commit loses the continuation
         // even though state and outbox items were stored durably.
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
-        services.AddScoped<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
+        services.RemoveAll<IRuntimeSchedulerWorkItemResolver>();
+        services.RemoveAll<GroundworkWorkflowSchedulerWorkQueue>();
+        services.AddScoped<GroundworkWorkflowSchedulerWorkQueue>();
+        services.AddScoped<IWorkflowSchedulerWorkQueue>(serviceProvider =>
+            serviceProvider.GetRequiredService<GroundworkWorkflowSchedulerWorkQueue>());
+        // Recovery always resolves against the undecorated durable provider. Coalescing may later decorate the queue
+        // contract with an overlay that hides durable claimed work, so bind the capability directly to this store.
+        services.AddScoped<IRuntimeSchedulerWorkItemResolver>(serviceProvider =>
+            serviceProvider.GetRequiredService<GroundworkWorkflowSchedulerWorkQueue>());
 
         // Durable scheduler poison store. Without this swap handler crashes recorded by the drainer live only
         // in process memory and disappear on restart.

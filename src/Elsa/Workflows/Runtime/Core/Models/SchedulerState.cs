@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -41,6 +43,7 @@ public sealed record SchedulerState
     /// Generated-event work is a separate lane because generator emissions are scheduler/history data, not activity executions.
     /// Use named arguments for source call sites that need generator lanes.
     /// </remarks>
+    [JsonConstructor]
     public SchedulerState(
         string workflowExecutionId,
         long version,

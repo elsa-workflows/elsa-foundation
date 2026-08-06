@@ -9,6 +9,7 @@ namespace Elsa.Persistence.Groundwork.Tests;
 internal sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore, IBoundedDocumentStore
 {
     public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+    public Func<SaveDocumentRequest, DocumentStoreWriteResult?>? OnSaveResult { get; set; }
     public Func<DeleteDocumentRequest, Task>? OnBeforeDelete { get; set; }
     public Func<DocumentCommitScope, Task>? OnBeforeBegin { get; set; }
     public DocumentStoreAccess Access => inner.Access;
@@ -21,6 +22,9 @@ internal sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumen
             OnBeforeSave = null;
             await hook(request);
         }
+
+        if (OnSaveResult?.Invoke(request) is { } injected)
+            return injected;
 
         return await inner.SaveAsync(request, cancellationToken);
     }
@@ -93,6 +97,10 @@ internal sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumen
                 owner.OnBeforeSave = null;
                 await hook(request);
             }
+
+
+            if (owner.OnSaveResult?.Invoke(request) is { } injected)
+                return injected;
 
             return await innerUnitOfWork.SaveAsync(request, cancellationToken);
         }

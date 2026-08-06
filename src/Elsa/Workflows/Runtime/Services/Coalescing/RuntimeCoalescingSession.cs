@@ -27,6 +27,7 @@ public sealed class RuntimeCoalescingSession
     private bool _queueSeeded;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
+    private readonly List<RuntimeCheckpointPreparedCommit> _bufferedPreparedCommits = [];
 
     private WorkflowExecutionState? _workflowExecution;
     private SchedulerState? _scheduler;
@@ -74,6 +75,7 @@ public sealed class RuntimeCoalescingSession
 
     public int HopCount { get; private set; }
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
+    public IReadOnlyList<RuntimeCheckpointPreparedCommit> BufferedPreparedCommits => _bufferedPreparedCommits;
 
     public void Deactivate() => IsActive = false;
 
@@ -97,6 +99,25 @@ public sealed class RuntimeCoalescingSession
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
+        HopCount++;
+    }
+
+    /// <summary>Retains the provider-owned preparation authority together with its deterministic final replay.</summary>
+    public void BufferDeferred(RuntimeCheckpointPreparedCommit preparedCommit)
+    {
+        ArgumentNullException.ThrowIfNull(preparedCommit);
+        if (!StringComparer.Ordinal.Equals(preparedCommit.Commit.WorkflowExecutionId, WorkflowExecutionId))
+            throw new InvalidOperationException("A coalescing session cannot retain a preparation for another workflow execution.");
+        if (_bufferedPreparedCommits.Count > 0 &&
+            preparedCommit.Token.Provenance.WorkflowCheckpointOrder <=
+            _bufferedPreparedCommits[^1].Token.Provenance.WorkflowCheckpointOrder)
+        {
+            throw new InvalidOperationException("Prepared checkpoints must be retained in strictly increasing allocated order.");
+        }
+
+        ApplyToOverlay(preparedCommit.Commit.StateChanges, includeOutbox: true);
+        _bufferedChangeSets.Add(preparedCommit.Commit.StateChanges);
+        _bufferedPreparedCommits.Add(preparedCommit);
         HopCount++;
     }
 
@@ -724,6 +745,7 @@ public sealed class RuntimeCoalescingSession
     public void ClearBuffer()
     {
         _bufferedChangeSets.Clear();
+        _bufferedPreparedCommits.Clear();
         HopCount = 0;
     }
 

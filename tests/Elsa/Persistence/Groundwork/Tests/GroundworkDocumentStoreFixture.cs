@@ -643,6 +643,7 @@ internal sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner)
 {
     public List<DocumentQuery> Queries { get; } = [];
     public List<int> ReturnedDocumentCounts { get; } = [];
+    public List<IReadOnlyList<string>> ReturnedDocumentIds { get; } = [];
 
     public async Task<DocumentQueryResult> QueryAsync(
         DocumentQuery query,
@@ -651,6 +652,7 @@ internal sealed class RecordingBoundedDocumentStore(IBoundedDocumentStore inner)
         Queries.Add(query);
         var result = await inner.QueryAsync(query, cancellationToken);
         ReturnedDocumentCounts.Add(result.Documents.Count);
+        ReturnedDocumentIds.Add(result.Documents.Select(document => document.Id).ToArray());
         return result;
     }
 

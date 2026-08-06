@@ -1,6 +1,6 @@
 # Data Model: Execution Evidence Foundation
 
-**Status:** Draft protocol/model design. The in-memory provider is not a database schema or a durability claim.
+**Status:** Review-pending protocol/model design. The Path A recovery models are approved; the durable scheduler-continuation session state below awaits plan review. The in-memory provider is not a database schema or a durability claim.
 
 ## Generic Runtime provenance and ledger (owned by Runtime)
 
@@ -8,14 +8,54 @@
 |---|---|
 | `RuntimeExecutionContextSnapshot` | Immutable, bounded, versioned, canonically ordered opaque entries. Runtime validates only generic bounds and copies it unchanged. |
 | `RuntimeCheckpointProvenance` | The snapshot plus positive `WorkflowCheckpointOrder`, assigned by generic prepare before every baseline checkpoint reaches enrichers and reused on replay. |
-| `RuntimeCheckpointPreparationToken` | `CommitId`, logical-ledger token, provenance, expected order/context revisions, expected ownership fence, canonical input fingerprint/reference, and candidate disposition. It cannot be used after a fence/revision conflict without preflight. |
-| `RuntimeLogicalCheckpointLedgerEntry` | Durable bounded canonical input reservation: `(logical CommitId, order, provenance/context fingerprint, stable source/operation identity, raw RuntimeCheckpoint, pre-enrichment RuntimeCheckpointStateChangeSet, requested context mutation, expected revisions/fence, input fingerprint, status)`. `Prepared` exists before enrichment; `Committed`, `Skipped`, or `Failed` is set by the later outcome. It is not a checkpoint, Evidence record, context attachment, state/outbox write, or durable enriched payload. After safe commit it may compact its input to an immutable receipt/marker. |
+| `RuntimeCheckpointRecoveryAuthority` | Optional declaration captured only from a scheduler dispatch: protocol `1`, kind `runtime.scheduler-work`, workflow execution ID, durable `WorkItemId`, and `sha256:` canonical work-item fingerprint. Bounds/canonicalization are fixed in research. Presence requires accepted source redelivery; null at original preparation alone permits source-independent replay. A declared value is immutable and never becomes null because lookup later fails. |
+| `RuntimeCheckpointPreparationIdentity` | Immutable `CommitId`, stable durable `LedgerToken`, workflow identity, provenance/order, original preparation fence, original expected order/context revisions, exact recovery authority, canonical input reference/digest/fingerprint, and candidate disposition. |
+| `RuntimeCheckpointAuthorityBinding` | Mutable current authority fence plus positive provider CAS revision. It starts from the original fence. Exact-set adoption may advance it to a strictly newer current-owner fence; exact same-current replay is idempotent. It is not part of the preparation identity. |
+| `RuntimeLogicalCheckpointLedgerEntry` | Durable bounded canonical input reservation containing preparation identity, current authority binding, raw checkpoint/state changes, requested context mutation, and status. `Prepared` exists before enrichment; terminal status requires an explicit successful outcome. It is not a checkpoint, Evidence record, context attachment, state/outbox write, progression authority, or durable enriched payload. Only terminal success permits compaction. |
+| `RuntimeCheckpointPreparedAdoptionRequest` | One workflow/route, inclusive `ThroughWorkflowCheckpointOrder`, a strictly newer target fence, and a complete ordered member list. Each member repeats immutable identity, exact authority, original fence/revisions, and expected current fence/CAS revision. Source-bound scope is every same-authority `Prepared` member through the bound; source-free scope is every `Prepared` member from the first nonterminal order through it. Provider comparison is exact-set and one atomic CAS for either route. |
 | `WorkflowExecutionState.CheckpointOrderHighWatermarks` | Durable committed and reserved order high-watermarks. A fresh logical checkpoint reserves one monotonic order; a fold commits entries in order; replay returns the stored order. |
 | `RuntimePostCommitOutboxItem.WorkflowCheckpointOrder` | The logical committed checkpoint order copied from its source ledger/provenance, used by generic status reads and cutoff reconciliation. |
+| Active-session durably persisted continuation set | Internal coalescing-session index of the exact `OutboxItemId` values and committed row values imported after a qualifying Immediate commit. Eligibility requires empty context snapshot, no context mutation, and a nonempty outbox containing only `EnqueueSchedulerWork`. The set does not create a second durable row, intent, or work item and is not progression authority. |
 
 The generic context entry carrying an Evidence association is opaque to Runtime. It is bounded, versioned, write-once by generic `AttachIfAbsent`, and is not a Runtime constant, configuration field, or model branch. `RuntimeCheckpointCommitFingerprint` includes the full provenance, so altered order/context is a replay conflict.
 
-For coalescing, a context-free logical checkpoint has a durable `Prepared` canonical-input reservation before enrichment even though full checkpoint state/outbox persistence is deferred. The store computes its order from the durable base plus buffered ordinal but does not attach/write context at reservation time. Recovery loads that input, verifies its fingerprint, reattaches the stored provenance/order, reruns deterministic enrichers, and continues decide/commit/fold without re-driving a scheduler source. At fold, one CAS writes `Committed` markers, high-watermark, state, context where applicable, and the unioned `PostCommitOutbox` without changing any logical order; safe committed entries may compact to receipts/markers. Post-fold duplicate `CommitId` reads the committed ledger/marker. Skip/failure consumes an internal order but exposes no committed checkpoint, outbox, association, or evidence; orders are monotonic rather than contiguous and #1134 owns gap semantics. The generic committer overrides deferral to immediate for an enriched commit with non-empty/mutating context or any post-commit work. Reservation input may approach logical checkpoint payload size and is benchmarked for storage, allocation, and throughput.
+The authority fingerprint covers the immutable scheduler item in fixed order: work-item/workflow/command/envelope/idempotency identities, numeric command kind, UTC-tick times, nullable sequence, execution scope, attempt lineage, canonical payload, and ordinal-keyed metadata. Identity/lineage strings are at most 450 UTF-16 code units; each metadata map has at most 64 entries with 128-unit keys and 4096-unit values; payload is at most 256 KiB canonical UTF-8/depth 64; total canonical material is at most 512 KiB. JSON objects sort recursively by ordinal property name, arrays retain order, validated numbers use minimal JSON, strings are not Unicode-normalized, and the hash is domain-separated by `elsa.runtime.scheduler-work-authority:v1`.
+
+`WorkflowSchedulerDrainer` opens the authority accessor from the actually acquired durable item around dispatch. Nested D2/D1 calls inherit that scope. Only `RuntimeCheckpointCommitter` reads it into preparation; ordinary checkpoint callers and providers cannot populate or infer it.
+
+For coalescing, a context-free logical checkpoint has a durable `Prepared` canonical-input reservation before enrichment even though full persistence is deferred. If the active dispatch has an accepted durable redelivery source, Runtime records that generic authority on every inline preparation; a D1/D2 fused dispatch therefore binds its whole unflushed prefix to the original durable `ScheduleActivity`. Pre-dispatch routing returns exactly `Absent`, `Exact`, `Missing`, `FingerprintMismatch`, `UnsupportedVersionOrKind`, or `Ambiguous`. Exact-key lookup or bounded keyset paging observes claimed-but-still-durable items. Only original null authority returns `Absent`; missing or invalid declared authority never creates source-independent eligibility.
+
+Both an `Exact` source-bound set and a contiguous source-free `Absent` prefix use the same exact-set adoption request before dispatch/replay. Every member must be present once, in order, with one route authority and one expected current fence. Missing, extra, duplicate, partial, mixed authority/current fence, stale, downgrade, or unauthorized requests fail atomically. Adoption changes only current fence/CAS revision: it never changes original fence/revisions, rotates `LedgerToken`, changes canonical input/authority/provenance/order, advances a high-watermark, writes state/context/outbox/marker/receipt, or compacts input. An injected provider failure rolls back all members and permits no dispatch/replay/fold. Source-bound success leaves entries `Prepared` for normal source redelivery; source-free success may rehydrate/fold. Terminal fold writes explicit outcomes without renumbering; no error is inferred as `Skipped`/`Failed`. The generic after-enrichment Immediate override remains unchanged.
+
+After a qualifying Immediate CAS, its checkpoint/state and scheduler-continuation rows are already durable. The active session applies that durable boundary state to its overlay, imports only the exact committed Pending rows, marks their IDs durably persisted, advances/consumes the current scheduler source with cap-flush semantics, and remains active. Existing outbox delivery may enqueue/consume the continuation in the overlay, but the durable row stays Pending while the downstream effect is memory-only. A later successful checkpoint/fold first incorporates that effect durably; only then may reconciliation transition the original row to Delivered. Crash before inline dispatch and crash after inline dispatch but before that commit/fold both retain the same durable Pending authority and idempotent redrive identity.
+
+Any context snapshot/mutation, non-scheduler or mixed outbox, delivery failure, or terminal/no-continuation boundary deactivates the session. Arbitrary/external handlers use ordinary durable outbox processing. No state transition invokes a handler directly, creates a duplicate intent/work item, acknowledges delivery early, or inspects Evidence, D1/D2, fusion mode, or recovery authority.
+
+### Runtime recovery transitions
+
+```text
+Prepared(original identity + current binding)
+  -- route Missing/FingerprintMismatch/Unsupported/Ambiguous --> unchanged, no dispatch
+  -- route Exact + exact-set adopt newer fence --> Prepared(updated binding) -- normal source redelivery --> terminal
+  -- route Absent + exact-set adopt newer fence --> Prepared(updated binding) -- shared replay/fold --> terminal
+  -- exact same-current adoption replay --> Prepared(same binding/receipt)
+  -- any adoption mismatch or injected failure --> every member unchanged, no dispatch/replay/fold
+```
+
+### Qualifying Immediate scheduler-continuation transitions
+
+```text
+Immediate CAS commits checkpoint/state + exact EnqueueSchedulerWork rows(Pending)
+  -- eligible active session --> import exact rows + mark durably persisted
+                             --> apply durable boundary + cap-flush source advance
+                             --> overlay outbox/queue/D2 dispatch (durable row still Pending)
+                             --> later checkpoint/fold incorporates inline effect
+                             --> reconcile original durable row Delivered
+  -- crash before/after inline dispatch --> same durable Pending row redrives idempotently
+  -- context, mixed/external outbox, delivery failure, terminal/no continuation --> deactivate
+```
+
+The T024/T025 model proof stops at actual outer D1 authority capture plus ambient stack restoration. The T028/T029 model proof owns this transition system, including the actual shipped D2→D1 re-entry retaining that outer authority and all crash/reconciliation branches.
 
 ## Evidence session aggregate
 
@@ -103,4 +143,4 @@ The last outcome is observable but is not #1134’s settled/gap-free/definitive-
 
 ## Out of scope extension room
 
-`EvidenceCaptureProfile` can name `captured`, `redacted`, `omitted`, and `truncated`, but #1133 creates neither values nor disposition instances. No input, output, state, payload, exception, arbitrary checkpoint metadata, retention/TTL policy, recovery, shared conformance fixture, or J-Test type is modeled here.
+`EvidenceCaptureProfile` can name `captured`, `redacted`, `omitted`, and `truncated`, but #1133 creates neither values nor disposition instances. No evidence input, output, state, payload, exception, arbitrary checkpoint metadata, retention/TTL policy, Evidence-query-store recovery, shared conformance fixture, or J-Test type is modeled here. Generic Runtime prepared recovery is checkpoint correctness, not Evidence persistence.

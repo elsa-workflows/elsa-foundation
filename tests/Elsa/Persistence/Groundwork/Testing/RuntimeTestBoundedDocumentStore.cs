@@ -116,6 +116,7 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
             QueryComparisonOperator.NotEqual => compared != 0,
             QueryComparisonOperator.StartsWith => actual.StartsWith(expected, StringComparison.Ordinal),
             QueryComparisonOperator.GreaterThan => compared > 0,
+            QueryComparisonOperator.GreaterThanOrEqual => compared >= 0,
             QueryComparisonOperator.LessThanOrEqual => compared <= 0,
             _ => throw new InvalidOperationException(
                 $"Runtime test range comparison '{comparison.Operator}' is unsupported.")
