@@ -42,6 +42,13 @@ public sealed class GroundworkCoverageLedgerTests
     private const string Prior88CheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
     private const string Prior88CheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
     private const string Prior88CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
+    private const string Current103CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.103/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string Current103CheckpointFenceAttachmentSha256 =
+        "83c6e89dda9b1deeeee9a5c7dd25e696804323f60e8655040a0e55608e390470";
+    private const string Current103CheckpointFenceEvidenceCommit = "0b1d027a0cf18d314bc13fc14efeb25aff4ae005";
+    private const string Current103CheckpointFenceEvidenceTree = "dede7922cebeb291e996f68d80bf61418f6a7f92";
+    private const string Current103CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview103";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -139,17 +146,29 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview103_checkpoint_fence_evidence_awaits_mechanical_import()
+    public void Preview103_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
-        var entries = Entries(ReadLedger()).ToArray();
-        Assert.DoesNotContain(
-            entries.SelectMany(entry => entry["providerEvidence"]!.AsObject())
-                .SelectMany(pair => pair.Value!.AsArray())
-                .OfType<JsonObject>(),
-            record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion);
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            Current103CheckpointFenceAttachmentRelativePath,
+            Current103CheckpointFenceAttachmentSha256,
+            Current103CheckpointFenceEvidenceCommit,
+            Current103CheckpointFenceEvidenceTree,
+            Current103CheckpointFenceRunIdentity);
+    }
 
+    /// <summary>
+    /// Publication does not advance a row status, so importing the current generation must leave every row
+    /// below <c>evidence-complete</c>. This half of the superseded
+    /// <c>Preview103_checkpoint_fence_evidence_awaits_mechanical_import</c> fact is still live and is kept
+    /// separate: a row only becomes evidence-complete when every declared obligation is present for all
+    /// four providers, which the checkpoint/fence slice alone does not supply.
+    /// </summary>
+    [Fact]
+    public void Importing_a_generation_does_not_advance_any_row_status()
+    {
         Assert.DoesNotContain(
-            entries,
+            Entries(ReadLedger()),
             entry => entry["status"]?.GetValue<string>() is
                 "evidence-complete" or "performance-complete" or "ready");
     }

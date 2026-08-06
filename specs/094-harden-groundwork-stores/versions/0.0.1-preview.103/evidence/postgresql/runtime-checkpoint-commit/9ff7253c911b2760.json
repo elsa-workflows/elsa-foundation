@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "restartScenario:dispose-and-reopen-same-database",
+  "sourceScenarioId": "runtime-checkpoint-bundle-process-restart",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "postgresql",
+  "providerIdentity": "groundwork-postgresql",
+  "providerVersion": "0.0.1-preview.103",
+  "topology": "real-postgresql-container",
+  "manifestFingerprint": "9db7224be6813255dc8a74d7df5c259451514f4b787bec3336a9dc42f1680471",
+  "executionPath": "provider-driver/postgresql/runtime-checkpoint-bundle-process-restart/9db7224be6813255",
+  "clients": 2,
+  "resultHash": "4278b1459a41c6aee04daab97f6c7f050f54df71f977c763cb22c3e62414ae63",
+  "observations": [
+    {
+      "name": "child-process-rehydration",
+      "value": "schema-version:1;document-version:1;distinct-process:true"
+    },
+    {
+      "name": "complete-bundle-count",
+      "value": "1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "0b1d027a0cf18d314bc13fc14efeb25aff4ae005",
+    "elsaTree": "dede7922cebeb291e996f68d80bf61418f6a7f92",
+    "runIdentity": "runtime-checkpoint-fence-preview103"
+  },
+  "restartScenario": "dispose-and-reopen-same-database",
+  "evidence": "versions/0.0.1-preview.103/evidence/postgresql/runtime-checkpoint-commit/9ff7253c911b2760.json"
+}

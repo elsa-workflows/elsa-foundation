@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "concurrencySemantic:strictly-increasing-fence",
+  "sourceScenarioId": "runtime-execution-ownership-fencing",
+  "coverageEntryId": "runtime-execution-liveness",
+  "provider": "mongodb",
+  "providerIdentity": "groundwork-mongodb",
+  "providerVersion": "0.0.1-preview.103",
+  "topology": "transaction-capable-replica-set",
+  "manifestFingerprint": "390261ad0a176d6f3845a531051ecdcc55636033e8942816bb520b23288f834a",
+  "executionPath": "provider-driver/mongodb/runtime-execution-ownership-fencing/390261ad0a176d6f",
+  "clients": 2,
+  "resultHash": "ade63a28514f6262893453a1af57f738bb17a9edc7dfcc099ea55859ecab44e3",
+  "observations": [
+    {
+      "name": "stale-commit-count",
+      "value": "1"
+    },
+    {
+      "name": "token-order",
+      "value": "1,2"
+    },
+    {
+      "name": "winner-count",
+      "value": "1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "0b1d027a0cf18d314bc13fc14efeb25aff4ae005",
+    "elsaTree": "dede7922cebeb291e996f68d80bf61418f6a7f92",
+    "runIdentity": "runtime-checkpoint-fence-preview103"
+  },
+  "concurrencySemantic": "strictly-increasing-fence",
+  "evidence": "versions/0.0.1-preview.103/evidence/mongodb/runtime-execution-liveness/6c14c7b1ab7d6741.json"
+}
