@@ -19,6 +19,14 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
 {
     private const string MarkerIdentityVersion = "elsa-design-operation:v1";
     private const string RollbackFailureDataKey = "Elsa.Persistence.Groundwork.DesignAtomicWrite.RollbackFailure";
+
+    // A create-only marker conflict raised by a rival that has not committed yet leaves no winner to reload.
+    // The conflicting save has already rolled this attempt's unit of work back, so IDocumentUnitOfWork sanctions
+    // a fresh attempt; these bound how long we give the rival to become durable before declaring the outcome
+    // uncertain. Design operations are user-facing CRUD, so a few short waits cost far less than a false uncertainty.
+    private const int MarkerRaceAttemptBudget = 4;
+    private static readonly TimeSpan MarkerRaceBackoffStep = TimeSpan.FromMilliseconds(25);
+
     private static readonly TimeSpan DefaultReconciliationTimeout = TimeSpan.FromSeconds(10);
     private static readonly JsonSerializerOptions MarkerJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -58,7 +66,9 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
     /// <summary>
     /// Executes an operation-owned read preflight after an exact-replay lookup misses and before the
     /// transactional unit of work starts. Callers can use this to perform provider reads while holding
-    /// their aggregate lock without opening a second store session inside the write transaction.
+    /// their aggregate lock without opening a second store session inside the write transaction. It runs
+    /// at most once per call: a marker-race retry re-drives only the staged transaction, so any lock the
+    /// preflight took is still held and is never re-acquired.
     /// </summary>
     public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
@@ -100,69 +110,89 @@ public sealed class GroundworkDesignAtomicWrite : IDesignAtomicWriter
                 GroundworkDesignAtomicWriteStatus.Replayed);
         }
 
+        // The preflight runs exactly once, outside the retry loop. It is the caller's opportunity to take its
+        // aggregate locks and read under them, and those locks stay held for every attempt — so re-running it
+        // would re-acquire a lock the operation already owns and leak the earlier handle.
         if (beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
-        try
-        {
-            return await ExecuteAttemptAsync(operationStore, request, markerId, stage, cancellationToken);
-        }
-        catch (DesignOperationMarkerRaceException)
+        // A create-only marker conflict is only terminal once a winning marker is durable. While the rival is
+        // still in flight — or after it rolled back — this attempt has committed nothing and its unit of work is
+        // already rolled back, so the loop re-drives the staged attempt instead of reporting a false uncertainty.
+        for (var attempt = 1; ; attempt++)
         {
             try
             {
-                var marker = await LoadMarkerAsync(_store, markerId, request.Operation, cancellationToken)
-                             ?? throw new UncertainDesignCommitException(
-                                 $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
-                return Resolve(
-                    marker,
-                    request,
-                    GroundworkDesignAtomicWriteStatus.Replayed);
+                return await ExecuteAttemptAsync(operationStore, request, markerId, stage, cancellationToken);
             }
-            catch (OperationCanceledException)
+            catch (DesignOperationMarkerRaceException)
             {
-                throw;
+                if (await ReloadMarkerRaceWinnerAsync(markerId, request.Operation, cancellationToken) is { } winner)
+                    return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Replayed);
+                if (attempt >= MarkerRaceAttemptBudget)
+                {
+                    throw new UncertainDesignCommitException(
+                        $"Design operation marker '{markerId}' conflicted, but the winning marker could not be reloaded.");
+                }
+
+                await Task.Delay(MarkerRaceBackoffStep * attempt, _timeProvider, cancellationToken);
             }
-            catch (UncertainDesignCommitException)
+            catch (DocumentCommitAcknowledgementUncertainException exception)
             {
-                throw;
-            }
-            catch (Exception exception)
-            {
+                using var reconciliation = new CancellationTokenSource(_reconciliationTimeout, _timeProvider);
+                try
+                {
+                    if (await LoadMarkerAsync(_store, markerId, request.Operation, reconciliation.Token) is { } marker)
+                    {
+                        return Resolve(
+                            marker,
+                            request,
+                            GroundworkDesignAtomicWriteStatus.Reconciled);
+                    }
+                }
+                catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
+                {
+                    // Preserve the uncertain-commit contract when the independently bounded reconciliation
+                    // lookup also times out. The provider may still have committed the mutation and marker.
+                }
+                catch (Exception reconciliationException)
+                {
+                    throw new UncertainDesignCommitException(
+                        $"Design operation '{request.Operation.OperationKind}' with key " +
+                        $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be classified.",
+                        new AggregateException(exception, reconciliationException));
+                }
+
                 throw new UncertainDesignCommitException(
-                    $"Design operation marker '{markerId}' conflicted, but the winning marker could not be classified.",
+                    $"Design operation '{request.Operation.OperationKind}' with key " +
+                    $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be reconciled.",
                     exception);
             }
         }
-        catch (DocumentCommitAcknowledgementUncertainException exception)
-        {
-            using var reconciliation = new CancellationTokenSource(_reconciliationTimeout, _timeProvider);
-            try
-            {
-                if (await LoadMarkerAsync(_store, markerId, request.Operation, reconciliation.Token) is { } marker)
-                {
-                    return Resolve(
-                        marker,
-                        request,
-                        GroundworkDesignAtomicWriteStatus.Reconciled);
-                }
-            }
-            catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
-            {
-                // Preserve the uncertain-commit contract when the independently bounded reconciliation
-                // lookup also times out. The provider may still have committed the mutation and marker.
-            }
-            catch (Exception reconciliationException)
-            {
-                throw new UncertainDesignCommitException(
-                    $"Design operation '{request.Operation.OperationKind}' with key " +
-                    $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be classified.",
-                    new AggregateException(exception, reconciliationException));
-            }
+    }
 
+    /// <summary>
+    /// Reads the marker a create-only conflict lost to. This deliberately uses the ambient store rather than the
+    /// operation session: the winner is another writer's committed document, and the attempt session may be
+    /// terminal. A <see langword="null"/> result means no winner is durable yet, not that the conflict was spurious.
+    /// </summary>
+    private async Task<DesignOperationMarker?> ReloadMarkerRaceWinnerAsync(
+        string markerId,
+        GroundworkDesignOperationIdentity operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await LoadMarkerAsync(_store, markerId, operation, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
             throw new UncertainDesignCommitException(
-                $"Design operation '{request.Operation.OperationKind}' with key " +
-                $"'{request.Operation.OperationKey}' may have committed, but its durable marker could not be reconciled.",
+                $"Design operation marker '{markerId}' conflicted, but the winning marker could not be classified.",
                 exception);
         }
     }

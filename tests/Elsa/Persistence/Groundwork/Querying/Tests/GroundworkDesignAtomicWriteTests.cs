@@ -591,6 +591,95 @@ public sealed class GroundworkDesignAtomicWriteTests
     }
 
     [Fact]
+    public async Task Marker_create_race_retries_the_unit_of_work_until_the_rival_marker_becomes_visible()
+    {
+        var inner = CreateStore();
+        var original = new GroundworkDesignAtomicWrite(inner);
+        await original.ExecuteAsync(Request(), AcceptedWithoutDomainWritesAsync, CancellationToken.None);
+
+        // The rival's marker only becomes readable on the fourth ledger load: the entry preflight and the two
+        // race reloads that follow the first two attempts all miss, exactly as they would while it is uncommitted.
+        var documents = new MarkerRaceDocumentStore(inner, conflictingMarkerSaves: 0, hiddenLedgerLoads: 3);
+        var write = new GroundworkDesignAtomicWrite(documents);
+        var stageCalls = 0;
+        var preflightCalls = 0;
+
+        var result = await write.ExecuteAsync(
+            Request(),
+            _ =>
+            {
+                preflightCalls++;
+                return Task.CompletedTask;
+            },
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(GroundworkDesignAtomicWriteStageResult.Accepted("ignored", "{}"));
+            },
+            CancellationToken.None);
+
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Replayed, result.Status);
+        Assert.Equal(ResultFingerprint, result.AuthoritativeResultFingerprint);
+        Assert.Equal(ResultJson, result.AuthoritativeResultJson);
+        Assert.Equal(3, stageCalls);
+        // The preflight owns the caller's aggregate lock, so retries must never re-run it.
+        Assert.Equal(1, preflightCalls);
+        Assert.Equal(3, documents.RollbackCount);
+        Assert.Single(inner.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+    }
+
+    [Fact]
+    public async Task Marker_create_race_commits_on_a_later_attempt_when_the_rival_rolls_back()
+    {
+        var inner = CreateStore();
+        var documents = new MarkerRaceDocumentStore(inner, conflictingMarkerSaves: 1, hiddenLedgerLoads: 0);
+        var write = new GroundworkDesignAtomicWrite(documents);
+        var stageCalls = 0;
+
+        var result = await write.ExecuteAsync(
+            Request(),
+            async (context, cancellationToken) =>
+            {
+                stageCalls++;
+                await context.SaveAsync(SaveAggregate("definition-1"), cancellationToken);
+                return GroundworkDesignAtomicWriteStageResult.Accepted(ResultFingerprint, ResultJson);
+            },
+            CancellationToken.None);
+
+        Assert.Equal(GroundworkDesignAtomicWriteStatus.Committed, result.Status);
+        Assert.Equal(ResultFingerprint, result.AuthoritativeResultFingerprint);
+        Assert.Equal(2, stageCalls);
+        Assert.Equal(1, documents.RollbackCount);
+        Assert.Single(inner.Snapshot(AggregateDocumentKind));
+        Assert.Single(inner.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+    }
+
+    [Fact]
+    public async Task Marker_create_race_that_never_resolves_surfaces_uncertain_after_a_bounded_budget()
+    {
+        var inner = CreateStore();
+        var documents = new MarkerRaceDocumentStore(inner, conflictingMarkerSaves: int.MaxValue, hiddenLedgerLoads: 0);
+        var write = new GroundworkDesignAtomicWrite(documents);
+        var stageCalls = 0;
+
+        var exception = await Assert.ThrowsAsync<UncertainDesignCommitException>(() =>
+            write.ExecuteAsync(
+                Request(),
+                (_, _) =>
+                {
+                    stageCalls++;
+                    return Task.FromResult(
+                        GroundworkDesignAtomicWriteStageResult.Accepted(ResultFingerprint, ResultJson));
+                },
+                CancellationToken.None));
+
+        Assert.Contains("could not be reloaded", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(4, stageCalls);
+        Assert.Equal(4, documents.RollbackCount);
+        Assert.Empty(inner.Snapshot(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind));
+    }
+
+    [Fact]
     public async Task Corrupt_marker_json_is_rejected_before_staging()
     {
         var store = CreateStore();
@@ -843,36 +932,44 @@ public sealed class GroundworkDesignAtomicWriteTests
                 () => Interlocked.Increment(ref _rollbackCount));
     }
 
-    private sealed class RollbackRecordingUnitOfWork(
-        IDocumentUnitOfWork inner,
-        Action recordRollback) : IDocumentUnitOfWork
+    private class DelegatingDocumentUnitOfWork(IDocumentUnitOfWork inner) : IDocumentUnitOfWork
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
+        protected IDocumentUnitOfWork Inner { get; } = inner;
+
+        public virtual Task<DocumentStoreWriteResult> SaveAsync(
             SaveDocumentRequest request,
             CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
+            Inner.SaveAsync(request, cancellationToken);
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(
+        public virtual Task<DocumentStoreWriteResult> DeleteAsync(
             DeleteDocumentRequest request,
             CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
+            Inner.DeleteAsync(request, cancellationToken);
 
-        public Task<DocumentEnvelope?> LoadAsync(
+        public virtual Task<DocumentEnvelope?> LoadAsync(
             string documentKind,
             string id,
             CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
+            Inner.LoadAsync(documentKind, id, cancellationToken);
 
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            inner.CommitAsync(cancellationToken);
+        public virtual Task CommitAsync(CancellationToken cancellationToken = default) =>
+            Inner.CommitAsync(cancellationToken);
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        public virtual Task RollbackAsync(CancellationToken cancellationToken = default) =>
+            Inner.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => Inner.DisposeAsync();
+    }
+
+    private sealed class RollbackRecordingUnitOfWork(
+        IDocumentUnitOfWork inner,
+        Action recordRollback) : DelegatingDocumentUnitOfWork(inner)
+    {
+        public override Task RollbackAsync(CancellationToken cancellationToken = default)
         {
             recordRollback();
-            return inner.RollbackAsync(cancellationToken);
+            return base.RollbackAsync(cancellationToken);
         }
-
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
     private sealed class RollbackThrowingDocumentStore(IDocumentStore inner) : DelegatingDocumentStore(inner)
@@ -885,31 +982,10 @@ public sealed class GroundworkDesignAtomicWriteTests
     }
 
     private sealed class RollbackThrowingUnitOfWork(
-        IDocumentUnitOfWork inner) : IDocumentUnitOfWork
+        IDocumentUnitOfWork inner) : DelegatingDocumentUnitOfWork(inner)
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            inner.CommitAsync(cancellationToken);
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
+        public override Task RollbackAsync(CancellationToken cancellationToken = default) =>
             throw new IOException("rollback failed");
-
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
     private sealed class RejectingMarkerSaveDocumentStore(IDocumentStore inner) : DelegatingDocumentStore(inner)
@@ -926,38 +1002,25 @@ public sealed class GroundworkDesignAtomicWriteTests
                 () => Interlocked.Increment(ref _rollbackCount));
     }
 
+    // Models a provider that refuses the marker for a reason unrelated to a create-only race. A relationship
+    // conflict is the only non-success status a create-only save can legitimately return, so this stays a
+    // terminal rejection and must never be mistaken for a rival holding the marker id.
     private sealed class RejectingMarkerSaveUnitOfWork(
         IDocumentUnitOfWork inner,
-        Action recordRollback) : IDocumentUnitOfWork
+        Action recordRollback) : DelegatingDocumentUnitOfWork(inner)
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
+        public override Task<DocumentStoreWriteResult> SaveAsync(
             SaveDocumentRequest request,
             CancellationToken cancellationToken = default) =>
             request.DocumentKind == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind
-                ? Task.FromResult(DocumentStoreWriteResult.NotFound)
-                : inner.SaveAsync(request, cancellationToken);
+                ? Task.FromResult(DocumentStoreWriteResult.RelationshipConflict)
+                : base.SaveAsync(request, cancellationToken);
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            inner.CommitAsync(cancellationToken);
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        public override Task RollbackAsync(CancellationToken cancellationToken = default)
         {
             recordRollback();
-            return inner.RollbackAsync(cancellationToken);
+            return base.RollbackAsync(cancellationToken);
         }
-
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
     private sealed class HideFirstLedgerLoadDocumentStore(IDocumentStore inner) : DelegatingDocumentStore(inner)
@@ -985,6 +1048,64 @@ public sealed class GroundworkDesignAtomicWriteTests
             new RollbackRecordingUnitOfWork(
                 await base.BeginAsync(scope, cancellationToken),
                 () => Interlocked.Increment(ref _rollbackCount));
+    }
+
+    /// <summary>
+    /// Models a same-key rival that holds the create-only marker id inside its own still-uncommitted
+    /// transaction. Groundwork answers the losing create with <c>ConcurrencyConflict</c>, but the winning
+    /// marker stays invisible to a non-transactional reload until the rival commits — so
+    /// <paramref name="hiddenLedgerLoads"/> is how many reloads happen before the rival becomes durable, and
+    /// <paramref name="conflictingMarkerSaves"/> is how many attempts lose the create before the id frees up.
+    /// </summary>
+    private sealed class MarkerRaceDocumentStore(
+        IDocumentStore inner,
+        int conflictingMarkerSaves,
+        int hiddenLedgerLoads) : DelegatingDocumentStore(inner)
+    {
+        private int _ledgerLoads;
+        private int _markerSaves;
+        private int _rollbackCount;
+
+        public int RollbackCount => Volatile.Read(ref _rollbackCount);
+
+        public override Task<DocumentEnvelope?> LoadAsync(
+            string documentKind,
+            string id,
+            CancellationToken cancellationToken = default) =>
+            IsLedger(documentKind) && Interlocked.Increment(ref _ledgerLoads) <= hiddenLedgerLoads
+                ? Task.FromResult<DocumentEnvelope?>(null)
+                : base.LoadAsync(documentKind, id, cancellationToken);
+
+        public override async Task<IDocumentUnitOfWork> BeginAsync(
+            DocumentCommitScope scope,
+            CancellationToken cancellationToken = default) =>
+            new MarkerRaceUnitOfWork(
+                await base.BeginAsync(scope, cancellationToken),
+                () => Interlocked.Increment(ref _markerSaves) <= conflictingMarkerSaves,
+                () => Interlocked.Increment(ref _rollbackCount));
+
+        private static bool IsLedger(string documentKind) =>
+            documentKind == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind;
+    }
+
+    private sealed class MarkerRaceUnitOfWork(
+        IDocumentUnitOfWork inner,
+        Func<bool> markerSaveLosesTheRace,
+        Action recordRollback) : DelegatingDocumentUnitOfWork(inner)
+    {
+        public override Task<DocumentStoreWriteResult> SaveAsync(
+            SaveDocumentRequest request,
+            CancellationToken cancellationToken = default) =>
+            request.DocumentKind == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind &&
+            markerSaveLosesTheRace()
+                ? Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict)
+                : base.SaveAsync(request, cancellationToken);
+
+        public override Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            recordRollback();
+            return base.RollbackAsync(cancellationToken);
+        }
     }
 
     private sealed class UncertainAfterCommitDocumentStore(
