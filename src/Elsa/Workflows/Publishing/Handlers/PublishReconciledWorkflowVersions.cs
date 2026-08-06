@@ -19,7 +19,8 @@ namespace Elsa.Workflows.Publishing.Handlers;
 /// startup task, so publications exist before shell activation completes — "ready" means executable.
 /// </summary>
 /// <remarks>
-/// Idempotent across restarts: a definition whose publication slot already holds an <em>active</em>
+/// Idempotent across restarts: a definition whose <em>policy-resolved</em> publication slot — the one
+/// a slot-less <see cref="PublishWorkflow"/> request will update — already holds an <em>active</em>
 /// publication of the target version is skipped before any compile; <c>PublishWorkflow</c>'s own
 /// unchanged-artifact short-circuit (<c>WasCreated = false</c>) is the second net. Failure policy per
 /// the event's contract: this handler never lets an exception escape — a per-definition failure is
@@ -30,9 +31,12 @@ public sealed class PublishReconciledWorkflowVersions(
     ILogger<PublishReconciledWorkflowVersions> logger,
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
+    IPublicationPolicyStore policyStore,
+    IPublicationPolicyResolver policyResolver,
     IPublicationSlotStore slotStore,
     IPublicationRecordStore recordStore,
-    IRequestSender requestSender) : IEventHandler<OnWorkflowVersionsReconciled>
+    IRequestSender requestSender,
+    TimeProvider timeProvider) : IEventHandler<OnWorkflowVersionsReconciled>
 {
     public async Task Handle(OnWorkflowVersionsReconciled domainEvent, CancellationToken cancellationToken)
     {
@@ -106,18 +110,47 @@ public sealed class PublishReconciledWorkflowVersions(
         LogPublished(claim, published.ArtifactId, published.WasCreated);
     }
 
+    /// <summary>
+    /// True when the slot that this handler's slot-less <see cref="PublishWorkflow"/> request would update
+    /// already holds an active publication of <paramref name="versionId"/>. Scoped to that one slot on
+    /// purpose (reviewed on #1161): a version active only in some other slot — a side-by-side <c>canary</c>,
+    /// say — says nothing about the target slot, which may still point at an older version or hold no
+    /// publication at all, and skipping on it would leave the deployment unpublished where it matters.
+    /// </summary>
     private async Task<bool> HasActivePublicationOf(string definitionId, string versionId, CancellationToken cancellationToken)
     {
-        var slots = await slotStore.ListByDefinitionAsync(definitionId, cancellationToken);
+        if (await ResolveTargetSlotName(definitionId, versionId, cancellationToken) is not { } slotName)
+            return false;
 
-        foreach (var publicationId in slots.Where(x => x.ActivePublicationId is not null).Select(x => x.ActivePublicationId!))
+        var slot = await slotStore.FindAsync(definitionId, slotName, cancellationToken);
+        if (slot?.ActivePublicationId is not { } publicationId)
+            return false;
+
+        var record = await recordStore.FindAsync(publicationId, cancellationToken);
+        return record is { Status: PublicationStatus.Active } && record.WorkflowDefinitionVersionId == versionId;
+    }
+
+    /// <summary>
+    /// Mirrors the slot resolution <see cref="PublishWorkflowRequestHandler"/> performs for a request that
+    /// carries neither an action nor a slot name: workflow policy first, host policy second, and the same
+    /// synthesized host default when none is stored. Returns <c>null</c> when the policy cannot resolve a
+    /// slot (explicit-slot policies, a malformed default); the pre-check is an optimization rather than a
+    /// gate, so an unresolvable policy falls through to <c>PublishWorkflow</c> and its authoritative error.
+    /// </summary>
+    private async Task<string?> ResolveTargetSlotName(string definitionId, string versionId, CancellationToken cancellationToken)
+    {
+        var workflowPolicy = await policyStore.FindAsync(definitionId, cancellationToken);
+        var hostPolicy = await policyStore.FindAsync(workflowDefinitionId: null, cancellationToken)
+            ?? new PublicationPolicy(null, PublicationPolicyDefaultAction.ReplaceDefaultSlot, "default", 0, timeProvider.GetUtcNow());
+
+        try
         {
-            var record = await recordStore.FindAsync(publicationId, cancellationToken);
-            if (record is { Status: PublicationStatus.Active } && record.WorkflowDefinitionVersionId == versionId)
-                return true;
+            return policyResolver.Resolve(definitionId, versionId, null, workflowPolicy, hostPolicy).SlotName;
         }
-
-        return false;
+        catch (PublicationPolicyResolutionException)
+        {
+            return null;
+        }
     }
 
     private void LogSkipDeleted(WorkflowVersionSourceClaim claim)
