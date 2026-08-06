@@ -6717,6 +6717,18 @@ html[data-theme="brass-instrument"] .wf-chip {
   font-size: 11px;
 }
 
+/* Slot badges stack under the task copy rather than beside it, so they drop the ordinary node's
+   icon-column indent. The frame gains a bottom band so the badges clear the centred ⊞ marker. */
+.wf-bpmn-task-copy .wf-node-slot-list,
+.wf-bpmn-task-copy .wf-node-slot-badge {
+  margin: 6px 0 0;
+}
+
+.wf-bpmn-task:has(.wf-node-slot-list),
+.wf-bpmn-task:has(.wf-node-slot-badge) {
+  padding-bottom: 16px;
+}
+
 .wf-bpmn-subprocess-marker {
   position: absolute;
   bottom: 2px;

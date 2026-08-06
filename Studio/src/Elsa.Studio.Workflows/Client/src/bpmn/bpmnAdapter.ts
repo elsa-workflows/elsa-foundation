@@ -1,6 +1,6 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, DesignMetadataRecord } from "../workflowTypes";
-import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, resolveActivityIcon, type ActivityCatalogLookup, type CanvasScope, type WorkflowNodeIcon } from "../workflowAdapter";
+import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, resolveActivityIcon, type ActivityCatalogLookup, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
 import {
   bpmnElementTypes,
   bpmnStructureKind,
@@ -23,6 +23,10 @@ export interface BpmnNodeData extends Record<string, unknown> {
     label: string;
     icon: WorkflowNodeIcon;
   };
+  // The BOUND ACTIVITY's child slots, so a subprocess offers the same slot entry an ordinary node does
+  // (empty for events, gateways, unbound tasks, and tasks bound to a leaf). Slot entry addresses
+  // `boundActivity.nodeId`, never the element id — see NodeSlotBadges.
+  childSlots: ChildSlot[];
 }
 
 export interface BpmnCanvas {
@@ -99,7 +103,8 @@ function createBpmnNode(
     data: {
       element,
       label: element.name?.trim() || boundActivity?.label || "",
-      boundActivity
+      boundActivity,
+      childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : []
     }
   };
 }
@@ -194,7 +199,7 @@ export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosi
     type: "bpmnElement",
     position,
     selected: true,
-    data: { element, label: "" }
+    data: { element, label: "", childSlots: [] }
   };
 }
 
@@ -227,7 +232,8 @@ export function createBpmnBoundNode(
         activityTypeKey: catalogItem.activityTypeKey,
         label: getActivityDisplay(catalogItem),
         icon: resolveActivityIcon(catalogItem)
-      }
+      },
+      childSlots: getChildSlots(activityNode, catalogItem)
     }
   };
 }

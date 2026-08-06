@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, Handle, Position, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { getActivityDisplay, type ChildSlot, type WorkflowNodeData } from "../workflowAdapter";
+import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { renderActivityIcon, truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
-import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext } from "./contexts";
+import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
+import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import type { WorkflowEdge } from "./editorTypes";
@@ -24,9 +25,6 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const subtitle = formatNodeSubtitle(nodeData);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
-  const slotNavigation = React.useContext(WorkflowSlotNavigationContext);
-  const enterSlot = nodeData.onEnterSlot
-    ?? (slotNavigation ? (slot: ChildSlot) => slotNavigation(id, nodeData.label, slot) : undefined);
   return (
     <div
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : ""].filter(Boolean).join(" ")}
@@ -47,27 +45,12 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
         </span>
       </div>
-      {nodeData.childSlots.length > 0 ? (
-        enterSlot ? (
-          <span className="wf-node-slot-list">
-            {nodeData.childSlots.map(slot => (
-              <button
-                type="button"
-                className="wf-node-slot-badge nodrag"
-                key={slot.id}
-                onClick={event => {
-                  event.stopPropagation();
-                  enterSlot(slot);
-                }}
-              >
-                {slot.label}
-              </button>
-            ))}
-          </span>
-        ) : (
-          <span className="wf-node-slot-badge">{nodeData.childSlots.length} slot{nodeData.childSlots.length === 1 ? "" : "s"}</span>
-        )
-      ) : null}
+      <NodeSlotBadges
+        ownerNodeId={id}
+        ownerLabel={nodeData.label}
+        slots={nodeData.childSlots}
+        onEnterSlot={nodeData.onEnterSlot}
+      />
       {runtime ? (
         <div className="wf-node-runtime-strip">
           {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}

@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Edge, Node } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
-import { getActivityDesignerSupport, getChildSlots, readStructureDesignFacet } from "../workflowAdapter";
+import {
+  getActivityDesignerSupport,
+  getChildSlots,
+  planSlotNavigation,
+  readStructureDesignFacet,
+  resolveScope,
+  slotCrumbLabel
+} from "../workflowAdapter";
 import {
   buildBpmnCanvas,
   createBpmnBoundNode,
@@ -44,6 +51,33 @@ function bpmnOwner(elements: unknown[], sequenceFlows: unknown[], activities: Ac
     }
   };
 }
+
+// A container activity a subProcess element can bind: its own BPMN process, one level down.
+function nestedBpmnActivity(nodeId: string): ActivityNode {
+  return {
+    nodeId,
+    activityVersionId: "bpmn@1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: bpmnStructureKind,
+      schemaVersion: "1.0.0",
+      payload: {
+        elements: [
+          { elementId: "inner-start", elementType: "startEvent" },
+          { elementId: "inner-task", elementType: "task", childNodeId: "node-inner" }
+        ],
+        sequenceFlows: [{ flowId: "inner-flow", sourceRef: "inner-start", targetRef: "inner-task" }],
+        activities: [activityNode("node-inner")]
+      }
+    }
+  };
+}
+
+const catalog = [
+  catalogItem(),
+  catalogItem({ activityVersionId: "bpmn@1", activityTypeKey: "Elsa.BpmnProcess", displayName: "BPMN Process" })
+];
 
 const diamondElements = [
   { elementId: "start", elementType: "startEvent" },
@@ -196,6 +230,31 @@ describe("buildBpmnCanvas", () => {
     expect(canvas.edges.map(edge => edge.id)).toEqual(["flow-1", "flow-2"]);
     expect(canvas.edges[1].label).toBe("Done");
   });
+
+  it("carries the bound activity's child slots so a subprocess offers slot entry", () => {
+    const owner = bpmnOwner(
+      [...diamondElements, { elementId: "sub-1", elementType: "subProcess", childNodeId: "node-sub" }],
+      diamondFlows,
+      [activityNode("node-a"), nestedBpmnActivity("node-sub")]
+    );
+    const canvas = buildBpmnCanvas({ owner, slot: getChildSlots(owner, catalog)[0] }, catalog, []);
+    const subprocess = canvas.nodes.find(node => node.id === "sub-1")!;
+
+    expect(subprocess.data.childSlots.map(slot => slot.mode)).toEqual(["bpmn"]);
+    expect(subprocess.data.boundActivity?.nodeId).toBe("node-sub");
+  });
+
+  it("leaves child slots empty for events, gateways, unbound tasks, and leaf-bound tasks", () => {
+    const owner = bpmnOwner(
+      [...diamondElements, { elementId: "gw-1", elementType: "parallelGateway" }, { elementId: "task-b", elementType: "task" }],
+      diamondFlows,
+      [activityNode("node-a")]
+    );
+    const canvas = buildBpmnCanvas({ owner, slot: getChildSlots(owner, catalog)[0] }, catalog, []);
+
+    // start + end events, the gateway, the unbound task, and task-a bound to a leaf activity.
+    expect(canvas.nodes.every(node => node.data.childSlots.length === 0)).toBe(true);
+  });
 });
 
 describe("syncBpmnCanvasToScope", () => {
@@ -273,6 +332,71 @@ describe("updateBpmnElement", () => {
     expect(elements[1].name).toBe("Approve order");
     expect(elements[1].elementId).toBe("task-a");
     expect((owner.structure?.payload.elements as Record<string, unknown>[])[1].name).toBeUndefined();
+  });
+});
+
+// A BPMN canvas node is keyed by its ELEMENT id while slot entry addresses ACTIVITY node ids, so the
+// two are easy to confuse and the wrong one fails silently: resolveScope yields null and the host
+// clears the canvas rather than raising. These pin the translation at the element boundary.
+describe("bpmn subprocess slot navigation routing", () => {
+  const subProcessElement = { elementId: "sub-1", elementType: "subProcess", childNodeId: "node-sub" };
+  const root = bpmnOwner([...diamondElements, subProcessElement], diamondFlows, [
+    activityNode("node-a"),
+    nestedBpmnActivity("node-sub")
+  ]);
+  const rootScope = resolveScope(root, [], catalog)!;
+
+  function planFrom(ownerNodeId: string) {
+    const bound = rootScope.slot.activities.find(activity => activity.nodeId === "node-sub")!;
+    const slot = getChildSlots(bound, catalog)[0];
+    return planSlotNavigation([], rootScope.owner, ownerNodeId, slot, slotCrumbLabel("Review", slot), catalog);
+  }
+
+  it("descends into the nested BPMN process when routed through the bound activity node id", () => {
+    const plan = planFrom("node-sub")!;
+    expect(plan.frames).toEqual([{ ownerNodeId: "node-sub", slotId: "elsa.bpmn.structure:activities", label: "Review / Activities" }]);
+
+    const nested = resolveScope(root, plan.frames, catalog)!;
+    expect(nested.owner.nodeId).toBe("node-sub");
+    expect(nested.slot.mode).toBe("bpmn");
+
+    // The nested scope is an ordinary BPMN scope, so the same canvas construction applies at depth.
+    const nestedCanvas = buildBpmnCanvas(nested, catalog, []);
+    expect(nestedCanvas.nodes.map(node => node.id)).toEqual(["inner-start", "inner-task"]);
+    expect(nestedCanvas.edges.map(edge => edge.id)).toEqual(["inner-flow"]);
+  });
+
+  it("resolves to nothing when routed through the element id instead", () => {
+    const plan = planFrom("sub-1")!;
+    expect(plan.frames[0].ownerNodeId).toBe("sub-1");
+    // No slot of the BPMN owner holds a child called "sub-1" — that is an element, not an activity.
+    expect(resolveScope(root, plan.frames, catalog)).toBeNull();
+  });
+
+  it("descends into a flowchart-backed subprocess as a flowchart scope", () => {
+    const flowchartActivity: ActivityNode = {
+      nodeId: "node-fc",
+      activityVersionId: "flowchart@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.flowchart.structure",
+        schemaVersion: "1.0.0",
+        payload: { activities: [activityNode("node-fc-child")], connections: [] }
+      }
+    };
+    const owner = bpmnOwner(
+      [{ elementId: "sub-fc", elementType: "subProcess", childNodeId: "node-fc" }],
+      [],
+      [flowchartActivity]
+    );
+    const scope = resolveScope(owner, [], catalog)!;
+    const slot = getChildSlots(flowchartActivity, catalog)[0];
+    const plan = planSlotNavigation([], scope.owner, "node-fc", slot, slotCrumbLabel("Review", slot), catalog)!;
+
+    const nested = resolveScope(owner, plan.frames, catalog)!;
+    expect(nested.owner.nodeId).toBe("node-fc");
+    expect(nested.slot.mode).toBe("flowchart");
   });
 });
 

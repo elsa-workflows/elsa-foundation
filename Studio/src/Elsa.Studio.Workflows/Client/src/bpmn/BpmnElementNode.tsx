@@ -1,6 +1,7 @@
 import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../workflowFormatting";
+import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
 import type { BpmnNodeData } from "./bpmnAdapter";
 
@@ -60,7 +61,8 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
     );
   }
 
-  // Task family and subprocess: a rounded frame; a bound Elsa activity renders its icon + label.
+  // Task family and subprocess: a rounded frame; a bound Elsa activity renders its icon + label, plus a
+  // slot badge per child slot when it is a container (the affordance for descending into a subprocess).
   const bound = nodeData.boundActivity;
   return (
     <span className={["wf-bpmn-task", element.elementType === bpmnElementTypes.subProcess ? "wf-bpmn-subprocess" : ""].filter(Boolean).join(" ")}>
@@ -70,6 +72,12 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
           <span className="wf-bpmn-task-copy">
             <strong>{element.name?.trim() || bound.label}</strong>
             <small>{bpmnElementTypeLabel(element)}</small>
+            {/* Slot entry addresses the bound ACTIVITY node; the element id resolves to nothing. */}
+            <NodeSlotBadges
+              ownerNodeId={bound.nodeId}
+              ownerLabel={element.name?.trim() || bound.label}
+              slots={nodeData.childSlots}
+            />
           </span>
         </>
       ) : (

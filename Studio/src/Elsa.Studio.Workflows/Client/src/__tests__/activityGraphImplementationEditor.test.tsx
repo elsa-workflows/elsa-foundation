@@ -352,6 +352,46 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     expect(payload.elements.map(element => element.elementId)).toContain("start");
   });
 
+  // Slot badges are rendered by the shared BpmnElementNode, so this host gets subprocess navigation the
+  // moment it emits bpmnElement nodes. The badge addresses the BOUND ACTIVITY node id; this host's
+  // slotNavigation looks the owner up among the scope slot's activities, so an element id would find
+  // nothing and silently no-op.
+  it("descends into a bound subprocess from its slot badge", () => {
+    catalogItems = [bpmnCatalogItem(), leafCatalogItem()];
+    const rendered = renderDesigner({
+      value: bpmnImplementationValue(
+        [{ elementId: "sub-1", elementType: "subProcess", childNodeId: "nested-process" }],
+        [{
+          nodeId: "nested-process",
+          activityVersionId: "bpmn-v1",
+          inputs: [],
+          outputs: [],
+          structure: {
+            kind: bpmnStructureKind,
+            schemaVersion: "1.0.0",
+            payload: {
+              elements: [{ elementId: "inner-task", elementType: "task", childNodeId: "write-line-1" }],
+              sequenceFlows: [],
+              activities: [{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]
+            }
+          }
+        }]
+      )
+    });
+
+    // The parent scope shows the subprocess element, not the nested process.
+    expect(rendered.container.querySelector("[data-graph-node-id='sub-1']")).not.toBeNull();
+    expect(rendered.container.querySelector("[data-graph-node-id='inner-task']")).toBeNull();
+
+    const badge = rendered.container.querySelector<HTMLButtonElement>(".wf-node-slot-badge");
+    expect(badge).not.toBeNull();
+    click(badge!);
+
+    // The nested scope is itself a BPMN scope, so it renders from its own elements.
+    expect(rendered.container.querySelector("[data-graph-node-id='inner-task']")).not.toBeNull();
+    expect(rendered.container.querySelector("[data-graph-node-id='sub-1']")).toBeNull();
+  });
+
   it("offers BPMN shapes only in a BPMN scope, and never on a locked draft", () => {
     catalogItems = [bpmnCatalogItem(), flowchartCatalogItem(), leafCatalogItem()];
 
