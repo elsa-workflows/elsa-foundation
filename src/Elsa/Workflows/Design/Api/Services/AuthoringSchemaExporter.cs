@@ -45,11 +45,15 @@ internal static class AuthoringSchemaExporter
     /// Exports the JSON Schema of <paramref name="type"/> as serialized on the wire. Opaque members
     /// (<c>object</c>, <c>JsonElement</c>) intentionally export as unconstrained schemas.
     /// </summary>
-    internal static JsonElement ExportSchema(Type type)
-    {
-        var node = WireOptions.GetJsonSchemaAsNode(type, ExporterOptions);
-        return JsonSerializer.SerializeToElement(node, WireOptions);
-    }
+    internal static JsonElement ExportSchema(Type type) => ToElement(ExportSchemaNode(type));
+
+    /// <summary>
+    /// Exports the schema as a mutable node so operation-specific handlers can layer invariants the
+    /// shared payload types cannot express (e.g. members mandatory on one operation only).
+    /// </summary>
+    internal static JsonNode ExportSchemaNode(Type type) => WireOptions.GetJsonSchemaAsNode(type, ExporterOptions);
+
+    internal static JsonElement ToElement(JsonNode node) => JsonSerializer.SerializeToElement(node, WireOptions);
 
     // The exporter marks every non-defaulted constructor parameter of a positional record as
     // "required", but the wire deserializer treats a missing nullable parameter exactly like an

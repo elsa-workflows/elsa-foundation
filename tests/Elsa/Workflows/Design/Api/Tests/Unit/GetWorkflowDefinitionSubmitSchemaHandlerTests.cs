@@ -45,6 +45,11 @@ public sealed class GetWorkflowDefinitionSubmitSchemaHandlerTests
 
         var argumentState = GetRootActivitySchema(view.Schema).GetProperty("properties").GetProperty("inputs").GetProperty("items");
         Assert.Equal(["referenceKey", "value"], GetRequired(argumentState));
+
+        // The converse also holds: the submit operation always rejects a missing root activity
+        // (SubmittedActivityTreeValidator → 400) even though the shared state view type is nullable
+        // for add/replace, so this operation's schema must require it.
+        Assert.Equal(["rootActivity"], GetRequired(view.Schema.GetProperty("properties").GetProperty("state")));
     }
 
     private static string[] GetRequired(JsonElement schema) =>
