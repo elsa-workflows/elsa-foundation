@@ -3,6 +3,8 @@
   <ItemGroup>
     <PackageReference Include="Groundwork.Core" />
     <PackageReference Include="Groundwork.DiagnosticRecords" />
+    <!-- The lane registrar binds adapters to a target's IDocumentStore/IBoundedDocumentStore. -->
+    <PackageReference Include="Groundwork.Documents" />
     <!-- Lanes bind their manifest contribution to a target through a service-collection extension. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>

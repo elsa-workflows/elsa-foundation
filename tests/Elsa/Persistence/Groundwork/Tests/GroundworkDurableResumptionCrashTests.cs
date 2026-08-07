@@ -151,12 +151,17 @@ public sealed class GroundworkDurableResumptionCrashTests
             // Manual decoration (Scrutor's Decorate is not referenced here): capture the durable writer type registered
             // by AddGroundworkRuntimeStores and wrap it so the FIRST commit throws OperationCanceledException.
             var innerDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
-            var innerImplementationType = innerDescriptor.ImplementationType
-                ?? throw new InvalidOperationException("Expected a type-based IRuntimeCheckpointCommitStore registration to decorate.");
             services.Remove(innerDescriptor);
+
+            // The runtime lane binds its adapters to a named Groundwork target, so the registration is a
+            // factory rather than a plain implementation type. Wrap whatever the container would have built.
+            var createInner = innerDescriptor.ImplementationFactory
+                ?? (innerDescriptor.ImplementationType is { } implementationType
+                    ? sp => ActivatorUtilities.CreateInstance(sp, implementationType)
+                    : throw new InvalidOperationException(
+                        "Expected an IRuntimeCheckpointCommitStore registration to decorate."));
             services.AddSingleton<IRuntimeCheckpointCommitStore>(sp =>
-                new CrashOnceCheckpointCommitStore(
-                    (IRuntimeCheckpointCommitStore)ActivatorUtilities.CreateInstance(sp, innerImplementationType)));
+                new CrashOnceCheckpointCommitStore((IRuntimeCheckpointCommitStore)createInner(sp)));
         }))
         {
             // The crash propagates out of the start dispatch as an OperationCanceledException.

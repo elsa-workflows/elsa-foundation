@@ -732,9 +732,9 @@ public class GroundworkStorageCompositionTests
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
         Assert.Equal(ServiceLifetime.Scoped, source.Lifetime);
-        var helper = Assert.Single(services.Where(x =>
-            x.ServiceType == typeof(IDesignAtomicWriter) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWrite)));
+        // The writer is bound to the design lane's target, so it is registered through a factory rather
+        // than by implementation type; both design registrations still contribute exactly one.
+        var helper = Assert.Single(services.Where(x => x.ServiceType == typeof(IDesignAtomicWriter)));
         Assert.Equal(ServiceLifetime.Scoped, helper.Lifetime);
     }
 
