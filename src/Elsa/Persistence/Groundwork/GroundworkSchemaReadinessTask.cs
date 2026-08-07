@@ -17,11 +17,13 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public sealed class GroundworkSchemaReadinessTask(
     GroundworkTargetRegistry targets,
-    IServiceProvider serviceProvider) : IShellInitializer
+    IServiceProvider serviceProvider,
+    GroundworkTargetComposition? composition = null) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        EnsureEveryConfiguredTargetFoundItsProvider();
         var declared = targets.TargetNames;
         if (declared.Count == 0)
         {
@@ -52,6 +54,28 @@ public sealed class GroundworkSchemaReadinessTask(
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A target naming a provider whose package was never composed produces no store at all. Nothing else
+    /// notices, because admission only walks the targets that were declared, so the configuration would
+    /// simply have no effect. Name it here instead.
+    /// </summary>
+    private void EnsureEveryConfiguredTargetFoundItsProvider()
+    {
+        var pending = composition?.PendingTargets ?? [];
+        if (pending.Count == 0)
+            return;
+
+        var composed = composition!.ComposedProviders;
+        var available = composed.Count == 0
+            ? "no Groundwork provider leaf is composed"
+            : $"composed providers are {string.Join(", ", composed.Select(provider => $"'{provider}'"))}";
+        var descriptions = pending.Select(target =>
+            $"'{target}' (provider '{composition.RequestedProvider(target) ?? "<unset>"}')");
+        throw new GroundworkSchemaReadinessException(
+            $"Groundwork target(s) {string.Join(", ", descriptions)} name a provider that is not composed; " +
+            $"{available}. Enable the provider package's shell feature, or correct the target's provider.");
     }
 }
 
