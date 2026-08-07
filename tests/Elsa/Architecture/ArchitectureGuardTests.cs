@@ -381,6 +381,23 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Server_catalogs_workflow_json_reconciliation_for_file_based_deployment()
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
+
+        // spec 147 (#1157): the workflow-side reconciliation family must be in the runtime feature catalog so
+        // a shells.json enabling JsonWorkflowReconciliation deploys mounted definition files at startup instead
+        // of being silently skipped. Deliberately NOT enabled in any default shell: the feature requires a
+        // SourceId plus exactly one file/folder path and fails registration on empty options.
+        Assert.Contains("Elsa.Workflows.Design.Reconciliation", references);
+        Assert.Contains("Elsa.Workflows.Design.Reconciliation.Json", references);
+        Assert.Contains("typeof(WorkflowsDesignReconciliationFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(JsonWorkflowReconciliationFeature).Assembly", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Server_catalogs_workflow_design_validations_required_by_dashboard()
     {
         var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");

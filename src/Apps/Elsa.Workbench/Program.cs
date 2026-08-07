@@ -60,6 +60,8 @@ using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -241,6 +243,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // publish source-owned CLR activity definitions through the stable provider/runtime seam.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
+            // Reconciliation (Design side, workflows): the workflow-version pass + the JSON file source, so
+            // shells can deploy mounted workflow-definition files at startup (spec 147, #1157). Opt-in — not
+            // enabled in any default shell because the feature requires a SourceId and a file/folder path.
+            typeof(WorkflowsDesignReconciliationFeature).Assembly,
+            typeof(JsonWorkflowReconciliationFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,

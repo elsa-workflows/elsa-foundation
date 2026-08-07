@@ -128,6 +128,39 @@ mount nothing at all, Studio toggles land on the container's writable layer: the
 > enabled feature — with `enabled: false` to disable it — rather than only the one you're toggling.
 > (Images published before this guard silently wiped every omitted feature from the file instead.)
 
+## Deploying workflow definitions from files
+
+With a custom `shells.json` in place you can deploy workflow definitions as files — imported **and
+published** (executable) at startup, zero API calls (spec 147). Add a second mount for the
+definitions folder and enable the `JsonWorkflowReconciliation` feature:
+
+```bash
+-v "$(pwd)/workflow-definitions:/app/workflow-definitions:ro"
+```
+
+```jsonc
+// inside CShells.Shells.default.Features
+"JsonWorkflowReconciliation": {
+  "Options": {
+    "SourceId": "mounted-definitions",
+    "FolderPath": "/app/workflow-definitions",   // top-level *.json, ordinal name order
+    "PublishOnReconcile": true                   // omit for import-only
+  }
+}
+```
+
+Each `*.json` file is an array of workflow-version envelopes; **pin `definitionId`** in every envelope
+(an omitted id is regenerated per restart, duplicating the definition) and use resolved `actver_*`
+activity ids — authoring rules and the id recipe live in the
+[feature README](../src/Elsa/Workflows/Design/Reconciliation/Json/README.md).
+
+> **Readiness:** deployment completes during shell activation. Wait on **`GET /health/ready`**
+> (200 = every definition imported and, with `PublishOnReconcile`, published). `GET /` returns 200
+> before deployment finishes and is not a gate. A misconfigured feature (bad path, two path options)
+> keeps `/health/ready` at 503 with `shell_activation_failed` — check the logs.
+
+Restarts with unchanged files are no-ops: no duplicate definition versions, no duplicate publications.
+
 ## Configuration precedence
 
 All configuration layers merge; later layers win:

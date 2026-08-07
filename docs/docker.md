@@ -111,6 +111,7 @@ server outside Docker; the compose file adds the Studio container origin.
 |---|---|
 | `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
+| `/app/workflow-definitions` (ro) | Workflow definition JSON files deployed at startup by the `JsonWorkflowReconciliation` feature (`FolderPath` + optional `PublishOnReconcile`). Path is conventional — it is whatever the feature's `FolderPath` points at. See [Deploying workflow definitions from files](docker-hub-quickstart.md#deploying-workflow-definitions-from-files). |
 
 ---
 

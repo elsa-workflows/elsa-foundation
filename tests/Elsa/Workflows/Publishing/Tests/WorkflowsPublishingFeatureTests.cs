@@ -1,7 +1,10 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -52,6 +55,18 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationSlotStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationRecordStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationPolicyStore));
+    }
+
+    [Fact]
+    public void Registers_the_publish_on_reconcile_subscriber()
+    {
+        var services = ComposeEngine();
+
+        // spec 147: the engine subscribes to the Design-side reconcile completion event so sources with
+        // PublishOnReconcile become executable at startup. Independent subscriber — no contributor interface.
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IEventHandler<OnWorkflowVersionsReconciled>) &&
+            descriptor.ImplementationType == typeof(PublishReconciledWorkflowVersions));
     }
 
     [Fact]
