@@ -54,6 +54,13 @@ public static class SqliteGroundworkDocumentStoreRegistration
             serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key),
             skipInspectionWhenPlanUnchanged,
             storeCacheOptions));
+        // Aggregate dashboard reads query the physical tables directly and need this target's connection.
+        services.AddKeyedSingleton<IGroundworkTargetConnectionSource>(
+            target,
+            (_, key) => new GroundworkTargetConnectionSource(
+                (string)key,
+                ProviderIdentity,
+                () => new Microsoft.Data.Sqlite.SqliteConnection(connectionString)));
         services.AddGroundworkTargetAdmission<SqliteGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;
