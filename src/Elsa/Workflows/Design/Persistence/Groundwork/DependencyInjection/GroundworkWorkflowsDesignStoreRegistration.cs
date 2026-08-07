@@ -16,79 +16,53 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 
 /// <summary>
-/// Registers the Groundwork (document) implementations of the workflow-design read ports. A provider
-/// feature is responsible for registering the concrete <see cref="Groundwork.Documents.Store.IDocumentStore"/>
-/// (and the host's <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>) these adapters consume; this
-/// method only swaps the read-port contracts over to the document-backed implementations, mirroring the
-/// runtime lane's <c>AddGroundworkRuntimeStores</c>.
+/// Registers the Groundwork (document) implementations of the workflow-design read ports against one named
+/// Groundwork target. A provider feature is responsible for declaring that target and the host's
+/// <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>; this method only swaps the read-port contracts
+/// over to the document-backed implementations and binds them to that target's store.
 /// <para>
-/// <see cref="ServiceCollectionDescriptorExtensions.RemoveAll{T}(IServiceCollection)"/> guarantees the
-/// Groundwork adapters win over any previously-registered (e.g. EF Core) read stores regardless of feature
-/// composition order, so a host that selects the Groundwork provider gets one provider backing every design
-/// read.
+/// Naming a target other than the default is what puts the authoring catalog in its own database. The design
+/// lane's storage manifests are bound to the same target, so that database carries design tables and nothing
+/// else.
+/// </para>
+/// <para>
+/// The registrar replaces rather than tries-to-add, so the Groundwork adapters win over any previously
+/// registered read stores regardless of feature composition order.
 /// </para>
 /// </summary>
 public static class GroundworkWorkflowsDesignStoreRegistration
 {
-    public static IServiceCollection AddGroundworkWorkflowsDesignStores(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkWorkflowsDesignStores(
+        this IServiceCollection services,
+        string? targetName = null)
     {
         services.AddPersistenceCore();
-        services.AddGroundworkManifestSource<WorkflowsDesignGroundworkStorageManifestSource>();
-        services.AddGroundworkManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>();
-        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        var lane = services.GroundworkLane(targetName);
+
+        lane.Manifest<WorkflowsDesignGroundworkStorageManifestSource>();
+        lane.Manifest<GroundworkDesignAtomicWriteStorageManifestSource>();
+        lane.TryAdd<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
         services.TryAddScoped<IDraftOriginator, DraftOriginator>();
 
-        services.RemoveAll<IWorkflowDefinitionStore>();
-        services.AddScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>();
+        lane.Replace<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>();
+        lane.Replace<IWorkflowDefinitionVersionStore, GroundworkWorkflowDefinitionVersionStore>();
+        lane.Replace<IWorkflowDefinitionDraftStore, GroundworkWorkflowDefinitionDraftStore>();
+        lane.Replace<IWorkflowDefinitionListProjectionStore, GroundworkWorkflowDefinitionListProjectionStore>();
+        lane.Replace<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>();
+        lane.Replace<IAddWorkflowDefinitionCommand, GroundworkAddWorkflowDefinitionCommand>();
+        lane.Replace<IMaterializeWorkflowDefinitionCommand, GroundworkMaterializeWorkflowDefinitionCommand>();
+        lane.Replace<IAddWorkflowDefinitionVersionCommand, GroundworkAddWorkflowDefinitionVersionCommand>();
+        lane.Replace<IMaterializeWorkflowDefinitionVersionCommand, GroundworkMaterializeWorkflowDefinitionVersionCommand>();
+        lane.Replace<ISaveWorkflowDefinitionCommand, GroundworkSaveWorkflowDefinitionCommand>();
+        lane.Replace<IDeleteWorkflowDefinitionPermanentlyCommand, GroundworkDeleteWorkflowDefinitionPermanentlyCommand>();
+        lane.Replace<ICreateDraftCommand, GroundworkCreateDraftCommand>();
+        lane.Replace<IUpdateDraftCommand, GroundworkUpdateDraftCommand>();
+        lane.Replace<IDiscardDraftCommand, GroundworkDiscardDraftCommand>();
+        lane.Replace<IPromoteDraftToVersionCommand, GroundworkPromoteDraftToVersionCommand>();
+        lane.Replace<ISubmitWorkflowDefinitionCommand, GroundworkSubmitWorkflowDefinitionCommand>();
+        lane.Replace<ICloneDraftFromVersionCommand, GroundworkCloneDraftFromVersionCommand>();
 
-        services.RemoveAll<IWorkflowDefinitionVersionStore>();
-        services.AddScoped<IWorkflowDefinitionVersionStore, GroundworkWorkflowDefinitionVersionStore>();
-
-        services.RemoveAll<IWorkflowDefinitionDraftStore>();
-        services.AddScoped<IWorkflowDefinitionDraftStore, GroundworkWorkflowDefinitionDraftStore>();
-
-        services.RemoveAll<IWorkflowDefinitionListProjectionStore>();
-        services.AddScoped<IWorkflowDefinitionListProjectionStore, GroundworkWorkflowDefinitionListProjectionStore>();
-
-        services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
-        services.AddScoped<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>();
-
-        services.RemoveAll<IAddWorkflowDefinitionCommand>();
-        services.AddScoped<IAddWorkflowDefinitionCommand, GroundworkAddWorkflowDefinitionCommand>();
-
-        services.RemoveAll<IMaterializeWorkflowDefinitionCommand>();
-        services.AddScoped<IMaterializeWorkflowDefinitionCommand, GroundworkMaterializeWorkflowDefinitionCommand>();
-
-        services.RemoveAll<IAddWorkflowDefinitionVersionCommand>();
-        services.AddScoped<IAddWorkflowDefinitionVersionCommand, GroundworkAddWorkflowDefinitionVersionCommand>();
-
-        services.RemoveAll<IMaterializeWorkflowDefinitionVersionCommand>();
-        services.AddScoped<IMaterializeWorkflowDefinitionVersionCommand, GroundworkMaterializeWorkflowDefinitionVersionCommand>();
-
-        services.RemoveAll<ISaveWorkflowDefinitionCommand>();
-        services.AddScoped<ISaveWorkflowDefinitionCommand, GroundworkSaveWorkflowDefinitionCommand>();
-
-        services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>();
-        services.AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, GroundworkDeleteWorkflowDefinitionPermanentlyCommand>();
-
-        services.RemoveAll<ICreateDraftCommand>();
-        services.AddScoped<ICreateDraftCommand, GroundworkCreateDraftCommand>();
-
-        services.RemoveAll<IUpdateDraftCommand>();
-        services.AddScoped<IUpdateDraftCommand, GroundworkUpdateDraftCommand>();
-
-        services.RemoveAll<IDiscardDraftCommand>();
-        services.AddScoped<IDiscardDraftCommand, GroundworkDiscardDraftCommand>();
-
-        services.RemoveAll<IPromoteDraftToVersionCommand>();
-        services.AddScoped<IPromoteDraftToVersionCommand, GroundworkPromoteDraftToVersionCommand>();
-
-        services.RemoveAll<ISubmitWorkflowDefinitionCommand>();
-        services.AddScoped<ISubmitWorkflowDefinitionCommand, GroundworkSubmitWorkflowDefinitionCommand>();
-
-        services.RemoveAll<ICloneDraftFromVersionCommand>();
-        services.AddScoped<ICloneDraftFromVersionCommand, GroundworkCloneDraftFromVersionCommand>();
-
+        // The lookup composes the design ports above rather than a store, so it needs no target binding.
         services.RemoveAll<IWorkflowDefinitionLookup>();
         services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
 

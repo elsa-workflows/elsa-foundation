@@ -23,25 +23,23 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyIn
 /// </summary>
 public static class GroundworkDistributedStoresRegistration
 {
-    public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkDistributedRuntimeStores(
+        this IServiceCollection services,
+        string? targetName = null)
     {
-        // Capability admission is per-target from this stage on: a provider leaf publishes it keyed by
-        // target plus an unkeyed alias for the default target. This feature still has to register it,
-        // because GroundworkWorkflowExecutionLeaseFencingCapability below depends on it and a host may
-        // compose the distributed bridges without a provider leaf -- but it must register the SAME shape
-        // the leaf does. Registering the concrete type unkeyed instead would race the leaf's alias through
-        // TryAdd, and if this call won, the unkeyed service would be an empty instance while provider
-        // admission filled the keyed one, leaving IsAvailable false after a successful admission.
-        // This helper is idempotent and order-independent, so either composition order converges.
-        services.AddGroundworkProviderCapabilityAdmission();
-        services.AddGroundworkManifestSource<DistributedGroundworkStorageManifestSource>();
+        // Admission is published for this feature's own target, in the same shape the provider leaf uses:
+        // keyed, plus an unkeyed alias when the target is the default one. The fencing capability below
+        // depends on it and a host may compose the distributed bridges without any provider leaf, so this
+        // cannot be left to the leaf. The helper is idempotent and order-independent, so a leaf declaring
+        // the same target converges on one instance instead of racing a second, empty one through TryAdd.
+        services.AddGroundworkProviderCapabilityAdmission(targetName);
+        var lane = services.GroundworkLane(targetName);
+        lane.Manifest<DistributedGroundworkStorageManifestSource>();
 
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
         // registers its in-memory defaults with TryAddScoped, so bridge-first ordering also composes correctly).
-        services.RemoveAll<IExecutionPlacementStore>();
-        services.AddScoped<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
-        services.RemoveAll<IExecutionCommandTransport>();
-        services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        lane.Replace<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
+        lane.Replace<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability, GroundworkWorkflowExecutionLeaseFencingCapability>());

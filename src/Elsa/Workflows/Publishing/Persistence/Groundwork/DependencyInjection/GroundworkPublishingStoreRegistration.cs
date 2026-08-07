@@ -1,70 +1,44 @@
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 
+/// <summary>
+/// Registers the Publishing stores against one named Groundwork target.
+/// <para>
+/// Publishing straddles the design and runtime lanes: it reads design material and writes runtime
+/// executables. Its own documents (publication slots, records, policies, receipts) live in the target named
+/// here. Reusable-activity publication commits design, runtime, and publishing kinds together, so those
+/// lanes' targets have to agree for that path; plain workflow publish is already a compensating sequence and
+/// works across targets.
+/// </para>
+/// </summary>
 public static class GroundworkPublishingStoreRegistration
 {
-    public static IServiceCollection AddGroundworkPublishingStores(this IServiceCollection services)
-        => services.AddGroundworkPublishingStores(
-            sp => sp.GetRequiredService<IDocumentStore>(),
-            sp => sp.GetRequiredService<IBoundedDocumentStore>());
-
-    /// <summary>
-    /// Registers Publishing stores against lane-specific document and certified bounded-query runtimes.
-    /// Both factories must address the same admitted physical target.
-    /// </summary>
     public static IServiceCollection AddGroundworkPublishingStores(
         this IServiceCollection services,
-        Func<IServiceProvider, IDocumentStore> documentStoreFactory,
-        Func<IServiceProvider, IBoundedDocumentStore> boundedDocumentStoreFactory)
+        string? targetName = null)
     {
-        ArgumentNullException.ThrowIfNull(documentStoreFactory);
-        ArgumentNullException.ThrowIfNull(boundedDocumentStoreFactory);
+        ArgumentNullException.ThrowIfNull(services);
         services.AddPersistenceCore();
-        services.AddGroundworkManifestSource<PublishingGroundworkStorageManifestSource>();
+        var lane = services.GroundworkLane(targetName);
+
+        lane.Manifest<PublishingGroundworkStorageManifestSource>();
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
-        services.RemoveAll<IPublicationSlotStore>();
-        services.AddScoped<IPublicationSlotStore>(sp => new GroundworkPublicationSlotStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
-            boundedDocumentStoreFactory(sp)));
-        services.RemoveAll<IPublicationRecordStore>();
-        services.AddScoped<IPublicationRecordStore>(sp => new GroundworkPublicationRecordStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
-            boundedDocumentStoreFactory(sp)));
-        services.RemoveAll<IPublicationPolicyStore>();
-        services.AddScoped<IPublicationPolicyStore>(sp => new GroundworkPublicationPolicyStore(
-            documentStoreFactory(sp), sp.GetRequiredService<PublishingGroundworkDocumentSerializer>()));
-        services.RemoveAll<IPublicationProjectionIntentStore>();
-        services.AddScoped<IPublicationProjectionIntentStore>(sp => new GroundworkPublicationProjectionIntentStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
-            boundedDocumentStoreFactory(sp)));
-        services.RemoveAll<IPublicationSnapshotReviewStore>();
-        services.AddScoped<IPublicationSnapshotReviewStore>(sp => new GroundworkPublicationSnapshotReviewStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
-            sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            boundedDocumentStoreFactory(sp)));
-        services.RemoveAll<IActivityPublicationReceiptStore>();
-        services.AddScoped<IActivityPublicationReceiptStore>(sp => new GroundworkActivityPublicationReceiptStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>()));
-        services.RemoveAll<IActivityDraftTestRunStore>();
-        services.AddScoped<IActivityDraftTestRunStore>(sp => new GroundworkActivityDraftTestRunStore(
-            documentStoreFactory(sp),
-            sp.GetRequiredService<PublishingGroundworkDocumentSerializer>(),
-            sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            boundedDocumentStoreFactory(sp)));
+
+        lane.Replace<IPublicationSlotStore, GroundworkPublicationSlotStore>();
+        lane.Replace<IPublicationRecordStore, GroundworkPublicationRecordStore>();
+        lane.Replace<IPublicationPolicyStore, GroundworkPublicationPolicyStore>();
+        lane.Replace<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>();
+        lane.Replace<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>();
+        lane.Replace<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>();
+        lane.Replace<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>();
         return services;
     }
 }
