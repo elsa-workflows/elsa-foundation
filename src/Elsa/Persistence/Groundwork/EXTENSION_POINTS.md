@@ -4,12 +4,37 @@ The Groundwork document-store bridge that persists Elsa runtime state (bookmarks
 
 This catalog covers the **schema-versioning** seams added so persisted runtime state can evolve without silently breaking suspended workflows. See [`../../../../docs/serialization.md`](../../../../docs/serialization.md) (**Schema evolution**) for the contract and the sanctioned-exception rationale.
 
-## Provider selection — host composition
+## Target selection — host composition
 
-The runtime persistence seams are backed by a Groundwork document store only when a host composes a
-provider shell feature. The provider choice is the host's; runtime and domain code reference only the
-neutral ports. Each provider feature registers a scoped access-bound `IDocumentStore` adapter and calls
-`AddGroundworkRuntimeStores()` (runtime-only) or the unified registration (all lanes).
+A Groundwork **target** is one admitted physical store: an opaque, operator-chosen name, the provider leaf
+that opens it, and the schema composed from the lanes bound to it. A host declares targets on
+`GroundworkTargets`, enables the provider leaf features that can open them, and binds each persistence lane
+to a target by name. Since [#1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156) a host may
+declare several, so design data and runtime state can live in different databases:
+
+```jsonc
+"GroundworkProviderSqlite": {},
+"GroundworkTargets": { "Targets": {
+    "default":   { "Provider": "sqlite", "ConnectionString": "Data Source=elsa-runtime.db" },
+    "authoring": { "Provider": "sqlite", "ConnectionString": "Data Source=elsa-design.db" } } },
+"WorkflowsRuntimeGroundworkPersistence":  { "Target": "default" },
+"WorkflowsDesignGroundworkPersistence":   { "Target": "authoring" },
+"ActivitiesDesignGroundworkPersistence":  { "Target": "authoring" }
+```
+
+Declaring one target name twice against different stores is a composition error; an exact repeat is
+idempotent. Each target composes and admits only its own lanes and derives its own manifest identity, so two
+targets never contend for one Groundwork schema-state row. `default` is the only well-known name and keeps
+the bare `elsa-documents` identity, so databases admitted before targets existed are unaffected.
+
+**Two operations still require co-located lanes.** Reusable-activity publication commits design, runtime and
+publishing documents in one transaction and Groundwork has no cross-store transaction, so splitting those
+three fails with the lane-to-target mapping named. The dashboard portfolio tile spans design and runtime and
+switches to per-target queries with in-memory correlation when they differ.
+
+The unified and runtime-only shell features remain as **presets** that declare one target and bind the
+relevant lanes to it. The provider choice is the host's; runtime and domain code reference only the neutral
+ports.
 
 | Shell feature | Provider | Scope | Registration |
 |---|---|---|---|
