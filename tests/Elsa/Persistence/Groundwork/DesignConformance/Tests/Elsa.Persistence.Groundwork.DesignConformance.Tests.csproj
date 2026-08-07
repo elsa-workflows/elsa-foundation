@@ -18,6 +18,8 @@
     <ProjectReference Include="../../../../../../src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
+    <!-- The shared contract asserts the provider-neutral target registry and its conflict diagnostic. -->
+    <ProjectReference Include="../../../../../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />

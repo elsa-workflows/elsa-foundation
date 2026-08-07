@@ -9,15 +9,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 
-/// <summary>Composes the SQLite reference-host shapes and proves a second (SQL Server) leaf is rejected.</summary>
-public sealed class SqliteProviderLeafConflictContractSuite : ProviderLeafConflictContractSuite
+/// <summary>Composes the SQLite reference-host shapes against a second (SQL Server) store.</summary>
+public sealed class SqliteGroundworkTargetConflictContractSuite : GroundworkTargetConflictContractSuite
 {
     private const string SqliteConnectionString = "Data Source=:memory:";
     private const string SqlServerConnectionString =
         "Server=localhost,1433;Database=elsa;User Id=sa;Password=Placeholder_1;TrustServerCertificate=True";
 
-    protected override string PrimaryProviderIdentity => "sqlite";
-    protected override string ConflictingProviderIdentity => "sqlserver";
+    protected override string PrimaryProviderIdentity => SqliteGroundworkDocumentStoreRegistration.ProviderIdentity;
+    protected override string SecondProviderIdentity => SqlServerGroundworkDocumentStoreRegistration.ProviderIdentity;
 
     protected override void ComposePrimary(ReferenceHostShape shape, IServiceCollection services)
     {
@@ -40,6 +40,6 @@ public sealed class SqliteProviderLeafConflictContractSuite : ProviderLeafConfli
         }
     }
 
-    protected override void AddConflictingProviderLeaf(IServiceCollection services) =>
-        services.AddSqlServerGroundworkDocumentStore(SqlServerConnectionString);
+    protected override void AddSecondStore(IServiceCollection services, string? targetName) =>
+        services.AddSqlServerGroundworkDocumentStore(SqlServerConnectionString, targetName: targetName);
 }

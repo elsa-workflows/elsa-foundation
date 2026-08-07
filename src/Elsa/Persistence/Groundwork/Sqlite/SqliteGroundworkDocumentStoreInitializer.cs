@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Diagnostics;
 using Groundwork.Core.SchemaEvolution;
@@ -15,7 +15,6 @@ using Groundwork.Sqlite.Documents;
 using Groundwork.Sqlite.PhysicalStorage;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
@@ -30,6 +29,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite;
 /// store session. The originating provider exception is preserved as the inner exception.
 /// </exception>
 public sealed class SqliteGroundworkDocumentStoreInitializer(
+    string targetName,
     string connectionString,
     bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
@@ -37,7 +37,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     ILogger<SqliteGroundworkDocumentStoreInitializer> logger,
     GroundworkProviderCapabilityAdmission? capabilityAdmission = null,
     bool skipInspectionWhenPlanUnchanged = false,
-    SqliteGroundworkStoreCacheOptions? storeCacheOptions = null) : IHostedService, IShellInitializer
+    SqliteGroundworkStoreCacheOptions? storeCacheOptions = null) : IGroundworkTargetAdmission
 {
     private static readonly SqliteConnectionPragmaOptions OperationConnectionPragmas =
         SqliteConnectionPragmaOptions.Default with { WriteAheadLogging = false };
@@ -47,9 +47,9 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         ValidateStoreCacheOptions(storeCacheOptions);
     private volatile bool initialized;
 
-    public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
-    public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public string TargetName { get; } = GroundworkTargetNames.Normalize(targetName);
+
+    public Task AdmitAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
