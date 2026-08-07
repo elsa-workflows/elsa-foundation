@@ -434,7 +434,7 @@ replaced by a different defect. The row's statement was accurate at `f769b5165` 
 `0.0.1-preview.103`, so there is no version mismatch. The blocker recorded here on 2026-08-03 — that
 `specs/094-harden-groundwork-stores/versions/` contained only `preview.81`, `.86`, and `.88`, leaving the
 ledger's declared version with **no imported evidence generation at all** — was **resolved on 2026-08-06**
-by publishing and importing the `preview.103` checkpoint/fence generation at Elsa commit `0b1d027a0` (see
+by publishing and importing the `preview.103` checkpoint/fence generation at Elsa commit `78e648996` (see
 the 2026-08-06 checkpoint below). That closes one of the row's four findings. The other three are
 unchanged and still current: zero `performanceVerdict` objects, empty diagnostics provider-evidence
 arrays, and no accepted immutable #50 baseline. **T011 remains Blocked**, and the generation import did
@@ -585,7 +585,7 @@ bucket or Project 33 completion state.
 ### 2026-08-06 preview.103 evidence generation published (T011 evidence record)
 
 T011 requires evidence recorded here. Recording it: the `preview.103` checkpoint/fence generation was
-published and mechanically imported at Elsa commit `0b1d027a0` (tree `dede7922c`), run identity
+published and mechanically imported at Elsa commit `78e648996` (tree `17acb4c7a`), run identity
 `runtime-checkpoint-fence-preview103` — 36 records across sqlite, sqlserver, postgresql and mongodb, now
 under `specs/094-harden-groundwork-stores/versions/0.0.1-preview.103/`.
 
@@ -598,8 +598,7 @@ the task text implies:
 
 1. **The #646 harness could never run.** `matrix` refuses without `--child-command`, and no
    `IBenchmarkAdapter` implementation existed anywhere in the repository — only test doubles. The child
-   host was built on 2026-08-06 (`benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/`, commit
-   `0b1d027a0`) but has **zero adapter leaves registered**, so every workload is still a blocked run.
+   host was built on 2026-08-06 (`benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/`) but has **zero adapter leaves registered**, so every workload is still a blocked run.
 2. **A `performanceVerdict` cannot be produced at all yet.** `Comparison.Compare` requires two measurement
    sets differing only by *physical form*, and those form labels have no binding in `src/` — Groundwork
    ships one shape per store. Tier C ("compare against the last accepted generation") is also unreachable:

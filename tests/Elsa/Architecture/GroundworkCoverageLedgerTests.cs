@@ -42,6 +42,13 @@ public sealed class GroundworkCoverageLedgerTests
     private const string Prior88CheckpointFenceEvidenceCommit = "b0545e166fd45aa872f265c88782a7034a09c357";
     private const string Prior88CheckpointFenceEvidenceTree = "613afd96195b4ef28546a67f099d259e5ffbe448";
     private const string Prior88CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview88";
+    private const string Current103CheckpointFenceAttachmentRelativePath =
+        "specs/094-harden-groundwork-stores/versions/0.0.1-preview.103/ledger-attachments/runtime-checkpoint-fence.json";
+    private const string Current103CheckpointFenceAttachmentSha256 =
+        "61eed043b056a1c40bb5ff5bd2a48f7bc7eb04a363cb1788cf4403538f11303e";
+    private const string Current103CheckpointFenceEvidenceCommit = "78e64899684e61f7c02e9273829c16c014ddc446";
+    private const string Current103CheckpointFenceEvidenceTree = "17acb4c7a3c90bddac7b89ef535b35aa714edec1";
+    private const string Current103CheckpointFenceRunIdentity = "runtime-checkpoint-fence-preview103";
 
     private static readonly string[] ExpectedEntryIds =
     [
@@ -139,19 +146,61 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
-    public void Preview103_checkpoint_fence_evidence_awaits_mechanical_import()
+    public void Preview103_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance()
     {
-        var entries = Entries(ReadLedger()).ToArray();
-        Assert.DoesNotContain(
-            entries.SelectMany(entry => entry["providerEvidence"]!.AsObject())
-                .SelectMany(pair => pair.Value!.AsArray())
-                .OfType<JsonObject>(),
-            record => record["providerVersion"]?.GetValue<string>() == ExpectedGroundworkVersion);
+        AssertCheckpointFenceGeneration(
+            ExpectedGroundworkVersion,
+            Current103CheckpointFenceAttachmentRelativePath,
+            Current103CheckpointFenceAttachmentSha256,
+            Current103CheckpointFenceEvidenceCommit,
+            Current103CheckpointFenceEvidenceTree,
+            Current103CheckpointFenceRunIdentity);
+    }
 
+    /// <summary>
+    /// The recorded provenance commit must stay reachable from the branch. An earlier import recorded a
+    /// commit that a rebase then rewrote away, which left the retained generation naming a source snapshot
+    /// that existed nowhere -- the exact property the generation is retained to provide. Every prior
+    /// generation records a commit reachable from main; this keeps that true by construction.
+    /// </summary>
+    [Fact]
+    public void Preview103_provenance_commit_is_reachable_from_the_current_branch()
+    {
+        var result = RunGit($"merge-base --is-ancestor {Current103CheckpointFenceEvidenceCommit} HEAD");
+
+        Assert.True(
+            result == 0,
+            $"Recorded provenance commit {Current103CheckpointFenceEvidenceCommit} is not an ancestor of HEAD; " +
+            "the retained evidence names a source snapshot that cannot be checked out.");
+    }
+
+    /// <summary>
+    /// Publication does not advance a row status, so importing the current generation must leave every row
+    /// below <c>evidence-complete</c>. This half of the superseded
+    /// <c>Preview103_checkpoint_fence_evidence_awaits_mechanical_import</c> fact is still live and is kept
+    /// separate: a row only becomes evidence-complete when every declared obligation is present for all
+    /// four providers, which the checkpoint/fence slice alone does not supply.
+    /// </summary>
+    [Fact]
+    public void Importing_a_generation_does_not_advance_any_row_status()
+    {
         Assert.DoesNotContain(
-            entries,
+            Entries(ReadLedger()),
             entry => entry["status"]?.GetValue<string>() is
                 "evidence-complete" or "performance-complete" or "ready");
+    }
+
+    private static int RunGit(string arguments)
+    {
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = RepoRoot,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        })!;
+        process.WaitForExit();
+        return process.ExitCode;
     }
 
     [Fact]

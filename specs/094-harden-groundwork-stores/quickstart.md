@@ -30,7 +30,7 @@ versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview
 lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The latest retained
 `0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and was imported mechanically by tuple. The
 `preview.102` generation was never published. The current `0.0.1-preview.103` generation was published and
-mechanically imported on **2026-08-06** at Elsa commit `0b1d027a0` and lives under
+mechanically imported on **2026-08-06** at Elsa commit `78e648996` and lives under
 `versions/0.0.1-preview.103/`. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
 
@@ -508,7 +508,7 @@ restart obligation is present for all four providers and the linked #642/#644 au
 
 ### Preview.103 checkpoint/fence evidence publication (2026-08-06)
 
-Published and imported at Elsa commit `0b1d027a0` (tree `dede7922c`), run identity
+Published and imported at Elsa commit `78e648996` (tree `17acb4c7a`), run identity
 `runtime-checkpoint-fence-preview103`. 36 records across all four providers, importer exit 0,
 `versions/0.0.1-preview.103/` created. This closes the defect where the ledger declared
 `0.0.1-preview.103` while `versions/` stopped at `preview.88`. Note the ledger declaration was never
