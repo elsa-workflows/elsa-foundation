@@ -48,6 +48,20 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
 
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
 
+    /// <summary>
+    /// The default lease duration is one minute, and against a real durable provider the frozen scenario
+    /// cannot survive it: it acquires all 128 leases up front and then heartbeats a given execution only
+    /// every 128th commit, so the earliest leases expire long before their turn comes round and
+    /// <c>HeartbeatAsync</c> returns <c>Expired</c>. The in-memory double never shows this because its
+    /// commits are microseconds.
+    ///
+    /// This is host configuration, not a contract change — <c>LeaseDuration</c> exists so a host can size it
+    /// to its own unit of work — and it weakens no asserted invariant: the scenario proves stale-fence
+    /// rejection through token supersession, never through expiry. It is sized to outlast one child process
+    /// (a full correctness run plus five thirty-second measurement windows).
+    /// </summary>
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(2);
+
     private const string SeedFencedExecutions = "seed-fenced-executions";
     private const string CommitCheckpointBundle = "commit-checkpoint-bundle";
     private const string ReplayEquivalentCommit = "replay-equivalent-commit";
@@ -76,6 +90,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
     private static readonly string[] RetainedDiagnosticKeys = ["engine-version", "container-image"];
 
     private readonly RunRequest _request;
+    private readonly System.Diagnostics.Stopwatch _started = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<ClientLease> _leases = [];
     private GroundworkProviderDriver? _driver;
     private ClientLease? _measured;
@@ -123,6 +138,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
         _measured = await OpenLeaseAsync(MeasuredScope, cancellationToken);
         _fixtures = await SeedMeasuredFixturesAsync(_measured.Client, cancellationToken);
         Operations = CreateOperations(_measured.Client, _fixtures);
+        Report("prepared");
     }
 
     /// <summary>
@@ -136,6 +152,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
         _activeScope = CorrectnessScope;
         var result = await new RuntimeCheckpointCommitWorkload().ExecuteAsync(this, cancellationToken);
         _activeScope = MeasuredScope;
+        Report("correctness verified");
 
         return new CorrectnessEvidence(
             result.ResultDigest,
@@ -187,6 +204,14 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
             throw new PerformanceContractException(
                 $"The '{_request.Provider}' driver reports provider version '{driver.Descriptor.ProviderVersion}', not the requested '{_request.ProviderVersion}'.");
     }
+
+    /// <summary>
+    /// A child is silent for many minutes — a full 1024-commit correctness run, then five thirty-second
+    /// measurement windows — and the harness spawns four of them serially. Progress goes to stderr so an
+    /// operator watching a cohort can tell a slow provider from a hung one.
+    /// </summary>
+    private void Report(string stage) =>
+        Console.Error.WriteLine($"[{_request.Provider} {_request.ProcessKind}/{_request.ProcessIndex}] {stage} at {_started.Elapsed:hh\\:mm\\:ss}");
 
     private GroundworkProviderDriver RequireDriver() =>
         _driver ?? throw new PerformanceContractException("The checkpoint adapter was used before its provider driver was opened.");
@@ -250,6 +275,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
             collection.AddSingleton<IPersistenceAccessContextAccessor>(GroundworkTestAccess.AccessContext(scope));
             collection.AddSingleton<IDocumentStore>(providerClient.DocumentStore);
             collection.AddSingleton(boundedStore);
+            collection.AddSingleton(new RuntimeExecutionOwnershipOptions { LeaseDuration = LeaseDuration });
             // AddWorkflowRuntime is TryAdd-only and supplies IRuntimeExecutionOwnershipService, TimeProvider
             // and IWorkflowExecutableRootWriteLeaseManager, none of which has a Groundwork replacement.
             // AddGroundworkRuntimeStores then RemoveAll's the in-memory defaults, so this order is required.
