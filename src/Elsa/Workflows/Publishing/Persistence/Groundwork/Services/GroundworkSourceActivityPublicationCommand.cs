@@ -25,7 +25,8 @@ public sealed class GroundworkSourceActivityPublicationCommand(
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
-    GroundworkLaneTargets laneTargets)
+    GroundworkLaneTargets laneTargets,
+    GroundworkLaneStores laneStores)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
     public async Task ExecuteAsync(
@@ -33,7 +34,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
         CancellationToken cancellationToken = default)
     {
         Validate(commit);
-        ActivityPublicationLaneColocation.EnsureColocated(laneTargets, "Source-owned activity publication");
+        var colocated = ActivityPublicationLaneColocation.AreColocated(laneTargets);
         var requests = new List<SaveDocumentRequest>();
         var definitionEnvelope = await store.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
@@ -143,17 +144,44 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 [],
                 [commit.Publication]),
             cancellationToken);
+        string[] designKinds =
+        [
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind
+        ];
+        string[] runtimeKinds =
+        [
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+        ];
+
+        if (colocated)
+        {
+            await managementProjection.CommitAsync(
+                [.. designKinds, .. runtimeKinds],
+                requests,
+                cancellationToken);
+            return;
+        }
+
+        // Runtime first: the template is content-addressed and the source reference create-only, so a repeat
+        // is a no-op and a template written without the design commit is unreferenced and collectable. The
+        // design commit is the linearization point, exactly as in the reusable-activity path.
+        var runtimeRequests = requests.Where(request => runtimeKinds.Contains(request.DocumentKind)).ToArray();
+        if (runtimeRequests.Length > 0)
+        {
+            await laneStores.For(typeof(RuntimeGroundworkStorageManifestSource)).SaveAllAsync(
+                DocumentCommitScope.Of(runtimeKinds),
+                runtimeRequests,
+                cancellationToken);
+        }
+
         await managementProjection.CommitAsync(
-            [
-                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
-                ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
-            ],
-            requests,
+            designKinds,
+            requests.Where(request => !runtimeKinds.Contains(request.DocumentKind)).ToArray(),
             cancellationToken);
     }
 
