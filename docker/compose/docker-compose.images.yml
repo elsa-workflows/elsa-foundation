@@ -15,7 +15,10 @@
 # container discards it. For durable, Postgres-backed persistence (or to build from
 # source), use the reference stack in docker-compose.yml instead.
 #
-# Pin a version for reproducible runs, e.g. elsaworkflows/elsa-workbench:4 or :4.0.0.
+# Pin for reproducible runs. Published tags are latest, 4.0.0-preview.<n> and
+# sha-<short-commit> — there are no 4 / 4.0 / 4.0.0 release tags yet, e.g.
+# elsaworkflows/elsa-workbench:4.0.0-preview.471 or :sha-2e7dbf0. The two images
+# are built by separate pipelines, so their run numbers do not line up.
 # =============================================================================
 
 name: elsa-stack

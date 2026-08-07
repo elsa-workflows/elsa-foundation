@@ -1,13 +1,16 @@
 # Elsa on Docker Hub — quickstart
 
-Run the prebuilt Elsa Server + Elsa Studio images from Docker Hub with plain `docker` commands —
+Run the prebuilt Elsa Workbench + Elsa Studio images from Docker Hub with plain `docker` commands —
 no checkout, no build. For building the images yourself or the full PostgreSQL compose stack, see
 [Docker & compose](docker.md).
 
-| Service     | Image                          | URL                    | Login                    |
-|-------------|--------------------------------|------------------------|--------------------------|
-| Elsa Server | `elsaworkflows/elsa-workbench`    | http://localhost:13000 | —                        |
-| Elsa Studio | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
+| Service        | Image                          | URL                    | Login                    |
+|----------------|--------------------------------|------------------------|--------------------------|
+| Elsa Workbench | `elsaworkflows/elsa-workbench` | http://localhost:13000 | —                        |
+| Elsa Studio    | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
+
+Both images publish `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>` on every push to `main`.
+There are no `4` / `4.0` / `4.0.0` release tags yet — to pin, use a preview or commit tag.
 
 The login is the demo admin seeded by the image's built-in `shells.json` (Development posture).
 Demo credentials and API key throughout — do not expose this setup beyond your machine.

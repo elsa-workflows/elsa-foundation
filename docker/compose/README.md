@@ -26,8 +26,10 @@ Three ways to run, fastest first:
 ## Quick start — published images (no clone or build)
 
 CI publishes two images to Docker Hub — **`elsaworkflows/elsa-workbench`** and
-**`elsaworkflows/elsa-studio`** — tagged with the Elsa major version (`4`, `4.0`, `4.0.0`), plus
-`latest` and `4.0.0-preview.<n>` from `main`. Run the whole stack straight from them.
+**`elsaworkflows/elsa-studio`**. Every push to `main` publishes three tags: `latest`,
+`4.0.0-preview.<n>` (`<n>` is the CI run number, so it increments but is not contiguous), and
+`sha-<short-commit>`. There are no `4` / `4.0` / `4.0.0` release tags yet — Elsa 4 is pre-release.
+Run the whole stack straight from these images.
 
 > **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
 > (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
@@ -79,8 +81,11 @@ Four environment variables wire the two containers together (double-underscore =
 | `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The Elsa host management key the server accepts. |
 | `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
 
-To pin a version instead of `latest`, use a version tag, e.g. `elsaworkflows/elsa-workbench:4` or
-`:4.0.0`. Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
+To pin instead of tracking `latest`, use a preview or commit tag —
+`elsaworkflows/elsa-workbench:4.0.0-preview.471` or `:sha-2e7dbf0`. The two images are versioned
+independently (they are built by separate pipelines), so their run numbers do not line up; pick each
+one from its own [Docker Hub tag list](https://hub.docker.com/r/elsaworkflows/elsa-workbench/tags).
+Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
 
 > ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on both
 > sides and scope CORS before exposing this anywhere.
