@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
@@ -34,7 +35,8 @@ public sealed class GroundworkActivityPublicationCommand(
     IActivityDefinitionVersionPublicationStore publications,
     GroundworkActivityDependencyProjection dependencyProjection,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
-    PublishingGroundworkDocumentSerializer publishingSerializer)
+    PublishingGroundworkDocumentSerializer publishingSerializer,
+    GroundworkLaneTargets laneTargets)
     : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
 {
     private static readonly JsonSerializerOptions DesignJson = GroundworkActivitiesDesignJson.Options;
@@ -44,6 +46,7 @@ public sealed class GroundworkActivityPublicationCommand(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        ActivityPublicationLaneColocation.EnsureColocated(laneTargets, "Reusable-activity publication");
         ValidateCommit(commit);
 
         var draftEnvelope = await RequiredAsync(

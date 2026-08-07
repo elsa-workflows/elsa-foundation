@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Serialization.Core;
@@ -23,7 +24,8 @@ public sealed class GroundworkSourceActivityPublicationCommand(
     IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
-    GroundworkActivityManagementProjectionWriter managementProjectionWriter)
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter,
+    GroundworkLaneTargets laneTargets)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
     public async Task ExecuteAsync(
@@ -31,6 +33,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
         CancellationToken cancellationToken = default)
     {
         Validate(commit);
+        ActivityPublicationLaneColocation.EnsureColocated(laneTargets, "Source-owned activity publication");
         var requests = new List<SaveDocumentRequest>();
         var definitionEnvelope = await store.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
