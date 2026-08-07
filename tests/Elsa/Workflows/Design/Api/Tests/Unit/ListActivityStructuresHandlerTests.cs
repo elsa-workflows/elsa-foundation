@@ -53,7 +53,8 @@ public sealed class ListActivityStructuresHandlerTests
         Assert.NotNull(alpha.PayloadSchema);
 
         // The payload schema follows the wire contract: camelCase property names.
-        var properties = alpha.PayloadSchema.Value.GetProperty("properties");
+        var payloadSchema = alpha.PayloadSchema!;
+        var properties = payloadSchema.Value.GetProperty("properties");
         Assert.True(properties.TryGetProperty("childNodeIds", out _));
         Assert.True(properties.TryGetProperty("startNodeId", out _));
     }
