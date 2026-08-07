@@ -36,7 +36,8 @@ public sealed class GroundworkActivityPublicationCommand(
     GroundworkActivityDependencyProjection dependencyProjection,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
     PublishingGroundworkDocumentSerializer publishingSerializer,
-    GroundworkLaneTargets laneTargets)
+    GroundworkLaneTargets laneTargets,
+    GroundworkLaneStores laneStores)
     : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
 {
     private static readonly JsonSerializerOptions DesignJson = GroundworkActivitiesDesignJson.Options;
@@ -46,7 +47,7 @@ public sealed class GroundworkActivityPublicationCommand(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
-        ActivityPublicationLaneColocation.EnsureColocated(laneTargets, "Reusable-activity publication");
+        var colocated = ActivityPublicationLaneColocation.AreColocated(laneTargets);
         ValidateCommit(commit);
 
         var draftEnvelope = await RequiredAsync(
@@ -150,21 +151,30 @@ public sealed class GroundworkActivityPublicationCommand(
 
         try
         {
-            await managementProjection.CommitAsync(
-                [
-                    ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-                    ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
-                    ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
-                    PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind
-                ],
-                requests,
-                cancellationToken);
+            if (colocated)
+            {
+                // One store backs all three lanes, so the whole publication is one transaction and the
+                // guarantee is exactly what it has always been.
+                await managementProjection.CommitAsync(
+                    [
+                        ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
+                        ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
+                        ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+                        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+                        PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind
+                    ],
+                    requests,
+                    cancellationToken);
+            }
+            else
+            {
+                await CommitAcrossTargetsAsync(managementProjection, requests, cancellationToken);
+            }
         }
         catch (DocumentAtomicWriteException exception)
         {
@@ -179,6 +189,101 @@ public sealed class GroundworkActivityPublicationCommand(
             commit.SourceReference.SourceReferenceId,
             commit.Design.Publication.PublishedAt);
     }
+
+    /// <summary>
+    /// Commits a publication whose lanes are on different Groundwork targets, as an ordered sequence rather
+    /// than one transaction (there is no cross-store transaction to have). The ordering is what makes every
+    /// partial state inert:
+    /// <list type="number">
+    /// <item>
+    /// Runtime first. The template is content-addressed and the source reference is create-only, so a repeat
+    /// is a no-op and a template written without the rest is unreferenced: nothing can reach it until the
+    /// design commit lands, and reference garbage collection can reclaim it.
+    /// </item>
+    /// <item>
+    /// Design second, and this is the linearization point. The publication is done when this commits; the
+    /// draft and authoring state move under their own optimistic versions, so a concurrent publication still
+    /// loses here exactly as before.
+    /// </item>
+    /// <item>
+    /// The publishing receipt last. It is an idempotency artifact derived from the caller's own commit, not
+    /// a source of truth, so a crash before it leaves the publication done and the receipt recoverable: a
+    /// retry with the same idempotency key resumes at this step rather than redoing the publication.
+    /// </item>
+    /// </list>
+    /// </summary>
+    private async Task CommitAcrossTargetsAsync(
+        GroundworkActivityManagementProjectionUpdate managementProjection,
+        IReadOnlyList<SaveDocumentRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var runtimeRequests = requests.Where(request => RuntimeKinds.Contains(request.DocumentKind)).ToArray();
+        var receiptRequests = requests.Where(request => PublishingKinds.Contains(request.DocumentKind)).ToArray();
+        var designRequests = requests
+            .Where(request => !RuntimeKinds.Contains(request.DocumentKind)
+                              && !PublishingKinds.Contains(request.DocumentKind))
+            .ToArray();
+
+        if (runtimeRequests.Length > 0)
+        {
+            await laneStores.For(typeof(RuntimeGroundworkStorageManifestSource)).SaveAllAsync(
+                DocumentCommitScope.Of(RuntimeKinds),
+                runtimeRequests,
+                cancellationToken);
+        }
+
+        await managementProjection.CommitAsync(
+            [
+                ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind
+            ],
+            designRequests,
+            cancellationToken);
+
+        await WritePublicationReceiptAsync(receiptRequests, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes the publishing receipt after the design commit. An already-present receipt is success, not a
+    /// conflict: the caller retried after the receipt had landed.
+    /// </summary>
+    private async Task WritePublicationReceiptAsync(
+        IReadOnlyList<SaveDocumentRequest> receiptRequests,
+        CancellationToken cancellationToken)
+    {
+        if (receiptRequests.Count == 0)
+            return;
+
+        var publishingStore = laneStores.For(typeof(PublishingGroundworkStorageManifest));
+        try
+        {
+            await publishingStore.SaveAllAsync(
+                DocumentCommitScope.Of(PublishingKinds),
+                receiptRequests,
+                cancellationToken);
+        }
+        catch (DocumentAtomicWriteException exception)
+            when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict)
+        {
+            // The publication itself already committed; a racing retry wrote the receipt first.
+        }
+    }
+
+    private static readonly string[] RuntimeKinds =
+    [
+        ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+    ];
+
+    private static readonly string[] PublishingKinds =
+    [
+        PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind
+    ];
 
     private async Task<ActivityDependencyProjectionPreparedUpdate> PrepareProjectionAsync(
         ActivityPublicationDesignMutation mutation,

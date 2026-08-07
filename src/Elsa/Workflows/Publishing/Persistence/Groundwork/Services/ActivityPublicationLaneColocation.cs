@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// would happen if the command simply used whichever store it was handed.
 /// </para>
 /// </summary>
-internal static class ActivityPublicationLaneColocation
+public static class ActivityPublicationLaneColocation
 {
     /// <summary>The lanes a reusable-activity publication commits together.</summary>
     private static readonly Dictionary<string, Type> Lanes = new(StringComparer.Ordinal)
@@ -24,23 +24,27 @@ internal static class ActivityPublicationLaneColocation
         ["publishing"] = typeof(PublishingGroundworkStorageManifestSource)
     };
 
-    /// <summary>Throws unless design, runtime, and publishing share one target.</summary>
-    public static void EnsureColocated(GroundworkLaneTargets laneTargets, string operation)
+    /// <summary>
+    /// Whether design, runtime, and publishing share one target, and so whether the publication can be one
+    /// transaction. When they do not, the commands fall back to the ordered sequence described on
+    /// <c>CommitAcrossTargetsAsync</c>.
+    /// </summary>
+    public static bool AreColocated(GroundworkLaneTargets laneTargets)
     {
         ArgumentNullException.ThrowIfNull(laneTargets);
-        if (laneTargets.AreColocated(Lanes))
-            return;
+        return laneTargets.AreColocated(Lanes);
+    }
 
-        throw new ActivityPublicationLaneSplitException(
-            $"{operation} commits design, runtime, and publishing documents in one Groundwork transaction, " +
-            $"but those lanes are on different targets ({laneTargets.Describe(Lanes)}). Groundwork has no " +
-            "cross-store transaction, so this publication cannot be made atomic as composed. Put those three " +
-            "lanes on one target, or disable reusable-activity publishing on this host.");
+    /// <summary>A log-safe lane-to-target mapping, for diagnostics about a split publication.</summary>
+    public static string Describe(GroundworkLaneTargets laneTargets)
+    {
+        ArgumentNullException.ThrowIfNull(laneTargets);
+        return laneTargets.Describe(Lanes);
     }
 }
 
 /// <summary>
-/// Raised when reusable-activity publication is composed across Groundwork targets it cannot commit
-/// atomically. Splitting the lanes is otherwise supported; only this one operation requires co-location.
+/// Raised when a split reusable-activity publication cannot proceed. The split itself is supported; this
+/// reports the cases the ordered sequence cannot resolve.
 /// </summary>
 public sealed class ActivityPublicationLaneSplitException(string message) : InvalidOperationException(message);
