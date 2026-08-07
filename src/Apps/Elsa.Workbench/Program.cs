@@ -71,6 +71,7 @@ using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Runtime.Tracing;
 using Nuplane;
 using Nuplane.Admin;
@@ -319,7 +320,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
             // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
             // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
-            typeof(WorkflowsRuntimeTracingFeature).Assembly
+            typeof(WorkflowsRuntimeTracingFeature).Assembly,
+
+            // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
+            // test suite can query what a workflow actually did over HTTP. Process-local and non-durable by design.
+            typeof(WorkflowsExecutionEvidenceFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)

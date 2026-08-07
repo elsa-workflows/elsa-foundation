@@ -153,6 +153,13 @@
 			the host-local OpenTelemetryEngineTracingBridge feature then forwards those spans into the OTel ingestion store.
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Tracing\Elsa.Workflows.Runtime.Tracing.csproj" />
+
+		<!--
+			Test-host execution evidence. The Workbench is a development and QA host, so the collector's assembly is in
+			the catalog and the feature is enabled below; a product host would simply omit both. It observes committed
+			checkpoints in-process and holds the derived facts in memory only.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

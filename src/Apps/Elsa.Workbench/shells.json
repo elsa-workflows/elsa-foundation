@@ -178,7 +178,8 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTracing": {},
-          "WorkflowsRuntimeTriggers": {}
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsExecutionEvidence": {}
         },
         "Configuration": {
           "WebRouting": {
