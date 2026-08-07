@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
@@ -150,9 +151,9 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         try
         {
             Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
-            var initializer = provider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>();
+            var initializer = provider.GetRequiredKeyedService<MongoDbGroundworkDocumentStoreInitializer>(GroundworkTargetNames.Default);
 
-            await initializer.InitializeAsync();
+            await initializer.AdmitAsync();
 
             var resources = await provider.GetRequiredService<GroundworkStoreSessionSource>()
                 .OpenAsync(GroundworkTestAccess.DefaultScoped);
@@ -173,7 +174,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
             Assert.Contains(WellKnownCapabilities.AtomicCommit, admission.Source.Snapshot.RequiredCapabilities);
             AssertExactMongoTarget(admission.Source);
 
-            await initializer.StartAsync(CancellationToken.None);
+            await initializer.AdmitAsync(CancellationToken.None);
             Assert.Equal(1, admission.TopologyInspections);
             Assert.Equal(1, admission.OpenAttempts);
         }
@@ -201,8 +202,8 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         var provider = services.BuildServiceProvider();
         try
         {
-            await provider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>()
-                .InitializeAsync();
+            await provider.GetRequiredKeyedService<MongoDbGroundworkDocumentStoreInitializer>(GroundworkTargetNames.Default)
+                .AdmitAsync();
 
             Assert.Equal(
             [
@@ -243,7 +244,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
 
         await using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true });
-        await provider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>().InitializeAsync();
+        await provider.GetRequiredKeyedService<MongoDbGroundworkDocumentStoreInitializer>(GroundworkTargetNames.Default).AdmitAsync();
         await using var scope = provider.CreateAsyncScope();
 
         Assert.Contains("elsa-identity", admission.Source!.Snapshot.SelectedFeatures);

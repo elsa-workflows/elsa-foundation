@@ -1,6 +1,6 @@
-using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Transactions;
@@ -12,7 +12,6 @@ using Groundwork.PostgreSql;
 using Groundwork.PostgreSql.Documents;
 using Groundwork.PostgreSql.PhysicalStorage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql;
@@ -23,19 +22,20 @@ namespace Elsa.Persistence.Groundwork.PostgreSql;
 /// safe pending operations automatically.
 /// </summary>
 public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
+    string targetName,
     string connectionString,
     bool autoApplyOnStartup,
     IServiceScopeFactory scopeFactory,
     GroundworkStoreSessionSource sessionSource,
     ILogger<PostgreSqlGroundworkDocumentStoreInitializer> logger,
-    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IHostedService, IShellInitializer
+    GroundworkProviderCapabilityAdmission? capabilityAdmission = null) : IGroundworkTargetAdmission
 {
     private readonly SemaphoreSlim initializationLock = new(1, 1);
     private bool initialized;
 
-    public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
-    public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public string TargetName { get; } = GroundworkTargetNames.Normalize(targetName);
+
+    public Task AdmitAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
