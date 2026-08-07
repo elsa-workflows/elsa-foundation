@@ -37,6 +37,16 @@ public sealed class DesignPersistenceBoundaryTests
     // ---------------------------------------------------------------------------------------------
 
     /// <summary>
+    /// Whether a lane registration binds <paramref name="contract"/>, in either spelling: the plain
+    /// container call, or the target-bound registrar that replaced it (lane.Replace/TryAdd/Alias).
+    /// </summary>
+    private static bool RegistersContract(string registration, string contract) =>
+        registration.Contains($"AddScoped<{contract}", StringComparison.Ordinal)
+        || registration.Contains($"Replace<{contract},", StringComparison.Ordinal)
+        || registration.Contains($"TryAdd<{contract},", StringComparison.Ordinal)
+        || registration.Contains($"Alias<{contract},", StringComparison.Ordinal);
+
+    /// <summary>
     /// The design contract cores the catalog treats as provider-neutral. Discovery is by convention
     /// (a <c>*.Design*.Core</c> project outside a provider folder); these two must always be present so
     /// a broken glob cannot silently turn the guard into a vacuous pass.
@@ -175,15 +185,15 @@ public sealed class DesignPersistenceBoundaryTests
         (
             "src/Elsa/Workflows/Design/Persistence/Groundwork/DependencyInjection/GroundworkWorkflowsDesignStoreRegistration.cs",
             [
-                "ManifestSource<WorkflowsDesignGroundworkStorageManifestSource>",
-                "ManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>",
+                "Manifest<WorkflowsDesignGroundworkStorageManifestSource>",
+                "Manifest<GroundworkDesignAtomicWriteStorageManifestSource>",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ]),
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs",
             [
-                "ManifestSource<ActivitiesDesignGroundworkStorageManifestSource>",
-                "ManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>",
+                "Manifest<ActivitiesDesignGroundworkStorageManifestSource>",
+                "Manifest<GroundworkDesignAtomicWriteStorageManifestSource>",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ])
     ];
@@ -305,7 +315,7 @@ public sealed class DesignPersistenceBoundaryTests
 
             Assert.NotEmpty(declared);
             violations.AddRange(declared
-                .Where(contract => !registration.Contains($"AddScoped<{contract}", StringComparison.Ordinal))
+                .Where(contract => !RegistersContract(registration, contract))
                 .Select(contract => $"{manifestSourcePath}: declares '{contract}' but {Path.GetFileName(registrationPath)} does not register it."));
         }
 
