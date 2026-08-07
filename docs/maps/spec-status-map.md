@@ -186,3 +186,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
 | [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | out of scope |
 | [147-file-workflow-deployment](../../specs/147-file-workflow-deployment/spec.md) | File-based workflow deployment at startup | Draft | - | 38 | 0 | - |
+| [148-authoring-schema-endpoints](../../specs/148-authoring-schema-endpoints/spec.md) | Authoring-Schema Endpoints for Headless Clients | Retrofit — documents behavior shipped in PR #1170 (issue #1164); source of truth for review and future evolution, not a driver of new implementation. | - | 0 | 0 | - |

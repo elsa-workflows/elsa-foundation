@@ -21,7 +21,22 @@ public sealed record ActivityAuthoringDescriptorView(
     IReadOnlyCollection<ActivityPortDescriptorView> Ports,
     JsonElement? ContainerStructure,
     ActivityAuthoringTemplateView AuthoringTemplate,
-    ActivityAuthoringIntrinsicView? Intrinsic = null);
+    ActivityAuthoringIntrinsicView? Intrinsic = null,
+    ActivityAuthoringProvenanceView? Provenance = null);
+
+/// <summary>
+/// Provenance of a persisted catalog entry: which reconciliation source produced the version
+/// (<see cref="SourceKind"/>/<see cref="SourceId"/>, persisted on the version row) and — for CLR-provided
+/// activities — which shell feature provides the activity type (<see cref="FeatureId"/>, resolved
+/// best-effort; null when the consumer is not the CLR activity consumer or attribution is unresolvable).
+/// The named feature may currently be disabled in the shell composition: the catalog is folder-scanned,
+/// so the id is the "enable feature X to use this activity" signal. Built-in engine-intrinsic entries
+/// carry no provenance.
+/// </summary>
+public sealed record ActivityAuthoringProvenanceView(
+    string SourceKind,
+    string SourceId,
+    string? FeatureId);
 
 /// <summary>
 /// Present only on built-in engine-intrinsic catalog entries (e.g. Set Variable, Set Output). It tells
