@@ -1010,6 +1010,48 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Contains(nameof(ActivityResourceMeasurements.LocalNodeCount), diagnostic.Metadata!["invalidMeasurements"], StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The split path commits runtime, then design, then the receipt. The design commit is the point the
+    /// publication becomes done, so an interruption before the receipt must be finishable: retrying with the
+    /// same idempotency key has to write the receipt rather than reject the retry as a duplicate. Without
+    /// this, the receipt would be unobtainable forever and every retry would conflict. ADR 0066.
+    /// </summary>
+    [Fact]
+    public async Task Split_publication_interrupted_before_its_receipt_is_finished_by_a_retry()
+    {
+        var harness = await Harness.CreateSplitAsync();
+        var receiptId = ReceiptId(harness.Commit.Receipt.IdempotencyKey);
+
+        var first = await harness.Command.ExecuteAsync(harness.Commit);
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+
+        // Simulate the crash window: the design commit landed, the receipt never did.
+        await harness.Documents.DeleteAsync(new(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+        Assert.Null(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+
+        var resumed = await harness.Command.ExecuteAsync(harness.Commit);
+
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+        Assert.Equal(first.DefinitionVersionId, resumed.DefinitionVersionId);
+        Assert.Equal(first.SourceReferenceId, resumed.SourceReferenceId);
+        Assert.Equal(first.PublishedAt, resumed.PublishedAt);
+    }
+
+    /// <summary>A fully committed publication is still a duplicate, not a resume.</summary>
+    [Fact]
+    public async Task Split_publication_that_fully_committed_still_rejects_a_replay()
+    {
+        var harness = await Harness.CreateSplitAsync();
+        await harness.Command.ExecuteAsync(harness.Commit);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => harness.Command.ExecuteAsync(harness.Commit));
+    }
+
     [Fact]
     public async Task Atomic_commit_finds_authoring_by_definition_when_document_id_differs()
     {
@@ -1797,10 +1839,56 @@ public sealed class ActivityDefinitionPublicationTests
                 store,
                 new ImmediateLockProvider(),
                 documents);
-            var laneTargets = new GroundworkLaneTargets(new GroundworkManifestBindings());
             return new(
                 documents,
-                new(
+                CreateCommand(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection, null),
+                commit);
+        }
+
+        /// <summary>
+        /// Composes the publication command with design and publishing on one target and runtime on another,
+        /// which is what selects the ordered (non-transactional) path.
+        /// </summary>
+        public static async Task<Harness> CreateSplitAsync()
+        {
+            var documents = new InMemoryDocumentStore(CombinedManifest());
+            await SeedAsync(documents);
+            var payloads = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+            var runtimeSerializer = new GroundworkRuntimeDocumentSerializer();
+            IDocumentStore store = documents;
+            var commit = CreateCommit();
+            var publications = new PublisherPublicationStore([]);
+            var projection = new GroundworkActivityDependencyProjection(store, publications);
+            var managementProjection = new GroundworkActivityManagementProjectionWriter(
+                store, new ImmediateLockProvider(), documents);
+
+            var bindings = new GroundworkManifestBindings();
+            bindings.Bind(typeof(ActivitiesDesignGroundworkStorageManifestSource), "authoring");
+            bindings.Bind(typeof(PublishingGroundworkStorageManifestSource), "authoring");
+
+            return new(
+                documents,
+                CreateCommand(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection, bindings),
+                commit);
+        }
+
+        private static GroundworkActivityPublicationCommand CreateCommand(
+            IDocumentStore store,
+            InMemoryDocumentStore documents,
+            IPayloadSerializer payloads,
+            IGroundworkRuntimeDocumentSerializer runtimeSerializer,
+            PublisherPublicationStore publications,
+            GroundworkActivityDependencyProjection projection,
+            GroundworkActivityManagementProjectionWriter managementProjection,
+            GroundworkManifestBindings? bindings)
+        {
+            var laneTargets = new GroundworkLaneTargets(bindings ?? new GroundworkManifestBindings());
+            var services = new ServiceCollection().AddSingleton(store);
+            // Both targets are the same physical store here; the split is in the lane bindings, which is what
+            // selects the ordered path. Sharing the store keeps the resume assertions about ordering, not wiring.
+            services.AddKeyedSingleton("authoring", store);
+            services.AddKeyedSingleton(GroundworkTargetNames.Default, store);
+            return new(
                     store,
                     documents,
                     payloads,
@@ -1809,15 +1897,8 @@ public sealed class ActivityDefinitionPublicationTests
                     projection,
                     managementProjection,
                     new PublishingGroundworkDocumentSerializer(),
-                    // No lane is bound to a named target here, so design, runtime and publishing all
-                    // resolve to the default one and the publication stays a single atomic commit.
                     laneTargets,
-                    new GroundworkLaneStores(
-                        new ServiceCollection()
-                            .AddSingleton<IDocumentStore>(store)
-                            .BuildServiceProvider(),
-                        laneTargets)),
-                commit);
+                    new GroundworkLaneStores(services.BuildServiceProvider(), laneTargets));
         }
 
         private static async Task SeedAsync(IDocumentStore store)
