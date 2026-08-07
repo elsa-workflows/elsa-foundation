@@ -205,6 +205,12 @@ reviewed policy files, both class constants are dead by design, and making `Defa
 workload-aware would change its signature and every call site only to enforce a provisional number the
 sunset condition already retires. Recorded here so the gap is not mistaken for a live gate.
 
+**Interim, 2026-08-07 (#1176).** Gate behavior is unchanged and the wire-or-supersede choice is still
+open. What landed is documentation plus a pin: the constant's XML doc now states that nothing enforces it,
+and `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
+fails if any construction path starts applying it or if the harness references it anywhere but its own
+declaration — so whichever option is chosen, the correction has to be made in the same change.
+
 ## Field evidence for the shape: Tier A's own gate flakes
 
 Observed while this proposal was open, and it argues for the design rather than against it.
