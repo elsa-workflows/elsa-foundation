@@ -46,7 +46,13 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & push elsa-workbench
-    uses: docker/github-builder/.github/workflows/build.yml@v1
+    # Pinned to an exact release, not the floating @v1. This workflow pins the
+    # BuildKit and Buildx versions the build runs on, and a frontend older than
+    # that BuildKit fails the build outright -- see the `# syntax=` pin in
+    # src/Apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # release moves BuildKit under us and breaks main with no change of ours;
+    # pinned, that becomes a deliberate bump where both pins move together.
+    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
       id-token: write
