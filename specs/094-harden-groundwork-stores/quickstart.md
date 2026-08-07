@@ -29,8 +29,9 @@ The original checkpoint/fence attachment and its unversioned evidence paths reta
 versioned attachment by tuple as prior-generation provenance. The `0.0.1-preview.86` checkpoint/fence slice
 lives under `versions/0.0.1-preview.86/` as immutable prior-generation provenance. The latest retained
 `0.0.1-preview.88` slice lives under `versions/0.0.1-preview.88/` and was imported mechanically by tuple. The
-`preview.102` generation was never published. The current `preview.103` generation remains intentionally absent until the exact clean-source four-provider publisher
-and mechanical importer complete. All rows remain below
+`preview.102` generation was never published. The current `0.0.1-preview.103` generation was published and
+mechanically imported on **2026-08-06** at Elsa commit `78e648996` and lives under
+`versions/0.0.1-preview.103/`. All rows remain below
 `evidence-complete`: this narrow 36-record slice cannot close the full provider-evidence gate.
 
 **2026-07-31 preview.103 integration preparation**: Groundwork merge
@@ -504,6 +505,45 @@ checkpoint/fence slice's 36 tuple keys, exact source commit/tree/run provenance,
 and unchanged preview.80/preview.81/preview.86/preview.88 history. Publication does
 not advance a row status. A row remains incomplete until every declared query, concurrency, failure, and
 restart obligation is present for all four providers and the linked #642/#644 authority evidence is current.
+
+### Preview.103 checkpoint/fence evidence publication (2026-08-06)
+
+Published and imported at Elsa commit `78e648996` (tree `17acb4c7a`), run identity
+`runtime-checkpoint-fence-preview103`. 36 records across all four providers, importer exit 0,
+`versions/0.0.1-preview.103/` created. This closes the defect where the ledger declared
+`0.0.1-preview.103` while `versions/` stopped at `preview.88`. Note the ledger declaration was never
+stale — it matched `Directory.Packages.props` exactly; the gap was one-sided.
+
+**No status advanced**, by design: `EnsureStatusesUnchanged` throws if one differs. Counts are unchanged
+at 30 implemented / 4 externally blocked / 1 planned, and the performance-verdict count remains zero. The
+slice covers three rows' checkpoint/fence obligations; diagnostics and 17 runtime rows still have no
+publisher at all.
+
+Three things worth knowing before repeating this:
+
+1. **Budget ~25–35 minutes, not the 1m58s–2m33s recorded for prior generations.** This run took 25m26s
+   (mongodb ~18m, sqlserver ~11m on an Apple Silicon host).
+2. **The first run failed and the retry passed.** It died with
+   `GroundworkRuntimeCheckpointWriterException: Runtime checkpoint marker 'commit-current' conflicted but
+   no committed marker could be reloaded`. An isolated re-run of
+   `RuntimeFenceContractTests.Runtime_fence_contract_is_enforced_by_every_persistent_provider` then passed
+   on all four providers. It was a real timing-dependent race, not a flake:
+   `GroundworkRuntimeCheckpointWriter.ApplyAtomicallyAsync` retried on `FenceConcurrencyException` via
+   `continue` but **threw** on `CheckpointMarkerConcurrencyException` when the marker was not yet
+   loadable, so a concurrent double-commit of the same commit id failed instead of resolving as an
+   idempotent replay. **Fixed by `cf3354481` (PR #1165)**, which gives the marker branch the same bounded
+   retry; only MongoDB reproduces it, because SQL Server and PostgreSQL block the conflicting insert on
+   the rival transaction instead of failing it fast. A publisher run before that commit can still hit it.
+3. **Do not add the imported version to the importer's `HistoricalGenerations`.** That list is the
+   generations *before* the current one; the importer's own tests import the current version as their
+   target, and adding `preview.103` broke 20 of them. It joins the list when a later Groundwork version
+   becomes current.
+
+`GroundworkCoverageLedgerTests.Preview103_checkpoint_fence_evidence_awaits_mechanical_import` asserted
+that zero `preview.103` records existed, so it had to fail once the generation landed. It is replaced by
+`Preview103_checkpoint_fence_attachment_remains_imported_exactly_once_as_prior_provenance`, mirroring the
+`Preview88` fact; its second assertion (no row advanced) survives as
+`Importing_a_generation_does_not_advance_any_row_status`. Full 355-test architecture suite green.
 
 ### Preview.81 checkpoint/fence evidence refresh (2026-07-24)
 
@@ -1159,8 +1199,9 @@ collect timing/native-plan evidence, select a physical form, edit the coverage l
 performance verdict, independently prove provider-internal executable root-lease exclusion, or
 advance a Spec 094 task. Groundwork #50 completion, current-family evidence reconciliation, real EF
 comparators, provider failure/restart evidence, and the remaining workload-contract ratifications
-stay in the #646 completion gate. The preview.103 exact-source publication/import remains a
-prerequisite to any current provider or performance claim.
+stay in the #646 completion gate. The preview.103 exact-source publication/import was a prerequisite to
+any current provider or performance claim; it completed on 2026-08-06 (see the checkpoint below). The
+other items in this paragraph are unchanged.
 
 ### Outbox drain correctness-runner checkpoint
 

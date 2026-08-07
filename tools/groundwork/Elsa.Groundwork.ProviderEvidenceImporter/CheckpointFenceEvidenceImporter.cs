@@ -31,6 +31,9 @@ public static class CheckpointFenceEvidenceImporter
             "0.0.1-preview.88",
             "versions/0.0.1-preview.88/ledger-attachments/runtime-checkpoint-fence.json",
             "f0b40406e1e5a044bb8e83e6090c3eb84b676124674cd948ed2440f227b065f2")
+        // preview.103 is deliberately absent: this list is the generations *before* the current one, and
+        // the importer's own tests import preview.103 as their target. It joins the list when a later
+        // Groundwork version becomes current, not when it is first imported.
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
