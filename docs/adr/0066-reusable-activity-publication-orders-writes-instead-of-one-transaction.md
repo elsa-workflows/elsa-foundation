@@ -62,18 +62,26 @@ to publish reusable activities on a host whose design and runtime data are separ
 blocking a fully split topology.
 
 **Convergence is caller-driven, and that is the limit worth stating plainly.** No new document kind was
-added: the receipt is derivable from the caller's own commit description, so a retry with the same
-idempotency key resumes at the receipt write rather than redoing the publication. A caller that crashes after
-the design commit and never retries leaves the receipt absent — the publication is done and observable, but
-its idempotency artifact is missing until someone retries. A background redrive would close that, and would
-need a design-lane outbox; the design-operation marker ledger is the natural home. This is a smaller gap than
-it looks, because an idempotency key only has a purpose for a caller that retries.
+added. A split publication that is interrupted after the design commit is finished by retrying it with the
+same idempotency key: the retry recognises that the design publication already exists and matches the commit
+being replayed, and completes at the receipt write instead of redoing the publication or rejecting itself as
+a duplicate. A caller that never retries leaves the receipt absent — the publication is done and observable,
+but its idempotency artifact is missing until someone retries. A background redrive would remove even that
+dependence on the caller, and would need a design-lane outbox; the design-operation marker ledger is the
+natural home. This is a smaller gap than it looks, because an idempotency key only has a purpose for a caller
+that retries.
+
+Recognising the retry requires comparing the stored publication against the one being replayed. A different
+publication reusing the same id is not a resume and falls through to the ordinary create-only preflight, so
+the resume path cannot turn a genuine conflict into a success. The same reasoning applies to the receipt
+write itself: a conflicting receipt is only treated as benign when its stored content is identical.
 
 Two new failure windows exist and are covered by the ordering rather than by compensation: a crash after the
 runtime commit leaves an unreferenced, collectable template, and a crash after the design commit leaves the
-publication done with the receipt recoverable on retry. Crash-injection coverage across those boundaries is
-worth adding and is not yet present; what is tested today is that each lane is addressed through its own
-target's store, that the mode is chosen from the actual bindings, and that a lane on an undeclared named
-target refuses rather than falling back.
+publication done with the receipt recoverable on retry. The second is tested by interrupting a split
+publication before its receipt and asserting the retry completes it, and by asserting that a fully committed
+publication is still rejected as a replay. The first — that an orphaned template is genuinely collectable by
+reference garbage collection — is asserted by reasoning about content-addressing rather than by a test, and
+is worth covering alongside the background redrive.
 
 Hosts that co-locate the three lanes are unaffected either way.

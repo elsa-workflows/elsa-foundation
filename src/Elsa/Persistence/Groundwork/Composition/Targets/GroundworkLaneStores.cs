@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +14,10 @@ namespace Elsa.Persistence.Groundwork.Targets;
 /// </summary>
 public sealed class GroundworkLaneStores(IServiceProvider serviceProvider, GroundworkLaneTargets laneTargets)
 {
+    /// <summary>The store backing the lane declared by <typeparamref name="TManifestSource"/>.</summary>
+    public IDocumentStore For<TManifestSource>()
+        where TManifestSource : IGroundworkStorageManifestSource => For(typeof(TManifestSource));
+
     /// <summary>The store backing the lane whose manifest source is <paramref name="manifestSourceType"/>.</summary>
     public IDocumentStore For(Type manifestSourceType)
     {

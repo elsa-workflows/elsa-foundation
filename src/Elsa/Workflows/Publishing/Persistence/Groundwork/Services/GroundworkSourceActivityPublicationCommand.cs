@@ -173,7 +173,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
         var runtimeRequests = requests.Where(request => runtimeKinds.Contains(request.DocumentKind)).ToArray();
         if (runtimeRequests.Length > 0)
         {
-            await laneStores.For(typeof(RuntimeGroundworkStorageManifestSource)).SaveAllAsync(
+            await laneStores.For<RuntimeGroundworkStorageManifestSource>().SaveAllAsync(
                 DocumentCommitScope.Of(runtimeKinds),
                 runtimeRequests,
                 cancellationToken);

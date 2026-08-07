@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Targets;
@@ -17,12 +18,12 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 public static class ActivityPublicationLaneColocation
 {
     /// <summary>The lanes a reusable-activity publication commits together.</summary>
-    private static readonly Dictionary<string, Type> Lanes = new(StringComparer.Ordinal)
+    private static readonly FrozenDictionary<string, Type> Lanes = new Dictionary<string, Type>(StringComparer.Ordinal)
     {
         ["activities design"] = typeof(ActivitiesDesignGroundworkStorageManifestSource),
         ["runtime"] = typeof(RuntimeGroundworkStorageManifestSource),
         ["publishing"] = typeof(PublishingGroundworkStorageManifestSource)
-    };
+    }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether design, runtime, and publishing share one target, and so whether the publication can be one
