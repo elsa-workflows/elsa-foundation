@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -96,6 +97,9 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
         services.AddEventHandler<OnExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
+        // Publish-on-reconcile (spec 147): independent subscriber on the Design-side reconcile completion
+        // event. Only acts on claims whose source opted in (PublishOnReconcile); never throws.
+        services.AddEventHandler<OnWorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);

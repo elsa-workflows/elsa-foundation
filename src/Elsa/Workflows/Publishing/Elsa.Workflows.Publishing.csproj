@@ -28,6 +28,12 @@
     <ProjectReference Include="..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <!--
+      Contracts only (spec 147): OnWorkflowVersionsReconciled + WorkflowVersionSourceClaim, so the engine's
+      publish-on-reconcile subscriber can react to the Design-side reconcile completion event. Same allowed
+      bridge direction as the Activities reconciliation Core reference above; Design never references back.
+    -->
+    <ProjectReference Include="..\Design\Reconciliation\Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\Runtime\Elsa.Workflows.Runtime.csproj" />

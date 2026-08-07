@@ -1,4 +1,5 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
@@ -29,6 +30,18 @@ public sealed class WorkflowVersionsReconcilingHandler(
                 var definition = definitionFactory.Create(entry.Name, entry.Description, entry.DefinitionId, entry.Deleted);
                 var version = versionFactory.Create(definition, entry.Version, entry.State, entry.SourceCreatedAt);
                 domainEvent.Versions.Add(version);
+                // Provenance beside the version: source identity is not persisted on design entities, so
+                // this claim is what survives to OnWorkflowVersionsReconciled (and the publish-on-reconcile
+                // step). DefinitionId is read back from the factory-created definition so a generated id
+                // (entry.DefinitionId omitted) is the final one.
+                domainEvent.Claims.Add(new WorkflowVersionSourceClaim(
+                    DefinitionId: definition.Id,
+                    Version: entry.Version,
+                    SemVerSortKey: SemVer.ToSortKey(entry.Version),
+                    SourceId: source.SourceId,
+                    SourceKind: source.SourceKind,
+                    PublishRequested: source.RequestsPublication,
+                    Deleted: entry.Deleted));
             }
         }
     }

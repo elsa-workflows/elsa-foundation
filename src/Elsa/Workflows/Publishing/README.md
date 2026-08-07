@@ -50,6 +50,19 @@ activity-draft services that consume it live in the Api feature only. The engine
 context and introduces no neutral default, so composing the engine alone yields a fully wired publish surface
 with zero transport.
 
+## Cross-domain contributions
+
+The engine registers one independent event subscriber for a Design-side event (spec 147, #1157):
+
+- `PublishReconciledWorkflowVersions : IEventHandler<OnWorkflowVersionsReconciled>` — publish-on-reconcile.
+  After a workflow-reconciliation pass completes, it publishes the latest reconciled version of each
+  definition whose source opted in (`PublishOnReconcile` on the JSON source → `PublishRequested` on the
+  claim) via the in-process `PublishWorkflow` request. Idempotent across restarts (publication-slot
+  pre-check + the publish handler's unchanged-artifact replay); per-definition failures are logged and
+  isolated — the handler never throws (Sequential delivery would otherwise fail shell activation).
+  Contract and delivery semantics:
+  [reconciliation extension-point catalog](../Design/Reconciliation/EXTENSION_POINTS.md).
+
 ## Publication lifecycle
 
 The authority transition is one coordinated operation (identical to what the API drives, minus HTTP):
