@@ -35,6 +35,8 @@ public static class SqlServerGroundworkDocumentStoreRegistration
 
         services.AddGroundworkStoreSessions(target);
 
+        services.AddGroundworkProviderCapabilityAdmission(target);
+
         services.AddKeyedSingleton(target, (serviceProvider, key) => new SqlServerGroundworkDocumentStoreInitializer(
             (string)key,
             connectionString,
@@ -44,7 +46,7 @@ public static class SqlServerGroundworkDocumentStoreRegistration
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             serviceProvider.GetService<ILogger<SqlServerGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<SqlServerGroundworkDocumentStoreInitializer>.Instance,
-            serviceProvider.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
+            serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key)));
         services.AddGroundworkTargetAdmission<SqlServerGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;

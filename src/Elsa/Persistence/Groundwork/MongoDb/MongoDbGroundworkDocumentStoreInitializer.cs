@@ -102,7 +102,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IGroundworkTarge
             var providerCapabilities = await GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
                 MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
                 topology,
-                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                GroundworkTargetManifestSources.ForTarget(scope.ServiceProvider, TargetName),
                 cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
@@ -110,7 +110,8 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IGroundworkTarge
                     providerCapabilities,
                     MongoDbPhysicalNameNormalizer.Instance,
                     cancellationToken,
-                    MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance);
+                    MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
+                    TargetName);
 
             if (!_sessionSource.IsInitialized)
             {

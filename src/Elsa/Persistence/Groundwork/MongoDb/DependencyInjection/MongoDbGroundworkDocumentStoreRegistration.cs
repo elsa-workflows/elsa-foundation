@@ -38,6 +38,8 @@ public static class MongoDbGroundworkDocumentStoreRegistration
 
         services.AddGroundworkStoreSessions(target);
 
+        services.AddGroundworkProviderCapabilityAdmission(target);
+
         services.TryAddSingleton<IMongoDbGroundworkRuntimeAdmission, MongoDbGroundworkRuntimeAdmission>();
         services.AddKeyedSingleton(target, (serviceProvider, key) => new MongoDbGroundworkDocumentStoreInitializer(
             (string)key,
@@ -50,7 +52,7 @@ public static class MongoDbGroundworkDocumentStoreRegistration
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             serviceProvider.GetService<ILogger<MongoDbGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<MongoDbGroundworkDocumentStoreInitializer>.Instance,
-            serviceProvider.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
+            serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key)));
         services.AddGroundworkTargetAdmission<MongoDbGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;

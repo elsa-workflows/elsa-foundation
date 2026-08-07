@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Identity;
 using Elsa.Persistence.Core.DependencyInjection;
@@ -32,10 +33,8 @@ public static class GroundworkWorkflowsDesignStoreRegistration
     public static IServiceCollection AddGroundworkWorkflowsDesignStores(this IServiceCollection services)
     {
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, WorkflowsDesignGroundworkStorageManifestSource>());
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
+        services.AddGroundworkManifestSource<WorkflowsDesignGroundworkStorageManifestSource>();
+        services.AddGroundworkManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>();
         services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
         services.TryAddScoped<IDraftOriginator, DraftOriginator>();
 

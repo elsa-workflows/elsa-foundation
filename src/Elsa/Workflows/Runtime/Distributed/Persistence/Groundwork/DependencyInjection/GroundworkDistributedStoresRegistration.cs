@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork;
@@ -24,8 +25,7 @@ public static class GroundworkDistributedStoresRegistration
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
     {
         services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DistributedGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<DistributedGroundworkStorageManifestSource>();
 
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
         // registers its in-memory defaults with TryAddScoped, so bridge-first ordering also composes correctly).

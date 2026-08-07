@@ -152,12 +152,14 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IGroundworkTar
                 {
                     RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                 }),
-            scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+            GroundworkTargetManifestSources.ForTarget(scope.ServiceProvider, TargetName),
             cancellationToken);
         var source = await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,
-            cancellationToken);
+            cancellationToken,
+            targetCompiler: null,
+            targetName: TargetName);
         return new GroundworkProviderSchemaSource(source, capabilities);
     }
 

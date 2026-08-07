@@ -40,6 +40,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
             return services;
 
         services.AddGroundworkStoreSessions(target);
+
+        services.AddGroundworkProviderCapabilityAdmission(target);
         services.AddKeyedSingleton(target, (serviceProvider, key) => new SqliteGroundworkDocumentStoreInitializer(
             (string)key,
             connectionString,
@@ -49,7 +51,7 @@ public static class SqliteGroundworkDocumentStoreRegistration
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             serviceProvider.GetService<ILogger<SqliteGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<SqliteGroundworkDocumentStoreInitializer>.Instance,
-            serviceProvider.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(),
+            serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key),
             skipInspectionWhenPlanUnchanged,
             storeCacheOptions));
         services.AddGroundworkTargetAdmission<SqliteGroundworkDocumentStoreInitializer>(target);
