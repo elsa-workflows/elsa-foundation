@@ -7,6 +7,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <!-- The shared target-admission driver runs as both a hosted service and a shell initializer. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- GroundworkTargetsFeature is a host feature and needs the manifest hint attributes. -->
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
