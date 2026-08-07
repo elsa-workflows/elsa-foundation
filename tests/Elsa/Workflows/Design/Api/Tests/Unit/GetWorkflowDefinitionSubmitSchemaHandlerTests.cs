@@ -34,6 +34,25 @@ public sealed class GetWorkflowDefinitionSubmitSchemaHandlerTests
     }
 
     [Fact]
+    public async Task Required_lists_only_members_the_server_rejects_when_absent()
+    {
+        var view = await HandleAsync();
+
+        // The wire deserializer treats a missing nullable member exactly like an explicit null, so
+        // nullable members (operationKey, description, ...) must not be marked required: a client
+        // validating against the schema would otherwise reject bodies the server accepts.
+        Assert.Equal(["name", "state"], GetRequired(view.Schema));
+
+        var argumentState = GetRootActivitySchema(view.Schema).GetProperty("properties").GetProperty("inputs").GetProperty("items");
+        Assert.Equal(["referenceKey", "value"], GetRequired(argumentState));
+    }
+
+    private static string[] GetRequired(JsonElement schema) =>
+        schema.TryGetProperty("required", out var required)
+            ? required.EnumerateArray().Select(value => value.GetString()!).ToArray()
+            : [];
+
+    [Fact]
     public async Task Argument_state_schema_documents_the_authored_wire_contract()
     {
         var argumentState = await GetInputArgumentStateSchemaAsync();

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -21,7 +22,8 @@ internal static class AuthoringSchemaExporter
 
     private static readonly JsonSchemaExporterOptions ExporterOptions = new()
     {
-        TreatNullObliviousAsNonNullable = true
+        TreatNullObliviousAsNonNullable = true,
+        TransformSchemaNode = PruneToleratedAbsencesFromRequired
     };
 
     private static JsonSerializerOptions CreateWireOptions()
@@ -47,6 +49,35 @@ internal static class AuthoringSchemaExporter
     {
         var node = WireOptions.GetJsonSchemaAsNode(type, ExporterOptions);
         return JsonSerializer.SerializeToElement(node, WireOptions);
+    }
+
+    // The exporter marks every non-defaulted constructor parameter of a positional record as
+    // "required", but the wire deserializer treats a missing nullable parameter exactly like an
+    // explicit null. Keeping those members in "required" would make clients reject bodies the
+    // server accepts, so "required" is pruned to members whose absence the contract cannot
+    // represent: non-nullable and without a default.
+    private static JsonNode PruneToleratedAbsencesFromRequired(JsonSchemaExporterContext context, JsonNode schema)
+    {
+        if (schema is not JsonObject schemaObject ||
+            !schemaObject.TryGetPropertyValue("required", out var requiredNode) ||
+            requiredNode is not JsonArray required)
+            return schema;
+
+        var nullableMembers = context.TypeInfo.Properties
+            .Where(property => property.IsSetNullable)
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        for (var index = required.Count - 1; index >= 0; index--)
+        {
+            if (required[index]?.GetValue<string>() is { } member && nullableMembers.Contains(member))
+                required.RemoveAt(index);
+        }
+
+        if (required.Count == 0)
+            schemaObject.Remove("required");
+
+        return schemaObject;
     }
 
     /// <summary>
