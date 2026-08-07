@@ -24,6 +24,8 @@ internal sealed class IfStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => IfActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(IfAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);

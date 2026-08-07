@@ -13,7 +13,7 @@ public static class ActivityViewProjections
     public static ActivityDefinitionView ToView(this IActivityDefinition definition) =>
         new(definition.Id, definition.ActivityTypeKey, definition.Category, definition.DisplayName, definition.Description);
 
-    public static ActivityDefinitionVersionDetailsView ToDetailsView(this IActivityDefinitionVersion version) =>
+    public static ActivityDefinitionVersionDetailsView ToDetailsView(this IActivityDefinitionVersion version, string? providingFeatureId = null) =>
         new(
             version.Id,
             version.Version,
@@ -26,5 +26,6 @@ public static class ActivityViewProjections
             version.Inputs,
             version.Outputs,
             version.DesignFacets,
-            version.ExecutionType);
+            version.ExecutionType,
+            new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, providingFeatureId));
 }

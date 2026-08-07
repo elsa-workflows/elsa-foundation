@@ -8,6 +8,10 @@ internal static class RouteConstants
 
     internal static string Definitions => GetRoute("definitions");
 
+    internal static string DefinitionSubmitSchema => GetRoute("definitions/submit/schema");
+
+    internal static string Structures => GetRoute("structures");
+
     internal static string Versions => GetRoute("versions");
 
     internal static string ScopedVariableAnalysis => GetRoute("scoped-variables/analyze");

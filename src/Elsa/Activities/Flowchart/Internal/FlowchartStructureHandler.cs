@@ -21,6 +21,8 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => FlowchartActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(FlowchartAuthoredStructure);
+
     public bool SupportsScopedVariables => true;
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)

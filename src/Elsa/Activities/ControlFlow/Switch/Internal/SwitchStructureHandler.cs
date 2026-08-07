@@ -25,6 +25,8 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => SwitchActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(SwitchAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);

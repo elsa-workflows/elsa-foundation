@@ -20,6 +20,8 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => SequenceActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(SequenceAuthoredStructure);
+
     public bool SupportsScopedVariables => true;
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)

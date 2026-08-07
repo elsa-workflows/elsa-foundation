@@ -173,6 +173,22 @@ public sealed class ActivityDesignFeatureCompositionTests
     }
 
     [Fact]
+    public void ActivitiesDesignApiFeature_RegistersActivityFeatureAttributionResolver()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        // The resolver's own dependencies (type registry, runtime feature catalog) are optional: a shell
+        // composing neither must still resolve the service and degrade to null attribution.
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var resolver = scope.ServiceProvider.GetService<IActivityFeatureAttributionResolver>();
+        Assert.IsType<ActivityFeatureAttributionResolver>(resolver);
+    }
+
+    [Fact]
     public void ActivitiesDesignApiFeature_RegistersActivityAvailabilitySettingsStore()
     {
         var services = MinimalServices();

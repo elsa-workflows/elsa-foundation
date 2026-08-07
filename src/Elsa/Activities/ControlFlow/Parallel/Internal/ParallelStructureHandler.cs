@@ -24,6 +24,8 @@ internal sealed class ParallelStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => ParallelActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(ParallelAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);
