@@ -50,6 +50,13 @@ public sealed class GroundworkActivityPublicationCommand(
         var colocated = ActivityPublicationLaneColocation.AreColocated(laneTargets);
         ValidateCommit(commit);
 
+        // A split publication commits in phases, so it can be interrupted after the design commit — which is
+        // the point the publication becomes done — but before the receipt lands. The preflight below is
+        // create-only and would reject that retry as a duplicate, leaving the receipt unobtainable. Detect
+        // the interrupted case first and finish it rather than redoing work that already committed.
+        if (!colocated && await TryResumeAtReceiptAsync(commit, cancellationToken) is { } resumed)
+            return resumed;
+
         var draftEnvelope = await RequiredAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
             commit.Design.DraftId,
@@ -94,17 +101,7 @@ public sealed class GroundworkActivityPublicationCommand(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
             commit.Design.CatalogVersion,
             0));
-        var (receiptSchemaVersion, receiptContent) = publishingSerializer.Serialize(
-            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
-            commit.Receipt);
-        requests.Add(new(
-            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
-            GroundworkActivityPublicationReceiptStore.Id(
-                commit.Receipt.TenantId,
-                commit.Receipt.IdempotencyKey),
-            receiptSchemaVersion,
-            receiptContent,
-            0));
+        requests.Add(CreateReceiptRequest(commit.Receipt));
         requests.Add(CreateDesignRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection,
@@ -191,6 +188,97 @@ public sealed class GroundworkActivityPublicationCommand(
     }
 
     /// <summary>
+    /// Finishes a split publication that already committed its design phase but never wrote its receipt.
+    /// <para>
+    /// The design publication document is the linearization point, so its presence means the publication is
+    /// done. Recognising this retry requires that it describe the same publication: the caller re-supplies
+    /// the whole commit, so the stored publication is compared against it before anything is written. A
+    /// different publication reusing the id is a genuine conflict and falls through to the preflight.
+    /// </para>
+    /// </summary>
+    /// <returns>The original publication's result when resumed, otherwise <c>null</c>.</returns>
+    /// <summary>
+    /// Confirms a conflicting receipt is byte-identical to the one being written. Anything else means two
+    /// different publications claimed one idempotency key, which is a genuine conflict.
+    /// </summary>
+    private async Task EnsureStoredReceiptMatchesAsync(
+        IDocumentStore publishingStore,
+        SaveDocumentRequest intended,
+        CancellationToken cancellationToken)
+    {
+        var stored = await publishingStore.LoadAsync(
+            intended.DocumentKind,
+            intended.Id,
+            cancellationToken);
+        if (stored is null)
+        {
+            throw Conflict(
+                $"The activity publication receipt '{intended.Id}' conflicted on write but is not present; " +
+                "the publishing target rejected the write for another reason.");
+        }
+
+        if (!StringComparer.Ordinal.Equals(stored.ContentJson, intended.ContentJson))
+        {
+            throw Conflict(
+                $"Activity publication receipt '{intended.Id}' already exists with different content. Two " +
+                "publications are using one idempotency key.");
+        }
+    }
+
+    /// <summary>Builds the create-only receipt write, shared by the ordinary path and the resume path.</summary>
+    private SaveDocumentRequest CreateReceiptRequest(ActivityPublicationReceipt receipt)
+    {
+        var (schemaVersion, content) = publishingSerializer.Serialize(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            receipt);
+        return new(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            GroundworkActivityPublicationReceiptStore.Id(receipt.TenantId, receipt.IdempotencyKey),
+            schemaVersion,
+            content,
+            0);
+    }
+
+    private async Task<ActivityPublicationResult?> TryResumeAtReceiptAsync(
+        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit,
+        CancellationToken cancellationToken)
+    {
+        var receiptId = GroundworkActivityPublicationReceiptStore.Id(
+            commit.Receipt.TenantId,
+            commit.Receipt.IdempotencyKey);
+        var publishingStore = laneStores.For<PublishingGroundworkStorageManifestSource>();
+        if (await publishingStore.LoadAsync(
+                PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+                receiptId,
+                cancellationToken) is not null)
+        {
+            // Fully committed already; the preflight reports the duplicate as it always has.
+            return null;
+        }
+
+        var designStore = laneStores.For<ActivitiesDesignGroundworkStorageManifestSource>();
+        var publicationEnvelope = await designStore.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+            commit.Design.Publication.Id,
+            cancellationToken);
+        if (publicationEnvelope is null)
+            return null;
+
+        var stored = DeserializeDesign<ActivityDefinitionVersionPublication>(publicationEnvelope);
+        if (!StringComparer.Ordinal.Equals(stored.DefinitionVersionId, commit.Design.Publication.DefinitionVersionId))
+            return null;
+
+        await WritePublicationReceiptAsync([CreateReceiptRequest(commit.Receipt)], cancellationToken);
+        return new(
+            commit.Design.DefinitionId,
+            commit.Design.Publication.DefinitionVersionId,
+            commit.Design.DraftId,
+            commit.ExecutableTemplate.TemplateId,
+            commit.SourceReference.SourceReferenceId,
+            stored.PublishedAt);
+    }
+
+    /// <summary>
     /// Commits a publication whose lanes are on different Groundwork targets, as an ordered sequence rather
     /// than one transaction (there is no cross-store transaction to have). The ordering is what makes every
     /// partial state inert:
@@ -226,7 +314,7 @@ public sealed class GroundworkActivityPublicationCommand(
 
         if (runtimeRequests.Length > 0)
         {
-            await laneStores.For(typeof(RuntimeGroundworkStorageManifestSource)).SaveAllAsync(
+            await laneStores.For<RuntimeGroundworkStorageManifestSource>().SaveAllAsync(
                 DocumentCommitScope.Of(RuntimeKinds),
                 runtimeRequests,
                 cancellationToken);
@@ -259,7 +347,7 @@ public sealed class GroundworkActivityPublicationCommand(
         if (receiptRequests.Count == 0)
             return;
 
-        var publishingStore = laneStores.For(typeof(PublishingGroundworkStorageManifest));
+        var publishingStore = laneStores.For<PublishingGroundworkStorageManifestSource>();
         try
         {
             await publishingStore.SaveAllAsync(
@@ -270,7 +358,10 @@ public sealed class GroundworkActivityPublicationCommand(
         catch (DocumentAtomicWriteException exception)
             when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict)
         {
-            // The publication itself already committed; a racing retry wrote the receipt first.
+            // A create-only write and a racing write surface the same status, so the conflict is only benign
+            // when what is already stored is this same receipt. A different publication reusing one
+            // idempotency key must not be reported as success.
+            await EnsureStoredReceiptMatchesAsync(publishingStore, receiptRequests[0], cancellationToken);
         }
     }
 
