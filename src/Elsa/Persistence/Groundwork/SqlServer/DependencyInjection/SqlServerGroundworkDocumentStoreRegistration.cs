@@ -47,6 +47,13 @@ public static class SqlServerGroundworkDocumentStoreRegistration
             serviceProvider.GetService<ILogger<SqlServerGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<SqlServerGroundworkDocumentStoreInitializer>.Instance,
             serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key)));
+        // Aggregate dashboard reads query the physical tables directly and need this target's connection.
+        services.AddKeyedSingleton<IGroundworkTargetConnectionSource>(
+            target,
+            (_, key) => new GroundworkTargetConnectionSource(
+                (string)key,
+                ProviderIdentity,
+                () => new Microsoft.Data.SqlClient.SqlConnection(connectionString)));
         services.AddGroundworkTargetAdmission<SqlServerGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;

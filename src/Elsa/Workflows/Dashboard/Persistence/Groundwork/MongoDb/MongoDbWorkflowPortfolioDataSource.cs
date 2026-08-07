@@ -20,8 +20,16 @@ namespace Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
 /// </summary>
 public sealed class MongoDbWorkflowPortfolioDataSource(
     Func<IMongoDatabase> databaseFactory,
-    IPayloadSerializer payloadSerializer) : IWorkflowPortfolioDataSource
+    IPayloadSerializer payloadSerializer,
+    Func<IMongoDatabase>? runtimeDatabaseFactory = null) : IWorkflowPortfolioDataSource
 {
+    /// <summary>
+    /// Upper bound on published definition ids read from the runtime database when the lanes are split.
+    /// One row per published definition, so this is catalog scale; exceeding it is reported rather than
+    /// silently truncating a count.
+    /// </summary>
+    private const int SplitPublishedIdLimit = 100_000;
+
     private const string DefinitionIdPath = "content.entity.id";
     private const string DefinitionTenantIdPath = "content.entity.tenantId";
     private const string DefinitionDeletedAtPath = "content.entity.deletedAt";
@@ -55,7 +63,10 @@ public sealed class MongoDbWorkflowPortfolioDataSource(
         var definitions = database.GetCollection<BsonDocument>(DefinitionsCollectionName);
         var drafts = database.GetCollection<BsonDocument>(DraftsCollectionName);
 
-        var (activeCount, publishedCount) = await QueryActiveAndPublishedCountsAsync(definitions, tenantId, asOf, cancellationToken);
+        // A $lookup cannot reach a collection in another database, so a split host correlates in memory.
+        var (activeCount, publishedCount) = runtimeDatabaseFactory is null
+            ? await QueryActiveAndPublishedCountsAsync(definitions, tenantId, asOf, cancellationToken)
+            : await QueryActiveAndPublishedCountsAcrossTargetsAsync(definitions, tenantId, asOf, cancellationToken);
         var unpublishedDraftCount = await QueryUnpublishedDraftCountAsync(drafts, tenantId, cancellationToken);
 
         return new(activeCount, publishedCount, unpublishedDraftCount);
@@ -110,6 +121,97 @@ public sealed class MongoDbWorkflowPortfolioDataSource(
                 yield return portfolioDocument.Entity;
             }
         }
+    }
+
+    /// <summary>
+    /// Counts active definitions on the design database and intersects them with the published references
+    /// read from the runtime database.
+    /// </summary>
+    private async Task<(int ActiveCount, int PublishedCount)> QueryActiveAndPublishedCountsAcrossTargetsAsync(
+        IMongoCollection<BsonDocument> definitions,
+        string tenantId,
+        DateTimeOffset asOf,
+        CancellationToken cancellationToken)
+    {
+        var activeIds = new HashSet<string>(StringComparer.Ordinal);
+        using (var cursor = await definitions.FindAsync(
+            new BsonDocument
+            {
+                [DefinitionTenantIdPath] = tenantId,
+                [DefinitionDeletedAtPath] = BsonNull.Value
+            },
+            new FindOptions<BsonDocument, BsonDocument>
+            {
+                Projection = new BsonDocument { ["_id"] = 0, [DefinitionIdPath] = 1 }
+            },
+            cancellationToken))
+        {
+            while (await cursor.MoveNextAsync(cancellationToken))
+            {
+                foreach (var document in cursor.Current)
+                {
+                    var id = ReadDefinitionId(document);
+                    if (id is not null)
+                        activeIds.Add(id);
+                }
+            }
+        }
+
+        if (activeIds.Count == 0)
+            return (0, 0);
+
+        var references = runtimeDatabaseFactory!().GetCollection<BsonDocument>(ReferencesCollectionName);
+        var published = 0;
+        var seen = 0;
+        using (var cursor = await references.FindAsync(
+            new BsonDocument("$and", new BsonArray(BuildPublishedReferenceFilters(asOf))),
+            new FindOptions<BsonDocument, BsonDocument>
+            {
+                Projection = new BsonDocument { ["_id"] = 0, [ReferenceDefinitionIdPath] = 1 }
+            },
+            cancellationToken))
+        {
+            var matched = new HashSet<string>(StringComparer.Ordinal);
+            while (await cursor.MoveNextAsync(cancellationToken))
+            {
+                foreach (var document in cursor.Current)
+                {
+                    if (++seen > SplitPublishedIdLimit)
+                    {
+                        throw new InvalidOperationException(
+                            $"The workflow portfolio read more than {SplitPublishedIdLimit} published " +
+                            "definition references from the runtime target. Correlating the lanes in memory " +
+                            "is only viable at catalog scale; co-locate the design and runtime targets.");
+                    }
+
+                    var id = ReadReferenceDefinitionId(document);
+                    if (id is not null && activeIds.Contains(id))
+                        matched.Add(id);
+                }
+            }
+
+            published = matched.Count;
+        }
+
+        return (activeIds.Count, published);
+    }
+
+    private static string? ReadDefinitionId(BsonDocument document) => ReadPath(document, DefinitionIdPath);
+
+    private static string? ReadReferenceDefinitionId(BsonDocument document) =>
+        ReadPath(document, ReferenceDefinitionIdPath);
+
+    private static string? ReadPath(BsonDocument document, string dottedPath)
+    {
+        BsonValue current = document;
+        foreach (var segment in dottedPath.Split('.'))
+        {
+            if (current is not BsonDocument nested || !nested.TryGetValue(segment, out var next))
+                return null;
+            current = next;
+        }
+
+        return current.IsString ? current.AsString : null;
     }
 
     private static async Task<(int ActiveCount, int PublishedCount)> QueryActiveAndPublishedCountsAsync(
@@ -211,6 +313,26 @@ public sealed class MongoDbWorkflowPortfolioDataSource(
             })
         }))),
         new("$limit", 1)
+    ];
+
+    /// <summary>
+    /// The same liveness predicate as <see cref="BuildPublishedReferenceMatchPipeline"/>, expressed as plain
+    /// filters for the split path where there is no correlated <c>$$definitionId</c> to match against: the
+    /// definition-id intersection happens in memory instead.
+    /// </summary>
+    private static BsonDocument[] BuildPublishedReferenceFilters(DateTimeOffset asOf) =>
+    [
+        new(ReferenceScopePath, (int)WorkflowExecutableReferenceScope.Published),
+        new(ReferenceDeletedAtPath, BsonNull.Value),
+        new("$or", new BsonArray
+        {
+            new BsonDocument(ReferenceExpiresAtPath, BsonNull.Value),
+            new BsonDocument("$expr", new BsonDocument("$gt", new BsonArray
+            {
+                new BsonDocument("$toDate", "$" + ReferenceExpiresAtPath),
+                asOf.UtcDateTime
+            }))
+        })
     ];
 
     private sealed record PortfolioDraftDocument(

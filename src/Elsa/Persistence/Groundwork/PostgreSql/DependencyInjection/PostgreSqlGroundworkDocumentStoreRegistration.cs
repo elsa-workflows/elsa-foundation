@@ -51,6 +51,13 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             serviceProvider.GetService<ILogger<PostgreSqlGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<PostgreSqlGroundworkDocumentStoreInitializer>.Instance,
             serviceProvider.GetRequiredKeyedService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>(key)));
+        // Aggregate dashboard reads query the physical tables directly and need this target's connection.
+        services.AddKeyedSingleton<IGroundworkTargetConnectionSource>(
+            target,
+            (_, key) => new GroundworkTargetConnectionSource(
+                (string)key,
+                ProviderIdentity,
+                () => new Npgsql.NpgsqlConnection(connectionString)));
         services.AddGroundworkTargetAdmission<PostgreSqlGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;
