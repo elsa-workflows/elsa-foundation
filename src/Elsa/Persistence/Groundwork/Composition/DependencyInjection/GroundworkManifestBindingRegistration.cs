@@ -25,6 +25,8 @@ public static class GroundworkManifestBindingRegistration
 
         var created = new GroundworkManifestBindings();
         services.AddSingleton(created);
+        // Cross-lane operations ask which target a lane landed on; everything else is handed its store.
+        services.TryAddSingleton<GroundworkLaneTargets>();
         return created;
     }
 

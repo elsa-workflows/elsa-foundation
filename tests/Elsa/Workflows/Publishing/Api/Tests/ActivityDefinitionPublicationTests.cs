@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
 using System.Security.Cryptography;
@@ -1805,7 +1806,10 @@ public sealed class ActivityDefinitionPublicationTests
                     publications,
                     projection,
                     managementProjection,
-                    new PublishingGroundworkDocumentSerializer()),
+                    new PublishingGroundworkDocumentSerializer(),
+                    // No lane is bound to a named target here, so design, runtime and publishing all
+                    // resolve to the default one and the atomic cross-lane commit is admissible.
+                    new GroundworkLaneTargets(new GroundworkManifestBindings())),
                 commit);
         }
 
