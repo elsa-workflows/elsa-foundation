@@ -22,6 +22,7 @@ public sealed class ActivitiesBpmnFeatureTests
         var structureHandler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
         Assert.Equal(Activities.BpmnProcess.StructureKind, structureHandler.Kind);
         Assert.True(structureHandler.SupportsScopedVariables);
+        Assert.Equal(typeof(Models.BpmnAuthoredStructure), structureHandler.AuthoredPayloadType);
 
         var registry = provider.GetRequiredService<IBpmnBehaviorRegistry>();
         foreach (var family in new[]

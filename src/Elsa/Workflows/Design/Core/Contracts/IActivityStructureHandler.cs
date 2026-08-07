@@ -20,6 +20,13 @@ public interface IActivityStructureHandler
     /// </summary>
     bool SupportsScopedVariables => false;
 
+    /// <summary>
+    /// The CLR model type of the authored structure payload for this kind/schema-version, used by
+    /// the design API to publish a JSON Schema per structure kind so headless clients can author
+    /// payloads without reverse-engineering them. <c>null</c> keeps the payload opaque/undocumented.
+    /// </summary>
+    Type? AuthoredPayloadType => null;
+
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>

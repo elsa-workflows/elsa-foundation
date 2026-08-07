@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 152
 - Test projects: 98
-- Direct project references: 1228
+- Direct project references: 1229
 
 ## Projects
 
@@ -18,7 +18,7 @@ Records direct project references only.
 | [Elsa.Activities.Bpmn](../../src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Bpmn.Interchange](../../src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Bpmn<br>Elsa.Api.FastEndpoints<br>Elsa.Workflows.Design.Core |
 | [Elsa.Activities.ControlFlow](../../src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.Capabilities<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Mediator.Core |
+| [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.Capabilities<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Persistence.Core](../../src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Serialization.Core |

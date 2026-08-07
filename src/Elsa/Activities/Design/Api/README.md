@@ -23,6 +23,8 @@ Catalog and read operations use `activity-design.read`; management operations us
 
 The default catalog returns addable activities. `availability=all` is the diagnostic/administrative view and includes unavailable entries with their reason; it does not change availability.
 
+Catalog items and version details carry a `provenance` object (`sourceKind`, `sourceId`, `featureId`) identifying the reconciliation source that contributed the definition version and — for CLR-provided activities — the shell feature that provides the activity type (issue #1164). `featureId` is resolved best-effort at read time (`activityTypeKey` → well-known type registry → assembly → runtime feature catalog) and is `null` for non-CLR rows or when attribution is unavailable; a non-null `featureId` may name a feature that is not enabled in the current composition, which is the "enable feature X to use this activity" signal for headless clients. Built-in engine intrinsics have no provenance.
+
 ## Extension points
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/EXTENSION_POINTS.md).

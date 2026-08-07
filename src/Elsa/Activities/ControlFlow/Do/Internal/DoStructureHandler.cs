@@ -24,6 +24,8 @@ internal sealed class DoStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => DoActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(DoAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);

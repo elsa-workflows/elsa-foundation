@@ -15,5 +15,9 @@ public sealed record ActivityDefinitionVersionDetailsView(
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,
     IEnumerable<ActivityDesignFacet>? DesignFacets,
-    ActivityExecutionType ExecutionType
+    ActivityExecutionType ExecutionType,
+    // Source provenance persisted on the version row, plus the best-effort providing shell feature id
+    // for CLR-backed versions (see ActivityAuthoringProvenanceView). Trailing optional keeps the
+    // positional construction surface additive.
+    ActivityAuthoringProvenanceView? Provenance = null
 );

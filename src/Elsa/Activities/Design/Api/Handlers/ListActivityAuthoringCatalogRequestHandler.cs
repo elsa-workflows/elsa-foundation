@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
@@ -16,7 +17,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
     IActivityDefinitionVersionStore versionStore,
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
-    IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders)
+    IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders,
+    IActivityFeatureAttributionResolver featureAttributionResolver)
     : IRequestHandler<ListActivityAuthoringCatalog, ActivityAuthoringCatalogView>
 {
     public async Task<ActivityAuthoringCatalogView> Handle(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
@@ -29,14 +31,26 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             .Select(x => x.ActivityTypeKey)
             .ToHashSet(StringComparer.Ordinal);
 
-        var persisted = versions
+        var persistedItems = versions
             .Where(version => definitionsById.ContainsKey(version.DefinitionId))
             .Select(version => (Version: version, Definition: definitionsById[version.DefinitionId]))
             .Where(item => request.Availability == ActivityCatalogAvailability.All || addableKeys.Contains(item.Definition.ActivityTypeKey))
             .OrderBy(item => item.Definition.Category, StringComparer.Ordinal)
             .ThenBy(item => item.Definition.DisplayName, StringComparer.Ordinal)
             .ThenBy(item => item.Version.Id, StringComparer.Ordinal)
-            .Select(item => ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey)));
+            .ToArray();
+
+        var persisted = new List<ActivityAuthoringDescriptorView>(persistedItems.Length);
+        foreach (var item in persistedItems)
+        {
+            // Feature attribution is only meaningful for CLR-backed versions: their activity type key is
+            // a well-known type alias that resolves to the providing feature's assembly. Other consumers
+            // (e.g. graph activities) keep source provenance but carry no feature id.
+            var featureId = string.Equals(item.Version.ConsumerKey, ActivityProvenanceConstants.ClrActivityConsumerKey, StringComparison.Ordinal)
+                ? await featureAttributionResolver.ResolveProvidingFeatureAsync(item.Definition.ActivityTypeKey, cancellationToken)
+                : null;
+            persisted.Add(ToView(item.Version, item.Definition, addableKeys.Contains(item.Definition.ActivityTypeKey), featureId));
+        }
 
         // Built-in engine intrinsics (Set Variable, Set Output, …) are code-owned and always addable: they
         // have no persisted catalog row and are never gated by the availability policy.
@@ -51,7 +65,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
     private static ActivityAuthoringDescriptorView ToView(
         Persistence.Core.Entities.ActivityDefinitionVersion version,
         Persistence.Core.Entities.ActivityDefinition definition,
-        bool available)
+        bool available,
+        string? featureId)
     {
         if (!ActivityStructureDesignFacetReader.TryReadSingle(version.DesignFacets, out var structureFacet))
             throw new InvalidOperationException(
@@ -79,7 +94,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
                 version.Id,
                 new Dictionary<string, ActivityArgumentValue>(StringComparer.Ordinal),
                 new Dictionary<string, ActivityArgumentValue>(StringComparer.Ordinal),
-                structure));
+                structure),
+            Provenance: new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, featureId));
     }
 
     private static ActivityInputDescriptorView ToView(InputDefinition input) =>

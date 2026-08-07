@@ -18,5 +18,6 @@ public sealed class ActivitiesSequenceFeatureTests
         var handler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
         Assert.Equal(global::Elsa.Activities.Sequence.Activities.Sequence.StructureKind, handler.Kind);
         Assert.Equal(global::Elsa.Activities.Sequence.Activities.Sequence.StructureSchemaVersion, handler.SchemaVersion);
+        Assert.Equal(typeof(Models.SequenceAuthoredStructure), handler.AuthoredPayloadType);
     }
 }

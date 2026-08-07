@@ -162,3 +162,16 @@ environment other than `Development` (e.g. the unedited default deployed to Prod
 at startup** with an actionable message rather than silently booting the insecure posture (ephemeral keys +
 the administrator seeded from the committed dev credentials). There is no insecure escape hatch in production — set
 `IsDevelopmentOrDemo = false` (and configure real keys) for any non-Development deployment.
+
+### Environment overlays override `shells.json`
+
+`Elsa.Workbench` layers `shells.{Environment}.json` **on top of** `shells.json` (see `Program.cs`), and the
+shipped `shells.Production.json` resets `IsDevelopmentOrDemo` to `false` for both identity features. In a
+container the default environment is `Production`, so editing (or mounting) `shells.json` with
+`"IsDevelopmentOrDemo": true` has **no effect** — the overlay wins, the flag is `false`, and with no signing
+key configured every request that touches token issuance or validation fails with the
+"No signing key is configured for the OpenIddict identity module" error. This is why the same image behaves
+differently under `ASPNETCORE_ENVIRONMENT=Development` (no `shells.Development.json` exists, so the
+`shells.json` value survives — and the Development environment also satisfies the startup guard above). For a
+non-Development demo host, don't chase the flag: configure a real `SigningKey` per the go-live checklist. For
+a throwaway local demo, run the container with `ASPNETCORE_ENVIRONMENT=Development`.

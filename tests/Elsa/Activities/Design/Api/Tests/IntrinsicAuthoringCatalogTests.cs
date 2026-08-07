@@ -131,7 +131,8 @@ public sealed class IntrinsicAuthoringCatalogTests
             new EmptyVersionStore(),
             new NoneAddableEvaluator(),
             new NullSettingsStore(),
-            [_provider]);
+            [_provider],
+            new NullFeatureAttributionResolver());
 
         var view = await handler.Handle(new ListActivityAuthoringCatalog(), CancellationToken.None);
 
@@ -173,5 +174,10 @@ public sealed class IntrinsicAuthoringCatalogTests
     {
         public Task<ActivityAvailabilitySettings?> LoadAsync(string scope, CancellationToken cancellationToken = default) => Task.FromResult<ActivityAvailabilitySettings?>(null);
         public Task SaveAsync(ActivityAvailabilitySettings settings, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class NullFeatureAttributionResolver : Contracts.IActivityFeatureAttributionResolver
+    {
+        public ValueTask<string?> ResolveProvidingFeatureAsync(string activityTypeKey, CancellationToken cancellationToken) => ValueTask.FromResult<string?>(null);
     }
 }

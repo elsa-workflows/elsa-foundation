@@ -16,7 +16,9 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// OpenIddict requires an asymmetric signing key, so access tokens are RS256-signed:
 /// <list type="bullet">
 /// <item><b>Development/demo</b> (no key configured + <see cref="OpenIddictIdentityOptions.IsDevelopmentOrDemo"/>):
-/// a stable per-process ephemeral RSA key — tokens simply do not survive a restart.</item>
+/// a stable per-process ephemeral RSA key — tokens simply do not survive a restart. This resolution is
+/// environment-blind by design; the Development-environment requirement for the flag is enforced separately by
+/// the startup <c>DevelopmentOrDemoGuard</c>, which refuses the flag outside Development.</item>
 /// <item><b>Production</b>: <see cref="OpenIddictIdentityOptions.SigningKey"/> (falling back to
 /// <see cref="FoundationIdentityOptions.SigningKey"/>) must hold a base64-encoded PKCS#8 RSA private key.</item>
 /// </list>
@@ -84,8 +86,12 @@ internal sealed class ConfigureOpenIddictServerOptions(
 
         throw new InvalidOperationException(
             "No signing key is configured for the OpenIddict identity module. Set OpenIddictIdentityOptions.SigningKey " +
-            "(or FoundationIdentityOptions.SigningKey) to a base64-encoded PKCS#8 RSA private key, or enable " +
-            "IsDevelopmentOrDemo to use an ephemeral development key.");
+            "(or FoundationIdentityOptions.SigningKey) to a base64-encoded PKCS#8 RSA private key. For local " +
+            "development/demo only, IsDevelopmentOrDemo = true uses an ephemeral development key instead — but that " +
+            "flag is honored only when the host runs with ASPNETCORE_ENVIRONMENT=Development (the DevelopmentOrDemoGuard " +
+            "refuses it elsewhere), and environment-specific configuration overlays (e.g. shells.Production.json " +
+            "layered over shells.json) may reset it to false. Check the effective configuration for the environment " +
+            "the host actually runs in.");
     }
 
     private static byte[] ResolveEncryptionKey(string? material, bool isDevelopmentOrDemo)
@@ -98,6 +104,10 @@ internal sealed class ConfigureOpenIddictServerOptions(
 
         throw new InvalidOperationException(
             "No encryption key is configured for the OpenIddict identity module. Set OpenIddictIdentityOptions.EncryptionKey " +
-            "or a signing key to derive it from, or enable IsDevelopmentOrDemo to use an ephemeral development key.");
+            "or a signing key to derive it from. For local development/demo only, IsDevelopmentOrDemo = true uses an " +
+            "ephemeral development key instead — but that flag is honored only when the host runs with " +
+            "ASPNETCORE_ENVIRONMENT=Development (the DevelopmentOrDemoGuard refuses it elsewhere), and " +
+            "environment-specific configuration overlays (e.g. shells.Production.json layered over shells.json) may " +
+            "reset it to false.");
     }
 }

@@ -24,6 +24,8 @@ internal sealed class ForEachStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => ForEachActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(ForEachAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);

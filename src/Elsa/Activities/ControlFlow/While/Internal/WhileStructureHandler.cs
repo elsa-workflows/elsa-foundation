@@ -24,6 +24,8 @@ internal sealed class WhileStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => WhileActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(WhileAuthoredStructure);
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);
