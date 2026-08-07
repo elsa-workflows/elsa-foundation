@@ -1,4 +1,12 @@
-# syntax=docker/dockerfile:1.20
+# syntax=docker/dockerfile:1.26
+# Keep this pin within a few releases of the BuildKit that docker/github-builder
+# runs (currently moby/buildkit v0.32.2). BuildKit negotiates capabilities with
+# the frontend, so a frontend older than the daemon fails the build outright:
+# 1.20 (2025-11) predates the source.git.fetchbycommit capability added in
+# 2026-04, and every CI build died with "unknown API capability
+# source.git.fetchbycommit" while parsing this file. Local builds do not
+# reproduce it -- only Buildx >= v0.36 sends the git query that makes the
+# frontend ask for that capability.
 
 # =============================================================================
 # Elsa.Workbench container image (development and demo host, not the shipped product)
