@@ -166,6 +166,40 @@ public sealed class ProtocolAndGateTests
             GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds);
     }
 
+    /// <summary>
+    /// The counterpart to the test above: the ratified bounded-read ceiling binds nothing, because
+    /// <c>DefaultFor</c> keys on gate class rather than workload. That is a recorded gap awaiting a
+    /// ratification decision (#1176), not a live gate, so it is pinned rather than fixed here — wiring it
+    /// fails this test, which is the point: the constant's documentation must be corrected in the same
+    /// change that makes it enforce something.
+    /// </summary>
+    [Fact]
+    public void Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path()
+    {
+        var review = new GateReview("w", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+        double?[] ceilings =
+        [
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds,
+            GatePolicy.DefaultFor(GateClass.OrdinaryStore).MaxP95Milliseconds,
+            GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review).MaxP95Milliseconds
+        ];
+
+        Assert.DoesNotContain(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, ceilings);
+
+        // Behavior alone would miss a workload-aware overload added alongside the existing one, so also
+        // hold the harness to referencing the constant nowhere but its own declaration.
+        var references = Directory
+            .EnumerateFiles(
+                Path.Combine(Repository.Root(), "benchmarks", "Elsa.Groundwork.StorePerformance.Benchmarks"),
+                "*.cs",
+                SearchOption.AllDirectories)
+            .SelectMany(File.ReadAllLines)
+            .Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
+            .Count(line => line.Contains(nameof(GatePolicy.RatifiedBoundedReadPathP95Milliseconds), StringComparison.Ordinal));
+
+        Assert.Equal(1, references);
+    }
+
     [Fact]
     public void Reviewed_replacement_inherits_the_ceiling_when_the_policy_file_omits_it()
     {

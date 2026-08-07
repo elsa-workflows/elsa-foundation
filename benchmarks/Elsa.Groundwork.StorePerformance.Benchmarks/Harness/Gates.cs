@@ -16,14 +16,29 @@ public sealed record GateReview(string WorkloadId, string WorkloadVersion, strin
 /// </summary>
 public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double MinThroughputRatio, double MaxP99Ratio, GateReview? Review, double? MaxP95Milliseconds = null)
 {
-    /// <summary>Ratified 2026-08-04: durable write path 150 ms p95, bounded read path 40 ms p95.</summary>
+    /// <summary>Ratified 2026-08-04 for the durable write path. This is the only ceiling any construction
+    /// path applies; see the bounded-read constant below for the one that does not.</summary>
     public const double RatifiedDurableWritePathP95Milliseconds = 150d;
+
+    /// <summary>
+    /// Ratified 2026-08-04 for the five bounded-read runtime workloads — bookmark-lookup, recovery-scan,
+    /// due-timer-selection, recurring-schedule-selection, trigger-binding-stimulus-lookup — and
+    /// <b>enforced by nothing</b>. <see cref="DefaultFor"/> keys on <see cref="GateClass"/>, not on
+    /// workload, so those five carry the 150 ms durable-write ceiling instead: 3.75x looser than ratified.
+    /// A bounded read regressing from 5 ms to 140 ms passes the default gate. Only a reviewed policy file
+    /// naming the value per workload (<see cref="Replacement"/>) enforces it today.
+    /// Whether to wire this or supersede it once measured per-workload ceilings land is an open
+    /// ratification decision — issue #1176, and the "the bounded-read ceiling is not enforced" correction
+    /// in specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md. Do not read this
+    /// declaration as a live gate.
+    /// </summary>
     public const double RatifiedBoundedReadPathP95Milliseconds = 40d;
 
     /// <summary>
-    /// The runtime hot path carries the ratified absolute ceiling as well as its ratios. Leaving it unset
-    /// would let a workload inside its relative comparison sail past the latency budget the ceiling
-    /// exists to enforce.
+    /// The runtime hot path carries an absolute ceiling as well as its ratios. Leaving it unset would let a
+    /// workload inside its relative comparison sail past the latency budget the ceiling exists to enforce.
+    /// The ceiling applied is the durable-write one for <i>every</i> runtime workload, bounded reads
+    /// included; this method has no workload argument to distinguish them.
     /// </summary>
     public static GatePolicy DefaultFor(GateClass gateClass) => gateClass == GateClass.RuntimeHotPath
         ? new(gateClass, 1.10, .90, 2.0, null, RatifiedDurableWritePathP95Milliseconds)
