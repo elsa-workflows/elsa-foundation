@@ -14,5 +14,11 @@ namespace Elsa.Studio.Preferences.Persistence.Groundwork;
     DependsOn = new object[] { "StudioPreferences" })]
 public sealed class StudioPreferencesGroundworkPersistenceFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkStudioPreferences();
+    [ManifestSetting(
+        DisplayName = "Target",
+        Description = "The Groundwork target this lane's documents live in. Defaults to 'default'.",
+        Category = "Persistence")]
+    public string? Target { get; set; }
+
+    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkStudioPreferences(Target);
 }

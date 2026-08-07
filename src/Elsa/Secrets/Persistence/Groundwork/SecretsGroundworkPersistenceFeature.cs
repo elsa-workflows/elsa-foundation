@@ -15,5 +15,11 @@ namespace Elsa.Secrets.Persistence.Groundwork;
 )]
 public class SecretsGroundworkPersistenceFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkSecretsStore();
+        [ManifestSetting(
+        DisplayName = "Target",
+        Description = "The Groundwork target this lane's documents live in. Defaults to 'default'.",
+        Category = "Persistence")]
+    public string? Target { get; set; }
+
+    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkSecretsStore(Target);
 }
