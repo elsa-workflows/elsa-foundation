@@ -25,6 +25,7 @@ public sealed class ActivitiesFlowchartFeatureTests
         var handler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
         Assert.Equal(global::Elsa.Activities.Flowchart.Activities.Flowchart.StructureKind, handler.Kind);
         Assert.Equal(global::Elsa.Activities.Flowchart.Activities.Flowchart.StructureSchemaVersion, handler.SchemaVersion);
+        Assert.Equal(typeof(FlowchartAuthoredStructure), handler.AuthoredPayloadType);
     }
 
     [Fact]

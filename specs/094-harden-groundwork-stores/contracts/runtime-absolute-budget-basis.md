@@ -156,16 +156,54 @@ the ledger schema already supports the value.
 
 Small, and mostly additive:
 
-1. **`PerformanceVerdict` has no `NotHotPath` member** (`Harness/Gates.cs`) while the ledger schema's
-   `performanceVerdict.outcome` enum does. Either add it, or record those rows by hand with a review
-   reference. Adding it is cleaner and keeps the harness the single writer.
-2. **`GatePolicy` needs an absolute ceiling alongside the ratios** for Tier B — one nullable
-   `MaxP95Milliseconds`, evaluated the same way the ratio rows already are, so `GateRow` gains one column.
-3. **The artifact manifest needs a comparand-identity field** for Tier C so a generation-over-generation
-   run is distinguishable from an EF-oracle run in retained evidence. Without it the two are
-   indistinguishable after the fact, which would be a provenance defect.
+1. ~~**`PerformanceVerdict` has no `NotHotPath` member**~~ **— DONE.** The member exists
+   (`Harness/Gates.cs:9`). *Caveat:* `GateEvaluator` still only emits `Pass`, `Redesign` and `Blocked`, so
+   nothing produces it yet; the three `pass-or-reviewed-not-hot-path` rows still need a hand-authored
+   verdict carrying a review reference.
+2. ~~**`GatePolicy` needs an absolute ceiling alongside the ratios**~~ **— DONE.** `MaxP95Milliseconds` is
+   a nullable field on `GatePolicy`, inherited by `Replacement` when omitted, and evaluated alongside the
+   ratios in `GateEvaluator.Evaluate`, which adds it to `GateRow`.
+3. **The artifact manifest needs a comparand-identity field** for Tier C — **still open, and larger than
+   this line implies.** See the correction below.
 
-Tiers A and C need no gate-logic changes at all; Tier B needs one field and one comparison.
+~~Tiers A and C need no gate-logic changes at all;~~ Tier B needs one field and one comparison — that
+field now exists.
+
+### Correction (2026-08-06): Tier C is not "no gate-logic changes"
+
+The claim in **The core insight** that the existing machinery "works exactly as-is if the denominator is
+the last accepted generation of Groundwork itself" **does not hold against the code.**
+`Comparison.Compare` (`Harness/ArtifactsAndMatrix.cs:498-511`) requires all eight artifacts to share one
+comparison cohort, one machine environment, and — decisively —
+
+```csharp
+if (source.CommitSha != candidate.CommitSha)
+    return Blocked(..., "Oracle and target do not share exact commit provenance.");
+```
+
+A generation-over-generation comparison has two commits by definition, so **every Tier C run returns
+`Blocked` today**. Tier C therefore needs a real change to the comparison contract (a comparand-identity
+concept that admits two commits while keeping the machine and workload bindings), not just a manifest
+field. Until that lands, the only legal comparison at one commit is between two **physical forms** — and
+the form labels in the workload JSON (`shared-documents-with-linked-index-tables`,
+`document-type-specific-tables`, …) have no binding in `src/`; Groundwork ships one shape per store.
+
+Consequence for the sunset condition: the first production-provider run can populate **Tier B ceilings**
+(which need only one measurement set — median-of-three p95 × 3) but **cannot** produce a
+`performanceVerdict`, because a verdict requires a comparison. Those are separable, and only the first is
+reachable now.
+
+### Correction (2026-08-06): the bounded-read ceiling is not enforced
+
+`RatifiedBoundedReadPathP95Milliseconds` (40 ms) is referenced nowhere but its own declaration.
+`GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applies the 150 ms **durable-write** ceiling to *every*
+runtime workload, including the five bounded-read workloads this document assigns 40 ms. A bounded read
+regressing from 5 ms to 140 ms passes the default gate silently.
+
+Recommended resolution is to **supersede rather than wire**: once per-workload measured ceilings land in
+reviewed policy files, both class constants are dead by design, and making `DefaultFor(GateClass)`
+workload-aware would change its signature and every call site only to enforce a provisional number the
+sunset condition already retires. Recorded here so the gap is not mistaken for a live gate.
 
 ## Field evidence for the shape: Tier A's own gate flakes
 

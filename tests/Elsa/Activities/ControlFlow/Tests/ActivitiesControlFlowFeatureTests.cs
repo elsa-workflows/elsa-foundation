@@ -42,4 +42,10 @@ public sealed class ActivitiesControlFlowFeatureTests
         var handler = Assert.Single(_handlers, h => h.Kind == kind);
         Assert.Equal(schemaVersion, handler.SchemaVersion);
     }
+
+    [Fact]
+    public void EveryControlFlowStructureHandler_ExposesAnAuthoredPayloadTypeForSchemaPublication()
+    {
+        Assert.All(_handlers, handler => Assert.NotNull(handler.AuthoredPayloadType));
+    }
 }

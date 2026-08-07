@@ -7,6 +7,22 @@ name: Docker Image
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
+#
+# POLICY DEPENDENCY: the job below calls a reusable workflow from another
+# organization, so elsa-workflows must allow-list it under
+# Settings -> Actions -> General -> "Allow specified actions and reusable
+# workflows" (the list is set at the org level, so a repository admin cannot
+# change it here):
+#
+#   docker/github-builder/.github/workflows/*@*
+#
+# The directory glob is deliberate: build.yml calls a second workflow,
+# setup-registry-identities.yml, at a ref that moves with upstream releases,
+# and both must match. Without the entry every run ends in startup_failure
+# with no jobs and no logs -- `gh run view` only reports the generic
+# "workflow file issue", and the real message is on the run's web page.
+# Allowing Marketplace verified creators does NOT cover this: that setting
+# applies to actions, not to reusable workflows.
 
 on:
   push:
@@ -30,7 +46,13 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & push elsa-workbench
-    uses: docker/github-builder/.github/workflows/build.yml@v1
+    # Pinned to an exact release, not the floating @v1. This workflow pins the
+    # BuildKit and Buildx versions the build runs on, and a frontend older than
+    # that BuildKit fails the build outright -- see the `# syntax=` pin in
+    # src/Apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # release moves BuildKit under us and breaks main with no change of ours;
+    # pinned, that becomes a deliberate bump where both pins move together.
+    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
       id-token: write

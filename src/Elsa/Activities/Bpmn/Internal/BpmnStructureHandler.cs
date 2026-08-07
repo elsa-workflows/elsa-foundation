@@ -15,6 +15,8 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => BpmnProcessActivity.StructureSchemaVersion;
 
+    public Type AuthoredPayloadType => typeof(BpmnAuthoredStructure);
+
     public bool SupportsScopedVariables => true;
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)

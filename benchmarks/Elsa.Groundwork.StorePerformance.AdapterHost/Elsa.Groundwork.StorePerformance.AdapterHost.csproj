@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The adapter child host the #646 matrix runner spawns. The harness project deliberately ships no
+    adapter ("a missing adapter is a blocked run, never a simulated result"), so this is the leaf that
+    binds real Groundwork provider drivers to the frozen workload contracts.
+
+    It lives under benchmarks/ rather than tests/ because it is a measurement instrument, not a test
+    project, and because ArchitectureGuardTests.ProjectFiles() enumerates only src/ and tests/. The
+    reference to the Groundwork provider-driver library under tests/ is deliberate and has precedent in
+    benchmarks/Elsa/Workflows/Runtime/Benchmarks: the benchmark must run against the *same* containers,
+    pinned images and physical target that produce the Spec 094 conformance evidence, or the numbers do
+    not describe the system the evidence describes.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <AssemblyName>Elsa.Groundwork.StorePerformance.AdapterHost</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+    <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
+  </ItemGroup>
+</Project>

@@ -64,7 +64,11 @@ public sealed class ActivityAuthoringCatalogTests
             "Outputs",
             "Ports",
             "ContainerStructure",
-            "AuthoringTemplate");
+            "AuthoringTemplate",
+            "Provenance");
+
+        var provenance = descriptor.GetProperty("Provenance")!.PropertyType;
+        AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
         AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable");
@@ -122,6 +126,7 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.Contains("Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore", dependencies);
         Assert.Contains("Elsa.Activities.Design.Core.Contracts.IActivityAvailabilityEvaluator", dependencies);
         Assert.Contains("Elsa.Activities.Design.Core.Stores.IActivityAvailabilitySettingsStore", dependencies);
+        Assert.Contains("Elsa.Activities.Design.Api.Contracts.IActivityFeatureAttributionResolver", dependencies);
     }
 
     private static BaseEndpoint FindCatalogEndpoint()

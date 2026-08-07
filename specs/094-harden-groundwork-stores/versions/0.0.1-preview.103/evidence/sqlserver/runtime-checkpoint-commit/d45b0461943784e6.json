@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "failureWindow:during-provider-decision",
+  "sourceScenarioId": "runtime-checkpoint-failure-recovery",
+  "coverageEntryId": "runtime-checkpoint-commit",
+  "provider": "sqlserver",
+  "providerIdentity": "groundwork-sqlserver",
+  "providerVersion": "0.0.1-preview.103",
+  "topology": "real-sqlserver-container",
+  "manifestFingerprint": "3f0b554708a04a0885ccbaec288af077cb9b41373269fa0f9f293eb39ea11adb",
+  "executionPath": "provider-driver/sqlserver/runtime-checkpoint-failure-recovery/3f0b554708a04a08",
+  "clients": 2,
+  "resultHash": "8c85c13211cebcec0bbd5a1419bbe7ff8c718cf88e8b2b8bbfea6939a7dcc911",
+  "observations": [
+    {
+      "name": "committed-bundle-count",
+      "value": "1"
+    },
+    {
+      "name": "partial-bundle-count",
+      "value": "0"
+    },
+    {
+      "name": "recovered-state",
+      "value": "initial-complete-count:1;recovered-complete-count:1"
+    }
+  ],
+  "outcome": "pass",
+  "provenance": {
+    "elsaCommit": "78e64899684e61f7c02e9273829c16c014ddc446",
+    "elsaTree": "17acb4c7a3c90bddac7b89ef535b35aa714edec1",
+    "runIdentity": "runtime-checkpoint-fence-preview103"
+  },
+  "failureWindow": "during-provider-decision",
+  "evidence": "versions/0.0.1-preview.103/evidence/sqlserver/runtime-checkpoint-commit/d45b0461943784e6.json"
+}
