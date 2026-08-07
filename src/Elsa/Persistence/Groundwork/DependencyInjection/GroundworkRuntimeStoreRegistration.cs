@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
@@ -47,8 +48,7 @@ public static class GroundworkRuntimeStoreRegistration
 
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkWorkflowTestScopeStore));
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, RuntimeGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<RuntimeGroundworkStorageManifestSource>();
 
         // Replace the in-memory defaults registered by the runtime API feature. RemoveAll guarantees
         // the bridge wins regardless of feature composition order.

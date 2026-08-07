@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -30,10 +31,8 @@ public static class GroundworkActivitiesDesignStoreRegistration
     public static IServiceCollection AddGroundworkActivitiesDesignStores(this IServiceCollection services)
     {
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource>());
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
+        services.AddGroundworkManifestSource<ActivitiesDesignGroundworkStorageManifestSource>();
+        services.AddGroundworkManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>();
         services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
 
         services.RemoveAll<IActivityDefinitionStore>();

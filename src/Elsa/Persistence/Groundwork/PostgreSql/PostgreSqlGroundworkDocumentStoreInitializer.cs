@@ -58,14 +58,16 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
                     {
                         RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                     }),
-                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                GroundworkTargetManifestSources.ForTarget(scope.ServiceProvider, TargetName),
                 cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
                     capabilities,
                     PostgreSqlGroundworkCapabilities.PhysicalNames,
-                    cancellationToken);
+                    cancellationToken,
+                    targetCompiler: null,
+                    targetName: TargetName);
 
             var admission = await source.InspectRuntimeAdmissionAsync(
                 new PostgreSqlPhysicalSchemaExecutor(connectionString),

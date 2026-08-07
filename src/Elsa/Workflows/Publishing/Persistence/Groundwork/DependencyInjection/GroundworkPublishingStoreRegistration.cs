@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
@@ -28,8 +29,7 @@ public static class GroundworkPublishingStoreRegistration
         ArgumentNullException.ThrowIfNull(documentStoreFactory);
         ArgumentNullException.ThrowIfNull(boundedDocumentStoreFactory);
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, PublishingGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<PublishingGroundworkStorageManifestSource>();
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
         services.RemoveAll<IPublicationSlotStore>();
         services.AddScoped<IPublicationSlotStore>(sp => new GroundworkPublicationSlotStore(

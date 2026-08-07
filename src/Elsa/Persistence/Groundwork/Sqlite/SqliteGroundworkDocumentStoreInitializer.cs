@@ -88,14 +88,16 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     {
                         RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                     }),
-                scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+                GroundworkTargetManifestSources.ForTarget(scope.ServiceProvider, TargetName),
                 cancellationToken);
             var source = await scope.ServiceProvider
                 .GetRequiredService<GroundworkStorageCompositionFactory>()
                 .CreateSourceAsync(
                     capabilities,
                     SqliteGroundworkCapabilities.PhysicalNames,
-                    cancellationToken);
+                    cancellationToken,
+                    targetCompiler: null,
+                    targetName: TargetName);
 
             // Route through Groundwork's connection factory so the WAL/synchronous/busy-timeout pragmas apply
             // whenever admission actually touches the database. Keep the connection unopened here: a rejected

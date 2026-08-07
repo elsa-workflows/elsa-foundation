@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using CShells.Features;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Composition;
@@ -20,8 +21,7 @@ public class Elsa3ImportActivitiesGroundworkFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, Elsa3ImportGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<Elsa3ImportGroundworkStorageManifestSource>();
         services.TryAddScoped<GroundworkActivityManagementProjectionWriter>();
         services.RemoveAll<IReusableActivityImportOperationStore>();
         services.AddScoped<IReusableActivityImportOperationStore, GroundworkReusableActivityImportOperationStore>();

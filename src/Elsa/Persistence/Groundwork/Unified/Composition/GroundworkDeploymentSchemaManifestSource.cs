@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
@@ -151,19 +152,38 @@ internal sealed class GroundworkDeploymentSchemaSelection
             "Configure host naming through that deployment source only.");
     }
 
-    internal void EnsureExactDeclarations(IReadOnlyCollection<GroundworkStorageManifestDeclaration> declarations)
+    /// <summary>
+    /// Asserts that what a target composes at runtime is exactly what the deployment schema declares for
+    /// that target. The deployment source still enumerates the whole host, so the expected set is narrowed
+    /// by the same manifest bindings the runtime composition used: a target must admit every lane bound to
+    /// it and nothing else. On a single-target host this is the original whole-host equality check.
+    /// </summary>
+    internal void EnsureDeclarationsForTarget(
+        string targetName,
+        IReadOnlyCollection<GroundworkStorageManifestDeclaration> declarations,
+        IReadOnlyDictionary<string, string> targetsByFeature)
     {
+        ArgumentNullException.ThrowIfNull(declarations);
+        ArgumentNullException.ThrowIfNull(targetsByFeature);
+        var target = GroundworkTargetNames.Normalize(targetName);
+        var expected = Declarations
+            .Where(declaration => string.Equals(
+                targetsByFeature.GetValueOrDefault(declaration.FeatureIdentity, GroundworkTargetNames.Default),
+                target,
+                StringComparison.Ordinal))
+            .ToArray();
         var actual = declarations.OrderBy(declaration => declaration.FeatureIdentity, StringComparer.Ordinal).ToArray();
-        if (Declarations.Count == actual.Length && Declarations.All(expected =>
-                actual.Count(candidate => candidate.FeatureIdentity == expected.FeatureIdentity) == 1 &&
+        if (expected.Length == actual.Length && expected.All(item =>
+                actual.Count(candidate => candidate.FeatureIdentity == item.FeatureIdentity) == 1 &&
                 HasSameDefinition(
-                    expected,
-                    actual.Single(candidate => candidate.FeatureIdentity == expected.FeatureIdentity))))
+                    item,
+                    actual.Single(candidate => candidate.FeatureIdentity == item.FeatureIdentity))))
             return;
 
         throw new GroundworkStorageCompositionException(
-            $"Runtime Groundwork declarations do not match deployment schema source '{SourceType.FullName}'. " +
-            $"Expected [{string.Join(", ", Declarations.Select(item => item.FeatureIdentity))}]; " +
+            $"Runtime Groundwork declarations for target '{target}' do not match deployment schema source " +
+            $"'{SourceType.FullName}'. " +
+            $"Expected [{string.Join(", ", expected.Select(item => item.FeatureIdentity))}]; " +
             $"actual [{string.Join(", ", actual.Select(item => item.FeatureIdentity))}].");
     }
 
