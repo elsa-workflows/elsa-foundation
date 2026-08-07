@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Targets;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
 using System.Security.Cryptography;
@@ -1796,6 +1797,7 @@ public sealed class ActivityDefinitionPublicationTests
                 store,
                 new ImmediateLockProvider(),
                 documents);
+            var laneTargets = new GroundworkLaneTargets(new GroundworkManifestBindings());
             return new(
                 documents,
                 new(
@@ -1808,8 +1810,13 @@ public sealed class ActivityDefinitionPublicationTests
                     managementProjection,
                     new PublishingGroundworkDocumentSerializer(),
                     // No lane is bound to a named target here, so design, runtime and publishing all
-                    // resolve to the default one and the atomic cross-lane commit is admissible.
-                    new GroundworkLaneTargets(new GroundworkManifestBindings())),
+                    // resolve to the default one and the publication stays a single atomic commit.
+                    laneTargets,
+                    new GroundworkLaneStores(
+                        new ServiceCollection()
+                            .AddSingleton<IDocumentStore>(store)
+                            .BuildServiceProvider(),
+                        laneTargets)),
                 commit);
         }
 

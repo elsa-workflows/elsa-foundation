@@ -27,6 +27,10 @@ public static class GroundworkManifestBindingRegistration
         services.AddSingleton(created);
         // Cross-lane operations ask which target a lane landed on; everything else is handed its store.
         services.TryAddSingleton<GroundworkLaneTargets>();
+        // ...and the few that write several lanes need each lane's store, not just its target name.
+        // Scoped, because it hands back the scoped per-target document stores: a singleton holding the
+        // root provider would resolve them from the root and capture them outside any request scope.
+        services.TryAddScoped<GroundworkLaneStores>();
         return created;
     }
 
