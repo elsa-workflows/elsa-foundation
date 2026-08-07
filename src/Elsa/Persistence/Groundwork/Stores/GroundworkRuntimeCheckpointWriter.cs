@@ -31,6 +31,16 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
 {
     private static readonly TimeSpan CommitAcknowledgementReconciliationTimeout = TimeSpan.FromSeconds(10);
+
+    // Backoff between attempts to reconcile a create-only marker conflict whose marker is not yet visible; its length
+    // is the retry budget. See the CheckpointMarkerConcurrencyException handler in ApplyAtomicallyAsync.
+    private static readonly TimeSpan[] MarkerConflictReconciliationBackoff =
+    [
+        TimeSpan.Zero,
+        TimeSpan.FromMilliseconds(10),
+        TimeSpan.FromMilliseconds(25)
+    ];
+
     private readonly IDocumentStore _commitLedger;
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
     private readonly IPersistenceAccessContextAccessor _accessContextAccessor;
@@ -225,6 +235,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         if (_commitLedger.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
             throw new GroundworkRuntimeCheckpointWriterException($"The Groundwork document store cannot atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}' because it does not support cross-unit atomic transactions.", new NotSupportedException($"Unsupported transaction boundary '{_commitLedger.TransactionBoundary}'."));
 
+        var markerConflictRetries = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -244,13 +255,28 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                     continue;
                 throw await NewStaleFenceExceptionAsync(commit, cancellationToken);
             }
+            // A create-only marker conflict means some writer already inserted this commit id, so the normal outcome is
+            // the idempotent replay below. It is not always observable yet: a concurrent writer that inserted the same
+            // marker inside a still-uncommitted transaction makes the provider report the conflict before its row is
+            // visible to this out-of-transaction read (MongoDB returns a write conflict immediately instead of blocking
+            // on the other transaction). Retrying converges the same way the fence branch does — the next attempt either
+            // observes the now-committed marker or wins the create itself — because the conflict already rolled this
+            // unit-of-work back. The budget is bounded so a conflict that never becomes visible still fails closed.
             catch (CheckpointMarkerConcurrencyException)
             {
-                var marker = await LoadMarkerAsync(commit, cancellationToken)
-                    ?? throw new GroundworkRuntimeCheckpointWriterException(
-                        $"Runtime checkpoint marker '{commit.CommitId}' conflicted but no committed marker could be reloaded.",
-                        new InvalidOperationException("The create-only marker conflict could not be reconciled."));
-                return ResolveReplay(commit, fingerprint, marker);
+                if (await LoadMarkerAsync(commit, cancellationToken) is { } marker)
+                    return ResolveReplay(commit, fingerprint, marker);
+                if (markerConflictRetries < MarkerConflictReconciliationBackoff.Length)
+                {
+                    var backoff = MarkerConflictReconciliationBackoff[markerConflictRetries++];
+                    if (backoff > TimeSpan.Zero)
+                        await Task.Delay(backoff, _timeProvider, cancellationToken);
+                    continue;
+                }
+
+                throw new GroundworkRuntimeCheckpointWriterException(
+                    $"Runtime checkpoint marker '{commit.CommitId}' conflicted but no committed marker could be reloaded.",
+                    new InvalidOperationException("The create-only marker conflict could not be reconciled."));
             }
             catch (DocumentCommitAcknowledgementUncertainException e)
             {

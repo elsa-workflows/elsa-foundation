@@ -50,6 +50,13 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+		<!--
+			Workflow-side reconciliation (spec 147, #1157): the universal workflow pass plus the JSON file
+			source, so a shells.json enabling JsonWorkflowReconciliation deploys mounted definition files at
+			startup instead of being silently skipped by the runtime feature catalog.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />

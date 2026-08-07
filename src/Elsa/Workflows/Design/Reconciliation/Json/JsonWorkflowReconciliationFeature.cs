@@ -49,8 +49,9 @@ public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFe
 
     /// <summary>
     /// Fails fast at registration on an invalid composition: a required <c>SourceId</c>, and exactly one
-    /// of <c>FilePath</c> (single-file shorthand) or <c>Files</c> (ordered list) — never both, never
-    /// neither. Centralising the check here keeps the source itself free of configuration policy.
+    /// of <c>FilePath</c> (single-file shorthand), <c>Files</c> (ordered list), or <c>FolderPath</c>
+    /// (scanned directory) — never more than one, never none. Centralising the check here keeps the
+    /// source itself free of configuration policy.
     /// </summary>
     private void ValidateOptions()
     {
@@ -58,13 +59,17 @@ public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFe
             throw new InvalidOperationException(
                 $"{nameof(JsonWorkflowReconciliationFeature)} requires a non-empty {nameof(JsonWorkflowReconciliationOptions.SourceId)}.");
 
-        var hasSingleFile = !string.IsNullOrWhiteSpace(Options.FilePath);
-        var hasFileList = Options.Files.Any();
+        var configuredPathOptions = new[]
+        {
+            !string.IsNullOrWhiteSpace(Options.FilePath),
+            Options.Files.Any(),
+            !string.IsNullOrWhiteSpace(Options.FolderPath),
+        }.Count(configured => configured);
 
-        if (hasSingleFile == hasFileList)
+        if (configuredPathOptions != 1)
             throw new InvalidOperationException(
                 $"{nameof(JsonWorkflowReconciliationFeature)} requires exactly one of "
-                + $"{nameof(JsonWorkflowReconciliationOptions.FilePath)} or {nameof(JsonWorkflowReconciliationOptions.Files)} "
-                + "to be configured — not both, and not neither.");
+                + $"{nameof(JsonWorkflowReconciliationOptions.FilePath)}, {nameof(JsonWorkflowReconciliationOptions.Files)}, "
+                + $"or {nameof(JsonWorkflowReconciliationOptions.FolderPath)} to be configured — not several, and not none.");
     }
 }
