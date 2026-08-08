@@ -114,7 +114,10 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.UiHint,
             input.DefaultValue,
             input.DefaultSyntax,
-            input.UISpecifications);
+            input.UISpecifications,
+            // Pre-G1 persisted rows carry HasStaticDefault=false even when an attribute default exists;
+            // a non-null DefaultValue implies a static default regardless (see InputDefinition remarks).
+            input.HasStaticDefault || input.DefaultValue is not null);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(
@@ -124,7 +127,9 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             output.DisplayName,
             output.Description,
             output.Category,
-            output.IsBrowsable ?? true);
+            output.IsBrowsable ?? true,
+            output.IsRequired,
+            output.ReferenceKey);
 
     private static IEnumerable<ActivityPortDescriptorView> ToPorts(ActivityDesignFacet facet)
     {

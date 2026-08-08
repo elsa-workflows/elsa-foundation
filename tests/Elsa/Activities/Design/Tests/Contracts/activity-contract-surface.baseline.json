@@ -17,6 +17,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -45,6 +46,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": true,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -92,6 +94,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": true,
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         },
@@ -104,6 +107,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -116,6 +120,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -128,6 +133,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         },
@@ -140,6 +146,7 @@
           "isNullable": false,
           "uiHint": "dropdown",
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": {
             "optionsProvider": {
@@ -197,7 +204,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -277,7 +285,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": 0,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -289,7 +298,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -301,7 +311,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": 0,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -314,6 +325,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": 1,
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -359,6 +371,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -418,7 +431,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -430,7 +444,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -443,6 +458,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": false,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -455,6 +471,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -467,6 +484,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -479,6 +497,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -490,7 +509,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": "async",
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -503,6 +523,7 @@
           "isNullable": true,
           "uiHint": "checklist",
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": {
             "options": [
@@ -582,6 +603,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -594,6 +616,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": "text/plain",
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": {
             "options": [
@@ -617,6 +640,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -629,6 +653,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": "GET",
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": {
             "options": [
@@ -664,6 +689,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -676,6 +702,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -688,6 +715,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -752,6 +780,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -764,6 +793,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -776,6 +806,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -788,6 +819,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": 200,
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -852,7 +884,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -961,6 +994,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": true,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -973,6 +1007,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -985,6 +1020,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1023,6 +1059,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1035,6 +1072,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1047,6 +1085,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1059,6 +1098,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1087,6 +1127,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1115,6 +1156,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1127,6 +1169,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1138,7 +1181,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1151,6 +1195,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1206,6 +1251,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1236,6 +1282,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1264,6 +1311,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1302,6 +1350,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": "00:00:00",
+          "hasStaticDefault": true,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -1332,6 +1381,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1370,6 +1420,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": "{}",
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1382,6 +1433,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1394,6 +1446,7 @@
           "isNullable": false,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1471,6 +1524,7 @@
           "isNullable": true,
           "uiHint": null,
           "defaultValue": null,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1528,7 +1582,8 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": null,
+          "defaultValue": false,
+          "hasStaticDefault": true,
           "defaultSyntax": null,
           "uiSpecifications": null
         }

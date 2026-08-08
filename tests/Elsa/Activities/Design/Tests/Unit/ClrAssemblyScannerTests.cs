@@ -93,10 +93,14 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
     }
 
+    // HttpEndpoint's hash was re-pinned for G1 (spec 149 / RFC #1191): inputs now carry HasStaticDefault
+    // and initializer/default(T)-derived DefaultValue, which is deliberate same-version content change
+    // (Model X surfaces it as a hash mismatch on pre-G1 databases; see the spec's deployment note).
+    // TriggerFixtureActivity has no inputs, so its hash proves input-less content is untouched.
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
+        { typeof(HttpEndpoint), "CCB7B53F4C582DCECC6B247F8702F1B12EDC14BC95B2BDE60F8F4873FB214EA0" }
     };
 
     [Theory]

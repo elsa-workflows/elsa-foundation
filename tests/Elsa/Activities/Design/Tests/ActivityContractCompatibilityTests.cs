@@ -19,12 +19,13 @@ public sealed class ActivityContractCompatibilityTests
         var constructor = Assert.Single(typeof(InputDefinition).GetConstructors());
         var parameters = constructor.GetParameters();
 
-        Assert.Equal(17, parameters.Length);
+        // 18 = 17 pre-G1 parameters + HasStaticDefault (spec 149 / RFC #1191 G1, additive tail default).
+        Assert.Equal(18, parameters.Length);
         var nullability = Assert.Single(parameters, parameter => parameter.Name == nameof(InputDefinition.IsNullable));
         Assert.Equal(typeof(bool), nullability.ParameterType);
         Assert.False(nullability.HasDefaultValue);
         Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 17);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 18);
     }
 
     [Fact]

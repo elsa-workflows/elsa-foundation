@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
@@ -12,8 +12,11 @@ namespace Elsa.Workflows.Design.Api.Services;
 /// request payloads without reverse-engineering the wire format. Schemas are generated from a
 /// serializer configuration identical to the FastEndpoints wire options, so property names,
 /// dictionary keys, and enum values in the schema match actual traffic.
+/// Public (spec 149 / RFC #1191 one-projection rule): the contracts generator
+/// (<c>tools/contracts/Elsa.Contracts.Generator</c>) exports structure payload and submit-body schemas
+/// through this same exporter, so build-time fragments and served schemas cannot diverge.
 /// </summary>
-internal static class AuthoringSchemaExporter
+public static class AuthoringSchemaExporter
 {
     // Duplicates the wire options of Elsa.Api.FastEndpoints' SerializationFastEndpointConfigurator
     // (internal to that assembly, deliberately not exposed): camelCase properties, camelCase
@@ -45,15 +48,15 @@ internal static class AuthoringSchemaExporter
     /// Exports the JSON Schema of <paramref name="type"/> as serialized on the wire. Opaque members
     /// (<c>object</c>, <c>JsonElement</c>) intentionally export as unconstrained schemas.
     /// </summary>
-    internal static JsonElement ExportSchema(Type type) => ToElement(ExportSchemaNode(type));
+    public static JsonElement ExportSchema(Type type) => ToElement(ExportSchemaNode(type));
 
     /// <summary>
     /// Exports the schema as a mutable node so operation-specific handlers can layer invariants the
     /// shared payload types cannot express (e.g. members mandatory on one operation only).
     /// </summary>
-    internal static JsonNode ExportSchemaNode(Type type) => WireOptions.GetJsonSchemaAsNode(type, ExporterOptions);
+    public static JsonNode ExportSchemaNode(Type type) => WireOptions.GetJsonSchemaAsNode(type, ExporterOptions);
 
-    internal static JsonElement ToElement(JsonNode node) => JsonSerializer.SerializeToElement(node, WireOptions);
+    public static JsonElement ToElement(JsonNode node) => JsonSerializer.SerializeToElement(node, WireOptions);
 
     // The exporter marks every non-defaulted constructor parameter of a positional record as
     // "required", but the wire deserializer treats a missing nullable parameter exactly like an
@@ -88,9 +91,10 @@ internal static class AuthoringSchemaExporter
     /// Computes the canonical <c>sha256:&lt;lowercase hex&gt;</c> fingerprint of a snapshot,
     /// following the descriptor-document fingerprint pattern of the design APIs.
     /// </summary>
-    internal static string ComputeFingerprint<TSnapshot>(TSnapshot snapshot)
+    public static string ComputeFingerprint<TSnapshot>(TSnapshot snapshot)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         return $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
     }
 }
+

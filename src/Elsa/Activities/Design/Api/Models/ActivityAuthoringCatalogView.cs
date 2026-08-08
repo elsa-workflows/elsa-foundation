@@ -71,7 +71,10 @@ public sealed record ActivityInputDescriptorView(
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications);
+    JsonElement? UiSpecifications,
+    // G1 (spec 149 / RFC #1191): disambiguates DefaultValue — true with a value = concrete static default;
+    // true with null = the default is null; false = no statically representable default exists.
+    bool HasStaticDefault = false);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,
@@ -80,7 +83,11 @@ public sealed record ActivityOutputDescriptorView(
     string? DisplayName,
     string? Description,
     string? Category,
-    bool IsBrowsable);
+    bool IsBrowsable,
+    // G2 (spec 149 / RFC #1191): a required output must have an authored target or the publish compile
+    // rejects the definition (RuntimeOutputCaptureCompiler); ReferenceKey is the binding key to author it.
+    bool IsRequired = false,
+    string? ReferenceKey = null);
 
 public sealed record ActivityPortDescriptorView(
     string Name,

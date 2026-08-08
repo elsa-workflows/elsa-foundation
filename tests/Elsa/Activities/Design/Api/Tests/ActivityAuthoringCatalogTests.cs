@@ -71,15 +71,20 @@ public sealed class ActivityAuthoringCatalogTests
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable");
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "HasStaticDefault");
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
         var inputConstructor = inputDescriptor.GetConstructors().Single();
-        Assert.Equal(15, inputConstructor.GetParameters().Length);
+        // 16 = 15 pre-G1 parameters + HasStaticDefault (spec 149 / RFC #1191 G1, additive tail default).
+        Assert.Equal(16, inputConstructor.GetParameters().Length);
         var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
             StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
         Assert.False(nullability.HasDefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 15);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 16);
+        // G2 (spec 149 / RFC #1191): outputs state requiredness and carry the binding reference key.
+        var outputDescriptor = CollectionElementType(descriptor.GetProperty("Outputs")!.PropertyType);
+        AssertProperties(outputDescriptor, "Name", "Type", "CollectionKind", "IsBrowsable", "IsRequired", "ReferenceKey");
+        Assert.Equal(typeof(bool), outputDescriptor.GetProperty("IsRequired")!.PropertyType);
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);
         AssertProperties(portDescriptor, "Name", "ReferenceKey", "Type", "IsBrowsable");
     }

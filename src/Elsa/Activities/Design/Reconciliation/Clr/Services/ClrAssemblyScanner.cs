@@ -59,6 +59,7 @@ public sealed class ClrAssemblyScanner(
             return [];
 
         using var context = new MetadataLoadContext(new PathAssemblyResolver(BuildResolverPaths(folderDlls)));
+        using var initializerReader = new InitializerDefaultReader();
         var models = new List<ActivityVersionReconciliationModel>();
 
         foreach (var dll in folderDlls)
@@ -108,7 +109,7 @@ public sealed class ClrAssemblyScanner(
                     continue;
 
                 models.Add(
-                    BuildModel(type, assembly)
+                    BuildModel(type, assembly, initializerReader)
                 );
             }
         }
@@ -116,7 +117,7 @@ public sealed class ClrAssemblyScanner(
         return models;
     }
 
-    private ActivityVersionReconciliationModel BuildModel(Type type, Assembly assembly)
+    private ActivityVersionReconciliationModel BuildModel(Type type, Assembly assembly, InitializerDefaultReader initializerReader)
     {
         var version = versionResolver.Resolve(type, assembly);
         var category = categoryResolver.Resolve(type, assembly);
@@ -139,6 +140,7 @@ public sealed class ClrAssemblyScanner(
             var metadata = ReadActivityInputMetadata(property, property.PropertyType, inputNames, type.FullName!);
             var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName)!;
             var key = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Key)) ?? property.Name;
+            var (defaultValue, hasStaticDefault) = ResolveStaticDefault(metadata, property, initializerReader);
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
@@ -152,8 +154,9 @@ public sealed class ClrAssemblyScanner(
                 UiHint: metadata.UiHint,
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
-                DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax));
+                DefaultValue: defaultValue,
+                DefaultSyntax: metadata.DefaultSyntax,
+                HasStaticDefault: hasStaticDefault));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -749,6 +752,126 @@ public sealed class ClrAssemblyScanner(
             _ => null
         };
     }
+
+    /// <summary>
+    /// Resolves the effective static default of an activity input (G1, spec 149 / RFC #1191). Ladder:
+    /// author-declared attribute default → compiled property-initializer constant → <c>default(T)</c> for
+    /// synthesizable non-nullable value types → explicit null for nullable/reference types. An initializer
+    /// that is not a statically representable constant yields <c>(null, false)</c> — "no static default",
+    /// distinct from "the default is null". Roslyn elides initializers assigning the type's default value,
+    /// so the default(T) rung also covers e.g. <c>= ResponseMode.Async</c> where Async is the zero member.
+    /// </summary>
+    private static (JsonElement? DefaultValue, bool HasStaticDefault) ResolveStaticDefault(
+        ActivityInputMetadata metadata,
+        PropertyInfo property,
+        InitializerDefaultReader initializerReader)
+    {
+        // Author-declared attribute default wins (pre-existing behavior).
+        if (metadata.DefaultValue is not null)
+            return (metadata.DefaultValue, true);
+
+        var propertyType = property.PropertyType;
+        var initializer = property.DeclaringType is null
+            ? PropertyInitializer.Unrecognized
+            : initializerReader.GetInitializer(property.DeclaringType, property.Name);
+
+        switch (initializer.Kind)
+        {
+            case InitializerKind.Constant:
+                // A constant that flowed through a ctor call is only meaningful for Nullable<T> wrapping;
+                // anywhere else (e.g. decimal construction) the captured constant is a component, not the value.
+                if (initializer.ViaNewobj && UnwrapNullable(propertyType) == propertyType)
+                    return (null, false);
+                return SerializeStaticConstant(initializer.Value, propertyType);
+            case InitializerKind.Unrecognized:
+                return (null, false);
+        }
+
+        // No initializer. Non-nullable value types default to default(T); only synthesizable shapes
+        // (bool, numerics, enums with a zero member) are published — anything else is honestly "not static".
+        if (propertyType.IsValueType && UnwrapNullable(propertyType) == propertyType)
+            return SynthesizeValueTypeDefault(propertyType);
+
+        // Nullable and reference types default to null: an unauthored input leaves the property null.
+        return (null, true);
+    }
+
+    private static (JsonElement? DefaultValue, bool HasStaticDefault) SerializeStaticConstant(object? value, Type propertyType)
+    {
+        if (value is null)
+            return (null, true);
+
+        var targetType = UnwrapNullable(propertyType)!;
+
+        if (targetType.IsEnum)
+        {
+            var memberName = targetType.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(field => EqualsNumeric(field.GetRawConstantValue(), value))?.Name;
+            return memberName is null
+                ? (null, false)
+                : (JsonSerializer.SerializeToElement(JsonNamingPolicy.CamelCase.ConvertName(memberName)), true);
+        }
+
+        if (targetType.FullName == typeof(string).FullName && value is string stringValue)
+            return (JsonSerializer.SerializeToElement(stringValue), true);
+
+        if (targetType.FullName == typeof(bool).FullName && value is int boolBits)
+            return (JsonSerializer.SerializeToElement(boolBits != 0), true);
+
+        if (targetType.FullName == typeof(char).FullName && value is int charBits)
+            return (JsonSerializer.SerializeToElement(((char)charBits).ToString()), true);
+
+        if (IsNumericType(targetType))
+        {
+            try
+            {
+                var converted = Convert.ChangeType(value, NumericClrType(targetType), CultureInfo.InvariantCulture);
+                return (JsonSerializer.SerializeToElement(converted), true);
+            }
+            catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+            {
+                return (null, false);
+            }
+        }
+
+        return (null, false);
+    }
+
+    private static (JsonElement? DefaultValue, bool HasStaticDefault) SynthesizeValueTypeDefault(Type valueType)
+    {
+        if (valueType.IsEnum)
+        {
+            var zeroMember = valueType.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(field => EqualsNumeric(field.GetRawConstantValue(), 0))?.Name;
+            return zeroMember is null
+                ? (null, false)
+                : (JsonSerializer.SerializeToElement(JsonNamingPolicy.CamelCase.ConvertName(zeroMember)), true);
+        }
+
+        if (valueType.FullName == typeof(bool).FullName)
+            return (JsonSerializer.SerializeToElement(false), true);
+
+        if (IsNumericType(valueType))
+            return (JsonSerializer.SerializeToElement(Convert.ChangeType(0, NumericClrType(valueType), CultureInfo.InvariantCulture)), true);
+
+        // Structs like TimeSpan/Guid/DateTime cannot be synthesized without instantiation — not static.
+        return (null, false);
+    }
+
+    private static Type NumericClrType(Type type) => type.FullName switch
+    {
+        "System.Byte" => typeof(byte),
+        "System.SByte" => typeof(sbyte),
+        "System.Int16" => typeof(short),
+        "System.UInt16" => typeof(ushort),
+        "System.Int32" => typeof(int),
+        "System.UInt32" => typeof(uint),
+        "System.Int64" => typeof(long),
+        "System.UInt64" => typeof(ulong),
+        "System.Single" => typeof(float),
+        "System.Double" => typeof(double),
+        _ => typeof(decimal)
+    };
 
     private static JsonElement ParseDefaultValue(string value, Type? valueType)
     {

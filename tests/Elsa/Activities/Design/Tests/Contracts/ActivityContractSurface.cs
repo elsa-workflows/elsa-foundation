@@ -107,6 +107,7 @@ public static class ActivityContractSurface
                 ["isNullable"] = input.IsNullable,
                 ["uiHint"] = input.UiHint,
                 ["defaultValue"] = ToNode(input.DefaultValue),
+                ["hasStaticDefault"] = input.HasStaticDefault,
                 ["defaultSyntax"] = input.DefaultSyntax,
                 ["uiSpecifications"] = ToNode(input.UISpecifications)
             });
