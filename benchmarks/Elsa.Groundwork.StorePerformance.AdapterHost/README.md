@@ -26,6 +26,29 @@ re-verifies a clean HEAD with `--untracked-files=all`, so a stray file inside th
 Build this host and the harness in the **same configuration**. Each child re-verifies the harness assembly
 digest, and a Debug host cannot satisfy a Release matrix.
 
+**Build once, then stage, then run — never rebuild in between.** The harness assembly is not byte-
+deterministic: rebuilding it with no source change produces a different digest. Building the harness
+project alone leaves this host's copied reference stale, and `capture-plan` bakes whichever digest *it*
+loaded into the staged evidence — so a rebuild between staging and `matrix` fails every child closed. The
+safe order is: build both projects, confirm the two copies of
+`Elsa.Groundwork.StorePerformance.Benchmarks.dll` hash identically, then `capture-plan`, then `matrix`.
+
+```bash
+# Confirm digest parity before staging anything.
+shasum -a 256 \
+  benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/bin/Release/net10.0/Elsa.Groundwork.StorePerformance.Benchmarks.dll \
+  benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/bin/Release/net10.0/Elsa.Groundwork.StorePerformance.Benchmarks.dll
+```
+
+Run the matrix **detached** (`nohup … & disown`). A cohort is tens of minutes of provider I/O, and a
+terminal or session teardown kills it outright — leaving a partial artifact directory, which is deliberately
+not resumable.
+
+**Prefer a checkout you are not working in.** Because every child re-verifies a clean HEAD, *any* edit to
+the repository while a cohort is running aborts the remaining children — including edits unrelated to the
+benchmark, such as touching this README. Running the matrix from a dedicated clean checkout removes the
+whole hazard; otherwise, stop editing for the duration of the run.
+
 ```bash
 # 0. Read the provenance values off the provider itself. Correctness binds the *observed* provider
 #    configuration to the requested one entry for entry, so these cannot be guessed.
