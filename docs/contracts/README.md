@@ -129,6 +129,11 @@ These are the load-bearing facts a consumer needs that no descriptor field expre
 here because omitting them measurably costs more than publishing nothing: a contracts-only consumer
 trusts the structural answers and then burns publish cycles guessing the rest.
 
+The machine-readable, test-pinned form of these lives in
+[`docs/consumer-guide/claims.json`](../consumer-guide/README.md) — one sentence per claim, each named by a
+test that fails if the behaviour changes, gated in both directions by CI. Read that if you are consuming
+programmatically; read on for the narrative version.
+
 ### Binding a required output
 
 `isRequired` on an output does **not** mean "the runtime fills this in". It means: *if you author an

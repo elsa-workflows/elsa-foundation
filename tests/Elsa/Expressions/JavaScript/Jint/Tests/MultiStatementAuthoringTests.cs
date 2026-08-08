@@ -6,6 +6,7 @@ using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.ConsumerGuide.Testing;
 using Xunit;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
@@ -28,6 +29,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 public sealed class MultiStatementAuthoringTests
 {
     [Fact]
+    [ConsumerContract("javascript.expression-input-is-a-single-expression")]
     public async Task An_expression_input_rejects_a_bare_statement()
     {
         // The reported 422: an expression slot is not a script slot.
@@ -37,6 +39,7 @@ public sealed class MultiStatementAuthoringTests
     }
 
     [Fact]
+    [ConsumerContract("javascript.expression-input-is-a-single-expression")]
     public async Task An_expression_input_accepts_multi_statement_logic_wrapped_in_an_iife()
     {
         // The escape hatch: an IIFE *is* an expression, so statements and return are legal inside it.
@@ -46,6 +49,7 @@ public sealed class MultiStatementAuthoringTests
     }
 
     [Fact]
+    [ConsumerContract("javascript.script-activity-takes-statements")]
     public async Task The_script_evaluator_accepts_statements_and_return_without_a_wrapper()
     {
         // What the RunJavaScript activity uses: the evaluator supplies the IIFE, so the author does not.

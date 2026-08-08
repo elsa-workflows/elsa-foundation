@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0.0",
+  "claims": [
+    {
+      "id": "javascript.expression-input-is-a-single-expression",
+      "scope": "expressions.javascript",
+      "kind": "constraint",
+      "stability": "stable",
+      "statement": "A JavaScript expression input is parsed as a single expression, not a script: a bare statement such as `var x = 1;` is a syntax error, and multi-statement logic must be wrapped in an IIFE — `(() => { ...; return value; })()` — which is itself an expression.",
+      "rationale": "Three benchmarked sessions hit `Unexpected token 'var'` and concluded multi-line JavaScript was impossible. The published `MaxStatements` sandbox option actively implies the opposite, and nothing published the rule.",
+      "tests": [
+        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_rejects_a_bare_statement",
+        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_accepts_multi_statement_logic_wrapped_in_an_iife"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "javascript.script-activity-takes-statements",
+      "scope": "expressions.javascript",
+      "kind": "constraint",
+      "stability": "stable",
+      "statement": "The `RunJavaScript` activity's script input is the opposite case: the evaluator supplies the function body, so statements and a bare `return` work directly and must not be wrapped in an IIFE.",
+      "rationale": "The same source string is legal in one slot and a syntax error in the other; without this pair a consumer generalises the wrong half of the rule.",
+      "tests": [
+        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.The_script_evaluator_accepts_statements_and_return_without_a_wrapper"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "publishing.required-output-enforcement-is-per-node",
+      "scope": "publishing",
+      "kind": "behaviour",
+      "stability": "provisional",
+      "statement": "Required-output enforcement is per node and all-or-nothing: a node that authors no output bindings is never checked, and binding a single output makes every required output on that node mandatory — so `isRequired` means \"must be bound if you bind anything here\", not \"the runtime fills this in\".",
+      "rationale": "`HttpEndpoint` rejects a missing `RouteData` once `Request` is bound while `WriteHttpResponse` publishes with all four required outputs unbound; that looks like a per-activity difference and is one rule about binding state. `[Output]` defaults `IsRequired` to true, so most published `isRequired: true` values are an unreviewed default — pre-binding an output \"to be safe\" is what turns a working definition into a publish-time 400.",
+      "tests": [
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_required_output_is_unenforced_when_the_node_authors_no_output_at_all",
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Binding_one_output_makes_every_required_output_on_that_node_mandatory"
+      ],
+      "since": "1.1.0"
+    }
+  ]
+}

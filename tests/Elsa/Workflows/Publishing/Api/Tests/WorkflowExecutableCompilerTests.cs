@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
@@ -760,6 +761,65 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains(
             new RuntimeStorageDriverRequirement(WellKnownRuntimeDurableValueStorageDrivers.Json),
             executable.StorageDriverRequirements);
+    }
+
+    /// <summary>
+    /// First half of the published required-output rule (docs/consumer-guide claim
+    /// <c>publishing.required-output-enforcement-is-per-node</c>): a node that authors NO outputs is not
+    /// checked at all, even though its contract declares a required one. <c>[Output]</c> defaults
+    /// <c>IsRequired</c> to true, so this is the common case, and reading <c>isRequired</c> as "the runtime
+    /// demands this" is what made the flag look inconsistent between activities.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.required-output-enforcement-is-per-node")]
+    public async Task A_required_output_is_unenforced_when_the_node_authors_no_output_at_all()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        var alias = TypeAliasConvention.CanonicalAlias(typeof(OutputProducingActivity));
+        registry.RegisterType(typeof(OutputProducingActivity), alias);
+        var activityVersion = ClrActivityVersion("activity-output-producer", "Test.OutputProducer", alias);
+        var root = new ActivityNode("read-value", activityVersion.Id, [], []);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(root)),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Empty(executable.RootActivity.OutputCaptures);
+    }
+
+    /// <summary>
+    /// Second half of the same rule: bind one output and every required output on that node becomes
+    /// mandatory. This is why pre-binding an output "to be safe" is what turns a working definition into a
+    /// publish-time 400.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.required-output-enforcement-is-per-node")]
+    public void Binding_one_output_makes_every_required_output_on_that_node_mandatory()
+    {
+        ActivityResultProjectionContract Projection(string key, bool isRequired) => new(
+            key,
+            key.ToLowerInvariant(),
+            new ValueTypeDescriptor("String"),
+            isRequired,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+
+        var bound = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+
+        var exception = Assert.Throws<ArgumentException>(() => LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [Projection("Value", isRequired: false), Projection("Trace", isRequired: true)],
+            [bound],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]));
+
+        Assert.Contains("missing required output target 'Trace'", exception.Message, StringComparison.Ordinal);
     }
 
     private static RuntimeOutputCaptureCompiler LeafOutputCompiler() =>

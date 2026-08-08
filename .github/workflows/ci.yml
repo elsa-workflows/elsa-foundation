@@ -85,6 +85,13 @@ jobs:
       - name: Check committed consumer contracts against the tree
         run: dotnet run --project tools/contracts/Elsa.Contracts.Generator -c Release --no-build -- check
 
+      # Consumer claims (spec 150 FR-B2), gates A and B: every published claim names tests that exist and
+      # carry [ConsumerContract], and every [ConsumerContract] test names a published claim. The gate checks
+      # the link; the test run above is what checks the claim, so a published behavioural claim is never
+      # older than the last green build. Runs after the test step for that reason.
+      - name: Check consumer claims against their pinning tests
+        run: dotnet run --project tools/contracts/Elsa.Contracts.Generator -c Release --no-build -- claims
+
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:

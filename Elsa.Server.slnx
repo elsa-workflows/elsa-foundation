@@ -388,6 +388,9 @@
   <Folder Name="/tests/Elsa/Contracts/">
     <Project Path="tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/ConsumerGuide/">
+    <Project Path="tests/Elsa/ConsumerGuide/Testing/Elsa.ConsumerGuide.Testing.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Agent/">
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
