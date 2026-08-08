@@ -175,15 +175,15 @@ public sealed class DesignPersistenceBoundaryTests
         (
             "src/Elsa/Workflows/Design/Persistence/Groundwork/DependencyInjection/GroundworkWorkflowsDesignStoreRegistration.cs",
             [
-                "IGroundworkStorageManifestSource, WorkflowsDesignGroundworkStorageManifestSource",
-                "IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource",
+                "ManifestSource<WorkflowsDesignGroundworkStorageManifestSource>",
+                "ManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ]),
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs",
             [
-                "IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource",
-                "IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource",
+                "ManifestSource<ActivitiesDesignGroundworkStorageManifestSource>",
+                "ManifestSource<GroundworkDesignAtomicWriteStorageManifestSource>",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ])
     ];
