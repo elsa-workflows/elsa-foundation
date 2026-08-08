@@ -144,11 +144,13 @@ is unavailable. The class ceilings in this document are therefore **unchanged**;
 recorded, not ratified, and superseding 150 ms / 40 ms still needs an independent ratifier. Nothing measured
 so far breaches either: the durable write path came in at 75 ms (SQLite) and 94 ms (PostgreSQL) p95.
 
-Two observations bear on the reasoning above. The predicted per-provider divergence is real and does not
-run one way — PostgreSQL is ~25% slower on the durable write and ~3× faster on the bounded read — which
-supports keeping Tier B a blunt backstop. And the 35.7 ms anchor is not a like-for-like comparand for these
-figures: it was measured on the *portable* store in WAL mode, whereas the matrix measures the *physical*
-target on SQLite's default rollback journal.
+Two observations bear on the reasoning above. Per-provider numbers do diverge, and not uniformly in one
+direction, which supports keeping Tier B a blunt backstop — but the *size* of the cross-provider gap is not
+yet trustworthy: the two provider drivers are not configured symmetrically (SQLite disables connection
+pooling, PostgreSQL does not), so the measured read inversion has an unexcluded fixture explanation. The
+per-provider ceilings are unaffected, because Tier B is per-provider by construction. And the 35.7 ms anchor
+is not a like-for-like comparand for these figures either: it was measured on the *portable* store in WAL
+mode, whereas the matrix measures the *physical* target on SQLite's default rollback journal.
 
 ### Tier C — Self-referential ratio ratchet (reuses existing machinery verbatim)
 

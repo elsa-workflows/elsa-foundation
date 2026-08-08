@@ -99,11 +99,27 @@ Against the standing ceilings, nothing here fails: the durable write path measur
 
 ## What the numbers show
 
-**PostgreSQL writes slower and reads much faster.** The durable commit costs 94 ms against SQLite's 75 ms —
-a remote round trip per statement that local SQLite never pays. But the bounded read is 0.25 ms against
-0.80 ms, and idempotent replay 0.34 ms against 1.08 ms. This is the per-provider divergence the budget
-document predicted when it argued Tier B should stay a blunt backstop rather than become a precision
-instrument.
+**PostgreSQL writes slower and reads faster — but the two are not configured symmetrically, so read the
+cross-provider gap with care.** The durable commit costs 94 ms against SQLite's 75 ms. The bounded read is
+0.25 ms against 0.80 ms, and idempotent replay 0.34 ms against 1.08 ms.
+
+The confound: the SQLite provider driver sets `Pooling = false`
+([SqliteGroundworkProviderDriver.cs](../../tests/Elsa/Persistence/Groundwork/Testing/SqliteGroundworkProviderDriver.cs)),
+while the PostgreSQL driver sets no pooling override and so gets Npgsql's default pool. Every SQLite
+operation therefore pays connection establishment that PostgreSQL amortizes. That asymmetry is not
+corrected here on purpose — the benchmark deliberately reuses the same driver that produces the Spec 094
+conformance evidence, and re-tuning it for the benchmark would decouple the two.
+
+**A networked PostgreSQL beating a local SQLite on a primary-key read inverts the expected ordering, and
+this measurement does not explain why.** Unpooled connection setup is the obvious candidate and is roughly
+the right magnitude, but that is a hypothesis, not a result: no experiment here isolates it. Treat the
+per-provider figures as sound and the cross-provider *ratio* as unresolved until someone measures the two
+under matched connection settings.
+
+What survives the caveat is the shape the budget document predicted: per-provider numbers diverge, they do
+not diverge uniformly in one direction, and that is the argument for keeping Tier B a blunt backstop rather
+than a precision instrument. Tier B ceilings are per-provider, so each column stands on its own regardless
+of how the comparison resolves.
 
 **A rejected commit costs almost as much as an accepted one.** `attempt-stale-fence-commit` measures 71 ms
 against 75 ms on SQLite (95%) and 92 ms against 94 ms on PostgreSQL (98%). A stale fence is detected and

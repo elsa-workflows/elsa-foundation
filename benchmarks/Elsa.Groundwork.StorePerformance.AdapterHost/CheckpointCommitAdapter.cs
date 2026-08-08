@@ -26,10 +26,11 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 /// The <c>checkpoint-commit</c> leaf: binds the frozen Spec 094 checkpoint workload to a real Groundwork
 /// provider driver.
 ///
-/// It implements <see cref="IBenchmarkAdapter"/> and <see cref="IRuntimeCheckpointCommitWorkloadAdapter"/>
-/// on one object, so the frozen scenario drives exactly the composition the harness then measures.
+/// It owns one provider driver for the whole child process, so the frozen correctness scenario and the
+/// timed operations run against exactly the same provider — they differ only in storage scope. The
+/// scenario's own client factory is a separate scope-bound object; see <c>ScopedClientSource</c>.
 /// </summary>
-internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheckpointCommitWorkloadAdapter
+internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter
 {
     /// <summary>
     /// Not a free choice. The frozen scenario stamps <c>TenantId = "tenant-checkpoint"</c> onto every
@@ -93,10 +94,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
     private readonly System.Diagnostics.Stopwatch _started = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<ClientLease> _leases = [];
     private GroundworkProviderDriver? _driver;
-    private ClientLease? _measured;
-    private MeasuredFixtures? _fixtures;
     private IReadOnlyDictionary<string, string> _observedConfiguration = new Dictionary<string, string>(StringComparer.Ordinal);
-    private string _activeScope = CorrectnessScope;
 
     private CheckpointCommitAdapter(RunRequest request) => _request = request;
 
@@ -134,10 +132,9 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
         await driver.ResetPhysicalAsync(cancellationToken);
         _observedConfiguration = await CaptureProviderConfigurationAsync(driver, cancellationToken);
 
-        _activeScope = MeasuredScope;
-        _measured = await OpenLeaseAsync(MeasuredScope, cancellationToken);
-        _fixtures = await SeedMeasuredFixturesAsync(_measured.Client, cancellationToken);
-        Operations = CreateOperations(_measured.Client, _fixtures);
+        var measured = await OpenLeaseAsync(MeasuredScope, cancellationToken);
+        var fixtures = await SeedMeasuredFixturesAsync(measured.Client, cancellationToken);
+        Operations = CreateOperations(measured.Client, fixtures);
         Report("prepared");
     }
 
@@ -149,9 +146,8 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
     public async Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
     {
         var driver = RequireDriver();
-        _activeScope = CorrectnessScope;
-        var result = await new RuntimeCheckpointCommitWorkload().ExecuteAsync(this, cancellationToken);
-        _activeScope = MeasuredScope;
+        var result = await new RuntimeCheckpointCommitWorkload()
+            .ExecuteAsync(new ScopedClientSource(this, CorrectnessScope), cancellationToken);
         Report("correctness verified");
 
         return new CorrectnessEvidence(
@@ -166,15 +162,25 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
                 []));
     }
 
-    public async ValueTask<RuntimeCheckpointCommitClients> OpenIndependentClientsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Hands the frozen workload its clients, all bound to one storage scope.
+    ///
+    /// The workload's adapter contract takes no scope argument, so the scope has to come from somewhere.
+    /// Binding it to an instance rather than to mutable adapter state means there is no window in which the
+    /// scope is wrong — an exception mid-scenario cannot leave a stale value behind for the next caller.
+    /// </summary>
+    private sealed class ScopedClientSource(CheckpointCommitAdapter owner, string scope)
+        : IRuntimeCheckpointCommitWorkloadAdapter
     {
-        var primary = await OpenLeaseAsync(_activeScope, cancellationToken);
-        var secondary = await OpenLeaseAsync(_activeScope, cancellationToken);
-        return new RuntimeCheckpointCommitClients(primary.Client, secondary.Client);
-    }
+        public async ValueTask<RuntimeCheckpointCommitClients> OpenIndependentClientsAsync(CancellationToken cancellationToken = default) =>
+            new(await OpenAsync(cancellationToken), await OpenAsync(cancellationToken));
 
-    public async ValueTask<RuntimeCheckpointCommitClient> ReopenClientAsync(CancellationToken cancellationToken = default) =>
-        (await OpenLeaseAsync(_activeScope, cancellationToken)).Client;
+        public ValueTask<RuntimeCheckpointCommitClient> ReopenClientAsync(CancellationToken cancellationToken = default) =>
+            OpenAsync(cancellationToken);
+
+        private async ValueTask<RuntimeCheckpointCommitClient> OpenAsync(CancellationToken cancellationToken) =>
+            (await owner.OpenLeaseAsync(scope, cancellationToken)).Client;
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -182,7 +188,6 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
         for (var index = _leases.Count - 1; index >= 0; index--)
             await _leases[index].DisposeAsync();
         _leases.Clear();
-        _measured = null;
 
         if (_driver is not null)
             await _driver.DisposeAsync();
