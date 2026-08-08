@@ -1,0 +1,63 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Tasks"
+      ],
+      "description": "Background pump that periodically prunes expired/retired workflow-executable source references and the content-addressed artifacts no live reference points at any more (ADR 0040). Compose alongside the Tasks feature.",
+      "displayName": "Workflows Runtime Reference Garbage Collection",
+      "id": "WorkflowsRuntimeReferenceGarbageCollection",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Minimum artifact age before physical garbage collection may consider it.",
+          "displayName": "Artifact creation grace (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "ArtifactCreationGracePeriodMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 30,
+          "description": "Upper bound the sweep interval widens to under sustained failure.",
+          "displayName": "Max backoff interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "MaxBackoffIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Baseline minutes between reference GC sweeps while the host is healthy.",
+          "displayName": "Sweep interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "SweepIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

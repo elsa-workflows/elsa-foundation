@@ -1,0 +1,124 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Api",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ApiCapabilities"
+      ],
+      "description": "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
+      "displayName": "Workflows Runtime API",
+      "id": "WorkflowsRuntimeApi",
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Activity Execution Hierarchy Cursor Signing Key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ActivityExecutionHierarchyCursorSigningKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Workflow Alteration Payload Protection Active Key Id",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "WorkflowAlterationPayloadProtectionActiveKeyId",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IDictionary\u00602[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Workflow Alteration Payload Protection Keys",
+          "experimental": false,
+          "jsonType": "object",
+          "name": "WorkflowAlterationPayloadProtectionKeys",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeApi"
+      ],
+      "description": "Selects immediate or bounded coalesced checkpoint persistence after the shell\u0027s runtime provider is configured.",
+      "displayName": "Workflows Runtime Checkpoint Persistence",
+      "id": "WorkflowsRuntimeCheckpointPersistence",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 50,
+          "description": "Maximum replayable checkpoints buffered by Coalesced mode before an intermediate flush. Must be greater than zero.",
+          "displayName": "Maximum segment checkpoints",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxSegmentCheckpoints",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "Elsa.Workflows.Runtime.Api.Coalescing.CheckpointPersistenceMode",
+          "defaultValue": "Immediate",
+          "description": "Immediate persists each checkpoint; Coalesced folds replayable checkpoints until a durable boundary.",
+          "displayName": "Checkpoint persistence mode",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "Mode",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeApi"
+      ],
+      "description": "Trigger index over published workflows plus global stimulus routing: start new instances from an external stimulus with no explicit execution id, and fan a single stimulus in to every waiting instance across executions. Exposes POST runtime/workflows/stimuli. Compose alongside the Workflows Runtime API.",
+      "displayName": "Workflows Runtime Triggers",
+      "id": "WorkflowsRuntimeTriggers",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

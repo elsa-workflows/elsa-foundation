@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Primitives.Hosting",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers primitive hosting services shared by Elsa foundation features.",
+      "displayName": "Primitives",
+      "id": "Primitives",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

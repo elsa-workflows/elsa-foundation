@@ -1,0 +1,144 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Scheduling",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Tasks",
+        "WorkflowsRuntimeTriggers"
+      ],
+      "description": "Background pump that fires recurring Timer/Cron start triggers, starting new workflow instances on a schedule through the stimulus router. Populates the recurring-schedule store at publish time. Compose alongside the Workflows Runtime Triggers feature and the Tasks feature.",
+      "displayName": "Workflows Runtime Recurring Triggers",
+      "id": "WorkflowsRuntimeRecurringTriggers",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Upper bound the sweep interval widens to under sustained failure.",
+          "displayName": "Max backoff interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "MaxBackoffIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Hard cap on due schedules claimed and fired per sweep.",
+          "displayName": "Max schedules per tick",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxSchedulesPerTick",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 10,
+          "description": "Baseline seconds between recurring-trigger sweeps while the host is healthy.",
+          "displayName": "Sweep interval (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "SweepIntervalSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "dependsOn": [
+        "Tasks"
+      ],
+      "description": "Background pump that fires durable timers, resuming suspended workflows (e.g. Delay) at their due time through the bookmark-resume dispatcher. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature to make timers restart-durable.",
+      "displayName": "Workflows Runtime Scheduling",
+      "id": "WorkflowsRuntimeScheduling",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 60,
+          "description": "Visibility lease renewed while a claim-capable durable timer store dispatches one timer.",
+          "displayName": "Timer claim visibility (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "ClaimVisibilitySeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Upper bound the sweep interval and per-timer backoff widen to under sustained failure.",
+          "displayName": "Max backoff interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "MaxBackoffIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Hard cap on due timers loaded and fired per sweep, bounding both the store scan and dispatch bursts.",
+          "displayName": "Max timers per tick",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxTimersPerTick",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 30,
+          "description": "Grace after a timer\u0027s due time before a no-matching-bookmark dispatch deletes the timer (covers a very short delay racing its own bookmark commit).",
+          "displayName": "Not-found grace (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "NotFoundGraceSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 10,
+          "description": "Baseline seconds between timer sweeps while the host is healthy.",
+          "displayName": "Sweep interval (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "SweepIntervalSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

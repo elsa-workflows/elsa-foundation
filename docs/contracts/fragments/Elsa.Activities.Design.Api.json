@@ -1,0 +1,365 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Design.Api",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ApiCapabilities",
+        "Expressions"
+      ],
+      "description": "Contains endpoints to manage data in the Activities Design Domain",
+      "displayName": "Activities Design API",
+      "id": "ActivitiesDesignApi",
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Dependency Cursor Signing Key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "DependencyCursorSigningKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": null,
+          "displayName": "Dependency Default Page Size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "DependencyDefaultPageSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Int32",
+          "defaultValue": 500,
+          "description": null,
+          "displayName": "Dependency Maximum Page Size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "DependencyMaximumPageSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.TimeSpan",
+          "defaultValue": "00:15:00",
+          "description": null,
+          "displayName": "Fork Reservation Lifetime",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ForkReservationLifetime",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.TimeSpan",
+          "defaultValue": "1.00:00:00",
+          "description": null,
+          "displayName": "Fork Reservation Retention",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ForkReservationRetention",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [
+    {
+      "activityTypeKey": "Elsa.Finish",
+      "category": "Primitives",
+      "description": "Completes the workflow with a named outcome.",
+      "descriptorId": "elsa.intrinsic.finish@1",
+      "displayName": "Finish",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The outcome the workflow completes with.",
+          "displayName": "Outcome",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Outcome",
+          "order": 0,
+          "referenceKey": "outcome",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "Finish",
+        "outputNameInputKey": null,
+        "valueInputKey": "outcome",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetCorrelationId",
+      "category": "Primitives",
+      "description": "Assigns the correlation id of the running workflow instance.",
+      "descriptorId": "elsa.intrinsic.set-correlation-id@1",
+      "displayName": "Set Correlation Id",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The correlation id to assign to this instance.",
+          "displayName": "Value",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Value",
+          "order": 0,
+          "referenceKey": "value",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "SetCorrelationId",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetInstanceName",
+      "category": "Primitives",
+      "description": "Assigns the display name of the running workflow instance.",
+      "descriptorId": "elsa.intrinsic.set-instance-name@1",
+      "displayName": "Set Instance Name",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The name to assign to this instance.",
+          "displayName": "Value",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Value",
+          "order": 0,
+          "referenceKey": "value",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "SetInstanceName",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetOutput",
+      "category": "Primitives",
+      "description": "Assigns a value to a named workflow output.",
+      "descriptorId": "elsa.intrinsic.set-output@1",
+      "displayName": "Set Output",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The name of the workflow output to assign.",
+          "displayName": "Output Name",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Output Name",
+          "order": 0,
+          "referenceKey": "name",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The value to assign to the output.",
+          "displayName": "Value",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": true,
+          "name": "Value",
+          "order": 1,
+          "referenceKey": "value",
+          "type": "Elsa.Any",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "SetOutput",
+        "outputNameInputKey": "name",
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetVariable",
+      "category": "Primitives",
+      "description": "Assigns a value to a declared workflow variable, resolved to its nearest visible scope.",
+      "descriptorId": "elsa.intrinsic.set@1",
+      "displayName": "Set Variable",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The declared variable to assign.",
+          "displayName": "Variable",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Variable",
+          "order": 0,
+          "referenceKey": "variable",
+          "type": "String",
+          "uiHint": "variable-picker",
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The value to assign to the variable.",
+          "displayName": "Value",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": true,
+          "name": "Value",
+          "order": 1,
+          "referenceKey": "value",
+          "type": "Elsa.Any",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "Set",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": "variable"
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    }
+  ],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

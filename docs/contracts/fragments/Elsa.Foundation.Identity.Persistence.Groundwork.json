@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.Persistence.Groundwork",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Replaces the default in-memory identity stores with Groundwork-backed, durable stores so users, roles, external identities, and tenant memberships survive restarts.",
+      "displayName": "Identity Groundwork Persistence",
+      "id": "IdentityGroundworkPersistence",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

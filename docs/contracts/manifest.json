@@ -1,0 +1,390 @@
+{
+  "counts": {
+    "activities": 28,
+    "features": 100,
+    "fragments": 94,
+    "intrinsics": 5,
+    "structures": 10
+  },
+  "fragments": [
+    {
+      "assembly": "Elsa.Activities.Bpmn",
+      "fingerprint": "sha256:1f87ee5ffccddc008108be58c29dd6d8ddb8f69e3715976a6ecca3c3487016d2"
+    },
+    {
+      "assembly": "Elsa.Activities.Bpmn.Interchange",
+      "fingerprint": "sha256:c49a48a9d6f4427f48c3ca07aee086be920d95945dccda4fd31bc09db4d539fd"
+    },
+    {
+      "assembly": "Elsa.Activities.ControlFlow",
+      "fingerprint": "sha256:9c670238320959335f922d51fc8ea556ab1a62a34d1c76436cb1f31c70fcdd62"
+    },
+    {
+      "assembly": "Elsa.Activities.Design.Api",
+      "fingerprint": "sha256:5b29c68196392fcab1a53c3e4d4253192260df6b2c1143c3aae4d7f5b0ea85f8"
+    },
+    {
+      "assembly": "Elsa.Activities.Design.Reconciliation",
+      "fingerprint": "sha256:8e4c0527e61e53cc1c2d672877c6734d2c3d1291c7c72a9528797f4b8afa6ef2"
+    },
+    {
+      "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+      "fingerprint": "sha256:3f093dc707571b933d79a7e9c60e76983400ee5310b75109753d94ef40d595ea"
+    },
+    {
+      "assembly": "Elsa.Activities.Design.Reconciliation.Json",
+      "fingerprint": "sha256:1abdfd5667bf0fce130d08b86a545682120a5e564606b657a87bdded69ccaaa2"
+    },
+    {
+      "assembly": "Elsa.Activities.DispatchWorkflow.Design",
+      "fingerprint": "sha256:1582b6e46b7fbaf19754298f7a0472fc688614f0a014b505a76e20f2b1eb64ae"
+    },
+    {
+      "assembly": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "fingerprint": "sha256:ac2fdd03f365eb2ade8dc9f478bc17288a7c0b6968d817ecac9902059636e49c"
+    },
+    {
+      "assembly": "Elsa.Activities.Flowchart",
+      "fingerprint": "sha256:1026080c348fc41bc59c3c788672e6f6e3cc7af70863d145b23b3a7a737581f6"
+    },
+    {
+      "assembly": "Elsa.Activities.Graph.Design",
+      "fingerprint": "sha256:aefe95ec1c29f64afa5d69e3a943803e42f2e9f45ebd7c8e325a334c5c6c368b"
+    },
+    {
+      "assembly": "Elsa.Activities.Graph.Runtime",
+      "fingerprint": "sha256:ebec48b79ef1a41f1146f2804ee602b5804dbcb86337237784928649b5aa532e"
+    },
+    {
+      "assembly": "Elsa.Activities.Http",
+      "fingerprint": "sha256:31cda422bd759543cdb4e42be38e0332da5a53f76bd2581bc29c83132b6b5981"
+    },
+    {
+      "assembly": "Elsa.Activities.Primitives",
+      "fingerprint": "sha256:e228e15b4207c75a39e58e90217aeed68631f2f1a063446066eec82788c68e88"
+    },
+    {
+      "assembly": "Elsa.Activities.Runtime",
+      "fingerprint": "sha256:ff010a8636b94fb279aa9602e5951df64cebd15b44c03b1dfaa993a6a26734c0"
+    },
+    {
+      "assembly": "Elsa.Activities.Scheduling",
+      "fingerprint": "sha256:01b6672c2e0a3305beeda91959671c2aa2edd0cc010e36dfe9918870d204b9d4"
+    },
+    {
+      "assembly": "Elsa.Activities.Scripting",
+      "fingerprint": "sha256:44490d19efa2d806cff26652c6deaa11459fe5338ce2a9bdbbcbff9e0051d546"
+    },
+    {
+      "assembly": "Elsa.Activities.Sequence",
+      "fingerprint": "sha256:bf00501765f7da96d50be0c2320c3e7b0994fce077efe122fa4a9c52d31612c5"
+    },
+    {
+      "assembly": "Elsa.Agent.Anthropic",
+      "fingerprint": "sha256:2c8fca9eb100c8862ae0245c0ea7331eec21455ff1aa1bcd2a99d1f84bb1e243"
+    },
+    {
+      "assembly": "Elsa.Agent.Api",
+      "fingerprint": "sha256:bb4fcdad2c33fd4d2979921984c466459ca3275cdf4922626b4336605d4fff55"
+    },
+    {
+      "assembly": "Elsa.Agent.Core",
+      "fingerprint": "sha256:95245b3b44dc959c976c7853ca34707f23bb348366088565cb0bf39ffe589bbc"
+    },
+    {
+      "assembly": "Elsa.Agent.GitHubCopilot",
+      "fingerprint": "sha256:bf1d4fe5fcd961bb606016df102922a183daa244b87267b4f6adf42a263de3c7"
+    },
+    {
+      "assembly": "Elsa.Agent.Workflows",
+      "fingerprint": "sha256:181b0da1ed827b779564ca9e2c4133838c1103865e0060ba563e7c484150d725"
+    },
+    {
+      "assembly": "Elsa.Api.Capabilities",
+      "fingerprint": "sha256:d7868aef133d688c26e702d73e90d2926745d8d2c385b2a7cdeab678ba858134"
+    },
+    {
+      "assembly": "Elsa.Api.FastEndpoints",
+      "fingerprint": "sha256:f9d2d867079498ad1de7a9b5425159487787123d13201a17bbf215530c399ad9"
+    },
+    {
+      "assembly": "Elsa.Attention.Api",
+      "fingerprint": "sha256:61c7e48c1b331dd3113cec174943e5fadb70de458cc4fde8ad11bc71b81fc98c"
+    },
+    {
+      "assembly": "Elsa.Caching.Memory",
+      "fingerprint": "sha256:4e3a189d1e369d9700af182212b424e9095ac0e198a8856b1c5b4263eef9f3af"
+    },
+    {
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "fingerprint": "sha256:bfbfd10006aac3e2865aacda7f2dfc28e44eea392701181d489963bffaac9e7a"
+    },
+    {
+      "assembly": "Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite",
+      "fingerprint": "sha256:f62f75adbf0180ee07d1d8d2c7c5ec603ba6e4d44e98692c047acc63ff682dba"
+    },
+    {
+      "assembly": "Elsa.Diagnostics.Persistence.Groundwork",
+      "fingerprint": "sha256:a6b2216a60b9cd89df6f08c50fbc10edeb2abff57c0163fcf14188f022ab490d"
+    },
+    {
+      "assembly": "Elsa.Diagnostics.StructuredLogs",
+      "fingerprint": "sha256:1edf3c953b8720c8dfd9f0d01ad95cc850d4fcd12a158ed4857133f1433c68a2"
+    },
+    {
+      "assembly": "Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite",
+      "fingerprint": "sha256:83e9c2eca79611d4d9d94e02da89b62caa0bbddcc0ed3d657129a73647c890ff"
+    },
+    {
+      "assembly": "Elsa.Events",
+      "fingerprint": "sha256:e65f6d9d1c47ce72b407665be1771c40ea17a81d060017b58316af46d524b222"
+    },
+    {
+      "assembly": "Elsa.Expressions",
+      "fingerprint": "sha256:efb8ef2070b581f5cfbc518406e311b42db26f09c8a9afa4af5ce2bb43e52a48"
+    },
+    {
+      "assembly": "Elsa.Expressions.Api",
+      "fingerprint": "sha256:7a7561ab60016d037428262078cc9fd568e4203ceda41b4112a17a41920b28c4"
+    },
+    {
+      "assembly": "Elsa.Expressions.JavaScript",
+      "fingerprint": "sha256:0c740ed731d8888307cb97da5cc1b963e030a686ec3da47f8b8bdba5c94a042f"
+    },
+    {
+      "assembly": "Elsa.Expressions.JavaScript.Jint",
+      "fingerprint": "sha256:f3a472dfda230b744cbd1cf4151095aea2167d83e8e91b0e071256653bafa8a3"
+    },
+    {
+      "assembly": "Elsa.Expressions.JavaScript.Rendering",
+      "fingerprint": "sha256:9894e44728839427a489321a138027f957f43d4d952e1946d4bbe8cab492b69d"
+    },
+    {
+      "assembly": "Elsa.Expressions.Liquid",
+      "fingerprint": "sha256:eebbfa0cc4f2288b0addc10ab8d633cfdd6465187bf12ae4e77b2b12c464e14c"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.Abstractions",
+      "fingerprint": "sha256:51ab25355fd1168086b80e446457917d255891ec7132464762c7ff5331951688"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "fingerprint": "sha256:aaf1470b675958a91c51544345e224c218064b2aada72151d8716a3de8fa052c"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "fingerprint": "sha256:4e7a7a019651213e8822bf1500841ecbaa7a7ab0a60f9317b967c1554b5909f4"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "fingerprint": "sha256:e44c13da8ba15e2f49c95f7f8797589b40716ed93372a35fcd5fe0f5dde90b2e"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork",
+      "fingerprint": "sha256:5429a5d35812b79a3b38d1b6a34413a52924a54d9e0eee0308e6f03bb074b4eb"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.Oidc",
+      "fingerprint": "sha256:4bce672ecd9bb32e7b674d5e663c7b40beea7f88a0cadc9fb1edc796ebf6f15d"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.OpenIddict",
+      "fingerprint": "sha256:95cf61011724f7c6813348f5b574f906b31f654bbaf6ce6596744c9f5767f23a"
+    },
+    {
+      "assembly": "Elsa.Foundation.Identity.Persistence.Groundwork",
+      "fingerprint": "sha256:d032635ce1218d22c19bc3e9bf06b65654d444e075284dd127f3e66ef9b964d6"
+    },
+    {
+      "assembly": "Elsa.Http",
+      "fingerprint": "sha256:23a1a9a51b3330cfabde7497b506ad2120f677d0e431051e2d8e47a5ee7819fb"
+    },
+    {
+      "assembly": "Elsa.Http.JavaScript",
+      "fingerprint": "sha256:00da51f709b557a27bd4978e8e5094252b3368fae4be5db5ae44080b92976fd4"
+    },
+    {
+      "assembly": "Elsa.Locking.FileSystem",
+      "fingerprint": "sha256:0f5ece006cf01cc42ded1376c062a1349fe8637f697ddda79c69e25644ab6127"
+    },
+    {
+      "assembly": "Elsa.Mediator",
+      "fingerprint": "sha256:46e16f1e4f4019d1761d81b5a5183625aebf847a2d4c439467936ea8216d329f"
+    },
+    {
+      "assembly": "Elsa.Modularity.Api",
+      "fingerprint": "sha256:755edabed11d66a545e7edb5cb6a02728cba30e1cfd377ff10f5b69270400e8c"
+    },
+    {
+      "assembly": "Elsa.Modularity.Attention",
+      "fingerprint": "sha256:92155a1cd7b88291a34d87e74022644d01d55a84f768656b73c3b8961c64508f"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.MongoDb",
+      "fingerprint": "sha256:c98e3a3e4b46a0274d7b1bf1d7153b808738a3ff727c055a77b4d93fed506990"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.MongoDb.Unified",
+      "fingerprint": "sha256:596bef1a6a5a23db3b63f23f93af7bfbf5cf56393ce25a6b4085f7d2740956ab"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.PostgreSql",
+      "fingerprint": "sha256:f1c45a8464faaa3f2c824f615dbc4b75f2d454671252c00c555b7a5cc72ed35a"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.PostgreSql.Unified",
+      "fingerprint": "sha256:116879ce8cddddb6ebc424e80fedbc1606c281efaec0140515f0f1e282bc3e45"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.SqlServer",
+      "fingerprint": "sha256:f798a56906030485590c43139ccde1a509afc1f76a26715fdd8f053409a16431"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.SqlServer.Unified",
+      "fingerprint": "sha256:9a67803b40fa00ae5ff0e5cc53b6ca4773ad4b66fbf08c8480cc78c41570ba41"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.Sqlite",
+      "fingerprint": "sha256:9f0a016635503c8e5d463d92f7dc911a309b4f91bf6dcfa38122e44c1a56a879"
+    },
+    {
+      "assembly": "Elsa.Persistence.Groundwork.Sqlite.Unified",
+      "fingerprint": "sha256:e2d6f42b9ded9d50e48d893f1dcdec88cb5701d7262775d81f99ce7fe8638155"
+    },
+    {
+      "assembly": "Elsa.Primitives.Hosting",
+      "fingerprint": "sha256:e93bb48197cf6473a9e7bff3649651d70ef1c35a7ab555c012daf99cba62d3a6"
+    },
+    {
+      "assembly": "Elsa.Secrets",
+      "fingerprint": "sha256:8206968b916c97ba5ade2ad955f9396e6f4ded4ac44d8868c5e0ddf38be62c60"
+    },
+    {
+      "assembly": "Elsa.Secrets.Api",
+      "fingerprint": "sha256:8087f8e94c7c88771eae296c9ef93f70a9d7915f91c76027e37ff410df7252d4"
+    },
+    {
+      "assembly": "Elsa.Secrets.Attention",
+      "fingerprint": "sha256:5c44db9aae6b5e3f8bbd269de0b14a92c50354e4b1b0f7121a4d5240a88359a2"
+    },
+    {
+      "assembly": "Elsa.Secrets.Persistence.Groundwork",
+      "fingerprint": "sha256:51f14d5dcb3afe370fb6debbe678f6292832b106d9d0387e749c71c32b77c03c"
+    },
+    {
+      "assembly": "Elsa.Serialization.Newtonsoft",
+      "fingerprint": "sha256:da096521c3dc4cfee70eceb6853c4ce40e8ff3c096ba6a7743682d00c15ecc32"
+    },
+    {
+      "assembly": "Elsa.Serialization.SystemText",
+      "fingerprint": "sha256:35de3c60e7aaf6dc44ed50b72d149ad3bad5b4ab64d7f03da5cbb43ae2143589"
+    },
+    {
+      "assembly": "Elsa.Studio.Preferences.Api",
+      "fingerprint": "sha256:b0a7a0cd5eaad46966222b6880f7488ea1e89facdae9382c31b8a901c2b65814"
+    },
+    {
+      "assembly": "Elsa.Studio.Preferences.Persistence.Groundwork",
+      "fingerprint": "sha256:07031cd60a745d132a1a31eed44486f69cba7400e11e6d906aff3a2e68379bd5"
+    },
+    {
+      "assembly": "Elsa.Tasks",
+      "fingerprint": "sha256:e4fdb7721f83f5ac04953e7f4360656a3d0b25bd454c59e1e2e96ed13c8fa2ba"
+    },
+    {
+      "assembly": "Elsa.Workflows.Dashboard",
+      "fingerprint": "sha256:562df769b83063bb667a57f686b4530cd2bd5d9fcf0a1b62986fb9a54834b1a5"
+    },
+    {
+      "assembly": "Elsa.Workflows.Design.Api",
+      "fingerprint": "sha256:9a4226da393dc1ca8de2175ba2fffa381c5c3788b39a215fe8c4a8e2e576ecda"
+    },
+    {
+      "assembly": "Elsa.Workflows.Design.JavaScript",
+      "fingerprint": "sha256:4def501be6996c1f28063ddef88ac3dbba0b5ae083144af400258c1bf7865d49"
+    },
+    {
+      "assembly": "Elsa.Workflows.Design.Reconciliation.Git",
+      "fingerprint": "sha256:026736bfcc04826c18d39934955d70c6f7466f925bbc3f74a84b6a739b82648b"
+    },
+    {
+      "assembly": "Elsa.Workflows.Design.Reconciliation.Json",
+      "fingerprint": "sha256:4a42c48432c9f5ac97ab140fe81d621713be054d85936684bfe0ce71184ec48a"
+    },
+    {
+      "assembly": "Elsa.Workflows.Design.Validations",
+      "fingerprint": "sha256:b8b177d32abb98508c8b9e03fb00b4a02c0b3fc32f57c1a584d5c34e6b8d7785"
+    },
+    {
+      "assembly": "Elsa.Workflows.ExecutionEvidence",
+      "fingerprint": "sha256:b18a23430116d19378f20ec255e86c41f53d77f3e9caf07de7d17309ca608297"
+    },
+    {
+      "assembly": "Elsa.Workflows.Publishing",
+      "fingerprint": "sha256:26dd4b9783f0e40cba7a97dce76138ec02fe36c22d96cfa9432a10bc900ceb39"
+    },
+    {
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "fingerprint": "sha256:7dee695b06d2b04235f7f1264438d84c67b24934347a9f3f0b557a07198d245c"
+    },
+    {
+      "assembly": "Elsa.Workflows.Publishing.Persistence.Groundwork",
+      "fingerprint": "sha256:23c6348cff90a895dd43720317c0ded4cb4c9a4e8130e0be61cd703d51ecdac7"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "fingerprint": "sha256:c86ee231128ded34eceafea2579374c7950cd36aea92d1566e15fd1004e497c2"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Attention",
+      "fingerprint": "sha256:84c4704255b76217ff8ce09c950eea8e2d17fbabfc96504ec089355f3329eefb"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Distributed",
+      "fingerprint": "sha256:405c62acb1637f2f92843a07da5930923cd89d50c7d1ad66aa5673ffc98a1802"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork",
+      "fingerprint": "sha256:f3edc6c9877669642173e1f712b2764ed01f154ce484ff8c7b50147c87df8934"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Http",
+      "fingerprint": "sha256:99e666eb8a3f2ba0e56c8649f2fb5893e0d5f52d01a2acb24531af48294b22e1"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.JavaScript",
+      "fingerprint": "sha256:1f42c8a01fe799340950c9f0f217b2a0dcc849094773c77ad2d0e8e6d8e521a2"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+      "fingerprint": "sha256:706df82cedb2f06672c1ad468c9c555ad3828252c9ba8a3f36bc3d572c391a40"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Resumption",
+      "fingerprint": "sha256:ac3f5a3e6c7e05cbb6bec82375c8cacb798d21073f2dc3d813124356d0a112dd"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Scheduling",
+      "fingerprint": "sha256:f3323513e687331f8e29f8cc5d59e22f05cf4e2cbb7b32b213dea6ccaaba3329"
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime.Tracing",
+      "fingerprint": "sha256:30ab5ccb7a8a133630d4fbf6a5bf2be9577898db20d80e55f80258df1573e389"
+    },
+    {
+      "assembly": "Elsa3.Activities.Design.Import",
+      "fingerprint": "sha256:296e93f36254dab60aa01a5a6d4e43ab4877d6725eadf907fb50d05f5449eac0"
+    },
+    {
+      "assembly": "Elsa3.Activities.Design.Import.Persistence.Groundwork",
+      "fingerprint": "sha256:8b1eac0a2e9a5051c5e6fe8ff42cccb64ab9396892381efc30c6a22e655923a3"
+    },
+    {
+      "assembly": "Elsa3.Mapping",
+      "fingerprint": "sha256:f353068f08f1192babf504ea55b7bd47d6401377f5dad0f67419ef1800ff48d6"
+    }
+  ],
+  "generator": "tools/contracts/Elsa.Contracts.Generator",
+  "schemaVersion": "1.0",
+  "submitSchema": "sha256:a18012ecbb231d8a7f8c68118c008fcf9a49fd331457b71893b3775ae687513e"
+}

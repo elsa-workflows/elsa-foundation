@@ -1,0 +1,103 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Http",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides HTTP content parsing, routing, downloading, and cache services.",
+      "displayName": "HTTP",
+      "id": "Http",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Caching",
+          "clrType": "System.TimeSpan",
+          "defaultValue": null,
+          "description": "Duration downloaded ZIP files remain in the local cache.",
+          "displayName": "ZIP cache time to live",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "CacheTtl",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "CLR type name of the content type provider implementation.",
+          "displayName": "Content type provider type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ContentTypeProviderType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "CLR type name of the file downloader implementation.",
+          "displayName": "File downloader type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "FileDownloaderType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Caching",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Directory used for local HTTP ZIP file caching.",
+          "displayName": "Local cache directory",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "LocalCacheDirectory",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "CLR type name of the ZIP archive manager implementation.",
+          "displayName": "ZIP archive manager type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ZipArchiveManagerType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "CLR type name of the ZIP file cache storage provider implementation.",
+          "displayName": "Zip file cache provider type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ZipFileCacheProviderType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

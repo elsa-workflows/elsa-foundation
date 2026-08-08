@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Events",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides event publishing, event pipeline dispatch, and background event processing services.",
+      "displayName": "Events",
+      "id": "Events",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

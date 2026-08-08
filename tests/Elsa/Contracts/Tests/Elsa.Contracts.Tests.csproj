@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../tools/contracts/Elsa.Contracts.Generator/Elsa.Contracts.Generator.csproj" />
+    <!-- Representative-host surface for the equivalence tests: activities, structures, expressions, intrinsics. -->
+    <ProjectReference Include="../../../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Expressions/Elsa.Expressions.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
+    <ProjectReference Include="../../../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
+  </ItemGroup>
+
+</Project>

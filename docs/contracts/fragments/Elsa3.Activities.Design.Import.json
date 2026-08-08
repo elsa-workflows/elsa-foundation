@@ -1,0 +1,49 @@
+{
+  "activities": [],
+  "assembly": "Elsa3.Activities.Design.Import",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Elsa3Mapping"
+      ],
+      "description": "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
+      "displayName": "Elsa 3 Import Activities",
+      "id": "Elsa3ImportJsonActivities",
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Workflow Collection Source Types",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "WorkflowCollectionSourceTypes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

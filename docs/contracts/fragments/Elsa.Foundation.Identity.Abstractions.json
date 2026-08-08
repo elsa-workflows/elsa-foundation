@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.Abstractions",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers provider-agnostic authentication, IAM, authorization, ownership, and security guard contracts.",
+      "displayName": "Foundation Identity Abstractions",
+      "id": "FoundationIdentityAbstractions",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

@@ -1,0 +1,47 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Locking.FileSystem",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides services to enable distributed locking using the file system",
+      "displayName": "File System Distributed Locking",
+      "id": "FileSystemDistributedLocking",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Locking",
+          "clrType": "System.Double",
+          "defaultValue": 10,
+          "description": "Maximum time in minutes to wait when acquiring a distributed lock.",
+          "displayName": "Lock acquisition timeout",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "LockAcquisitionTimeoutMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Locking",
+          "clrType": "System.String",
+          "defaultValue": "C:\\Users\\JoeyBarten\\source\\repos\\elsa-foundation\\App_Data/locks",
+          "description": "Directory used to store file-system distributed lock files.",
+          "displayName": "Locks folder path",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "LocksFolderPath",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

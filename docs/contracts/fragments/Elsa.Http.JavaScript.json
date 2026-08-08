@@ -1,0 +1,2146 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Http.JavaScript",
+  "expressions": {
+    "descriptors": [],
+    "javaScriptDeclarations": [
+      {
+        "contributor": "Elsa.Http.JavaScript.Contributors.HttpTypeDeclarationContributor",
+        "featureId": "HttpJavaScript",
+        "functions": [],
+        "types": [
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpRouteData",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Route",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "DataTokens",
+                "type": "RouteValueDictionary"
+              },
+              {
+                "isOptional": false,
+                "name": "RouteValues",
+                "type": "RouteValueDictionary"
+              },
+              {
+                "isOptional": false,
+                "name": "CompiledMatcher",
+                "type": "Object"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "ReadFormAsync",
+                "parameters": [
+                  {
+                    "isOptional": true,
+                    "name": "cancellationToken",
+                    "type": "CancellationToken"
+                  }
+                ],
+                "returnType": "Task\u00601"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpRequest",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "HttpContext",
+                "type": "HttpContext"
+              },
+              {
+                "isOptional": false,
+                "name": "Method",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Scheme",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "IsHttps",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "Host",
+                "type": "HostString"
+              },
+              {
+                "isOptional": false,
+                "name": "PathBase",
+                "type": "PathString"
+              },
+              {
+                "isOptional": false,
+                "name": "Path",
+                "type": "PathString"
+              },
+              {
+                "isOptional": false,
+                "name": "QueryString",
+                "type": "QueryString"
+              },
+              {
+                "isOptional": false,
+                "name": "Query",
+                "type": "IQueryCollection"
+              },
+              {
+                "isOptional": false,
+                "name": "Protocol",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Headers",
+                "type": "IHeaderDictionary"
+              },
+              {
+                "isOptional": false,
+                "name": "Cookies",
+                "type": "IRequestCookieCollection"
+              },
+              {
+                "isOptional": true,
+                "name": "ContentLength",
+                "type": "Nullable\u00601"
+              },
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Body",
+                "type": "Stream"
+              },
+              {
+                "isOptional": false,
+                "name": "BodyReader",
+                "type": "PipeReader"
+              },
+              {
+                "isOptional": false,
+                "name": "HasFormContentType",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "Form",
+                "type": "IFormCollection"
+              },
+              {
+                "isOptional": false,
+                "name": "RouteValues",
+                "type": "RouteValueDictionary"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "OnStarting",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "callback",
+                    "type": "Func\u00602"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "state",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "OnCompleted",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "callback",
+                    "type": "Func\u00602"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "state",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "RegisterForDispose",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "disposable",
+                    "type": "IDisposable"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "RegisterForDisposeAsync",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "disposable",
+                    "type": "IAsyncDisposable"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Redirect",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "location",
+                    "type": "String"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "StartAsync",
+                "parameters": [
+                  {
+                    "isOptional": true,
+                    "name": "cancellationToken",
+                    "type": "CancellationToken"
+                  }
+                ],
+                "returnType": "Task"
+              },
+              {
+                "name": "CompleteAsync",
+                "parameters": [],
+                "returnType": "Task"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpResponse",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "HttpContext",
+                "type": "HttpContext"
+              },
+              {
+                "isOptional": false,
+                "name": "StatusCode",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "Headers",
+                "type": "IHeaderDictionary"
+              },
+              {
+                "isOptional": false,
+                "name": "Body",
+                "type": "Stream"
+              },
+              {
+                "isOptional": false,
+                "name": "BodyWriter",
+                "type": "PipeWriter"
+              },
+              {
+                "isOptional": true,
+                "name": "ContentLength",
+                "type": "Nullable\u00601"
+              },
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Cookies",
+                "type": "IResponseCookies"
+              },
+              {
+                "isOptional": false,
+                "name": "HasStarted",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "EnsureSuccessStatusCode",
+                "parameters": [],
+                "returnType": "HttpResponseMessage"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Dispose",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpResponseMessage",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Version",
+                "type": "Version"
+              },
+              {
+                "isOptional": false,
+                "name": "Content",
+                "type": "HttpContent"
+              },
+              {
+                "isOptional": false,
+                "name": "StatusCode",
+                "type": "HttpStatusCode"
+              },
+              {
+                "isOptional": false,
+                "name": "ReasonPhrase",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Headers",
+                "type": "HttpResponseHeaders"
+              },
+              {
+                "isOptional": false,
+                "name": "TrailingHeaders",
+                "type": "HttpResponseHeaders"
+              },
+              {
+                "isOptional": false,
+                "name": "RequestMessage",
+                "type": "HttpRequestMessage"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSuccessStatusCode",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Add",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "key",
+                    "type": "String"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "String[]"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Clear",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "ContainsKey",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "key",
+                    "type": "String"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "ContainsValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "String[]"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "Enumerator"
+              },
+              {
+                "name": "GetObjectData",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "info",
+                    "type": "SerializationInfo"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "context",
+                    "type": "StreamingContext"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetAlternateLookup",
+                "parameters": [],
+                "returnType": "AlternateLookup\u00601"
+              },
+              {
+                "name": "TryGetAlternateLookup",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "lookup",
+                    "type": "AlternateLookup\u00601\u0026"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "OnDeserialization",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "sender",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Remove",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "key",
+                    "type": "String"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "TryGetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "key",
+                    "type": "String"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "String[]\u0026"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "TryAdd",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "key",
+                    "type": "String"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "String[]"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "EnsureCapacity",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "capacity",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "TrimExcess",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpHeaders",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Comparer",
+                "type": "IEqualityComparer\u00601"
+              },
+              {
+                "isOptional": false,
+                "name": "Count",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "Capacity",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "Keys",
+                "type": "KeyCollection"
+              },
+              {
+                "isOptional": false,
+                "name": "Values",
+                "type": "ValueCollection"
+              },
+              {
+                "isOptional": false,
+                "name": "Item",
+                "type": "String[]"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "interface",
+            "methods": [
+              {
+                "name": "OpenReadStream",
+                "parameters": [],
+                "returnType": "Stream"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "target",
+                    "type": "Stream"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "CopyToAsync",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "target",
+                    "type": "Stream"
+                  },
+                  {
+                    "isOptional": true,
+                    "name": "cancellationToken",
+                    "type": "CancellationToken"
+                  }
+                ],
+                "returnType": "Task"
+              }
+            ],
+            "name": "IFormFile",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "ContentDisposition",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "Headers",
+                "type": "IHeaderDictionary"
+              },
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Name",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "FileName",
+                "type": "String"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "GetBytes",
+                "parameters": [],
+                "returnType": "Byte[]"
+              },
+              {
+                "name": "GetStreamContent",
+                "parameters": [],
+                "returnType": "StreamContent"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpFile",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Stream",
+                "type": "Stream"
+              },
+              {
+                "isOptional": false,
+                "name": "Filename",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "ETag",
+                "type": "String"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "Downloadable",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Stream",
+                "type": "Stream"
+              },
+              {
+                "isOptional": false,
+                "name": "Filename",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "ContentType",
+                "type": "String"
+              },
+              {
+                "isOptional": false,
+                "name": "ETag",
+                "type": "String"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "IFormFile"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "IFormFile"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "IFormFile\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "IFormFile[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "HttpFile"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "HttpFile"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "HttpFile\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpFile[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": null,
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Downloadable"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Downloadable"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Downloadable\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "Downloadable[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": "IFormFile[]",
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "IFormFile"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "IFormFile"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "IFormFile\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "IFormFile[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": "HttpFile[]",
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "HttpFile"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "HttpFile"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "HttpFile\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "HttpFile[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          },
+          {
+            "alias": "Downloadable[]",
+            "declarationKeyword": "class",
+            "methods": [
+              {
+                "name": "Get",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Downloadable"
+              },
+              {
+                "name": "Set",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Downloadable"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "Address",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": null,
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Downloadable\u0026"
+              },
+              {
+                "name": "Initialize",
+                "parameters": [],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetUpperBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetLowerBound",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int32"
+              },
+              {
+                "name": "GetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "indices",
+                    "type": "Int32[]"
+                  }
+                ],
+                "returnType": "Object"
+              },
+              {
+                "name": "SetValue",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "value",
+                    "type": "Object"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetLongLength",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "dimension",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Int64"
+              },
+              {
+                "name": "Clone",
+                "parameters": [],
+                "returnType": "Object"
+              },
+              {
+                "name": "CopyTo",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "array",
+                    "type": "Array"
+                  },
+                  {
+                    "isOptional": false,
+                    "name": "index",
+                    "type": "Int32"
+                  }
+                ],
+                "returnType": "Void"
+              },
+              {
+                "name": "GetEnumerator",
+                "parameters": [],
+                "returnType": "IEnumerator"
+              },
+              {
+                "name": "GetType",
+                "parameters": [],
+                "returnType": "Type"
+              },
+              {
+                "name": "ToString",
+                "parameters": [],
+                "returnType": "String"
+              },
+              {
+                "name": "Equals",
+                "parameters": [
+                  {
+                    "isOptional": false,
+                    "name": "obj",
+                    "type": "Object"
+                  }
+                ],
+                "returnType": "Boolean"
+              },
+              {
+                "name": "GetHashCode",
+                "parameters": [],
+                "returnType": "Int32"
+              }
+            ],
+            "name": "Downloadable[]",
+            "properties": [
+              {
+                "isOptional": false,
+                "name": "Length",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "LongLength",
+                "type": "Int64"
+              },
+              {
+                "isOptional": false,
+                "name": "Rank",
+                "type": "Int32"
+              },
+              {
+                "isOptional": false,
+                "name": "SyncRoot",
+                "type": "Object"
+              },
+              {
+                "isOptional": false,
+                "name": "IsReadOnly",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsFixedSize",
+                "type": "Boolean"
+              },
+              {
+                "isOptional": false,
+                "name": "IsSynchronized",
+                "type": "Boolean"
+              }
+            ]
+          }
+        ],
+        "variables": []
+      }
+    ],
+    "scriptSandbox": []
+  },
+  "features": [
+    {
+      "dependsOn": [
+        "JavaScriptRendering"
+      ],
+      "description": "Adds HTTP declarations to JavaScript design services.",
+      "displayName": "HTTP JavaScript services",
+      "id": "HttpJavaScript",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa3.Activities.Design.Import.Persistence.Groundwork",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Commits reviewed Elsa 3 reusable-activity collection closures atomically across Activity and Workflow Design documents.",
+      "displayName": "Elsa 3 Activity Import Groundwork",
+      "id": "Elsa3ImportActivitiesGroundwork",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Serialization.Newtonsoft",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Contributes Newtonsoft JSON island handling for the payload serializer.",
+      "displayName": "Serialization - Newtonsoft",
+      "id": "Serialization.Newtonsoft",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

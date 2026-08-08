@@ -26,6 +26,9 @@
   <Folder Name="/tools/evidence/">
     <Project Path="tools/evidence/Preview95SchemaFixtureReproducer.csproj" />
   </Folder>
+  <Folder Name="/tools/contracts/">
+    <Project Path="tools/contracts/Elsa.Contracts.Generator/Elsa.Contracts.Generator.csproj" />
+  </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
   </Folder>
@@ -381,6 +384,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Runtime/">
     <Project Path="tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Contracts/">
+    <Project Path="tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Agent/">
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />

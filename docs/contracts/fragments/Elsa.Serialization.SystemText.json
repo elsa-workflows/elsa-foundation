@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Serialization.SystemText",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the OnJsonPayloadConvertersInitializing domain event (framework \u00A72.6.1 Registry \u002B StartUp Task sub-pattern; Elsa \u00A7E3.3 worked example).",
+      "displayName": "Serialization",
+      "id": "Serialization",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

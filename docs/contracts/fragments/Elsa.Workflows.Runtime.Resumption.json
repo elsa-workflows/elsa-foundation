@@ -1,0 +1,133 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Resumption",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Tasks"
+      ],
+      "description": "Background pump that periodically re-delivers stranded post-commit outbox items and re-drives workflow executions with durable scheduler-work backlog after a restart or crash. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature.",
+      "displayName": "Workflows Runtime Resumption",
+      "id": "WorkflowsRuntimeResumption",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Maximum stranded-backlog execution IDs discovered from the durable queue per sweep.",
+          "displayName": "Backlog batch size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "BacklogBatchSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Heartbeat-expiry threshold handed to the recovery scanner.",
+          "displayName": "Heartbeat timeout (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "HeartbeatTimeoutMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Lease-expiry threshold handed to the recovery scanner.",
+          "displayName": "Lease timeout (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "LeaseTimeoutMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Upper bound the sweep interval and per-execution backoff widen to under sustained failure.",
+          "displayName": "Max backoff interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "MaxBackoffIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Hard cap on executions re-driven per sweep after discovery, bounding dispatch bursts.",
+          "displayName": "Max executions per sweep",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxExecutionsPerSweep",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Maximum post-commit outbox items delivered per sweep.",
+          "displayName": "Outbox batch size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "OutboxBatchSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Maximum recovery-scanner candidates requested per sweep.",
+          "displayName": "Recovery scan batch size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "RecoveryScanBatchSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 10,
+          "description": "Baseline seconds between resumption sweeps while the host is healthy.",
+          "displayName": "Sweep interval (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "SweepIntervalSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

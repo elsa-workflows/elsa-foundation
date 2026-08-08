@@ -12,7 +12,11 @@ namespace Elsa.Http.JavaScript;
 [ShellFeature(
     name: "HttpJavaScript",
     DisplayName = "HTTP JavaScript services",
-    Description = "Adds HTTP declarations to JavaScript design services."
+    Description = "Adds HTTP declarations to JavaScript design services.",
+    // HttpTypeDeclarationContributor injects IJavaScriptTypeDeclarationFactory, which only the
+    // JavaScriptRendering feature registers — the dependency was always real, just undeclared
+    // (surfaced by the contract fragment projection, spec 149 / RFC #1191).
+    DependsOn = new object[] { "JavaScriptRendering" }
 )]
 public class HttpJavaScriptFeature : IShellFeature
 {

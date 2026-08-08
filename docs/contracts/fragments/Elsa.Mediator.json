@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Mediator",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides request and command dispatch pipelines for synchronous in-process mediation.",
+      "displayName": "Mediator",
+      "id": "Mediator",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

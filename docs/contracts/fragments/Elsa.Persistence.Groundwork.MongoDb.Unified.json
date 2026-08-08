@@ -1,0 +1,91 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Persistence.Groundwork.MongoDb.Unified",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeResumption"
+      ],
+      "description": "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required; safe missing document structures and diagnostic streams can be auto-applied at startup.",
+      "displayName": "Groundwork MongoDB Unified Persistence",
+      "id": "GroundworkUnifiedPersistenceMongoDb",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.Boolean",
+          "defaultValue": null,
+          "description": "When enabled, safe pending document-schema operations and missing diagnostic-record streams are applied automatically at startup instead of requiring Groundwork.Tool. Drift and destructive operations are never auto-applied.",
+          "displayName": "Auto-apply schema on startup",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "AutoApplySchemaOnStartup",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Performance",
+          "clrType": "System.Boolean",
+          "defaultValue": null,
+          "description": "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+          "displayName": "Cache workflow executables",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "CacheWorkflowExecutables",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "MongoDB replica-set connection string for the unified Groundwork document store.",
+          "displayName": "Connection string",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ConnectionString",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "MongoDB database containing the deployment-owned Groundwork physical schema.",
+          "displayName": "Database name",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "DatabaseName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Performance",
+          "clrType": "System.Int32",
+          "defaultValue": null,
+          "description": "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+          "displayName": "Workflow executable cache capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "WorkflowExecutableCacheCapacity",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

@@ -1,0 +1,35 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
+      "category": "Runtime",
+      "containerStructure": null,
+      "contentHash": "096C312A1AC5E467403127333568E545DAF855315204F1B7E9140F7BA0424709",
+      "description": null,
+      "displayName": "Graph Activity",
+      "executionType": "Action",
+      "featureId": "ActivitiesGraphRuntime",
+      "inputs": [],
+      "outputs": [],
+      "ports": [],
+      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+    }
+  ],
+  "assembly": "Elsa.Activities.Graph.Runtime",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ActivitiesRuntime"
+      ],
+      "description": "Runtime construction and activity-execution scoping for reusable activity graphs.",
+      "displayName": "Activities Graph (Runtime)",
+      "id": "ActivitiesGraphRuntime",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

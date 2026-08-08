@@ -1,0 +1,645 @@
+{
+  "fingerprint": "sha256:45ad34de13a630461404b46dd2a10e68a8bb9daf2e96ade0d743b9113d687add",
+  "schema": {
+    "properties": {
+      "description": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "operationKey": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "state": {
+        "properties": {
+          "inputs": {
+            "default": null,
+            "items": {
+              "properties": {
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "defaultSyntax": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "defaultValue": {
+                  "default": null
+                },
+                "description": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "hasStaticDefault": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "isBrowsable": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "isNullable": {
+                  "type": "boolean"
+                },
+                "isRequired": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "isSerializable": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order": {
+                  "default": 0,
+                  "type": "number"
+                },
+                "propertyInfo": {
+                  "default": null
+                },
+                "referenceKey": {
+                  "type": "string"
+                },
+                "storageDriverType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "collectionKind": {
+                      "default": "single",
+                      "enum": [
+                        "single",
+                        "array",
+                        "list",
+                        "hashSet",
+                        "dictionary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "alias"
+                  ],
+                  "type": "object"
+                },
+                "uiHint": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "uiSpecifications": {
+                  "default": null
+                }
+              },
+              "required": [
+                "referenceKey",
+                "name",
+                "type",
+                "displayName",
+                "isNullable"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "outputs": {
+            "default": null,
+            "items": {
+              "properties": {
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "description": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "isBrowsable": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "isNullable": {
+                  "type": "boolean"
+                },
+                "isRequired": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "isSerializable": {
+                  "default": null,
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order": {
+                  "default": 0,
+                  "type": "number"
+                },
+                "propertyInfo": {
+                  "default": null
+                },
+                "referenceKey": {
+                  "type": "string"
+                },
+                "sourceRepresentation": {
+                  "default": null,
+                  "enum": [
+                    "typedValue",
+                    "structuredValue",
+                    "textValue",
+                    "formattedContent",
+                    "binaryContent",
+                    "durableReference",
+                    "transientResource",
+                    null
+                  ]
+                },
+                "storageDriverType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "collectionKind": {
+                      "default": "single",
+                      "enum": [
+                        "single",
+                        "array",
+                        "list",
+                        "hashSet",
+                        "dictionary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "alias"
+                  ],
+                  "type": "object"
+                },
+                "uiHint": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "uiSpecifications": {
+                  "default": null
+                }
+              },
+              "required": [
+                "referenceKey",
+                "name",
+                "type",
+                "displayName",
+                "isNullable"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "rootActivity": {
+            "default": null,
+            "properties": {
+              "activityVersionId": {
+                "type": "string"
+              },
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "autoEvaluate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "conversion": {
+                      "default": null,
+                      "properties": {
+                        "limits": {
+                          "default": null,
+                          "properties": {
+                            "maxCollectionItems": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxDepth": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxPayloadBytes": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "default": "auto",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "json",
+                            "xml",
+                            "profile"
+                          ]
+                        },
+                        "options": {
+                          "default": null
+                        },
+                        "profile": {
+                          "default": null,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evaluatorType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "isSensitive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": true
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "intrinsic": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "set",
+                      "merge",
+                      "reduce",
+                      "return",
+                      "control",
+                      "setCorrelationId",
+                      "setInstanceName",
+                      "setOutput",
+                      "finish"
+                    ]
+                  },
+                  "valueType": {
+                    "default": null,
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "collectionKind": {
+                        "default": "single",
+                        "enum": [
+                          "single",
+                          "array",
+                          "list",
+                          "hashSet",
+                          "dictionary"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "alias"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "variable": {
+                    "default": null,
+                    "properties": {
+                      "declaringScopeId": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isWorkflowScope": {
+                        "type": "boolean"
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "referenceKey"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "outputs": {
+                "items": {
+                  "$ref": "#/properties/state/properties/rootActivity/properties/inputs/items"
+                },
+                "type": "array"
+              },
+              "structure": {
+                "default": null,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "payload": true,
+                  "schemaVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "schemaVersion",
+                  "payload"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "activityVersionId",
+              "inputs",
+              "outputs"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "strategyOptions": {
+            "default": null,
+            "properties": {
+              "activationStrategyType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "checkpointCadence": {
+                "properties": {
+                  "maxSegmentCheckpoints": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "commitStrategyType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "incidentStrategy": {
+                "properties": {
+                  "alias": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "alias",
+                  "version"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "variables": {
+            "default": null,
+            "items": {
+              "properties": {
+                "default": {
+                  "properties": {
+                    "expressionType": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": true
+                  },
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "referenceKey": {
+                  "type": "string"
+                },
+                "storageDriverType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "collectionKind": {
+                      "default": "single",
+                      "enum": [
+                        "single",
+                        "array",
+                        "list",
+                        "hashSet",
+                        "dictionary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "alias"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "referenceKey",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "rootActivity"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "name",
+      "state"
+    ],
+    "type": "object"
+  },
+  "schemaVersion": "1"
+}

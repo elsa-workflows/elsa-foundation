@@ -1,0 +1,44 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.JavaScript",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "JavaScriptJintEngine"
+      ],
+      "description": "Provides runtime support for JavaScript-backed workflow activities.",
+      "displayName": "JavaScript activities",
+      "id": "JavaScriptActivities",
+      "options": []
+    },
+    {
+      "dependsOn": [
+        "JavaScriptJintEngine"
+      ],
+      "description": "Exposes runtime API endpoints for JavaScript workflow activities.",
+      "displayName": "JavaScript FastEndpoints",
+      "id": "JavaScriptEndpoints",
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

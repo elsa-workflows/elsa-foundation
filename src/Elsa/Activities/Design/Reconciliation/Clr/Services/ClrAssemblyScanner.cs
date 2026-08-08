@@ -58,11 +58,33 @@ public sealed class ClrAssemblyScanner(
         if (folderDlls.Count == 0)
             return [];
 
-        using var context = new MetadataLoadContext(new PathAssemblyResolver(BuildResolverPaths(folderDlls)));
+        return ScanCore(folderDlls, folderDlls);
+    }
+
+    /// <summary>
+    /// Scans a single assembly with an explicit reference set for metadata resolution instead of a
+    /// deployment folder. This is the build-output entry point used by the contracts generator
+    /// (spec 149 / RFC #1191): fragments must describe exactly one assembly's contribution, while the
+    /// projection stays this scanner's <c>BuildModel</c> — the same code the runtime catalog reconciles
+    /// from (one-projection rule).
+    /// </summary>
+    public IReadOnlyList<ActivityVersionReconciliationModel> ScanAssembly(string assemblyPath, IReadOnlyCollection<string> referencePaths)
+    {
+        if (!File.Exists(assemblyPath))
+            return [];
+
+        return ScanCore([assemblyPath], [assemblyPath, .. referencePaths]);
+    }
+
+    private IReadOnlyList<ActivityVersionReconciliationModel> ScanCore(
+        IReadOnlyList<string> assembliesToScan,
+        IReadOnlyCollection<string> resolverDlls)
+    {
+        using var context = new MetadataLoadContext(new PathAssemblyResolver(BuildResolverPaths(resolverDlls)));
         using var initializerReader = new InitializerDefaultReader();
         var models = new List<ActivityVersionReconciliationModel>();
 
-        foreach (var dll in folderDlls)
+        foreach (var dll in assembliesToScan)
         {
             Assembly assembly;
             try

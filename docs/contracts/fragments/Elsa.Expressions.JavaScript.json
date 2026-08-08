@@ -1,0 +1,29 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Expressions.JavaScript",
+  "expressions": {
+    "descriptors": [
+      {
+        "displayName": "JavaScript",
+        "editingMode": "Text",
+        "featureId": "JavaScriptExpressions",
+        "type": "JavaScript"
+      }
+    ],
+    "javaScriptDeclarations": [],
+    "scriptSandbox": []
+  },
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides portable JavaScript expression evaluation",
+      "displayName": "JavaScript Expressions",
+      "id": "JavaScriptExpressions",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

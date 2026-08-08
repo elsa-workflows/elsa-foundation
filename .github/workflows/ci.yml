@@ -77,6 +77,14 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
+      # Consumer contracts (spec 149 / RFC #1191): regenerate the contract fragments from the built
+      # assemblies and byte-compare against the committed docs/contracts/. Unlike the maps (whose
+      # refresh is a deliberate human act), contract regeneration is expected in the same PR that
+      # changes the surface -- this failing IS the reviewer signal that a contract changed silently.
+      # Runs inside this job to reuse the Release build above.
+      - name: Check committed consumer contracts against the tree
+        run: dotnet run --project tools/contracts/Elsa.Contracts.Generator -c Release --no-build -- check
+
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:

@@ -1,0 +1,29 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Expressions.Liquid",
+  "expressions": {
+    "descriptors": [
+      {
+        "displayName": "Liquid",
+        "editingMode": "Text",
+        "featureId": "Liquid",
+        "type": "Liquid"
+      }
+    ],
+    "javaScriptDeclarations": [],
+    "scriptSandbox": []
+  },
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides portable Liquid expression evaluation",
+      "displayName": "Liquid Expressions",
+      "id": "Liquid",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

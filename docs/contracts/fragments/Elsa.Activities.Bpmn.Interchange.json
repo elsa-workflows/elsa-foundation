@@ -1,0 +1,33 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Bpmn.Interchange",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "BPMN 2.0 XML \u002B BPMNDI import/export for the BPMN process composite.",
+      "displayName": "Activities BPMN Interchange",
+      "id": "ActivitiesBpmnInterchange",
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": [],
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

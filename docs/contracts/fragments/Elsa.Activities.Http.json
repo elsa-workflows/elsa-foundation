@@ -1,0 +1,616 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "CCB7B53F4C582DCECC6B247F8702F1B12EDC14BC95B2BDE60F8F4873FB214EA0",
+      "description": null,
+      "displayName": "Http Endpoint",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "category": "Simple",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Path",
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Path",
+          "order": 10,
+          "referenceKey": "Path",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Simple",
+          "collectionKind": "List",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Supported Methods",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "SupportedMethods",
+          "order": 20,
+          "referenceKey": "SupportedMethods",
+          "type": "String",
+          "uiHint": "checklist",
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              }
+            ]
+          }
+        },
+        {
+          "category": "Simple",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Can Start Workflow",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "CanStartWorkflow",
+          "order": 0,
+          "referenceKey": "CanStartWorkflow",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Advanced",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Authorize",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Authorize",
+          "order": 100,
+          "referenceKey": "Authorize",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Advanced",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Policy",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Policy",
+          "order": 110,
+          "referenceKey": "Policy",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Advanced",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Timeout",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestTimeout",
+          "order": 120,
+          "referenceKey": "RequestTimeout",
+          "type": "TimeSpan?",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Advanced",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Size Limit",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestSizeLimit",
+          "order": 130,
+          "referenceKey": "RequestSizeLimit",
+          "type": "Int64?",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": "Simple",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": "async",
+          "description": null,
+          "displayName": "Response Mode",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "ResponseMode",
+          "order": 30,
+          "referenceKey": "ResponseMode",
+          "type": "Elsa.Http.Core.ResponseMode",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Request",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Request",
+          "referenceKey": "Request",
+          "type": "Elsa.Activities.Http.Models.HttpRequestModel"
+        },
+        {
+          "category": null,
+          "collectionKind": "Dictionary",
+          "description": null,
+          "displayName": "Route Data",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "RouteData",
+          "referenceKey": "RouteData",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Parsed Content",
+          "isBrowsable": true,
+          "isRequired": false,
+          "name": "ParsedContent",
+          "referenceKey": "ParsedContent",
+          "type": "System.Text.Json.JsonElement?"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.SendHttpRequest",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "242B14647A98385B8938FAC629BEAAB6AD3853D1ABBFF4AE65986DF589A2A85E",
+      "description": null,
+      "displayName": "Send Http Request",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "URL",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Url",
+          "order": 0,
+          "referenceKey": "Url",
+          "type": "System.Uri",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": "Literal",
+          "defaultValue": "GET",
+          "description": null,
+          "displayName": "Method",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Method",
+          "order": 0,
+          "referenceKey": "Method",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              }
+            ]
+          }
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Content",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Content",
+          "order": 0,
+          "referenceKey": "Content",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": "Literal",
+          "defaultValue": "text/plain",
+          "description": null,
+          "displayName": "Content Type",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ContentType",
+          "order": 0,
+          "referenceKey": "ContentType",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "text/plain",
+                "value": "text/plain"
+              },
+              {
+                "label": "application/json",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "category": null,
+          "collectionKind": "Dictionary",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Headers",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestHeaders",
+          "order": 0,
+          "referenceKey": "RequestHeaders",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "List",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Expected Status Codes",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ExpectedStatusCodes",
+          "order": 0,
+          "referenceKey": "ExpectedStatusCodes",
+          "type": "Int32",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Timeout",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Timeout",
+          "order": 0,
+          "referenceKey": "Timeout",
+          "type": "TimeSpan?",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Status Code",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "StatusCode",
+          "referenceKey": "StatusCode",
+          "type": "Int32?"
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Response Body",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ResponseBody",
+          "referenceKey": "ResponseBody",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "Dictionary",
+          "description": null,
+          "displayName": "Response Headers",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ResponseHeaders",
+          "referenceKey": "ResponseHeaders",
+          "type": "System.String[]"
+        }
+      ],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Failed",
+          "isBrowsable": true,
+          "name": "Failed",
+          "referenceKey": "Failed",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Timeout",
+          "isBrowsable": true,
+          "name": "Timeout",
+          "referenceKey": "Timeout",
+          "type": "outcome"
+        }
+      ],
+      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "86A3A09C48E0A4D068DB0DDA30D285BCC06BA08A31FCAB8436FFB1CC4B3E136B",
+      "description": null,
+      "displayName": "Write Http Response",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": "Literal",
+          "defaultValue": 200,
+          "description": null,
+          "displayName": "Status Code",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "StatusCode",
+          "order": 0,
+          "referenceKey": "StatusCode",
+          "type": "Int32",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Body",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Body",
+          "order": 0,
+          "referenceKey": "Body",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Content Type",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ContentType",
+          "order": 0,
+          "referenceKey": "ContentType",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "category": null,
+          "collectionKind": "Dictionary",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Headers",
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Headers",
+          "order": 0,
+          "referenceKey": "Headers",
+          "type": "System.String[]",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Status Code",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "StatusCode",
+          "referenceKey": "StatusCode",
+          "type": "Int32"
+        },
+        {
+          "category": null,
+          "collectionKind": "Dictionary",
+          "description": null,
+          "displayName": "Headers",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Headers",
+          "referenceKey": "Headers",
+          "type": "System.String[]"
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Body",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Body",
+          "referenceKey": "Body",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "Single",
+          "description": null,
+          "displayName": "Content Type",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ContentType",
+          "referenceKey": "ContentType",
+          "type": "String"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+    }
+  ],
+  "assembly": "Elsa.Activities.Http",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Http",
+        "WorkflowsRuntimeHttp"
+      ],
+      "description": "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
+      "displayName": "Activities HTTP",
+      "id": "ActivitiesHttp",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Routing",
+          "clrType": "System.String",
+          "defaultValue": "/workflows/http",
+          "description": "Base HTTP path used by workflow endpoints.",
+          "displayName": "Base path",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "BasePath",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

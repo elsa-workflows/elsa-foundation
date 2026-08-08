@@ -1,0 +1,64 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Http",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Http",
+        "WorkflowsRuntimeTriggers"
+      ],
+      "description": "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints.",
+      "displayName": "Workflows Runtime HTTP",
+      "id": "WorkflowsRuntimeHttp",
+      "options": [
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": "Elsa.Workflows.Runtime.Http.Services.AuthenticationBasedHttpEndpointAuthorizationHandler, Elsa.Workflows.Runtime.Http",
+          "description": "CLR type name of the HTTP endpoint authorization handler implementation.",
+          "displayName": "Authorization handler type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "AuthorizationHandlerType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointFaultHandler, Elsa.Workflows.Runtime.Http",
+          "description": "CLR type name of the HTTP endpoint fault handler implementation.",
+          "displayName": "Fault handler type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "FaultHandlerType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Services",
+          "clrType": "System.String",
+          "defaultValue": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http",
+          "description": "CLR type name of the HTTP endpoint route resolver implementation.",
+          "displayName": "Route resolver type",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "RouteResolverType",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

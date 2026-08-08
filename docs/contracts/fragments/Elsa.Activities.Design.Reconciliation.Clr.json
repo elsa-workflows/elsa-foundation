@@ -1,0 +1,18 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind).",
+      "displayName": "CLR Activity Reconciliation",
+      "id": "ClrActivityReconciliation",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

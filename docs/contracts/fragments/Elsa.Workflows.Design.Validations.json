@@ -1,0 +1,33 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Design.Validations",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers baseline workflow draft validators and validation event handling.",
+      "displayName": "Workflow Design Validations",
+      "id": "WorkflowDesignValidations",
+      "options": [
+        {
+          "advanced": false,
+          "category": "Validation",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Maximum activity tree depth inspected by workflow draft validation.",
+          "displayName": "Maximum recursion depth",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxRecursionDepth",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

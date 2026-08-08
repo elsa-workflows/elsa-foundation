@@ -1,0 +1,21 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Modularity.Attention",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "AttentionApi",
+        "ModularityApi"
+      ],
+      "description": "Contributes manifest diagnostics and incompatible module dependencies to Attention.",
+      "displayName": "Module Management Attention",
+      "id": "ModularityAttention",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

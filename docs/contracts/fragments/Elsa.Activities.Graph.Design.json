@@ -1,0 +1,21 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Graph.Design",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ActivitiesDesignApi",
+        "WorkflowsPublishing"
+      ],
+      "description": "Authored activity-graph validation, dependency discovery, and compilation.",
+      "displayName": "Activities Graph (Design)",
+      "id": "ActivitiesGraphDesign",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

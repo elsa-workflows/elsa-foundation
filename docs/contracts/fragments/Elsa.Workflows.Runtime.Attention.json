@@ -1,0 +1,21 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Attention",
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "AttentionApi",
+        "WorkflowsRuntimeApi"
+      ],
+      "description": "Contributes complete workflow failure and incident conditions to Attention.",
+      "displayName": "Workflow Runtime Attention",
+      "id": "WorkflowsRuntimeAttention",
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}
