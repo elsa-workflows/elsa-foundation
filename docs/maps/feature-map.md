@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 111
+- Discovered feature classes: 112
 
 ## Features
 
@@ -97,6 +97,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | OpenTelemetryEngineTracingBridgeFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [OpenTelemetryEngineTracingBridge.cs](../../src/Apps/Elsa.Workbench/OpenTelemetryEngineTracingBridge.cs) |
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
 | WorkflowsDashboardFeature | FastEndpoints feature | Elsa.Workflows.Dashboard | FastEndpointsFeatureBase | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
+| WorkflowsDashboardGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Dashboard.Persistence.Groundwork | IShellFeature | [WorkflowsDashboardGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/WorkflowsDashboardGroundworkPersistenceFeature.cs) |
 | WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
 | WorkflowsDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Design.Persistence.Groundwork | IShellFeature | [WorkflowsDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkPersistenceFeature.cs) |
