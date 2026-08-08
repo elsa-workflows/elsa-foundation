@@ -1,5 +1,8 @@
 # 136 — BPMN collaboration/pool import: N-process documents, participants, message-flow wiring (BPMN Phase 3, collaborations slice 2 of 2 — final construct slice)
 
+**Status**: Implemented
+**Merged**: PR #1003
+
 ## Goal
 
 Make multi-pool BPMN documents import honestly. Today the importer reads only `<process>`

@@ -1,5 +1,8 @@
 # 118 — BPMN interchange eventDefinition wiring (timer/message/signal) (BPMN Phase 2, interchange slice)
 
+**Status**: Implemented
+**Merged**: PR #940
+
 ## Goal
 
 Make the executable event constructs of specs 116 (intermediate catch events) and 117 (event-defined

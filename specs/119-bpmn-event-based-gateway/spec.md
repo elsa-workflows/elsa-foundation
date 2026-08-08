@@ -1,5 +1,8 @@
 # 119 — BPMN event-based gateway (first-catch-wins race) (BPMN Phase 2, events tier, seam-A consumer)
 
+**Status**: Implemented
+**Merged**: PR #948
+
 ## Goal
 
 Let a published BPMN process fork a token into a **race** of intermediate catch events and keep only the

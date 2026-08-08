@@ -1,5 +1,8 @@
 # 121 — BPMN multi-instance activities (sequential + parallel; graphs stay acyclic) (BPMN Phase 2, events tier, iteration-frame + seam-A/B consumer)
 
+**Status**: Implemented
+**Merged**: PR #954
+
 ## Goal
 
 Let a published BPMN process attach **multi-instance loop characteristics**

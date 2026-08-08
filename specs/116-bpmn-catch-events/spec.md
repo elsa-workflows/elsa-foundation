@@ -1,5 +1,8 @@
 # 116 — BPMN timer/message/signal intermediate catch events (BPMN Phase 2, catch-events slice)
 
+**Status**: Implemented
+**Merged**: PR #917
+
 ## Goal
 
 Let a BPMN process wait mid-flow: an `intermediateCatchEvent` element with a timer, message, or
