@@ -173,4 +173,37 @@
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
 	</ItemGroup>
 
+	<!--
+		Everything-image completion (spec 150 Part E). A feature whose assembly this host does not
+		reference cannot be enabled through shells.json at all: the shell logs "requested N feature(s)
+		that are not available in the runtime feature catalog" and the capability silently never appears.
+		Fourteen features were in that state; these eight are the incidental omissions, added so any of
+		them can be activated by configuration alone.
+
+		Two carried consumer-visible authoring surface and were the ones that actually cost consumers:
+		ActivitiesScripting publishes the RunJavaScript activity, and Liquid publishes an expression
+		language the host could not evaluate at all.
+
+		Deliberately NOT added — alternative providers of a role this host already fills, which is the
+		one exception called out when this decision was delegated:
+		  - Elsa.Persistence.Groundwork.{MongoDb,MongoDb.Unified,SqlServer,SqlServer.Unified}
+		    (the host ships the Sqlite and PostgreSql providers; Mongo/SQL Server additionally need a
+		    server of their own to be useful)
+		  - Elsa.Diagnostics.{OpenTelemetry,StructuredLogs}.Persistence.EFCore.Sqlite
+		    (EF Core alternatives to the Groundwork diagnostics persistence this host already ships)
+
+		Adding a reference makes a feature discoverable, not active: features run only when enabled in
+		shells.json, so nothing here changes default behaviour.
+	-->
+	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Json\Elsa.Activities.Design.Reconciliation.Json.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
+		<ProjectReference Include="..\..\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
+		<ProjectReference Include="..\..\Elsa3\Activities\Design\Import\Persistence\Groundwork\Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\Elsa3\Mapping\Elsa3.Mapping.csproj" />
+	</ItemGroup>
+
 </Project>
