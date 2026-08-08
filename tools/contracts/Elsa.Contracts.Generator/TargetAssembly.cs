@@ -55,22 +55,24 @@ public static class TargetAssembly
             if (string.IsNullOrEmpty(simpleName))
                 return null;
 
+            string[] candidates;
             lock (ProbeDirectories)
             {
-                foreach (var directory in ProbeDirectories)
+                candidates = ProbeDirectories
+                    .Select(directory => Path.Combine(directory, simpleName + ".dll"))
+                    .Where(File.Exists)
+                    .ToArray();
+            }
+
+            foreach (var candidate in candidates)
+            {
+                try
                 {
-                    var candidate = Path.Combine(directory, simpleName + ".dll");
-                    if (File.Exists(candidate))
-                    {
-                        try
-                        {
-                            return Assembly.LoadFrom(candidate);
-                        }
-                        catch (BadImageFormatException)
-                        {
-                            // Reference-only or non-runtime image; keep probing.
-                        }
-                    }
+                    return Assembly.LoadFrom(candidate);
+                }
+                catch (BadImageFormatException)
+                {
+                    // Reference-only or non-runtime image; keep probing.
                 }
             }
 

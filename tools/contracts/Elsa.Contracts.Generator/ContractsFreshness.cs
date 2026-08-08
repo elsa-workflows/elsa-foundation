@@ -91,19 +91,19 @@ public sealed class ContractsFreshness(Diagnostics diagnostics)
         var regenerated = ListFiles(regeneratedDirectory);
 
         // README.md is authored documentation living beside the generated artifacts; it is not generated.
-        var comparableFiles = committed.Keys.Union(regenerated.Keys, StringComparer.Ordinal)
+        return committed.Keys.Union(regenerated.Keys, StringComparer.Ordinal)
             .Where(file => !string.Equals(file, "README.md", StringComparison.OrdinalIgnoreCase))
+            .Where(file => IsStale(committed, regenerated, file))
             .Order(StringComparer.Ordinal);
-        foreach (var file in comparableFiles)
-        {
-            if (!committed.TryGetValue(file, out var committedPath) ||
-                !regenerated.TryGetValue(file, out var regeneratedPath) ||
-                !File.ReadAllBytes(committedPath).AsSpan().SequenceEqual(File.ReadAllBytes(regeneratedPath)))
-            {
-                yield return file;
-            }
-        }
     }
+
+    private static bool IsStale(
+        IReadOnlyDictionary<string, string> committed,
+        IReadOnlyDictionary<string, string> regenerated,
+        string file) =>
+        !committed.TryGetValue(file, out var committedPath) ||
+        !regenerated.TryGetValue(file, out var regeneratedPath) ||
+        !File.ReadAllBytes(committedPath).AsSpan().SequenceEqual(File.ReadAllBytes(regeneratedPath));
 
     private static IReadOnlyDictionary<string, string> ListFiles(string root)
     {

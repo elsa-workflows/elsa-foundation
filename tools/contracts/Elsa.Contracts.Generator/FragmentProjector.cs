@@ -182,12 +182,14 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             ports.ValueKind != JsonValueKind.Array)
             yield break;
 
-        foreach (var port in ports.EnumerateArray().Where(candidate => candidate.ValueKind == JsonValueKind.Object))
-        {
-            if (!port.TryGetProperty("name", out var nameProperty) || string.IsNullOrWhiteSpace(nameProperty.GetString()))
-                continue;
+        var namedPorts = ports.EnumerateArray()
+            .Where(candidate => candidate.ValueKind == JsonValueKind.Object &&
+                                candidate.TryGetProperty("name", out var nameProperty) &&
+                                !string.IsNullOrWhiteSpace(nameProperty.GetString()));
 
-            var name = nameProperty.GetString()!;
+        foreach (var port in namedPorts)
+        {
+            var name = port.GetProperty("name").GetString()!;
             yield return new PortContract(
                 name,
                 ReadString(port, "displayName") ?? name,
@@ -589,10 +591,16 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             {
                 try
                 {
-                    foreach (var instance in provider.GetServices<TContract>().Where(candidate => candidate.GetType().Assembly == assembly))
+                    // One instance per contributing type: a feature may register the same contract more
+                    // than once, but the contract describes the type's contribution, not its registrations.
+                    var instances = provider.GetServices<TContract>()
+                        .Where(candidate => candidate.GetType().Assembly == assembly)
+                        .DistinctBy(candidate => candidate.GetType());
+
+                    foreach (var instance in instances)
                     {
-                        if (resolvedTypes.Add(instance.GetType()))
-                            resolved.Add(instance);
+                        resolvedTypes.Add(instance.GetType());
+                        resolved.Add(instance);
                     }
                 }
                 catch (Exception exception)
