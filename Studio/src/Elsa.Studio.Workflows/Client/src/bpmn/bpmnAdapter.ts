@@ -316,6 +316,22 @@ export function collectBpmnElementIds(
 }
 
 /**
+ * Every document node id an activity owns: itself, its nested activities, and the BPMN element ids of
+ * any BPMN scope in its subtree. This is the key space of the per-node side tables (layout and
+ * presentation), so it is what a removal has to forget — `collectActivityNodeIds` alone leaves every
+ * nested element's record behind.
+ */
+export function collectOwnedNodeIds(
+  activity: ActivityNode,
+  catalog: ActivityCatalogLookup,
+  result: Set<string> = new Set()
+) {
+  collectActivityNodeIds(activity, catalog, result);
+  collectBpmnElementIds(activity, catalog, result);
+  return result;
+}
+
+/**
  * Expands the canvas nodes a delete removed into every document node id that goes with them: the
  * activity an element binds, that activity's nested activities, and the BPMN element ids of any BPMN
  * scope in the subtree. Shared by the workflow designer and Activity Definition graph authoring, which
@@ -330,9 +346,7 @@ export function collectRemovedGraphNodeIds(
     const activityNodeId = node.data?.boundActivity?.nodeId ?? node.id;
     const activity = slotActivities.find(candidate => candidate.nodeId === activityNodeId);
     if (!activity) return result.add(activityNodeId);
-    collectActivityNodeIds(activity, catalog, result);
-    collectBpmnElementIds(activity, catalog, result);
-    return result;
+    return collectOwnedNodeIds(activity, catalog, result);
   }, new Set<string>());
 }
 

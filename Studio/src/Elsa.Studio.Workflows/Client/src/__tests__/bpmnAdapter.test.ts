@@ -12,6 +12,7 @@ import {
 import {
   buildBpmnCanvas,
   createBpmnBoundNode,
+  collectOwnedNodeIds,
   collectRemovedGraphNodeIds,
   createBpmnShapeNode,
   syncBpmnCanvasToScope,
@@ -213,6 +214,47 @@ describe("bpmn designer mode plumbing", () => {
     }] as unknown as Node<BpmnNodeData>[];
 
     expect([...collectRemovedGraphNodeIds(deleted, [], undefined)]).toEqual(["start"]);
+  });
+
+  // Removals that start from an activity rather than a canvas node — a single-cardinality slot being
+  // overwritten, a slot activity being replaced — need the same expansion, or the nested elements'
+  // side-table records outlive the activity that owned them.
+  it("collectOwnedNodeIds expands an activity to its nested activities and BPMN element ids", () => {
+    const owner: ActivityNode = {
+      nodeId: "subprocess-activity",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: bpmnStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [{ elementId: "nested-task-element", elementType: "task", childNodeId: "nested-activity" }],
+          sequenceFlows: [],
+          activities: [{ nodeId: "nested-activity", activityVersionId: "writeline@1", inputs: [], outputs: [] }]
+        }
+      }
+    };
+
+    expect([...collectOwnedNodeIds(owner, undefined)].sort()).toEqual([
+      "nested-activity",
+      "nested-task-element",
+      "subprocess-activity"
+    ]);
+  });
+
+  it("collectOwnedNodeIds accumulates into a caller's set so several removals share one pass", () => {
+    const leaf: ActivityNode = {
+      nodeId: "leaf",
+      activityVersionId: "writeline@1",
+      inputs: [],
+      outputs: [],
+      structure: null
+    } as unknown as ActivityNode;
+    const result = new Set(["already-there"]);
+
+    expect(collectOwnedNodeIds(leaf, undefined, result)).toBe(result);
+    expect([...result].sort()).toEqual(["already-there", "leaf"]);
   });
 
 });

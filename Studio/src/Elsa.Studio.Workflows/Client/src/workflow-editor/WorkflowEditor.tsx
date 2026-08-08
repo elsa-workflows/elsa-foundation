@@ -18,7 +18,6 @@ import {
 } from "../workflowAdapter";
 import {
   indexActivityPresentation,
-  removeActivityPresentation,
   resolveActivityLabel,
   updateActivityPresentation
 } from "../activityPresentation";
@@ -48,7 +47,7 @@ import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
-import { useWorkflowDocument } from "./workflowDocument";
+import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
@@ -69,7 +68,7 @@ import {
 } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
 import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
-import { findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
@@ -398,9 +397,7 @@ export function WorkflowEditor({
 
       return {
         ...current,
-        activityPresentation: removeActivityPresentation(
-          current.activityPresentation ?? [],
-          removedNodeIds),
+        ...forgetRemovedNodes(current, removedNodeIds),
         state: {
           ...current.state,
           rootActivity: normalizedRoot
@@ -539,12 +536,9 @@ export function WorkflowEditor({
       if (!current || !rootActivity) return null;
       return {
         ...current,
-        activityPresentation: removeActivityPresentation(
-          current.activityPresentation ?? [],
-          slot.activities.reduce(
-            (nodeIds, oldActivity) =>
-              collectActivityNodeIds(oldActivity, catalogByVersion, nodeIds),
-            new Set<string>())),
+        ...forgetRemovedNodes(current, slot.activities.reduce(
+          (nodeIds, oldActivity) => collectOwnedNodeIds(oldActivity, catalogByVersion, nodeIds),
+          new Set<string>())),
         state: {
           ...current.state,
           rootActivity: updateActivity(rootActivity, ownerNodeId, owner => replaceSlotActivities(owner, slot, [next]), catalogByVersion)

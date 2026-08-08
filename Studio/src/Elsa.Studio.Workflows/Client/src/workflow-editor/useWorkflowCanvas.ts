@@ -5,7 +5,6 @@ import { formatActivitySummary } from "../activitySummary";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
-  collectActivityNodeIds,
   createActivityNode,
   createWorkflowEdge,
   getActivityDisplay,
@@ -20,6 +19,7 @@ import {
 } from "../workflowAdapter";
 import {
   buildBpmnCanvas,
+  collectOwnedNodeIds,
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
@@ -29,10 +29,9 @@ import {
   type BpmnNodeData
 } from "../bpmn/bpmnAdapter";
 import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
-import { removeActivityPresentation } from "../activityPresentation";
 import { createNodeId } from "./editorHelpers";
 import type { WorkflowEdge, WorkflowErrorInput } from "./editorTypes";
-import type { WorkflowDraftRecipe } from "./workflowDocument";
+import { forgetRemovedNodes, type WorkflowDraftRecipe } from "./workflowDocument";
 import { planActivityDrop } from "./addActivityRouting";
 import type { ScopeFrame } from "../workflowAdapter";
 import { observeReusableActivity } from "../reusableActivityObservability";
@@ -167,12 +166,16 @@ export function useWorkflowCanvas({
     editDraft(({ draft: current, frames: currentFrames }) => {
       if (!current) return null;
 
-      const nextLayout = updateLayout(current.layout, nextNodes);
+      // Prune the departed nodes' side tables before upserting the survivors' positions: updateLayout
+      // only ever upserts, so a deleted node's record would otherwise outlive it in the saved draft.
+      const forgotten = forgetRemovedNodes(current, options?.removedNodeIds ?? []);
+      const nextLayout = updateLayout(forgotten.layout, nextNodes);
+      const nextPresentation = forgotten.activityPresentation;
       const rootActivity = current.state.rootActivity;
-      if (!rootActivity) return { ...current, layout: nextLayout };
+      if (!rootActivity) return { ...current, layout: nextLayout, activityPresentation: nextPresentation };
 
       const currentScope = resolveScope(rootActivity, currentFrames, catalogByVersion);
-      if (!currentScope) return { ...current, layout: nextLayout };
+      if (!currentScope) return { ...current, layout: nextLayout, activityPresentation: nextPresentation };
 
       const additionalActivities = options?.createdActivities ?? [];
       let nextOwner: ActivityNode;
@@ -188,9 +191,7 @@ export function useWorkflowCanvas({
       return {
         ...current,
         layout: nextLayout,
-        activityPresentation: removeActivityPresentation(
-          current.activityPresentation ?? [],
-          options?.removedNodeIds ?? []),
+        activityPresentation: nextPresentation,
         state: {
           ...current.state,
           rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner, catalogByVersion)
@@ -296,16 +297,18 @@ export function useWorkflowCanvas({
         ? [next]
         : [...currentScope.slot.activities, next];
       const updatedRoot = updateScopeActivities(current.state.rootActivity, currentFrames, nextActivities, catalogByVersion);
+      // Overwriting a single-cardinality slot evicts whatever it held, nested BPMN elements included.
       const displacedNodeIds = currentScope.slot.cardinality === "single"
-        ? currentScope.slot.activities.flatMap(activity => [...collectActivityNodeIds(activity, catalogByVersion)])
-        : [];
+        ? currentScope.slot.activities.reduce(
+            (nodeIds, activity) => collectOwnedNodeIds(activity, catalogByVersion, nodeIds),
+            new Set<string>())
+        : new Set<string>();
+      const forgotten = forgetRemovedNodes(current, displacedNodeIds);
 
       return {
         ...current,
-        activityPresentation: removeActivityPresentation(
-          current.activityPresentation ?? [],
-          displacedNodeIds),
-        layout: pinLayout(current.layout, next.nodeId, position),
+        layout: pinLayout(forgotten.layout, next.nodeId, position),
+        activityPresentation: forgotten.activityPresentation,
         state: { ...current.state, rootActivity: updatedRoot }
       };
     }, next.nodeId);

@@ -1,7 +1,29 @@
 import { useReducer, useMemo } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
+import { removeActivityPresentation } from "../activityPresentation";
 import type { WorkflowTestRunState } from "./editorTypes";
+
+/**
+ * Drops the per-node side tables of nodes that just left the document. A draft keeps two of them —
+ * `layout` and `activityPresentation` — both keyed by canvas node id, so a removal that forgets either
+ * grows the saved draft on every delete and re-applies a stale position or label if that id is ever
+ * reused. They are returned together because pruning one and not the other is the bug this exists to
+ * prevent; callers that also write layout (a canvas commit, a cursor-positioned drop) apply their
+ * upsert on top of the pruned records.
+ *
+ * `removedNodeIds` must be the *owned* id set — see `collectOwnedNodeIds`, which includes the BPMN
+ * element ids that `collectActivityNodeIds` does not yield.
+ */
+export function forgetRemovedNodes(draft: WorkflowDraft, removedNodeIds: Iterable<string>) {
+  const removed = removedNodeIds instanceof Set ? removedNodeIds : new Set(removedNodeIds);
+  const activityPresentation = draft.activityPresentation ?? [];
+  if (removed.size === 0) return { layout: draft.layout, activityPresentation };
+  return {
+    layout: draft.layout.filter(record => !removed.has(record.nodeId)),
+    activityPresentation: removeActivityPresentation(activityPresentation, removed)
+  };
+}
 
 // The workflow editor's document state — the interdependent cluster that used to cascade through many
 // separate setDraft/setFrames/setSelectedNodeId/setTestRun/setPublishedArtifactId calls scattered across
