@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -24,7 +25,15 @@ public static class GroundworkDistributedStoresRegistration
 {
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
     {
-        services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
+        // Capability admission is per-target from this stage on: a provider leaf publishes it keyed by
+        // target plus an unkeyed alias for the default target. This feature still has to register it,
+        // because GroundworkWorkflowExecutionLeaseFencingCapability below depends on it and a host may
+        // compose the distributed bridges without a provider leaf -- but it must register the SAME shape
+        // the leaf does. Registering the concrete type unkeyed instead would race the leaf's alias through
+        // TryAdd, and if this call won, the unkeyed service would be an empty instance while provider
+        // admission filled the keyed one, leaving IsAvailable false after a successful admission.
+        // This helper is idempotent and order-independent, so either composition order converges.
+        services.AddGroundworkProviderCapabilityAdmission();
         services.AddGroundworkManifestSource<DistributedGroundworkStorageManifestSource>();
 
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
