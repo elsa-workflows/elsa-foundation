@@ -108,13 +108,13 @@ public sealed class PublishedContractAgreementTests
             if (!fragment.RootElement.TryGetProperty("activities", out var activities))
                 continue;
 
-            foreach (var input in activities.EnumerateArray().SelectMany(activity => activity.GetProperty("inputs").EnumerateArray()))
-            {
-                if (input.GetProperty("enumValues").ValueKind != JsonValueKind.Array)
-                    continue;
-                if (input.GetProperty("defaultValue").ValueKind != JsonValueKind.String)
-                    continue;
+            var defaultedEnumInputs = activities.EnumerateArray()
+                .SelectMany(activity => activity.GetProperty("inputs").EnumerateArray())
+                .Where(input => input.GetProperty("enumValues").ValueKind == JsonValueKind.Array &&
+                                input.GetProperty("defaultValue").ValueKind == JsonValueKind.String);
 
+            foreach (var input in defaultedEnumInputs)
+            {
                 var members = input.GetProperty("enumValues").EnumerateArray().Select(value => value.GetString()!).ToArray();
                 Assert.True(members.Contains(input.GetProperty("defaultValue").GetString()!, StringComparer.Ordinal),
                     $"{Path.GetFileName(fragmentPath)}: input '{input.GetProperty("referenceKey").GetString()}' publishes a default that is not among its published members.");
