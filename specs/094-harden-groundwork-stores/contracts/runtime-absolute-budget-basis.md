@@ -131,6 +131,25 @@ Tier B action is to **run the matrix once at the current version and populate th
 also resolves the missing-evidence-generation defect recorded in
 [spec 144's quickstart](../../144-zero-ef-final-removal/quickstart.md).
 
+### Update (2026-08-08): the first measurement exists, for one workload
+
+The matrix has now run. #1175 registered the `checkpoint-commit` adapter leaf — the first `IBenchmarkAdapter`
+implementation in the repository — and took one signed four-artifact measurement set on SQLite and one on
+PostgreSQL at `preview.103`. Per-operation medians and the derived `p95 × 3` ceilings are in
+[docs/reports/checkpoint-commit-store-performance-2026-08.md](../../../docs/reports/checkpoint-commit-store-performance-2026-08.md).
+
+Scope, precisely: **one of the eight runtime workloads**, and no `performanceVerdict` — `compare` and `gate`
+were run and correctly refused, because a verdict needs the two-form comparison the correction below shows
+is unavailable. The class ceilings in this document are therefore **unchanged**; the measured numbers are
+recorded, not ratified, and superseding 150 ms / 40 ms still needs an independent ratifier. Nothing measured
+so far breaches either: the durable write path came in at 75 ms (SQLite) and 94 ms (PostgreSQL) p95.
+
+Two observations bear on the reasoning above. The predicted per-provider divergence is real and does not
+run one way — PostgreSQL is ~25% slower on the durable write and ~3× faster on the bounded read — which
+supports keeping Tier B a blunt backstop. And the 35.7 ms anchor is not a like-for-like comparand for these
+figures: it was measured on the *portable* store in WAL mode, whereas the matrix measures the *physical*
+target on SQLite's default rollback journal.
+
 ### Tier C — Self-referential ratio ratchet (reuses existing machinery verbatim)
 
 Purpose: catch slow drift that stays under the Tier B ceilings.

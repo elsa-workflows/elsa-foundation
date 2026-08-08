@@ -1,0 +1,14 @@
+{
+  "SchemaVersion": 2,
+  "ComparisonCohortId": "tierb-001",
+  "ExpectedCommitSha": "93e441b72e4dcefb91527ad63828d712216794fe",
+  "ExpectedHarnessAssemblySha256": "5f7fb83d5c07fdb3715a3702c7a6e2c5dfa1855dd941d09a5ff493ae05258871",
+  "ExpectedHostFingerprintSha256": "9d8f1d014c7b81873534bf82b81756b0c441645541cd1c475a9345c2a308b153",
+  "ArtifactsSha256": {
+    "checkpoint-commit.postgresql.native-plan.json": "974c6d06b4f5b7bd2ece5b99357502f9ea2a20f11ba53afe300f69d3ad15b97b",
+    "tierb-001.groundwork-postgresql.checkpoint-commit.postgresql.groundwork.shared-documents-with-linked-index-tables.measured1.process.json": "e46ae70490934c23850a573a3c519c6d26e5079f29915f342a82385d6d8b96dd",
+    "tierb-001.groundwork-postgresql.checkpoint-commit.postgresql.groundwork.shared-documents-with-linked-index-tables.measured2.process.json": "c7140e86f8a88a71699a0213f775e6b2d2958f3d2e40c0cfec4e70cca1d04427",
+    "tierb-001.groundwork-postgresql.checkpoint-commit.postgresql.groundwork.shared-documents-with-linked-index-tables.measured3.process.json": "0daa48082d9f3446a773e672671ef860f48f1bf713cadc5980104dd71a7828e1",
+    "tierb-001.groundwork-postgresql.checkpoint-commit.postgresql.groundwork.shared-documents-with-linked-index-tables.warmup0.process.json": "85d5cf638daffa2e9674772982a11111cd911aa6c0a369f428b771377d04563d"
+  }
+}
