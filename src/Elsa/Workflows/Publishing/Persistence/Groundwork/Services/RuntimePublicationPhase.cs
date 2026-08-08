@@ -15,6 +15,15 @@ internal sealed record SourceReferenceDocument(
     WorkflowExecutableSourceReference Reference);
 
 /// <summary>
+/// The runtime template document a publication writes, shared by both publication paths for the same reason
+/// as <see cref="SourceReferenceDocument"/>: two private copies of a persisted shape drift silently.
+/// </summary>
+internal sealed record TemplateDocument(
+    string Collection,
+    string TemplateHash,
+    ExecutableActivityTemplate Template);
+
+/// <summary>
 /// The runtime phase of a split publication.
 /// <para>
 /// Both publication paths write runtime documents before the design commit, so both can be interrupted

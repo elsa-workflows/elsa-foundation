@@ -43,9 +43,3 @@ public static class ActivityPublicationLaneColocation
         return laneTargets.Describe(Lanes);
     }
 }
-
-/// <summary>
-/// Raised when a split reusable-activity publication cannot proceed. The split itself is supported; this
-/// reports the cases the ordered sequence cannot resolve.
-/// </summary>
-public sealed class ActivityPublicationLaneSplitException(string message) : InvalidOperationException(message);
