@@ -385,7 +385,7 @@
     }
   ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
-  "hosts": "sha256:7bb13ed9aeaad246e63d3f610ea91cd5bcb870adc1194852fad698e037889ec7",
+  "hosts": "sha256:13f1ef71ed91d073bc70046d146f2b377d2dc95ce2ceb04989474a2f92f2bc57",
   "schemaVersion": "1.0",
   "submitSchema": "sha256:a18012ecbb231d8a7f8c68118c008fcf9a49fd331457b71893b3775ae687513e"
 }

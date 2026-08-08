@@ -81,7 +81,7 @@ Unlike `docs/maps/manifest.json`, this manifest is **included** in check-mode co
 
 ## HostsIndex (`docs/contracts/hosts.json`)
 
-The third term of consumer availability (`fragments ∩ shells.json ∩ hosts.json[host]`), added after consumer validation of `207326e0c`. One entry per host under `src/Apps`: `host` (assembly name) and `fragments` (ordinal-sorted names of the fragments that host actually contains). Read from the host's `.deps.json` — regenerated per build, so unlike a bin-directory listing it cannot be polluted by assemblies left over from another branch.
+The third term of consumer availability (`fragments ∩ shells.json ∩ hosts.json[host]`), added after consumer validation of `207326e0c`. One entry per host under `src/Apps`: `host` (assembly name), `features` (ordinal-sorted feature ids the host can actually enable — the same vocabulary `shells.json` uses, so consumers intersect directly) and `fragments` (the assembly-level view of the same fact). Read from the host's `.deps.json` — regenerated per build, so unlike a bin-directory listing it cannot be polluted by assemblies left over from another branch.
 
 A fragment describes what an assembly contributes *if present*; it never asserts that a host ships it. Without this index a consumer reads a fragment correctly and still wrongly concludes the feature is enableable — the shell only reports the mismatch as `requested N feature(s) that are not available in the runtime feature catalog`.
 

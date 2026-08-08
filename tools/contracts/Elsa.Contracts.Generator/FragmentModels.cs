@@ -173,6 +173,14 @@ public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
 /// </summary>
 public sealed record HostsIndex(string SchemaVersion, IReadOnlyList<HostContractSet> Hosts);
 
-public sealed record HostContractSet(string Host, IReadOnlyList<string> Fragments);
+/// <summary>
+/// What a host actually ships. <see cref="Features"/> is the directly usable term — <c>shells.json</c> is
+/// keyed by feature id, so a consumer intersects its enabled ids with this list without first joining
+/// through fragments. <see cref="Fragments"/> is the assembly-level view of the same fact.
+/// </summary>
+public sealed record HostContractSet(
+    string Host,
+    IReadOnlyList<string> Features,
+    IReadOnlyList<string> Fragments);
 
 public sealed record ContractsManifestCounts(int Fragments, int Features, int Activities, int Structures, int Intrinsics);

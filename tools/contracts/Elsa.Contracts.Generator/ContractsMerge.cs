@@ -65,6 +65,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var featureIndex = FeatureIndex.Build(assemblyPaths, diagnostics);
         var projector = new FragmentProjector(diagnostics, featureIndex);
         var fragments = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
+        var featureIdsByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var counts = (Features: 0, Activities: 0, Structures: 0, Intrinsics: 0);
 
         foreach (var assemblyPath in assemblyPaths)
@@ -88,6 +89,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
                 continue;
 
             fragments.Add(fragment.Assembly, DeterministicJson.SerializeToBytes(fragment));
+            featureIdsByFragment[fragment.Assembly] = fragment.Features.Select(feature => feature.Id).ToArray();
             counts = (
                 counts.Features + fragment.Features.Count,
                 counts.Activities + fragment.Activities.Count,
@@ -104,7 +106,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             .GetAwaiter().GetResult();
         var submitSchemaBytes = DeterministicJson.SerializeToBytes(submitSchemaView);
 
-        var hostsIndex = BuildHostsIndex(hostAssemblyPaths, fragments.Keys);
+        var hostsIndex = BuildHostsIndex(hostAssemblyPaths, featureIdsByFragment);
         var hostsBytes = DeterministicJson.SerializeToBytes(hostsIndex);
 
         var manifest = new ContractsManifest(
@@ -142,9 +144,11 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
     /// Note that a runtime-kind attribute could not express this — Elsa.Activities.Scripting and
     /// Elsa.Activities.Http both declare <c>elsa.server</c>, yet only one ships in Elsa.Workbench.
     /// </summary>
-    private HostsIndex BuildHostsIndex(IReadOnlyList<string> hostAssemblyPaths, IEnumerable<string> fragmentNames)
+    private HostsIndex BuildHostsIndex(
+        IReadOnlyList<string> hostAssemblyPaths,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> featureIdsByFragment)
     {
-        var known = fragmentNames.ToHashSet(StringComparer.Ordinal);
+        var known = featureIdsByFragment.Keys.ToHashSet(StringComparer.Ordinal);
         var hosts = new List<HostContractSet>();
 
         foreach (var hostAssemblyPath in hostAssemblyPaths.Order(StringComparer.Ordinal))
@@ -170,9 +174,11 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
                 continue;
             }
 
+            var shippedFragments = shipped.Where(known.Contains).Order(StringComparer.Ordinal).ToArray();
             hosts.Add(new HostContractSet(
                 hostName,
-                shipped.Where(known.Contains).Order(StringComparer.Ordinal).ToArray()));
+                shippedFragments.SelectMany(fragment => featureIdsByFragment[fragment]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                shippedFragments));
         }
 
         return new HostsIndex("1.0", hosts.OrderBy(host => host.Host, StringComparer.Ordinal).ToArray());

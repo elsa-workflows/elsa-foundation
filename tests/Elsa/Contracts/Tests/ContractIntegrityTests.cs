@@ -69,6 +69,38 @@ public sealed class ContractIntegrityTests
         }
     }
 
+    /// <summary>
+    /// shells.json is keyed by feature id, so the index must publish feature ids too — otherwise a
+    /// consumer still has to join through fragments to answer "can I enable this?". Every published id
+    /// must come from a fragment the same host ships.
+    /// </summary>
+    [Fact]
+    public void Hosts_index_publishes_feature_ids_backed_by_the_same_host_fragments()
+    {
+        using var hosts = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot, "hosts.json")));
+
+        foreach (var host in hosts.RootElement.GetProperty("hosts").EnumerateArray())
+        {
+            var features = host.GetProperty("features").EnumerateArray().Select(f => f.GetString()!).ToArray();
+            Assert.NotEmpty(features);
+            Assert.Equal(features.OrderBy(id => id, StringComparer.Ordinal), features);
+            Assert.Equal(features.Distinct(StringComparer.Ordinal).Count(), features.Length);
+
+            var idsFromShippedFragments = host.GetProperty("fragments").EnumerateArray()
+                .SelectMany(fragment =>
+                {
+                    using var document = JsonDocument.Parse(
+                        File.ReadAllBytes(Path.Combine(ContractsRoot, "fragments", fragment.GetString() + ".json")));
+                    return document.RootElement.GetProperty("features").EnumerateArray()
+                        .Select(feature => feature.GetProperty("id").GetString()!)
+                        .ToArray();
+                })
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.All(features, id => Assert.Contains(id, idsFromShippedFragments));
+        }
+    }
+
     [Fact]
     public void Every_app_host_appears_in_the_hosts_index()
     {

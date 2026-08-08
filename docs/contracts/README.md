@@ -21,19 +21,28 @@ state is never published as contract. Resolve version ids at submit time via
 ## Consuming — availability is a three-way intersection
 
 ```
-available = fragments  ∩  your shells.json  ∩  hosts.json[your host]
+available features = your shells.json  ∩  hosts.json[your host].features
 ```
 
-Every contribution entry carries the owning `featureId`, so the first two terms are a filter by feature id.
+`hosts.json` publishes both `features` (feature ids, the same vocabulary `shells.json` uses — intersect
+directly) and `fragments` (the assembly-level view of the same fact). Every fragment contribution entry
+carries its owning `featureId`, so you can go from an available feature to the activities, structures and
+expression surface it brings.
+
 **The third term is not optional.** A fragment describes what an assembly contributes *if that assembly is
 present*; it is not a claim that any particular host ships it. Enabling a feature whose assembly the host
 does not carry is a silent no-op — the shell logs `requested N feature(s) that are not available in the
 runtime feature catalog` and the activities simply never appear.
 
-This is not a rare edge: at the time of writing, 14 of the 94 fragments describe assemblies that
-`Elsa.Workbench` does not reference. `Elsa.Activities.Scripting` is the worked example — its fragment
-publishes `RunJavaScript`, but the assembly is absent from the Workbench image, so `ActivitiesScripting`
-cannot be enabled there. Consult `hosts.json` before concluding an activity is usable.
+This is not a rare edge: 14 of the 94 fragments describe assemblies that `Elsa.Workbench` does not
+reference, and two of those carry authoring surface — `ActivitiesScripting` publishes the `RunJavaScript`
+activity, and `Liquid` publishes an expression descriptor for a language the Workbench cannot evaluate at
+all. Consult `hosts.json` before concluding an activity or expression language is usable.
+
+**Validated against the running server**: requesting all fragment-declared features against a Workbench
+image built from this branch made the shell report exactly these 14 as *not available in the runtime
+feature catalog* — the same 14, feature id for feature id, that this build-time index excludes. The index
+is therefore a faithful stand-in for booting the image and asking it.
 
 A runtime-kind attribute would **not** substitute for this: `Elsa.Activities.Scripting` and
 `Elsa.Activities.Http` both declare `elsa.server`, yet only one ships in the Workbench.
