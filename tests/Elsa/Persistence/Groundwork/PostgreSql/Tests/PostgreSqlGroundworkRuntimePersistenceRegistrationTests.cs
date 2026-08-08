@@ -202,7 +202,9 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     private static void AssertPublishedOncePerShape<TService>(IServiceCollection services)
     {
         Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(TService) && descriptor.IsKeyedService);
+            descriptor.ServiceType == typeof(TService)
+            && descriptor.IsKeyedService
+            && Equals(descriptor.ServiceKey, GroundworkTargetNames.Default));
         Assert.Single(services, descriptor =>
             descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService);
     }
