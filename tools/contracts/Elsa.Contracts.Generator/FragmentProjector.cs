@@ -40,8 +40,13 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         WarnOnTypeLoadDrops(assembly, assemblyPath);
 
         var features = ProjectFeatures(assembly, assemblyPath);
-        // The runtime attribution rule (ActivityFeatureAttributionResolver): activity type → declaring
+        // KNOWN DUPLICATION (accepted, tracked): this restates the runtime attribution rule of
+        // Elsa.Activities.Design.Api's ActivityFeatureAttributionResolver — activity type → declaring
         // assembly → the feature whose startup type lives in it, ties broken by min-ordinal feature id.
+        // The resolver itself cannot be reused here: it depends on runtime services (IWellKnownTypeRegistry,
+        // CShells' IRuntimeFeatureCatalog) that no build-time projection can supply. Unlike the ports facet
+        // convention (unified in ActivityPortDesignFacetReader), this is a two-line rule rather than a parser,
+        // so §2.17 "duplication beats dependency" applies — but the two MUST change together.
         var owningFeatureId = features.Count > 0
             ? features.Select(feature => feature.Id).OrderBy(id => id, StringComparer.Ordinal).First()
             : null;
@@ -174,30 +179,16 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         output.IsBrowsable ?? true,
         output.IsRequired);
 
-    // Same ports-facet convention the catalog handler reads (ListActivityAuthoringCatalogRequestHandler.ToPorts).
-    private static IEnumerable<PortContract> ToPorts(ActivityDesignFacet facet)
-    {
-        if (facet.Payload.ValueKind != JsonValueKind.Object ||
-            !facet.Payload.TryGetProperty("ports", out var ports) ||
-            ports.ValueKind != JsonValueKind.Array)
-            yield break;
-
-        var namedPorts = ports.EnumerateArray()
-            .Where(candidate => candidate.ValueKind == JsonValueKind.Object &&
-                                candidate.TryGetProperty("name", out var nameProperty) &&
-                                !string.IsNullOrWhiteSpace(nameProperty.GetString()));
-
-        foreach (var port in namedPorts)
-        {
-            var name = port.GetProperty("name").GetString()!;
-            yield return new PortContract(
-                name,
-                ReadString(port, "displayName") ?? name,
-                ReadString(port, "type"),
-                ReadBoolean(port, "isBrowsable") ?? true,
-                ReadString(port, "referenceKey") ?? name);
-        }
-    }
+    // The ports-facet convention is parsed by the product reader the served catalog also uses
+    // (ActivityPortDesignFacetReader) — never re-implemented here (one-projection rule).
+    private static IEnumerable<PortContract> ToPorts(ActivityDesignFacet facet) =>
+        ActivityPortDesignFacetReader.Read(facet)
+            .Select(port => new PortContract(
+                port.Name,
+                port.DisplayName,
+                port.Type,
+                port.IsBrowsable,
+                port.ReferenceKey));
 
     /// <summary>
     /// A type that fails to load is invisible to every projection below — which would silently drop a

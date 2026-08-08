@@ -131,37 +131,15 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             output.IsRequired,
             output.ReferenceKey);
 
-    private static IEnumerable<ActivityPortDescriptorView> ToPorts(ActivityDesignFacet facet)
-    {
-        if (facet.Payload.ValueKind != JsonValueKind.Object ||
-            !facet.Payload.TryGetProperty("ports", out var ports) ||
-            ports.ValueKind != JsonValueKind.Array)
-            yield break;
-
-        foreach (var port in ports.EnumerateArray())
-        {
-            if (port.ValueKind != JsonValueKind.Object ||
-                !port.TryGetProperty("name", out var nameProperty) ||
-                string.IsNullOrWhiteSpace(nameProperty.GetString()))
-                continue;
-
-            var name = nameProperty.GetString()!;
-            yield return new ActivityPortDescriptorView(
-                name,
-                ReadString(port, "displayName") ?? name,
-                ReadString(port, "type"),
-                ReadBoolean(port, "isBrowsable") ?? true,
-                ReadString(port, "referenceKey") ?? name);
-        }
-    }
-
-    private static string? ReadString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
-
-    private static bool? ReadBoolean(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var property) && property.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? property.GetBoolean()
-            : null;
+    // Parsing of the "ports" facet convention lives in ActivityPortDesignFacetReader so the served
+    // catalog and the build-time contract fragments cannot disagree about an activity's ports
+    // (one-projection rule, spec 149 / RFC #1191). This method only shapes the result into the view.
+    private static IEnumerable<ActivityPortDescriptorView> ToPorts(ActivityDesignFacet facet) =>
+        ActivityPortDesignFacetReader.Read(facet)
+            .Select(port => new ActivityPortDescriptorView(
+                port.Name,
+                port.DisplayName,
+                port.Type,
+                port.IsBrowsable,
+                port.ReferenceKey));
 }

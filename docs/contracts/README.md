@@ -11,18 +11,40 @@ to author workflow definitions against it: no server boot, no endpoint dumps, no
 |---|---|
 | `fragments/<Assembly>.json` | One fragment per contributing assembly: feature metadata (id, `dependsOn`, options), activity contracts (inputs with `defaultValue`/`hasStaticDefault`, outputs with `isRequired`, ports, container structure), structure kinds with payload schemas, expression surface (descriptors, JS declarations, script-sandbox globals), engine intrinsics. |
 | `submit-schema.json` | The workflow-definition submit-body schema — produced by the same handler that serves `GET design/workflows/definitions/submit/schema`. |
-| `manifest.json` | Per-fragment `sha256:` fingerprints. Verify "these contracts match my pinned commit" by string compare. |
+| `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains — the third term of availability, see below. |
+| `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json` and `hosts.json`. Verify "these contracts match my pinned commit" by string compare. |
 
 Deliberately **not** in fragments: assigned activity version ids and availability (`addable`) — server
 state is never published as contract. Resolve version ids at submit time via
 `GET design/activities/catalog`.
 
-## Consuming
+## Consuming — availability is a three-way intersection
 
-Intersect the merged fragments with your own composition: every contribution entry carries the owning
-`featureId`; filter by the feature ids enabled in your `shells.json`. Each fragment also ships inside its
-assembly as the embedded resource `elsa.contract.json` (byte-identical to the committed file at any green
-commit).
+```
+available = fragments  ∩  your shells.json  ∩  hosts.json[your host]
+```
+
+Every contribution entry carries the owning `featureId`, so the first two terms are a filter by feature id.
+**The third term is not optional.** A fragment describes what an assembly contributes *if that assembly is
+present*; it is not a claim that any particular host ships it. Enabling a feature whose assembly the host
+does not carry is a silent no-op — the shell logs `requested N feature(s) that are not available in the
+runtime feature catalog` and the activities simply never appear.
+
+This is not a rare edge: at the time of writing, 14 of the 94 fragments describe assemblies that
+`Elsa.Workbench` does not reference. `Elsa.Activities.Scripting` is the worked example — its fragment
+publishes `RunJavaScript`, but the assembly is absent from the Workbench image, so `ActivitiesScripting`
+cannot be enabled there. Consult `hosts.json` before concluding an activity is usable.
+
+A runtime-kind attribute would **not** substitute for this: `Elsa.Activities.Scripting` and
+`Elsa.Activities.Http` both declare `elsa.server`, yet only one ships in the Workbench.
+
+If you run a host that is not in this repository, compute the third term from your own image the same way
+the generator does — read the library names out of your host's `.deps.json` and intersect with the
+fragment names.
+
+Each fragment also ships inside its assembly as the embedded resource `elsa.contract.json` (byte-identical
+to the committed file at any green commit), which is another way to answer "is this contract actually in
+my image?" for a host built elsewhere.
 
 ## Regenerating
 

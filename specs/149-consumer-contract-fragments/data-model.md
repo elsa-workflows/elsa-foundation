@@ -74,9 +74,16 @@ Mirrors the intrinsic authoring descriptors: `typeKey` (e.g. `Elsa.SetVariable`)
 | `generator` | string | `tools/contracts/Elsa.Contracts.Generator`. |
 | `fragments` | { name → `sha256:<hex>` } | Per-fragment file fingerprint — the consumer's "matches my pinned commit" string compare. |
 | `submit_schema` | `sha256:<hex>` | Fingerprint of `submit-schema.json`. |
+| `hosts` | `sha256:<hex>` | Fingerprint of `hosts.json`. |
 | `counts` | object | fragments, features, activities, structures — advisory. |
 
 Unlike `docs/maps/manifest.json`, this manifest is **included** in check-mode comparison: fingerprints are contract.
+
+## HostsIndex (`docs/contracts/hosts.json`)
+
+The third term of consumer availability (`fragments ∩ shells.json ∩ hosts.json[host]`), added after consumer validation of `207326e0c`. One entry per host under `src/Apps`: `host` (assembly name) and `fragments` (ordinal-sorted names of the fragments that host actually contains). Read from the host's `.deps.json` — regenerated per build, so unlike a bin-directory listing it cannot be polluted by assemblies left over from another branch.
+
+A fragment describes what an assembly contributes *if present*; it never asserts that a host ships it. Without this index a consumer reads a fragment correctly and still wrongly concludes the feature is enableable — the shell only reports the mismatch as `requested N feature(s) that are not available in the runtime feature catalog`.
 
 ## Validation rules
 

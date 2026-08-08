@@ -22,13 +22,21 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         // to their own bin). Registering them as probe directories lets feature types that reference
         // external packages (Groundwork, EF Core, Fluid, ...) load for projection.
         var appsRoot = Path.Combine(sourceRoot, "Apps");
+        var hostAssemblyPaths = new List<string>();
         if (Directory.Exists(appsRoot))
         {
             foreach (var appProject in Directory.EnumerateFiles(appsRoot, "*.csproj", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
             {
                 var appAssembly = FindBuiltAssembly(appProject, Path.GetFileNameWithoutExtension(appProject), configuration);
-                if (appAssembly is not null)
-                    TargetAssembly.AddProbeDirectory(Path.GetDirectoryName(appAssembly)!);
+                if (appAssembly is null)
+                {
+                    diagnostics.Error(appProject, "ELSACT001",
+                        $"No built assembly found for host '{Path.GetFileNameWithoutExtension(appProject)}' (configuration {configuration}). Build the solution first: dotnet build Elsa.Server.slnx -c {configuration}.");
+                    continue;
+                }
+
+                TargetAssembly.AddProbeDirectory(Path.GetDirectoryName(appAssembly)!);
+                hostAssemblyPaths.Add(appAssembly);
             }
         }
 
@@ -96,11 +104,15 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             .GetAwaiter().GetResult();
         var submitSchemaBytes = DeterministicJson.SerializeToBytes(submitSchemaView);
 
+        var hostsIndex = BuildHostsIndex(hostAssemblyPaths, fragments.Keys);
+        var hostsBytes = DeterministicJson.SerializeToBytes(hostsIndex);
+
         var manifest = new ContractsManifest(
             SchemaVersion: "1.0",
             Generator: GeneratorId,
             Fragments: fragments.Select(pair => new FragmentFingerprint(pair.Key, DeterministicJson.Fingerprint(pair.Value))).ToArray(),
             SubmitSchema: DeterministicJson.Fingerprint(submitSchemaBytes),
+            Hosts: DeterministicJson.Fingerprint(hostsBytes),
             Counts: new ContractsManifestCounts(
                 fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics));
 
@@ -110,11 +122,73 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         foreach (var (name, bytes) in fragments)
             DeterministicJson.WriteFile(Path.Combine(fragmentsDirectory, name + ".json"), bytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "submit-schema.json"), submitSchemaBytes);
+        DeterministicJson.WriteFile(Path.Combine(outputDirectory, "hosts.json"), hostsBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "manifest.json"), DeterministicJson.SerializeToBytes(manifest));
 
         Console.WriteLine($"Merged {fragments.Count} contract fragments into {outputDirectory} " +
                           $"({counts.Features} features, {counts.Activities} activities, {counts.Structures} structures, {counts.Intrinsics} intrinsics).");
         return 0;
+    }
+
+    /// <summary>
+    /// Which contract fragments each shipped host actually contains — the third term of consumer
+    /// availability (spec 149 / RFC #1191). A fragment describes what an assembly contributes *if the
+    /// assembly is present*; it is not a claim that any given host ships it. Enabling a feature whose
+    /// assembly the host does not carry is a silent no-op ("requested N feature(s) that are not available
+    /// in the runtime feature catalog"), so availability is
+    /// <c>fragments ∩ shells.json ∩ hosts.json[host]</c>, not the two-way intersection the RFC first stated.
+    /// Read from the host's <c>.deps.json</c> rather than its bin contents: deps.json is regenerated per
+    /// build and cannot be polluted by assemblies left behind from an earlier branch.
+    /// Note that a runtime-kind attribute could not express this — Elsa.Activities.Scripting and
+    /// Elsa.Activities.Http both declare <c>elsa.server</c>, yet only one ships in Elsa.Workbench.
+    /// </summary>
+    private HostsIndex BuildHostsIndex(IReadOnlyList<string> hostAssemblyPaths, IEnumerable<string> fragmentNames)
+    {
+        var known = fragmentNames.ToHashSet(StringComparer.Ordinal);
+        var hosts = new List<HostContractSet>();
+
+        foreach (var hostAssemblyPath in hostAssemblyPaths.Order(StringComparer.Ordinal))
+        {
+            var hostName = Path.GetFileNameWithoutExtension(hostAssemblyPath);
+            var depsPath = Path.Combine(Path.GetDirectoryName(hostAssemblyPath)!, hostName + ".deps.json");
+            if (!File.Exists(depsPath))
+            {
+                diagnostics.Error(hostAssemblyPath, "ELSACT011",
+                    $"Host '{hostName}' has no '{hostName}.deps.json'; its available-fragment set cannot be published.");
+                continue;
+            }
+
+            IReadOnlyCollection<string> shipped;
+            try
+            {
+                shipped = ReadDependencyLibraryNames(depsPath);
+            }
+            catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException)
+            {
+                diagnostics.Error(depsPath, "ELSACT011",
+                    $"Host '{hostName}' dependency file could not be read: {exception.GetBaseException().Message}");
+                continue;
+            }
+
+            hosts.Add(new HostContractSet(
+                hostName,
+                shipped.Where(known.Contains).Order(StringComparer.Ordinal).ToArray()));
+        }
+
+        return new HostsIndex("1.0", hosts.OrderBy(host => host.Host, StringComparer.Ordinal).ToArray());
+    }
+
+    private static IReadOnlyCollection<string> ReadDependencyLibraryNames(string depsPath)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(depsPath));
+        if (!document.RootElement.TryGetProperty("libraries", out var libraries) ||
+            libraries.ValueKind != System.Text.Json.JsonValueKind.Object)
+            return [];
+
+        // deps.json library keys are "<name>/<version>"; the name alone identifies the assembly.
+        return libraries.EnumerateObject()
+            .Select(library => library.Name.Split('/')[0])
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>

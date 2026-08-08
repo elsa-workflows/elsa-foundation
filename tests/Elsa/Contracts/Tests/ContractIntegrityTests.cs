@@ -42,6 +42,62 @@ public sealed class ContractIntegrityTests
         }
     }
 
+    /// <summary>
+    /// hosts.json is the third term of consumer availability (fragments ∩ shells.json ∩ hosts.json[host]).
+    /// It only earns that role if it names real fragments, covers every shipped host, and is genuinely
+    /// narrower than the fragment set — otherwise it would silently re-assert the two-way rule that let a
+    /// consumer conclude a feature was available when its assembly was absent from the image.
+    /// </summary>
+    [Fact]
+    public void Hosts_index_names_only_real_fragments_and_is_narrower_than_the_full_set()
+    {
+        using var hosts = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot, "hosts.json")));
+        var allFragments = Directory.EnumerateFiles(Path.Combine(ContractsRoot, "fragments"), "*.json")
+            .Select(Path.GetFileNameWithoutExtension)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var entries = hosts.RootElement.GetProperty("hosts").EnumerateArray().ToArray();
+        Assert.NotEmpty(entries);
+
+        foreach (var host in entries)
+        {
+            var shipped = host.GetProperty("fragments").EnumerateArray().Select(f => f.GetString()!).ToArray();
+            Assert.All(shipped, name => Assert.Contains(name, allFragments));
+            Assert.Equal(shipped.OrderBy(name => name, StringComparer.Ordinal), shipped);
+            Assert.True(shipped.Length < allFragments.Count,
+                $"Host '{host.GetProperty("host").GetString()}' claims every fragment; the index would then be indistinguishable from the fragment set and useless as an availability term.");
+        }
+    }
+
+    [Fact]
+    public void Every_app_host_appears_in_the_hosts_index()
+    {
+        using var hosts = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot, "hosts.json")));
+        var indexed = hosts.RootElement.GetProperty("hosts").EnumerateArray()
+            .Select(host => host.GetProperty("host").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var appProjects = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Apps"), "*.csproj", SearchOption.AllDirectories)
+            .Select(Path.GetFileNameWithoutExtension)
+            .ToArray();
+
+        Assert.NotEmpty(appProjects);
+        Assert.All(appProjects, app => Assert.Contains(app!, indexed));
+    }
+
+    [Fact]
+    public void Manifest_fingerprints_the_hosts_index_and_submit_schema()
+    {
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot, "manifest.json")));
+
+        Assert.Equal(
+            manifest.RootElement.GetProperty("hosts").GetString(),
+            DeterministicJson.Fingerprint(File.ReadAllBytes(Path.Combine(ContractsRoot, "hosts.json"))));
+        Assert.Equal(
+            manifest.RootElement.GetProperty("submitSchema").GetString(),
+            DeterministicJson.Fingerprint(File.ReadAllBytes(Path.Combine(ContractsRoot, "submit-schema.json"))));
+    }
+
     [Fact]
     public void Every_committed_fragment_corresponds_to_a_src_project()
     {

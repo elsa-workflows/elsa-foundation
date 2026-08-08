@@ -161,8 +161,18 @@ public sealed record ContractsManifest(
     // by a serializer key policy.
     IReadOnlyList<FragmentFingerprint> Fragments,
     string SubmitSchema,
+    string Hosts,
     ContractsManifestCounts Counts);
 
 public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
+
+/// <summary>
+/// docs/contracts/hosts.json — which fragments each shipped host actually contains. A consumer's real
+/// availability is <c>fragments ∩ shells.json ∩ hosts.json[host]</c>: a feature whose assembly the host
+/// does not carry cannot be enabled, regardless of what its fragment describes.
+/// </summary>
+public sealed record HostsIndex(string SchemaVersion, IReadOnlyList<HostContractSet> Hosts);
+
+public sealed record HostContractSet(string Host, IReadOnlyList<string> Fragments);
 
 public sealed record ContractsManifestCounts(int Fragments, int Features, int Activities, int Structures, int Intrinsics);
