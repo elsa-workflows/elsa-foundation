@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
@@ -28,6 +29,7 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
+    [ConsumerContract("javascript.json-parameters-are-native-frozen-values")]
     public async Task Evaluates_declared_json_parameters_through_args()
     {
         await using var provider = BuildProvider();

@@ -65,7 +65,32 @@ public sealed class MultiStatementAuthoringTests
         Assert.Equal("hello world", result!.Value.GetString());
     }
 
-    private static async ValueTask<JsonElement> EvaluateExpression(string source)
+    /// <summary>
+    /// Pins the surprising half of <c>javascript.json-parameters-are-native-frozen-values</c> (spec 150
+    /// FR-C8): a captured JSON value such as <c>ParsedContent</c> arrives as a native, walkable object — the
+    /// sibling suite's <c>Evaluates_declared_json_parameters_through_args</c> pins that — but the object is
+    /// frozen, and the evaluator's <c>"use strict"</c> wrapper turns a write into a throw rather than a
+    /// silent no-op. A benchmarked session published a throwaway probe workflow to learn this shape.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("javascript.json-parameters-are-native-frozen-values")]
+    public async Task Writing_to_a_json_parameter_throws_rather_than_being_silently_dropped()
+    {
+        var parsedContent = JsonSerializer.SerializeToElement(new { order = new { id = "A-1" } });
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() =>
+            EvaluateExpression(
+                "(() => { args.parsedContent.order.id = 'B-2'; return args.parsedContent.order.id; })()",
+                ("parsedContent", parsedContent)).AsTask());
+
+        Assert.Contains("read only", failure.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ValueTask<JsonElement> EvaluateExpression(string source) => EvaluateExpression(source, []);
+
+    private static async ValueTask<JsonElement> EvaluateExpression(
+        string source,
+        params (string Name, JsonElement Value)[] parameters)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
@@ -75,17 +100,21 @@ public sealed class MultiStatementAuthoringTests
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
 
+        var values = parameters.ToDictionary(parameter => parameter.Name, parameter => parameter.Value, StringComparer.Ordinal);
         var definition = new ExpressionDefinition(
             "JavaScript",
             source,
             new TypeReference("Any"),
-            new Dictionary<string, ExpressionParameterBinding>(),
+            values.ToDictionary(
+                value => value.Key,
+                value => (ExpressionParameterBinding)new LiteralExpressionParameterBinding(value.Value),
+                StringComparer.Ordinal),
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
 
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(
             definition,
-            new Dictionary<string, JsonElement>(),
+            values,
             CancellationToken.None));
     }
 }

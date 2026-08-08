@@ -90,6 +90,19 @@
         "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_of_a_value_within_the_limit_carries_it_whole"
       ],
       "since": "1.1.0"
+    },
+    {
+      "id": "javascript.json-parameters-are-native-frozen-values",
+      "scope": "expressions.javascript",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "A captured JSON value (an `HttpEndpoint`'s `ParsedContent`, for instance) reaches a JavaScript expression under the `args` namespace as a native value — objects, arrays, numbers and booleans walkable with plain `args.name.field[0]` access, no accessor call and no `JSON.parse` — but every such object is frozen, so writing to one throws under the evaluator's strict-mode wrapper instead of being silently dropped.",
+      "rationale": "A benchmarked session published a throwaway probe workflow purely to learn this shape. The freezing matters separately: code that mutates its input as a scratch buffer fails at runtime rather than degrading quietly.",
+      "tests": [
+        "Elsa.Expressions.JavaScript.Jint.Tests.ExplicitExpressionParametersTests.Evaluates_declared_json_parameters_through_args",
+        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.Writing_to_a_json_parameter_throws_rather_than_being_silently_dropped"
+      ],
+      "since": "1.1.0"
     }
   ]
 }
