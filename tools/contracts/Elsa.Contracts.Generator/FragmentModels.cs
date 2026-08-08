@@ -195,6 +195,11 @@ public sealed record HostsIndex(string SchemaVersion, IReadOnlyList<HostContract
 public sealed record HostContractSet(
     string Host,
     IReadOnlyList<string> Features,
+    // Expression types this host actually serves: the intrinsics that no feature gates
+    // (Literal/Object/Input) plus the descriptors of the expression features it ships. Published
+    // directly because the feature-keyed intersection silently drops un-gated entries — which made
+    // Literal, used on nearly every authored input, unreachable through the documented rule.
+    IReadOnlyList<string> ExpressionTypes,
     IReadOnlyList<string> Fragments);
 
 public sealed record ContractsManifestCounts(int Fragments, int Features, int Activities, int Structures, int Intrinsics);

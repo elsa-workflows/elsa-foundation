@@ -1,6 +1,14 @@
 {
   "hosts": [
     {
+      "expressionTypes": [
+        "Input",
+        "JavaScript",
+        "Literal",
+        "Object",
+        "Secret",
+        "Variable"
+      ],
       "features": [
         "ActivitiesBpmn",
         "ActivitiesBpmnInterchange",

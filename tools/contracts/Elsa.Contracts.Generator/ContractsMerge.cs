@@ -66,6 +66,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var projector = new FragmentProjector(diagnostics, featureIndex);
         var fragments = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
         var featureIdsByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var expressionTypesByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var counts = (Features: 0, Activities: 0, Structures: 0, Intrinsics: 0);
 
         foreach (var assemblyPath in assemblyPaths)
@@ -90,6 +91,8 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
 
             fragments.Add(fragment.Assembly, DeterministicJson.SerializeToBytes(fragment));
             featureIdsByFragment[fragment.Assembly] = fragment.Features.Select(feature => feature.Id).ToArray();
+            expressionTypesByFragment[fragment.Assembly] = fragment.Expressions?.Descriptors
+                .Select(descriptor => descriptor.Type).ToArray() ?? [];
             counts = (
                 counts.Features + fragment.Features.Count,
                 counts.Activities + fragment.Activities.Count,
@@ -106,7 +109,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             .GetAwaiter().GetResult();
         var submitSchemaBytes = DeterministicJson.SerializeToBytes(submitSchemaView);
 
-        var hostsIndex = BuildHostsIndex(hostAssemblyPaths, featureIdsByFragment);
+        var hostsIndex = BuildHostsIndex(hostAssemblyPaths, featureIdsByFragment, expressionTypesByFragment);
         var hostsBytes = DeterministicJson.SerializeToBytes(hostsIndex);
 
         var manifest = new ContractsManifest(
@@ -146,7 +149,8 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
     /// </summary>
     private HostsIndex BuildHostsIndex(
         IReadOnlyList<string> hostAssemblyPaths,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> featureIdsByFragment)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> featureIdsByFragment,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> expressionTypesByFragment)
     {
         var known = featureIdsByFragment.Keys.ToHashSet(StringComparer.Ordinal);
         var hosts = new List<HostContractSet>();
@@ -178,6 +182,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             hosts.Add(new HostContractSet(
                 hostName,
                 shippedFragments.SelectMany(fragment => featureIdsByFragment[fragment]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                shippedFragments.SelectMany(fragment => expressionTypesByFragment[fragment]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                 shippedFragments));
         }
 
