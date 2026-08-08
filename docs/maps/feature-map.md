@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 103
+- Discovered feature classes: 108
 
 ## Features
 
@@ -68,12 +68,17 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
 | ModularityApiFeature | FastEndpoints feature | Elsa.Modularity.Api | FastEndpointsFeatureBase | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
 | ModularityAttentionFeature | direct IShellFeature | Elsa.Modularity.Attention | IShellFeature | [ModularityAttentionFeature.cs](../../src/Elsa/Modularity/Attention/ModularityAttentionFeature.cs) |
+| GroundworkTargetsFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkTargetsFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkTargetsFeature.cs) |
+| MongoDbGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb | IShellFeature | [MongoDbGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/MongoDbGroundworkProviderFeature.cs) |
 | MongoDbGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb | IShellFeature | [MongoDbGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/MongoDbGroundworkRuntimePersistenceShellFeature.cs) |
 | MongoDbGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb.Unified | IShellFeature | [MongoDbGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs) |
+| PostgreSqlGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql | IShellFeature | [PostgreSqlGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkProviderFeature.cs) |
 | PostgreSqlGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql | IShellFeature | [PostgreSqlGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs) |
 | PostgreSqlGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql.Unified | IShellFeature | [PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs) |
+| SqlServerGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer | IShellFeature | [SqlServerGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/SqlServerGroundworkProviderFeature.cs) |
 | SqlServerGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer | IShellFeature | [SqlServerGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/SqlServerGroundworkRuntimePersistenceShellFeature.cs) |
 | SqlServerGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer.Unified | IShellFeature | [SqlServerGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/SqlServerGroundworkUnifiedPersistenceShellFeature.cs) |
+| SqliteGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkProviderFeature.cs) |
 | SqliteGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | SqliteGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite.Unified | IShellFeature | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
