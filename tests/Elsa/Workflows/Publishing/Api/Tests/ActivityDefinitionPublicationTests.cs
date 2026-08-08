@@ -1016,7 +1016,86 @@ public sealed class ActivityDefinitionPublicationTests
     /// same idempotency key has to write the receipt rather than reject the retry as a duplicate. Without
     /// this, the receipt would be unobtainable forever and every retry would conflict. ADR 0066.
     /// </summary>
+    /// <summary>
+    /// The earlier window. The split path writes the runtime documents before the design commit, so an
+    /// interruption between the two leaves a source reference behind. It is create-only, so a naive retry
+    /// conflicts on it and the publication is never finishable. The retry must recognise its own earlier
+    /// write and carry on. ADR 0066.
+    /// </summary>
+    /// <remarks>
+    /// The interruption is modelled by seeding the runtime phase and then publishing once, rather than by
+    /// publishing and undoing it: the design commit also mutates draft and authoring state, so unwinding it
+    /// would leave a state no real crash produces.
+    /// </remarks>
     [Fact]
+    public async Task Split_publication_interrupted_before_its_design_commit_is_finished_by_a_retry()
+    {
+        var harness = await Harness.CreateSplitAsync();
+        await SeedSourceReferenceAsync(harness, harness.Commit.SourceReference.ArtifactId);
+
+        var resumed = await harness.Command.ExecuteAsync(harness.Commit);
+
+        Assert.Equal("version-1", resumed.DefinitionVersionId);
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+            harness.Commit.Design.Publication.Id));
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey)));
+    }
+
+    /// <summary>
+    /// Tolerating one's own source reference must not tolerate somebody else's: an id occupied by a
+    /// different artifact is a real conflict, not an interrupted phase.
+    /// </summary>
+    [Fact]
+    public async Task A_source_reference_belonging_to_another_artifact_is_still_a_conflict()
+    {
+        var harness = await Harness.CreateSplitAsync();
+        await SeedSourceReferenceAsync(harness, "someone-elses-artifact");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => harness.Command.ExecuteAsync(harness.Commit));
+
+        Assert.Contains("different artifact", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A co-located publication commits in one transaction and keeps the strict create-only check.</summary>
+    [Fact]
+    public async Task A_colocated_publication_still_rejects_an_existing_source_reference()
+    {
+        var harness = await Harness.CreateAsync();
+        await SeedSourceReferenceAsync(harness, harness.Commit.SourceReference.ArtifactId);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => harness.Command.ExecuteAsync(harness.Commit));
+
+        Assert.Contains("already exists", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Writes the runtime document a completed phase one would have left behind.</summary>
+    private static async Task SeedSourceReferenceAsync(Harness harness, string artifactId)
+    {
+        var serialized = new GroundworkRuntimeDocumentSerializer().Serialize(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            new SeedSourceReferenceDocument(
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceCollection,
+                artifactId,
+                harness.Commit.SourceReference));
+        await harness.Documents.SaveAsync(new(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            harness.Commit.SourceReference.SourceReferenceId,
+            serialized.SchemaVersion,
+            serialized.ContentJson,
+            0));
+    }
+
+    /// <summary>Mirrors the shape the publication commands persist; serialization is by shape.</summary>
+    private sealed record SeedSourceReferenceDocument(
+        string Collection,
+        string ArtifactId,
+        WorkflowExecutableSourceReference Reference);
+
     public async Task Split_publication_interrupted_before_its_receipt_is_finished_by_a_retry()
     {
         var harness = await Harness.CreateSplitAsync();
@@ -1880,17 +1959,21 @@ public sealed class ActivityDefinitionPublicationTests
             PublisherPublicationStore publications,
             GroundworkActivityDependencyProjection projection,
             GroundworkActivityManagementProjectionWriter managementProjection,
-            GroundworkManifestBindings? bindings)
+            GroundworkManifestBindings? bindings,
+            IDocumentStore? runtimeStore = null)
         {
             var laneTargets = new GroundworkLaneTargets(bindings ?? new GroundworkManifestBindings());
             var services = new ServiceCollection().AddSingleton(store);
-            // Both targets are the same physical store here; the split is in the lane bindings, which is what
-            // selects the ordered path. Sharing the store keeps the resume assertions about ordering, not wiring.
+            // When the lanes are split they must be genuinely different stores. Pointing both keys at one
+            // store would hide a lane addressing the wrong database, which is exactly the defect this
+            // harness exists to catch.
             services.AddKeyedSingleton("authoring", store);
-            services.AddKeyedSingleton(GroundworkTargetNames.Default, store);
+            services.AddKeyedSingleton(GroundworkTargetNames.Default, runtimeStore ?? store);
+            if (store is IBoundedDocumentStore designBounded)
+                services.AddKeyedSingleton(typeof(IBoundedDocumentStore), "authoring", designBounded);
+            if ((runtimeStore ?? store) is IBoundedDocumentStore runtimeBounded)
+                services.AddKeyedSingleton(typeof(IBoundedDocumentStore), GroundworkTargetNames.Default, runtimeBounded);
             return new(
-                    store,
-                    documents,
                     payloads,
                     runtimeSerializer,
                     publications,
