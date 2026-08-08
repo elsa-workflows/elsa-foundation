@@ -153,9 +153,20 @@ adapter, with a hardcoded provider version. That path has no compiled physical t
 admission, so it cannot describe the system the Spec 094 conformance evidence describes. The leaf uses
 `ResetPhysicalAsync` + `OpenPhysicalClientAsync`, the same driver path the conformance suites use.
 
-**A quiet machine is not advice, it is a precondition.** An early attempt was measured while this session
-was concurrently reading the live SQLite file to check progress. The correctness phase took 9m20s under
-that load and 1m53s without it — a 5× distortion from read-only observation alone.
+**A quiet machine is not advice, it is a precondition — and SQLite is far more sensitive to this than
+PostgreSQL.** An early attempt was measured while this session was concurrently reading the live SQLite
+file to check progress: the correctness phase took 9m20s under that load and 1m53s without it, a 5×
+distortion from read-only observation alone. Later attempts on a host running at a load average of 60–150
+(8 cores) produced a `commit-checkpoint-bundle` p95 of 328–404 ms against the 75 ms recorded here. Over the
+same period PostgreSQL was unaffected and reproduced its numbers to three decimals — its work happens
+inside its container, while SQLite contends for host fsync.
+
+**The contamination signature is per-process sample counts diverging inside a single cohort.** The figures
+above were taken with `[429, 413, 430]` samples across the three measured processes; the discarded runs
+showed `[199, 112, 415]` and `[254, 100, 142]`, with one process barely clearing the 100-sample floor.
+Check that spread before trusting a set — the harness will not check it for you. `GateEvaluator.Complete`
+requires at least 100 samples per process and never compares processes to each other, so a load-contaminated
+cohort is admitted silently.
 
 ## Provenance
 
