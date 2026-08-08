@@ -1,0 +1,4 @@
+# Consumer contract artifacts (docs/contracts) are byte-compared by the CI freshness check
+# (tools/contracts/Elsa.Contracts.Generator -- check) and fingerprinted in manifest.json.
+# They must check out with LF on every platform or the comparison and the fingerprints break.
+docs/contracts/** text eol=lf
