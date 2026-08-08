@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -49,6 +50,34 @@ public sealed class RuntimeDiagnosticSnapshotTests
         Assert.Equal("abc", snapshot.GetProperty("preview").GetString());
         Assert.True(snapshot.GetProperty("truncated").GetBoolean());
         Assert.Equal(6, snapshot.GetProperty("length").GetInt32());
+    }
+
+    /// <summary>
+    /// Pins the published claim <c>evidence.value-preview-is-capped-and-flags-truncation</c> at the DEFAULT
+    /// limit — the sibling test above proves the mechanism with an explicit limit, which does not tell a
+    /// consumer what it will actually receive. An equality assertion against a captured value is only sound
+    /// once <c>truncated</c> is false, and a benchmarked session lost a run to exactly that.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("evidence.value-preview-is-capped-and-flags-truncation")]
+    public void Capture_caps_a_preview_at_the_default_limit_and_declares_the_truncation()
+    {
+        var snapshot = DefaultDiagnosticSnapshotFactory.Capture(new string('x', 300));
+
+        Assert.Equal(DiagnosticSnapshotLimits.Default.MaxStringLength, snapshot.GetProperty("preview").GetString()!.Length);
+        Assert.True(snapshot.GetProperty("truncated").GetBoolean());
+        // The full length is still reported, so a consumer can tell "long value" from "value of 256 chars".
+        Assert.Equal(300, snapshot.GetProperty("length").GetInt32());
+    }
+
+    [Fact]
+    [ConsumerContract("evidence.value-preview-is-capped-and-flags-truncation")]
+    public void Capture_of_a_value_within_the_limit_carries_it_whole()
+    {
+        var snapshot = DefaultDiagnosticSnapshotFactory.Capture("short value");
+
+        Assert.Equal("short value", snapshot.GetProperty("preview").GetString());
+        Assert.False(snapshot.TryGetProperty("truncated", out var truncated) && truncated.GetBoolean());
     }
 
     [Fact]

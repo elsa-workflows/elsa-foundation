@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
@@ -971,6 +972,37 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, draft!.TenantId);
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, version.TenantId);
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, layout!.TenantId);
+    }
+
+    /// <summary>
+    /// Pins the published claim <c>design.submit-by-name-creates-a-new-definition</c>. Names are not
+    /// identities here: submitting the same name twice yields two definitions, not a second version of the
+    /// first. It is the reason a second run of an authoring script fails where the first succeeded — the new
+    /// definition collides with the HTTP route the first one already claimed.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("design.submit-by-name-creates-a-new-definition")]
+    public async Task SubmitWorkflowDefinition_with_an_existing_name_creates_a_second_definition()
+    {
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new EmptyActivityStructureService(),
+            _clock,
+            _accessContext);
+
+        var first = await command.Execute(NextKey(), "Same Name", null, MinimalState(), CancellationToken.None);
+        var second = await command.Execute(NextKey(), "Same Name", null, MinimalState(), CancellationToken.None);
+
+        Assert.NotEqual(first.DefinitionId, second.DefinitionId);
+        Assert.NotEqual(first.VersionId, second.VersionId);
+
+        // Both are first versions of their own definition — not v1 and v2 of one.
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        Assert.Equal("Same Name", (await definitions.GetAsync(first.DefinitionId)).Name);
+        Assert.Equal("Same Name", (await definitions.GetAsync(second.DefinitionId)).Name);
     }
 
     [Fact]

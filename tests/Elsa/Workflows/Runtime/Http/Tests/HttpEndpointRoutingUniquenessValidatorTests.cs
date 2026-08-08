@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Http.Exceptions;
@@ -21,6 +22,7 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
         new(bindings[0].ArtifactId, bindings);
 
     [Fact]
+    [ConsumerContract("publishing.http-route-method-pair-is-exclusive")]
     public async Task AllowsExclusiveClaimToReplaceTheActivePublicationInItsOwnSlot()
     {
         var current = PublicationBinding(
@@ -71,6 +73,7 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
     }
 
     [Fact]
+    [ConsumerContract("publishing.http-route-method-pair-is-exclusive")]
     public async Task Throws_WhenAnotherDefinitionAlreadyClaimsTheTemplateAndMethod()
     {
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
@@ -106,6 +109,7 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
     }
 
     [Fact]
+    [ConsumerContract("publishing.http-route-method-pair-is-exclusive")]
     public async Task AllowsDifferentMethods_OnTheSameTemplate_AcrossDefinitions()
     {
         // GET vs POST orders/{id} are distinct (template, method) identities — different hashes — so two

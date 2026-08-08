@@ -38,6 +38,58 @@
         "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Binding_one_output_makes_every_required_output_on_that_node_mandatory"
       ],
       "since": "1.1.0"
+    },
+    {
+      "id": "publishing.http-route-method-pair-is-exclusive",
+      "scope": "publishing",
+      "kind": "constraint",
+      "stability": "stable",
+      "statement": "An HTTP `(route template, method)` pair is exclusive across workflow definitions — a second definition claiming a pair another definition already holds fails the publish — while republishing a definition into the slot it already occupies is exempt, and two definitions may hold the same template under different methods.",
+      "rationale": "The exclusivity is what makes a second run of the same authoring script fail where the first succeeded: submitting again creates a NEW definition, and that new definition then collides with the route the first one already claimed.",
+      "tests": [
+        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.Throws_WhenAnotherDefinitionAlreadyClaimsTheTemplateAndMethod",
+        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsExclusiveClaimToReplaceTheActivePublicationInItsOwnSlot",
+        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsDifferentMethods_OnTheSameTemplate_AcrossDefinitions"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "design.submit-by-name-creates-a-new-definition",
+      "scope": "design",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "Submitting a definition whose name already exists creates a second, independent definition — a name is not an identity, and there is no upsert-by-name — so to add a version to an existing definition you must address that definition by id rather than re-submit its name.",
+      "rationale": "This is what makes route exclusivity bite on re-runs: running the same authoring script twice produces two definitions, and the second collides with the HTTP route the first already claimed.",
+      "tests": [
+        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_with_an_existing_name_creates_a_second_definition"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "publishing.artifact-ids-are-content-addressed",
+      "scope": "publishing",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "An executable artifact id is derived from a hash of execution material only, so two definitions with identical authored behaviour share one artifact id regardless of which definition version, artifact version or source produced them — while any change to execution material (down to an input-binding literal) moves it.",
+      "rationale": "A consumer that assumes one artifact id per definition will read another definition's executions as its own; a consumer that assumes the id changes per publish will miss that a no-op republish reuses it.",
+      "tests": [
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash",
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_ChangingAnInputBindingLiteralYieldsDifferentHash"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "evidence.value-preview-is-capped-and-flags-truncation",
+      "scope": "runtime.evidence",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "A captured value's `preview` is capped at 256 characters by default and the capture then carries `truncated: true` alongside the value's real `length` — so an equality assertion against a captured value is only sound after checking `truncated` is false.",
+      "rationale": "A benchmarked session asserted equality against a 256-character prefix and read the mismatch as a workflow defect. The cap is a display bound, not a statement about what the workflow produced.",
+      "tests": [
+        "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_caps_a_preview_at_the_default_limit_and_declares_the_truncation",
+        "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_of_a_value_within_the_limit_carries_it_whole"
+      ],
+      "since": "1.1.0"
     }
   ]
 }
