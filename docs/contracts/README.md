@@ -11,7 +11,8 @@ to author workflow definitions against it: no server boot, no endpoint dumps, no
 |---|---|
 | `fragments/<Assembly>.json` | One fragment per contributing assembly: feature metadata (id, `dependsOn`, options), activity contracts (inputs with `defaultValue`/`hasStaticDefault`, outputs with `isRequired`, ports, container structure), structure kinds with payload schemas, expression surface (descriptors, JS declarations, script-sandbox globals), engine intrinsics. |
 | `submit-schema.json` | The workflow-definition submit-body schema — produced by the same handler that serves `GET design/workflows/definitions/submit/schema`. |
-| `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains — the third term of availability, see below. |
+| `api.json` | Every published HTTP endpoint in one route-sorted document: verb, route, permissions, declared success statuses, and the assembly/feature that provides it. Per-endpoint request/response schemas live in the owning fragment's `endpoints` entry. |
+| `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains, plus the features and expression types it serves — the third term of availability, see below. |
 | `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json` and `hosts.json`. Verify "these contracts match my pinned commit" by string compare. |
 
 Deliberately **not** in fragments: assigned activity version ids and availability (`addable`) — server
@@ -82,6 +83,33 @@ that reconciliation persists (constitution §E2.8 — the catalog endpoint reads
 schema exporter, the same manifest-hint options projection, the same structure/intrinsic provider types.
 An equivalence test (`tests/Elsa/Contracts/Tests`) asserts catalog endpoint output equals the merged
 fragments of the composed features plus the server-state overlay.
+
+## Calling the API
+
+`api.json` publishes the HTTP surface so you do not have to probe for it — `/swagger` and `/openapi` are
+not served on this build. Each entry carries the verb, the route template, the permissions the endpoint
+accepts, and the assembly that provides it (intersect with `hosts.json` the same way as features). The
+request and response body schemas for an endpoint live in its owning fragment under `endpoints`.
+
+**Success statuses are published only where the endpoint declares one**, and are absent otherwise —
+deliberately, because a defaulted `200` is precisely the confidently-wrong fact that cost every
+benchmarked session a failed assertion. Where an endpoint can answer more than one status, the set and
+the rule are both published. The workflow publish endpoint is the worked example:
+
+```json
+{
+  "verb": "POST",
+  "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish",
+  "successStatuses": [201, 200],
+  "successStatusCondition": "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies)."
+}
+```
+
+Two things to note when matching routes. Route templates are published verbatim, including ASP.NET
+constraints (`{versionId:regex(...)}`) — strip the constraint to build a URL. And a small number of
+endpoints cannot be configured for build-time projection (server-sent-event streams and the token
+endpoint); they are reported as `ELSACT012` warnings during generation rather than silently omitted, so
+`api.json` is complete except for a knowable, warned set.
 
 ## Behavioural rules the fields alone do not tell you
 

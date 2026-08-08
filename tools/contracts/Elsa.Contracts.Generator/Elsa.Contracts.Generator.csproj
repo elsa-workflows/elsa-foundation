@@ -25,6 +25,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       The full CShells family: feature classes implement interfaces from all three packages
       (e.g. IMiddlewareShellFeature from CShells.AspNetCore); without them such feature types fail to
@@ -33,6 +37,8 @@
     <PackageReference Include="CShells" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore" />
+    <!-- Endpoint projection instantiates endpoints the way the API contract tests do. -->
+    <PackageReference Include="CShells.FastEndpoints" />
   </ItemGroup>
 
 </Project>

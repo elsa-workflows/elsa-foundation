@@ -1,6 +1,377 @@
 {
   "activities": [],
   "assembly": "Elsa.Foundation.Identity.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "ownershipMode": {
+            "enum": [
+              "foundationOwned",
+              "externalOwned",
+              "hybrid"
+            ]
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "challenge": {
+                  "properties": {
+                    "method": {
+                      "default": "GET",
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": null,
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "scheme": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "isDefault": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "displayName",
+                "isDefault",
+                "enabled"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ownershipMode",
+          "providers"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/identity/bootstrap",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [
+        "*",
+        "identity.providers.read"
+      ],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "ownershipMode": {
+            "enum": [
+              "foundationOwned",
+              "externalOwned",
+              "hybrid"
+            ]
+          },
+          "permissions": {
+            "items": {
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "implies": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "displayName",
+                "category",
+                "description",
+                "implies"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "capabilities": {
+                  "properties": {
+                    "canIssueTokens": {
+                      "type": "boolean"
+                    },
+                    "canManageApplications": {
+                      "type": "boolean"
+                    },
+                    "canManageRoles": {
+                      "type": "boolean"
+                    },
+                    "canManageUsers": {
+                      "type": "boolean"
+                    },
+                    "canMapGroups": {
+                      "type": "boolean"
+                    },
+                    "canRefreshTokens": {
+                      "type": "boolean"
+                    },
+                    "canRevokeTokens": {
+                      "type": "boolean"
+                    },
+                    "permissionPropagation": {
+                      "enum": [
+                        "immediateServerSide",
+                        "tokenRefreshBoundary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "canManageUsers",
+                    "canManageRoles",
+                    "canManageApplications",
+                    "canMapGroups",
+                    "canIssueTokens",
+                    "canRefreshTokens",
+                    "canRevokeTokens",
+                    "permissionPropagation"
+                  ],
+                  "type": "object"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "isDefault": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "displayName",
+                "isDefault",
+                "enabled",
+                "capabilities"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ownershipMode",
+          "providers",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/identity/capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "responseSchema": null,
+      "route": "/_elsa/identity/challenge/{provider}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "responseSchema": null,
+      "route": "/_elsa/identity/logout/{provider}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": {
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "refreshToken": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/identity/refresh",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenFreshness": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "roles",
+          "permissions",
+          "tokenFreshness"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/identity/session",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -28,6 +399,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

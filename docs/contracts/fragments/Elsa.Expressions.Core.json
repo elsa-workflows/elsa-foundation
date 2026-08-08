@@ -1,6 +1,7 @@
 {
   "activities": [],
   "assembly": "Elsa.Expressions.Core",
+  "endpoints": [],
   "expressions": {
     "descriptors": [
       {
@@ -28,6 +29,6 @@
   "features": [],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

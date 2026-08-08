@@ -1,6 +1,21 @@
 {
   "activities": [],
   "assembly": "Elsa.Expressions.JavaScript.Rendering",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "JavaScriptRendering",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "responseSchema": null,
+      "route": "/javascript/documents/render",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
   "expressions": {
     "descriptors": [],
     "javaScriptDeclarations": [
@@ -8499,6 +8514,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

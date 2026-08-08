@@ -1,0 +1,2150 @@
+{
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.audit"
+      ],
+      "route": "/_elsa/agent/audit",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/bootstrap",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/feedback",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "route": "/_elsa/agent/proposals/{proposalId}/approve",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "route": "/_elsa/agent/proposals/{proposalId}/deny",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "route": "/_elsa/agent/proposals/{proposalId}/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/sessions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/sessions/{sessionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/sessions/{sessionId}/messages",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/sessions/{sessionId}/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Agent.Api",
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "route": "/_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Attention.Api",
+      "featureId": "AttentionApi",
+      "permissions": [
+        "*"
+      ],
+      "route": "/_elsa/attention/items",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.ExecutionEvidence",
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.ExecutionEvidence",
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.ExecutionEvidence",
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "route": "/_elsa/execution-evidence/workflows/{workflowExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "route": "/_elsa/identity/bootstrap",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [
+        "*",
+        "identity.providers.read"
+      ],
+      "route": "/_elsa/identity/capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "route": "/_elsa/identity/challenge/{provider}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "route": "/_elsa/identity/logout/{provider}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "route": "/_elsa/identity/refresh",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "assembly": "Elsa.Foundation.Identity.Api",
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "route": "/_elsa/identity/session",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Studio.Preferences.Api",
+      "featureId": "StudioPreferences",
+      "permissions": [
+        "*",
+        "studio.preferences.read"
+      ],
+      "route": "/_elsa/studio/preferences/{namespace}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Studio.Preferences.Api",
+      "featureId": "StudioPreferences",
+      "permissions": [
+        "*",
+        "studio.preferences.write"
+      ],
+      "route": "/_elsa/studio/preferences/{namespace}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Dashboard",
+      "featureId": "WorkflowsDashboard",
+      "permissions": [
+        "*",
+        "workflows.dashboard.read"
+      ],
+      "route": "/_elsa/workflows/dashboard/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Dashboard",
+      "featureId": "WorkflowsDashboard",
+      "permissions": [
+        "*",
+        "workflows.dashboard.read"
+      ],
+      "route": "/_elsa/workflows/dashboard/runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Api.Capabilities",
+      "featureId": "ApiCapabilities",
+      "permissions": [
+        "*",
+        "api-capabilities.read"
+      ],
+      "route": "/capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/authoring-capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/availability/diagnostics",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/availability/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/availability/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/catalog",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/definitions/picker",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PATCH"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/definitions/{definitionId}/drafts",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/definitions/{definitionId}/drafts",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/definitions/{definitionId}/fork-previews",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/definitions/{definitionId}/recommendation",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/definitions/{definitionId}/versions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/conflict-copies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/contract-proposals",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/contract-proposals/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/drafts/{draftId}/diff",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/migrate-provider",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/presentation",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PATCH"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/design/activities/drafts/{draftId}/publication-preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/publish",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/drafts/{draftId}/validate",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/fork-candidates/{candidateId}/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/forks/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/design/activities/publications/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/upgrade-plans",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/upgrade-plans/{planId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/upgrade-plans/{planId}/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/upgrade-plans/{planId}/receipts/{receiptId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/upgrade-plans/{planId}/refresh",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/versions/{fromVersionId}/diff/{toVersionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/versions/{versionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "route": "/design/activities/versions/{versionId}/dependencies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/versions/{versionId}/restore",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/versions/{versionId}/retire",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Design.Api",
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "route": "/design/activities/versions/{versionId}/revoke",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions/submit",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/definitions/submit/schema",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PATCH"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}/permanent",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}/restore",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/definitions/{definitionId}/versions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/drafts/{draftId}/promote",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/drafts/{draftId}/promotion-preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/drafts/{draftId}/validations",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/completions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/context",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/descriptors",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/hover",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/symbols",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/expression-tooling/validate",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/scoped-variables/analyze",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/structures",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.manage"
+      ],
+      "route": "/design/workflows/versions/ingest",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Design.Api",
+      "featureId": "WorkflowsDesignApi",
+      "permissions": [
+        "*",
+        "workflow-design.read"
+      ],
+      "route": "/design/workflows/versions/{versionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/collector-configuration",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/logs/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/metrics/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/resources/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/storage",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/traces/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Diagnostics.OpenTelemetry",
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "route": "/diagnostics/opentelemetry/traces/{traceId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Expressions.Api",
+      "featureId": "ExpressionsApi",
+      "permissions": [
+        "*",
+        "expressions.read"
+      ],
+      "route": "/expressions/descriptors",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Expressions.Api",
+      "featureId": "ExpressionsApi",
+      "permissions": [
+        "*",
+        "expressions.read"
+      ],
+      "route": "/expressions/variable-types",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Bpmn.Interchange",
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.read"
+      ],
+      "route": "/interchange/bpmn/analyze",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Bpmn.Interchange",
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.read"
+      ],
+      "route": "/interchange/bpmn/export",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Activities.Bpmn.Interchange",
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.manage"
+      ],
+      "route": "/interchange/bpmn/import",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Expressions.JavaScript.Rendering",
+      "featureId": "JavaScriptRendering",
+      "permissions": [
+        "*"
+      ],
+      "route": "/javascript/documents/render",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.JavaScript",
+      "featureId": "JavaScriptActivities",
+      "permissions": [
+        "*"
+      ],
+      "route": "/javascript/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa3.Activities.Design.Import",
+      "featureId": "Elsa3ImportJsonActivities",
+      "permissions": [
+        "*",
+        "elsa3-import.manage"
+      ],
+      "route": "/migration/elsa3/reusable-activities/collections",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa3.Activities.Design.Import",
+      "featureId": "Elsa3ImportJsonActivities",
+      "permissions": [
+        "*",
+        "elsa3-import.read"
+      ],
+      "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa3.Activities.Design.Import",
+      "featureId": "Elsa3ImportJsonActivities",
+      "permissions": [
+        "*",
+        "elsa3-import.manage"
+      ],
+      "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa3.Activities.Design.Import",
+      "featureId": "Elsa3ImportJsonActivities",
+      "permissions": [
+        "*",
+        "elsa3-import.read"
+      ],
+      "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/selection",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa3.Activities.Design.Import",
+      "featureId": "Elsa3ImportJsonActivities",
+      "permissions": [
+        "*",
+        "elsa3-import.read"
+      ],
+      "route": "/migration/elsa3/reusable-activities/imports/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Modularity.Api",
+      "featureId": "ModularityApi",
+      "permissions": [
+        "*"
+      ],
+      "route": "/modularity/features",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Modularity.Api",
+      "featureId": "ModularityApi",
+      "permissions": [
+        "*"
+      ],
+      "route": "/modularity/features/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/activities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/activities/{activityId}/construct",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/activity-drafts/{draftId}/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/activity-test-runs/{testRunId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/activity-test-runs/{testRunId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/incident-strategies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/value-conversion/profiles",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/workflows/drafts/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/workflows/{definitionId}/slots",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}/restore",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
+      "successStatusCondition": "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies).",
+      "successStatuses": [
+        201,
+        200
+      ],
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Publishing.Api",
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "route": "/runtime/workflows/alteration-plans",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/alteration-plans/{planId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "route": "/runtime/workflows/alteration-plans/{planId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/alteration-plans/{planId}/jobs/page",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/alteration-plans/{planId}/jobs/{jobId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/diagnostics/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "route": "/runtime/workflows/diagnostics/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/dispatches",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/dispatches/{dispatchId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "route": "/runtime/workflows/dispatches/{dispatchId}/redrive",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/executables",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/executables/{artifactId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.execute"
+      ],
+      "route": "/runtime/workflows/executables/{artifactId}/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/executables/{artifactId}/provenance",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "route": "/runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/page",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/incidents",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Workflows.Runtime.Api",
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.execute"
+      ],
+      "route": "/runtime/workflows/stimuli",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:read"
+      ],
+      "route": "/secrets/",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:write"
+      ],
+      "route": "/secrets/",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:read"
+      ],
+      "route": "/secrets/descriptors",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:read"
+      ],
+      "route": "/secrets/picker",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:delete"
+      ],
+      "route": "/secrets/{name}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:read"
+      ],
+      "route": "/secrets/{name}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:write"
+      ],
+      "route": "/secrets/{name}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:delete"
+      ],
+      "route": "/secrets/{name}/revoke",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:update-value"
+      ],
+      "route": "/secrets/{name}/rotate",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "assembly": "Elsa.Secrets.Api",
+      "featureId": "SecretsApi",
+      "permissions": [
+        "*",
+        "secrets:test"
+      ],
+      "route": "/secrets/{name}/test",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "schemaVersion": "1.1.0"
+}

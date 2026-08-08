@@ -1,6 +1,70 @@
 {
   "activities": [],
   "assembly": "Elsa.Api.Capabilities",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "ApiCapabilities",
+      "permissions": [
+        "*",
+        "api-capabilities.read"
+      ],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "properties": {
+                "contractVersion": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "links": {
+                  "items": {
+                    "properties": {
+                      "href": {
+                        "type": "string"
+                      },
+                      "rel": {
+                        "type": "string"
+                      },
+                      "templated": {
+                        "default": false,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "rel",
+                      "href"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "contractVersion",
+                "links"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "route": "/capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -28,6 +92,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

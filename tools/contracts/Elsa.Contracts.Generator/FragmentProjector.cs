@@ -62,6 +62,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         var structures = ProjectStructures(contributions, owningFeatureId);
         var expressions = ProjectExpressions(contributions, assemblyName, owningFeatureId);
         var intrinsics = ProjectIntrinsics(contributions, owningFeatureId);
+        var endpoints = new EndpointProjector(diagnostics).Project(assembly, assemblyPath, owningFeatureId);
 
         return new ContractFragment(
             ContractFragment.CurrentSchemaVersion,
@@ -70,7 +71,8 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             activities,
             structures,
             expressions,
-            intrinsics);
+            intrinsics,
+            endpoints);
     }
 
     private IReadOnlyList<ActivityContract> ProjectActivities(

@@ -1,6 +1,31 @@
 {
   "activities": [],
   "assembly": "Elsa.Workflows.Runtime.JavaScript",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "JavaScriptActivities",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": {
+        "properties": {
+          "script": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "responseSchema": null,
+      "route": "/javascript/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -39,6 +64,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

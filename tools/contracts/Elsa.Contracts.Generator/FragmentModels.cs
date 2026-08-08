@@ -15,14 +15,37 @@ public sealed record ContractFragment(
     IReadOnlyList<ActivityContract> Activities,
     IReadOnlyList<StructureContract> Structures,
     ExpressionSurface? Expressions,
-    IReadOnlyList<IntrinsicContract> Intrinsics)
+    IReadOnlyList<IntrinsicContract> Intrinsics,
+    IReadOnlyList<EndpointContract> Endpoints)
 {
-    public const string CurrentSchemaVersion = "1.0.0";
+    // 1.1.0: additive — endpoints, input enumValues/authoredVia, host expressionTypes. The schema version
+    // bumps on ANY published-shape change, additive included (spec 150 Part D): three builds moved the
+    // submit-schema fingerprint while the version stood still, so a consumer could not tell a stale cache
+    // from a current one. Minor = additive and backward-compatible; major = a removal or reinterpretation.
+    public const string CurrentSchemaVersion = "1.1.0";
 
     public bool HasContributions =>
         Features.Count > 0 || Activities.Count > 0 || Structures.Count > 0 ||
-        Intrinsics.Count > 0 || Expressions is not null;
+        Intrinsics.Count > 0 || Endpoints.Count > 0 || Expressions is not null;
 }
+
+/// <summary>
+/// One HTTP endpoint of the published API surface. <see cref="SuccessStatus"/> is absent unless the
+/// endpoint declares it (<c>[SuccessStatus]</c>): a guessed 200 is what made every benchmarked session
+/// assert the wrong status on publish.
+/// </summary>
+public sealed record EndpointContract(
+    string? FeatureId,
+    string Verb,
+    string Route,
+    // Absent unless the endpoint declares it; never defaulted to 200. More than one entry means the
+    // endpoint chooses at runtime — SuccessStatusCondition states the rule.
+    IReadOnlyList<int>? SuccessStatuses,
+    string? SuccessStatusCondition,
+    bool AllowsAnonymous,
+    IReadOnlyList<string> Permissions,
+    JsonElement? RequestSchema,
+    JsonElement? ResponseSchema);
 
 public sealed record FeatureContract(
     string Id,
@@ -176,6 +199,7 @@ public sealed record ContractsManifest(
     IReadOnlyList<FragmentFingerprint> Fragments,
     string SubmitSchema,
     string Hosts,
+    string Api,
     ContractsManifestCounts Counts);
 
 public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
@@ -186,6 +210,24 @@ public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
 /// does not carry cannot be enabled, regardless of what its fragment describes.
 /// </summary>
 public sealed record HostsIndex(string SchemaVersion, IReadOnlyList<HostContractSet> Hosts);
+
+/// <summary>
+/// docs/contracts/api.json — every published endpoint in one route-sorted document, so a consumer
+/// answering "how do I publish / execute / inspect this?" reads one file instead of probing. Each entry
+/// carries the assembly that declares it, so it can be intersected with hosts.json the same way features
+/// and expression types are.
+/// </summary>
+public sealed record ApiSurface(string SchemaVersion, IReadOnlyList<ApiSurfaceEntry> Endpoints);
+
+public sealed record ApiSurfaceEntry(
+    string Verb,
+    string Route,
+    string Assembly,
+    string? FeatureId,
+    IReadOnlyList<int>? SuccessStatuses,
+    string? SuccessStatusCondition,
+    bool AllowsAnonymous,
+    IReadOnlyList<string> Permissions);
 
 /// <summary>
 /// What a host actually ships. <see cref="Features"/> is the directly usable term — <c>shells.json</c> is

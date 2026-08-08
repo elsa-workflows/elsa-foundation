@@ -1,6 +1,764 @@
 {
   "activities": [],
   "assembly": "Elsa.Activities.Bpmn.Interchange",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "elementCounts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "properties": {
+                "elementId": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "severity": {
+                  "enum": [
+                    "info",
+                    "degraded",
+                    "dropped"
+                  ]
+                }
+              },
+              "required": [
+                "severity",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "processIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "processIds",
+          "elementCounts",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "route": "/interchange/bpmn/analyze",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "processNode": {
+            "properties": {
+              "activityVersionId": {
+                "type": "string"
+              },
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "autoEvaluate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "conversion": {
+                      "default": null,
+                      "properties": {
+                        "limits": {
+                          "default": null,
+                          "properties": {
+                            "maxCollectionItems": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxDepth": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxPayloadBytes": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "default": "auto",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "json",
+                            "xml",
+                            "profile"
+                          ]
+                        },
+                        "options": {
+                          "default": null
+                        },
+                        "profile": {
+                          "default": null,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evaluatorType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "isSensitive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": true
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "intrinsic": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "set",
+                      "merge",
+                      "reduce",
+                      "return",
+                      "control",
+                      "setCorrelationId",
+                      "setInstanceName",
+                      "setOutput",
+                      "finish"
+                    ]
+                  },
+                  "valueType": {
+                    "default": null,
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "collectionKind": {
+                        "default": "single",
+                        "enum": [
+                          "single",
+                          "array",
+                          "list",
+                          "hashSet",
+                          "dictionary"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "alias"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "variable": {
+                    "default": null,
+                    "properties": {
+                      "declaringScopeId": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isWorkflowScope": {
+                        "type": "boolean"
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "referenceKey"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "outputs": {
+                "items": {
+                  "$ref": "#/properties/processNode/properties/inputs/items"
+                },
+                "type": "array"
+              },
+              "structure": {
+                "default": null,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "payload": true,
+                  "schemaVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "schemaVersion",
+                  "payload"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "activityVersionId",
+              "inputs",
+              "outputs"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "processNode"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "route": "/interchange/bpmn/export",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "ActivitiesBpmnInterchange",
+      "permissions": [
+        "*",
+        "bpmn-interchange.manage"
+      ],
+      "requestSchema": {
+        "properties": {
+          "nodeIdPrefix": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "analysis": {
+            "properties": {
+              "elementCounts": {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              "issues": {
+                "items": {
+                  "properties": {
+                    "elementId": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "enum": [
+                        "info",
+                        "degraded",
+                        "dropped"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "severity",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "processIds": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "processIds",
+              "elementCounts",
+              "issues"
+            ],
+            "type": "object"
+          },
+          "processNode": {
+            "properties": {
+              "activityVersionId": {
+                "type": "string"
+              },
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "autoEvaluate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "conversion": {
+                      "default": null,
+                      "properties": {
+                        "limits": {
+                          "default": null,
+                          "properties": {
+                            "maxCollectionItems": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxDepth": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxPayloadBytes": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "default": "auto",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "json",
+                            "xml",
+                            "profile"
+                          ]
+                        },
+                        "options": {
+                          "default": null
+                        },
+                        "profile": {
+                          "default": null,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evaluatorType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "isSensitive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": true
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "intrinsic": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "set",
+                      "merge",
+                      "reduce",
+                      "return",
+                      "control",
+                      "setCorrelationId",
+                      "setInstanceName",
+                      "setOutput",
+                      "finish"
+                    ]
+                  },
+                  "valueType": {
+                    "default": null,
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "collectionKind": {
+                        "default": "single",
+                        "enum": [
+                          "single",
+                          "array",
+                          "list",
+                          "hashSet",
+                          "dictionary"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "alias"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "variable": {
+                    "default": null,
+                    "properties": {
+                      "declaringScopeId": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isWorkflowScope": {
+                        "type": "boolean"
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "referenceKey"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "outputs": {
+                "items": {
+                  "$ref": "#/properties/processNode/properties/inputs/items"
+                },
+                "type": "array"
+              },
+              "structure": {
+                "default": null,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "payload": true,
+                  "schemaVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "schemaVersion",
+                  "payload"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "activityVersionId",
+              "inputs",
+              "outputs"
+            ],
+            "type": "object"
+          },
+          "processNodes": {
+            "items": {
+              "properties": {
+                "node": {
+                  "properties": {
+                    "activityVersionId": {
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "$ref": "#/properties/processNode/properties/inputs"
+                    },
+                    "intrinsic": {
+                      "$ref": "#/properties/processNode/properties/intrinsic"
+                    },
+                    "nodeId": {
+                      "type": "string"
+                    },
+                    "outputs": {
+                      "$ref": "#/properties/processNode/properties/outputs"
+                    },
+                    "structure": {
+                      "$ref": "#/properties/processNode/properties/structure",
+                      "default": null
+                    }
+                  },
+                  "required": [
+                    "nodeId",
+                    "activityVersionId",
+                    "inputs",
+                    "outputs"
+                  ],
+                  "type": "object"
+                },
+                "participantId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "participantName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "processId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "processId",
+                "node"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "processNode",
+          "analysis",
+          "processNodes"
+        ],
+        "type": "object"
+      },
+      "route": "/interchange/bpmn/import",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -28,6 +786,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

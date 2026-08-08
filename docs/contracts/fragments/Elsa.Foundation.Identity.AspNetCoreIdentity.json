@@ -1,6 +1,52 @@
 {
   "activities": [],
   "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+  "endpoints": [
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "requestSchema": null,
+      "responseSchema": null,
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "requestSchema": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "returnUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "responseSchema": null,
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -56,6 +102,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

@@ -139,6 +139,7 @@
     }
   ],
   "assembly": "Elsa.Activities.Scheduling",
+  "endpoints": [],
   "expressions": null,
   "features": [
     {
@@ -154,6 +155,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

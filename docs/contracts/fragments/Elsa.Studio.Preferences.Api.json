@@ -1,6 +1,104 @@
 {
   "activities": [],
   "assembly": "Elsa.Studio.Preferences.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "StudioPreferences",
+      "permissions": [
+        "*",
+        "studio.preferences.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": true
+        },
+        "required": [
+          "namespace",
+          "schemaVersion",
+          "revision",
+          "value",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/studio/preferences/{namespace}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "StudioPreferences",
+      "permissions": [
+        "*",
+        "studio.preferences.write"
+      ],
+      "requestSchema": {
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "value": true
+        },
+        "type": "object"
+      },
+      "responseSchema": {
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": true
+        },
+        "required": [
+          "namespace",
+          "schemaVersion",
+          "revision",
+          "value",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/studio/preferences/{namespace}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -37,6 +135,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }

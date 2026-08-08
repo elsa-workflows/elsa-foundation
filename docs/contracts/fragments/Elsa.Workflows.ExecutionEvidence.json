@@ -1,6 +1,279 @@
 {
   "activities": [],
   "assembly": "Elsa.Workflows.ExecutionEvidence",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "responseSchema": null,
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "firstSequence": {
+            "type": "integer"
+          },
+          "lastSequence": {
+            "type": "integer"
+          },
+          "matchedWorkflows": {
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "properties": {
+                "activityExecutionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "authoredActivityId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "checkpointId": {
+                  "type": "string"
+                },
+                "correlationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "occurredAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "outcomes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "sequence": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value": true,
+                "valueDisposition": {
+                  "enum": [
+                    "captured",
+                    "null",
+                    "absent",
+                    "external",
+                    "sensitive",
+                    "truncated",
+                    null
+                  ]
+                },
+                "workflowExecutionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "workflowExecutionId",
+                "kind",
+                "occurredAt",
+                "checkpointId"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "terminal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "records",
+          "firstSequence",
+          "lastSequence",
+          "terminal",
+          "matchedWorkflows"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "responseSchema": {
+        "properties": {
+          "firstSequence": {
+            "type": "integer"
+          },
+          "lastSequence": {
+            "type": "integer"
+          },
+          "matchedWorkflows": {
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "properties": {
+                "activityExecutionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "authoredActivityId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "checkpointId": {
+                  "type": "string"
+                },
+                "correlationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "occurredAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "outcomes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "sequence": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value": true,
+                "valueDisposition": {
+                  "enum": [
+                    "captured",
+                    "null",
+                    "absent",
+                    "external",
+                    "sensitive",
+                    "truncated",
+                    null
+                  ]
+                },
+                "workflowExecutionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "workflowExecutionId",
+                "kind",
+                "occurredAt",
+                "checkpointId"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "terminal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "records",
+          "firstSequence",
+          "lastSequence",
+          "terminal",
+          "matchedWorkflows"
+        ],
+        "type": "object"
+      },
+      "route": "/_elsa/execution-evidence/workflows/{workflowExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
   "expressions": null,
   "features": [
     {
@@ -98,6 +371,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "structures": []
 }
