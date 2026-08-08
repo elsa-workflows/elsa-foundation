@@ -13,7 +13,7 @@
           "advanced": false,
           "category": "Caching",
           "clrType": "System.TimeSpan",
-          "defaultValue": "00:01:00",
+          "defaultValue": null,
           "description": "Default duration for entries stored by the memory cache.",
           "displayName": "Cache duration",
           "experimental": false,

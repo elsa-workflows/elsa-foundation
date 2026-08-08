@@ -27,7 +27,7 @@ Ordering: every array ordinal-sorted by its identity key (feature id, activity t
 | `dependsOn` | string[] | Dependency closure as structural data (RFC Part 1). |
 | `options` | FeatureOptionContract[] | Public settable feature properties + manifest-hint metadata. |
 
-**FeatureOptionContract**: `name`, `jsonType` (string/boolean/integer/number/object/array), `clrType` (alias), `required`, `defaultValue` (JsonElement?), `displayName`, `description`, `category`, `secret`, `restartRequired`, `advanced`, `experimental` — same projection `ManifestHintReader` performs.
+**FeatureOptionContract**: `name`, `jsonType` (string/boolean/integer/number/object/array), `clrType` (alias), `required`, `defaultValue` (JsonElement?), `displayName`, `description`, `category`, `secret`, `restartRequired`, `advanced`, `experimental` — the `ManifestHintReader` projection, except `defaultValue` which is **static-only** (explicit attribute default → compiled initializer constant → synthesizable `default(T)` → null): instance-read defaults embed the generator's environment and broke fragment determinism (discovered via the first CI run — e.g. `LocksFolderPath = Path.Combine(Environment.CurrentDirectory, …)`).
 
 ## ActivityContract
 
@@ -37,7 +37,7 @@ Mirrors `ActivityAuthoringDescriptorView` content fields; excludes overlay (`Act
 |---|---|---|
 | `featureId` | string? | Owning feature via the shared attribution rule; null if assembly hosts no feature. |
 | `activityTypeKey` | string | CLR FullName (scanner-minted, stable identity). |
-| `version` | string | SemVer from assembly version / `[Version]` override. |
+| `version` | string | SemVer from assembly version / `[Version]` override, **build metadata stripped** (the informational version carries the SourceLink commit sha, which would make committed fragments change every commit; identity is metadata-insensitive per §E2.8). |
 | `contentHash` | string | `DefaultActivityDefinitionHasher` canonical hash — equals the persisted row `Hash` for identical content. |
 | `displayName`, `category`, `description` | string? | Scanner-minted. |
 | `executionType` | string | Always `Action` today (scanner invariant). |

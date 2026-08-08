@@ -31,18 +31,15 @@ public sealed class FeatureIndex
                 continue;
             }
 
-            foreach (var type in TargetAssembly.GetLoadableTypes(assembly))
+            var featureTypes = TargetAssembly.GetLoadableTypes(assembly)
+                .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(IShellFeature).IsAssignableFrom(type))
+                .Select(type => (Type: type, Id: ReadFeatureId(type)))
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Id));
+            foreach (var (type, id) in featureTypes)
             {
-                if (type is not { IsClass: true, IsAbstract: false } || !typeof(IShellFeature).IsAssignableFrom(type))
-                    continue;
-
-                var id = ReadFeatureId(type);
-                if (string.IsNullOrWhiteSpace(id))
-                    continue;
-
-                if (!index.featureTypesById.TryAdd(id, type))
+                if (!index.featureTypesById.TryAdd(id!, type))
                     diagnostics.Warning(assemblyPath, "ELSACT008",
-                        $"Feature id '{id}' is declared by both '{index.featureTypesById[id].FullName}' and '{type.FullName}'; keeping the first.");
+                        $"Feature id '{id}' is declared by both '{index.featureTypesById[id!].FullName}' and '{type.FullName}'; keeping the first.");
             }
         }
 

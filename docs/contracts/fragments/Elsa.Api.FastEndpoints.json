@@ -13,7 +13,7 @@
           "advanced": false,
           "category": null,
           "clrType": "System.Boolean",
-          "defaultValue": null,
+          "defaultValue": false,
           "description": null,
           "displayName": "Allow Anonymous",
           "experimental": false,

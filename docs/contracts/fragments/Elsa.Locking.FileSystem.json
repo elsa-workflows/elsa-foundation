@@ -27,7 +27,7 @@
           "advanced": false,
           "category": "Locking",
           "clrType": "System.String",
-          "defaultValue": "C:\\Users\\JoeyBarten\\source\\repos\\elsa-foundation\\App_Data/locks",
+          "defaultValue": null,
           "description": "Directory used to store file-system distributed lock files.",
           "displayName": "Locks folder path",
           "experimental": false,

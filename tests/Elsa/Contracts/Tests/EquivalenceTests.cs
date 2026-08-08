@@ -73,11 +73,8 @@ public sealed class EquivalenceTests
         foreach (var assemblyName in assemblyNames)
         {
             var fragment = ProjectFragment(assemblyName);
-            foreach (var activity in fragment.Activities)
-            {
-                if (activity.FeatureId is not null)
-                    featureIdByTypeKey[activity.ActivityTypeKey] = activity.FeatureId;
-            }
+            foreach (var activity in fragment.Activities.Where(candidate => candidate.FeatureId is not null))
+                featureIdByTypeKey[activity.ActivityTypeKey] = activity.FeatureId!;
 
             foreach (var model in scanner.ScanAssembly(Path.Combine(BaseDirectory, assemblyName + ".dll"), ReferencePaths))
             {
@@ -224,7 +221,10 @@ public sealed class EquivalenceTests
     private static ActivityContract ToComparableContract(ActivityAuthoringDescriptorView item, string? featureId, string contentHash) => new(
         featureId,
         item.ActivityTypeKey,
-        item.Version,
+        // The server legitimately carries SemVer build metadata (SourceLink sha); fragments strip it
+        // because identity is build-metadata-insensitive (§E2.8) and committed artifacts must be
+        // commit-stable. Normalize the served version the same way.
+        FragmentProjector.StripBuildMetadata(item.Version),
         contentHash,
         item.DisplayName,
         string.IsNullOrEmpty(item.Category) ? null : item.Category,

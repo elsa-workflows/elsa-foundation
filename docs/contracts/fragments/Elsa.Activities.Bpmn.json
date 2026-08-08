@@ -31,7 +31,7 @@
       ],
       "outputs": [],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
@@ -90,7 +90,7 @@
           "type": "outcome"
         }
       ],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     }
   ],
   "assembly": "Elsa.Activities.Bpmn",

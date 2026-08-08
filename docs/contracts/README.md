@@ -55,6 +55,14 @@ fragments of the composed features plus the server-state overlay.
 - Every input with a statically representable CLR default publishes it (`hasStaticDefault: true`);
   computed or conditional initializers publish `hasStaticDefault: false` — an honest "no static default",
   never a guess.
+- Activity `version` is published **without SemVer build metadata**: the assembly's informational
+  version carries the SourceLink commit sha (`1.0.0+<sha>`), identity is build-metadata-insensitive by
+  design, and a committed fragment must not change on every commit.
+- Feature option `defaultValue` is **static-only** (explicit `[ManifestSetting(DefaultValue)]`, compiled
+  initializer constant, or synthesizable `default(T)`): defaults computed at construction
+  (`Path.Combine(Environment.CurrentDirectory, …)`, `TimeSpan.FromSeconds(…)`, `string.Empty`,
+  `typeof(…)` names) publish `null` — they embed the generator's environment or are not IL constants.
+  The runtime feature catalog still shows live values.
 - Generation warnings (`ELSACT006`/`ELSACT009`) mean a feature's registration or some types could not be
   loaded during projection — the fragment may under-describe that assembly. Known cases: features
   requiring configuration at construction (JSON reconciliation sources) and assemblies whose external

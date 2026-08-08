@@ -13,7 +13,7 @@
           "advanced": false,
           "category": null,
           "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Design.Reconciliation.Contracts.IWorkflowReconciliationSource, Elsa.Workflows.Design.Reconciliation, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
-          "defaultValue": [],
+          "defaultValue": null,
           "description": null,
           "displayName": "Sources",
           "experimental": false,

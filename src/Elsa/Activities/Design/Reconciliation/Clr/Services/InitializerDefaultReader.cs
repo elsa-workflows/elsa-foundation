@@ -168,14 +168,12 @@ public sealed class InitializerDefaultReader : IDisposable
         {
             var merged = new Dictionary<string, PropertyInitializer>(StringComparer.Ordinal);
 
-            foreach (var methodHandle in typeDefinition.GetMethods())
+            var constructors = typeDefinition.GetMethods()
+                .Select(metadata.GetMethodDefinition)
+                .Where(method => string.Equals(metadata.GetString(method.Name), ".ctor", StringComparison.Ordinal) &&
+                                 method.RelativeVirtualAddress != 0);
+            foreach (var method in constructors)
             {
-                var method = metadata.GetMethodDefinition(methodHandle);
-                if (!string.Equals(metadata.GetString(method.Name), ".ctor", StringComparison.Ordinal))
-                    continue;
-                if (method.RelativeVirtualAddress == 0)
-                    continue;
-
                 IReadOnlyDictionary<string, PropertyInitializer> parsed;
                 try
                 {
@@ -384,11 +382,12 @@ public sealed class InitializerDefaultReader : IDisposable
         private static Dictionary<short, OpCode> BuildOpCodeMap()
         {
             var map = new Dictionary<short, OpCode>();
-            foreach (var field in typeof(OpCodes).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
-            {
-                if (field.GetValue(null) is OpCode opCode)
-                    map[opCode.Value] = opCode;
-            }
+            var opCodes = typeof(OpCodes)
+                .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                .Select(field => field.GetValue(null))
+                .OfType<OpCode>();
+            foreach (var opCode in opCodes)
+                map[opCode.Value] = opCode;
 
             return map;
         }

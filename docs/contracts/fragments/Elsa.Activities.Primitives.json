@@ -20,7 +20,7 @@
           "type": "outcome"
         }
       ],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.Event",
@@ -101,7 +101,7 @@
         }
       ],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.Fault",
@@ -188,7 +188,7 @@
       ],
       "outputs": [],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
@@ -221,7 +221,7 @@
       ],
       "outputs": [],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.PublishEvent",
@@ -316,7 +316,7 @@
           "type": "outcome"
         }
       ],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.ReadLine",
@@ -342,7 +342,7 @@
         }
       ],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
@@ -383,7 +383,7 @@
           "type": "outcome"
         }
       ],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     },
     {
       "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLines",
@@ -416,7 +416,7 @@
       ],
       "outputs": [],
       "ports": [],
-      "version": "1.0.0\u002B2c3348ac5bd7f0b42d33d0b582e9489c649ad839"
+      "version": "1.0.0"
     }
   ],
   "assembly": "Elsa.Activities.Primitives",

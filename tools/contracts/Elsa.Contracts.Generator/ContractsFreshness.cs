@@ -26,7 +26,10 @@ public sealed class ContractsFreshness(Diagnostics diagnostics)
             }
 
             foreach (var file in stale)
+            {
                 diagnostics.Error(Path.Combine(committedDirectory, file), "ELSACT010", "Committed contract artifact does not match the tree.");
+                PrintFirstDifference(committedDirectory, scratchDirectory, file);
+            }
             Console.Error.WriteLine();
             Console.Error.WriteLine("Committed contracts are stale. Refresh them and commit the result:");
             Console.Error.WriteLine($"  dotnet build Elsa.Server.slnx -c {configuration}");
@@ -47,18 +50,52 @@ public sealed class ContractsFreshness(Diagnostics diagnostics)
         }
     }
 
+    /// <summary>
+    /// Shows the first differing line of a stale artifact so a CI failure reveals WHAT drifted, not just
+    /// that something did — without this, an environment-dependent generation bug is undiagnosable from logs.
+    /// </summary>
+    private static void PrintFirstDifference(string committedDirectory, string regeneratedDirectory, string file)
+    {
+        var committedPath = Path.Combine(committedDirectory, file);
+        var regeneratedPath = Path.Combine(regeneratedDirectory, file);
+        if (!File.Exists(committedPath) || !File.Exists(regeneratedPath))
+        {
+            Console.Error.WriteLine($"  {(File.Exists(committedPath) ? "only committed" : "only regenerated")}: {file}");
+            return;
+        }
+
+        var committedLines = File.ReadAllLines(committedPath);
+        var regeneratedLines = File.ReadAllLines(regeneratedPath);
+        for (var index = 0; index < Math.Max(committedLines.Length, regeneratedLines.Length); index++)
+        {
+            var committedLine = index < committedLines.Length ? committedLines[index] : "<end of file>";
+            var regeneratedLine = index < regeneratedLines.Length ? regeneratedLines[index] : "<end of file>";
+            if (!string.Equals(committedLine, regeneratedLine, StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine($"  first difference at line {index + 1}:");
+                Console.Error.WriteLine($"    committed:   {Truncate(committedLine)}");
+                Console.Error.WriteLine($"    regenerated: {Truncate(regeneratedLine)}");
+                return;
+            }
+        }
+
+        Console.Error.WriteLine("  files differ only in line endings or trailing bytes.");
+
+        static string Truncate(string line) => line.Length <= 200 ? line : line[..200] + "…";
+    }
+
     /// <summary>Public for direct unit testing (§2.23.2); the CLI path goes through <see cref="Run"/>.</summary>
     public static IEnumerable<string> Compare(string committedDirectory, string regeneratedDirectory)
     {
         var committed = ListFiles(committedDirectory);
         var regenerated = ListFiles(regeneratedDirectory);
 
-        foreach (var file in committed.Keys.Union(regenerated.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        // README.md is authored documentation living beside the generated artifacts; it is not generated.
+        var comparableFiles = committed.Keys.Union(regenerated.Keys, StringComparer.Ordinal)
+            .Where(file => !string.Equals(file, "README.md", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal);
+        foreach (var file in comparableFiles)
         {
-            // README.md is authored documentation living beside the generated artifacts; it is not generated.
-            if (string.Equals(file, "README.md", StringComparison.OrdinalIgnoreCase))
-                continue;
-
             if (!committed.TryGetValue(file, out var committedPath) ||
                 !regenerated.TryGetValue(file, out var regeneratedPath) ||
                 !File.ReadAllBytes(committedPath).AsSpan().SequenceEqual(File.ReadAllBytes(regeneratedPath)))

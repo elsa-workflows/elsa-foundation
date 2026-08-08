@@ -122,7 +122,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         return new ActivityContract(
             owningFeatureId,
             model.ActivityTypeKey,
-            model.Version,
+            StripBuildMetadata(model.Version),
             version.Hash ?? throw new InvalidOperationException($"No content hash was produced for '{model.ActivityTypeKey}'."),
             model.DisplayName ?? model.ActivityTypeKey,
             model.Category,
@@ -132,6 +132,17 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             model.Outputs.Select(ToOutputContract).ToArray(),
             model.DesignFacets.SelectMany(ToPorts).ToArray(),
             structureFacet?.Payload.Clone());
+    }
+
+    /// <summary>
+    /// SemVer build metadata carries the SourceLink commit sha (<c>1.0.0+&lt;sha&gt;</c>): activity identity
+    /// is build-metadata-insensitive by design (constitution §E2.8 — the SemVer sort key excludes it), and
+    /// a committed fragment must not change on every commit, so the published version strips it.
+    /// </summary>
+    public static string StripBuildMetadata(string version)
+    {
+        var plus = version.IndexOf('+');
+        return plus < 0 ? version : version[..plus];
     }
 
     private static InputContract ToInputContract(InputDefinition input) => new(
@@ -171,11 +182,9 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             ports.ValueKind != JsonValueKind.Array)
             yield break;
 
-        foreach (var port in ports.EnumerateArray())
+        foreach (var port in ports.EnumerateArray().Where(candidate => candidate.ValueKind == JsonValueKind.Object))
         {
-            if (port.ValueKind != JsonValueKind.Object ||
-                !port.TryGetProperty("name", out var nameProperty) ||
-                string.IsNullOrWhiteSpace(nameProperty.GetString()))
+            if (!port.TryGetProperty("name", out var nameProperty) || string.IsNullOrWhiteSpace(nameProperty.GetString()))
                 continue;
 
             var name = nameProperty.GetString()!;
@@ -215,18 +224,17 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
     private IReadOnlyList<FeatureContract> ProjectFeatures(Assembly assembly, string assemblyPath)
     {
+        using var initializerReader = new InitializerDefaultReader();
         var features = new List<FeatureContract>();
-        foreach (var type in TargetAssembly.GetLoadableTypes(assembly))
+        var candidates = TargetAssembly.GetLoadableTypes(assembly)
+            .Where(type => type is { IsClass: true, IsAbstract: false })
+            .Select(type => (Type: type, Attribute: type.GetCustomAttributesData()
+                .FirstOrDefault(candidate => candidate.AttributeType.Name == ShellFeatureAttributeName)))
+            .Where(candidate => candidate.Attribute is not null);
+
+        foreach (var (type, attribute) in candidates)
         {
-            if (type is not { IsClass: true, IsAbstract: false })
-                continue;
-
-            var attribute = type.GetCustomAttributesData()
-                .FirstOrDefault(candidate => candidate.AttributeType.Name == ShellFeatureAttributeName);
-            if (attribute is null)
-                continue;
-
-            var id = attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null;
+            var id = attribute!.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null;
             if (string.IsNullOrWhiteSpace(id))
             {
                 diagnostics.Error(assemblyPath, "ELSACT003", $"Feature class '{type.FullName}' declares a [ShellFeature] without a name.");
@@ -245,7 +253,10 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                     setting.ClrType,
                     setting.JsonType ?? "string",
                     setting.Required,
-                    setting.DefaultValue,
+                    // NOT setting.DefaultValue: ManifestHintReader reads defaults off an activated
+                    // instance, which embeds the generator's environment (current directory, machine
+                    // limits, ...) and breaks fragment determinism. Contracts publish static defaults only.
+                    ResolveStaticOptionDefault(type, setting.Name, initializerReader),
                     setting.Secret,
                     setting.RestartRequired,
                     setting.Advanced,
@@ -263,6 +274,106 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
         return features.OrderBy(feature => feature.Id, StringComparer.Ordinal).ToArray();
     }
+
+    private const string ManifestSettingAttributeFullName = "Elsa.Platform.PackageManifest.Generator.Hints.ManifestSettingAttribute";
+
+    /// <summary>
+    /// The G1 static-default ladder applied to feature options: explicit <c>[ManifestSetting(DefaultValue)]</c>
+    /// → compiled property-initializer constant (via <see cref="InitializerDefaultReader"/>) → synthesizable
+    /// <c>default(T)</c> → null (no published default). Never an instance read: a default like
+    /// <c>Path.Combine(Environment.CurrentDirectory, ...)</c> is honest runtime behavior but not static contract.
+    /// Enum values use the raw member name, matching the options list ManifestHintReader publishes.
+    /// </summary>
+    private static JsonElement? ResolveStaticOptionDefault(Type featureType, string propertyName, InitializerDefaultReader initializerReader)
+    {
+        var property = featureType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        if (property is null)
+            return null;
+
+        var explicitDefault = property.GetCustomAttributesData()
+            .FirstOrDefault(attribute => attribute.AttributeType.FullName == ManifestSettingAttributeFullName)
+            ?.NamedArguments.FirstOrDefault(argument => argument.MemberName == "DefaultValue").TypedValue.Value as string;
+        var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!string.IsNullOrWhiteSpace(explicitDefault))
+            return ParseExplicitOptionDefault(explicitDefault, underlying);
+
+        var initializer = initializerReader.GetInitializer(property.DeclaringType ?? featureType, property.Name);
+        return initializer.Kind switch
+        {
+            InitializerKind.Constant when initializer.ViaNewobj && Nullable.GetUnderlyingType(property.PropertyType) is null => null,
+            InitializerKind.Constant => SerializeOptionConstant(initializer.Value, underlying),
+            InitializerKind.Unrecognized => null,
+            _ when property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null =>
+                SynthesizeOptionDefault(underlying),
+            _ => null
+        };
+    }
+
+    private static JsonElement? ParseExplicitOptionDefault(string value, Type underlying)
+    {
+        // Mirrors ManifestHintReader.ParseDefault's jsonType-driven parsing.
+        if (underlying == typeof(bool) && bool.TryParse(value, out var boolValue))
+            return JsonSerializer.SerializeToElement(boolValue);
+        if (IsIntegerType(underlying) && long.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var longValue))
+            return JsonSerializer.SerializeToElement(longValue);
+        if (IsFloatingType(underlying) && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var doubleValue))
+            return JsonSerializer.SerializeToElement(doubleValue);
+        return JsonSerializer.SerializeToElement(value);
+    }
+
+    private static JsonElement? SerializeOptionConstant(object? value, Type underlying)
+    {
+        if (value is null)
+            return null;
+
+        if (underlying.IsEnum)
+        {
+            var name = Enum.GetName(underlying, Enum.ToObject(underlying, value));
+            return name is null ? null : JsonSerializer.SerializeToElement(name);
+        }
+
+        if (underlying == typeof(bool) && value is int boolBits)
+            return JsonSerializer.SerializeToElement(boolBits != 0);
+        if (underlying == typeof(string) && value is string stringValue)
+            return JsonSerializer.SerializeToElement(stringValue);
+        if (IsIntegerType(underlying) || IsFloatingType(underlying))
+        {
+            try
+            {
+                return JsonSerializer.SerializeToElement(Convert.ChangeType(value, underlying, System.Globalization.CultureInfo.InvariantCulture));
+            }
+            catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static JsonElement? SynthesizeOptionDefault(Type underlying)
+    {
+        if (underlying.IsEnum)
+        {
+            var zero = Enum.GetName(underlying, Enum.ToObject(underlying, 0));
+            return zero is null ? null : JsonSerializer.SerializeToElement(zero);
+        }
+
+        if (underlying == typeof(bool))
+            return JsonSerializer.SerializeToElement(false);
+        if (IsIntegerType(underlying) || IsFloatingType(underlying))
+            return JsonSerializer.SerializeToElement(Convert.ChangeType(0, underlying, System.Globalization.CultureInfo.InvariantCulture));
+
+        // Structs like TimeSpan/Guid cannot be synthesized statically — no published default.
+        return null;
+    }
+
+    private static bool IsIntegerType(Type type) =>
+        type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
+        type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong);
+
+    private static bool IsFloatingType(Type type) =>
+        type == typeof(float) || type == typeof(double) || type == typeof(decimal);
 
     private IReadOnlyList<StructureContract> ProjectStructures(ContributionResolver contributions, string? owningFeatureId)
     {
@@ -452,11 +563,11 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
             if (featureIndex is not null)
             {
-                foreach (var dependencyId in FeatureIndex.ReadDependsOn(type))
-                {
-                    if (featureIndex.TryGetFeatureType(dependencyId, out var dependencyType))
-                        ComposeFeature(dependencyType, services, featureIndex, composed, depth + 1);
-                }
+                var dependencyTypes = FeatureIndex.ReadDependsOn(type)
+                    .Select(dependencyId => featureIndex.TryGetFeatureType(dependencyId, out var dependencyType) ? dependencyType : null)
+                    .Where(dependencyType => dependencyType is not null);
+                foreach (var dependencyType in dependencyTypes)
+                    ComposeFeature(dependencyType!, services, featureIndex, composed, depth + 1);
             }
 
             try
@@ -478,10 +589,8 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             {
                 try
                 {
-                    foreach (var instance in provider.GetServices<TContract>())
+                    foreach (var instance in provider.GetServices<TContract>().Where(candidate => candidate.GetType().Assembly == assembly))
                     {
-                        if (instance.GetType().Assembly != assembly)
-                            continue;
                         if (resolvedTypes.Add(instance.GetType()))
                             resolved.Add(instance);
                     }
@@ -495,13 +604,12 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
             // Fallback: contribution types the assembly declares but its own features did not register
             // (e.g. registered by a sibling feature assembly at composition time).
-            foreach (var type in TargetAssembly.GetLoadableTypes(assembly))
+            var unregistered = TargetAssembly.GetLoadableTypes(assembly)
+                .Where(type => type is { IsClass: true, IsAbstract: false } &&
+                               typeof(TContract).IsAssignableFrom(type) &&
+                               !resolvedTypes.Contains(type));
+            foreach (var type in unregistered)
             {
-                if (type is not { IsClass: true, IsAbstract: false } ||
-                    !typeof(TContract).IsAssignableFrom(type) ||
-                    resolvedTypes.Contains(type))
-                    continue;
-
                 if (type.GetConstructor(Type.EmptyTypes) is not null)
                 {
                     try

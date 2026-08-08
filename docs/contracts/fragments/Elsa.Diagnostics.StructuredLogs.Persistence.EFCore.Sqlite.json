@@ -27,7 +27,7 @@
           "advanced": true,
           "category": "Persistence",
           "clrType": "System.Nullable\u00601[[Microsoft.Extensions.DependencyInjection.ServiceLifetime, Microsoft.Extensions.DependencyInjection.Abstractions, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60]]",
-          "defaultValue": 0,
+          "defaultValue": null,
           "description": "Service lifetime used for the EF Core DbContext factory.",
           "displayName": "DbContext factory lifetime",
           "experimental": false,
