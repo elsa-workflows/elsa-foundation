@@ -67,7 +67,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var fragments = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
         var featureIdsByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var expressionTypesByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
-        var apiEndpoints = new List<ApiSurfaceEntry>();
+        var apiEndpoints = new List<OpenApiEndpoint>();
         var counts = (Features: 0, Activities: 0, Structures: 0, Intrinsics: 0);
 
         foreach (var assemblyPath in assemblyPaths)
@@ -94,7 +94,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             featureIdsByFragment[fragment.Assembly] = fragment.Features.Select(feature => feature.Id).ToArray();
             expressionTypesByFragment[fragment.Assembly] = fragment.Expressions?.Descriptors
                 .Select(descriptor => descriptor.Type).ToArray() ?? [];
-            apiEndpoints.AddRange(fragment.Endpoints.Select(endpoint => new ApiSurfaceEntry(
+            apiEndpoints.AddRange(fragment.Endpoints.Select(endpoint => new OpenApiEndpoint(
                 endpoint.Verb,
                 endpoint.Route,
                 fragment.Assembly,
@@ -102,7 +102,12 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
                 endpoint.SuccessStatuses,
                 endpoint.SuccessStatusCondition,
                 endpoint.AllowsAnonymous,
-                endpoint.Permissions)));
+                endpoint.Permissions,
+                endpoint.RequestSchema,
+                endpoint.RequestType,
+                endpoint.ResponseSchema,
+                endpoint.ResponseType,
+                endpoint.ConfigurationDependent)));
             counts = (
                 counts.Features + fragment.Features.Count,
                 counts.Activities + fragment.Activities.Count,
@@ -122,13 +127,8 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var hostsIndex = BuildHostsIndex(hostAssemblyPaths, featureIdsByFragment, expressionTypesByFragment);
         var hostsBytes = DeterministicJson.SerializeToBytes(hostsIndex);
 
-        var apiSurface = new ApiSurface(
-            ContractFragment.CurrentSchemaVersion,
-            apiEndpoints
-                .OrderBy(entry => entry.Route, StringComparer.Ordinal)
-                .ThenBy(entry => entry.Verb, StringComparer.Ordinal)
-                .ToArray());
-        var apiBytes = DeterministicJson.SerializeToBytes(apiSurface);
+        var openApiDocument = OpenApiDocumentBuilder.Build(apiEndpoints, ContractFragment.CurrentSchemaVersion);
+        var apiBytes = DeterministicJson.SerializeToBytes(openApiDocument);
 
         var manifest = new ContractsManifest(
             SchemaVersion: "1.0",
@@ -136,7 +136,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             Fragments: fragments.Select(pair => new FragmentFingerprint(pair.Key, DeterministicJson.Fingerprint(pair.Value))).ToArray(),
             SubmitSchema: DeterministicJson.Fingerprint(submitSchemaBytes),
             Hosts: DeterministicJson.Fingerprint(hostsBytes),
-            Api: DeterministicJson.Fingerprint(apiBytes),
+            OpenApi: DeterministicJson.Fingerprint(apiBytes),
             Counts: new ContractsManifestCounts(
                 fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics));
 
@@ -147,7 +147,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             DeterministicJson.WriteFile(Path.Combine(fragmentsDirectory, name + ".json"), bytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "submit-schema.json"), submitSchemaBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "hosts.json"), hostsBytes);
-        DeterministicJson.WriteFile(Path.Combine(outputDirectory, "api.json"), apiBytes);
+        DeterministicJson.WriteFile(Path.Combine(outputDirectory, "openapi.json"), apiBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "manifest.json"), DeterministicJson.SerializeToBytes(manifest));
 
         Console.WriteLine($"Merged {fragments.Count} contract fragments into {outputDirectory} " +

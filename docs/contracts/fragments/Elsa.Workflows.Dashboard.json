@@ -4,12 +4,14 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDashboard",
       "permissions": [
         "*",
         "workflows.dashboard.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "activeDefinitionCount": {
@@ -52,6 +54,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Dashboard.WorkflowPortfolioSnapshot",
       "route": "/_elsa/workflows/dashboard/definitions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -59,12 +62,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDashboard",
       "permissions": [
         "*",
         "workflows.dashboard.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "bucket": {
@@ -224,6 +229,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Dashboard.WorkflowRunHealthSnapshot",
       "route": "/_elsa/workflows/dashboard/runs",
       "successStatusCondition": null,
       "successStatuses": null,

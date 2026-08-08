@@ -54,11 +54,10 @@ public sealed class PublishedAvailabilityTests
     /// a kind-dependent requirement, so the published schema accepted bodies the runtime refuses.
     /// </summary>
     [Fact]
-    public void Submit_schema_expresses_the_kind_dependent_intrinsic_invariants()
+    public async Task Submit_schema_expresses_the_kind_dependent_intrinsic_invariants()
     {
-        var view = new GetWorkflowDefinitionSubmitSchemaHandler()
-            .Handle(new GetWorkflowDefinitionSubmitSchema(), CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var view = await new GetWorkflowDefinitionSubmitSchemaHandler()
+            .Handle(new GetWorkflowDefinitionSubmitSchema(), CancellationToken.None);
 
         var intrinsic = FindIntrinsic(view.Schema);
         Assert.True(intrinsic.HasValue, "The submit schema no longer exposes an intrinsic sub-schema to constrain.");

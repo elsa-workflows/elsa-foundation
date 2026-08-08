@@ -4,6 +4,7 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -32,6 +33,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightActivityDraftPublication",
       "responseSchema": {
         "properties": {
           "definitionHeadVersionId": {
@@ -647,6 +649,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationPreflightView",
       "route": "/design/activities/drafts/{draftId}/publication-preflight",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -654,6 +657,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -688,6 +692,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PublishActivityDraft",
       "responseSchema": {
         "properties": {
           "diagnostics": {
@@ -942,6 +947,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
       "route": "/design/activities/drafts/{draftId}/publish",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -949,12 +955,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "diagnostics": {
@@ -1209,6 +1217,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
       "route": "/design/activities/publications/{idempotencyKey}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1216,6 +1225,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -1233,6 +1243,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ListConstructableActivities",
       "responseSchema": {
         "items": {
           "properties": {
@@ -1271,6 +1282,7 @@
         },
         "type": "array"
       },
+      "responseType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/publishing/activities",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1278,6 +1290,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -1294,6 +1307,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ConstructActivity",
       "responseSchema": {
         "properties": {
           "activityVersionId": {
@@ -1341,6 +1355,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ConstructedActivityView",
       "route": "/publishing/activities/{activityId}/construct",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1348,6 +1363,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -1396,6 +1412,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Models.StartActivityDraftTestRun",
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -1726,6 +1743,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
       "route": "/publishing/activity-drafts/{draftId}/test-runs",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1733,12 +1751,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.manage"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -2069,6 +2089,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
       "route": "/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -2076,12 +2097,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.manage"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -2412,6 +2435,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
       "route": "/publishing/activity-test-runs/{testRunId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -2419,12 +2443,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.manage"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -2755,6 +2781,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
       "route": "/publishing/activity-test-runs/{testRunId}/cancel",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -2762,12 +2789,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "defaultStrategy": {
@@ -2820,6 +2849,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.IncidentStrategiesResponse",
       "route": "/publishing/incident-strategies",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -2827,6 +2857,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -2852,6 +2883,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.RunRuntimeRequirementPreflight",
       "responseSchema": {
         "properties": {
           "checkedArtifactCount": {
@@ -3057,6 +3089,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.RuntimeRequirementPreflightView",
       "route": "/publishing/preflight",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3064,12 +3097,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
         "workflow-publishing.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "items": {
@@ -3126,6 +3161,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ValueConversionProfilesResponse",
       "route": "/publishing/value-conversion/profiles",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3133,6 +3169,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -3822,6 +3859,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun",
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -3876,6 +3914,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
       "route": "/publishing/workflows/drafts/test-runs",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3883,6 +3922,847 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "action": {
+            "default": null,
+            "enum": [
+              "replace",
+              "sideBySide",
+              null
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "expectedPublicationId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "layout": {
+            "items": {
+              "properties": {
+                "additionalProperties": {
+                  "default": null
+                },
+                "height": {
+                  "default": null,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "nodeId": {
+                  "type": "string"
+                },
+                "width": {
+                  "default": null,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "nodeId",
+                "x",
+                "y"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "slotName": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "properties": {
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "category": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "defaultSyntax": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "defaultValue": {
+                      "default": null
+                    },
+                    "description": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "enumValues": {
+                      "default": null,
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "hasStaticDefault": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "isBrowsable": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "isNullable": {
+                      "type": "boolean"
+                    },
+                    "isRequired": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "isSerializable": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "order": {
+                      "default": 0,
+                      "type": "number"
+                    },
+                    "propertyInfo": {
+                      "default": null
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "properties": {
+                        "alias": {
+                          "type": "string"
+                        },
+                        "collectionKind": {
+                          "default": "single",
+                          "enum": [
+                            "single",
+                            "array",
+                            "list",
+                            "hashSet",
+                            "dictionary"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "alias"
+                      ],
+                      "type": "object"
+                    },
+                    "uiHint": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "uiSpecifications": {
+                      "default": null
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "name",
+                    "type",
+                    "displayName",
+                    "isNullable"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "outputs": {
+                "items": {
+                  "properties": {
+                    "category": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "description": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "isBrowsable": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "isNullable": {
+                      "type": "boolean"
+                    },
+                    "isRequired": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "isSerializable": {
+                      "default": null,
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "order": {
+                      "default": 0,
+                      "type": "number"
+                    },
+                    "propertyInfo": {
+                      "default": null
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "sourceRepresentation": {
+                      "default": null,
+                      "enum": [
+                        "typedValue",
+                        "structuredValue",
+                        "textValue",
+                        "formattedContent",
+                        "binaryContent",
+                        "durableReference",
+                        "transientResource",
+                        null
+                      ]
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "properties": {
+                        "alias": {
+                          "type": "string"
+                        },
+                        "collectionKind": {
+                          "default": "single",
+                          "enum": [
+                            "single",
+                            "array",
+                            "list",
+                            "hashSet",
+                            "dictionary"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "alias"
+                      ],
+                      "type": "object"
+                    },
+                    "uiHint": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "uiSpecifications": {
+                      "default": null
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "name",
+                    "type",
+                    "displayName",
+                    "isNullable"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "rootActivity": {
+                "properties": {
+                  "activityVersionId": {
+                    "type": "string"
+                  },
+                  "inputs": {
+                    "items": {
+                      "properties": {
+                        "autoEvaluate": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "conversion": {
+                          "default": null,
+                          "properties": {
+                            "limits": {
+                              "default": null,
+                              "properties": {
+                                "maxCollectionItems": {
+                                  "default": null,
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ]
+                                },
+                                "maxDepth": {
+                                  "default": null,
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ]
+                                },
+                                "maxPayloadBytes": {
+                                  "default": null,
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "type": [
+                                "object",
+                                "null"
+                              ]
+                            },
+                            "mode": {
+                              "default": "auto",
+                              "enum": [
+                                "auto",
+                                "none",
+                                "json",
+                                "xml",
+                                "profile"
+                              ]
+                            },
+                            "options": {
+                              "default": null
+                            },
+                            "profile": {
+                              "default": null,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "version"
+                              ],
+                              "type": [
+                                "object",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "evaluatorType": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "isSensitive": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "referenceKey": {
+                          "type": "string"
+                        },
+                        "storageDriverType": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": {
+                          "properties": {
+                            "expressionType": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "value": true
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "referenceKey",
+                        "value"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "intrinsic": {
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "set",
+                          "merge",
+                          "reduce",
+                          "return",
+                          "control",
+                          "setCorrelationId",
+                          "setInstanceName",
+                          "setOutput",
+                          "finish"
+                        ]
+                      },
+                      "valueType": {
+                        "default": null,
+                        "properties": {
+                          "alias": {
+                            "type": "string"
+                          },
+                          "collectionKind": {
+                            "default": "single",
+                            "enum": [
+                              "single",
+                              "array",
+                              "list",
+                              "hashSet",
+                              "dictionary"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "alias"
+                        ],
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "variable": {
+                        "default": null,
+                        "properties": {
+                          "declaringScopeId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "isWorkflowScope": {
+                            "type": "boolean"
+                          },
+                          "referenceKey": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "referenceKey"
+                        ],
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "outputs": {
+                    "items": {
+                      "$ref": "#/properties/state/properties/rootActivity/properties/inputs/items"
+                    },
+                    "type": "array"
+                  },
+                  "structure": {
+                    "default": null,
+                    "properties": {
+                      "kind": {
+                        "type": "string"
+                      },
+                      "payload": true,
+                      "schemaVersion": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "schemaVersion",
+                      "payload"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "nodeId",
+                  "activityVersionId",
+                  "inputs",
+                  "outputs"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "strategyOptions": {
+                "properties": {
+                  "activationStrategyType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "checkpointCadence": {
+                    "properties": {
+                      "maxSegmentCheckpoints": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "mode": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "commitStrategyType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "incidentStrategy": {
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "alias",
+                      "version"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "variables": {
+                "items": {
+                  "properties": {
+                    "default": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": true
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "properties": {
+                        "alias": {
+                          "type": "string"
+                        },
+                        "collectionKind": {
+                          "default": "single",
+                          "enum": [
+                            "single",
+                            "array",
+                            "list",
+                            "hashSet",
+                            "dictionary"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "alias"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "name",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "variables",
+              "inputs",
+              "outputs"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "definitionId",
+          "state",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublicationSnapshot",
+      "responseSchema": {
+        "properties": {
+          "canActivate": {
+            "type": "boolean"
+          },
+          "candidateHash": {
+            "type": "string"
+          },
+          "claims": {
+            "items": {
+              "properties": {
+                "cardinality": {
+                  "enum": [
+                    "exclusive",
+                    "fanOut"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "cardinality"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conflicts": {
+            "items": {
+              "properties": {
+                "cardinality": {
+                  "enum": [
+                    "exclusive",
+                    "fanOut"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                },
+                "publicationId": {
+                  "type": "string"
+                },
+                "slotName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "cardinality",
+                "publicationId",
+                "slotName"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "policySource": {
+            "enum": [
+              "request",
+              "workflow",
+              "host"
+            ]
+          },
+          "preflightToken": {
+            "type": "string"
+          },
+          "resolvedAction": {
+            "enum": [
+              "replace",
+              "sideBySide"
+            ]
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "triggers": {
+            "items": {
+              "properties": {
+                "cardinality": {
+                  "enum": [
+                    "exclusive",
+                    "fanOut"
+                  ]
+                },
+                "change": {
+                  "enum": [
+                    "added",
+                    "removed",
+                    "retained"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "change",
+                "key",
+                "cardinality"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "versionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "preflightToken",
+          "candidateHash",
+          "definitionId",
+          "slotName",
+          "resolvedAction",
+          "policySource",
+          "canActivate",
+          "claims",
+          "triggers",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSnapshotPreflightView",
+      "route": "/publishing/workflows/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -3899,6 +4779,152 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.GetWorkflowPublicationPolicy",
+      "responseSchema": {
+        "properties": {
+          "defaultAction": {
+            "enum": [
+              "replace",
+              "requireExplicitSlot"
+            ]
+          },
+          "defaultSlotName": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "request",
+              "workflow",
+              "host"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "defaultAction",
+          "defaultSlotName",
+          "source",
+          "revision",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+      "route": "/publishing/workflows/{definitionId}/policy",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": {
+        "properties": {
+          "defaultAction": {
+            "enum": [
+              "replace",
+              "requireExplicitSlot"
+            ]
+          },
+          "defaultSlotName": {
+            "default": "default",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "default": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definitionId",
+          "defaultAction"
+        ],
+        "type": "object"
+      },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.SetWorkflowPublicationPolicy",
+      "responseSchema": {
+        "properties": {
+          "defaultAction": {
+            "enum": [
+              "replace",
+              "requireExplicitSlot"
+            ]
+          },
+          "defaultSlotName": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "request",
+              "workflow",
+              "host"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "defaultAction",
+          "defaultSlotName",
+          "source",
+          "revision",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+      "route": "/publishing/workflows/{definitionId}/policy",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ListPublicationSlots",
       "responseSchema": {
         "properties": {
           "items": {
@@ -4039,6 +5065,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotListResponse",
       "route": "/publishing/workflows/{definitionId}/slots",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -4046,6 +5073,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -4066,6 +5094,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest",
       "responseSchema": {
         "properties": {
           "activePublicationId": {
@@ -4195,6 +5224,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
       "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -4202,6 +5232,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -4222,6 +5253,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.GetPublicationSlot",
       "responseSchema": {
         "properties": {
           "activePublicationId": {
@@ -4351,6 +5383,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
       "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -4358,6 +5391,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -4378,6 +5412,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.RestorePublicationSlotRequest",
       "responseSchema": {
         "properties": {
           "activePublicationId": {
@@ -4507,6 +5542,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
       "route": "/publishing/workflows/{definitionId}/slots/{slotName}/restore",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -4514,6 +5550,159 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": {
+        "properties": {
+          "action": {
+            "default": null,
+            "enum": [
+              "replace",
+              "sideBySide",
+              null
+            ]
+          },
+          "expectedPublicationId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slotName": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublication",
+      "responseSchema": {
+        "properties": {
+          "canActivate": {
+            "type": "boolean"
+          },
+          "conflicts": {
+            "items": {
+              "properties": {
+                "cardinality": {
+                  "enum": [
+                    "exclusive",
+                    "fanOut"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                },
+                "publicationId": {
+                  "type": "string"
+                },
+                "slotName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "cardinality",
+                "publicationId",
+                "slotName"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "policySource": {
+            "enum": [
+              "request",
+              "workflow",
+              "host"
+            ]
+          },
+          "resolvedAction": {
+            "enum": [
+              "replace",
+              "sideBySide"
+            ]
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "triggers": {
+            "items": {
+              "properties": {
+                "cardinality": {
+                  "enum": [
+                    "exclusive",
+                    "fanOut"
+                  ]
+                },
+                "change": {
+                  "enum": [
+                    "added",
+                    "removed",
+                    "retained"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "change",
+                "key",
+                "cardinality"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "slotName",
+          "resolvedAction",
+          "policySource",
+          "canActivate",
+          "triggers",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPreflightView",
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -4559,6 +5748,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PublishWorkflowRequest",
       "responseSchema": {
         "properties": {
           "activatedAt": {
@@ -4638,6 +5828,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView",
       "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
       "successStatusCondition": "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies).",
       "successStatuses": [
@@ -4648,6 +5839,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsPublishingApi",
       "permissions": [
         "*",
@@ -4675,6 +5867,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.StartWorkflowTestRun",
       "responseSchema": {
         "properties": {
           "artifactId": {
@@ -4729,6 +5922,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
       "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs",
       "successStatusCondition": null,
       "successStatuses": null,

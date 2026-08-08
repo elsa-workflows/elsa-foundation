@@ -4,6 +4,7 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "JavaScriptActivities",
       "permissions": [
         "*"
@@ -19,7 +20,9 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.RequestModel",
       "responseSchema": null,
+      "responseType": null,
       "route": "/javascript/execute",
       "successStatusCondition": null,
       "successStatuses": null,

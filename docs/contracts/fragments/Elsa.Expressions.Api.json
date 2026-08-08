@@ -4,12 +4,14 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ExpressionsApi",
       "permissions": [
         "*",
         "expressions.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "items": {
@@ -51,6 +53,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Expressions.Api.Models.ExpressionDescriptorsResponse",
       "route": "/expressions/descriptors",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -58,12 +61,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ExpressionsApi",
       "permissions": [
         "*",
         "expressions.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "items": {
@@ -130,6 +135,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Expressions.Api.Models.VariableTypeDescriptorsResponse",
       "route": "/expressions/variable-types",
       "successStatusCondition": null,
       "successStatuses": null,

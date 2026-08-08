@@ -6,6 +6,7 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Contracts.Generator;
 
@@ -30,6 +31,9 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
 {
     private const string SuccessStatusAttributeName = "SuccessStatusAttribute";
 
+    // Set while the endpoint under projection runs Configure(), if it read a host options object.
+    private bool _readConfiguration;
+
     public IReadOnlyList<EndpointContract> Project(Assembly assembly, string assemblyPath, string? owningFeatureId)
     {
         var endpoints = new List<EndpointContract>();
@@ -43,6 +47,7 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
         foreach (var endpointType in endpointTypes)
         {
             BaseEndpoint endpoint;
+            _readConfiguration = false;
             try
             {
                 endpoint = CreateEndpoint(endpointType);
@@ -81,7 +86,10 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
                         definition.AnonymousVerbs is not null,
                         (definition.AllowedPermissions ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                         requestType is null ? null : SafeSchema(requestType, endpointType, assemblyPath),
-                        responseType is null ? null : SafeSchema(responseType, endpointType, assemblyPath)));
+                        responseType is null ? null : SafeSchema(responseType, endpointType, assemblyPath),
+                        requestType?.FullName,
+                        responseType?.FullName,
+                        _readConfiguration));
                 }
             }
         }
@@ -164,7 +172,7 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
     /// Mirrors the endpoint-contract test helper: FastEndpoints' factory with stubbed dependencies, so
     /// <c>Configure()</c> runs without a host.
     /// </summary>
-    private static BaseEndpoint CreateEndpoint(Type endpointType)
+    private BaseEndpoint CreateEndpoint(Type endpointType)
     {
         var constructor = endpointType
             .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
@@ -183,7 +191,7 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
         return (BaseEndpoint)create.Invoke(null, [(Action<Microsoft.AspNetCore.Http.DefaultHttpContext>)(_ => { }), dependencies])!;
     }
 
-    private static object ResolveDependency(Type type)
+    private object ResolveDependency(Type type)
     {
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
         {
@@ -191,17 +199,116 @@ public sealed class EndpointProjector(Diagnostics diagnostics)
             return (nullLogger.GetProperty("Instance")?.GetValue(null) ?? nullLogger.GetField("Instance")?.GetValue(null))!;
         }
 
+        if (ResolveOptions(type) is { } options)
+            return options;
+
         if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(UnusedDependencyProxy));
+        {
+            var proxy = DispatchProxy.Create(type, typeof(HostAbsentProxy));
+            ((HostAbsentProxy)proxy).Bind(() => _readConfiguration = true);
+            return proxy;
+        }
+
+        // GetUninitializedObject cannot make an abstract class (TimeProvider is the one in practice).
+        // Framework abstractions of that shape expose a static singleton — prefer it, and fall back to a
+        // null argument, which binds fine because Configure() never touches the dependency.
+        if (type.IsAbstract)
+            return StaticSingleton(type)!;
 
         return RuntimeHelpers.GetUninitializedObject(type);
     }
 
-    /// <summary>Configure() must not call its dependencies; if one does, the failure is loud and warned.</summary>
-    public class UnusedDependencyProxy : DispatchProxy
+    private static object? StaticSingleton(Type type) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .Where(property => type.IsAssignableFrom(property.PropertyType))
+            .Select(property => property.GetValue(null))
+            .FirstOrDefault(value => value is not null);
+
+    /// <summary>
+    /// <c>IOptions&lt;T&gt;</c> and friends resolve to the options type's own compiled defaults, so endpoints
+    /// whose <c>Configure()</c> reads configuration still project — the identity token endpoint is the one
+    /// that matters most, since a consumer that cannot find it cannot authenticate at all. What such an
+    /// endpoint publishes is the *default* configuration, so the fact is flagged
+    /// (<c>configurationDependent</c>) rather than passed off as fixed.
+    /// </summary>
+    private object? ResolveOptions(Type type)
     {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            throw new InvalidOperationException(
-                $"Endpoint configuration invoked dependency member '{targetMethod?.Name}'; contract projection configures endpoints without a host.");
+        if (!type.IsGenericType)
+            return null;
+
+        var definition = type.GetGenericTypeDefinition();
+        if (definition != typeof(IOptions<>) && definition != typeof(IOptionsMonitor<>) && definition != typeof(IOptionsSnapshot<>))
+            return null;
+
+        var optionsType = type.GenericTypeArguments[0];
+        if (optionsType.GetConstructor(Type.EmptyTypes) is null)
+            return null;
+
+        var proxy = DispatchProxy.Create(type, typeof(DefaultOptionsProxy));
+        ((DefaultOptionsProxy)proxy).Bind(Activator.CreateInstance(optionsType)!, () => _readConfiguration = true);
+        return proxy;
+    }
+
+    /// <summary>
+    /// Stands in for a service when there is no host: every query answers "absent". The identity token
+    /// endpoint is the case that matters — it filters its auth schemes by what the host registered, and
+    /// throwing there dropped the one endpoint a consumer needs before it can call anything else. Answering
+    /// "absent" configures the endpoint against an empty host, which is exactly what a build-time
+    /// projection knows; the endpoint is flagged <c>configurationDependent</c> so the reader knows the auth
+    /// (and any host-derived route) is this build's default rather than a fixed fact.
+    /// </summary>
+    public class HostAbsentProxy : DispatchProxy
+    {
+        private Action? _onRead;
+
+        internal void Bind(Action onRead) => _onRead = onRead;
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            _onRead?.Invoke();
+            return AbsentResult(targetMethod?.ReturnType);
+        }
+
+        private static object? AbsentResult(Type? returnType)
+        {
+            if (returnType is null || returnType == typeof(void))
+                return null;
+
+            // Async members must still hand back an awaitable, or Configure() faults instead of seeing "absent".
+            if (returnType.IsGenericType)
+            {
+                var definition = returnType.GetGenericTypeDefinition();
+                var argument = returnType.GenericTypeArguments[0];
+                if (definition == typeof(Task<>))
+                    return typeof(Task).GetMethod(nameof(Task.FromResult))!.MakeGenericMethod(argument)
+                        .Invoke(null, [Default(argument)]);
+                if (definition == typeof(ValueTask<>))
+                    return Activator.CreateInstance(returnType, Default(argument));
+            }
+
+            return returnType == typeof(Task) ? Task.CompletedTask : Default(returnType);
+        }
+
+        private static object? Default(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
+    }
+
+    /// <summary>Serves the options type's compiled defaults and records that configuration was consulted.</summary>
+    public class DefaultOptionsProxy : DispatchProxy
+    {
+        private object? _value;
+        private Action? _onRead;
+
+        internal void Bind(object value, Action onRead)
+        {
+            _value = value;
+            _onRead = onRead;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            // Value / CurrentValue / Get(name) — every accessor these interfaces expose.
+            _onRead?.Invoke();
+            return _value;
+        }
     }
 }

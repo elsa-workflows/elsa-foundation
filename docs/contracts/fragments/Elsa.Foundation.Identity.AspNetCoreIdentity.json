@@ -4,10 +4,13 @@
   "endpoints": [
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityAspNetCoreIdentity",
       "permissions": [],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": null,
+      "responseType": null,
       "route": "/_elsa/identity/login",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -15,6 +18,7 @@
     },
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityAspNetCoreIdentity",
       "permissions": [],
       "requestSchema": {
@@ -40,7 +44,9 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginRequest",
       "responseSchema": null,
+      "responseType": null,
       "route": "/_elsa/identity/login",
       "successStatusCondition": null,
       "successStatuses": null,

@@ -4,12 +4,15 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "JavaScriptRendering",
       "permissions": [
         "*"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": null,
+      "responseType": null,
       "route": "/javascript/documents/render",
       "successStatusCondition": null,
       "successStatuses": null,

@@ -4,11 +4,13 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ModularityApi",
       "permissions": [
         "*"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "features": {
@@ -228,6 +230,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Modularity.Core.Models.FeatureCatalogResponse",
       "route": "/modularity/features",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -235,6 +238,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ModularityApi",
       "permissions": [
         "*"
@@ -271,6 +275,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Modularity.Core.Models.FeatureApplyRequest",
       "responseSchema": {
         "properties": {
           "catalog": {
@@ -506,6 +511,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Modularity.Core.Models.FeatureApplyResult",
       "route": "/modularity/features/apply",
       "successStatusCondition": null,
       "successStatuses": null,

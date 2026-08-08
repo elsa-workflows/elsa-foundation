@@ -4,6 +4,7 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ActivitiesBpmnInterchange",
       "permissions": [
         "*",
@@ -27,6 +28,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentRequest",
       "responseSchema": {
         "properties": {
           "elementCounts": {
@@ -78,6 +80,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Activities.Bpmn.Interchange.Models.BpmnImportAnalysis",
       "route": "/interchange/bpmn/analyze",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -85,6 +88,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ActivitiesBpmnInterchange",
       "permissions": [
         "*",
@@ -346,6 +350,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentRequest",
       "responseSchema": {
         "properties": {
           "xml": {
@@ -357,6 +362,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentResult",
       "route": "/interchange/bpmn/export",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -364,6 +370,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ActivitiesBpmnInterchange",
       "permissions": [
         "*",
@@ -394,6 +401,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentRequest",
       "responseSchema": {
         "properties": {
           "analysis": {
@@ -753,6 +761,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult",
       "route": "/interchange/bpmn/import",
       "successStatusCondition": null,
       "successStatuses": null,

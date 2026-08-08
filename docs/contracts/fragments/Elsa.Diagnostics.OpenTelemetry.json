@@ -4,12 +4,31 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": true,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
         "Diagnostics:OpenTelemetry"
       ],
       "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "endpointEnvironmentVariable": {
@@ -92,6 +111,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.CollectorConfiguration",
       "route": "/diagnostics/opentelemetry/collector-configuration",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -99,6 +119,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
@@ -165,6 +186,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryLogFilter",
       "responseSchema": {
         "properties": {
           "droppedCount": {
@@ -233,6 +255,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryLogResult",
       "route": "/diagnostics/opentelemetry/logs/search",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -240,6 +263,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
@@ -288,6 +312,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryMetricFilter",
       "responseSchema": {
         "properties": {
           "droppedCount": {
@@ -418,6 +443,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryMetricResult",
       "route": "/diagnostics/opentelemetry/metrics/search",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -425,6 +451,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
@@ -461,6 +488,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryResourceFilter",
       "responseSchema": {
         "properties": {
           "droppedCount": {
@@ -523,6 +551,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryResourceResult",
       "route": "/diagnostics/opentelemetry/resources/search",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -530,12 +559,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
         "Diagnostics:OpenTelemetry"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "droppedLogRecordCount": {
@@ -599,6 +630,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryStorageDiagnostics",
       "route": "/diagnostics/opentelemetry/storage",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -606,6 +638,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
@@ -674,6 +707,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceFilter",
       "responseSchema": {
         "properties": {
           "droppedCount": {
@@ -754,6 +788,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceResult",
       "route": "/diagnostics/opentelemetry/traces/search",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -761,12 +796,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "DiagnosticsOpenTelemetry",
       "permissions": [
         "*",
         "Diagnostics:OpenTelemetry"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "logs": {
@@ -1073,10 +1110,53 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceDetail",
       "route": "/diagnostics/opentelemetry/traces/{traceId}",
       "successStatusCondition": null,
       "successStatuses": null,
       "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/logs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/metrics",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/traces",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
     }
   ],
   "expressions": null,

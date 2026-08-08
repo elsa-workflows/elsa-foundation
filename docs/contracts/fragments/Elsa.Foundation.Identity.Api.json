@@ -4,9 +4,11 @@
   "endpoints": [
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "ownershipMode": {
@@ -88,6 +90,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Foundation.Identity.Api.Models.IdentityBootstrapResponse",
       "route": "/_elsa/identity/bootstrap",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -95,12 +98,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [
         "*",
         "identity.providers.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "ownershipMode": {
@@ -224,6 +229,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Foundation.Identity.Api.Models.IdentityCapabilitiesResponse",
       "route": "/_elsa/identity/capabilities",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -231,6 +237,7 @@
     },
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [],
       "requestSchema": {
@@ -241,7 +248,9 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest",
       "responseSchema": null,
+      "responseType": null,
       "route": "/_elsa/identity/challenge/{provider}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -249,6 +258,7 @@
     },
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [],
       "requestSchema": {
@@ -259,7 +269,9 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest",
       "responseSchema": null,
+      "responseType": null,
       "route": "/_elsa/identity/logout/{provider}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -267,6 +279,7 @@
     },
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [],
       "requestSchema": {
@@ -280,6 +293,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Foundation.Identity.Api.Models.RefreshTokenRequest",
       "responseSchema": {
         "properties": {
           "accessToken": {
@@ -303,6 +317,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Foundation.Identity.Abstractions.Authentication.TokenRefreshResult",
       "route": "/_elsa/identity/refresh",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -310,9 +325,11 @@
     },
     {
       "allowsAnonymous": true,
+      "configurationDependent": false,
       "featureId": "FoundationIdentityApi",
       "permissions": [],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "displayName": {
@@ -366,7 +383,37 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Foundation.Identity.Abstractions.Authentication.AuthSession",
       "route": "/_elsa/identity/session",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "FoundationIdentityApi",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": {
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "responseType": "Elsa.Foundation.Identity.Api.Models.AccessTokenResponse",
+      "route": "/_elsa/identity/token",
       "successStatusCondition": null,
       "successStatuses": null,
       "verb": "GET"

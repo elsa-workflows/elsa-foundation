@@ -4,12 +4,14 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "ApiCapabilities",
       "permissions": [
         "*",
         "api-capabilities.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "capabilities": {
@@ -59,6 +61,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument",
       "route": "/capabilities",
       "successStatusCondition": null,
       "successStatuses": null,

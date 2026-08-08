@@ -45,7 +45,16 @@ public sealed record EndpointContract(
     bool AllowsAnonymous,
     IReadOnlyList<string> Permissions,
     JsonElement? RequestSchema,
-    JsonElement? ResponseSchema);
+    JsonElement? ResponseSchema,
+    // CLR full names of the body types. They name the OpenAPI components/schemas entries, so two
+    // endpoints sharing a body type share one component instead of duplicating the schema.
+    string? RequestType = null,
+    string? ResponseType = null,
+    // True when the endpoint's Configure() read host options: the route and auth published here are this
+    // build's *defaults*, and a host that configures those options serves something else. Stated rather
+    // than either omitting the endpoint (which lost the identity token endpoint entirely) or passing a
+    // configurable route off as fixed.
+    bool ConfigurationDependent = false);
 
 public sealed record FeatureContract(
     string Id,
@@ -199,7 +208,7 @@ public sealed record ContractsManifest(
     IReadOnlyList<FragmentFingerprint> Fragments,
     string SubmitSchema,
     string Hosts,
-    string Api,
+    string OpenApi,
     ContractsManifestCounts Counts);
 
 public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
@@ -210,24 +219,6 @@ public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
 /// does not carry cannot be enabled, regardless of what its fragment describes.
 /// </summary>
 public sealed record HostsIndex(string SchemaVersion, IReadOnlyList<HostContractSet> Hosts);
-
-/// <summary>
-/// docs/contracts/api.json — every published endpoint in one route-sorted document, so a consumer
-/// answering "how do I publish / execute / inspect this?" reads one file instead of probing. Each entry
-/// carries the assembly that declares it, so it can be intersected with hosts.json the same way features
-/// and expression types are.
-/// </summary>
-public sealed record ApiSurface(string SchemaVersion, IReadOnlyList<ApiSurfaceEntry> Endpoints);
-
-public sealed record ApiSurfaceEntry(
-    string Verb,
-    string Route,
-    string Assembly,
-    string? FeatureId,
-    IReadOnlyList<int>? SuccessStatuses,
-    string? SuccessStatusCondition,
-    bool AllowsAnonymous,
-    IReadOnlyList<string> Permissions);
 
 /// <summary>
 /// What a host actually ships. <see cref="Features"/> is the directly usable term — <c>shells.json</c> is

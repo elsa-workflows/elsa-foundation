@@ -4,6 +4,7 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -653,6 +654,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ActivityInputOptionsRequest",
       "responseSchema": {
         "properties": {
           "code": {
@@ -691,6 +693,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ActivityInputOptionsResponse",
       "route": "/design/workflows/activities/{activityVersionId}/inputs/{inputName}/options",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -698,6 +701,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -745,6 +749,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.ListDefinitions",
       "responseSchema": {
         "properties": {
           "items": {
@@ -820,6 +825,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionListView",
       "route": "/design/workflows/definitions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -827,6 +833,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -1554,6 +1561,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.AddDefinition",
       "responseSchema": {
         "properties": {
           "definition": {
@@ -2364,6 +2372,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionDetailsView",
       "route": "/design/workflows/definitions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -2371,6 +2380,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -3024,6 +3034,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.SubmitDefinition",
       "responseSchema": {
         "properties": {
           "definition": {
@@ -3871,6 +3882,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.SubmittedWorkflowDefinitionView",
       "route": "/design/workflows/definitions/submit",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3878,12 +3890,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
         "workflow-design.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "fingerprint": {
@@ -3901,6 +3915,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionSubmitSchemaView",
       "route": "/design/workflows/definitions/submit/schema",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3908,6 +3923,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -3937,7 +3953,9 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.SoftDeleteDefinition",
       "responseSchema": null,
+      "responseType": null,
       "route": "/design/workflows/definitions/{definitionId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -3945,6 +3963,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -3961,6 +3980,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.GetDefinition",
       "responseSchema": {
         "properties": {
           "definition": {
@@ -4771,6 +4791,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionDetailsView",
       "route": "/design/workflows/definitions/{definitionId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -4778,6 +4799,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -4810,6 +4832,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.UpdateDefinitionMetadata",
       "responseSchema": {
         "properties": {
           "definition": {
@@ -5620,6 +5643,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionDetailsView",
       "route": "/design/workflows/definitions/{definitionId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -5627,6 +5651,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -5649,7 +5674,9 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.DeleteDefinitionPermanently",
       "responseSchema": null,
+      "responseType": null,
       "route": "/design/workflows/definitions/{definitionId}/permanent",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -5657,6 +5684,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -5679,7 +5707,9 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.RestoreDefinition",
       "responseSchema": null,
+      "responseType": null,
       "route": "/design/workflows/definitions/{definitionId}/restore",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -5687,6 +5717,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -5703,6 +5734,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.ListDefinitionVersions",
       "responseSchema": {
         "items": {
           "properties": {
@@ -5726,6 +5758,7 @@
         },
         "type": "array"
       },
+      "responseType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Design.Core.Models.WorkflowDefinitionVersionSummary, Elsa.Workflows.Design.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/design/workflows/definitions/{definitionId}/versions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -5733,6 +5766,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -5755,7 +5789,9 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.DiscardDraft",
       "responseSchema": null,
+      "responseType": null,
       "route": "/design/workflows/drafts/{draftId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -5763,6 +5799,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -5779,6 +5816,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.GetDraft",
       "responseSchema": {
         "properties": {
           "activityPresentation": {
@@ -6490,6 +6528,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDraftView",
       "route": "/design/workflows/drafts/{draftId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -6497,6 +6536,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -7215,6 +7255,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.ReplaceDraft",
       "responseSchema": {
         "properties": {
           "activityPresentation": {
@@ -7926,6 +7967,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDraftView",
       "route": "/design/workflows/drafts/{draftId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -7933,6 +7975,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -7962,6 +8005,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.PromoteDraft",
       "responseSchema": {
         "properties": {
           "activityPresentation": {
@@ -8732,6 +8776,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionVersionDetailsView",
       "route": "/design/workflows/drafts/{draftId}/promote",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -8739,6 +8784,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -8762,6 +8808,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.PreflightDraftPromotion",
       "responseSchema": {
         "properties": {
           "assignmentMode": {
@@ -8821,6 +8868,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.PromotionPreflightAssessmentView",
       "route": "/design/workflows/drafts/{draftId}/promotion-preflight",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -8828,6 +8876,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -8844,6 +8893,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.GetDraftValidations",
       "responseSchema": {
         "properties": {
           "draftId": {
@@ -8890,6 +8940,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.DraftValidationsView",
       "route": "/design/workflows/drafts/{draftId}/validations",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -8897,6 +8948,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -8967,6 +9019,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingCompletionRequest",
       "responseSchema": {
         "properties": {
           "result": {
@@ -9099,6 +9152,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingOperationResponse\u00601[[Elsa.Expressions.Core.Models.ExpressionToolingItems, Elsa.Expressions.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/design/workflows/expression-tooling/completions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -9106,6 +9160,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -9172,6 +9227,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingContextRequest",
       "responseSchema": {
         "properties": {
           "result": {
@@ -9815,6 +9871,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingContextResponse",
       "route": "/design/workflows/expression-tooling/context",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -9822,12 +9879,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
         "workflow-design.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "result": {
@@ -9966,6 +10025,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingDescriptorsResponse",
       "route": "/design/workflows/expression-tooling/descriptors",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -9973,6 +10033,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -10043,6 +10104,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingHoverRequest",
       "responseSchema": {
         "properties": {
           "result": {
@@ -10165,6 +10227,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingOperationResponse\u00601[[Elsa.Expressions.Core.Models.ExpressionHover, Elsa.Expressions.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/design/workflows/expression-tooling/hover",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -10172,6 +10235,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -10238,6 +10302,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingContextRequest",
       "responseSchema": {
         "properties": {
           "result": {
@@ -10370,6 +10435,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingOperationResponse\u00601[[Elsa.Expressions.Core.Models.ExpressionToolingItems, Elsa.Expressions.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/design/workflows/expression-tooling/symbols",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -10377,6 +10443,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -10432,6 +10499,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingSourceRequest",
       "responseSchema": {
         "properties": {
           "result": {
@@ -10599,6 +10667,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ExpressionToolingOperationResponse\u00601[[Elsa.Expressions.Core.Models.ExpressionDiagnosticSet, Elsa.Expressions.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/design/workflows/expression-tooling/validate",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -10606,6 +10675,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -11249,6 +11319,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Models.AnalyzeScopedVariablesRequest",
       "responseSchema": {
         "properties": {
           "shadowingWarnings": {
@@ -11310,6 +11381,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ScopedVariableAnalysisResponse",
       "route": "/design/workflows/scoped-variables/analyze",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -11317,12 +11389,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
         "workflow-design.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "fingerprint": {
@@ -11358,6 +11432,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.ActivityStructuresResponse",
       "route": "/design/workflows/structures",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -11365,6 +11440,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -12012,6 +12088,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Commands.AddVersion",
       "responseSchema": {
         "properties": {
           "activityPresentation": {
@@ -12782,6 +12859,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionVersionDetailsView",
       "route": "/design/workflows/versions/ingest",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -12789,6 +12867,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "WorkflowsDesignApi",
       "permissions": [
         "*",
@@ -12805,6 +12884,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa.Workflows.Design.Api.Requests.GetVersion",
       "responseSchema": {
         "properties": {
           "activityPresentation": {
@@ -13575,6 +13655,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionVersionDetailsView",
       "route": "/design/workflows/versions/{versionId}",
       "successStatusCondition": null,
       "successStatuses": null,

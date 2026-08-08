@@ -1,7 +1,90 @@
 {
   "activities": [],
   "assembly": "Elsa.Diagnostics.StructuredLogs",
-  "endpoints": [],
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/structured-logs/recent",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": {
+        "items": {
+          "properties": {
+            "displayName": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "machineName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "processId": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "serviceName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "responseType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=0.0.1.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/studio/diagnostics/structured-logs/sources",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/structured-logs/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
   "expressions": null,
   "features": [
     {

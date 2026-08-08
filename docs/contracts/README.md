@@ -11,9 +11,9 @@ to author workflow definitions against it: no server boot, no endpoint dumps, no
 |---|---|
 | `fragments/<Assembly>.json` | One fragment per contributing assembly: feature metadata (id, `dependsOn`, options), activity contracts (inputs with `defaultValue`/`hasStaticDefault`, outputs with `isRequired`, ports, container structure), structure kinds with payload schemas, expression surface (descriptors, JS declarations, script-sandbox globals), engine intrinsics. |
 | `submit-schema.json` | The workflow-definition submit-body schema — produced by the same handler that serves `GET design/workflows/definitions/submit/schema`. |
-| `api.json` | Every published HTTP endpoint in one route-sorted document: verb, route, permissions, declared success statuses, and the assembly/feature that provides it. Per-endpoint request/response schemas live in the owning fragment's `endpoints` entry. |
+| `openapi.json` | The HTTP surface as an **OpenAPI 3.1** document: every published route, its verb, path parameters, request/response body schemas (hoisted into `components/schemas`), the permissions it accepts (`x-elsa-permissions`) and the assembly that provides it (`x-elsa-assembly`). Readable by any OpenAPI client generator or validator. |
 | `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains, plus the features and expression types it serves — the third term of availability, see below. |
-| `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json` and `hosts.json`. Verify "these contracts match my pinned commit" by string compare. |
+| `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json`, `hosts.json` and `openapi.json`. Verify "these contracts match my pinned commit" by string compare. |
 
 Deliberately **not** in fragments: assigned activity version ids and availability (`addable`) — server
 state is never published as contract. Resolve version ids at submit time via
@@ -86,30 +86,42 @@ fragments of the composed features plus the server-state overlay.
 
 ## Calling the API
 
-`api.json` publishes the HTTP surface so you do not have to probe for it — `/swagger` and `/openapi` are
-not served on this build. Each entry carries the verb, the route template, the permissions the endpoint
-accepts, and the assembly that provides it (intersect with `hosts.json` the same way as features). The
-request and response body schemas for an endpoint live in its owning fragment under `endpoints`.
+`openapi.json` publishes the HTTP surface so you do not have to probe for it — the running server serves
+neither `/swagger` nor `/openapi`, which the benchmark named the single largest gap. It is a standard
+**OpenAPI 3.1** document, so point a client generator, a validator or an agent at it rather than teaching
+them a private schema. Body schemas are hoisted into `components/schemas` keyed by the CLR body type, so
+endpoints sharing a request or response type share one component.
 
-**Success statuses are published only where the endpoint declares one**, and are absent otherwise —
-deliberately, because a defaulted `200` is precisely the confidently-wrong fact that cost every
-benchmarked session a failed assertion. Where an endpoint can answer more than one status, the set and
-the rule are both published. The workflow publish endpoint is the worked example:
+Elsa-specific facts ride as extensions on each operation: `x-elsa-permissions` (the permissions the
+endpoint accepts), `x-elsa-allows-anonymous`, `x-elsa-assembly` and `x-elsa-feature-id` — intersect the
+latter two with `hosts.json` the same way as features, because an operation whose assembly your host does
+not ship is not routable there.
 
-```json
-{
-  "verb": "POST",
-  "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish",
-  "successStatuses": [201, 200],
-  "successStatusCondition": "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies)."
-}
-```
+**Success statuses are published only where the endpoint declares one** (`[SuccessStatus]`). An endpoint
+that does not declare one publishes a `default` response rather than an asserted `200`, deliberately: a
+guessed `200` is precisely the confidently-wrong fact that cost every benchmarked session a failed
+assertion. Where an endpoint can answer more than one status, both the set and the rule between them are
+published. The workflow publish endpoint is the worked example — `POST /publishing/workflows/{versionId}/publish`
+documents `201` *and* `200`, each description stating when it applies (201 creates the publication, 200
+updates an existing publication in place).
 
-Two things to note when matching routes. Route templates are published verbatim, including ASP.NET
-constraints (`{versionId:regex(...)}`) — strip the constraint to build a URL. And a small number of
-endpoints cannot be configured for build-time projection (server-sent-event streams and the token
-endpoint); they are reported as `ELSACT012` warnings during generation rather than silently omitted, so
-`api.json` is complete except for a knowable, warned set.
+Path templates are **normalised for OpenAPI**: ASP.NET route constraints are stripped
+(`{versionId:regex(^(?!drafts$).+$)}` is published as `{versionId}`) and every remaining placeholder is
+declared as a required path parameter, so the template is directly usable as a URL. The constraint itself
+is still visible on the endpoint entry in the owning fragment.
+
+A handful of endpoints configure themselves from host options — the identity token endpoint reads which
+authentication schemes the host registered, the diagnostics and OTLP ingestion endpoints take their routes
+from options. Those are projected against an *empty* host and carry
+`"x-elsa-configuration-dependent": true`: the route and authentication shown are this build's defaults, and
+a host that overrides those options serves something else. Publishing them flagged beats omitting them —
+the token endpoint is the first call a consumer has to make, and it was invisible while these were dropped.
+Endpoints that cannot be projected at all would be reported as `ELSACT012` warnings during generation
+rather than silently omitted; there are currently none, so `openapi.json` is the complete surface.
+
+The document is regenerated from the same endpoint projection as the fragments on every build, so a new
+FastEndpoint appears in it without anyone remembering to update a list; the freshness gate fails the PR
+if it does not.
 
 ## Behavioural rules the fields alone do not tell you
 

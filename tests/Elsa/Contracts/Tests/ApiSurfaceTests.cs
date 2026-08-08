@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Contracts.Generator;
+using Microsoft.OpenApi;
+using Microsoft.OpenApi.Reader;
 using Xunit;
 
 namespace Elsa.Contracts.Tests;
@@ -7,7 +9,8 @@ namespace Elsa.Contracts.Tests;
 /// <summary>
 /// Spec 150 FR-C14/C15. The benchmark named the missing API surface the single largest gap: /swagger and
 /// /openapi both 404, so every session obtained the publish/execute/instances endpoints by blind probing
-/// or by reading an existing consumer suite.
+/// or by reading an existing consumer suite. It is published as OpenAPI so consumer tooling (client
+/// generators, validators, agents) reads it without being taught a private schema.
 /// </summary>
 public sealed class ApiSurfaceTests
 {
@@ -22,93 +25,187 @@ public sealed class ApiSurfaceTests
         throw new InvalidOperationException("Repository root not found.");
     }
 
-    private static JsonDocument Api() => JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot(), "api.json")));
+    private static string DocumentPath() => Path.Combine(ContractsRoot(), "openapi.json");
 
-    private static IEnumerable<JsonElement> Endpoints(JsonDocument api) => api.RootElement.GetProperty("endpoints").EnumerateArray();
+    private static JsonDocument Raw() => JsonDocument.Parse(File.ReadAllBytes(DocumentPath()));
 
     /// <summary>
-    /// The routes a consumer needs to author, publish and prove a workflow. Named explicitly because
-    /// "some endpoints are published" is not the requirement — these specific ones were probed for.
+    /// Parsed by the real reader, not by our own assumptions: a document our writer is happy with but
+    /// consumer tooling rejects would be worse than publishing nothing.
     /// </summary>
-    [Theory]
-    [InlineData("POST", "/design/workflows/definitions/submit")]
-    [InlineData("GET", "/design/workflows/definitions/submit/schema")]
-    [InlineData("GET", "/design/activities/catalog")]
-    public void The_authoring_path_is_published(string verb, string route)
+    [Fact]
+    public void The_published_document_parses_as_valid_openapi()
     {
-        using var api = Api();
+        using var stream = new MemoryStream(File.ReadAllBytes(DocumentPath()));
+        var result = OpenApiDocument.Load(stream, "json");
 
-        Assert.True(
-            Endpoints(api).Any(endpoint =>
-                endpoint.GetProperty("verb").GetString() == verb &&
-                endpoint.GetProperty("route").GetString() == route),
-            $"{verb} {route} is not in the published API surface, so a contracts-only consumer must discover it by probing.");
+        Assert.NotNull(result.Document);
+        var errors = result.Diagnostic?.Errors ?? [];
+        Assert.True(errors.Count == 0,
+            "docs/contracts/openapi.json is not a valid OpenAPI document: " +
+            string.Join("; ", errors.Select(error => $"{error.Pointer}: {error.Message}")));
+        Assert.NotEmpty(result.Document!.Paths);
     }
 
+    /// <summary>
+    /// Body schemas carry root-relative JSON Pointers into their own root; hoisting them into
+    /// components without re-prefixing would break every one of them while still looking well-formed.
+    /// </summary>
     [Fact]
-    public void The_publish_endpoint_publishes_both_success_statuses_and_the_rule_between_them()
+    public void Every_schema_reference_resolves_inside_the_document()
     {
-        using var api = Api();
+        using var raw = Raw();
+        var components = raw.RootElement.GetProperty("components").GetProperty("schemas");
 
-        // Specifically the workflow publish route — /design/activities/drafts/{id}/publish is a different
-        // endpoint that also ends in "/publish".
-        var publish = Endpoints(api).Single(endpoint =>
-            endpoint.GetProperty("verb").GetString() == "POST" &&
-            endpoint.GetProperty("route").GetString()! is var route &&
-            route.StartsWith("/publishing/workflows/", StringComparison.Ordinal) &&
-            route.EndsWith("/publish", StringComparison.Ordinal));
-
-        var statuses = publish.GetProperty("successStatuses").EnumerateArray().Select(value => value.GetInt32()).ToArray();
-
-        // 201 alone would be as wrong as 200 alone: the endpoint answers 201 when it creates the
-        // publication and 200 when it updates one in place.
-        Assert.Contains(201, statuses);
-        Assert.Contains(200, statuses);
-        Assert.False(string.IsNullOrWhiteSpace(publish.GetProperty("successStatusCondition").GetString()),
-            "Publishing more than one success status without stating which is returned when leaves the consumer guessing again.");
-    }
-
-    [Fact]
-    public void Success_status_is_absent_rather_than_guessed_when_an_endpoint_does_not_declare_it()
-    {
-        using var api = Api();
-
-        // The point of the opt-in attribute: an undeclared status is published as null, never as a
-        // defaulted 200 that a consumer would trust and assert against.
-        Assert.Contains(Endpoints(api), endpoint => endpoint.GetProperty("successStatuses").ValueKind == JsonValueKind.Null);
-    }
-
-    [Fact]
-    public void Every_endpoint_publishes_a_verb_route_and_permission_set()
-    {
-        using var api = Api();
-        var endpoints = Endpoints(api).ToArray();
-
-        Assert.NotEmpty(endpoints);
-        foreach (var endpoint in endpoints)
+        foreach (var reference in References(raw.RootElement))
         {
-            Assert.False(string.IsNullOrWhiteSpace(endpoint.GetProperty("verb").GetString()));
-            Assert.StartsWith("/", endpoint.GetProperty("route").GetString()!, StringComparison.Ordinal);
-            Assert.Equal(JsonValueKind.Array, endpoint.GetProperty("permissions").ValueKind);
-
-            var permissions = endpoint.GetProperty("permissions").EnumerateArray().Select(value => value.GetString()!).ToArray();
-            Assert.Equal(permissions.Distinct(StringComparer.Ordinal).Count(), permissions.Length);
+            Assert.StartsWith("#/components/schemas/", reference, StringComparison.Ordinal);
+            var componentName = reference["#/components/schemas/".Length..].Split('/')[0];
+            Assert.True(components.TryGetProperty(componentName, out _),
+                $"'{reference}' points at a component that does not exist.");
         }
     }
 
-    [Fact]
-    public void The_api_surface_is_route_sorted_and_fingerprinted()
+    private static IEnumerable<string> References(JsonElement element)
     {
-        using var api = Api();
-        var keys = Endpoints(api)
-            .Select(endpoint => (endpoint.GetProperty("route").GetString()!, endpoint.GetProperty("verb").GetString()!))
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (property.NameEquals("$ref") && property.Value.ValueKind == JsonValueKind.String)
+                        yield return property.Value.GetString()!;
+                    foreach (var nested in References(property.Value))
+                        yield return nested;
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    foreach (var nested in References(item))
+                        yield return nested;
+                }
+
+                break;
+        }
+    }
+
+    [Theory]
+    [InlineData("post", "/design/workflows/definitions/submit")]
+    [InlineData("get", "/design/workflows/definitions/submit/schema")]
+    [InlineData("get", "/design/activities/catalog")]
+    [InlineData("post", "/publishing/workflows/{versionId}/publish")]
+    public void The_authoring_and_publishing_path_is_published(string verb, string path)
+    {
+        using var raw = Raw();
+        var paths = raw.RootElement.GetProperty("paths");
+
+        Assert.True(paths.TryGetProperty(path, out var pathItem),
+            $"{path} is absent from the published API surface, so a contracts-only consumer must probe for it.");
+        Assert.True(pathItem.TryGetProperty(verb, out _), $"{verb.ToUpperInvariant()} {path} is not published.");
+    }
+
+    [Fact]
+    public void The_publish_operation_documents_both_statuses_and_the_rule_between_them()
+    {
+        using var raw = Raw();
+        var responses = raw.RootElement
+            .GetProperty("paths")
+            .GetProperty("/publishing/workflows/{versionId}/publish")
+            .GetProperty("post")
+            .GetProperty("responses");
+
+        // 201 alone would be as wrong as 200 alone: it creates (201) or updates in place (200).
+        Assert.True(responses.TryGetProperty("201", out var created));
+        Assert.True(responses.TryGetProperty("200", out _));
+        Assert.Contains("201", created.GetProperty("description").GetString()!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_undeclared_success_status_documents_default_rather_than_asserting_200()
+    {
+        using var raw = Raw();
+
+        var withDefault = raw.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject())
+            .Select(operation => operation.Value.GetProperty("responses"))
+            .Where(responses => responses.TryGetProperty("default", out _))
             .ToArray();
 
-        Assert.Equal(keys.OrderBy(key => key.Item1, StringComparer.Ordinal).ThenBy(key => key.Item2, StringComparer.Ordinal), keys);
+        // The point of the opt-in attribute: an endpoint that does not declare its status must not be
+        // published as if it returned 200.
+        Assert.NotEmpty(withDefault);
+        Assert.All(withDefault, responses => Assert.False(responses.TryGetProperty("200", out _)));
+    }
 
+    [Fact]
+    public void Route_constraints_are_stripped_and_path_parameters_declared()
+    {
+        using var raw = Raw();
+
+        foreach (var path in raw.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            Assert.DoesNotContain(":", path.Name, StringComparison.Ordinal);
+
+            var declared = path.Value.EnumerateObject()
+                .SelectMany(operation => operation.Value.TryGetProperty("parameters", out var parameters)
+                    ? parameters.EnumerateArray().Select(parameter => parameter.GetProperty("name").GetString()!)
+                    : [])
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var segment in path.Name.Split('/'))
+            {
+                if (segment.StartsWith('{') && segment.EndsWith('}'))
+                    Assert.Contains(segment.Trim('{', '}'), declared);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Authentication is the first thing a consumer needs and the last thing it can guess. This endpoint
+    /// was absent from the first cut because its <c>Configure()</c> queries the host for registered auth
+    /// schemes; projecting against an empty host publishes it, flagged, instead of dropping it.
+    /// </summary>
+    [Fact]
+    public void The_token_endpoint_is_published()
+    {
+        using var raw = Raw();
+
+        var token = raw.RootElement.GetProperty("paths").EnumerateObject()
+            .Single(path => path.Name.EndsWith("/identity/token", StringComparison.Ordinal));
+
+        Assert.True(token.Value.TryGetProperty("get", out var operation));
+        Assert.True(operation.GetProperty("x-elsa-configuration-dependent").GetBoolean());
+    }
+
+    /// <summary>
+    /// An operation configured from host options publishes this build's defaults. Saying so is the whole
+    /// point — a route a host can move must not read as a fixed fact.
+    /// </summary>
+    [Fact]
+    public void Configuration_dependent_operations_say_so_in_their_description()
+    {
+        using var raw = Raw();
+
+        var flagged = raw.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject())
+            .Select(operation => operation.Value)
+            .Where(operation => operation.TryGetProperty("x-elsa-configuration-dependent", out var flag) && flag.GetBoolean())
+            .ToArray();
+
+        Assert.NotEmpty(flagged);
+        Assert.All(flagged, operation =>
+            Assert.Contains("defaults", operation.GetProperty("description").GetString()!, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_document_is_fingerprinted_in_the_manifest()
+    {
         using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(ContractsRoot(), "manifest.json")));
+
         Assert.Equal(
-            manifest.RootElement.GetProperty("api").GetString(),
-            DeterministicJson.Fingerprint(File.ReadAllBytes(Path.Combine(ContractsRoot(), "api.json"))));
+            manifest.RootElement.GetProperty("openApi").GetString(),
+            DeterministicJson.Fingerprint(File.ReadAllBytes(DocumentPath())));
     }
 }

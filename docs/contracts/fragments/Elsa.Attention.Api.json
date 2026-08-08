@@ -4,11 +4,13 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "AttentionApi",
       "permissions": [
         "*"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "contributors": {
@@ -189,6 +191,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa.Attention.Core.AttentionAggregationResult",
       "route": "/_elsa/attention/items",
       "successStatusCondition": null,
       "successStatuses": null,

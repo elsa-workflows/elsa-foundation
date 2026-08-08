@@ -4,6 +4,7 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -26,6 +27,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentAuditQueryRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -116,6 +118,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Agent.Core.Models.AgentAuditEvent, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
       "route": "/_elsa/agent/audit",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -123,12 +126,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
         "agent.use"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "data": {
@@ -313,6 +318,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentBootstrapResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/bootstrap",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -320,6 +326,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -354,6 +361,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentFeedbackApiRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -426,6 +434,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentFeedback, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/feedback",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -433,6 +442,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -467,6 +477,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -652,6 +663,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentActionProposal, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/proposals/{proposalId}/approve",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -659,6 +671,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -693,6 +706,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -878,6 +892,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentActionProposal, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/proposals/{proposalId}/deny",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -885,6 +900,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -919,6 +935,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -982,6 +999,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentProposalExecutionResult, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/proposals/{proposalId}/execute",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -989,6 +1007,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -1058,6 +1077,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentCreateSessionRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -1151,6 +1171,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentCreateSessionResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/sessions",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1158,6 +1179,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -1171,6 +1193,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentSessionRouteRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -1291,6 +1314,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentSessionDetailsResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/sessions/{sessionId}",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1298,6 +1322,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -1371,6 +1396,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentMessageRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -1588,6 +1614,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentMessageAcceptedResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/sessions/{sessionId}/messages",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1595,6 +1622,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -1608,7 +1636,9 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentSessionRouteRequest",
       "responseSchema": null,
+      "responseType": null,
       "route": "/_elsa/agent/sessions/{sessionId}/stream",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -1616,6 +1646,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "FoundationAgentApi",
       "permissions": [
         "*",
@@ -1632,6 +1663,7 @@
         },
         "type": "object"
       },
+      "requestType": "Elsa.Agent.Api.Models.AgentTurnCancelRequest",
       "responseSchema": {
         "properties": {
           "data": {
@@ -1677,6 +1709,7 @@
         },
         "type": "object"
       },
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentTurnCancelResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
       "route": "/_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel",
       "successStatusCondition": null,
       "successStatuses": null,

@@ -4,12 +4,14 @@
   "endpoints": [
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "Elsa3ImportJsonActivities",
       "permissions": [
         "*",
         "elsa3-import.manage"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "collectionHandle": {
@@ -39,6 +41,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa3.Activities.Design.Import.Models.ReusableActivityImportUploadResult",
       "route": "/migration/elsa3/reusable-activities/collections",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -46,12 +49,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "Elsa3ImportJsonActivities",
       "permissions": [
         "*",
         "elsa3-import.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "collectionHandle": {
@@ -343,6 +348,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa3.Activities.Design.Import.Models.ReusableActivityImportAnalysisPage",
       "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -350,6 +356,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "Elsa3ImportJsonActivities",
       "permissions": [
         "*",
@@ -377,6 +384,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportApplyHttpRequest",
       "responseSchema": {
         "properties": {
           "accessScope": {
@@ -516,6 +524,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa3.Activities.Design.Import.Models.ReusableActivityImportReceipt",
       "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/apply",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -523,6 +532,7 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "Elsa3ImportJsonActivities",
       "permissions": [
         "*",
@@ -546,6 +556,7 @@
         ],
         "type": "object"
       },
+      "requestType": "Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportSelectionRequest",
       "responseSchema": {
         "properties": {
           "addedDependencySourceVersionIds": {
@@ -684,6 +695,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa3.Activities.Design.Import.Models.ReusableActivityImportSelectionReadiness",
       "route": "/migration/elsa3/reusable-activities/collections/{collectionHandle}/selection",
       "successStatusCondition": null,
       "successStatuses": null,
@@ -691,12 +703,14 @@
     },
     {
       "allowsAnonymous": false,
+      "configurationDependent": false,
       "featureId": "Elsa3ImportJsonActivities",
       "permissions": [
         "*",
         "elsa3-import.read"
       ],
       "requestSchema": null,
+      "requestType": null,
       "responseSchema": {
         "properties": {
           "accessScope": {
@@ -836,6 +850,7 @@
         ],
         "type": "object"
       },
+      "responseType": "Elsa3.Activities.Design.Import.Models.ReusableActivityImportReceipt",
       "route": "/migration/elsa3/reusable-activities/imports/{idempotencyKey}",
       "successStatusCondition": null,
       "successStatuses": null,
