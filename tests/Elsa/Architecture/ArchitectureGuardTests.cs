@@ -671,6 +671,33 @@ public sealed class ArchitectureGuardTests
         Assert.Empty(violations);
     }
 
+    [Fact] // framework §2.6.6 (constitution v4.0.0) — event types are named for the fact, never `On`-prefixed.
+    public void No_event_type_is_named_with_an_On_prefix()
+    {
+        // `On` is the handling-side idiom (`OnModelCreating` raises/reacts); on the event type it
+        // names the consumer instead of the fact. Scanning source rather than loaded assemblies
+        // catches a declaration in any package without this project referencing all of them.
+        // Only files that mention IEvent are considered, so `OnChildCompletedAsync`-style handler
+        // methods elsewhere are untouched.
+        var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
+
+        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .SelectMany(file =>
+            {
+                var code = File.ReadAllText(file);
+                if (!code.Contains("IEvent", StringComparison.Ordinal))
+                    return [];
+
+                return onPrefixedDeclaration.Matches(StripCommentsAndStringLiterals(code))
+                    .Select(match => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {match.Groups[1].Value}");
+            })
+            .Distinct()
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     private static bool IsDesignReference(ProjectInfo reference) =>
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);

@@ -49,7 +49,7 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     [Fact]
-    public void Feature_registers_exactly_one_OnDraftValidating_handler()
+    public void Feature_registers_exactly_one_DraftValidating_handler()
     {
         using var provider = BuildProvider(_ => { });
 

@@ -19,8 +19,8 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <c>projectName</c> identifies the project whose directory contains the per-domain catalog.
 /// <para>
 /// Two properties are verified:
-/// (a) every event in the assembly has a corresponding <c>### OnXxx</c> heading in the catalog;
-/// (b) every <c>### OnXxx</c> heading in the catalog maps to a real event in at least one of
+/// (a) every event in the assembly has a corresponding <c>### Xxx</c> heading in the catalog;
+/// (b) every <c>### Xxx</c> heading in the catalog maps to a real event in at least one of
 ///     the assemblies registered for that catalog (handles the multi-assembly case where two
 ///     Core assemblies publish into the same feature catalog).
 /// </para>
@@ -36,8 +36,10 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// folded into the per-domain <c>EXTENSION_POINTS.md</c> (with the events as an "Events"
 /// section) on 2026-06-03 (framework §2.22.1 amendment). Catalog locations moved from
 /// <c>*.Core</c> to composition-root feature projects on 2026-06-03 (framework §2.22.1
-/// amendment). Only <c>### On…</c> headings are matched, so contract/contributor headings
-/// in the other sections are ignored.
+/// amendment). Only undecorated PascalCase <c>### Xxx</c> headings are matched, so decorated
+/// contract/contributor headings in the other sections — e.g. <c>### `IDraftValidator` *(Core)*</c>
+/// — are ignored. The <c>On</c> prefix that used to do this filtering was dropped from event
+/// names on 2026-08-08 (framework §2.6.6 amendment, constitution v4.0.0).
 /// </remarks>
 public sealed class CatalogParityTests
 {

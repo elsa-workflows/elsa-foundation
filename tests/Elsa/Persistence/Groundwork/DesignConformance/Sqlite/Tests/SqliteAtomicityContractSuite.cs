@@ -23,7 +23,7 @@ public sealed class SqliteAtomicityContractSuite : DesignAtomicityContractSuite
         await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry, cancellationToken);
 
     [Fact]
-    public async Task Public_create_draft_command_publishes_OnDraftCreated_only_after_the_draft_is_durable()
+    public async Task Public_create_draft_command_publishes_DraftCreated_only_after_the_draft_is_durable()
     {
         await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry);
         await fixture.ValidateReadinessAsync();

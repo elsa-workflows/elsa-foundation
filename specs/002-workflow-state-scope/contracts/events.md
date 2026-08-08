@@ -42,11 +42,11 @@ Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):
 **Payload:** `DraftId : string`, `NodeId : string`, `NewX : double`, `NewY : double`, `NewWidth : double?`, `NewHeight : double?`.
 **Published by:** `IMoveActivityInDraftCommand`.
 
-### `OnConnectionAddedToDraft`
+### `ConnectionAddedToDraft`
 **Payload:** `DraftId : string`, `Connection : IActivityPortConnectionView`.
 **Published by:** `IAddConnectionToDraftCommand`.
 
-### `OnConnectionRemovedFromDraft`
+### `ConnectionRemovedFromDraft`
 **Payload:** `DraftId : string`, `ConnectionId : string`.
 **Published by:** `IRemoveConnectionFromDraftCommand`.
 

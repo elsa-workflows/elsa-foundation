@@ -146,8 +146,8 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 - [X] T044 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityRemovedFromDraft.cs`.
 - [X] T045 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityPropertyChangedInDraft.cs`. **Subsequently DELETED per Joey iteration 2026-05-28 round 2** — the generic event was redundant once the 6 specialized per-activity input/output CRUD events landed. All per-activity mutations now route through specialized commands; if a future non-input/non-output property surfaces (e.g. an `IsStart` toggle command), it gets its own dedicated event rather than a generic catch-all.
 - [X] T046 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityMovedInDraft.cs`.
-- [X] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionAddedToDraft.cs`. Passes `ActivityConnection` directly (same record-as-view rationale).
-- [X] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionRemovedFromDraft.cs`. **Decision:** passes the full `ActivityConnection` removed (no `Id` field exists on connections — source+target IS the identity); spec mentioned a `ConnectionId` field that doesn't exist on the model.
+- [X] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/ConnectionAddedToDraft.cs`. Passes `ActivityConnection` directly (same record-as-view rationale).
+- [X] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/ConnectionRemovedFromDraft.cs`. **Decision:** passes the full `ActivityConnection` removed (no `Id` field exists on connections — source+target IS the identity); spec mentioned a `ConnectionId` field that doesn't exist on the model.
 - [X] T049 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableDeclaredInDraft.cs`. Passes `VariableDefinition` directly.
 - [X] T050 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableUpdatedInDraft.cs`.
 - [X] T051 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableRemovedFromDraft.cs`.

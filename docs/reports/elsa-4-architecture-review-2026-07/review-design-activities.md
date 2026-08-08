@@ -190,7 +190,7 @@ concern for large templates (DS‑12).
 runtime genuinely need to inject different globals depending on execution context (workflow functions vs.
 materialization-only accessors). What's questionable is the mechanism: every one of these "contributor list"
 extension points in this review (`OnEvaluatingScript`, `OnScriptEvaluated`, `DeclarationsDocumentGenerating`,
-`DraftValidating`, `OnActivityConstructorsInitializing`, `ActivityVersionsReconciling`,
+`DraftValidating`, `ActivityConstructorsInitializing`, `ActivityVersionsReconciling`,
 `WorkflowVersionsReconciling`) is documented as having **"Expected handler: exactly one"** — i.e. it is not
 actually a fan-out pub/sub scenario, it is always "inject `IEnumerable<TContributor>` into one aggregator and
 call it," dressed up as a domain event round-tripped through `IEventPublisher`/mediator. `DefaultActivityStructureService`
@@ -502,7 +502,7 @@ extension points.
 `OnScriptEvaluated`→`PostProcessScript` (same file, line 72), `DeclarationsDocumentGenerating`→
 `BuildDeclarationsDocument` (`Expressions.JavaScript.Rendering/EXTENSION_POINTS.md:43`), `DraftValidating`→
 `ExecuteValidations` (`Workflows.Design.Validations/EXTENSION_POINTS.md:59`),
-`OnActivityConstructorsInitializing`→`RegisterActivityConstructors`
+`ActivityConstructorsInitializing`→`RegisterActivityConstructors`
 (`Activities.Runtime/EXTENSION_POINTS.md:71`), `ActivityVersionsReconciling`→
 `ActivityVersionsReconcilingHandler` (`Activities.Design.Reconciliation/EXTENSION_POINTS.md:41`),
 `WorkflowVersionsReconciling`→`WorkflowVersionsReconcilingHandler`

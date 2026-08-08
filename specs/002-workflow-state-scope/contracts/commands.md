@@ -53,12 +53,12 @@ Handler exceptions never propagate to the caller per FR-027c + framework §2.6.1
 
 #### `IAddConnectionToDraftCommand`
 **Payload:** `DraftId : string`, `Connection : ActivityPortConnectionRecord`.
-**Publishes:** `OnConnectionAddedToDraft`.
+**Publishes:** `ConnectionAddedToDraft`.
 **Effect:** appends to `WorkflowDefinitionState.ActivityConnections`.
 
 #### `IRemoveConnectionFromDraftCommand`
 **Payload:** `DraftId : string`, `ConnectionId : string` (or composite key — plan-stage decides).
-**Publishes:** `OnConnectionRemovedFromDraft`.
+**Publishes:** `ConnectionRemovedFromDraft`.
 **Effect:** removes from `State.ActivityConnections`.
 
 ### Variables

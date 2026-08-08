@@ -54,8 +54,8 @@ Entity inventory + relationships + lifecycle for the Workflow Design substrate l
 | `ActivityRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
 | `ActivityPropertyChangedInDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
 | `ActivityMovedInDraft` | Workflows.Design.Core | mutation (layout) | FR-018 |
-| `OnConnectionAddedToDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
-| `OnConnectionRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
+| `ConnectionAddedToDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
+| `ConnectionRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
 | `VariableDeclaredInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
 | `VariableUpdatedInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
 | `VariableRemovedFromDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |

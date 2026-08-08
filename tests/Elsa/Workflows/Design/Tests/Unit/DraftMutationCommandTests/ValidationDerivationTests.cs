@@ -43,7 +43,7 @@ public sealed class ValidationDerivationTests
     }
 
     [Fact]
-    public async Task Validator_contribution_appears_on_OnDraftValidated_after_update()
+    public async Task Validator_contribution_appears_on_DraftValidated_after_update()
     {
         using var host = await WorkflowsDesignTestHost.CreateAsync();
         host.EventPublisher.ContributeError(StubError);
@@ -57,7 +57,7 @@ public sealed class ValidationDerivationTests
     }
 
     [Fact]
-    public async Task A_subsequent_clean_mutation_yields_OnDraftValidated_with_the_error_gone()
+    public async Task A_subsequent_clean_mutation_yields_DraftValidated_with_the_error_gone()
     {
         using var host = await WorkflowsDesignTestHost.CreateAsync();
 

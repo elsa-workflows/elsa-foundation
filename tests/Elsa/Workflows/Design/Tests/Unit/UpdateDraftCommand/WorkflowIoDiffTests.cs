@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 public sealed class WorkflowIoDiffTests
 {
     [Fact]
-    public void Workflow_input_add_update_remove_emit_OnWorkflowInput_events()
+    public void Workflow_input_add_update_remove_emit_WorkflowInput_events()
     {
         // Add.
         var added = Assert.IsType<WorkflowInputAddedToDraft>(Assert.Single(
@@ -32,7 +32,7 @@ public sealed class WorkflowIoDiffTests
     }
 
     [Fact]
-    public void Workflow_output_add_update_remove_emit_OnWorkflowOutput_events()
+    public void Workflow_output_add_update_remove_emit_WorkflowOutput_events()
     {
         // Add.
         var added = Assert.IsType<WorkflowOutputAddedToDraft>(Assert.Single(

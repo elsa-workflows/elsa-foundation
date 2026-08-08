@@ -13,6 +13,8 @@ Modified sections:
   §2.6.6  - ADDED "Event naming - no `On` prefix" rule; hybrid pattern restated as
             `Xxxing` (Sequential gate) + `Xxxed` (Background outcome).
   §2.22.1 - events-catalog worked examples renamed.
+  §2.24.2 - sanctioned-pattern row 3b restated: `IEventHandler<On<Phase>>` -> `IEventHandler<PhaseEvent>`
+            and `OnXxxing/OnXxxed` -> `Xxxing / Xxxed`.
 Added sections: none (the naming rule lives inside §2.6.6).
 Removed sections: none.
 Templates requiring updates: none — .specify/templates/*, .specify/workflows/*, and
@@ -24,7 +26,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone. G
 # Modular Software Design Framework Constitution
 
 **Version:** 4.0.0
-**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates that carry their own `Status:` line (e.g. §2.24) remain draft/provisional and are **not** covered by this ratification.
+**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending ratification — whether via their own `Status:` line (§2.24) or inline wording — remain so and are **not** covered by this ratification.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
 **Knowledge boundary note:** treat this document as the generic quality-gate

@@ -55,7 +55,7 @@ dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
 At startup:
 
 1. **EF Core migration** — `RunMigrationsStartupTask` applies the fresh initial migration; the `Elsa.db` SQLite file is created with the new schema (catalog tables + reconciliation-state table).
-2. **Resolver registry initialization** — `ActivityImplementationResolverRegistryStartupTask` publishes `OnActivityImplementationResolversInitializing`; the activities runtime feature handles it to register `ClrActivityImplementationResolver`.
+2. **Resolver registry initialization** — `ActivityImplementationResolverRegistryStartupTask` publishes `ActivityImplementationResolversInitializing`; the activities runtime feature handles it to register `ClrActivityImplementationResolver`.
 3. **Reconciliation pass** — `ActivityVersionReconcilerStartupTask` invokes `IActivityVersionReconciler.Reconcile()`:
    - Publishes `ActivityVersionsReconciling` with an empty `Versions` collection.
    - The JSON-file source feature handles the event, reads `elsa-core-activities.json`, contributes one `IActivityDefinitionVersion` per JSON entry (each tagged `SourceKind = SourceKind.Json`, `SourceId = <assembly name>`, etc.).

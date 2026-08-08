@@ -67,7 +67,7 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
 2. Define a corresponding domain event in `Elsa.Workflows.Design.Core/Events/`:
 
    ```csharp
-   public sealed class OnMyNewMutationInDraft(...) : IDomainEvent { ... }
+   public sealed class MyNewMutationInDraft(...) : IDomainEvent { ... }
    ```
 
 3. Implement the command in `Elsa.Workflows.Design.Persistence.EFCore/Commands/`. The implementation MUST:
@@ -79,7 +79,7 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
    - Transactional flush.
    - Release lock.
 
-4. Add the new event to `DOMAIN_EVENTS.md` in `Elsa.Workflows.Design.Core/`. Use heading format `### OnMyNewMutationInDraft` per R4.
+4. Add the new event to `DOMAIN_EVENTS.md` in `Elsa.Workflows.Design.Core/`. Use heading format `### MyNewMutationInDraft` per R4.
 
 5. Add branch-covered tests per framework §2.23.2 in `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/`.
 

@@ -73,7 +73,7 @@ The existing `ActivityVersionProvisioner` already consumes this contract — pat
 4. Calls `IPayloadSerializer.Deserialize(json, type)` — the existing Elsa serialisation contract. If the API is non-generic, use it directly; if generic-only, construct via reflection: `typeof(IPayloadSerializer).GetMethod(nameof(IPayloadSerializer.Deserialize)).MakeGenericMethod(type).Invoke(serializer, [json])`.
 5. Assigns the result to the entity's `[NotMapped] ImplementationDescriptor` property.
 
-The registry is populated at startup by `ImplementationDescriptorRegistryStartupTask`, which publishes `OnImplementationDescriptorsInitializing` and flushes contributions into the registry. The activities runtime feature contributes the CLR mapping; Unit G later contributes the Workflow mapping; future units contribute analogously. This is symmetric with the existing `IActivityImplementationResolverRegistry` and its `OnActivityImplementationResolversInitializing` event — two registries, two events, two startup tasks, same canonical §2.6.1 pattern.
+The registry is populated at startup by `ImplementationDescriptorRegistryStartupTask`, which publishes `OnImplementationDescriptorsInitializing` and flushes contributions into the registry. The activities runtime feature contributes the CLR mapping; Unit G later contributes the Workflow mapping; future units contribute analogously. This is symmetric with the existing `IActivityImplementationResolverRegistry` and its `ActivityImplementationResolversInitializing` event — two registries, two events, two startup tasks, same canonical §2.6.1 pattern.
 
 **Saving mechanism.** The saving handler does the inverse — `IPayloadSerializer.Serialize(entity.ImplementationDescriptor)` → write to `entry.Property("ImplementationDescriptor").CurrentValue`.
 
@@ -145,11 +145,11 @@ public sealed class ActivityFactory : IActivityFactory
 
 **Decision.** Per framework §2.6.1 sub-pattern (worked example in Elsa §E3.3):
 
-1. `Elsa.Activities.Runtime.Core` defines `IActivityImplementationResolverRegistry` and `OnActivityImplementationResolversInitializing(List<IActivityImplementationResolver>)`.
+1. `Elsa.Activities.Runtime.Core` defines `IActivityImplementationResolverRegistry` and `ActivityImplementationResolversInitializing(List<IActivityImplementationResolver>)`.
 2. The activities-runtime feature registers a StartUp task that:
    ```csharp
    var resolvers = new List<IActivityImplementationResolver>();
-   await sender.Send(new OnActivityImplementationResolversInitializing(resolvers), ct);
+   await sender.Send(new ActivityImplementationResolversInitializing(resolvers), ct);
    registry.RegisterAll(resolvers);
    ```
 3. Other features (Workflow bridge in Unit G, Remote feature later, …) handle the event to add their resolvers.

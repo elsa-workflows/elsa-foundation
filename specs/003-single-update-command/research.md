@@ -43,7 +43,7 @@ The State model carries stable ids on every dimension **except connections**, wh
 
 **Decision**: the semantic diff matches on these per-dimension keys. Same-key + changed-payload → UPDATE; key-absent-from-desired → REMOVE; key-absent-from-stored → ADD. A rename of a keyed element (e.g. `VariableDefinition.Name` changes while `ReferenceKey` is stable) is a single UPDATE — confirming FR-023 and SC-015.
 
-**Connection refinement (important)**: connections have *no* synthetic id and *no* update event. Their value-tuple identity is their key; any change to a connection is a different tuple, so it diffs as REMOVE(old tuple)+ADD(new tuple). This is consistent with the existing event surface (only `OnConnectionAddedToDraft` / `OnConnectionRemovedFromDraft`). FR-023's "stable id per dimension" is therefore read as "stable *match key* per dimension" — for connections that key is the endpoint tuple, not an id. **No id field needs to be added to any element type.** This retires the open item flagged in the spec's Assumptions ("the one place FR-023 could touch the State model"): it does not — the State model is untouched.
+**Connection refinement (important)**: connections have *no* synthetic id and *no* update event. Their value-tuple identity is their key; any change to a connection is a different tuple, so it diffs as REMOVE(old tuple)+ADD(new tuple). This is consistent with the existing event surface (only `ConnectionAddedToDraft` / `ConnectionRemovedFromDraft`). FR-023's "stable id per dimension" is therefore read as "stable *match key* per dimension" — for connections that key is the endpoint tuple, not an id. **No id field needs to be added to any element type.** This retires the open item flagged in the spec's Assumptions ("the one place FR-023 could touch the State model"): it does not — the State model is untouched.
 
 **Activity rename cascade**: an activity's identity is `NodeId` (stable across rename). Because connections key on `ActivityNodeId`, renaming an activity's *display name* does not touch connections (the NodeId is unchanged). Only deleting/replacing an activity (new NodeId) cascades to connection remove+add — matching today's `RemoveActivityFromDraftCommand`, which already prunes connections referencing the removed NodeId.
 
@@ -58,12 +58,12 @@ The State model carries stable ids on every dimension **except connections**, wh
 | Activity present in desired, absent in stored | `ActivityAddedToDraft` |
 | Activity absent in desired, present in stored | `ActivityRemovedFromDraft` (+ prune its connections) |
 | Layout record (X/Y/W/H) changed for a NodeId | `ActivityMovedInDraft` |
-| Activity-input added / changed / removed (by `ReferenceKey`) | `OnActivityInput{Added,Updated,Removed}…` |
-| Activity-output added / changed / removed | `OnActivityOutput{Added,Updated,Removed}…` |
-| Connection tuple added / removed | `OnConnection{Added,Removed}…` |
-| Variable declared / changed / removed (by `ReferenceKey`) | `OnVariable{Declared,Updated,Removed}…` |
-| Workflow input added / changed / removed | `OnWorkflowInput{Added,Updated,Removed}…` |
-| Workflow output added / changed / removed | `OnWorkflowOutput{Added,Updated,Removed}…` |
+| Activity-input added / changed / removed (by `ReferenceKey`) | `ActivityInput{Added,Updated,Removed}…` |
+| Activity-output added / changed / removed | `ActivityOutput{Added,Updated,Removed}…` |
+| Connection tuple added / removed | `Connection{Added,Removed}…` |
+| Variable declared / changed / removed (by `ReferenceKey`) | `Variable{Declared,Updated,Removed}…` |
+| Workflow input added / changed / removed | `WorkflowInput{Added,Updated,Removed}…` |
+| Workflow output added / changed / removed | `WorkflowOutput{Added,Updated,Removed}…` |
 
 The `Update*` events carry `OldValue` + `NewValue`; the diff supplies both (stored = old, desired = new). This is exactly what the deleted update-commands constructed.
 

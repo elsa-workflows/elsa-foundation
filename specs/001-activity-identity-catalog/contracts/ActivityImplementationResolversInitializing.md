@@ -1,6 +1,6 @@
-# Contract: `OnActivityImplementationResolversInitializing`
+# Contract: `ActivityImplementationResolversInitializing`
 
-**Location.** `Elsa.Activities.Runtime.Core.Events.OnActivityImplementationResolversInitializing`
+**Location.** `Elsa.Activities.Runtime.Core.Events.ActivityImplementationResolversInitializing`
 
 **Kind.** Contribution event (framework §2.6.1). Drives Registry + StartUp Task sub-pattern population.
 
@@ -11,7 +11,7 @@
 ```csharp
 namespace Elsa.Activities.Runtime.Core.Events;
 
-public sealed record OnActivityImplementationResolversInitializing(
+public sealed record ActivityImplementationResolversInitializing(
     ICollection<IActivityImplementationResolver> Resolvers
 ) : IDomainEvent;
 ```
@@ -24,7 +24,7 @@ Published once at startup by `ActivityImplementationResolverRegistryStartupTask`
 public async Task Execute(CancellationToken ct)
 {
     var resolvers = new List<IActivityImplementationResolver>();
-    await sender.Send(new OnActivityImplementationResolversInitializing(resolvers), ct);
+    await sender.Send(new ActivityImplementationResolversInitializing(resolvers), ct);
     registry.RegisterAll(resolvers);
 }
 ```

@@ -10,7 +10,7 @@ Amendment: tracks framework constitution 4.0.0 — event types are never named w
 Modified sections:
   §2.9 specialization - EF Core save/load event mirrors renamed
                         `OnEntitySaving`/`OnEntityLoading` -> `EntitySaving`/`EntityLoading`.
-  §E5 (draft lifecycle) - `OnDraftCreated`/`OnDraftDiscarded` -> `DraftCreated`/`DraftDiscarded`;
+  §E2.9.7 (draft-mutation surface) - `OnDraftCreated`/`OnDraftDiscarded` -> `DraftCreated`/`DraftDiscarded`;
                         `OnDraftValidating`/`OnDraftValidated` -> `DraftValidating`/`DraftValidated`;
                         the dropped `OnDraftClonedFromVersion` reference follows the same shape.
   §E6 - ADDED an R4 cross-reference to the framework event-naming rule so the type-name gate
@@ -27,7 +27,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 # Elsa Workflow Engine Constitution
 
 **Version:** 4.0.0
-**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates that carry their own `Status:` line (e.g. §E2.9's provisional scope policy) remain provisional and are **not** covered by this ratification.
+**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v4.0.0**.
 
@@ -454,7 +454,7 @@ This constitution is amended together with the framework constitution where the 
 
 ### Sync rule with framework constitution
 
-This document declares the framework constitution version it derives from in the header (currently **v2.0.0**). When the framework constitution bumps:
+This document declares the framework constitution version it derives from in the header (currently **v4.0.0**). When the framework constitution bumps:
 
 - **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
 - **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.

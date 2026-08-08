@@ -194,12 +194,12 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T075 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityFactory.cs` — `ValueTask<IActivity> Create(IImplementationDescriptor, IEnumerable<InputState>, IEnumerable<OutputState>, CancellationToken)`.
 - [X] T076 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityImplementationResolver.cs` — non-generic marker + generic `IActivityImplementationResolver<TDescriptor> where TDescriptor : class, IImplementationDescriptor { string Kind { get; } Type Resolve(TDescriptor); }`.
 - [X] T077 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityImplementationResolverRegistry.cs` — `RegisterAll(IEnumerable<IActivityImplementationResolver>)` + `Resolve(IImplementationDescriptor)`.
-- [X] T078 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Events/OnActivityImplementationResolversInitializing.cs` — `public sealed record OnActivityImplementationResolversInitializing(ICollection<IActivityImplementationResolver> Resolvers) : IDomainEvent;`.
+- [X] T078 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Events/ActivityImplementationResolversInitializing.cs` — `public sealed record ActivityImplementationResolversInitializing(ICollection<IActivityImplementationResolver> Resolvers) : IDomainEvent;`.
 
 ### Implementation for US3 — factory + CLR resolver implementations
 
 - [X] T079 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistry.cs` — backing dictionary keyed by `ImplementationKind.Value`; throws on duplicate-kind registration; throws on unknown-kind lookup with `ActivityResolutionException`.
-- [X] T080 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistryStartupTask.cs` — implements `IStartUpTask`; publishes `OnActivityImplementationResolversInitializing` with a fresh `List<IActivityImplementationResolver>`; flushes contributions to the registry.
+- [X] T080 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistryStartupTask.cs` — implements `IStartUpTask`; publishes `ActivityImplementationResolversInitializing` with a fresh `List<IActivityImplementationResolver>`; flushes contributions to the registry.
 - [X] T081 [US3] Add `src/Elsa.Activities/Resolvers/ClrActivityImplementationResolver.cs` — implements `IActivityImplementationResolver<ClrImplementationDescriptor>`; `Kind = ImplementationKind.Clr.Value`; `Resolve(descriptor) => descriptor.TypeInfo.LoadType()`.
 - [X] T082 [US3] *(input/output state wiring to `Input&lt;T&gt;` / `Output&lt;T&gt;` deferred — out of Unit B contract scope; `ActivityFactory` doc-comment flags it for a follow-up.)* Add `src/Elsa.Activities/Services/ActivityFactory.cs` — implements `IActivityFactory`; resolver lookup via registry; type activation via `ActivatorUtilities.CreateInstance`; `InputState` / `OutputState` → `Input<T>` / `Output<T>` mapping via reflection; `ArgumentValue` → `IExpression` via `IExpressionFactory` (existing `Elsa.Expressions.Core` contract; verify the existing API or extend if needed).
 - [X] T083 [US3] Add `src/Elsa.Activities/ActivitiesRuntimeFeature.cs` (or extend existing feature class) — registers:
@@ -207,7 +207,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
    - `IImplementationDescriptorRegistry` + its `ImplementationDescriptorRegistryStartupTask`.
    - `IActivityFactory`.
    - `ClrActivityImplementationResolver` (DI-registered).
-   - Handles `OnActivityImplementationResolversInitializing` to contribute `ClrActivityImplementationResolver`.
+   - Handles `ActivityImplementationResolversInitializing` to contribute `ClrActivityImplementationResolver`.
    - Handles `OnImplementationDescriptorsInitializing` to contribute `new ImplementationDescriptorRegistration(ImplementationKind.Clr, typeof(ClrImplementationDescriptor))`.
 - [X] T084 [US3] Audit existing consumers of `ActivityDefinitionVersion.TypeInfo` across the codebase (likely some runtime activity-loading path); reroute to read `ImplementationDescriptor` and, for CLR cases, cast/pattern-match to `ClrImplementationDescriptor` to obtain the `TypeInformation`.
 - [X] T085 [US3] Update `src/Elsa3.Activities.Design.Import/...` mapping to produce `ImplementationKind=Clr` + `ClrImplementationDescriptor(TypeInformation)` for legacy Elsa3 activities. *(The `ActivityDefinitionVersionImport` record is reshaped to carry `ActivityTypeKey`, `ImplementationKind`, `IImplementationDescriptor`. No concrete mapping currently constructs this record; the Elsa3-activity → import flow itself is out of Unit B scope and lands alongside the activity-import wiring.)*
