@@ -113,8 +113,11 @@ versions and their floors did not move.
 
 ### Edge Cases
 
-- A package whose own files did not change but whose dependency floor moved: it must not be packed at
-  all, because repacking would produce different content at the same version.
+- A package whose own files did not change but whose dependency floor moved: covered by FR-006a. It
+  is not packed, and its published artifact stays correct because the newer dependency satisfies the
+  floor it already declares.
+- A publish that succeeds for some packages and fails for others: the baseline ref does not move, so
+  the next run recomputes the same set and re-pushes. Pushes of identical versions are no-ops.
 - A revert: height increases rather than decreasing, which is correct because the content changed
   again.
 - A rewritten history on `main`: versions renumber. Accepted, and recorded as an operational
@@ -138,8 +141,16 @@ versions and their floors did not move.
   `Directory.Build.props` and `NuGet.config`, MUST advance every project.
 - **FR-005**: No `.csproj` under `src/` may declare a literal `<Version>`, and the packaging workflow
   MUST NOT inject a global `/p:Version`.
-- **FR-006**: The pipeline MUST pack and push only packages whose computed version differs from the
-  version already published on the target feed.
+- **FR-006**: The pipeline MUST pack and push only the affected set, and MUST derive that set locally
+  from the repository. The baseline is a git ref recording the last commit published from that
+  branch, moved only after every push in a run has succeeded. The set MUST NOT be derived from a
+  query against the target feed, because that would make a correct build depend on network
+  availability and feed consistency, nor from state held in CI, because that would make the same
+  commit produce different results across re-runs.
+- **FR-006a**: A package whose own files did not change MUST NOT be packed, even when a package it
+  references has advanced. Its published artifact already declares a floor that the newer dependency
+  satisfies, so repacking it would publish different content at an unchanged version and would raise
+  its floor for no reason.
 - **FR-007**: Every nuspec dependency range MUST carry an upper bound at the next major.
 - **FR-008**: While the 4.0 line is unreleased, every produced package MUST carry a `-preview` label
   with no counter. Builds from a branch MUST carry a branch-scoped label instead.
@@ -170,6 +181,10 @@ versions and their floors did not move.
 - **SC-005**: Two pull requests touching the same package merge without a version conflict, and
   neither turns `main` red at publish.
 - **SC-006**: A preview build republishes no package whose owned files did not change.
+- **SC-007**: A build advancing only a contract package leaves every dependent package's published
+  artifact untouched, and those artifacts still resolve against the new contract version.
+- **SC-008**: The affected set is computed with no network access, and is identical when the same
+  commit and baseline ref are built on a machine with no feed connectivity.
 
 ## Assumptions
 
@@ -193,9 +208,9 @@ versions and their floors did not move.
 
 ## Open Questions
 
-- Should the affected set be computed against the target feed's published versions, or against the
-  previous build of the same branch? The feed is the real source of truth for what exists, but it
-  makes the build depend on a network query.
 - Should a documentation-only change inside a project directory, such as its `README.md`, advance the
   package? It changes no shipped content, but excluding it means classifying owned files by kind.
+- FR-006 puts the publish baseline in a git ref. Is a ref the right home, against the alternative of
+  a committed file? A ref adds no commit noise, but it is less visible in review and can drift from
+  the feed if a publish fails in a way the run does not detect.
 - What is the base tag's name? It must not be version-shaped.
