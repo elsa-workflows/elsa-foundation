@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DesignConformance.Tests;
+using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;

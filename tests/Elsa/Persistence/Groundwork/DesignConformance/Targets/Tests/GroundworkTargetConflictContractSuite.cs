@@ -3,7 +3,7 @@ using Elsa.Persistence.Groundwork.Targets;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Persistence.Groundwork.DesignConformance.Tests;
+namespace Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 
 /// <summary>
 /// Provider-neutral proof of the Groundwork target-declaration contract. A concrete leaf composes its own
