@@ -18,6 +18,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -47,6 +48,7 @@
           "uiHint": null,
           "defaultValue": true,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -95,6 +97,7 @@
           "uiHint": null,
           "defaultValue": true,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         },
@@ -108,6 +111,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -121,6 +125,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -134,6 +139,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         },
@@ -147,6 +153,7 @@
           "uiHint": "dropdown",
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": {
             "optionsProvider": {
@@ -206,6 +213,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -287,6 +295,7 @@
           "uiHint": null,
           "defaultValue": 0,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -300,6 +309,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -313,6 +323,7 @@
           "uiHint": null,
           "defaultValue": 0,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -326,6 +337,7 @@
           "uiHint": null,
           "defaultValue": 1,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -372,6 +384,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -433,6 +446,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -446,6 +460,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -459,6 +474,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": false,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -472,6 +488,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -485,6 +502,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -498,6 +516,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -511,6 +530,10 @@
           "uiHint": null,
           "defaultValue": "async",
           "hasStaticDefault": true,
+          "enumValues": [
+            "async",
+            "sync"
+          ],
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -524,6 +547,7 @@
           "uiHint": "checklist",
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": {
             "options": [
@@ -604,6 +628,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -617,6 +642,7 @@
           "uiHint": null,
           "defaultValue": "text/plain",
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": {
             "options": [
@@ -641,6 +667,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -654,6 +681,7 @@
           "uiHint": null,
           "defaultValue": "GET",
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": {
             "options": [
@@ -690,6 +718,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -703,6 +732,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -716,6 +746,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -781,6 +812,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -794,6 +826,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -807,6 +840,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -820,6 +854,7 @@
           "uiHint": null,
           "defaultValue": 200,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -886,6 +921,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -995,6 +1031,7 @@
           "uiHint": null,
           "defaultValue": true,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1008,6 +1045,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1021,6 +1059,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1060,6 +1099,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1073,6 +1113,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1086,6 +1127,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1099,6 +1141,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1128,6 +1171,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1157,6 +1201,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1170,6 +1215,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1183,6 +1229,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1196,6 +1243,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1252,6 +1300,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1283,6 +1332,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1312,6 +1362,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1351,6 +1402,7 @@
           "uiHint": null,
           "defaultValue": "00:00:00",
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": "Literal",
           "uiSpecifications": null
         }
@@ -1382,6 +1434,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1421,6 +1474,7 @@
           "uiHint": null,
           "defaultValue": "{}",
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1434,6 +1488,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         },
@@ -1447,6 +1502,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1525,6 +1581,7 @@
           "uiHint": null,
           "defaultValue": null,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }
@@ -1584,6 +1641,7 @@
           "uiHint": null,
           "defaultValue": false,
           "hasStaticDefault": true,
+          "enumValues": null,
           "defaultSyntax": null,
           "uiSpecifications": null
         }

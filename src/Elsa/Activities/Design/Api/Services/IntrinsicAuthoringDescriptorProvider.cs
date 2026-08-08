@@ -83,7 +83,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             Ports: [DonePort],
             ContainerStructure: null,
             AuthoringTemplate: IntrinsicTemplate(SetVariableVersionId),
-            Intrinsic: new ActivityAuthoringIntrinsicView("Set", ValueKey, VariableKey, OutputNameInputKey: null));
+            Intrinsic: new ActivityAuthoringIntrinsicView("set", ValueKey, VariableKey, OutputNameInputKey: null));
 
     private static ActivityAuthoringDescriptorView SetOutputDescriptor() =>
         new(
@@ -107,7 +107,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             Ports: [DonePort],
             ContainerStructure: null,
             AuthoringTemplate: IntrinsicTemplate(SetOutputVersionId),
-            Intrinsic: new ActivityAuthoringIntrinsicView("SetOutput", ValueKey, VariableInputKey: null, OutputNameInputKey: NameKey));
+            Intrinsic: new ActivityAuthoringIntrinsicView("setOutput", ValueKey, VariableInputKey: null, OutputNameInputKey: NameKey));
 
     /// <summary>Elsa 3's <c>Correlate</c>: stamps the running instance's correlation id.</summary>
     private static ActivityAuthoringDescriptorView SetCorrelationIdDescriptor() =>
@@ -117,7 +117,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             displayName: "Set Correlation Id",
             description: "Assigns the correlation id of the running workflow instance.",
             valueDescription: "The correlation id to assign to this instance.",
-            intrinsicKind: "SetCorrelationId");
+            intrinsicKind: "setCorrelationId");
 
     /// <summary>Elsa 3's <c>SetName</c>: stamps the running instance's display name.</summary>
     private static ActivityAuthoringDescriptorView SetInstanceNameDescriptor() =>
@@ -127,7 +127,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             displayName: "Set Instance Name",
             description: "Assigns the display name of the running workflow instance.",
             valueDescription: "The name to assign to this instance.",
-            intrinsicKind: "SetInstanceName");
+            intrinsicKind: "setInstanceName");
 
     /// <summary>
     /// Elsa 3's <c>Finish</c>/<c>Complete</c>: ends the workflow with a named outcome. The single authored input is
@@ -155,7 +155,7 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             Ports: [],
             ContainerStructure: null,
             AuthoringTemplate: IntrinsicTemplate(FinishVersionId),
-            Intrinsic: new ActivityAuthoringIntrinsicView("Finish", OutcomeKey, VariableInputKey: null, OutputNameInputKey: null));
+            Intrinsic: new ActivityAuthoringIntrinsicView("finish", OutcomeKey, VariableInputKey: null, OutputNameInputKey: null));
 
     /// <summary>
     /// Shared shape for the identity-effect intrinsics: one required string <c>value</c> input, one Done port, no

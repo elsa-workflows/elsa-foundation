@@ -11,12 +11,14 @@
       "featureId": "ActivitiesDispatchWorkflowRuntime",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Workflow Definition ID",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -34,12 +36,14 @@
           }
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Inputs",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -52,12 +56,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": false,
           "description": null,
           "displayName": "Wait For Completion",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -70,12 +76,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": true,
           "description": null,
           "displayName": "Cancel Child On Parent Cancellation",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -88,12 +96,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Correlation ID",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,

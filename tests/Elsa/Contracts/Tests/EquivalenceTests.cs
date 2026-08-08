@@ -233,7 +233,8 @@ public sealed class EquivalenceTests
         item.Inputs.Select(input => new InputContract(
             input.ReferenceKey, input.Name, input.Type, input.CollectionKind.ToString(), input.DisplayName,
             input.Description, input.Order, input.Category, input.IsBrowsable, input.IsRequired, input.IsNullable,
-            input.UiHint, input.DefaultValue, input.HasStaticDefault, input.DefaultSyntax, input.UiSpecifications)).ToArray(),
+            input.UiHint, input.DefaultValue, input.HasStaticDefault, input.DefaultSyntax, input.UiSpecifications,
+            input.EnumValues)).ToArray(),
         item.Outputs.Select(output => new OutputContract(
             output.ReferenceKey ?? output.Name, output.Name, output.Type, output.CollectionKind.ToString(),
             output.DisplayName, output.Description, output.Category, output.IsBrowsable, output.IsRequired)).ToArray(),

@@ -1,0 +1,33 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Expressions.Core",
+  "expressions": {
+    "descriptors": [
+      {
+        "displayName": "Input",
+        "editingMode": "Reference",
+        "featureId": null,
+        "type": "Input"
+      },
+      {
+        "displayName": "Literal",
+        "editingMode": "Literal",
+        "featureId": null,
+        "type": "Literal"
+      },
+      {
+        "displayName": "Object",
+        "editingMode": "Structured",
+        "featureId": null,
+        "type": "Object"
+      }
+    ],
+    "javaScriptDeclarations": [],
+    "scriptSandbox": []
+  },
+  "features": [],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.0.0",
+  "structures": []
+}

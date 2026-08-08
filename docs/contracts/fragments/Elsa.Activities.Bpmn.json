@@ -11,12 +11,14 @@
       "featureId": "ActivitiesBpmn",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Outcome",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -62,12 +64,14 @@
       "featureId": "ActivitiesBpmn",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": true,
           "description": null,
           "displayName": "Can Start Workflow",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,

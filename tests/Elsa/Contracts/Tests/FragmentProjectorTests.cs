@@ -103,7 +103,8 @@ public sealed class FragmentProjectorTests
         Assert.Equal(5, fragment.Intrinsics.Count);
         var setVariable = Assert.Single(fragment.Intrinsics, intrinsic => intrinsic.DescriptorId == "elsa.intrinsic.set@1");
         Assert.Equal("Elsa.SetVariable", setVariable.ActivityTypeKey);
-        Assert.Equal("Set", setVariable.Intrinsic.Kind);
+        // Wire spelling, matching the submit schema's enum (see PublishedContractAgreementTests).
+        Assert.Equal("set", setVariable.Intrinsic.Kind);
     }
 
     [Fact]

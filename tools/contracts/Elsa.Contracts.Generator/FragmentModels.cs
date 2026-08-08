@@ -81,7 +81,21 @@ public sealed record InputContract(
     JsonElement? DefaultValue,
     bool HasStaticDefault,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications);
+    JsonElement? UiSpecifications,
+    // Accepted members of an enum-typed input in wire spelling; null for every other type.
+    IReadOnlyList<string>? EnumValues = null,
+    // Where the consumer authors this input. "argument" (the default) means an entry in the node's
+    // `inputs`; "intrinsicBlock" means it is carried by the node's sibling `intrinsic` block instead —
+    // an intrinsic's variable target is descriptor-only and has no argument binding. Publishing it as a
+    // plain required input contradicted the submit schema with no tiebreaker.
+    string AuthoredVia = InputAuthoringSites.Argument);
+
+/// <summary>Where an input is authored in a submission.</summary>
+public static class InputAuthoringSites
+{
+    public const string Argument = "argument";
+    public const string IntrinsicBlock = "intrinsicBlock";
+}
 
 public sealed record OutputContract(
     string ReferenceKey,

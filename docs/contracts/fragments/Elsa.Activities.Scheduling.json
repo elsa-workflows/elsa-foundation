@@ -11,12 +11,14 @@
       "featureId": "ActivitiesScheduling",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Expression",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -56,12 +58,14 @@
       "featureId": "ActivitiesScheduling",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": "00:00:00",
           "description": null,
           "displayName": "Duration",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -97,12 +101,14 @@
       "featureId": "ActivitiesScheduling",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Interval",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,

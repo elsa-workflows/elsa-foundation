@@ -47,6 +47,12 @@ is therefore a faithful stand-in for booting the image and asking it.
 A runtime-kind attribute would **not** substitute for this: `Elsa.Activities.Scripting` and
 `Elsa.Activities.Http` both declare `elsa.server`, yet only one ships in the Workbench.
 
+The same intersection governs **expression types**. The set a host actually serves is the intrinsics
+(`Literal`, `Object`, `Input` — always present, published in `Elsa.Expressions.Core`'s fragment with a
+null `featureId` because no feature gates them) plus the descriptors of the expression features that host
+ships. `Liquid` is the worked example in the other direction: its descriptor is published, but
+`Elsa.Expressions.Liquid` is absent from the Workbench, so that host cannot evaluate Liquid at all.
+
 If you run a host that is not in this repository, compute the third term from your own image the same way
 the generator does — read the library names out of your host's `.deps.json` and intersect with the
 fragment names.
@@ -76,6 +82,46 @@ that reconciliation persists (constitution §E2.8 — the catalog endpoint reads
 schema exporter, the same manifest-hint options projection, the same structure/intrinsic provider types.
 An equivalence test (`tests/Elsa/Contracts/Tests`) asserts catalog endpoint output equals the merged
 fragments of the composed features plus the server-state overlay.
+
+## Behavioural rules the fields alone do not tell you
+
+These are the load-bearing facts a consumer needs that no descriptor field expresses. They are stated
+here because omitting them measurably costs more than publishing nothing: a contracts-only consumer
+trusts the structural answers and then burns publish cycles guessing the rest.
+
+### Binding a required output
+
+`isRequired` on an output does **not** mean "the runtime fills this in". It means: *if you author an
+output target for it, publication demands one, and that target must be a `Variable` expression naming a
+**workflow-scope** variable.* Concretely, publication rejects (HTTP 400) when a required output is:
+
+- authored with anything other than a `Variable` expression;
+- targeting a variable declared in a container scope rather than workflow scope;
+- targeting a variable the workflow does not declare.
+
+**The enforcement is per node, all-or-nothing.** For a leaf activity, if you author **zero** outputs on
+the node, no required-output check runs at all and the definition publishes. Author **one** output and
+every required output on that node becomes mandatory. This is why the flag looks inconsistent in
+practice — `HttpEndpoint` rejects a missing `RouteData` once you have bound `Request`, while
+`WriteHttpResponse` publishes happily with all four of its required outputs unbound. It is one rule about
+binding state, not a difference between activities.
+
+Two consequences worth internalising:
+
+- Do not pre-bind outputs "to be safe". Binding one output opts that node into full required-output
+  enforcement, which is what turns a working definition into a 400.
+- `[Output]` defaults `IsRequired` to `true`, so most published `isRequired: true` values are an
+  unreviewed default rather than a deliberate declaration. Treat the flag as "must be bound *if you bind
+  anything here*", not as "this output matters".
+
+### Choosing an expression type
+
+`enumValues` now publishes the accepted members of every enum-typed input, so `ResponseMode` states
+`["async", "sync"]` alongside its `"async"` default rather than leaving the alternatives to be guessed.
+What the fragments still do not tell you is what each member *does* — that is per-member consumer notes
+(RFC step 3, G3/F1), not yet published. For `ResponseMode` specifically the observable difference is
+large: the default `async` answers the triggering request `202` with no incident recorded, and a
+`WriteHttpResponse` body never reaches that caller.
 
 ## Notes for feature authors
 

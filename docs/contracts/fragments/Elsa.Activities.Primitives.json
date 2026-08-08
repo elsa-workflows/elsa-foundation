@@ -33,12 +33,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Event Name",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -51,12 +53,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Correlation ID",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -69,12 +73,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": true,
           "description": null,
           "displayName": "Can Start Workflow",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -114,12 +120,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Code",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -132,12 +140,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Message",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -150,12 +160,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Category",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -168,12 +180,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Fault Type",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -201,12 +215,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Expression",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -234,12 +250,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Event Name",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -252,12 +270,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Correlation ID",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -270,12 +290,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Payload",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -288,12 +310,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Is Local Event",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -355,12 +379,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Text",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -396,12 +422,14 @@
       "featureId": "ActivitiesPrimitives",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "List",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Lines",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,

@@ -120,6 +120,7 @@
         "Elsa.Events",
         "Elsa.Expressions",
         "Elsa.Expressions.Api",
+        "Elsa.Expressions.Core",
         "Elsa.Expressions.JavaScript",
         "Elsa.Expressions.JavaScript.Jint",
         "Elsa.Expressions.JavaScript.Rendering",

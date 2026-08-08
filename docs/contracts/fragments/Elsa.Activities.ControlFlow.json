@@ -29,12 +29,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Condition",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -80,12 +82,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": 0,
           "description": null,
           "displayName": "Start",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -98,12 +102,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": 0,
           "description": null,
           "displayName": "End",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -116,12 +122,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": 1,
           "description": null,
           "displayName": "Step",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -134,12 +142,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "End Inclusive",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -185,12 +195,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Collection",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -247,12 +259,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Condition",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -363,12 +377,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Value",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -429,12 +445,14 @@
       "featureId": "ActivitiesControlFlow",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Condition",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,

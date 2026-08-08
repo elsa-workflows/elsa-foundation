@@ -17,6 +17,12 @@ namespace Elsa.Activities.Design.Core.Models;
 /// constitution §E2.9).
 /// </para>
 /// <para>
+/// <see cref="EnumValues"/> lists the accepted members of an enum-typed input in wire spelling, and is
+/// <see langword="null"/> for every other type. Publishing the type name and a default without the member
+/// list forced consumers to guess the remaining values — a measured cost: one guess ("blocking") was
+/// rejected at publish, another ("sync") silently changed response behaviour.
+/// </para>
+/// <para>
 /// <see cref="HasStaticDefault"/> disambiguates <see cref="DefaultValue"/> (G1, spec 149 / RFC #1191):
 /// <c>true</c> with a value = concrete static default; <c>true</c> with <c>null</c> = the default is null
 /// (unauthored input yields null); <c>false</c> = no statically representable default exists (computed or
@@ -42,4 +48,5 @@ public sealed record InputDefinition(
     bool IsRequired = false,
     JsonElement? DefaultValue = null,
     string? DefaultSyntax = null,
-    bool HasStaticDefault = false);
+    bool HasStaticDefault = false,
+    IReadOnlyList<string>? EnumValues = null);

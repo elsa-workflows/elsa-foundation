@@ -2,14 +2,14 @@
   "counts": {
     "activities": 28,
     "features": 100,
-    "fragments": 94,
+    "fragments": 95,
     "intrinsics": 5,
     "structures": 10
   },
   "fragments": [
     {
       "assembly": "Elsa.Activities.Bpmn",
-      "fingerprint": "sha256:579fccdfb8a8aa1559b9ef0c67f08146f2e24133cc3fefe7d90538d8b36e825f"
+      "fingerprint": "sha256:64335fb4d64db88e4b0f361952070fa8bb745bcd233f5ba90d3d394294d30886"
     },
     {
       "assembly": "Elsa.Activities.Bpmn.Interchange",
@@ -17,11 +17,11 @@
     },
     {
       "assembly": "Elsa.Activities.ControlFlow",
-      "fingerprint": "sha256:d31e291f861b0a0442031f04644d6bfbad5dd2db85201d033ae85a3013184dc8"
+      "fingerprint": "sha256:8e6905113ecf96c6275a0c9eff507bb597b47565c5a5265bfd98c385b863f223"
     },
     {
       "assembly": "Elsa.Activities.Design.Api",
-      "fingerprint": "sha256:0b756da1021a188c12d495160594319a49e9139b5ea47ab414e1781f84b1ebc2"
+      "fingerprint": "sha256:3acfe0d57ee8a4e963b382c78e8afa95c6a88f1e537c907a60d0888fe25e15f3"
     },
     {
       "assembly": "Elsa.Activities.Design.Reconciliation",
@@ -41,7 +41,7 @@
     },
     {
       "assembly": "Elsa.Activities.DispatchWorkflow.Runtime",
-      "fingerprint": "sha256:fbf725ebf486d750d2bdea4549d01fd84b355efa84edee4e7b5b973be66e0896"
+      "fingerprint": "sha256:ea737e32fb9e228e75ee78494acdc91d469ee84286d68caf250c8cbf71a6571a"
     },
     {
       "assembly": "Elsa.Activities.Flowchart",
@@ -57,11 +57,11 @@
     },
     {
       "assembly": "Elsa.Activities.Http",
-      "fingerprint": "sha256:e55fc99883c958e5449b3732f9179f37d7e72b407408f7d957001b26cfce2b0c"
+      "fingerprint": "sha256:6d9ffda94dad9780ee759ba5400f9a6646975028dafb7185823c3c539f745a32"
     },
     {
       "assembly": "Elsa.Activities.Primitives",
-      "fingerprint": "sha256:91045f5315355fd0a1616be4bd5986df33bbece9548b620802dc8aad7485395a"
+      "fingerprint": "sha256:27dc6ca64e797dbe734bbde35fdefad9b8604dc0daf2a4425b1436c7568045b1"
     },
     {
       "assembly": "Elsa.Activities.Runtime",
@@ -69,11 +69,11 @@
     },
     {
       "assembly": "Elsa.Activities.Scheduling",
-      "fingerprint": "sha256:bdf2a463bc4f6731d1ee4ca90643a226b4738d4b7f6029f1d2a2a8626234e0a3"
+      "fingerprint": "sha256:1b8e150c88e35f78b44886c2834872095190cf4698fffd425ca0732e221807ce"
     },
     {
       "assembly": "Elsa.Activities.Scripting",
-      "fingerprint": "sha256:22a2e1e108e471129155bd83ad057c5040de13486e8fdebcda83432ca2e9ab92"
+      "fingerprint": "sha256:fc7ca082f270545a863d0c357d40e12720d22c3c1c80196460639fedbbccd9bd"
     },
     {
       "assembly": "Elsa.Activities.Sequence",
@@ -146,6 +146,10 @@
     {
       "assembly": "Elsa.Expressions.Api",
       "fingerprint": "sha256:3f9af30ac956937d244b868799d534ec2ddfb65502e86bab2abf21ed72929784"
+    },
+    {
+      "assembly": "Elsa.Expressions.Core",
+      "fingerprint": "sha256:861ba7838d440f2b2fee53f330a0bc34163057dbe9a43de86a5fe003bef37a5f"
     },
     {
       "assembly": "Elsa.Expressions.JavaScript",
@@ -385,7 +389,7 @@
     }
   ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
-  "hosts": "sha256:13f1ef71ed91d073bc70046d146f2b377d2dc95ce2ceb04989474a2f92f2bc57",
+  "hosts": "sha256:200dc00fdd464539e9e7641d1cd641e0faf0dd24795c320d9ad3a2b332ad0e58",
   "schemaVersion": "1.0",
-  "submitSchema": "sha256:a18012ecbb231d8a7f8c68118c008fcf9a49fd331457b71893b3775ae687513e"
+  "submitSchema": "sha256:af4fe5218ec923242e75da8f9a0ae62425030b89a60aec24e018104e14df271e"
 }

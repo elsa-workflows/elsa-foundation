@@ -111,12 +111,14 @@
       "featureId": "ActivitiesDesignApi",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The outcome the workflow completes with.",
           "displayName": "Outcome",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -130,7 +132,7 @@
         }
       ],
       "intrinsic": {
-        "kind": "Finish",
+        "kind": "finish",
         "outputNameInputKey": null,
         "valueInputKey": "outcome",
         "variableInputKey": null
@@ -149,12 +151,14 @@
       "featureId": "ActivitiesDesignApi",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The correlation id to assign to this instance.",
           "displayName": "Value",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -168,7 +172,7 @@
         }
       ],
       "intrinsic": {
-        "kind": "SetCorrelationId",
+        "kind": "setCorrelationId",
         "outputNameInputKey": null,
         "valueInputKey": "value",
         "variableInputKey": null
@@ -195,12 +199,14 @@
       "featureId": "ActivitiesDesignApi",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The name to assign to this instance.",
           "displayName": "Value",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -214,7 +220,7 @@
         }
       ],
       "intrinsic": {
-        "kind": "SetInstanceName",
+        "kind": "setInstanceName",
         "outputNameInputKey": null,
         "valueInputKey": "value",
         "variableInputKey": null
@@ -241,12 +247,14 @@
       "featureId": "ActivitiesDesignApi",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The name of the workflow output to assign.",
           "displayName": "Output Name",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -259,12 +267,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The value to assign to the output.",
           "displayName": "Value",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": true,
@@ -278,7 +288,7 @@
         }
       ],
       "intrinsic": {
-        "kind": "SetOutput",
+        "kind": "setOutput",
         "outputNameInputKey": "name",
         "valueInputKey": "value",
         "variableInputKey": null
@@ -305,12 +315,14 @@
       "featureId": "ActivitiesDesignApi",
       "inputs": [
         {
+          "authoredVia": "intrinsicBlock",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The declared variable to assign.",
           "displayName": "Variable",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -323,12 +335,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The value to assign to the variable.",
           "displayName": "Value",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": true,
@@ -342,7 +356,7 @@
         }
       ],
       "intrinsic": {
-        "kind": "Set",
+        "kind": "set",
         "outputNameInputKey": null,
         "valueInputKey": "value",
         "variableInputKey": "variable"

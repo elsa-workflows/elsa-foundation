@@ -4,19 +4,21 @@
       "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
       "category": "Http",
       "containerStructure": null,
-      "contentHash": "CCB7B53F4C582DCECC6B247F8702F1B12EDC14BC95B2BDE60F8F4873FB214EA0",
+      "contentHash": "10435BE68B6DD481137942EE185B6586EE8503BFC7E072CA2996475DC35786F0",
       "description": null,
       "displayName": "Http Endpoint",
       "executionType": "Action",
       "featureId": "ActivitiesHttp",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": "Simple",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Path",
+          "enumValues": null,
           "hasStaticDefault": false,
           "isBrowsable": true,
           "isNullable": false,
@@ -29,12 +31,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Simple",
           "collectionKind": "List",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Supported Methods",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -70,12 +74,14 @@
           }
         },
         {
+          "authoredVia": "argument",
           "category": "Simple",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Can Start Workflow",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -88,12 +94,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Advanced",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
           "displayName": "Authorize",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -106,12 +114,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Advanced",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Policy",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -124,12 +134,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Advanced",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Request Timeout",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -142,12 +154,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Advanced",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Request Size Limit",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -160,12 +174,17 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": "Simple",
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": "async",
           "description": null,
           "displayName": "Response Mode",
+          "enumValues": [
+            "async",
+            "sync"
+          ],
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -227,12 +246,14 @@
       "featureId": "ActivitiesHttp",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "URL",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -245,12 +266,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": "GET",
           "description": null,
           "displayName": "Method",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -286,12 +309,14 @@
           }
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Content",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -304,12 +329,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": "text/plain",
           "description": null,
           "displayName": "Content Type",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -333,12 +360,14 @@
           }
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Request Headers",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -351,12 +380,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "List",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Expected Status Codes",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -369,12 +400,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Timeout",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -458,12 +491,14 @@
       "featureId": "ActivitiesHttp",
       "inputs": [
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": "Literal",
           "defaultValue": 200,
           "description": null,
           "displayName": "Status Code",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -476,12 +511,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Body",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -494,12 +531,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Content Type",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,
@@ -512,12 +551,14 @@
           "uiSpecifications": null
         },
         {
+          "authoredVia": "argument",
           "category": null,
           "collectionKind": "Dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
           "displayName": "Headers",
+          "enumValues": null,
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": true,

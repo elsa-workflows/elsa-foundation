@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
@@ -166,7 +167,8 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         input.DefaultValue,
         input.HasStaticDefault || input.DefaultValue is not null,
         input.DefaultSyntax,
-        input.UISpecifications);
+        input.UISpecifications,
+        input.EnumValues);
 
     private static OutputContract ToOutputContract(OutputDefinition output) => new(
         output.ReferenceKey,
@@ -398,6 +400,20 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                 descriptor.EditingMode.ToString())));
         }
 
+        // The always-available expression types (Literal, Object, Input) are not provider-registered —
+        // they are intrinsic to the authoring surface. Publish them from the assembly that declares them
+        // so a contracts-only consumer can discover Literal, which nearly every authored input uses.
+        if (string.Equals(assemblyName, typeof(IntrinsicExpressionDescriptors).Assembly.GetName().Name, StringComparison.Ordinal))
+        {
+            descriptors.AddRange(IntrinsicExpressionDescriptors.All.Select(descriptor => new ExpressionDescriptorContract(
+                // Deliberately null: intrinsic expression types are not gated by any feature — they are
+                // available wherever the expressions system is present.
+                FeatureId: null,
+                descriptor.TypeName,
+                descriptor.DisplayName,
+                descriptor.EditingMode.ToString())));
+        }
+
         foreach (var contributor in contributions.Resolve<IJavaScriptDeclarationContributor>("JavaScript declaration contributor"))
         {
             var capture = new CapturingDeclarationsContext();
@@ -453,7 +469,10 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                     descriptor.Category,
                     descriptor.Description,
                     descriptor.ExecutionType,
-                    descriptor.Inputs.Select(ToInputContract).ToArray(),
+                    // The variable target is carried by the node's `intrinsic` block, not by `inputs`
+                    // (AuthoredWorkflowIntrinsic exposes Kind/ValueType/Variable only), so it is marked
+                    // rather than published as if it were an argument binding.
+                    descriptor.Inputs.Select(input => ToInputContract(input, descriptor.Intrinsic.VariableInputKey)).ToArray(),
                     descriptor.Outputs.Select(ToOutputContract).ToArray(),
                     descriptor.Ports.Select(port => new PortContract(
                         port.Name, port.DisplayName, port.Type, port.IsBrowsable, port.ReferenceKey ?? port.Name)).ToArray(),
@@ -468,7 +487,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         return intrinsics.OrderBy(intrinsic => intrinsic.DescriptorId, StringComparer.Ordinal).ToArray();
     }
 
-    private static InputContract ToInputContract(ActivityInputDescriptorView view) => new(
+    private static InputContract ToInputContract(ActivityInputDescriptorView view, string? intrinsicBlockInputKey = null) => new(
         view.ReferenceKey,
         view.Name,
         view.Type,
@@ -484,7 +503,11 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         view.DefaultValue,
         view.HasStaticDefault,
         view.DefaultSyntax,
-        view.UiSpecifications);
+        view.UiSpecifications,
+        view.EnumValues,
+        string.Equals(view.ReferenceKey, intrinsicBlockInputKey, StringComparison.Ordinal)
+            ? InputAuthoringSites.IntrinsicBlock
+            : InputAuthoringSites.Argument);
 
     private static OutputContract ToOutputContract(ActivityOutputDescriptorView view) => new(
         view.ReferenceKey ?? view.Name,

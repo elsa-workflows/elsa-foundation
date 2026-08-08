@@ -93,14 +93,15 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
     }
 
-    // HttpEndpoint's hash was re-pinned for G1 (spec 149 / RFC #1191): inputs now carry HasStaticDefault
-    // and initializer/default(T)-derived DefaultValue, which is deliberate same-version content change
-    // (Model X surfaces it as a hash mismatch on pre-G1 databases; see the spec's deployment note).
-    // TriggerFixtureActivity has no inputs, so its hash proves input-less content is untouched.
+    // HttpEndpoint's hash is re-pinned whenever descriptor content deliberately grows: first for G1
+    // (HasStaticDefault + initializer/default(T)-derived DefaultValue), now for published enum members
+    // (EnumValues). Both are same-version content changes, which Model X surfaces as a hash mismatch on
+    // databases reconciled before the change — see the spec's deployment note (fresh DB or version bump).
+    // TriggerFixtureActivity has no inputs, so its unchanged hash proves input-less content is untouched.
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "CCB7B53F4C582DCECC6B247F8702F1B12EDC14BC95B2BDE60F8F4873FB214EA0" }
+        { typeof(HttpEndpoint), "10435BE68B6DD481137942EE185B6586EE8503BFC7E072CA2996475DC35786F0" }
     };
 
     [Theory]

@@ -117,7 +117,8 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
             input.UISpecifications,
             // Pre-G1 persisted rows carry HasStaticDefault=false even when an attribute default exists;
             // a non-null DefaultValue implies a static default regardless (see InputDefinition remarks).
-            input.HasStaticDefault || input.DefaultValue is not null);
+            input.HasStaticDefault || input.DefaultValue is not null,
+            input.EnumValues);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(

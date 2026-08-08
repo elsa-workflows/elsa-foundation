@@ -178,7 +178,8 @@ public sealed class ClrAssemblyScanner(
                 IsRequired: HasRequired(property),
                 DefaultValue: defaultValue,
                 DefaultSyntax: metadata.DefaultSyntax,
-                HasStaticDefault: hasStaticDefault));
+                HasStaticDefault: hasStaticDefault,
+                EnumValues: ReadEnumValues(property.PropertyType)));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -773,6 +774,27 @@ public sealed class ClrAssemblyScanner(
             double number => (float)number,
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Lists the accepted members of an enum-typed input in the wire spelling the server serializes
+    /// (camelCase, matching the FastEndpoints enum converter), or <see langword="null"/> for non-enum
+    /// inputs. Mechanical completeness in the same class as G1/G2: an enum input publishes its type and
+    /// its default, so withholding the remaining members leaves the consumer guessing at the one fact
+    /// that decides whether their authored value is accepted at all. Collection-typed enum inputs
+    /// (e.g. <c>ICollection&lt;SomeEnum&gt;</c>) publish their element type's members.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadEnumValues(Type? propertyType)
+    {
+        var candidate = UnwrapNullable(GetOptionValueType(propertyType));
+        if (candidate is null || !candidate.IsEnum)
+            return null;
+
+        // Reflection-only context: read the member names from metadata, never Enum.GetNames (which needs
+        // a runtime type). Declaration order is preserved so the list reads the way the enum is authored.
+        return candidate.GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Select(field => JsonNamingPolicy.CamelCase.ConvertName(field.Name))
+            .ToArray();
     }
 
     /// <summary>

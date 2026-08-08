@@ -1,5 +1,5 @@
 {
-  "fingerprint": "sha256:45ad34de13a630461404b46dd2a10e68a8bb9daf2e96ade0d743b9113d687add",
+  "fingerprint": "sha256:e755046ffb94cbcdffb011b4c5a388294dfe38c5ecea72b296f22ea8a85cf636",
   "schema": {
     "properties": {
       "description": {
@@ -48,6 +48,16 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "enumValues": {
+                  "default": null,
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
                 },
                 "hasStaticDefault": {
                   "default": false,
