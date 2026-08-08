@@ -66,47 +66,49 @@ specs/149-consumer-contract-fragments/
 ### Source Code (repository root)
 
 ```text
-tools/contracts/
-├── Elsa.Contracts.Generator/            # NEW — reflection CLI: emit | merge | check
-│   ├── Program.cs                       # command routing (mirrors Elsa.Maps.Generator conventions)
-│   ├── FragmentModels.cs                # fragment + manifest envelope types (schemaVersion'd)
-│   ├── FragmentEmitter.cs               # per-assembly projection → fragment (composes product code)
-│   ├── FeatureMetadataProjector.cs      # [ShellFeature] + manifest-hint options
-│   ├── StructureProjector.cs            # IActivityStructureHandler instances → structure entries
-│   ├── ExpressionSurfaceProjector.cs    # IExpressionDescriptorProvider / JS declarations / sandbox catalog
-│   ├── DeterministicJson.cs             # ordinal key order, LF, no BOM, invariant culture
-│   ├── ResourceEmbedder.cs              # Cecil post-compile injection of the fragment resource
-│   ├── ContractsMerge.cs                # merge fragments → docs/contracts/ + manifest.json
-│   └── ContractsFreshness.cs            # check mode (byte-compare, MapFreshness conventions)
-└── ContractFragments.targets            # NEW — MSBuild target (Exec CLI after CoreCompile, canonical diagnostics)
+tools/contracts/Elsa.Contracts.Generator/  # NEW — reflection CLI: merge | check | emit
+├── Program.cs                             # command routing (mirrors Elsa.Maps.Generator conventions)
+├── FragmentModels.cs                      # fragment + manifest envelope types (schemaVersion'd)
+├── FragmentProjector.cs                   # per-assembly projection → fragment (composes product code + per-assembly feature DI)
+├── FeatureIndex.cs                        # repo-wide feature id → type map for DependsOn-closure composition
+├── TargetAssembly.cs                      # execution loading + dependency probing (target bins + app closures)
+├── DeterministicJson.cs                   # ordinal key order, LF, no BOM, invariant culture, sha256: fingerprints
+├── Diagnostics.cs                         # canonical MSBuild-format warnings/errors (ELSACT0NN)
+├── ContractsMerge.cs                      # project all src assemblies → docs/contracts/ + manifest.json
+└── ContractsFreshness.cs                  # check mode (byte-compare incl. manifest)
 
-src/Elsa/Directory.Build.targets          # CHANGED — conditional import of ContractFragments.targets (opt-in property)
+src/Elsa/Directory.Build.targets           # CHANGED — embeds the COMMITTED fragment as elsa.contract.json (by-existence; research R4)
 src/Elsa/Activities/Design/Reconciliation/Clr/Services/
-├── ClrAssemblyScanner.cs                 # CHANGED — G1: IL property-initializer default capture
-└── InitializerDefaultReader.cs           # NEW — SRM-based ctor-IL constant analysis (product code, shared path)
-src/Elsa/Activities/Design/Api/Models/ActivityAuthoringCatalogView.cs   # CHANGED — G2: outputs gain IsRequired (+ReferenceKey), additive
-src/Elsa/Activities/Design/Api/Handlers/ListActivityAuthoringCatalogRequestHandler.cs  # CHANGED — map the new output fields
+├── ClrAssemblyScanner.cs                  # CHANGED — G1 default ladder + ScanAssembly(assembly, references) overload
+└── InitializerDefaultReader.cs            # NEW — SRM-based ctor-IL constant analysis (product code, shared path)
+src/Elsa/Activities/Design/Core/Models/InputDefinition.cs               # CHANGED — HasStaticDefault (additive tail)
+src/Elsa/Activities/Design/Api/Models/ActivityAuthoringCatalogView.cs   # CHANGED — G2: outputs gain IsRequired + ReferenceKey; inputs gain HasStaticDefault
+src/Elsa/Activities/Design/Api/Handlers/ListActivityAuthoringCatalogRequestHandler.cs  # CHANGED — map the new fields
 src/Elsa/Workflows/Design/Api/Services/AuthoringSchemaExporter.cs       # CHANGED — internal → public (tool reuses the one schema exporter)
-src/Elsa/Expressions/JavaScript/Jint/…                                  # CHANGED — declarative sandbox-global catalog + guard test pin (research R10)
+src/Elsa/Expressions/JavaScript/Jint/SandboxSurfaceCatalog.cs           # NEW — declarative sandbox surface (research R10)
+src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs                       # CHANGED — real (previously undeclared) DependsOn on JavaScriptRendering
+.gitattributes                             # NEW — docs/contracts/** pinned to LF (byte-compare + fingerprints)
 
-docs/contracts/                           # NEW — committed generated artifact
-├── README.md                             # convention, regeneration, fingerprint verification
-├── manifest.json                         # schema_version, per-fragment sha256 fingerprints, counts
-├── fragments/<AssemblyName>.json         # one per contributing assembly
-└── submit-schema.json                    # exported SubmitDefinition schema (joins as-is per RFC)
+docs/contracts/                            # NEW — committed generated artifact (94 fragments at branch time)
+├── README.md                              # convention, regeneration, fingerprint verification, known degradations
+├── manifest.json                          # schema version, per-fragment sha256 fingerprints (array), counts
+├── fragments/<AssemblyName>.json          # one per contributing assembly
+└── submit-schema.json                     # produced by the served submit-schema handler itself
 
-tests/Elsa/Contracts/Tests/               # NEW — Elsa.Contracts.Tests
-├── EquivalenceTests.cs                   # representative host: endpoint == merged fragments + overlay
-├── FragmentDeterminismTests.cs           # double-emit byte identity; cross-culture
-├── FragmentEmitterTests.cs               # per-surface projection tests (branch-covered)
-└── CompletenessGuardTests.cs             # every contributing src assembly opted in (spec FR-001 completeness rule)
+tests/Elsa/Contracts/Tests/                # NEW — Elsa.Contracts.Tests
+├── EquivalenceTests.cs                    # catalog output == fragments + overlay; intrinsics; structures; dynamic union
+├── FragmentProjectorTests.cs              # per-surface projection incl. G1/G2 repros + determinism
+├── DeterministicJsonTests.cs              # ordering/LF/BOM/culture/fingerprint gates
+├── ContractIntegrityTests.cs              # fingerprints, embedded==committed, no server state, src-project mapping
+└── ContractsFreshnessTests.cs             # check-mode comparison semantics
 
-tests/Elsa/Activities/Design/…            # CHANGED/NEW — scanner G1 tests, HttpEndpoint G1/G2 repro tests, catalog view G2 tests
+tests/Elsa/Activities/Design/…             # CHANGED/NEW — scanner G1 tests, HttpEndpoint G1/G2 repros, catalog G2 tests, re-pinned ratchets
+tests/Elsa/Expressions/JavaScript/Jint/Tests/SandboxSurfaceCatalogTests.cs  # NEW — catalog ↔ live engine pin
 
-.github/workflows/ci.yml                  # CHANGED — contracts freshness check step (after build, reuses build output)
+.github/workflows/ci.yml                   # CHANGED — contracts check step inside build-and-test (reuses Release build)
 ```
 
-**Structure Decision**: build tooling under `tools/contracts/` (deliberate sibling of `tools/maps/`, per RFC "ride the same pipeline"); product changes confined to the three seams the gates require (scanner, catalog output view, exporter visibility) plus the Jint sandbox catalog; generated artifact under `docs/contracts/`; one new test project.
+**Structure Decision**: build tooling under `tools/contracts/` (deliberate sibling of `tools/maps/`, per RFC "ride the same pipeline"); generation post-build + embedding in-build per research R4 (the Cecil/`ContractFragments.targets` design was replaced after the reference-cycle discovery); product changes confined to the seams the gates require plus the Jint sandbox catalog and one surfaced missing DependsOn; generated artifact under `docs/contracts/`; one new test project.
 
 ## Complexity Tracking
 

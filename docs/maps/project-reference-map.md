@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 153
-- Test projects: 99
-- Direct project references: 1233
+- Test projects: 100
+- Direct project references: 1243
 
 ## Projects
 
@@ -193,6 +193,7 @@ Records direct project references only.
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Api |
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | - | default | Elsa.Caching.Core<br>Elsa.Caching.Memory |
+| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | test | Elsa.Contracts | - | default | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Sequence<br>Elsa.Contracts.Generator<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Http.JavaScript |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.Groundwork |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Persistence.Groundwork<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
@@ -277,6 +278,7 @@ Records direct project references only.
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |
+| Elsa.Contracts | 0 | 1 |
 | Elsa.Diagnostics | 13 | 9 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 10 | 3 |

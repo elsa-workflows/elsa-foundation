@@ -22,16 +22,17 @@ Exit 0 = committed contracts match the tree; exit 1 lists stale files with the r
 ## Run the feature's tests
 
 ```powershell
-dotnet test tests/Elsa/Contracts/Tests -c Release                       # equivalence + determinism + completeness guard
-dotnet test tests/Elsa/Activities/Design/Reconciliation -c Release      # scanner G1 tests (adjust path to actual test csproj)
+dotnet test tests/Elsa/Contracts/Tests -c Release                       # equivalence + determinism + integrity + check semantics
+dotnet test tests/Elsa/Activities/Design/Tests -c Release               # scanner G1 tests incl. HttpEndpoint repros
 dotnet test tests/Elsa/Activities/Design/Api/Tests -c Release           # catalog view G2 tests
+dotnet test tests/Elsa/Expressions/JavaScript/Jint/Tests -c Release     # sandbox surface catalog pin
 ```
 
 ## Verify the G1/G2 repros by hand
 
 After composing a host (or against the equivalence test output):
 
-- `HttpEndpoint` input `ResponseMode` → `defaultValue: "Async"` (was `null`).
+- `HttpEndpoint` input `ResponseMode` → `defaultValue: "async"` (was `null`; camelCase is the wire enum spelling).
 - `HttpEndpoint` outputs `Request`/`RouteData` → `isRequired: true`; `ParsedContent` → `isRequired: false`.
 - Same values in `docs/contracts/fragments/Elsa.Activities.Http.json` and in `GET design/activities/catalog`.
 

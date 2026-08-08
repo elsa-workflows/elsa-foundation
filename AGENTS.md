@@ -20,6 +20,7 @@ Use the narrowest source that answers the task.
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
+| Consumer authoring contracts (generated, committed; per-feature fragments + submit schema) | `docs/contracts/` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |

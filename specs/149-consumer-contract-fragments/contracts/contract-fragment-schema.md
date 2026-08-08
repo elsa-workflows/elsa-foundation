@@ -23,8 +23,8 @@ This is the external contract of the feature — what consumers read. Shapes are
           "category": "Simple",
           "collectionKind": "Single",
           "defaultSyntax": null,
-          "defaultValue": "Async",
-          "displayName": "Response mode",
+          "defaultValue": "async",
+          "displayName": "Response Mode",
           "hasStaticDefault": true,
           "isBrowsable": true,
           "isNullable": false,
@@ -69,17 +69,18 @@ This is the external contract of the feature — what consumers read. Shapes are
 
 ```json
 {
-  "counts": { "activities": 42, "features": 21, "fragments": 18, "structures": 10 },
-  "fragments": {
-    "Elsa.Activities.ControlFlow": "sha256:…",
-    "Elsa.Activities.Http": "sha256:…",
-    "Elsa.Activities.Sequence": "sha256:…"
-  },
+  "counts": { "activities": 28, "features": 100, "fragments": 94, "intrinsics": 5, "structures": 10 },
+  "fragments": [
+    { "assembly": "Elsa.Activities.ControlFlow", "fingerprint": "sha256:…" },
+    { "assembly": "Elsa.Activities.Http", "fingerprint": "sha256:…" }
+  ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
-  "schema_version": "1.0",
-  "submit_schema": "sha256:…"
+  "schemaVersion": "1.0",
+  "submitSchema": "sha256:…"
 }
 ```
+
+(Fragment fingerprints are an array of records, not a dictionary — assembly names are verbatim identifiers and must never be re-cased by a serializer key policy.)
 
 ## Embedded resource
 
@@ -100,8 +101,8 @@ Each opted-in assembly carries manifest resource **`elsa.contract.json`** — by
 
 | Command | Behavior | Exit codes |
 |---|---|---|
-| `emit --assembly <path> --references <rsp> --output <dir> [--embed]` | Project one assembly → fragment; optionally inject as embedded resource. No contribution → no output, exit 0. | 0 ok / 1 diagnostics errors / 2 usage |
-| `merge` | Collect fragments from built src assemblies → `docs/contracts/` + manifest. | 0 / 1 (unreadable or duplicate fragment) / 2 |
-| `check` | Regenerate to temp, byte-compare vs committed `docs/contracts/` (manifest included). | 0 fresh / 1 stale / 2 |
+| `merge [--configuration Release] [--output <dir>]` | Project every built src assembly → `docs/contracts/` (fragments, submit-schema, manifest). | 0 / 1 diagnostics errors / 2 usage |
+| `check [--configuration Release]` | Regenerate to temp, byte-compare vs committed `docs/contracts/` (manifest included; authored README exempt). | 0 fresh / 1 stale / 2 |
+| `emit --assembly <dll> [--references <rsp>] --output <dir>` | Project one assembly → fragment (the standalone mode consumers run against their own activity packages). No contribution → no output, exit 0. | 0 / 1 / 2 |
 
-Diagnostics printed in canonical MSBuild format (`path(line): warning ELSACT0NN: …`) so `Exec` surfaces them as first-class build diagnostics.
+Diagnostics printed in canonical MSBuild format (`path: warning|error ELSACT0NN: …`) so CI logs and IDEs surface them as first-class build diagnostics. Embedding is not a CLI concern: `src/Elsa/Directory.Build.targets` embeds the committed fragment file by existence (research R4).

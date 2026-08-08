@@ -43,25 +43,21 @@ Defaults are serialized to wire form (same options as the served catalog: camelC
 
 **Enforcement note**: required-output binding is enforced at publish compile (`RuntimeOutputCaptureCompiler.Compile` throws on a missing required target), not at draft validation — the fragment/catalog now states what the publish compiler will demand.
 
-## R4 — Emitter integration: MSBuild target + opt-in + completeness guard
+## R4 — Generation runs post-build; embedding is the build-integrated step *(revised during implementation — deviation from RFC resolved position 2, flagged for maintainer review)*
+
+**Discovered blocker**: RFC resolved position 2 (per-project MSBuild target invoking the emitter during each project's build) is structurally impossible for the projection assemblies themselves. The emitter must reference the product projection code (one-projection rule) — `Elsa.Activities.Design.Reconciliation.Clr` et al. — but those assemblies are *themselves* `[ShellFeature]` contributors that must emit fragments: `Elsa.Activities.Design.Reconciliation.Clr` carries `ClrActivityReconciliationFeature`, so its in-build emission would require the emitter, which requires the assembly currently being compiled — a self-cycle no build-order edge can express. The same cycle hits every contributor in the emitter's transitive closure.
 
 **Decision**:
-- `tools/contracts/ContractFragments.targets`, imported conditionally from `src/Elsa/Directory.Build.targets`, gated on `<EmitContractFragment>true</EmitContractFragment>` set in each contributing project's csproj.
-- Build ordering: contributing projects get a `ProjectReference` to the CLI project with `ReferenceOutputAssembly=false` (injected by the targets file) so the CLI is always built first; the target invokes the built CLI via `dotnet exec` with `Exec`, passing `@(IntermediateAssembly)`, `@(ReferencePath)`, and output paths.
-- Diagnostics: the CLI writes canonical MSBuild-format lines (`file(line): warning ELSACT001: …` / `error ELSACT00N: …`); `Exec` surfaces them natively to IDEs, CI, and agents (RFC resolved position 2).
-- **Completeness rule enforcement** (spec FR-001): opt-in alone would allow silent omission, so `CompletenessGuardTests` (in the new test project) scans all built src assemblies for contribution markers (non-abstract `IActivity` implementations, `IActivityStructureHandler`, `IExpressionDescriptorProvider`, `IJavaScriptDeclarationContributor`, `[ShellFeature]`) and fails when a contributing assembly lacks an embedded fragment resource. New surface kinds added later extend the guard, inheriting the obligation.
+- **Generation** happens in the standalone CLI (`tools/contracts/Elsa.Contracts.Generator`, commands `merge` | `check` | `emit`), run post-build and in CI — process-isolated, standalone-runnable against arbitrary assemblies (`emit`), diagnostics in canonical MSBuild warning/error format (`ELSACT0NN`) so CI logs, IDEs, and agents surface them natively.
+- **Embedding** is the build-integrated step: `src/Elsa/Directory.Build.targets` embeds the **committed** `docs/contracts/fragments/$(AssemblyName).json` as manifest resource `elsa.contract.json` whenever the file exists — plain MSBuild, no tooling in the build, no Cecil, no double compile. Embedded bytes are the committed bytes *by identity*; the CI check keeps committed == regenerated; therefore embedded == committed == projected at every green commit.
+- **No opt-in flags**: `merge` projects every src assembly and emits fragments only where contributions exist; embedding triggers on fragment-file existence. Completeness cannot be forgotten per-project (spec FR-001); `ContractIntegrityTests` additionally pins embedded == committed and manifest fingerprints == fragment bytes.
+- Contribution instances resolve the way the runtime resolves them: each assembly's own features are composed into a service provider together with their `DependsOn` closure (via a repo-wide feature index); parameterless construction is the fallback; a contribution that cannot be materialized is a canonical `ELSACT004` error, and dropped-type loads surface as `ELSACT009` warnings — omissions are visible choices, never silent.
 
-**Rationale**: running the emitter on all 153 projects taxes every build for nothing on ~130 non-contributors; opt-in + a mechanical guard gives the same completeness guarantee at a fraction of the cost. Precedent for the target shape: the external `Elsa.Platform.PackageManifest.Generator` package (already consumed repo-wide) wires `GenerateElsaPackageManifest` `AfterTargets="Build"` with a MetadataLoadContext task — ours differs by being repo-local and process-isolated (Exec, not in-proc task; per RFC resolved position 2).
+**What is given up**: contract diagnostics at *compile* time of the individual project. They surface instead at `merge`/`check` time — same PR, same CI run. This trades the RFC's "earliest possible moment" for a dramatically simpler, cycle-free, review-friendly mechanism; the hand-off and RFC comment state this explicitly so the maintainer can push back.
 
-## R5 — Embedding the fragment as an assembly resource
+## R5 — Embedding mechanism *(superseded by R4's committed-file embedding)*
 
-**Problem**: the fragment is projected *from* the compiled assembly, but manifest resources are attached *at* compilation — a chicken-and-egg.
-
-**Decision**: post-compile resource injection. The CLI's `emit` command, after producing `<AssemblyName>.contract.json`, injects it into the intermediate assembly (`obj/**/<Assembly>.dll`) as manifest resource `elsa.contract.json` using **Mono.Cecil** (tool-only dependency; symbols rewritten in sync), running `AfterTargets="CoreCompile"` / before output copy. Fragment content depends only on the compiled *types*, which the injection does not alter, so the operation is idempotent-by-content and deterministic.
-
-**Rationale**: single compile pass; battle-tested technique (Fody ecosystem); keeps the resource byte-identical to the emitted file (the later RFC step-5 "serve the same bytes" flip depends on this identity).
-
-**Alternatives considered**: (a) WPF-style double compile — rejected: doubles build cost of contributing projects and re-implementing the `Csc` invocation is fragile; (b) sidecar file next to the assembly instead of embedding — rejected: RFC explicitly requires embedded resources from day one.
+The originally planned post-compile resource injection (Mono.Cecil) and its double-compile alternative are both unnecessary under R4: embedding a committed file at compile time is native MSBuild. This is also strictly stronger for the RFC step-5 "serve the same bytes" flip — the embedded resource *is* the committed artifact, not a byte-copy of it.
 
 ## R6 — Fragment identity and granularity
 
@@ -78,22 +74,23 @@ Defaults are serialized to wire form (same options as the served catalog: camelC
 
 ## R8 — `docs/contracts/` merge + CI check
 
-**Decision**:
-- `merge` command: collects fragments from built src assemblies (embedded resources of opted-in projects), writes `docs/contracts/fragments/*.json`, `submit-schema.json` (via `AuthoringSchemaExporter.ExportSchemaNode(typeof(SubmitDefinition))` — joins as-is per RFC), and `manifest.json` (schema_version, generator id, per-fragment fingerprints, counts). Merge fails loudly if any expected fragment is unreadable (spec edge case: no silently partial contract set).
-- `check` command: regenerates to a temp dir and **byte-compares** each file against the committed copy, `MapFreshness`-style (exit 1 + regenerate-and-commit remediation text). `manifest.json` is *included* in the comparison (unlike maps): fragment fingerprints are contract, not bookkeeping.
-- CI: a step appended to the existing `build-and-test` job in `ci.yml` after `dotnet build` (`dotnet run --project tools/contracts/Elsa.Contracts.Generator -- check`), reusing the build output. A separate job would need its own full solution build.
+**Decision** (as implemented):
+- `merge` command: projects every built src assembly (excluding `src/Apps` hosts) directly — app bin directories are registered as dependency-probe roots so feature types referencing external NuGets load — and writes `docs/contracts/fragments/*.json`, `submit-schema.json` (produced by `GetWorkflowDefinitionSubmitSchemaHandler` itself, literally the served code path), and `manifest.json` (schema version, generator id, per-fragment `sha256:` fingerprints as an array — never a dictionary, so assembly-name keys can't be re-cased — plus counts). Merge fails loudly on any unprojectable assembly (spec edge case: no silently partial contract set).
+- `check` command: regenerates to a temp dir and **byte-compares** each file against the committed copy, `MapFreshness`-style (exit 1 + regenerate-and-commit remediation text). `manifest.json` is *included* in the comparison (unlike maps): fragment fingerprints are contract, not bookkeeping. `README.md` is authored and exempt. `.gitattributes` pins `docs/contracts/**` to LF so Windows checkouts don't break the byte-compare.
+- CI: a step appended to the existing `build-and-test` job in `ci.yml` after `dotnet test` (`dotnet run --project tools/contracts/Elsa.Contracts.Generator -c Release --no-build -- check`), reusing the Release build. A separate job would need its own full solution build.
 - Unlike maps (human-initiated refresh), contract regeneration is expected in the same PR that changes the surface — the check failing on a contract-affecting PR *is* the reviewer signal (spec US3).
+- Known, visible degradations (warned as `ELSACT006`/`ELSACT009`, documented in `docs/contracts/README.md`): features requiring configuration at construction (JSON reconciliation sources) cannot compose for projection, and assemblies whose external NuGet dependencies are outside the app closure (MongoDB, Fluid/Liquid, GitHub Copilot SDK) may under-describe their fragment.
 
 ## R9 — Equivalence test (one-projection rule, phase 1)
 
-**Decision**: `EquivalenceTests` composes a representative host in-process (pattern: `WorkflowsDesignTestHost` + feature `ConfigureServices` composition) with the feature set: Activities Design API + Reconciliation.Clr + Sequence + Flowchart + ControlFlow + Http + JavaScript/Expressions + Groundwork SQLite persistence. It runs CLR reconciliation, dispatches `ListActivityAuthoringCatalog(Availability: All)` and `ListActivityStructures` at the mediator level, then asserts:
+**Decision** (as implemented): `EquivalenceTests` runs the catalog pipeline for real over a representative feature set (Http, Sequence, Flowchart, ControlFlow, Primitives + the Design API intrinsics): scanner models are persisted through the same factories reconciliation uses (`ActivityDefinitionFactory`/`ActivityDefinitionVersionFactory` → entity rows), served by the real `ListActivityAuthoringCatalogRequestHandler` over in-memory store stubs (the established Design-API test pattern), and compared against freshly projected fragments:
 
-- catalog items for CLR-provided activities == fragment activity entries of the composed features, after stripping the server-state overlay (`ActivityVersionId`, `Available`, `AvailabilityReason`, `Provenance`) and normalizing the server-generated template boilerplate;
-- intrinsic catalog items == the intrinsics fragment;
-- structure registry == fragment structure entries (including payload schemas);
-- dynamic/store-fed activities are additive (assert union semantics with a test-registered reusable activity).
+- catalog items for CLR-provided activities == fragment activity entries, after stripping the server-state overlay (`ActivityVersionId`, `Available`, `AvailabilityReason`, `Provenance`) and the server-generated template — including the content hash (row `Hash` == fragment `contentHash`);
+- intrinsic catalog items == the Design API fragment's intrinsics (stable descriptor ids);
+- the structure registry (real feature `ConfigureServices` composition → `IEnumerable<IActivityStructureHandler>`) == the union of the owning fragments' structure entries;
+- a store-fed activity row appears additively and displaces nothing (union, never re-projection).
 
-Fragments come from the embedded resources of the referenced assemblies (the same bytes the merge committed — verified byte-equal by `check`).
+`ContractIntegrityTests` separately pins embedded resource == committed fragment and manifest fingerprints == fragment bytes.
 
 **Version wrinkle (accepted)**: activity versions derive from assembly versions; `ci.yml` builds without `/p:Version` injection, so committed fragments and the equivalence run see the same stable assembly version. Version-injected pipelines (`packages.yml`, docker) do not run the check.
 
@@ -102,7 +99,7 @@ Fragments come from the embedded resources of the referenced assemblies (the sam
 **Decision** per sub-surface:
 - **Expression descriptors**: instantiate `IExpressionDescriptorProvider` implementations (parameterless), record `Type`/`DisplayName`/editing mode — identical data to `expressions/descriptors`.
 - **JS design-time declarations**: invoke `IJavaScriptDeclarationContributor` implementations against a fresh declarations context; record the contributed declarations per contributor (e.g. `HttpTypeDeclarationContributor`, `BindingPureArgsDeclarationContributor`).
-- **Jint sandbox globals** (`getVariable`, frozen `args`/`variables`, per-variable `get<Name>()` accessors): these are installed imperatively in `IsolatedJintEngine` and are not discoverable. Introduce a small **declarative sandbox-surface catalog** (public static readonly data in the Jint feature package) that the fragment projects, **pinned by a guard unit test** that composes the engine and asserts the declared globals exist and no undeclared ones do. Dynamic per-variable accessors are described structurally as a pattern entry (`kind: "perVariableAccessor"`), not per-name.
+- **Jint sandbox globals** (`getVariable`, frozen `args`/`variables`, per-variable `get<Name>()` accessors, plus the deliberately **disabled** intrinsics `Date`/`Temporal`/`Intl`/`Math.random` — absence is contract too): these are installed imperatively in `IsolatedJintEngine` and are not discoverable. Implemented as `SandboxSurfaceCatalog` (declarative public data in the Jint package) that the fragment projects, **pinned by `SandboxSurfaceCatalogTests`**, which evaluates a live engine per catalog entry and fails on any entry kind it does not verify. Dynamic per-variable accessors are described structurally as a pattern entry (`kind: "perVariableAccessor"`), not per-name.
 
 **Rationale**: the catalog+guard-test pair keeps the declared surface from drifting without refactoring the engine; contributor instantiation reuses runtime types (one projection). A provider/contributor whose constructor requires dependencies fails emission with a canonical diagnostic — surface contributors must stay dependency-free to be contract-projectable (documented in `docs/contracts/README.md`).
 
