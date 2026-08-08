@@ -79,7 +79,7 @@ Activity I/O lives on `ActivityNode` (`Inputs`/`Outputs` collections of `Argumen
 
 ### 3.4 The 20 mutation event types (`Elsa.Workflows.Design.Core/Events/`)
 
-Re-homed, **not redefined**. All `sealed : IEvent`. Their *producer* changes from the deleted per-action commands to `IUpdateDraftCommand`; their identity, payload, and names are preserved (R7). The 3 lifecycle events (`OnDraftCreated`/`OnDraftClonedFromVersion`/`OnDraftDiscarded`) and the validation pair (`OnDraftValidating`/`OnDraftValidated`) are untouched.
+Re-homed, **not redefined**. All `sealed : IEvent`. Their *producer* changes from the deleted per-action commands to `IUpdateDraftCommand`; their identity, payload, and names are preserved (R7). The 3 lifecycle events (`DraftCreated`/`DraftClonedFromVersion`/`DraftDiscarded`) and the validation pair (`DraftValidating`/`DraftValidated`) are untouched.
 
 ---
 
@@ -111,11 +111,11 @@ Inside the per-Draft lock (`workflow-draft:{DraftId}`), absorbing the `DraftMuta
 2. **Load + hydrate** stored Draft (State + layout siblings) — `stored` snapshot for diffing.
 3. **Apply wholesale**: `draft.State = request.State`; `layout.Records = request.Layout`. Mark Modified.
 4. **Diff**: `DraftStateDiffer.Diff(stored, desired)` → ordered `IReadOnlyList<IEvent>`.
-5. **Sequential gate**: publish `OnDraftValidating` (sync, awaited) against post-apply state; collect `Errors`.
+5. **Sequential gate**: publish `DraftValidating` (sync, awaited) against post-apply state; collect `Errors`.
 6. **Upsert** validation sibling wholesale with the outcome.
 7. **SaveChanges** (transactional flush).
 8. **Release** lock.
-9. **Background-publish** the per-diff events (step 4), then `OnDraftValidated` (cause-before-effect).
+9. **Background-publish** the per-diff events (step 4), then `DraftValidated` (cause-before-effect).
 
 No optimistic-concurrency check at any step (FR-022). A no-op request (desired == stored) yields an empty diff → no mutation events; the validation pair still runs (matches today's pipeline).
 

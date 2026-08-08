@@ -74,7 +74,7 @@ public sealed class GetDraftValidationsRequestHandlerTests
     {
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
-            if (@event is OnDraftValidating validating)
+            if (@event is DraftValidating validating)
                 foreach (var error in contributions)
                     validating.Errors.Add(error);
 

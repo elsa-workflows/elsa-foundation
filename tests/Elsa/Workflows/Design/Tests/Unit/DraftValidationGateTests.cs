@@ -105,14 +105,14 @@ public sealed class DraftValidationGateTests
     private static IWorkflowDefinitionDraft Draft() => new StubDraft();
 
     /// <summary>
-    /// Inline publisher whose <c>Publish(OnDraftValidating)</c> synchronously contributes an error
+    /// Inline publisher whose <c>Publish(DraftValidating)</c> synchronously contributes an error
     /// before returning — modelling a validator whose effect the gate must observe on read-back.
     /// </summary>
     private sealed class InlineSpyPublisher(ValidationError contribution) : IInlineEventPublisher
     {
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
-            if (@event is OnDraftValidating validating)
+            if (@event is DraftValidating validating)
                 validating.Errors.Add(contribution);
 
             return Task.CompletedTask;
@@ -120,14 +120,14 @@ public sealed class DraftValidationGateTests
     }
 
     /// <summary>
-    /// Inline publisher whose <c>Publish(OnDraftValidating)</c> optionally contributes an error, then
+    /// Inline publisher whose <c>Publish(DraftValidating)</c> optionally contributes an error, then
     /// always throws — modelling a faulting validator (or a throwing OnPublish hook) on the gate's chain.
     /// </summary>
     private sealed class ThrowingPublisher(Exception toThrow, ValidationError? contributeFirst = null) : IInlineEventPublisher
     {
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
-            if (@event is OnDraftValidating validating && contributeFirst is not null)
+            if (@event is DraftValidating validating && contributeFirst is not null)
                 validating.Errors.Add(contributeFirst);
 
             throw toThrow;

@@ -6,7 +6,7 @@ All findings verified against source on branch `780-file-workflow-deployment` (p
 
 ## Verified current state (delta on top of spec.md's Context)
 
-1. **No reconciliation-completed event exists.** The only event in the workflow-reconciliation domain is `OnWorkflowVersionsReconciling` ([Core/OnWorkflowVersionsReconciling.cs](../../src/Elsa/Workflows/Design/Reconciliation/Core/OnWorkflowVersionsReconciling.cs)) — a *pre-pass* Sequential fan-in event whose payload (`ICollection<IWorkflowDefinitionVersion> Versions`) carries **no source provenance**: `WorkflowVersionsReconcilingHandler` flattens all sources into one bag, and `SourceId`/`SourceKind` are lost at the event boundary. Spec FR-006's trigger must be authored from scratch.
+1. **No reconciliation-completed event exists.** The only event in the workflow-reconciliation domain is `WorkflowVersionsReconciling` ([Core/WorkflowVersionsReconciling.cs](../../src/Elsa/Workflows/Design/Reconciliation/Core/WorkflowVersionsReconciling.cs)) — a *pre-pass* Sequential fan-in event whose payload (`ICollection<IWorkflowDefinitionVersion> Versions`) carries **no source provenance**: `WorkflowVersionsReconcilingHandler` flattens all sources into one bag, and `SourceId`/`SourceKind` are lost at the event boundary. Spec FR-006's trigger must be authored from scratch.
 2. **Provenance is not persisted.** `WorkflowDefinition` persists `IsSourceOwned` (bool) but no `SourceId`; `IWorkflowDefinitionVersion` exposes `Id`, `Version`, `DefinitionId`, `Definition`, `State` — no source identity. Which source owns which definition is knowable only at contribution time, inside the reconciling handler.
 3. **The XOR validation idiom does not extend.** `JsonWorkflowReconciliationFeature.ValidateOptions()` uses `hasSingleFile == hasFileList` (boolean-equality trick, throws `InvalidOperationException`); a third option forces a count-of-configured-options rewrite.
 4. **Startup-task failure fails shell activation.** `TaskManager.Start` rethrows any startup-task exception; a reconcile failure leaves `/health/ready` at 503 `shell_activation_failed`. FR-009's "publish failure must not fail shell activation" means the publish step must swallow per-definition failures itself.
@@ -22,9 +22,9 @@ All findings verified against source on branch `780-file-workflow-deployment` (p
 
 ## Decisions
 
-### D1 — Publish trigger: new `OnWorkflowVersionsReconciled` completion event + Publishing-side subscriber
+### D1 — Publish trigger: new `WorkflowVersionsReconciled` completion event + Publishing-side subscriber
 
-**Decision**: Author `OnWorkflowVersionsReconciled` in `Elsa.Workflows.Design.Reconciliation.Core`, published **Sequentially** (`IInlineEventPublisher`) by `WorkflowsVersionReconciler.Reconcile` after the pass completes without error. The Publishing engine (`WorkflowsPublishingFeature`) registers an independent subscriber `PublishReconciledWorkflowVersions : IEventHandler<OnWorkflowVersionsReconciled>` (verb-named, matching the Publishing feature's own `CollectExecutableCompilation` style) that performs the publish step.
+**Decision**: Author `WorkflowVersionsReconciled` in `Elsa.Workflows.Design.Reconciliation.Core`, published **Sequentially** (`IInlineEventPublisher`) by `WorkflowsVersionReconciler.Reconcile` after the pass completes without error. The Publishing engine (`WorkflowsPublishingFeature`) registers an independent subscriber `PublishReconciledWorkflowVersions : IEventHandler<WorkflowVersionsReconciled>` (verb-named, matching the Publishing feature's own `CollectExecutableCompilation` style) that performs the publish step.
 
 **Rationale**:
 - Sequential delivery inside the reconciler means the publish step runs **inside** `WorkflowsVersionReconcilerStartupTask` — so it inherits `[SingleNodeTask]` + the distributed lock (FR-008 satisfied without a second task/lock) and completes **before** `/health/ready` flips (SC-001's "ready ⇒ published" ordering).
@@ -34,14 +34,14 @@ All findings verified against source on branch `780-file-workflow-deployment` (p
 **Alternatives rejected**:
 - *Activities-style bridge* (`IWorkflowSourceVersionPublisher` analogue, invoked inline per version): opt-in is feature presence, not the per-source `PublishOnReconcile` flag the spec pins; it publishes per contributed version mid-pass rather than the latest version once after a successful pass; and workflows publish through the mediator `PublishWorkflow` request (spec 145's seam), not a commit command.
 - *Publishing-domain startup task `[Order(3+)]`*: requires a new `Elsa.Tasks.Core` reference on the engine, duplicates lock machinery, and — decisive — has no way to discover *which* definitions to publish: provenance is not persisted (finding 2), so a task ordered after the reconciler cannot scope to "definitions owned by sources that opted in" without coupling to the Json feature's options.
-- *Second subscriber on `OnWorkflowVersionsReconciling`*: pre-persistence timing (nothing exists to publish yet) and it is the fan-in event with exactly one sanctioned aggregating handler.
+- *Second subscriber on `WorkflowVersionsReconciling`*: pre-persistence timing (nothing exists to publish yet) and it is the fan-in event with exactly one sanctioned aggregating handler.
 
 ### D2 — Provenance + opt-in flow: source claims carried through the event pipeline
 
 **Decision**:
 - `IWorkflowReconciliationSource` gains a default interface member `bool RequestsPublication => false` (additive, MINOR). `JsonWorkflowReconciliationSource` returns `Options.PublishOnReconcile`.
-- `OnWorkflowVersionsReconciling` gains a second get-only collection `ICollection<WorkflowVersionSourceClaim> Claims { get; } = [];` (additive). `WorkflowVersionsReconcilingHandler` populates one claim per contributed entry alongside the version object: `(DefinitionId, Version, SemVerSortKey, SourceId, SourceKind, PublishRequested, Deleted)` — `DefinitionId` recorded *after* the definition factory resolves/generates it, so generated ids are correct.
-- `WorkflowsVersionReconciler` publishes `OnWorkflowVersionsReconciled` carrying the claims (read-only) after the pass succeeds. `WorkflowVersionSourceClaim` is a `sealed record` in `Reconciliation.Core`.
+- `WorkflowVersionsReconciling` gains a second get-only collection `ICollection<WorkflowVersionSourceClaim> Claims { get; } = [];` (additive). `WorkflowVersionsReconcilingHandler` populates one claim per contributed entry alongside the version object: `(DefinitionId, Version, SemVerSortKey, SourceId, SourceKind, PublishRequested, Deleted)` — `DefinitionId` recorded *after* the definition factory resolves/generates it, so generated ids are correct.
+- `WorkflowsVersionReconciler` publishes `WorkflowVersionsReconciled` carrying the claims (read-only) after the pass succeeds. `WorkflowVersionSourceClaim` is a `sealed record` in `Reconciliation.Core`.
 
 **Rationale**: provenance exists only at contribution time (finding 2); the claims collection is the minimal additive carrier. The Publishing subscriber stays decoupled from the Json feature — it sees only the neutral claim contract, so a future Git/other source setting `RequestsPublication` composes for free.
 
@@ -90,7 +90,7 @@ Docker (`SC-001` literal) remains the documented acceptance flow (docs example, 
 - New `src/Elsa/Workflows/Design/Reconciliation/Json/README.md` (per `Clr/README.md` precedent): what the feature provides, options table (incl. `FolderPath` scan rules + `PublishOnReconcile`), registration snippet, definition-file authoring guidance (envelope shape, **pin `definitionId`**, `actver_*` recipe: `actver_` + base64url(SHA-256(typeKey + U+001F + SemVer sort key)) via `ActivityCatalogStableIds`, or query `/design/activities` at runtime), constitutional basis.
 - `docs/docker-hub-quickstart.md`: new `##` section after "Mount it — two modes" — mounted definitions folder + `shells.json` feature snippet + readiness note (`/health/ready` gates deployment completion; `/` does not).
 - `docs/docker.md`: add the definitions-folder row to the "### Mounts" table.
-- `EXTENSION_POINTS.md` updates (same unit of work, §2.22.1): Reconciliation catalog gains `### OnWorkflowVersionsReconciled` (+ `RequestsPublication` on the `IWorkflowReconciliationSource` entry, + claims on the Reconciling entry); Publishing feature `README.md` gains a **Cross-domain contributions** section (it now subscribes to a Design-reconciliation event); Publishing `EXTENSION_POINTS.md` notes the subscriber under cross-domain seams consumed.
+- `EXTENSION_POINTS.md` updates (same unit of work, §2.22.1): Reconciliation catalog gains `### WorkflowVersionsReconciled` (+ `RequestsPublication` on the `IWorkflowReconciliationSource` entry, + claims on the Reconciling entry); Publishing feature `README.md` gains a **Cross-domain contributions** section (it now subscribes to a Design-reconciliation event); Publishing `EXTENSION_POINTS.md` notes the subscriber under cross-domain seams consumed.
 - Regenerate `docs/maps/*` via `tools/maps` (feature/dependency/project-reference maps shift).
 
 ### D9 — Versioning (§4.2)

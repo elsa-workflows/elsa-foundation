@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Publishing.Handlers;
 
 /// <summary>
 /// Publish-on-reconcile (spec 147, #1157): an independent subscriber on the Design-side
-/// <see cref="OnWorkflowVersionsReconciled"/> completion event that publishes the latest reconciled
+/// <see cref="WorkflowVersionsReconciled"/> completion event that publishes the latest reconciled
 /// version of each definition whose source opted in (<c>PublishOnReconcile</c> →
 /// <see cref="WorkflowVersionSourceClaim.PublishRequested"/>), via the in-process
 /// <see cref="PublishWorkflow"/> request. The event is Sequential and runs inside the reconcile
@@ -36,9 +36,9 @@ public sealed class PublishReconciledWorkflowVersions(
     IPublicationSlotStore slotStore,
     IPublicationRecordStore recordStore,
     IRequestSender requestSender,
-    TimeProvider timeProvider) : IEventHandler<OnWorkflowVersionsReconciled>
+    TimeProvider timeProvider) : IEventHandler<WorkflowVersionsReconciled>
 {
-    public async Task Handle(OnWorkflowVersionsReconciled domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(WorkflowVersionsReconciled domainEvent, CancellationToken cancellationToken)
     {
         // Latest claim per definition, opted-in sources only. SemVer sort keys compare ordinally —
         // the same ordering the reconciler and the version store use.

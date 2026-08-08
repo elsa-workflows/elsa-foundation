@@ -17,8 +17,8 @@ public sealed class MethodPatternTests
 {
     public static IEnumerable<object[]> AllPublishedEventTypes()
     {
-        var coreAssembly = typeof(OnDraftCreated).Assembly;
-        var validationsCoreAssembly = typeof(OnDraftValidating).Assembly;
+        var coreAssembly = typeof(DraftCreated).Assembly;
+        var validationsCoreAssembly = typeof(DraftValidating).Assembly;
 
         foreach (var t in PublishedEventTypesIn(coreAssembly))
             yield return [t];

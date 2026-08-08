@@ -17,7 +17,7 @@ namespace Elsa.Serialization.SystemText;
 [ShellFeature(
     name: "Serialization",
     DisplayName = "Serialization",
-    Description = "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the OnJsonPayloadConvertersInitializing domain event (framework §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).")]
+    Description = "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the JsonPayloadConvertersInitializing domain event (framework §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).")]
 public class SerializationFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
@@ -37,7 +37,7 @@ public class SerializationFeature : IShellFeature
         // reads from it synchronously while building JsonSerializerOptions.
         services.AddSingleton<JsonPayloadConverterRegistry>();
 
-        // Startup task: dispatch OnJsonPayloadConvertersInitializing → flush contributions
+        // Startup task: dispatch JsonPayloadConvertersInitializing → flush contributions
         // into the registry. Other features (e.g. Expressions) contribute by registering an
         // IJsonConverterSource; the single RegisterJsonConverters handler aggregates them.
         services.AddScoped<IStartupTask, JsonPayloadConvertersInitializingStartupTask>();
@@ -46,7 +46,7 @@ public class SerializationFeature : IShellFeature
         // authored argument aliases (e.g. "String", "Int32") resolve to their CLR types (research D5).
         services.AddScoped<IStartupTask, SeedWellKnownTypesStartupTask>();
 
-        services.AddEventHandler<OnJsonPayloadConvertersInitializing, RegisterJsonConverters>();
+        services.AddEventHandler<JsonPayloadConvertersInitializing, RegisterJsonConverters>();
         services.AddScoped<IJsonConverterSource, BuiltInJsonConverterSource>();
     }
 }

@@ -7,7 +7,7 @@ using Elsa.Workflows.Design.Reconciliation.Core;
 namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 
 /// <summary>
-/// Universal handler for <see cref="OnWorkflowVersionsReconciling"/>. Reads every registered
+/// Universal handler for <see cref="WorkflowVersionsReconciling"/>. Reads every registered
 /// <see cref="IWorkflowReconciliationSource"/> in turn and contributes one definition version per
 /// entry (built via the factories) by adding to <c>event.Versions</c>. Source modules extend the
 /// reconciliation feature by registering their own <see cref="IWorkflowReconciliationSource"/>; they
@@ -17,9 +17,9 @@ public sealed class WorkflowVersionsReconcilingHandler(
     IWorkflowDefinitionFactory definitionFactory,
     IWorkflowDefinitionVersionFactory versionFactory,
     IEnumerable<IWorkflowReconciliationSource> sources)
-    : IEventHandler<OnWorkflowVersionsReconciling>
+    : IEventHandler<WorkflowVersionsReconciling>
 {
-    public async Task Handle(OnWorkflowVersionsReconciling domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(WorkflowVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach (var source in sources)
         {
@@ -31,7 +31,7 @@ public sealed class WorkflowVersionsReconcilingHandler(
                 var version = versionFactory.Create(definition, entry.Version, entry.State, entry.SourceCreatedAt);
                 domainEvent.Versions.Add(version);
                 // Provenance beside the version: source identity is not persisted on design entities, so
-                // this claim is what survives to OnWorkflowVersionsReconciled (and the publish-on-reconcile
+                // this claim is what survives to WorkflowVersionsReconciled (and the publish-on-reconcile
                 // step). DefinitionId is read back from the factory-created definition so a generated id
                 // (entry.DefinitionId omitted) is the final one.
                 domainEvent.Claims.Add(new WorkflowVersionSourceClaim(

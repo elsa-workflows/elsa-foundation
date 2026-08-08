@@ -4,15 +4,15 @@
 
 ## R1 — Existing `ElsaDbContextBase` mechanism
 
-**Decision.** Migrate only the **saving** handlers (`IGlobalEntitySavingHandler` + typed `IEntitySavingHandler<,>`) to a new `OnEntitySaving` domain event. Keep `IEntityModelCreatingHandler` as-is — model-creating is a sync side-effect chain on the shared `ModelBuilder`, not a contribution flow in the §2.6.1 sense.
+**Decision.** Migrate only the **saving** handlers (`IGlobalEntitySavingHandler` + typed `IEntitySavingHandler<,>`) to a new `EntitySaving` domain event. Keep `IEntityModelCreatingHandler` as-is — model-creating is a sync side-effect chain on the shared `ModelBuilder`, not a contribution flow in the §2.6.1 sense.
 
 **Findings** (from [`src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs`](../../src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs)):
 
 - `SaveChangesAsync` → `BeforeSavingChanges` → calls four steps:
   1. `PreventImmutableChanges` — `[Immutable]` enforcement. **Preserve as-is.**
   2. `ApplyTimestamps` — stamps `CreatedAt` / `LastModifiedAt`. **Preserve as-is.**
-  3. `ApplyGlobalSavingHandlers` — `IGlobalEntitySavingHandler` from DI per entry. **Migrate to `OnEntitySaving(DbContext, EntityEntry)`** dispatched via `IDomainEventSender` (async; the surrounding `BeforeSavingChanges` is already async).
-  4. `ApplyEntitySavingHandlers` — typed `IEntitySavingHandler<TDbContext, TEntity>` via reflection. **Migrate to the same `OnEntitySaving` event** with entity-type filtering inside the handler.
+  3. `ApplyGlobalSavingHandlers` — `IGlobalEntitySavingHandler` from DI per entry. **Migrate to `EntitySaving(DbContext, EntityEntry)`** dispatched via `IDomainEventSender` (async; the surrounding `BeforeSavingChanges` is already async).
+  4. `ApplyEntitySavingHandlers` — typed `IEntitySavingHandler<TDbContext, TEntity>` via reflection. **Migrate to the same `EntitySaving` event** with entity-type filtering inside the handler.
 - `OnModelCreating` → `ConfigureEntityModel` → calls:
   1. `ApplyRowNumberIndex` — preserve. Pattern for `ApplyTenantIdIndex`.
   2. `ApplyEntityModelCreatingHandlers` — `IEntityModelCreatingHandler` from DI. **Preserve as-is.** `OnModelCreating` is intrinsically sync; `IDomainEventSender.Send` is async; forcing a sync-over-async dispatch is a smell with no architectural benefit. §2.6.1's domain-event contract addresses *contribution flows* (handlers contribute data the sender collects); model-creating is structurally different — each handler mutates the shared `ModelBuilder` and nothing flows back. The legacy provider-interface pattern is the right tool here.

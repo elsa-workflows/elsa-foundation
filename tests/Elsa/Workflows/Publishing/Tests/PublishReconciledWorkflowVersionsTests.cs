@@ -319,7 +319,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             TimeProvider.System);
 
-    private static OnWorkflowVersionsReconciled Reconciled(params WorkflowVersionSourceClaim[] claims) => new(claims);
+    private static WorkflowVersionsReconciled Reconciled(params WorkflowVersionSourceClaim[] claims) => new(claims);
 
     private static WorkflowVersionSourceClaim Claim(string definitionId, string version, bool publishRequested = true, bool deleted = false) =>
         new(definitionId, version, SemVer.ToSortKey(version), "test-source", "Json", publishRequested, deleted);

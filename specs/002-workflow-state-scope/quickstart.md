@@ -1,6 +1,6 @@
 # Quickstart — Unit C Workflow Design Substrate
 
-> **Supersession note (2026-07-05):** recipes below that rebuild `WorkflowDefinitionDraftValidation.Errors` are superseded — the entity is deleted; validation errors are derived state recomputed in-lock on each mutation (and re-derived by the promotion gate), never persisted (spec.md FR-021/FR-023). Per-diff mutation-event publication is likewise retired (declarations stand). The validators-as-`OnDraftValidating`-subscribers and wholesale-rebuild *semantics* survive in-memory. Reinstatable when a consumer exists.
+> **Supersession note (2026-07-05):** recipes below that rebuild `WorkflowDefinitionDraftValidation.Errors` are superseded — the entity is deleted; validation errors are derived state recomputed in-lock on each mutation (and re-derived by the promotion gate), never persisted (spec.md FR-021/FR-023). Per-diff mutation-event publication is likewise retired (declarations stand). The validators-as-`DraftValidating`-subscribers and wholesale-rebuild *semantics* survive in-memory. Reinstatable when a consumer exists.
 
 Developer onboarding for the Unit C deliverables. Five recipes covering the most common consumer scenarios.
 
@@ -14,12 +14,12 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
 
 1. Reference `Elsa.Workflows.Design.Validations.Core` from your activity's design-time module. Per Elsa §E3.10, that module is `Elsa.<Model>.Activities.Design` (e.g. `Elsa.Http.Activities.Design`).
 
-2. Implement `IDomainEventHandler<OnDraftValidating>` (`OnDraftValidating` is in `Elsa.Workflows.Design.Validations.Core`):
+2. Implement `IDomainEventHandler<DraftValidating>` (`DraftValidating` is in `Elsa.Workflows.Design.Validations.Core`):
 
    ```csharp
-   public sealed class HttpEndpointAuthPolicyValidator : IDomainEventHandler<OnDraftValidating>
+   public sealed class HttpEndpointAuthPolicyValidator : IDomainEventHandler<DraftValidating>
    {
-       public async ValueTask Handle(OnDraftValidating domainEvent, CancellationToken ct)
+       public async ValueTask Handle(DraftValidating domainEvent, CancellationToken ct)
        {
            foreach (var node in domainEvent.Draft.State.Activities)
            {
@@ -40,7 +40,7 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
 3. Register the handler in your feature's DI registration:
 
    ```csharp
-   services.AddScoped<IDomainEventHandler<OnDraftValidating>, HttpEndpointAuthPolicyValidator>();
+   services.AddScoped<IDomainEventHandler<DraftValidating>, HttpEndpointAuthPolicyValidator>();
    ```
 
 4. The dispatcher's exception-shielding middleware (framework §2.6.1 default) catches any exception your validator throws — so a bug in your validator can never break the publisher's mutation pipeline. If your validator depends on infrastructure that may fail (file system, network), wrap-and-rethrow per framework §2.23.5 and emit a `ValidationError` for the failure case rather than throwing.
@@ -74,7 +74,7 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
    - Acquire the per-Draft lock via `IDistributedLockProvider` (key: `workflow-draft:{DraftId}`).
    - Load the Draft + apply the mutation in memory.
    - Publish the granular event.
-   - Publish `OnDraftValidating`.
+   - Publish `DraftValidating`.
    - Rebuild `WorkflowDefinitionDraftValidation.Errors` from `event.Errors`.
    - Transactional flush.
    - Release lock.
@@ -91,7 +91,7 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
 
 **Audience:** anyone reading code that mutates the Draft and being puzzled about why errors come and go.
 
-**Concept.** Validators are subscribers to `OnDraftValidating`, which fires after every Draft mutation. Each validator walks the post-mutation Draft and contributes `ValidationError` entries. The set of errors on the validation sibling (`WorkflowDefinitionDraftValidation.Errors`) is **rebuilt wholesale** after every mutation — there is no "this error was solved" tracking. If the underlying condition is still failing, the next pass re-emits the error; if it stopped failing, the error disappears.
+**Concept.** Validators are subscribers to `DraftValidating`, which fires after every Draft mutation. Each validator walks the post-mutation Draft and contributes `ValidationError` entries. The set of errors on the validation sibling (`WorkflowDefinitionDraftValidation.Errors`) is **rebuilt wholesale** after every mutation — there is no "this error was solved" tracking. If the underlying condition is still failing, the next pass re-emits the error; if it stopped failing, the error disappears.
 
 ```
 prior mutation:  clear the root activity
@@ -123,7 +123,7 @@ next mutation:   add activity Y whose ActivityVersionId is not in the catalog
 - `Elsa.Workflows.Design.Validations` — baseline UNIVERSAL validators (5 of them per FR-033 as amended 2026-07-05) — applicable regardless of activity type. Missing root activity, variable uniqueness, required input/output, variable-expression resolver, unknown activity version.
 - `Elsa.<Model>.Activities.Design` — activity-specific validators co-located with the activity definitions (e.g. HttpEndpoint auth-policy lookup, URL string-input validation).
 
-Both subscribe to `OnDraftValidating` from `Elsa.Workflows.Design.Validations.Core`.
+Both subscribe to `DraftValidating` from `Elsa.Workflows.Design.Validations.Core`.
 
 ---
 
@@ -134,7 +134,7 @@ Both subscribe to `OnDraftValidating` from `Elsa.Workflows.Design.Validations.Co
 **Format per entry:**
 
 ```markdown
-### OnActivityAddedToDraft
+### ActivityAddedToDraft
 
 Published when an activity is placed on a Draft's canvas.
 
@@ -146,9 +146,9 @@ Published when an activity is placed on a Draft's canvas.
 - Event-sourcing subscriber (if enabled).
 - Activity-feature-co-located validators per FR-034 (handlers that recognise the new ActivityVersionId).
 
-**Ordering:** fires after the snapshot is updated, before `OnDraftValidating`.
+**Ordering:** fires after the snapshot is updated, before `DraftValidating`.
 
-**Cross-references:** `OnDraftValidating` (Elsa.Workflows.Design.Validations.Core).
+**Cross-references:** `DraftValidating` (Elsa.Workflows.Design.Validations.Core).
 ```
 
 **Parity test (FR-031):** the test reflection-scans the assembly for all `IDomainEvent` types and parses the `### <EventClassName>` headings from the markdown. Any mismatch fails the build with a precise diagnostic ("event X has no catalog heading" or "catalog heading X has no corresponding event").
@@ -169,7 +169,7 @@ Published when an activity is placed on a Draft's canvas.
 | Promoted a Draft and discovered the new Version's State doesn't include my latest edits. | Mutations arriving after a promotion's lock acquisition are on the Draft only — they need a new promotion to land on a new Version. | Either: (a) make the next promotion include those edits, or (b) document this for your operators as the expected per-Draft lock semantics. |
 | `IsRequired = true` on a workflow-level input but the validator never fires. | The validator walks `WorkflowDefinitionState.Inputs` AND every activity's input declarations. Check that your input is in `State.Inputs`, not nested in an activity. | If the input is workflow-level (workflow-as-activity composition), it's on State. If per-activity, it's under `Activity.Inputs`. |
 | Catalog parity test fails after I added a new event. | Step 4 of recipe 2 missed. | Add a `### YourEventName` heading to `DOMAIN_EVENTS.md` with the standard content. |
-| New `Elsa.Http.Activities.Design` activity validator fires even when the Draft contains no HTTP activities. | Validator runs on every `OnDraftValidating` for every Draft (your handler is registered globally). | Inside `Handle`, filter early: `foreach (var node in event.Draft.State.Activities) if (!IsHttp(node)) continue;`. The dispatcher invokes your handler for every event — you decide when to contribute. |
+| New `Elsa.Http.Activities.Design` activity validator fires even when the Draft contains no HTTP activities. | Validator runs on every `DraftValidating` for every Draft (your handler is registered globally). | Inside `Handle`, filter early: `foreach (var node in event.Draft.State.Activities) if (!IsHttp(node)) continue;`. The dispatcher invokes your handler for every event — you decide when to contribute. |
 
 ---
 

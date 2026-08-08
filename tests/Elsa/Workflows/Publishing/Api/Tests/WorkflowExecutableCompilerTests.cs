@@ -2573,6 +2573,6 @@ public sealed class WorkflowExecutableCompilerTests
         private readonly CollectExecutableCompilation _handler = new(sources);
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
-            _handler.Handle(Assert.IsType<OnExecutableCompilationCollecting>(@event), cancellationToken);
+            _handler.Handle(Assert.IsType<ExecutableCompilationCollecting>(@event), cancellationToken);
     }
 }

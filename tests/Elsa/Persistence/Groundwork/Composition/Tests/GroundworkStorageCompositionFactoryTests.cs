@@ -46,7 +46,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
         Assert.Contains(
             source.Snapshot.ManifestSources,
             declaration => declaration.FeatureIdentity == "elsa-workflows-runtime");
-        Assert.IsType<OnGroundworkStorageComposing>(Assert.Single(publishedEvents));
+        Assert.IsType<GroundworkStorageComposing>(Assert.Single(publishedEvents));
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
         public async Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             publishedEvents.Add(@event);
-            await handler.Handle((OnGroundworkStorageComposing)@event, cancellationToken);
+            await handler.Handle((GroundworkStorageComposing)@event, cancellationToken);
         }
     }
 

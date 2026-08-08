@@ -28,8 +28,8 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// production SQLite Groundwork unified persistence the design-conformance SQLite fixture uses
 /// (schema applied in-process to a temp file database, then production store/command registrations),
 /// wired to an <see cref="InMemoryDistributedLockProvider"/> and a single
-/// <see cref="CapturingEventPublisher"/> (for the synchronous <c>OnDraftValidating</c> gate AND the
-/// FR-018/FR-018a lifecycle events + <c>OnDraftValidated</c>) so command behaviour can be asserted
+/// <see cref="CapturingEventPublisher"/> (for the synchronous <c>DraftValidating</c> gate AND the
+/// FR-018/FR-018a lifecycle events + <c>DraftValidated</c>) so command behaviour can be asserted
 /// end-to-end without Entity Framework.
 /// </summary>
 /// <remarks>
@@ -103,11 +103,11 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
-        // The Groundwork storage-composition factory publishes OnGroundworkStorageComposing through the
+        // The Groundwork storage-composition factory publishes GroundworkStorageComposing through the
         // registered IInlineEventPublisher to gather each manifest source's schema declaration. The
         // capturing publisher only records events, so route this one composition event to the real
         // GroundworkStorageCompositionHandler (the production pipeline would dispatch it the same way).
-        eventPublisher.Subscribe<OnGroundworkStorageComposing>(async composing =>
+        eventPublisher.Subscribe<GroundworkStorageComposing>(async composing =>
         {
             using var scope = provider.CreateScope();
             await scope.ServiceProvider

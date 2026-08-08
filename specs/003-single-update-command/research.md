@@ -16,9 +16,9 @@ This document resolves every open decision the spec left for plan and records th
 | Granular mutation command contracts | 20 | `Elsa.Workflows.Design.Persistence.Core/Contracts/I*DraftCommand.cs` |
 | Granular mutation command impls | 20 | `Elsa.Workflows.Design.Persistence.EFCore/Commands/*.cs` |
 | Granular mutation **event types** | 20 | `Elsa.Workflows.Design.Core/Events/` |
-| Lifecycle event types | 3 | same (`OnDraftCreated`, `OnDraftClonedFromVersion`, `OnDraftDiscarded`) |
+| Lifecycle event types | 3 | same (`DraftCreated`, `DraftClonedFromVersion`, `DraftDiscarded`) |
 | Lifecycle command contracts | 4 | `…Persistence.Core/Contracts/` (`ICreate/IClone/IDiscard/IPromote…`) |
-| Validation event pair | 2 | `Elsa.Workflows.Design.Validations.Core/Events/` (`OnDraftValidating`, `OnDraftValidated`) |
+| Validation event pair | 2 | `Elsa.Workflows.Design.Validations.Core/Events/` (`DraftValidating`, `DraftValidated`) |
 
 **Decision**: spec counts (20/20/3, 23 Design.Core events total) are confirmed against source. The follow-up's "22/23" framing is approximate; the plan uses the verified counts.
 
@@ -32,14 +32,14 @@ The State model carries stable ids on every dimension **except connections**, wh
 
 | Dimension | Element type | Match key (identity) | Update event exists? |
 |---|---|---|---|
-| Variables | `VariableDefinition` | `ReferenceKey` (string) | yes (`OnVariableUpdatedInDraft`) |
+| Variables | `VariableDefinition` | `ReferenceKey` (string) | yes (`VariableUpdatedInDraft`) |
 | Workflow inputs | `InputDefinition` | `ReferenceKey` | yes |
 | Workflow outputs | `OutputDefinition` | `ReferenceKey` | yes |
 | Activities | `ActivityNode` | `NodeId` (string) | no (only Add/Remove/Move) |
 | Activity inputs | `ArgumentState` (in `ActivityNode.Inputs`) | (`NodeId`, `ReferenceKey`) | yes |
 | Activity outputs | `ArgumentState` (in `ActivityNode.Outputs`) | (`NodeId`, `ReferenceKey`) | yes |
 | Connections | `ActivityConnection` | `(Source.ActivityNodeId, Source.Port) → (Target.ActivityNodeId, Target.Port)` value tuple | **no** (only Add/Remove) |
-| Layout | `DesignMetadataRecord` (in `WorkflowDefinitionDraftLayout.Records`) | `NodeId` | move (`OnActivityMovedInDraft`) |
+| Layout | `DesignMetadataRecord` (in `WorkflowDefinitionDraftLayout.Records`) | `NodeId` | move (`ActivityMovedInDraft`) |
 
 **Decision**: the semantic diff matches on these per-dimension keys. Same-key + changed-payload → UPDATE; key-absent-from-desired → REMOVE; key-absent-from-stored → ADD. A rename of a keyed element (e.g. `VariableDefinition.Name` changes while `ReferenceKey` is stable) is a single UPDATE — confirming FR-023 and SC-015.
 
@@ -55,9 +55,9 @@ The State model carries stable ids on every dimension **except connections**, wh
 
 | Detected change | Event |
 |---|---|
-| Activity present in desired, absent in stored | `OnActivityAddedToDraft` |
-| Activity absent in desired, present in stored | `OnActivityRemovedFromDraft` (+ prune its connections) |
-| Layout record (X/Y/W/H) changed for a NodeId | `OnActivityMovedInDraft` |
+| Activity present in desired, absent in stored | `ActivityAddedToDraft` |
+| Activity absent in desired, present in stored | `ActivityRemovedFromDraft` (+ prune its connections) |
+| Layout record (X/Y/W/H) changed for a NodeId | `ActivityMovedInDraft` |
 | Activity-input added / changed / removed (by `ReferenceKey`) | `OnActivityInput{Added,Updated,Removed}…` |
 | Activity-output added / changed / removed | `OnActivityOutput{Added,Updated,Removed}…` |
 | Connection tuple added / removed | `OnConnection{Added,Removed}…` |
@@ -73,9 +73,9 @@ The `Update*` events carry `OldValue` + `NewValue`; the diff supplies both (stor
 
 The 20 command bodies are tiny and uniform: each does a `State = State with { … }` (or `State.WithMutatedActivity(nodeId, …)`, or a layout-record edit) and constructs one event. Verified examples:
 
-- `AddActivityToDraftCommand`: `State = State with { Activities = State.Activities.Append(activity) }` → `OnActivityAddedToDraft`.
-- `UpdateVariableInDraftCommand`: find old by `ReferenceKey`, replace, → `OnVariableUpdatedInDraft(…, old, new)`.
-- `MoveActivityInDraftCommand`: edits the `WorkflowDefinitionDraftLayout.Records` (layout sibling, not State) → `OnActivityMovedInDraft`.
+- `AddActivityToDraftCommand`: `State = State with { Activities = State.Activities.Append(activity) }` → `ActivityAddedToDraft`.
+- `UpdateVariableInDraftCommand`: find old by `ReferenceKey`, replace, → `VariableUpdatedInDraft(…, old, new)`.
+- `MoveActivityInDraftCommand`: edits the `WorkflowDefinitionDraftLayout.Records` (layout sibling, not State) → `ActivityMovedInDraft`.
 
 **Decision**: each command's apply logic is demoted to a **private apply-step** invoked by the diff engine. Two viable internal shapes:
 
@@ -118,7 +118,7 @@ The 4 retained lifecycle commands are named `I{Verb}…Command` (`ICreateDraftCo
 
 **Decision**:
 - **Command contract**: `IUpdateDraftCommand` (impl `UpdateDraftCommand`), method `Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)`. Chosen over the bare provisional `IUpdate` for consistency with the lifecycle command naming family and to keep the contract self-describing in `…Persistence.Core/Contracts/`.
-- **Per-diff events**: keep their existing names verbatim (`OnActivityAddedToDraft`, …). They are already `IEvent`s on the Unit 1 substrate; re-homing changes only their *producer*, not their identity. Renaming them would break the catalog-parity test and event-sourcing consumers for no benefit.
+- **Per-diff events**: keep their existing names verbatim (`ActivityAddedToDraft`, …). They are already `IEvent`s on the Unit 1 substrate; re-homing changes only their *producer*, not their identity. Renaming them would break the catalog-parity test and event-sourcing consumers for no benefit.
 - **Diff engine / apply-steps**: internal; provisional `DraftStateDiffer` (computes the event list from stored-vs-desired) living in `Elsa.Workflows.Design.Persistence.EFCore` alongside `UpdateDraftCommand`. Not a public contract (G2/G25 — no `.Contracts`-style indirection, no public surface).
 
 This fully resolves the spec's only remaining `[NEEDS CLARIFICATION]` (FR-021).
@@ -127,9 +127,9 @@ This fully resolves the spec's only remaining `[NEEDS CLARIFICATION]` (FR-021).
 
 ## R8 — Validation pair reuse (confirms FR-008)
 
-**Verified**: `OnDraftValidating(IWorkflowDefinitionDraft draft)` exposes `ICollection<ValidationError> Errors`; the single `ExecuteValidations : IEventHandler<OnDraftValidating>` (`Elsa.Workflows.Design.Validations/Handlers/ExecuteValidations.cs`) injects `IEnumerable<IDraftValidator>`, calls `Validate(draft, ct)` on each, and `Errors.Add`s the results. `OnDraftValidated(draft, IReadOnlyList<ValidationError> errors)` carries the persisted outcome + `HasErrors`.
+**Verified**: `DraftValidating(IWorkflowDefinitionDraft draft)` exposes `ICollection<ValidationError> Errors`; the single `ExecuteValidations : IEventHandler<DraftValidating>` (`Elsa.Workflows.Design.Validations/Handlers/ExecuteValidations.cs`) injects `IEnumerable<IDraftValidator>`, calls `Validate(draft, ct)` on each, and `Errors.Add`s the results. `DraftValidated(draft, IReadOnlyList<ValidationError> errors)` carries the persisted outcome + `HasErrors`.
 
-**Decision**: unchanged. `IUpdate` runs the identical Sequential gate once against the post-diff state, upserts the validation sibling wholesale, then Background-publishes the per-diff events followed by `OnDraftValidated` (cause-before-effect). This is the exact `DraftMutationPipeline.ExecuteMutation` ordering, lifted into the command. No validator, no `IDraftValidator` contract, no validation event changes. (Confirms SC-007.)
+**Decision**: unchanged. `IUpdate` runs the identical Sequential gate once against the post-diff state, upserts the validation sibling wholesale, then Background-publishes the per-diff events followed by `DraftValidated` (cause-before-effect). This is the exact `DraftMutationPipeline.ExecuteMutation` ordering, lifted into the command. No validator, no `IDraftValidator` contract, no validation event changes. (Confirms SC-007.)
 
 ---
 
@@ -151,7 +151,7 @@ This fully resolves the spec's only remaining `[NEEDS CLARIFICATION]` (FR-021).
 
 ## R11 — Lifecycle commands during the absorption (confirms FR-003)
 
-**Verified**: `CreateDraftCommand` + `CloneDraftFromVersionCommand` call `DraftMutationPipeline.ExecuteCreation`; `DiscardDraftCommand` **already** bypasses the pipeline (own lock + direct delete + Background `OnDraftDiscarded`); `PromoteDraftToVersionCommand` is an unimplemented placeholder (Unit D).
+**Verified**: `CreateDraftCommand` + `CloneDraftFromVersionCommand` call `DraftMutationPipeline.ExecuteCreation`; `DiscardDraftCommand` **already** bypasses the pipeline (own lock + direct delete + Background `DraftDiscarded`); `PromoteDraftToVersionCommand` is an unimplemented placeholder (Unit D).
 
 **Decision**: Unit 2 absorbs only the **mutation** path (`ExecuteMutation`) into `IUpdateDraftCommand`. The `ExecuteCreation` path **stays** on `DraftMutationPipeline` for now so create/clone remain green (least-invasive, FR-003). After Unit 2, `DraftMutationPipeline` no longer has a *mutation* responsibility; its residual creation path + the create/clone/discard topology alignment is the [`2026-06-03_followup_lifecycle_command_shells.md`](../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-06-03_followup_lifecycle_command_shells.md) follow-up; promote is Unit D. So "no standalone `DraftMutationPipeline` on the **mutation** path" (SC-006) is satisfied even though the type lingers for creation until the follow-up retires it.
 

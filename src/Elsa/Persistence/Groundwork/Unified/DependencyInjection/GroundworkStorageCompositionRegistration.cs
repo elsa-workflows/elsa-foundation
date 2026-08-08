@@ -68,7 +68,7 @@ public static class GroundworkStorageCompositionRegistration
         services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
         services.TryAddScoped<GroundworkStorageCompositionValidator>();
         services.TryAddScoped<GroundworkStorageCompositionHandler>();
-        services.TryAddEventHandler<OnGroundworkStorageComposing, GroundworkStorageCompositionHandler>();
+        services.TryAddEventHandler<GroundworkStorageComposing, GroundworkStorageCompositionHandler>();
         services.TryAddScoped(sp => new GroundworkStorageCompositionFactory(
             sp.GetRequiredService<GroundworkStorageCompositionHandler>(),
             sp.GetRequiredService<GroundworkStorageCompositionValidator>(),

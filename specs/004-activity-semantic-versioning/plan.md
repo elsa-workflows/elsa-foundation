@@ -53,9 +53,9 @@ All five spec-deferred items are resolved in this plan (see [research.md](resear
 | G18 | Persistence command/query split | **PASS** | Ordering change touches a query path (`ActivityVersionOrderDefinition` / lookup); no command/query merge introduced. |
 | G19 | No hidden dual-integration module | **PASS** | `.Clr` integrates one concern (CLR assembly scanning). |
 | G20 | **Refactor: existing tests keep passing** | **PASS (must hold)** | FR-021/FR-018 are §2.21.1 golden-rule refactors. Existing reconciliation + catalog tests preserved; only wiring/type-locations/version-type move. `ReadContractSurfaceTests` updated to assert the new `string` type (a pin update, not a subject change). |
-| G21 | Domain events are the contribution mechanism | **PASS** | Contribution flows through `OnActivityVersionsReconciling` + `IEnumerable<IActivityReconciliationSource>` (Registry-style sync read at startup). No new `IEnumerable<TProvider>` introduced *for new code* beyond the already-established reconciliation-source surface (legacy-aligned, Unit B). |
+| G21 | Domain events are the contribution mechanism | **PASS** | Contribution flows through `ActivityVersionsReconciling` + `IEnumerable<IActivityReconciliationSource>` (Registry-style sync read at startup). No new `IEnumerable<TProvider>` introduced *for new code* beyond the already-established reconciliation-source surface (legacy-aligned, Unit B). |
 | G22 | No tight logic coupling between impls | **PASS** | `.Clr` and the reconciler communicate only through the contribution model + event. |
-| G23 | Generic dispatch not a coupling mechanism | **PASS** | `OnActivityVersionsReconciling` is a declared domain event with an expected aggregating handler — not smuggled through a generic bus. |
+| G23 | Generic dispatch not a coupling mechanism | **PASS** | `ActivityVersionsReconciling` is a declared domain event with an expected aggregating handler — not smuggled through a generic bus. |
 | G24 | Design-time vs runtime contract split | **PASS** | The `Version` semver is the shared `.Core` data shape; design-time (catalog/picker) and runtime (execution) consume it through their own contracts (FR-018 unifies the *value*, not the consumers). |
 | G25 | Provider-impl deps only in provider-suffixed features | **PASS** | `.Clr` carries the provider suffix and is the only project pulling assembly-loading. Generic reconciliation feature depends only on `.Core`. |
 | G26 | Feature documentation (handlers + tasks) | **PASS (deliverable)** | `EXTENSION_POINTS.md` for the reconciliation feature updated; `.Clr` ships its own listing (the source it registers, the folder-path option). |
@@ -104,7 +104,7 @@ src/
 ├── Elsa.Activities.Design.Reconciliation.Core/         # RECEIVES (FR-021):
 │   ├── IActivityReconciliationSource.cs                #   moved from the feature project
 │   ├── Models/ActivityVersionReconciliationModel.cs    #   moved; Version : string
-│   └── (existing: OnActivityVersionsReconciling, IActivityVersionReconciler, IActivityDefinitionHasher, ActivityVersionHashMismatchException : string)
+│   └── (existing: ActivityVersionsReconciling, IActivityVersionReconciler, IActivityDefinitionHasher, ActivityVersionHashMismatchException : string)
 │
 ├── Elsa.Activities.Design.Reconciliation/              # RESHAPED (FR-021): non-abstract, no Sources;
 │                                                        #   registers options + default hasher + reconciler + single startup task + universal handler

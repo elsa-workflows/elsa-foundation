@@ -10,7 +10,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Serialization` �
 - **Kind:** Source (returns values — pull pattern).
 - **Signature:** `IEnumerable<JsonConverter> GetConverters();`
 - **Register:** `services.AddScoped<IJsonConverterSource, MySource>()`.
-- **Aggregated by:** the single `RegisterJsonConverters : IEventHandler<OnJsonPayloadConvertersInitializing>` (this feature), which injects `IEnumerable<IJsonConverterSource>`, calls `GetConverters()` on each, and adds every converter to the event's `Converters` collection.
+- **Aggregated by:** the single `RegisterJsonConverters : IEventHandler<JsonPayloadConvertersInitializing>` (this feature), which injects `IEnumerable<IJsonConverterSource>`, calls `GetConverters()` on each, and adds every converter to the event's `Converters` collection.
 - **Adding one does not replace the others** — all registered sources contribute their converters.
 
 **Known implementations (shipped):**
@@ -21,7 +21,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Serialization` �
 
 ## Events
 
-### OnJsonPayloadConvertersInitializing
+### JsonPayloadConvertersInitializing
 `(ICollection<JsonConverter> Converters)`
 
 **Semantic.** The JSON serialisation pipeline is initialising and collecting converters. Contributor-shaped: the `Converters` collection is the directly-accessible write sink that `RegisterJsonConverters` fills from all `IJsonConverterSource` implementations.
@@ -30,7 +30,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Serialization` �
 
 **Publication site.** `JsonPayloadConvertersInitializingStartupTask` (`Elsa.Serialization`) — a startup task that fires once before the application handles its first request.
 
-**Expected handler.** Exactly one `IEventHandler<OnJsonPayloadConvertersInitializing>`: `RegisterJsonConverters` (this feature).
+**Expected handler.** Exactly one `IEventHandler<JsonPayloadConvertersInitializing>`: `RegisterJsonConverters` (this feature).
 
 ---
 

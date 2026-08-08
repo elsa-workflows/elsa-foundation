@@ -189,9 +189,9 @@ concern for large templates (DS‑12).
 `IScriptPreProcessor`/`IScriptPostProcessor` *extension point* is well justified: activities and the
 runtime genuinely need to inject different globals depending on execution context (workflow functions vs.
 materialization-only accessors). What's questionable is the mechanism: every one of these "contributor list"
-extension points in this review (`OnEvaluatingScript`, `OnScriptEvaluated`, `OnDeclarationsDocumentGenerating`,
-`OnDraftValidating`, `OnActivityConstructorsInitializing`, `OnActivityVersionsReconciling`,
-`OnWorkflowVersionsReconciling`) is documented as having **"Expected handler: exactly one"** — i.e. it is not
+extension points in this review (`OnEvaluatingScript`, `OnScriptEvaluated`, `DeclarationsDocumentGenerating`,
+`DraftValidating`, `OnActivityConstructorsInitializing`, `ActivityVersionsReconciling`,
+`WorkflowVersionsReconciling`) is documented as having **"Expected handler: exactly one"** — i.e. it is not
 actually a fan-out pub/sub scenario, it is always "inject `IEnumerable<TContributor>` into one aggregator and
 call it," dressed up as a domain event round-tripped through `IEventPublisher`/mediator. `DefaultActivityStructureService`
 in the very same codebase shows the simpler alternative (inject `IEnumerable<IActivityStructureHandler>`
@@ -230,7 +230,7 @@ meaningful priority signal.
 root `ActivityNode` tree, workflow inputs/outputs). Every mutation goes through `IUpdateDraftCommand`, which
 diffs desired vs. stored state (`IDraftStateDiffEngine`), emits one fine-grained event per change (activity
 added/removed/moved, input/output/variable added/updated/removed — 18 event types total), and — inside the
-same per-Draft lock — synchronously publishes `OnDraftValidating` so every registered `IDraftValidator` can
+same per-Draft lock — synchronously publishes `DraftValidating` so every registered `IDraftValidator` can
 add `ValidationError`s before the transaction commits. `IPromoteDraftToVersionCommand` freezes the Draft's
 state into an immutable `WorkflowDefinitionVersion`, refusing to promote while validation errors are on
 record (`DraftHasValidationErrorsException`).
@@ -256,7 +256,7 @@ flowchart TB
     subgraph Design["Workflows.Design"]
         Draft["WorkflowDefinitionDraft\n(mutable WorkflowDefinitionState:\nVariables, RootActivity ActivityNode tree,\nInputs, Outputs)"]
         Diff["IUpdateDraftCommand\n+ IDraftStateDiffEngine\n(emits 18 On*Draft* events)"]
-        Validate["OnDraftValidating (Sequential)\n4 baseline + activity IDraftValidator[]"]
+        Validate["DraftValidating (Sequential)\n4 baseline + activity IDraftValidator[]"]
         Version["WorkflowDefinitionVersion\n(immutable snapshot, IPromoteDraftToVersionCommand)"]
         Draft --> Diff --> Validate -->|no errors| Version
     end
@@ -382,7 +382,7 @@ DS‑6) or delete the placeholder files and track the gap in an issue instead of
 ### DS‑6 — The documented Draft-mutation lifecycle has no HTTP surface
 **Severity:** High (feature gap masquerading as "done" because the domain model is fully built)
 **Evidence:** `Elsa.Workflows.Design.Api/EXTENSION_POINTS.md` documents 18 fine-grained mutation events
-(`OnActivityAddedToDraft` … `OnWorkflowOutputRemovedFromDraft`) all published by `IUpdateDraftCommand`. The
+(`ActivityAddedToDraft` … `WorkflowOutputRemovedFromDraft`) all published by `IUpdateDraftCommand`. The
 full command set exists and has EF Core + Groundwork implementations (`IUpdateDraftCommand`,
 `ICreateDraftCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `ICloneDraftFromVersionCommand`
 — all under `Persistence/Core/Contracts`, with `EFCore/Commands/*` and `Groundwork/Services/*`
@@ -499,13 +499,13 @@ extension points.
 **Severity:** Low (ceremony, not a bug)
 **Evidence:** Every one of the following is documented with **"Expected handler: Exactly one"**:
 `OnEvaluatingScript`→`PreProcessScript` (`Expressions.JavaScript/EXTENSION_POINTS.md:59`),
-`OnScriptEvaluated`→`PostProcessScript` (same file, line 72), `OnDeclarationsDocumentGenerating`→
-`BuildDeclarationsDocument` (`Expressions.JavaScript.Rendering/EXTENSION_POINTS.md:43`), `OnDraftValidating`→
+`OnScriptEvaluated`→`PostProcessScript` (same file, line 72), `DeclarationsDocumentGenerating`→
+`BuildDeclarationsDocument` (`Expressions.JavaScript.Rendering/EXTENSION_POINTS.md:43`), `DraftValidating`→
 `ExecuteValidations` (`Workflows.Design.Validations/EXTENSION_POINTS.md:59`),
 `OnActivityConstructorsInitializing`→`RegisterActivityConstructors`
-(`Activities.Runtime/EXTENSION_POINTS.md:71`), `OnActivityVersionsReconciling`→
+(`Activities.Runtime/EXTENSION_POINTS.md:71`), `ActivityVersionsReconciling`→
 `ActivityVersionsReconcilingHandler` (`Activities.Design.Reconciliation/EXTENSION_POINTS.md:41`),
-`OnWorkflowVersionsReconciling`→`WorkflowVersionsReconcilingHandler`
+`WorkflowVersionsReconciling`→`WorkflowVersionsReconcilingHandler`
 (`Workflows.Design.Reconciliation/EXTENSION_POINTS.md:41`). Each real extension point is actually the
 *contributor list* (`IScriptPreProcessor`, `IDraftValidator`, `IActivityConstructor`, `I*ReconciliationSource`),
 which is always resolved as `IEnumerable<T>` inside that one handler — see e.g.

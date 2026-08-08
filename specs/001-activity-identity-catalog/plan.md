@@ -5,7 +5,7 @@
 
 ## Summary
 
-Reshape the activity catalog around a stable logical identity (`ActivityTypeKey`) and a polymorphic `IImplementationDescriptor` that decouples *what the activity is* from *how the runtime constructs it*. Split provenance into immutable creation provenance (on `ActivityDefinition`) and operational reconciliation state (on a new sibling entity). Introduce a kind-typed `IActivityImplementationResolver` + a kind-agnostic `IActivityFactory` for construction dispatch, plus a parallel `IImplementationDescriptorRegistry` for kind-→-CLR-type resolution at persistence-load time (both registries follow the canonical §2.6.1 Registry + StartUp Task sub-pattern). Pin the catalog as the single source-of-truth for picker visibility (no live-provider lookup, no `IsBrowsable` flag). Rename the existing `Provisioning` modules to `Reconciliation` to align with Sipke item 6's idempotent-lifecycle framing. Fold in (a) Unit A's `OnEntitySaving` migration for the activity-catalog saving handlers (model-creating stays on the existing `IEntityModelCreatingHandler` sync-side-effect mechanism), (b) the `TenantEntity` base-class hygiene refactor across activity-catalog and workflow-side entities, and (c) the seed JSON-file reconciliation source as end-to-end proof.
+Reshape the activity catalog around a stable logical identity (`ActivityTypeKey`) and a polymorphic `IImplementationDescriptor` that decouples *what the activity is* from *how the runtime constructs it*. Split provenance into immutable creation provenance (on `ActivityDefinition`) and operational reconciliation state (on a new sibling entity). Introduce a kind-typed `IActivityImplementationResolver` + a kind-agnostic `IActivityFactory` for construction dispatch, plus a parallel `IImplementationDescriptorRegistry` for kind-→-CLR-type resolution at persistence-load time (both registries follow the canonical §2.6.1 Registry + StartUp Task sub-pattern). Pin the catalog as the single source-of-truth for picker visibility (no live-provider lookup, no `IsBrowsable` flag). Rename the existing `Provisioning` modules to `Reconciliation` to align with Sipke item 6's idempotent-lifecycle framing. Fold in (a) Unit A's `EntitySaving` migration for the activity-catalog saving handlers (model-creating stays on the existing `IEntityModelCreatingHandler` sync-side-effect mechanism), (b) the `TenantEntity` base-class hygiene refactor across activity-catalog and workflow-side entities, and (c) the seed JSON-file reconciliation source as end-to-end proof.
 
 ## Technical Context
 
@@ -41,7 +41,7 @@ Reshape the activity catalog around a stable logical identity (`ActivityTypeKey`
 | G2 — domain-language naming only | **PASS** | No `Features.*` / `Modules.*` / `Implementations.*` / `Providers.*` / `Adapters.*` / `.Contracts` / `.Abstractions` segments introduced. The `Reconciliation` rename replaces `Provisioning` with another domain-language term. |
 | G3 — no heavy dep in `.Core` | **PASS** | `Activities.Design.Core` adds only domain types (records, smart-enums, descriptor interface). `Activities.Runtime.Core` adds the factory + resolver interfaces. No heavy NuGet enters either. `Reconciliation.Core` carries only `IActivityDefinitionHasher` + event types. |
 | G4 — no peer impl-to-impl across unrelated sub-domains | **PASS** | The `Reconciliation.Json` feature references `Reconciliation` (provider-family inheritance) — permitted. No cross-domain impl references. |
-| G5 — contract kind declared | **PASS** | New contribution contracts (`OnActivityImplementationResolversInitializing`, `OnImplementationDescriptorsInitializing`, `OnActivityVersionsReconciling`, `OnEntitySaving`) are domain events per §2.6.1 — contribution kind. Replacement contracts: `IActivityFactory` (one factory per host), `IActivityDefinitionHasher` (default impl, replaceable per provider), `IImplementationDescriptorRegistry` + `IActivityImplementationResolverRegistry` (one of each per host). `IEntityModelCreatingHandler` is NOT migrated to a domain event — sync side-effect chain pattern; documented exception per G21 + clarifications session 3. |
+| G5 — contract kind declared | **PASS** | New contribution contracts (`OnActivityImplementationResolversInitializing`, `OnImplementationDescriptorsInitializing`, `ActivityVersionsReconciling`, `EntitySaving`) are domain events per §2.6.1 — contribution kind. Replacement contracts: `IActivityFactory` (one factory per host), `IActivityDefinitionHasher` (default impl, replaceable per provider), `IImplementationDescriptorRegistry` + `IActivityImplementationResolverRegistry` (one of each per host). `IEntityModelCreatingHandler` is NOT migrated to a domain event — sync side-effect chain pattern; documented exception per G21 + clarifications session 3. |
 | G6 — §2.7.1 decision rule applied | **PASS** | Inheritance: `ActivityDefinition`/`ActivityDefinitionVersion` → `TenantEntity` → `Entity` (specialization). Adapter: CLR resolver wraps `Type` activation behind `IActivityImplementationResolver<ClrImplementationDescriptor>`. Provider/contributor: resolvers contributed via domain event. Each role explicit. |
 | G7 — no `DependsOn` | **PASS** | No static feature-dependency declarations introduced. |
 | G8 — `TDbContext : DbContext` only | **PASS** | The `TenantId` index registration in `ElsaDbContextBase.OnModelCreating` scans for `TenantEntity` descendants generically — no `where TDbContext : ElsaDbContextBase` constraint. `ElsaDbContextBase` remains opt-in per §E2.5. |
@@ -57,7 +57,7 @@ Reshape the activity catalog around a stable logical identity (`ActivityTypeKey`
 | G18 — CQS at persistence boundary | **PASS** | Existing CQS shape preserved; `IAddActivityDefinitionCommand`, `IQueries<ActivityDefinition>`, etc. follow the split. |
 | G19 — dual-integration smell | N/A | No new cross-system integration introduced. |
 | G20 — refactor work preserves existing tests | **PASS** | The plan honours §2.21.1; existing handler/provisioner tests will be migrated (test setup may change; subject + objective preserved). Any test that genuinely no longer applies (e.g. tests asserting `IsBrowsable=false` behaviour) requires explicit architect approval per the rule. |
-| G21 — domain events for contribution | **PASS** | Cross-feature contributions go through domain events: `OnActivityVersionsReconciling` (source contributions), `OnActivityImplementationResolversInitializing` (resolver contributions), `OnImplementationDescriptorsInitializing` (descriptor type registry contributions), `OnEntitySaving` (entity-saving hook). `IEntityModelCreatingHandler` is retained under the **§2.6.5 sync contributor pattern — rare exception** (newly codified in the constitution): all three §2.6.5 criteria hold (intrinsically sync dispatch site, behaviour-not-data contribution, Registry + StartUp Task structurally inapplicable). Canonical worked example: Elsa §E3.9. |
+| G21 — domain events for contribution | **PASS** | Cross-feature contributions go through domain events: `ActivityVersionsReconciling` (source contributions), `OnActivityImplementationResolversInitializing` (resolver contributions), `OnImplementationDescriptorsInitializing` (descriptor type registry contributions), `EntitySaving` (entity-saving hook). `IEntityModelCreatingHandler` is retained under the **§2.6.5 sync contributor pattern — rare exception** (newly codified in the constitution): all three §2.6.5 criteria hold (intrinsically sync dispatch site, behaviour-not-data contribution, Registry + StartUp Task structurally inapplicable). Canonical worked example: Elsa §E3.9. |
 | G22 — no tight logic coupling | **PASS** | All cross-feature dependencies are contract-level (domain events with declared payload shapes). The factory/resolver split itself enforces this: resolver returns `Type`; factory does activation. No reliance on side effects between concrete classes. |
 | G23 — generic dispatch is not coupling | **PASS** | Domain events used throughout; no `IMediator.Send` for handler-expected-to-run scenarios. |
 | G24 — design-time vs runtime contract split | **PASS** | `ArgumentDefinition` (design-time canvas) is distinct from `ArgumentState` (filled-in canvas, design-time) which is distinct from runtime evaluation outputs. The factory bridges design → runtime at construction time; descriptor + states live design-side; runtime contracts (`IActivity`, factory, resolver) live runtime-side. |
@@ -86,9 +86,9 @@ specs/001-activity-identity-catalog/
 │   ├── IActivityFactory.md
 │   ├── IActivityImplementationResolver.md
 │   ├── IActivityDefinitionHasher.md
-│   ├── OnActivityVersionsReconciling.md
-│   ├── OnActivityImplementationResolversInitializing.md
-│   ├── OnEntitySaving.md
+│   ├── ActivityVersionsReconciling.md
+│   ├── ActivityImplementationResolversInitializing.md
+│   ├── EntitySaving.md
 │   └── read-contracts.md
 ├── checklists/
 │   └── requirements.md           # Already created at /speckit.specify
@@ -108,8 +108,8 @@ src/
 
 # --- Persistence ---
 ├── Elsa.Persistence.EFCore/
-│   ├── ElsaDbContextBase.cs                            # TenantEntity-aware index registration; dispatches OnEntitySaving (model-creating stays on IEntityModelCreatingHandler)
-│   ├── Events/OnEntitySaving.cs                        # NEW — domain event (carries DbContext + EntityEntry)
+│   ├── ElsaDbContextBase.cs                            # TenantEntity-aware index registration; dispatches EntitySaving (model-creating stays on IEntityModelCreatingHandler)
+│   ├── Events/EntitySaving.cs                        # NEW — domain event (carries DbContext + EntityEntry)
 │   ├── Contracts/IEntityModelCreatingHandler.cs        # UNCHANGED — sync side-effect chain pattern; not migrated
 │   └── Contracts/IGlobalEntitySavingHandler.cs         # DEPRECATED for activity-catalog (kept for the legacy migration tail elsewhere)
 
@@ -150,7 +150,7 @@ src/
 │   ├── Configurations/ActivityDefinitionConfiguration.cs        # unique (SourceKind, SourceId, ActivityTypeKey) + lookup (SourceKind, SourceId)
 │   ├── Configurations/ActivityDefinitionVersionConfiguration.cs # ImplementationDescriptor shadow column (immutable via PropertySaveBehavior.Throw); (DefinitionId, Version) unique
 │   ├── Configurations/ActivityDefinitionReconciliationStateConfiguration.cs  # NEW — FK + IsStale index
-│   ├── EntityHandlers/*SavingHandler.cs                # MIGRATED — registered as IDomainEventHandler<OnEntitySaving>
+│   ├── EntityHandlers/*SavingHandler.cs                # MIGRATED — registered as IDomainEventHandler<EntitySaving>
 │   ├── EntityHandlers/*ModelCreatingHandler.cs         # UNCHANGED — stays on IEntityModelCreatingHandler (sync side-effect chain)
 │   └── Services/AddActivityDefinitionCommand.cs        # updated
 
@@ -172,7 +172,7 @@ src/
 # --- Reconciliation (renamed from Provisioning) ---
 ├── Elsa.Activities.Design.Reconciliation.Core/         # RENAMED from .Provisioning.Core
 │   ├── IActivityVersionReconciler.cs                   # RENAMED from IActivityVersionProvisioner
-│   ├── OnActivityVersionsReconciling.cs                # RENAMED from OnActivityVersionsProvisioning
+│   ├── ActivityVersionsReconciling.cs                # RENAMED from OnActivityVersionsProvisioning
 │   └── IActivityDefinitionHasher.cs                    # NEW
 
 ├── Elsa.Activities.Design.Reconciliation/              # RENAMED from .Provisioning
@@ -184,7 +184,7 @@ src/
 
 ├── Elsa.Activities.Design.Reconciliation.Json/         # NEW — seed JSON-file source
 │   ├── ActivitiesDesignReconciliationJsonFeature.cs
-│   ├── Handlers/JsonActivityVersionsReconcilingHandler.cs  # handles OnActivityVersionsReconciling
+│   ├── Handlers/JsonActivityVersionsReconcilingHandler.cs  # handles ActivityVersionsReconciling
 │   ├── Services/JsonActivityCatalogReader.cs
 │   ├── Options/JsonReconciliationOptions.cs
 │   └── Models/JsonCatalogEntry.cs                      # mirrors elsa-core-activities.json
@@ -223,7 +223,7 @@ tests/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| G10 + G13 — NuGet identity rename + feature-class rename: `Elsa.Activities.Design.Provisioning.*` → `Elsa.Activities.Design.Reconciliation.*`; `IActivityVersionProvisioner` → `IActivityVersionReconciler`; `OnActivityVersionsProvisioning` → `OnActivityVersionsReconciling`; `ActivitiesDesignProvisioningFeature` → `ActivitiesDesignReconciliationFeature`. | Sipke item 6 (2026-05-26) reframes provisioning as one trigger of a broader idempotent reconciliation lifecycle. The new name names the lifecycle accurately; the old name names a sub-step. Ratified at clarify session 2 (2026-05-27). | Keeping `Provisioning` would leave the module name misaligned with the conceptual framing every architect now uses in conversation; downstream Unit F's reconciliation behaviour would land in a module called `Provisioning`, which would confuse readers. The rename is cheap NOW (pre-ratification, no production consumers); deferred it gets more expensive. |
+| G10 + G13 — NuGet identity rename + feature-class rename: `Elsa.Activities.Design.Provisioning.*` → `Elsa.Activities.Design.Reconciliation.*`; `IActivityVersionProvisioner` → `IActivityVersionReconciler`; `OnActivityVersionsProvisioning` → `ActivityVersionsReconciling`; `ActivitiesDesignProvisioningFeature` → `ActivitiesDesignReconciliationFeature`. | Sipke item 6 (2026-05-26) reframes provisioning as one trigger of a broader idempotent reconciliation lifecycle. The new name names the lifecycle accurately; the old name names a sub-step. Ratified at clarify session 2 (2026-05-27). | Keeping `Provisioning` would leave the module name misaligned with the conceptual framing every architect now uses in conversation; downstream Unit F's reconciliation behaviour would land in a module called `Provisioning`, which would confuse readers. The rename is cheap NOW (pre-ratification, no production consumers); deferred it gets more expensive. |
 
 ---
 

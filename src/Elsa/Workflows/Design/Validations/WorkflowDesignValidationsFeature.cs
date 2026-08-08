@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Design.Validations;
 
 /// <summary>
 /// Activation unit for the workflow-design validations sub-domain (Unit C FR-032). Registers the
-/// single <see cref="ExecuteValidations"/> handler for <c>OnDraftValidating</c> plus the baseline
+/// single <see cref="ExecuteValidations"/> handler for <c>DraftValidating</c> plus the baseline
 /// universal validators (FR-033) — unknown-activity-version, unhandled-activity-structure,
 /// missing root activity, variable-uniqueness, required-input/output,
 /// variable-expression-resolver, value-flow — as <see cref="IDraftValidator"/>
@@ -50,7 +50,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
             options.MaxRecursionDepth = MaxRecursionDepth;
         });
 
-        services.AddEventHandler<OnDraftValidating, ExecuteValidations>();
+        services.AddEventHandler<DraftValidating, ExecuteValidations>();
 
         services.AddScopedVariableAuthoring();
         services.AddScoped<ActivityTreeWalker>();

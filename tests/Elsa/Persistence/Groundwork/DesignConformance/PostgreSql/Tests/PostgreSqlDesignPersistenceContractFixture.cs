@@ -139,7 +139,7 @@ internal sealed class PostgreSqlDesignPersistenceContractFixture : IDesignPersis
         return Task.FromResult(_events.Snapshot());
     }
 
-    internal Task<OnDraftCreated> WaitForPublishedDraftCreatedAsync(
+    internal Task<DraftCreated> WaitForPublishedDraftCreatedAsync(
         string draftId,
         CancellationToken cancellationToken = default)
     {
@@ -302,12 +302,12 @@ internal sealed class PostgreSqlDesignPersistenceContractFixture : IDesignPersis
         services.AddGroundworkPostgreSqlUnifiedPersistence(_connectionString, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
-        services.AddScoped<IEventHandler<OnGroundworkStorageComposing>>(
-            _ => new GroundworkTargetCaptureHandler<OnGroundworkStorageComposing>(_events));
-        services.AddScoped<IEventHandler<OnDraftValidating>>(
-            _ => new GroundworkTargetCaptureHandler<OnDraftValidating>(_events));
-        services.AddScoped<IEventHandler<OnDraftCreated>, GroundworkTargetDraftCreatedCaptureHandler>();
-        services.AddScoped<IEventHandler<OnActivityVersionsReconciling>>(sp =>
+        services.AddScoped<IEventHandler<GroundworkStorageComposing>>(
+            _ => new GroundworkTargetCaptureHandler<GroundworkStorageComposing>(_events));
+        services.AddScoped<IEventHandler<DraftValidating>>(
+            _ => new GroundworkTargetCaptureHandler<DraftValidating>(_events));
+        services.AddScoped<IEventHandler<DraftCreated>, GroundworkTargetDraftCreatedCaptureHandler>();
+        services.AddScoped<IEventHandler<ActivityVersionsReconciling>>(sp =>
             new GroundworkTargetReconciliationHandler(
                 sp.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 _events));
@@ -580,8 +580,8 @@ internal sealed class GroundworkTargetAtomicityOperationCancellation : IDisposab
 internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry telemetry)
 {
     private readonly ConcurrentQueue<IEvent> _events = new();
-    private readonly ConcurrentQueue<OnDraftCreated> _publishedDraftCreatedEvents = new();
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<OnDraftCreated>> _publishedDraftCreatedWaiters =
+    private readonly ConcurrentQueue<DraftCreated> _publishedDraftCreatedEvents = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<DraftCreated>> _publishedDraftCreatedWaiters =
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, IReadOnlyCollection<ActivityDefinitionVersion>> _candidates =
         new(StringComparer.Ordinal);
@@ -611,7 +611,7 @@ internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry t
     }
 
     public void RecordReconciliationPass() => telemetry.RecordReconciliationPass();
-    public Task<OnDraftCreated> WaitForPublishedDraftCreatedAsync(string draftId, CancellationToken cancellationToken)
+    public Task<DraftCreated> WaitForPublishedDraftCreatedAsync(string draftId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
         var waiter = _publishedDraftCreatedWaiters
@@ -626,7 +626,7 @@ internal sealed class GroundworkTargetEventCapture(GroundworkBaselineTelemetry t
         return waiter.Task.WaitAsync(cancellationToken);
     }
 
-    public void RecordPublishedDraftCreated(OnDraftCreated @event)
+    public void RecordPublishedDraftCreated(DraftCreated @event)
     {
         _publishedDraftCreatedEvents.Enqueue(@event);
         if (_publishedDraftCreatedWaiters.TryRemove(@event.DraftId, out var waiter))
@@ -668,19 +668,19 @@ internal sealed class GroundworkTargetDraftCreatedCaptureHandler(
     IPersistenceAccessContextBinder accessContextBinder,
     IWorkflowDefinitionDraftStore drafts,
     GroundworkTargetEventCapture capture)
-    : IEventHandler<OnDraftCreated>
+    : IEventHandler<DraftCreated>
 {
-    public async Task Handle(OnDraftCreated @event, CancellationToken cancellationToken)
+    public async Task Handle(DraftCreated @event, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // OnDraftCreated intentionally carries aggregate identity rather than a persistence scope.
+        // DraftCreated intentionally carries aggregate identity rather than a persistence scope.
         // The PostgreSQL lifecycle evidence exercises ScopeA, so the background handler binds that
         // explicit test scope before using the same public read port as an application consumer.
         accessContextBinder.Bind(PersistenceAccessContext.Scoped(new PersistenceScope(DesignPersistenceFixtureData.ScopeA)));
         if (await drafts.FindWithLayoutByIdAsync(@event.DraftId, cancellationToken) is null)
         {
             throw new InvalidOperationException(
-                "OnDraftCreated reached the composed event pipeline before its draft was durable.");
+                "DraftCreated reached the composed event pipeline before its draft was durable.");
         }
 
         capture.RecordPublishedDraftCreated(@event);
@@ -690,9 +690,9 @@ internal sealed class GroundworkTargetDraftCreatedCaptureHandler(
 internal sealed class GroundworkTargetReconciliationHandler(
     IPersistenceAccessContextAccessor accessContext,
     GroundworkTargetEventCapture capture)
-    : IEventHandler<OnActivityVersionsReconciling>
+    : IEventHandler<ActivityVersionsReconciling>
 {
-    public Task Handle(OnActivityVersionsReconciling @event, CancellationToken cancellationToken)
+    public Task Handle(ActivityVersionsReconciling @event, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         capture.Record(@event);

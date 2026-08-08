@@ -85,6 +85,6 @@ Rules that keep deployments deterministic:
 
 - Reconciliation policy: Model X (§E2.8 / §E2.9.5) — creation-time reconcile, no per-pass mutating fields.
 - Publish-on-reconcile seam: the publish step is a Publishing-engine subscriber on
-  `OnWorkflowVersionsReconciled` (§2.6.1 independent subscription; Sequential per §2.6.6) — see the
+  `WorkflowVersionsReconciled` (§2.6.1 independent subscription; Sequential per §2.6.6) — see the
   [reconciliation extension-point catalog](../EXTENSION_POINTS.md) and the
   [publishing engine README](../../../Publishing/README.md).

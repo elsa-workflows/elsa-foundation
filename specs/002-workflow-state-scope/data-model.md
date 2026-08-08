@@ -49,25 +49,25 @@ Entity inventory + relationships + lifecycle for the Workflow Design substrate l
 
 | Event | Project | Kind | FR |
 |---|---|---|---|
-| `OnDraftCreated` | Workflows.Design.Core | lifecycle | FR-018 |
-| `OnActivityAddedToDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
-| `OnActivityRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
-| `OnActivityPropertyChangedInDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
-| `OnActivityMovedInDraft` | Workflows.Design.Core | mutation (layout) | FR-018 |
+| `DraftCreated` | Workflows.Design.Core | lifecycle | FR-018 |
+| `ActivityAddedToDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
+| `ActivityRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
+| `ActivityPropertyChangedInDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
+| `ActivityMovedInDraft` | Workflows.Design.Core | mutation (layout) | FR-018 |
 | `OnConnectionAddedToDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
 | `OnConnectionRemovedFromDraft` | Workflows.Design.Core | mutation (graph) | FR-018 |
-| `OnVariableDeclaredInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
-| `OnVariableUpdatedInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
-| `OnVariableRemovedFromDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
-| `OnWorkflowInputAddedToDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
-| `OnWorkflowInputUpdatedInDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
-| `OnWorkflowInputRemovedFromDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
-| `OnWorkflowOutputAddedToDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
-| `OnWorkflowOutputUpdatedInDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
-| `OnWorkflowOutputRemovedFromDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
-| `OnDraftClonedFromVersion` | Workflows.Design.Core | lifecycle | FR-018a |
-| `OnDraftDiscarded` | Workflows.Design.Core | lifecycle | FR-018a |
-| `OnDraftValidating` | Workflows.Design.Validations.Core | coarse validation | FR-025 |
+| `VariableDeclaredInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
+| `VariableUpdatedInDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
+| `VariableRemovedFromDraft` | Workflows.Design.Core | mutation (variables) | FR-018 |
+| `WorkflowInputAddedToDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
+| `WorkflowInputUpdatedInDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
+| `WorkflowInputRemovedFromDraft` | Workflows.Design.Core | mutation (workflow inputs) | FR-018 |
+| `WorkflowOutputAddedToDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
+| `WorkflowOutputUpdatedInDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
+| `WorkflowOutputRemovedFromDraft` | Workflows.Design.Core | mutation (workflow outputs) | FR-018 |
+| `DraftClonedFromVersion` | Workflows.Design.Core | lifecycle | FR-018a |
+| `DraftDiscarded` | Workflows.Design.Core | lifecycle | FR-018a |
+| `DraftValidating` | Workflows.Design.Validations.Core | coarse validation | FR-025 |
 
 ### 1.5 New commands
 
@@ -113,7 +113,7 @@ public sealed class WorkflowDefinitionDraftLayout
 
 **FK:** `WorkflowDefinitionDraftId` → `WorkflowDefinitionDraft.Id` (1:0..1; Cascade on delete per R5 — FR-029 atomicity).
 
-**Mutability:** mirrors parent Draft; mutates whenever an `OnActivityMovedInDraft` event fires (FR-018 — layout event folds into the Draft event stream).
+**Mutability:** mirrors parent Draft; mutates whenever an `ActivityMovedInDraft` event fires (FR-018 — layout event folds into the Draft event stream).
 
 ### 2.3 `DesignMetadataRecord` (new — FR-006 sub-shape)
 
@@ -153,7 +153,7 @@ public sealed class WorkflowDefinitionDraftValidation
 1. Acquires per-Draft lock (FR-027).
 2. Updates `WorkflowDefinitionState` snapshot.
 3. Publishes the granular FR-018 event.
-4. Publishes `OnDraftValidating`; validators run; collect errors via `AddValidationError`.
+4. Publishes `DraftValidating`; validators run; collect errors via `AddValidationError`.
 5. Replaces this entity's `Errors` list wholesale with the collected set.
 6. Flushes both to persistence.
 7. Releases lock.
@@ -247,12 +247,12 @@ Client → IAddActivityToDraftCommand.Execute(args)
     load Draft + apply mutation in memory    ← FR-027 step 2 (snapshot update)
          │
          ▼
-    IDomainEventSender.Send(OnActivityAddedToDraft)  ← FR-027 step 3 (granular event;
+    IDomainEventSender.Send(ActivityAddedToDraft)  ← FR-027 step 3 (granular event;
          │                                              event-sourcing seam observes here)
          │   (dispatcher: Iterator → ExceptionShielding → Invoker — handler exceptions
          │    caught + logged + swallowed per FR-027c + framework §2.6.1 default)
          ▼
-    IDomainEventSender.Send(OnDraftValidating)        ← FR-027 step 4 (validators run;
+    IDomainEventSender.Send(DraftValidating)        ← FR-027 step 4 (validators run;
          │                                              contribute errors via AddValidationError)
          │   (same dispatcher shield; same swallow semantics)
          ▼
@@ -326,7 +326,7 @@ Client → ICloneDraftFromVersionCommand.Execute(sourceVersionId, targetDefiniti
     set new Draft's ClonedFromVersionId = sourceVersionId   ← provisional FK per FR-028
          │
          ▼
-    IDomainEventSender.Send(OnDraftClonedFromVersion)
+    IDomainEventSender.Send(DraftClonedFromVersion)
          │
          ▼
     transactional flush
@@ -352,7 +352,7 @@ Client → IDiscardDraftCommand.Execute(draftId)
     delete Draft + cascade siblings (Layout + Validation) per R5 cascade rules
          │
          ▼
-    IDomainEventSender.Send(OnDraftDiscarded)
+    IDomainEventSender.Send(DraftDiscarded)
          │
          ▼
     transactional flush

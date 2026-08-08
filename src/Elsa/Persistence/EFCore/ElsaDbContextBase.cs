@@ -81,7 +81,7 @@ public abstract class ElsaDbContextBase : DbContext, IElsaDbContextSchema
     }
 
     /// <summary>
-    /// Publishes <see cref="OnEntitySaving"/> for each modified <see cref="Entity"/>. The single
+    /// Publishes <see cref="EntitySaving"/> for each modified <see cref="Entity"/>. The single
     /// <c>ApplyEntitySavingHandlers</c> aggregator is the sole subscriber and dispatches every
     /// registered <see cref="IEntitySavingHandler{TDbContext,TEntity}"/> contributor. The
     /// unrelated <see cref="IGlobalEntitySavingHandler"/> (runs for every entity, no per-type
@@ -94,7 +94,7 @@ public abstract class ElsaDbContextBase : DbContext, IElsaDbContextSchema
             return;
 
         foreach (var entry in entries.Where(IsModifiedEntity))
-            await eventPublisher.Publish(new OnEntitySaving(this, entry), cancellationToken);
+            await eventPublisher.Publish(new EntitySaving(this, entry), cancellationToken);
     }
 
 

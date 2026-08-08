@@ -16,9 +16,9 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// This replaces the former <c>ValidationSiblingPersistenceTests</c>, preserving the surviving
 /// subjects against the new observation mechanisms:
 /// <list type="bullet">
-/// <item>a valid draft surfaces an empty error set on <c>OnDraftValidated</c>;</item>
-/// <item>a validator's contribution appears on <c>OnDraftValidated</c> after a mutation;</item>
-/// <item>a subsequent clean mutation yields an <c>OnDraftValidated</c> with the error gone
+/// <item>a valid draft surfaces an empty error set on <c>DraftValidated</c>;</item>
+/// <item>a validator's contribution appears on <c>DraftValidated</c> after a mutation;</item>
+/// <item>a subsequent clean mutation yields an <c>DraftValidated</c> with the error gone
 ///       (wholesale recompute, not append);</item>
 /// <item>the <see cref="DraftValidationGate"/> derives the current error set on demand (replacing
 ///       the old persisted-row read and the former store derive-port).</item>
@@ -31,13 +31,13 @@ public sealed class ValidationDerivationTests
         new("$workflow", "RootActivity/Missing", "No root activity");
 
     [Fact]
-    public async Task CreateDraft_surfaces_an_empty_error_set_on_OnDraftValidated()
+    public async Task CreateDraft_surfaces_an_empty_error_set_on_DraftValidated()
     {
         using var host = await WorkflowsDesignTestHost.CreateAsync();
 
         await CreateDraft(host, "wf-1");
 
-        var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
+        var validated = Assert.IsType<DraftValidated>(host.EventPublisher.LastOf<DraftValidated>());
         Assert.False(validated.HasErrors);
         Assert.Empty(validated.Errors);
     }
@@ -51,7 +51,7 @@ public sealed class ValidationDerivationTests
         var draftId = await CreateDraft(host, "wf-1");
         await Update(host, draftId, State(activities: [Node("node-1")]));
 
-        var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
+        var validated = Assert.IsType<DraftValidated>(host.EventPublisher.LastOf<DraftValidated>());
         Assert.True(validated.HasErrors);
         Assert.Equal(StubError, Assert.Single(validated.Errors));
     }
@@ -69,7 +69,7 @@ public sealed class ValidationDerivationTests
         host.EventPublisher.OnPublish = null;
         await Update(host, draftId, State(activities: [Node("node-1")]));
 
-        var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
+        var validated = Assert.IsType<DraftValidated>(host.EventPublisher.LastOf<DraftValidated>());
         Assert.False(validated.HasErrors);
         Assert.Empty(validated.Errors);
     }
@@ -83,7 +83,7 @@ public sealed class ValidationDerivationTests
         var draftId = await CreateDraft(host, "wf-1");
 
         // Errors are derived on demand through the gate: load the draft, then DeriveValidationErrorsAsync
-        // re-publishes OnDraftValidating on it and reads the accumulated errors back (replacing the old
+        // re-publishes DraftValidating on it and reads the accumulated errors back (replacing the old
         // store derive-port).
         using var scope = host.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();

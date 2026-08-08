@@ -52,17 +52,17 @@ public sealed class CatalogParityTests
     public static IEnumerable<object[]> CoreAssembliesWithCatalogs()
     {
         // Workflows.Design mutation events → composition root at Elsa.Workflows.Design.Api
-        yield return [typeof(OnDraftCreated), "Elsa.Workflows.Design.Api"];
+        yield return [typeof(DraftCreated), "Elsa.Workflows.Design.Api"];
         // Validation events → composition root at Elsa.Workflows.Design.Validations
-        yield return [typeof(OnDraftValidating), "Elsa.Workflows.Design.Validations"];
+        yield return [typeof(DraftValidating), "Elsa.Workflows.Design.Validations"];
         // Serialization converter-initializing event
-        yield return [typeof(OnJsonPayloadConvertersInitializing), "Elsa.Serialization.SystemText"];
+        yield return [typeof(JsonPayloadConvertersInitializing), "Elsa.Serialization.SystemText"];
         // JavaScript rendering (declarations) event
-        yield return [typeof(OnDeclarationsDocumentGenerating), "Elsa.Expressions.JavaScript.Rendering"];
+        yield return [typeof(DeclarationsDocumentGenerating), "Elsa.Expressions.JavaScript.Rendering"];
         // Activity reconciliation event
-        yield return [typeof(OnActivityVersionsReconciling), "Elsa.Activities.Design.Reconciliation"];
+        yield return [typeof(ActivityVersionsReconciling), "Elsa.Activities.Design.Reconciliation"];
         // Workflow reconciliation event
-        yield return [typeof(OnWorkflowVersionsReconciling), "Elsa.Workflows.Design.Reconciliation"];
+        yield return [typeof(WorkflowVersionsReconciling), "Elsa.Workflows.Design.Reconciliation"];
     }
 
     [Theory]
@@ -115,15 +115,18 @@ public sealed class CatalogParityTests
 
     /// <summary>
     /// Extracts level-3 markdown headings from the catalog beside the selected project file.
-    /// Filters to headings that look like event class names per R4 — alphanumeric + starts
-    /// with <c>On</c> + no decoration. Prose like <c>### OnDraftValidating: domain gate</c>
-    /// would be ignored (the regex requires the heading to end at the class name).
+    /// Filters to headings that look like event class names per R4 — PascalCase alphanumeric +
+    /// no decoration. Prose like <c>### DraftValidating: domain gate</c> would be ignored (the
+    /// regex requires the heading to end at the class name), as would any decorated heading such
+    /// as <c>### `IDraftValidator` *(Core)*</c>. An undecorated single-word level-3 heading in a
+    /// catalog is therefore reserved for event names; <see cref="Every_catalog_heading_maps_to_a_real_event"/>
+    /// fails if one appears that no event backs.
     /// </summary>
     private static IReadOnlySet<string> ReadCatalogHeadings(string projectName)
     {
         var path = FindCatalogPath(projectName);
         var content = File.ReadAllText(path);
-        var matches = Regex.Matches(content, @"^### (On[A-Za-z0-9]+)\s*$", RegexOptions.Multiline);
+        var matches = Regex.Matches(content, @"^### ([A-Z][A-Za-z0-9]*)\s*$", RegexOptions.Multiline);
         return matches.Select(m => m.Groups[1].Value).ToHashSet();
     }
 

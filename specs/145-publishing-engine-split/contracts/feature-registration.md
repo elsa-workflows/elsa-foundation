@@ -11,7 +11,7 @@ Composing **only** `WorkflowsPublishing` (no Api) MUST make all of the following
 - `IWorkflowDefinitionVersionLayoutStore` (fallback), `IActivityStructureService`, `IWorkflowDefinitionPermanentDeletionGuard`
 - `IActivityTemplateProviderCompilerRegistry`, `IActivityTemplateDependencyDiscovererRegistry`, `IActivityTemplateCompiler`
 - `IRequestHandler<PublishWorkflow, PublishedWorkflowView>` (the relocated handler) + the workflow test-run / slot-lifecycle / preflight handlers
-- Event handlers for `OnExecutableCompilationCollecting`, `OnExecutableNodeMetadataCollecting`
+- Event handlers for `ExecutableCompilationCollecting`, `ExecutableNodeMetadataCollecting`
 - `TimeProvider`
 
 MUST NOT resolve (engine is authorization-free): `IActivityPublishingAuthorizationContext` — absent in an engine-only shell.

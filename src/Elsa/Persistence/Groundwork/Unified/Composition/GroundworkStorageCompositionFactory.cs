@@ -52,7 +52,7 @@ public sealed class GroundworkStorageCompositionFactory
         deploymentSelection?.EnsureExactNamingPolicy(namingPolicy);
 
         var context = new GroundworkStorageCompositionContext();
-        var composing = new OnGroundworkStorageComposing(context);
+        var composing = new GroundworkStorageComposing(context);
         if (inlineEventPublisher is not null)
             await inlineEventPublisher.Publish(composing, cancellationToken);
         else

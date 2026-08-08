@@ -159,11 +159,11 @@ lives *inside* the EFCore command classes (`src/Elsa/Workflows/Design/Persistenc
 `.../Activities/Design/Persistence/EFCore/Services/`):
 
 - **Neutral orchestration** (already on neutral services): `IIdentityGenerator`, `IDistributedLockProvider`
-  (`workflow-draft:{id}` per-draft lock), the validation gate (`OnDraftValidating`/`OnDraftValidated` events +
+  (`workflow-draft:{id}` per-draft lock), the validation gate (`DraftValidating`/`DraftValidated` events +
   `ExecuteValidations`), `IDraftStateDiffEngine`, SemVer next-version computation, lifecycle event publishing.
 - **EF-specific persistence**: `IDbContextFactory<T>`, `DbSet.AddAsync`, `Entry(x).State = Modified`,
   `SaveChangesAsync` (atomic across up to 6 entities), FK **cascade delete** (DiscardDraft), upsert via
-  `FirstOrDefault` + add/modify, and `OnEntityLoading` hydration of `*Source` shadows.
+  `FirstOrDefault` + add/modify, and `EntityLoading` hydration of `*Source` shadows.
 
 Re-implementing each command in a Groundwork project would duplicate ~500 lines of orchestration per provider —
 wrong. **Decision:** introduce a small **provider-neutral write/unit-of-work port** and lift the command
@@ -176,7 +176,7 @@ the (already neutral) collaborators. Shape (to refine):
   `SaveAsync`/`DeleteAsync`.
 - **Hydration is not needed on the neutral layer**: for documents the `GroundworkDocumentSerialization`
   projection *is* the authored-content (de)serialization (no `*Source` shadows); the EF write-port impl keeps the
-  `OnEntitySaving`/`OnEntityLoading` handlers internally.
+  `EntitySaving`/`EntityLoading` handlers internally.
 
 ### Open dependency — cross-document atomicity
 
@@ -255,8 +255,8 @@ Command **contracts** are already provider-neutral in `Core/Contracts` (`IAddWor
 2. Move each command implementation **into `Core`**, depending only on neutral deps it already uses
    (`IIdentityGenerator`, `IDistributedLockProvider`, `IEventPublisher`, `IDraftStateDiffEngine`, `SemVer`,
    `IActivityStructureService`) + the neutral write surface/UoW. The lock keys, validation gate
-   (`OnDraftValidating` sequential), diff stream, SemVer bump, and lifecycle events are all already neutral.
-3. EF write-port impl: wraps `IDbContextFactory` + `SaveChangesAsync`; keeps `OnEntityLoading` hydration and the
+   (`DraftValidating` sequential), diff stream, SemVer bump, and lifecycle events are all already neutral.
+3. EF write-port impl: wraps `IDbContextFactory` + `SaveChangesAsync`; keeps `EntityLoading` hydration and the
    `*Source` shadow serialization **internal** to the EF impl (the neutral layer never sees hydration).
 4. Groundwork write-port impl: maps Save/Delete onto `IDocumentStore` (single-doc commands) and `IDocumentUnitOfWork`
    (multi-doc commands); no hydration (the document projection *is* the content).

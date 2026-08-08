@@ -95,11 +95,11 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
-        services.AddEventHandler<OnExecutableCompilationCollecting, CollectExecutableCompilation>();
-        services.AddEventHandler<OnExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
+        services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
+        services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         // Publish-on-reconcile (spec 147): independent subscriber on the Design-side reconcile completion
         // event. Only acts on claims whose source opted in (PublishOnReconcile); never throws.
-        services.AddEventHandler<OnWorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
+        services.AddEventHandler<WorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);

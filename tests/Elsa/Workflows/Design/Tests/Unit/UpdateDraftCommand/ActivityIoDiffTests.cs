@@ -9,42 +9,42 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). A matched activity
 /// (same <c>NodeId</c>) diffs its <c>Inputs</c>/<c>Outputs</c> by (<c>NodeId</c>,<c>ReferenceKey</c>):
-/// add/update/remove map to the six <c>OnActivityInput*</c>/<c>OnActivityOutput*</c> events.
+/// add/update/remove map to the six <c>ActivityInput*</c>/<c>ActivityOutput*</c> events.
 /// </summary>
 public sealed class ActivityIoDiffTests
 {
     [Fact]
-    public void Adding_an_activity_input_emits_OnActivityInputAddedToDraft()
+    public void Adding_an_activity_input_emits_ActivityInputAddedToDraft()
     {
         var diff = Evaluate(
             State(activities: [Node("n1", inputs: [Arg("ak1", "x")])]),
             State(activities: [Node("n1", inputs: [Arg("ak1", "x"), Arg("ak2", "y")])]));
 
-        var added = Assert.IsType<OnActivityInputAddedToDraft>(Assert.Single(diff));
+        var added = Assert.IsType<ActivityInputAddedToDraft>(Assert.Single(diff));
         Assert.Equal("n1", added.NodeId);
         Assert.Equal("ak2", added.InputReferenceKey);
     }
 
     [Fact]
-    public void Updating_an_activity_input_payload_emits_OnActivityInputUpdatedInDraft()
+    public void Updating_an_activity_input_payload_emits_ActivityInputUpdatedInDraft()
     {
         var diff = Evaluate(
             State(activities: [Node("n1", inputs: [Arg("ak1", "x")])]),
             State(activities: [Node("n1", inputs: [Arg("ak1", "changed")])]));
 
-        var updated = Assert.IsType<OnActivityInputUpdatedInDraft>(Assert.Single(diff));
+        var updated = Assert.IsType<ActivityInputUpdatedInDraft>(Assert.Single(diff));
         Assert.Equal("n1", updated.NodeId);
         Assert.Equal("ak1", updated.InputReferenceKey);
     }
 
     [Fact]
-    public void Removing_an_activity_input_emits_OnActivityInputRemovedFromDraft()
+    public void Removing_an_activity_input_emits_ActivityInputRemovedFromDraft()
     {
         var diff = Evaluate(
             State(activities: [Node("n1", inputs: [Arg("ak1", "x")])]),
             State(activities: [Node("n1", inputs: [])]));
 
-        var removed = Assert.IsType<OnActivityInputRemovedFromDraft>(Assert.Single(diff));
+        var removed = Assert.IsType<ActivityInputRemovedFromDraft>(Assert.Single(diff));
         Assert.Equal("n1", removed.NodeId);
     }
 
@@ -52,17 +52,17 @@ public sealed class ActivityIoDiffTests
     public void Output_add_update_remove_emit_the_OnActivityOutput_events()
     {
         // Add.
-        Assert.IsType<OnActivityOutputAddedToDraft>(Assert.Single(Evaluate(
+        Assert.IsType<ActivityOutputAddedToDraft>(Assert.Single(Evaluate(
             State(activities: [Node("n1", outputs: [Arg("ok1", "x")])]),
             State(activities: [Node("n1", outputs: [Arg("ok1", "x"), Arg("ok2", "y")])]))));
 
         // Update.
-        Assert.IsType<OnActivityOutputUpdatedInDraft>(Assert.Single(Evaluate(
+        Assert.IsType<ActivityOutputUpdatedInDraft>(Assert.Single(Evaluate(
             State(activities: [Node("n1", outputs: [Arg("ok1", "x"), Arg("ok2", "y")])]),
             State(activities: [Node("n1", outputs: [Arg("ok1", "changed"), Arg("ok2", "y")])]))));
 
         // Remove.
-        Assert.IsType<OnActivityOutputRemovedFromDraft>(Assert.Single(Evaluate(
+        Assert.IsType<ActivityOutputRemovedFromDraft>(Assert.Single(Evaluate(
             State(activities: [Node("n1", outputs: [Arg("ok1", "changed"), Arg("ok2", "y")])]),
             State(activities: [Node("n1", outputs: [Arg("ok1", "changed")])]))));
     }
