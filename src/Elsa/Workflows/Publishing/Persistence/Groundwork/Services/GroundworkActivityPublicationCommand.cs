@@ -688,5 +688,4 @@ public sealed class GroundworkActivityPublicationCommand(
 
     private static InvalidOperationException Conflict(string message, Exception? innerException = null) => new(message, innerException);
 
-    private sealed record TemplateDocument(string Collection, string TemplateHash, ExecutableActivityTemplate Template);
 }
