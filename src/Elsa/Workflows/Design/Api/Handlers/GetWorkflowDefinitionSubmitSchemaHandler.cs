@@ -124,11 +124,8 @@ public sealed class GetWorkflowDefinitionSubmitSchemaHandler
                             queue.Enqueue(property.Value);
                     }
 
-                    foreach (var member in candidate)
-                    {
-                        if (member.Key != "properties")
-                            queue.Enqueue(member.Value);
-                    }
+                    foreach (var member in candidate.Where(member => member.Key != "properties"))
+                        queue.Enqueue(member.Value);
 
                     break;
                 case JsonArray array:

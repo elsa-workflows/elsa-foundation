@@ -115,26 +115,24 @@ public sealed class PublishedAvailabilityTests
                 if (properties.TryGetProperty("intrinsic", out var intrinsic) && intrinsic.TryGetProperty("allOf", out _))
                     return intrinsic;
 
-                foreach (var property in properties.EnumerateObject())
-                {
-                    if (FindIntrinsic(property.Value) is { } found)
-                        return found;
-                }
+                var nested = properties.EnumerateObject()
+                    .Select(property => FindIntrinsic(property.Value))
+                    .FirstOrDefault(found => found is not null);
+                if (nested is not null)
+                    return nested;
             }
 
-            foreach (var member in schema.EnumerateObject().Where(member => member.Name != "properties"))
-            {
-                if (FindIntrinsic(member.Value) is { } found)
-                    return found;
-            }
+            return schema.EnumerateObject()
+                .Where(member => member.Name != "properties")
+                .Select(member => FindIntrinsic(member.Value))
+                .FirstOrDefault(found => found is not null);
         }
-        else if (schema.ValueKind == JsonValueKind.Array)
+
+        if (schema.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in schema.EnumerateArray())
-            {
-                if (FindIntrinsic(item) is { } found)
-                    return found;
-            }
+            return schema.EnumerateArray()
+                .Select(FindIntrinsic)
+                .FirstOrDefault(found => found is not null);
         }
 
         return null;
