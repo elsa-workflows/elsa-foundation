@@ -109,16 +109,23 @@ public sealed class ConsumerClaimsGate(Diagnostics diagnostics)
 
         foreach (var test in claim.Tests)
         {
-            var pin = pins.FirstOrDefault(candidate => string.Equals(candidate.Method, test, StringComparison.Ordinal));
-            if (pin is null)
+            // [ConsumerContract] is AllowMultiple: one test can pin more than one claim, which is right when
+            // a single behaviour is the evidence for two separate statements. Match against ALL of that
+            // test's pins — looking only at the first rejected every claim but one.
+            var pinned = pins
+                .Where(candidate => string.Equals(candidate.Method, test, StringComparison.Ordinal))
+                .Select(candidate => candidate.ClaimId)
+                .ToArray();
+
+            if (pinned.Length == 0)
             {
                 diagnostics.Error(claimsPath, "ELSACT021",
                     $"Claim '{claim.Id}' names test '{test}', which does not exist or does not carry [ConsumerContract].");
             }
-            else if (!string.Equals(pin.ClaimId, claim.Id, StringComparison.Ordinal))
+            else if (!pinned.Contains(claim.Id, StringComparer.Ordinal))
             {
                 diagnostics.Error(claimsPath, "ELSACT021",
-                    $"Claim '{claim.Id}' names test '{test}', but that test pins claim '{pin.ClaimId}'.");
+                    $"Claim '{claim.Id}' names test '{test}', but that test pins {string.Join(", ", pinned.Select(id => $"'{id}'"))}.");
             }
         }
     }

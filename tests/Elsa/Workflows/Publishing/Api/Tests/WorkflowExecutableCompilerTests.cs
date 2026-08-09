@@ -778,6 +778,7 @@ public sealed class WorkflowExecutableCompilerTests
     /// </summary>
     [Fact]
     [ConsumerContract("publishing.required-output-enforcement-is-per-node")]
+    [ConsumerContract("evidence.capture-is-opt-in-per-authored-output")]
     public async Task A_required_output_is_unenforced_when_the_node_authors_no_output_at_all()
     {
         var registry = TestWellKnownTypeRegistry.Create();

@@ -201,6 +201,18 @@
         "Elsa.Workflows.Design.Api.Tests.Unit.WorkflowLifecycleHandlerTests.Definition_must_pass_through_soft_delete_before_permanent_delete_and_restore_clears_lifecycle_facts"
       ],
       "since": "1.1.0"
+    },
+    {
+      "id": "evidence.capture-is-opt-in-per-authored-output",
+      "scope": "runtime.evidence",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "Output value evidence is produced only for outputs you actually authored a target for: a node with no authored outputs — a bare root activity being the common case — produces no output captures at all, and so leaves no output evidence to assert against no matter what its contract declares.",
+      "rationale": "Querying a bare root's output evidence returns nothing, which reads as \"the workflow did not run\" rather than \"nothing was asked to be captured\". Bind the output you intend to assert on — but note that binding one opts the whole node into required-output enforcement.",
+      "tests": [
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_required_output_is_unenforced_when_the_node_authors_no_output_at_all"
+      ],
+      "since": "1.2.0"
     }
   ]
 }
