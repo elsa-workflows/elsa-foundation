@@ -451,21 +451,49 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             }
         }
 
+        // A deadline that fires in the same instant the dispatch is completing must not poison work that already
+        // succeeded: by then the handler has returned and its effects are committed, so a poison record and a blocking
+        // incident would both be false. Claim-lost keeps its precedence over a successful dispatch (a successor may own
+        // the item, so that dispatch's effects cannot be trusted); a deadline breach is only meaningful while the
+        // dispatch is still running, which is exactly the case where dispatchFailure carries its cancellation.
+        if (renewalFailure is RuntimeSchedulerDispatchDeadlineExceededException && dispatchFailure is null)
+            renewalFailure = null;
+
         if (renewalFailure is not null)
             throw renewalFailure;
         if (dispatchFailure is not null)
             ExceptionDispatchInfo.Capture(dispatchFailure).Throw();
     }
 
+    // Renews the dispatch's claim on a cadence until the dispatch completes — and, unlike the original loop, no longer
+    // renews without limit. RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration is an absolute ceiling on one
+    // dispatch: past it the loop stops renewing (so the claim lapses and a survivor can take the work), cancels the
+    // dispatch, and throws a deadline exception. That exception is deliberately NOT an OperationCanceledException and
+    // NOT a claim-lost, so it lands in DispatchAsync's general fault arm and the item is ack-deleted, poisoned, and
+    // surfaced as a blocking incident — a hang becomes a bounded, visible outcome instead of an invisible one.
     private async Task RenewClaimUntilStoppedAsync(
         ClaimRenewalState renewal,
         CancellationToken stopToken,
         CancellationTokenSource dispatchCancellation)
     {
         var cadence = TimeSpan.FromTicks(Math.Max(1, _claimOptions.VisibilityTimeout.Ticks / 3));
+        var deadline = _claimOptions.MaxDispatchDuration == Timeout.InfiniteTimeSpan
+            ? (DateTimeOffset?)null
+            : _timeProvider.GetUtcNow() + _claimOptions.MaxDispatchDuration;
         while (true)
         {
             await Task.Delay(cadence, _timeProvider, stopToken);
+
+            // Checked before renewing, so a breached dispatch never gets its visibility extended once more.
+            if (deadline is { } limit && _timeProvider.GetUtcNow() >= limit)
+            {
+                await dispatchCancellation.CancelAsync();
+                throw new RuntimeSchedulerDispatchDeadlineExceededException(
+                    renewal.Current.Item.WorkItemId,
+                    renewal.Current.Item.WorkflowExecutionId,
+                    _claimOptions.MaxDispatchDuration);
+            }
+
             RuntimeSchedulerWorkClaimTransitionResult result;
             try
             {
@@ -558,6 +586,28 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private sealed class ClaimRenewalState(RuntimeSchedulerWorkClaim current)
     {
         public RuntimeSchedulerWorkClaim Current { get; set; } = current;
+    }
+
+    /// <summary>
+    /// One dispatch exceeded <see cref="RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration"/>. Distinct from
+    /// <c>RuntimeSchedulerWorkClaimLostException</c> (a successor owns the work, so it must not be poisoned) and from
+    /// <see cref="OperationCanceledException"/> (a genuine shutdown/cancel, which must leave the item queued): a
+    /// deadline breach is a decided outcome about <em>this</em> item and belongs in the poison ladder.
+    /// </summary>
+    public sealed class RuntimeSchedulerDispatchDeadlineExceededException(
+        string workItemId,
+        string workflowExecutionId,
+        TimeSpan maxDispatchDuration)
+        : Exception(
+            $"Scheduler work item '{workItemId}' in workflow execution '{workflowExecutionId}' exceeded the maximum " +
+            $"dispatch duration of {maxDispatchDuration}. Renewal stopped and the dispatch was cancelled; if the " +
+            "activity does not observe cancellation the claim lapses and a survivor re-drives the item.")
+    {
+        public string WorkItemId { get; } = workItemId;
+
+        public string WorkflowExecutionId { get; } = workflowExecutionId;
+
+        public TimeSpan MaxDispatchDuration { get; } = maxDispatchDuration;
     }
 
     private sealed class RuntimeSchedulerWorkClaimLostException(

@@ -98,5 +98,38 @@ public sealed record RuntimeSchedulerWorkClaimTransitionResult(
 /// <summary>Controls the renewable visibility lease used while one scheduler work item is dispatched.</summary>
 public sealed class RuntimeSchedulerWorkClaimOptions
 {
+    /// <summary>
+    /// How long a single claim renewal keeps the item hidden. The drainer renews on a cadence of one third of this
+    /// while the handler runs, so this bounds the window after a <em>process</em> death before the item is visible
+    /// again — not how long one dispatch may run, which is <see cref="MaxDispatchDuration"/>.
+    /// </summary>
     public TimeSpan VisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// The maximum total wall time one dispatch may occupy before the drainer stops renewing its claim, cancels the
+    /// dispatch, and records the item as poisoned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists.</b> <see cref="VisibilityTimeout"/> is a renewal <em>interval</em>, and the renewal loop
+    /// renewed for as long as the handler ran, without limit. That protects against a process <em>dying</em> but not
+    /// against one <em>hanging</em>: an activity blocked on a socket with no timeout kept its claim renewed and its
+    /// execution-ownership heartbeat fresh, and those are the only two signals the recovery scanner reads — so a hung
+    /// dispatch was indistinguishable from healthy work at every layer that could have detected it. Zeebe's job
+    /// activation timeout and Camunda 7's lock expiry are both absolute for this reason.
+    /// </para>
+    /// <para>
+    /// <b>Why the default is generous rather than absent.</b> A dispatch holds its workflow execution's single writer
+    /// for its whole duration, so a genuinely long wait is meant to suspend on a bookmark or timer, not block a
+    /// dispatch. Thirty minutes is far outside any legitimate synchronous activity while still catching a hang in
+    /// bounded time. Set <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> to restore the previous unbounded
+    /// behavior.
+    /// </para>
+    /// <para>
+    /// <b>What it does not do.</b> Cancellation is cooperative: an activity blocked in unmanaged code will not
+    /// observe it. The deadline still stops renewal, so the claim lapses and a survivor can take the work — the
+    /// store-side stays correct even when the thread does not unwind.
+    /// </para>
+    /// </remarks>
+    public TimeSpan MaxDispatchDuration { get; set; } = TimeSpan.FromMinutes(30);
 }

@@ -106,6 +106,133 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
     }
 
+    // R3: the renewal loop used to renew for as long as the handler ran, so a hung activity kept its claim (and, via
+    // the drain's ownership heartbeat, its liveness) fresh forever — invisible to the recovery scanner, whose only two
+    // candidacy signals are exactly those. MaxDispatchDuration makes that bounded: past the ceiling the loop stops
+    // renewing, cancels the dispatch, and the item lands in the poison ladder as a decided, visible outcome.
+    [Fact]
+    public async Task DrainAsync_DispatchDeadlineExceeded_CancelsDispatchAndPoisonsTheItem()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new BlockingSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions
+        {
+            VisibilityTimeout = TimeSpan.FromSeconds(9),
+            MaxDispatchDuration = TimeSpan.FromSeconds(2)
+        };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // One cadence tick (3s) carries the clock past the 2s ceiling, so the watchdog breaches on its first wake.
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+
+        var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The dispatch was cancelled, and the breach never extended the claim: renewal stops before renewing.
+        Assert.True(handler.CancellationObserved);
+        Assert.Equal(0, queue.RenewalAttempts);
+
+        // A decided outcome, not a silent re-drive: the item is ack-deleted and recorded as poisoned, which the
+        // drain observer then projects into a blocking incident.
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var poisoned = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal("work-1", poisoned.WorkItemId);
+        Assert.Contains("exceeded the maximum dispatch duration", poisoned.Fault.Message);
+    }
+
+    // The converse, and the reason the deadline is not simply given precedence over the dispatch result: a ceiling that
+    // fires in the same instant the handler returns must NOT poison work that already succeeded — by then its effects
+    // are committed, so both the poison record and the incident would be false.
+    [Fact]
+    public async Task DrainAsync_DispatchDeadlineRacingASuccessfulDispatch_DoesNotPoison()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        // Ignores cancellation, so the breach below cancels the dispatch and the handler still completes successfully —
+        // the exact interleaving the suppression exists for, made deterministic.
+        var handler = new CancellationIgnoringSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions
+        {
+            VisibilityTimeout = TimeSpan.FromSeconds(9),
+            MaxDispatchDuration = TimeSpan.FromSeconds(2)
+        };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+        handler.Release();
+
+        var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(result.Items).Status);
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    // An infinite ceiling restores the pre-R3 behavior exactly, so a host that wants the old unbounded renewal can have
+    // it back with one setting.
+    [Fact]
+    public async Task DrainAsync_InfiniteDispatchDeadline_RenewsWithoutLimit()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new BlockingSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions
+        {
+            VisibilityTimeout = TimeSpan.FromSeconds(9),
+            MaxDispatchDuration = Timeout.InfiniteTimeSpan
+        };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Far past what any finite default would allow; the renewal must still happen and the dispatch survive.
+        timeProvider.AdvanceAndFire(TimeSpan.FromHours(12));
+        await queue.FirstRenewalObserved.WaitAsync(TimeSpan.FromSeconds(5));
+        handler.Release();
+
+        var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(handler.CancellationObserved);
+        Assert.Equal(1, queue.RenewalAttempts);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(result.Items).Status);
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+    }
+
     [Fact]
     public async Task DrainAsync_TripsSingleWriterInvariant_WhenDequeueDoesNotMatchPeekedHead()
     {
@@ -1295,6 +1422,27 @@ public sealed class RuntimeSchedulerDrainTests
                 CancellationObserved = true;
                 throw;
             }
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    // Completes successfully when released even if its cancellation token has already fired — models an activity whose
+    // body is past the point of no return (or simply does not observe cancellation) when a deadline breaches.
+    private sealed class CancellationIgnoringSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Name => nameof(CancellationIgnoringSchedulerWorkHandler);
+        public Task Started => _started.Task;
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            _started.TrySetResult();
+            await _release.Task;
         }
 
         public void Release() => _release.TrySetResult();
