@@ -134,3 +134,60 @@ API surface (largest measured gap):
 - Investigate-marked items (FR-C16/17/18) may resolve as "documented limitation" rather than code change; that outcome is acceptable if the limitation is published.
 - Behavioural claims are published only where a pinning test exists or is added — an unpinnable claim is not published (Gate A would fail).
 - This spec continues the spec-149 delivery branch; nothing here is validated as merged until the consumer workspace signs off.
+
+---
+
+## Implementation outcomes
+
+Every FR is implemented on branch `1165-consumer-contract-fragments`. Recorded here because three of them
+were open questions whose answers are part of the deliverable, not incidental to it.
+
+### Where each requirement landed
+
+| FR | Where it is now published |
+|---|---|
+| A1, A2 | `hosts.json` `expressionTypes`; submit-schema `allOf` if/then on intrinsic kind |
+| B1 | `[ConsumerNote]` (`Elsa.Primitives`), projected into fragments; gate G4 = `-- notes`; F1–F3 in the analyze skill |
+| B2 | `docs/consumer-guide/claims.json`; Gates A/B = `-- claims`, wired into CI |
+| C1, C5, C6 | `docs/contracts/vocabularies.json` |
+| C2, C3, C4, C7–C13 | claims, each with a passing pin |
+| C14, C15 | `docs/contracts/openapi.json` (OpenAPI 3.1) |
+| C16, C17, C18 | see below |
+| D1 | `schemaVersion` bumps on any published-shape change; rationale in `docs/contracts/README.md` |
+| E1 | 8 assemblies added to the Workbench; 6 deliberate exclusions documented in its csproj |
+
+### Investigate-marked items
+
+**FR-C16 — resolved as a defect in the published document, not in the filter.** `definitionVersionId` was
+never a filter: `ListWorkflowInstances` has no such field and the binder ignores what it cannot bind. The
+real defect was that GET operations published a `requestBody` — invalid OpenAPI, and it hid the supported
+filter set entirely. Query-bound operations now publish their parameters, so the supported set is explicit
+and a client generator cannot offer one that does not exist. No filter was added: adding one is a feature
+request, and inventing it here would have been scope the benchmark did not ask for.
+
+**FR-C17 — resolved as deliberate, now published.** `DELETE /design/workflows/definitions/{id}` is a
+design-side soft delete; publication is a separate lifecycle and nothing cascades. The unpublish operation
+exists (`DELETE /publishing/workflows/{definitionId}/slots/{slotName}`) and is in the published surface.
+Published as a claim rather than changed: cascading a design delete into a live route would be a
+significantly more dangerous default than the current one.
+
+**FR-C18 — resolved as documented rather than tightened.** `?search=` is a case-insensitive substring match
+OR'd across five fields, which is correct for a palette search. Tightening it would break discovery to
+prevent a misuse; the claim instead states that the endpoint is not an identity lookup and that a consumer
+must match `activityTypeKey` exactly on the result set.
+
+### Deliberate scoping decisions
+
+- **Notes are excluded from the activity content hash**, so a documentation edit never forces a new activity
+  version. The consequence is published rather than hidden: the running catalog endpoint does not serve
+  notes; only the fragments carry them. `EquivalenceTests` excludes exactly that one field so every other
+  divergence between the two projections still fails.
+- **G4 and F1–F3 never fail a build.** A gate that demanded a note per enum member would be satisfied within
+  a week by filler restating the member's name, and filler reads as an answer.
+- **A claim is published only where a pin exists.** Gate A rejects an empty `tests` list, so no statement in
+  `claims.json` is older than the last green build.
+
+### Acceptance still outstanding
+
+SC-001 and SC-002 are the three-arm benchmark, which is the maintainer's to run in a consumer workspace.
+SC-003, SC-004 and SC-005 are enforced by tests and CI gates on this branch.
