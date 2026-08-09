@@ -85,23 +85,71 @@ public static class OpenApiDocumentBuilder
             operation["x-elsa-allows-anonymous"] = true;
         if (endpoint.ConfigurationDependent)
             operation["x-elsa-configuration-dependent"] = true;
+        if (endpoint.RequestSchema is { } request && endpoint.RequestType is { } requestType)
+        {
+            if (BindsFromQuery(endpoint.Verb))
+                AppendQueryParameters(request, parameters);
+            else
+                operation["requestBody"] = new JsonObject
+                {
+                    ["required"] = true,
+                    ["content"] = new JsonObject
+                    {
+                        ["application/json"] = new JsonObject { ["schema"] = Reference(requestType, request, components) }
+                    }
+                };
+        }
+
         if (parameters.Count > 0)
             operation["parameters"] = parameters;
 
-        if (endpoint.RequestSchema is { } request && endpoint.RequestType is { } requestType)
-        {
-            operation["requestBody"] = new JsonObject
-            {
-                ["required"] = true,
-                ["content"] = new JsonObject
-                {
-                    ["application/json"] = new JsonObject { ["schema"] = Reference(requestType, request, components) }
-                }
-            };
-        }
-
         operation["responses"] = BuildResponses(endpoint, components);
         return operation;
+    }
+
+    /// <summary>Verbs whose request record binds from the route and query string rather than from a body.</summary>
+    private static bool BindsFromQuery(string verb) =>
+        verb is "GET" or "DELETE" or "HEAD";
+
+    /// <summary>
+    /// Publishes a query-bound request record as query parameters (spec 150 FR-C16).
+    /// </summary>
+    /// <remarks>
+    /// Publishing these as a <c>requestBody</c> was both wrong for OpenAPI and the reason the supported filter
+    /// set was invisible: a benchmarked session passed <c>?definitionVersionId=</c> to the instances endpoint,
+    /// got a 200 with an unfiltered list, and concluded the filter was broken. It was never a filter — the
+    /// binder has no such target and ignores what it cannot bind. Publishing the parameters makes the
+    /// supported set explicit and machine-readable, so a client generator cannot offer one that does not exist.
+    /// </remarks>
+    private static void AppendQueryParameters(JsonElement schema, JsonArray parameters)
+    {
+        if (!schema.TryGetProperty("properties", out var properties) || properties.ValueKind != JsonValueKind.Object)
+            return;
+
+        var declared = parameters
+            .Select(parameter => parameter?["name"]?.GetValue<string>())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var required = schema.TryGetProperty("required", out var requiredNames) && requiredNames.ValueKind == JsonValueKind.Array
+            ? requiredNames.EnumerateArray().Select(name => name.GetString()!).ToHashSet(StringComparer.Ordinal)
+            : [];
+
+        foreach (var property in properties.EnumerateObject())
+        {
+            // A route placeholder of the same name is already declared as a path parameter; the binder fills it
+            // from the route, so publishing it twice would describe an argument that does not exist.
+            if (!declared.Add(property.Name))
+                continue;
+
+            parameters.Add(new JsonObject
+            {
+                ["name"] = property.Name,
+                ["in"] = "query",
+                ["required"] = required.Contains(property.Name),
+                ["schema"] = JsonNode.Parse(property.Value.GetRawText())
+            });
+        }
     }
 
     private static JsonObject BuildResponses(OpenApiEndpoint endpoint, JsonObject components)

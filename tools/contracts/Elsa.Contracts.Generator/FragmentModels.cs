@@ -209,6 +209,7 @@ public sealed record ContractsManifest(
     string SubmitSchema,
     string Hosts,
     string OpenApi,
+    string Vocabularies,
     ContractsManifestCounts Counts);
 
 public sealed record FragmentFingerprint(string Assembly, string Fingerprint);

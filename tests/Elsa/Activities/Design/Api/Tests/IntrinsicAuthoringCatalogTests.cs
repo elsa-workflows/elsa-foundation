@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
@@ -89,6 +90,7 @@ public sealed class IntrinsicAuthoringCatalogTests
     }
 
     [Fact]
+    [ConsumerContract("design.intrinsic-descriptor-id-is-the-activity-version-id")]
     public void Set_variable_descriptor_authors_a_set_intrinsic_with_a_variable_target()
     {
         var setVariable = Single("Elsa.SetVariable");
@@ -127,7 +129,13 @@ public sealed class IntrinsicAuthoringCatalogTests
         Assert.Equal("Elsa.Any", valueInput.Type);
     }
 
+    /// <summary>
+    /// Also pins <c>design.intrinsics-are-catalog-only</c>: the stores here are EMPTY, so every intrinsic in
+    /// the result came from the built-in provider rather than from persisted rows. That is exactly why
+    /// <c>/design/activities/definitions</c> — which lists persisted definitions — never shows them.
+    /// </summary>
     [Fact]
+    [ConsumerContract("design.intrinsics-are-catalog-only")]
     public async Task Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog()
     {
         var handler = new ListActivityAuthoringCatalogRequestHandler(

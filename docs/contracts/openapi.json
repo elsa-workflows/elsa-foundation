@@ -1757,188 +1757,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Activities.Design.Api.Commands.DiscardReusableActivityDraft": {
-        "properties": {
-          "expectedRevision": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "expectedRevision"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.GetReusableActivityDefinition": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft": {
-        "properties": {
-          "draftId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "draftId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.GetReusableActivityForkStatus": {
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.GetReusableActivityVersion": {
-        "properties": {
-          "versionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "versionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions": {
-        "properties": {
-          "authority": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "default": 25,
-            "type": "integer"
-          },
-          "providerKey": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sort": {
-            "default": "identity-asc",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts": {
-        "properties": {
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "definitionId": {
-            "type": "string"
-          },
-          "limit": {
-            "default": 25,
-            "type": "integer"
-          },
-          "providerKey": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sort": {
-            "default": "identity-asc",
-            "type": "string"
-          },
-          "status": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions": {
-        "properties": {
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "definitionId": {
-            "type": "string"
-          },
-          "lifecycle": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "default": 25,
-            "type": "integer"
-          },
-          "providerKey": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sort": {
-            "default": "identity-asc",
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
       "Elsa.Activities.Design.Api.Commands.MigrateReusableActivityDraft": {
         "properties": {
           "expectedRevision": {
@@ -9002,124 +8820,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Activities.Design.Api.Requests.CompareActivityVersions": {
-        "properties": {
-          "fromVersionId": {
-            "type": "string"
-          },
-          "toVersionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fromVersionId",
-          "toVersionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.GetActivityAuthoringCapabilities": {
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.GetActivityAvailabilitySettings": {
-        "properties": {
-          "scope": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.GetActivityDependencies": {
-        "properties": {
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "direction": {
-            "default": "outbound",
-            "type": "string"
-          },
-          "include": {
-            "default": "versions",
-            "type": "string"
-          },
-          "limit": {
-            "default": null,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "transitive": {
-            "default": false,
-            "type": "boolean"
-          },
-          "versionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "versionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.GetActivityUpgradeApplyReceipt": {
-        "properties": {
-          "planId": {
-            "type": "string"
-          },
-          "receiptId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "planId",
-          "receiptId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.GetActivityUpgradePlan": {
-        "properties": {
-          "planId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "planId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.ListActivityAuthoringCatalog": {
-        "properties": {
-          "availability": {
-            "default": "addable",
-            "enum": [
-              "addable",
-              "all"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions": {
-        "properties": {
-          "limit": {
-            "default": 25,
-            "type": "integer"
-          },
-          "offset": {
-            "default": 0,
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "Elsa.Activities.Design.Api.Requests.PreviewActivityDraftDiff": {
         "properties": {
           "baseVersionId": {
@@ -10337,23 +10037,6 @@
         },
         "type": "object"
       },
-      "Elsa.Agent.Api.Models.AgentAuditQueryRequest": {
-        "properties": {
-          "sessionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "take": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
       "Elsa.Agent.Api.Models.AgentCreateSessionRequest": {
         "properties": {
           "activeSurface": {
@@ -10540,14 +10223,6 @@
               "string",
               "null"
             ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Agent.Api.Models.AgentSessionRouteRequest": {
-        "properties": {
-          "sessionId": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -12712,22 +12387,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Secrets.Api.Requests.DeleteSecretRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Secrets.Api.Requests.GetSecretRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "Elsa.Secrets.Api.Requests.RevokeSecretRequest": {
         "properties": {
           "name": {
@@ -13204,72 +12863,6 @@
         },
         "type": "object"
       },
-      "Elsa.Secrets.Core.Models.SecretQuery": {
-        "properties": {
-          "activeOnly": {
-            "type": "boolean"
-          },
-          "page": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pageSize": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "scope": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "enum": [
-              "active",
-              "retired",
-              "expired",
-              "revoked",
-              "deleted",
-              null
-            ]
-          },
-          "storeName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "storeNames": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "typeName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "typeNames": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
       "Elsa.Secrets.Core.Models.SecretTestResult": {
         "properties": {
           "code": {
@@ -13283,14 +12876,6 @@
           },
           "succeeded": {
             "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Studio.Preferences.Api.Models.GetStudioPreferenceRequest": {
-        "properties": {
-          "namespace": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -14898,40 +14483,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Workflows.Design.Api.Commands.DeleteDefinitionPermanently": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "operationKey": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Commands.DiscardDraft": {
-        "properties": {
-          "draftId": {
-            "type": "string"
-          },
-          "operationKey": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "draftId"
-        ],
-        "type": "object"
-      },
       "Elsa.Workflows.Design.Api.Commands.PromoteDraft": {
         "properties": {
           "draftId": {
@@ -15675,30 +15226,6 @@
             "type": "string"
           },
           "operationKey": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Commands.SoftDeleteDefinition": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "operationKey": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reason": {
-            "default": null,
             "type": [
               "string",
               "null"
@@ -22579,103 +22106,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Workflows.Design.Api.Requests.GetDefinition": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Requests.GetDraft": {
-        "properties": {
-          "draftId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "draftId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Requests.GetDraftValidations": {
-        "properties": {
-          "draftId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "draftId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Requests.GetVersion": {
-        "properties": {
-          "versionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "versionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Requests.ListDefinitionVersions": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Design.Api.Requests.ListDefinitions": {
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "searchTerm": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "state": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "tenantAgnostic": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
       "Elsa.Workflows.Design.Api.Requests.PreflightDraftPromotion": {
         "properties": {
           "draftId": {
@@ -25015,66 +24445,6 @@
         },
         "type": "object"
       },
-      "Elsa.Workflows.Publishing.Api.Requests.ConstructActivity": {
-        "properties": {
-          "activityId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "activityId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Publishing.Api.Requests.GetPublicationSlot": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "slotName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId",
-          "slotName"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Publishing.Api.Requests.GetWorkflowPublicationPolicy": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Publishing.Api.Requests.ListConstructableActivities": {
-        "properties": {
-          "consumerKey": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Workflows.Publishing.Api.Requests.ListPublicationSlots": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId"
-        ],
-        "type": "object"
-      },
       "Elsa.Workflows.Publishing.Api.Requests.PreflightActivityDraftPublication": {
         "properties": {
           "expectedDefinitionHeadVersionId": {
@@ -26653,21 +26023,6 @@
         },
         "required": [
           "versionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "slotName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId",
-          "slotName"
         ],
         "type": "object"
       },
@@ -31428,55 +30783,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationJob": {
-        "properties": {
-          "jobId": {
-            "type": "string"
-          },
-          "planId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "planId",
-          "jobId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationPlan": {
-        "properties": {
-          "planId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "planId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.Alterations.PageWorkflowAlterationJobs": {
-        "properties": {
-          "cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "planId": {
-            "type": "string"
-          },
-          "take": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "planId"
-        ],
-        "type": "object"
-      },
       "Elsa.Workflows.Runtime.Api.Requests.Alterations.SubmitWorkflowAlterationPlan": {
         "properties": {
           "alterations": {
@@ -31658,195 +30964,6 @@
         ],
         "type": "object"
       },
-      "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecution": {
-        "properties": {
-          "activityExecutionId": {
-            "type": "string"
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId",
-          "activityExecutionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionDescendants": {
-        "properties": {
-          "activityExecutionId": {
-            "type": "string"
-          },
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "include": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "default": null,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId",
-          "activityExecutionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionLayout": {
-        "properties": {
-          "activityExecutionId": {
-            "type": "string"
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId",
-          "activityExecutionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionValuePayload": {
-        "properties": {
-          "activityExecutionId": {
-            "type": "string"
-          },
-          "evidenceId": {
-            "type": "string"
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId",
-          "activityExecutionId",
-          "evidenceId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetRuntimeDiagnosticsSettings": {
-        "properties": {
-          "scope": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowDispatch": {
-        "properties": {
-          "dispatchId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dispatchId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutable": {
-        "properties": {
-          "artifactId": {
-            "type": "string"
-          },
-          "ref": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "artifactId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableInputSources": {
-        "properties": {
-          "artifactId": {
-            "type": "string"
-          },
-          "sourceReferenceId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "artifactId",
-          "sourceReferenceId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableProvenance": {
-        "properties": {
-          "artifactId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "artifactId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowInstance": {
-        "properties": {
-          "activityContinuationToken": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "activityPageSize": {
-            "default": 100,
-            "type": "integer"
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId"
-        ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.ListIncidents": {
-        "properties": {
-          "blockingOnly": {
-            "default": false,
-            "type": "boolean"
-          },
-          "workflowExecutionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workflowExecutionId"
-        ],
-        "type": "object"
-      },
       "Elsa.Workflows.Runtime.Api.Requests.ListIncidentsResponse": {
         "properties": {
           "count": {
@@ -31980,139 +31097,6 @@
           "incidents",
           "count"
         ],
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowDispatches": {
-        "properties": {
-          "afterCreatedAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "afterDispatchId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "childWorkflowExecutionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "parentWorkflowExecutionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "take": {
-            "default": null,
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowExecutables": {
-        "properties": {
-          "includeRetired": {
-            "default": false,
-            "type": "boolean"
-          },
-          "scope": {
-            "default": "published",
-            "enum": [
-              "published",
-              "testRuns",
-              "all"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowInstances": {
-        "properties": {
-          "artifactId": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "correlationId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cursor": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "definitionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "default": null,
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "runKind": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "take": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "to": {
-            "default": null,
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "workflowExecutionId": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
         "type": "object"
       },
       "Elsa.Workflows.Runtime.Api.Requests.RedriveWorkflowDispatch": {
@@ -33324,16 +32308,30 @@
       "get": {
         "description": "Requires one of: *, agent.audit.",
         "operationId": "getElsaAgentAudit",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentAuditQueryRequest"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sessionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -33592,16 +32590,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentSessionRouteRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -33680,16 +32668,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentSessionRouteRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -33907,16 +32885,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -34164,16 +33132,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Studio.Preferences.Api.Models.GetStudioPreferenceRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -34312,16 +33270,6 @@
       "get": {
         "description": "Requires one of: *, activity-design.read.",
         "operationId": "getDesignActivitiesAuthoringcapabilities",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.GetActivityAuthoringCapabilities"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -34370,16 +33318,20 @@
       "get": {
         "description": "Requires one of: *, activity-design.read.",
         "operationId": "getDesignActivitiesAvailabilitySettings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.GetActivityAvailabilitySettings"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34436,16 +33388,20 @@
       "get": {
         "description": "Requires one of: *, activity-design.read.",
         "operationId": "getDesignActivitiesCatalog",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.ListActivityAuthoringCatalog"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "availability",
+            "required": false,
+            "schema": {
+              "default": "addable",
+              "enum": [
+                "addable",
+                "all"
+              ]
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34470,16 +33426,74 @@
       "get": {
         "description": "Requires one of: *, activity-design.read.",
         "operationId": "getDesignActivitiesDefinitions",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "authority",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "providerKey",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "identity-asc",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34536,16 +33550,26 @@
       "get": {
         "description": "Requires one of: *, activity-design.read.",
         "operationId": "getDesignActivitiesDefinitionsPicker",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "type": "integer"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34580,16 +33604,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.GetReusableActivityDefinition"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -34664,18 +33678,74 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts"
-              }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "providerKey",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "identity-asc",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34838,18 +33908,74 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions"
-              }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "providerKey",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "identity-asc",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -34882,18 +34008,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "expectedRevision",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.DiscardReusableActivityDraft"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -34919,16 +34043,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35445,16 +34559,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.GetReusableActivityForkStatus"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35557,16 +34661,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.GetActivityUpgradePlan"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35653,16 +34747,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.GetActivityUpgradeApplyReceipt"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35749,16 +34833,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.CompareActivityVersions"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35793,16 +34867,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Commands.GetReusableActivityVersion"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -35835,18 +34899,59 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Activities.Design.Api.Requests.GetActivityDependencies"
-              }
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "default": "outbound",
+              "type": "string"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "transitive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "default": "versions",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -36055,16 +35160,75 @@
       "get": {
         "description": "Requires one of: *, workflow-design.read.",
         "operationId": "getDesignWorkflowsDefinitions",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.ListDefinitions"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "searchTerm",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "description",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenantAgnostic",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -36187,18 +35351,31 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Commands.SoftDeleteDefinition"
-              }
+          },
+          {
+            "in": "query",
+            "name": "operationKey",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "reason",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -36224,16 +35401,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.GetDefinition"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -36308,18 +35475,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "operationKey",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Commands.DeleteDefinitionPermanently"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -36384,16 +35552,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.ListDefinitionVersions"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -36426,18 +35584,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "operationKey",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Commands.DiscardDraft"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -36463,16 +35622,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.GetDraft"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -36637,16 +35786,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.GetDraftValidations"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -36967,16 +36106,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Design.Api.Requests.GetVersion"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -37692,16 +36821,20 @@
       "get": {
         "description": "Requires one of: *, workflow-publishing.read.",
         "operationId": "getPublishingActivities",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.ListConstructableActivities"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "consumerKey",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -37736,16 +36869,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.ConstructActivity"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38084,16 +37207,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.GetWorkflowPublicationPolicy"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38170,16 +37283,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.ListPublicationSlots"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38222,16 +37325,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38272,16 +37365,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Requests.GetPublicationSlot"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38544,16 +37627,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationPlan"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38620,18 +37693,30 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.Alterations.PageWorkflowAlterationJobs"
-              }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -38674,16 +37759,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationJob"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38708,16 +37783,20 @@
       "get": {
         "description": "Requires one of: *, workflow-runtime.read.",
         "operationId": "getRuntimeWorkflowsDiagnosticsSettings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetRuntimeDiagnosticsSettings"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -38774,16 +37853,76 @@
       "get": {
         "description": "Requires one of: *, workflow-runtime.read.",
         "operationId": "getRuntimeWorkflowsDispatches",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.ListWorkflowDispatches"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "parentWorkflowExecutionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "childWorkflowExecutionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "afterCreatedAt",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "afterDispatchId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -38818,16 +37957,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetWorkflowDispatch"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -38896,16 +38025,30 @@
       "get": {
         "description": "Requires one of: *, workflow-runtime.read.",
         "operationId": "getRuntimeWorkflowsExecutables",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.ListWorkflowExecutables"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "published",
+              "enum": [
+                "published",
+                "testRuns",
+                "all"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "includeRetired",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -38938,18 +38081,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "ref",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutable"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39028,16 +38173,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableProvenance"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39080,16 +38215,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableInputSources"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39114,16 +38239,126 @@
       "get": {
         "description": "Requires one of: *, workflow-runtime.read.",
         "operationId": "getRuntimeWorkflowsInstances",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.ListWorkflowInstances"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "definitionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "correlationId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflowExecutionId",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "artifactId",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "default": null,
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "default": null,
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "runKind",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -39148,16 +38383,126 @@
       "get": {
         "description": "Requires one of: *, workflow-runtime.read.",
         "operationId": "getRuntimeWorkflowsInstancesPage",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.ListWorkflowInstances"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "definitionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "correlationId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflowExecutionId",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "artifactId",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "default": null,
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "default": null,
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "runKind",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -39190,18 +38535,29 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetWorkflowInstance"
-              }
+          },
+          {
+            "in": "query",
+            "name": "activityPageSize",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer"
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "activityContinuationToken",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -39244,16 +38600,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetActivityExecution"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39294,18 +38640,44 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionDescendants"
-              }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -39348,16 +38720,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionLayout"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39408,16 +38770,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionValuePayload"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39450,18 +38802,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "blockingOnly",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Workflows.Runtime.Api.Requests.ListIncidents"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {
@@ -39520,16 +38871,119 @@
       "get": {
         "description": "Requires one of: *, secrets:read.",
         "operationId": "getSecrets",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Secrets.Core.Models.SecretQuery"
-              }
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
-          "required": true
-        },
+          {
+            "in": "query",
+            "name": "typeName",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "typeNames",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "storeName",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "storeNames",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "active",
+                "retired",
+                "expired",
+                "revoked",
+                "deleted",
+                null
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "activeOnly",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
         "responses": {
           "default": {
             "content": {
@@ -39654,16 +39108,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Secrets.Api.Requests.DeleteSecretRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
@@ -39689,16 +39133,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Elsa.Secrets.Api.Requests.GetSecretRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "default": {
             "content": {

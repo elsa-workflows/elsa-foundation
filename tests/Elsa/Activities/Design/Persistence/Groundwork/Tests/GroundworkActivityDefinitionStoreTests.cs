@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -135,6 +136,27 @@ public class GroundworkActivityDefinitionStoreTests
 
         Assert.NotNull(result);
         Assert.Equal("a1", result!.Id);
+    }
+
+    /// <summary>
+    /// Pins the published claim <c>design.activity-search-is-a-substring-match</c>. `?search=` is a
+    /// case-insensitive substring match OR'd across display name, type key, category, description and id —
+    /// so a term meant to identify one activity also returns every activity that merely contains it. A
+    /// benchmarked session read the first hit as the intended activity and deleted the wrong workflow.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("design.activity-search-is-a-substring-match")]
+    public async Task Find_by_filter_search_term_also_returns_longer_names_that_merely_contain_it()
+    {
+        var store = await SeededAsync(
+            Definition("a1", "Acme.WriteLine"),
+            Definition("a2", "Acme.WriteLines"),
+            Definition("a3", "Acme.Wait"));
+
+        var hits = await store.ListAsync(new ActivityDefinitionFilter { SearchTerm = "writeline" });
+
+        // Case-insensitive, and 'WriteLine' is not an identity: 'WriteLines' contains it too.
+        Assert.Equal(["a1", "a2"], hits.Select(definition => definition.Id).OrderBy(id => id, StringComparer.Ordinal));
     }
 
     [Fact]

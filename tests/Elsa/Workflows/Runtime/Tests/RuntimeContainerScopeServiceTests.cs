@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -216,7 +217,14 @@ public sealed class RuntimeContainerScopeServiceTests
 
     // ---- spec 123: runtime scoped-variable read seam ----
 
+    /// <summary>
+    /// Also pins <c>design.variable-reads-key-on-name-bindings-key-on-reference-key</c>: the frames below
+    /// store under the variable's reference key (<c>g</c>, <c>g2</c>) while the projection that feeds
+    /// JavaScript <c>variables.X</c>/<c>getVariable('X')</c> yields the declaration's <c>Name</c>
+    /// (<c>Shadowed</c>). Reading one and authoring the other is the mistake this asymmetry invites.
+    /// </summary>
     [Fact]
+    [ConsumerContract("design.variable-reads-key-on-name-bindings-key-on-reference-key")]
     public void Scoped_variable_envelopes_project_by_name_innermost_scope_wins()
     {
         var factory = new VariableFrameFactory();

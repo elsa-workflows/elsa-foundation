@@ -623,7 +623,13 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
     }
 
+    /// <summary>
+    /// Also pins <c>design.variable-reads-key-on-name-bindings-key-on-reference-key</c>: the authored
+    /// Variable payload below is <c>{referenceKey, declaringScopeId}</c> — reference key, not name — while
+    /// the resulting capture reports the variable's Name.
+    /// </summary>
     [Fact]
+    [ConsumerContract("design.variable-reads-key-on-name-bindings-key-on-reference-key")]
     public void Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture()
     {
         // The ordinary leaf path lowers an authored ActivityNode.Outputs binding through the same compiler the
@@ -1710,6 +1716,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    [ConsumerContract("evidence.intrinsics-capture-nothing")]
     public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
     {
         var message = new Elsa.Expressions.Core.Models.VariableDefinition(
@@ -1727,6 +1734,11 @@ public sealed class WorkflowExecutableCompilerTests
         var setNode = executable.NodesById["set-1"];
         Assert.Equal(WorkflowIntrinsicKind.Set, setNode.IntrinsicKind);
         Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
+
+        // Pins evidence.intrinsics-capture-nothing: an intrinsic writes its variable through the frame and
+        // produces no output capture, so it leaves no value evidence to assert against. Asserting on a Set
+        // node's evidence looks like the workflow never ran; read the variable's own evidence instead.
+        Assert.Empty(setNode.OutputCaptures);
     }
 
     private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>

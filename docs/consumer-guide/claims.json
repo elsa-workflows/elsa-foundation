@@ -103,6 +103,104 @@
         "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.Writing_to_a_json_parameter_throws_rather_than_being_silently_dropped"
       ],
       "since": "1.1.0"
+    },
+    {
+      "id": "design.intrinsic-descriptor-id-is-the-activity-version-id",
+      "scope": "design",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "An intrinsic's published `descriptorId` (`elsa.intrinsic.set@1`) *is* the value a node must carry as its required `activityVersionId` — there is nothing to resolve and no catalog lookup to perform, unlike a CLR activity whose version id is assigned server state.",
+      "rationale": "A consumer that treats every activityVersionId as server-assigned will look for an intrinsic's id where it cannot exist, then guess.",
+      "tests": [
+        "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Set_variable_descriptor_authors_a_set_intrinsic_with_a_variable_target"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "design.intrinsics-are-catalog-only",
+      "scope": "design",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "Intrinsics are contributed by built-in providers rather than persisted, so they appear in `GET /design/activities/catalog` and never in `GET /design/activities/definitions`, which lists persisted definitions only.",
+      "rationale": "Enumerating definitions and finding no intrinsic reads as \"this build has none\"; it means the wrong endpoint was asked.",
+      "tests": [
+        "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "design.variable-reads-key-on-name-bindings-key-on-reference-key",
+      "scope": "design",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "A variable is addressed two different ways: a `Variable` expression payload — including every authored output target — is `{\"referenceKey\":\"...\",\"declaringScopeId\":\"...\"}` and keys on the **referenceKey**, while the JavaScript read surface `variables.X` / `getVariable('X')` keys on the variable's author-facing **name**.",
+      "rationale": "The two are routinely different strings (`orderId` vs `OrderId`). Using the name in a binding, or the reference key in an expression, fails in ways that look like the variable does not exist.",
+      "tests": [
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture",
+        "Elsa.Workflows.Runtime.Tests.RuntimeContainerScopeServiceTests.Scoped_variable_envelopes_project_by_name_innermost_scope_wins"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "design.submit-stores-publish-validates",
+      "scope": "design",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "Submit checks structural well-formedness only — every node must carry a non-empty node id and activity version id — and stores whatever else it is given, including a node referencing an activity version that exists nowhere. Publication is the gate that resolves activity versions, enforces required inputs and output bindings, and claims routes.",
+      "rationale": "A 2xx from submit says the definition was stored, not that it can run. Treating it as acceptance moves every real failure to publish time, where it arrives without the context of which submit caused it.",
+      "tests": [
+        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_accepts_a_node_referencing_an_activity_version_that_does_not_exist",
+        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_rejects_a_node_without_an_activity_version_id"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "evidence.intrinsics-capture-nothing",
+      "scope": "runtime.evidence",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "An intrinsic node (`set`, `setOutput`, `finish`, …) writes through the variable frame and produces no output capture, so it contributes no value evidence of its own — assert against the variable's evidence, not against the intrinsic node's.",
+      "rationale": "Querying a Set node's value evidence returns nothing, which reads identically to \"the workflow never reached this node\".",
+      "tests": [
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Set_intrinsic_targeting_a_declared_workflow_variable_compiles"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "evidence.snapshot-name-is-not-unique",
+      "scope": "runtime.evidence",
+      "kind": "representation",
+      "stability": "stable",
+      "statement": "A value snapshot's `name` is scoped by its `subject` (`ActivityInput` / `ActivityOutput` / `ContainerVariable`) and is not unique within an activity execution — an input and an output on the same execution can both be named `result` — so a filter must match name **and** subject.",
+      "rationale": "Filtering on name alone silently asserts against whichever snapshot the projection happened to order first, which passes or fails for reasons unrelated to the workflow.",
+      "tests": [
+        "Elsa.Workflows.Runtime.Tests.ActivityExecutionInspectionProjectionTests.A_snapshot_name_repeats_across_subjects_within_one_activity_execution"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "design.activity-search-is-a-substring-match",
+      "scope": "design",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "`?search=` on the activity-definitions endpoint is a case-insensitive **substring** match OR'd across display name, activity type key, category, description and id — so `WriteLine` also returns `WriteLines`, and `Http-Greeting` also returns `JTest-Http-Greeting`. It is a discovery aid, never an identity lookup: to resolve one activity, match `activityTypeKey` exactly on the result set.",
+      "rationale": "Treating the first search hit as the intended activity caused a wrong-workflow deletion in a benchmarked session. The endpoint is doing what a palette search should; the mistake is reading a ranked substring result as an identity.",
+      "tests": [
+        "Elsa.Activities.Design.Persistence.Groundwork.Tests.GroundworkActivityDefinitionStoreTests.Find_by_filter_search_term_also_returns_longer_names_that_merely_contain_it"
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "id": "publishing.deleting-a-definition-does-not-unpublish-it",
+      "scope": "publishing",
+      "kind": "behaviour",
+      "stability": "stable",
+      "statement": "`DELETE /design/workflows/definitions/{definitionId}` is a design-side **soft** delete: it stamps the definition deleted and removes it from design listings, while its publication stays live and keeps serving its route. To stop a route serving, unpublish the slot with `DELETE /publishing/workflows/{definitionId}/slots/{slotName}`. A permanent delete is refused with 409 while the definition is not soft-deleted.",
+      "rationale": "A 204 from the delete plus an empty definition list reads as \"it is gone\", and the still-live route then looks like a caching bug. Design and publication are separate lifecycles; nothing cascades between them.",
+      "tests": [
+        "Elsa.Workflows.Design.Api.Tests.Unit.WorkflowLifecycleHandlerTests.Definition_must_pass_through_soft_delete_before_permanent_delete_and_restore_clears_lifecycle_facts"
+      ],
+      "since": "1.1.0"
     }
   ]
 }

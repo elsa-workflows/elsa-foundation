@@ -130,6 +130,8 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var openApiDocument = OpenApiDocumentBuilder.Build(apiEndpoints, ContractFragment.CurrentSchemaVersion);
         var apiBytes = DeterministicJson.SerializeToBytes(openApiDocument);
 
+        var vocabularyBytes = DeterministicJson.SerializeToBytes(VocabularyProjector.Project());
+
         var manifest = new ContractsManifest(
             SchemaVersion: "1.0",
             Generator: GeneratorId,
@@ -137,6 +139,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             SubmitSchema: DeterministicJson.Fingerprint(submitSchemaBytes),
             Hosts: DeterministicJson.Fingerprint(hostsBytes),
             OpenApi: DeterministicJson.Fingerprint(apiBytes),
+            Vocabularies: DeterministicJson.Fingerprint(vocabularyBytes),
             Counts: new ContractsManifestCounts(
                 fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics));
 
@@ -148,6 +151,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "submit-schema.json"), submitSchemaBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "hosts.json"), hostsBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "openapi.json"), apiBytes);
+        DeterministicJson.WriteFile(Path.Combine(outputDirectory, "vocabularies.json"), vocabularyBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "manifest.json"), DeterministicJson.SerializeToBytes(manifest));
 
         Console.WriteLine($"Merged {fragments.Count} contract fragments into {outputDirectory} " +

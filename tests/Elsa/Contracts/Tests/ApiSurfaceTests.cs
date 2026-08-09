@@ -199,6 +199,71 @@ public sealed class ApiSurfaceTests
             Assert.Contains("defaults", operation.GetProperty("description").GetString()!, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Spec 150 FR-C16. A GET's request record binds from the route and query string, never from a body, so
+    /// publishing it as a `requestBody` was both invalid OpenAPI and the reason the supported filter set was
+    /// invisible. A session passed `?definitionVersionId=` to the instances endpoint, got a 200 with an
+    /// unfiltered list, and read it as a broken filter — the binder simply has no such target and ignores
+    /// what it cannot bind. The published parameter list is the answer: it is the whole supported set.
+    /// </summary>
+    [Fact]
+    public void A_query_bound_endpoint_publishes_its_filters_as_parameters_not_a_body()
+    {
+        using var raw = Raw();
+        var operation = raw.RootElement
+            .GetProperty("paths")
+            .GetProperty("/runtime/workflows/instances")
+            .GetProperty("get");
+
+        Assert.False(operation.TryGetProperty("requestBody", out _));
+
+        var names = operation.GetProperty("parameters").EnumerateArray()
+            .Select(parameter => parameter.GetProperty("name").GetString()!)
+            .ToArray();
+
+        Assert.Contains("definitionId", names);
+        Assert.Contains("artifactId", names);
+        Assert.Contains("status", names);
+        // Not a supported filter, and now visibly so rather than silently ignored at runtime.
+        Assert.DoesNotContain("definitionVersionId", names);
+    }
+
+    [Fact]
+    public void No_get_or_delete_operation_publishes_a_request_body()
+    {
+        using var raw = Raw();
+
+        foreach (var path in raw.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            foreach (var operation in path.Value.EnumerateObject())
+            {
+                if (operation.Name is not ("get" or "delete" or "head"))
+                    continue;
+
+                Assert.False(operation.Value.TryGetProperty("requestBody", out _),
+                    $"{operation.Name.ToUpperInvariant()} {path.Name} publishes a request body; its arguments bind from route and query.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spec 150 FR-C17. Deleting a definition does not stop its publication serving; unpublishing the slot
+    /// does. That operation exists, and the whole point of publishing the surface is that a consumer finds it
+    /// instead of concluding from a 204 that the route is gone.
+    /// </summary>
+    [Fact]
+    public void The_unpublish_operation_is_published_alongside_the_definition_delete()
+    {
+        using var raw = Raw();
+        var paths = raw.RootElement.GetProperty("paths");
+
+        Assert.True(paths.GetProperty("/publishing/workflows/{definitionId}/slots/{slotName}")
+            .TryGetProperty("delete", out _),
+            "The unpublish operation is absent, so a consumer has no published way to stop a route serving.");
+        Assert.True(paths.GetProperty("/design/workflows/definitions/{definitionId}")
+            .TryGetProperty("delete", out _));
+    }
+
     [Fact]
     public void The_document_is_fingerprinted_in_the_manifest()
     {

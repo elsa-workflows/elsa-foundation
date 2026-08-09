@@ -390,7 +390,8 @@
   ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
   "hosts": "sha256:8d936b8e8569148de4c34b2639c59094b338554b07fc32ff43a3b870985c311b",
-  "openApi": "sha256:2ed23e2d708635a72d6e4baac092028d3001c5eb79f1cf279f2c3a1601ae93b1",
+  "openApi": "sha256:d8266fb2c46b65f0b953ca72e9aec52b56717067637999080f8929e9426f3d0e",
   "schemaVersion": "1.0",
-  "submitSchema": "sha256:063d4d085bf85db11b1de13c93aac8fdedf69deb86a2d612a9652a99b85c1d13"
+  "submitSchema": "sha256:063d4d085bf85db11b1de13c93aac8fdedf69deb86a2d612a9652a99b85c1d13",
+  "vocabularies": "sha256:76b91db2de4aabdc5e281446bd08ca8b0fb1ccf264cda6b9385dc37c8b74de49"
 }
