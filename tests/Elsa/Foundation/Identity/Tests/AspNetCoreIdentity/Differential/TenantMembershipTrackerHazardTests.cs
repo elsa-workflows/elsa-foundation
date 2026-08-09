@@ -92,11 +92,19 @@ public sealed class TenantMembershipTrackerHazardTests : IAsyncLifetime
 
         Assert.Null(exception);
         Assert.Equal(1, await db.TenantMemberships.CountAsync());
+
+        // The probe reads back after its re-drive, so prove the surviving row is the right one and
+        // not merely that exactly one row exists.
+        var readBack = await new EfCoreTenantMembershipStore(db)
+            .FindAsync(TenantMembershipDifferentialTarget.TenantId, UserId);
+
+        Assert.NotNull(readBack);
+        Assert.Equal("role-00", Assert.Single(readBack.RoleIds));
     }
 
     /// <summary>The state a concurrent writer leaves behind when its <c>SaveChangesAsync</c> throws after its <c>Add</c>.</summary>
     private void TrackUnsavedMembership() =>
-        _db.TenantMemberships.Add(new()
+        _db.TenantMemberships.Add(new TenantMembershipEntity
         {
             Id = Guid.NewGuid().ToString("n"),
             TenantId = TenantMembershipDifferentialTarget.TenantId,
