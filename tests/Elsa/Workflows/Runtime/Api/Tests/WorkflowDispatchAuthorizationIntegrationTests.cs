@@ -24,6 +24,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class WorkflowDispatchAuthorizationIntegrationTests
 {
     private const string PermissionHeader = "X-Test-Permission";

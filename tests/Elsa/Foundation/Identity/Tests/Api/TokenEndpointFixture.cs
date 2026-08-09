@@ -33,6 +33,10 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     private TokenEndpointFixture(IHost host) => _host = host;
 
     /// <summary>Builds, starts, and seeds a ready-to-use host.</summary>
+    /// <remarks>
+    /// Mapping FastEndpoints mutates process-global state, so the calling test class must join
+    /// <see cref="FastEndpointsHostCollection"/>.
+    /// </remarks>
     public static async Task<TokenEndpointFixture> StartAsync()
     {
         var databaseSuffix = Guid.NewGuid().ToString("n");
@@ -80,7 +84,15 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapFastEndpoints();
+                        // FastEndpoints holds these in a process-global static, so mapping without
+                        // configuring them inherits whatever the previous host in this process left
+                        // behind — which would let these tests pass for the wrong reason. Pin them to
+                        // the claim types this host actually issues.
+                        endpoints.MapFastEndpoints(config =>
+                        {
+                            config.Security.PermissionsClaimType = IdentityClaimTypes.Permission;
+                            config.Security.RoleClaimType = IdentityClaimTypes.Role;
+                        });
                         endpoints
                             .MapGet("/protected", context =>
                                 context.Response.WriteAsync(context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? string.Empty))
