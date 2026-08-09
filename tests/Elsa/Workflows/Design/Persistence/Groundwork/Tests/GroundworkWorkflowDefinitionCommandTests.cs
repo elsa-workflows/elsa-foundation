@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
@@ -971,6 +972,96 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, draft!.TenantId);
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, version.TenantId);
         Assert.Equal(GroundworkTestAccess.DefaultScopeValue, layout!.TenantId);
+    }
+
+    /// <summary>
+    /// Pins the published claim <c>design.submit-by-name-creates-a-new-definition</c>. Names are not
+    /// identities here: submitting the same name twice yields two definitions, not a second version of the
+    /// first. It is the reason a second run of an authoring script fails where the first succeeded — the new
+    /// definition collides with the HTTP route the first one already claimed.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("design.submit-by-name-creates-a-new-definition")]
+    public async Task SubmitWorkflowDefinition_with_an_existing_name_creates_a_second_definition()
+    {
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new EmptyActivityStructureService(),
+            _clock,
+            _accessContext);
+
+        var first = await command.Execute(NextKey(), "Same Name", null, MinimalState(), CancellationToken.None);
+        var second = await command.Execute(NextKey(), "Same Name", null, MinimalState(), CancellationToken.None);
+
+        Assert.NotEqual(first.DefinitionId, second.DefinitionId);
+        Assert.NotEqual(first.VersionId, second.VersionId);
+
+        // Both are first versions of their own definition — not v1 and v2 of one.
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        Assert.Equal("Same Name", (await definitions.GetAsync(first.DefinitionId)).Name);
+        Assert.Equal("Same Name", (await definitions.GetAsync(second.DefinitionId)).Name);
+    }
+
+    /// <summary>
+    /// Pins the published claim <c>design.submit-stores-publish-validates</c>. Submit checks structural
+    /// well-formedness only — every node carries a non-empty node id and activity version id — and stores
+    /// whatever else it was given. The activity version referenced here exists in no store at all, and the
+    /// definition is still accepted and persisted. Publication is the gate that resolves it.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("design.submit-stores-publish-validates")]
+    public async Task SubmitWorkflowDefinition_accepts_a_node_referencing_an_activity_version_that_does_not_exist()
+    {
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new EmptyActivityStructureService(),
+            _clock,
+            _accessContext);
+        var state = new WorkflowDefinitionState(
+            [],
+            new ActivityNode("root", "activity-version-that-does-not-exist", [], []),
+            [],
+            [],
+            null);
+
+        var submitted = await command.Execute(NextKey(), "Unresolvable", null, state, CancellationToken.None);
+
+        // Stored, not rejected: a 2xx from submit says nothing about whether the definition can run.
+        var version = await VersionStore().GetAsync(submitted.VersionId);
+        Assert.NotNull(version);
+    }
+
+    /// <summary>
+    /// The complementary half: an empty activity version id IS refused at submit, which is the whole of what
+    /// submit checks. Publishing the pair keeps the claim from reading as "submit validates nothing".
+    /// </summary>
+    [Fact]
+    [ConsumerContract("design.submit-stores-publish-validates")]
+    public async Task SubmitWorkflowDefinition_rejects_a_node_without_an_activity_version_id()
+    {
+        var command = new GroundworkSubmitWorkflowDefinitionCommand(
+            _identities,
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new EmptyActivityStructureService(),
+            _clock,
+            _accessContext);
+        var state = new WorkflowDefinitionState(
+            [],
+            new ActivityNode("root", "", [], []),
+            [],
+            [],
+            null);
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            command.Execute(NextKey(), "Structurally invalid", null, state, CancellationToken.None));
     }
 
     [Fact]

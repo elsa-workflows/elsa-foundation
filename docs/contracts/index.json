@@ -1,0 +1,1352 @@
+{
+  "activities": [
+    {
+      "file": "fragments/Elsa.Activities.Bpmn.json",
+      "key": "Elsa.Activities.Bpmn.Activities.BpmnDecision"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Bpmn.json",
+      "key": "Elsa.Activities.Bpmn.Activities.BpmnProcess"
+    },
+    {
+      "file": "fragments/Elsa.Activities.DispatchWorkflow.Runtime.json",
+      "key": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.Do.Activities.Do"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Flowchart.json",
+      "key": "Elsa.Activities.Flowchart.Activities.Flowchart"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.For.Activities.For"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.ForEach.Activities.ForEach"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Graph.Runtime.json",
+      "key": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Http.json",
+      "key": "Elsa.Activities.Http.Activities.HttpEndpoint"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Http.json",
+      "key": "Elsa.Activities.Http.Activities.SendHttpRequest"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Http.json",
+      "key": "Elsa.Activities.Http.Activities.WriteHttpResponse"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.If.Activities.If"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.Parallel.Activities.Parallel"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.Break"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.Event"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.Fault"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.Inline"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.PublishEvent"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.ReadLine"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.WriteLine"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "Elsa.Activities.Primitives.Activities.WriteLines"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scheduling.json",
+      "key": "Elsa.Activities.Scheduling.Activities.Cron"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scheduling.json",
+      "key": "Elsa.Activities.Scheduling.Activities.Delay"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scheduling.json",
+      "key": "Elsa.Activities.Scheduling.Activities.Timer"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scripting.json",
+      "key": "Elsa.Activities.Scripting.Activities.RunJavaScript"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Sequence.json",
+      "key": "Elsa.Activities.Sequence.Activities.Sequence"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.Switch.Activities.Switch"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "Elsa.Activities.While.Activities.While"
+    }
+  ],
+  "expressionTypes": [
+    {
+      "file": "fragments/Elsa.Expressions.Core.json",
+      "key": "Input"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.JavaScript.json",
+      "key": "JavaScript"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.Liquid.json",
+      "key": "Liquid"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.Core.json",
+      "key": "Literal"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.Core.json",
+      "key": "Object"
+    },
+    {
+      "file": "fragments/Elsa.Secrets.json",
+      "key": "Secret"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.json",
+      "key": "Variable"
+    }
+  ],
+  "features": [
+    {
+      "file": "fragments/Elsa.Activities.Bpmn.json",
+      "key": "ActivitiesBpmn"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Bpmn.Interchange.json",
+      "key": "ActivitiesBpmnInterchange"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "ActivitiesControlFlow"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "ActivitiesDesignApi"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Reconciliation.json",
+      "key": "ActivitiesDesignReconciliation"
+    },
+    {
+      "file": "fragments/Elsa.Activities.DispatchWorkflow.Design.json",
+      "key": "ActivitiesDispatchWorkflowDesign"
+    },
+    {
+      "file": "fragments/Elsa.Activities.DispatchWorkflow.Runtime.json",
+      "key": "ActivitiesDispatchWorkflowRuntime"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Flowchart.json",
+      "key": "ActivitiesFlowchart"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Graph.Design.json",
+      "key": "ActivitiesGraphDesign"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Graph.Runtime.json",
+      "key": "ActivitiesGraphRuntime"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Http.json",
+      "key": "ActivitiesHttp"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Primitives.json",
+      "key": "ActivitiesPrimitives"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Runtime.json",
+      "key": "ActivitiesRuntime"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scheduling.json",
+      "key": "ActivitiesScheduling"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Scripting.json",
+      "key": "ActivitiesScripting"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Sequence.json",
+      "key": "ActivitiesSequence"
+    },
+    {
+      "file": "fragments/Elsa.Agent.Anthropic.json",
+      "key": "AnthropicAgent"
+    },
+    {
+      "file": "fragments/Elsa.Api.Capabilities.json",
+      "key": "ApiCapabilities"
+    },
+    {
+      "file": "fragments/Elsa.Api.FastEndpoints.json",
+      "key": "ApiSecurity"
+    },
+    {
+      "file": "fragments/Elsa.Attention.Api.json",
+      "key": "AttentionApi"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Reconciliation.Clr.json",
+      "key": "ClrActivityReconciliation"
+    },
+    {
+      "file": "fragments/Elsa.Diagnostics.Persistence.Groundwork.json",
+      "key": "DiagnosticsGroundworkPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Diagnostics.OpenTelemetry.json",
+      "key": "DiagnosticsOpenTelemetry"
+    },
+    {
+      "file": "fragments/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.json",
+      "key": "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite"
+    },
+    {
+      "file": "fragments/Elsa.Diagnostics.StructuredLogs.json",
+      "key": "DiagnosticsStructuredLogs"
+    },
+    {
+      "file": "fragments/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.json",
+      "key": "DiagnosticsStructuredLogsPersistenceEFCoreSqlite"
+    },
+    {
+      "file": "fragments/Elsa3.Activities.Design.Import.Persistence.Groundwork.json",
+      "key": "Elsa3ImportActivitiesGroundwork"
+    },
+    {
+      "file": "fragments/Elsa3.Activities.Design.Import.json",
+      "key": "Elsa3ImportJsonActivities"
+    },
+    {
+      "file": "fragments/Elsa3.Mapping.json",
+      "key": "Elsa3Mapping"
+    },
+    {
+      "file": "fragments/Elsa.Events.json",
+      "key": "Events"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.json",
+      "key": "Expressions"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.Api.json",
+      "key": "ExpressionsApi"
+    },
+    {
+      "file": "fragments/Elsa.Locking.FileSystem.json",
+      "key": "FileSystemDistributedLocking"
+    },
+    {
+      "file": "fragments/Elsa.Agent.Core.json",
+      "key": "FoundationAgentAbstractions"
+    },
+    {
+      "file": "fragments/Elsa.Agent.Api.json",
+      "key": "FoundationAgentApi"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.Abstractions.json",
+      "key": "FoundationIdentityAbstractions"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.Api.json",
+      "key": "FoundationIdentityApi"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.AspNetCoreIdentity.json",
+      "key": "FoundationIdentityAspNetCoreIdentity"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.json",
+      "key": "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.json",
+      "key": "FoundationIdentityAspNetCoreIdentityGroundwork"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.Oidc.json",
+      "key": "FoundationIdentityOidc"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.OpenIddict.json",
+      "key": "FoundationIdentityOpenIddict"
+    },
+    {
+      "file": "fragments/Elsa.Agent.Workflows.json",
+      "key": "FoundationWorkflowsAgent"
+    },
+    {
+      "file": "fragments/Elsa.Agent.GitHubCopilot.json",
+      "key": "GitHubCopilotAgent"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.MongoDb.json",
+      "key": "GroundworkRuntimePersistenceMongoDb"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.PostgreSql.json",
+      "key": "GroundworkRuntimePersistencePostgreSql"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.SqlServer.json",
+      "key": "GroundworkRuntimePersistenceSqlServer"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.Sqlite.json",
+      "key": "GroundworkRuntimePersistenceSqlite"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.MongoDb.Unified.json",
+      "key": "GroundworkUnifiedPersistenceMongoDb"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.PostgreSql.Unified.json",
+      "key": "GroundworkUnifiedPersistencePostgreSql"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.SqlServer.Unified.json",
+      "key": "GroundworkUnifiedPersistenceSqlServer"
+    },
+    {
+      "file": "fragments/Elsa.Persistence.Groundwork.Sqlite.Unified.json",
+      "key": "GroundworkUnifiedPersistenceSqlite"
+    },
+    {
+      "file": "fragments/Elsa.Http.json",
+      "key": "Http"
+    },
+    {
+      "file": "fragments/Elsa.Http.JavaScript.json",
+      "key": "HttpJavaScript"
+    },
+    {
+      "file": "fragments/Elsa.Foundation.Identity.Persistence.Groundwork.json",
+      "key": "IdentityGroundworkPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.JavaScript.json",
+      "key": "JavaScriptActivities"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.JavaScript.json",
+      "key": "JavaScriptEndpoints"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.JavaScript.json",
+      "key": "JavaScriptExpressions"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.JavaScript.Jint.json",
+      "key": "JavaScriptJintEngine"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.JavaScript.Rendering.json",
+      "key": "JavaScriptRendering"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.JavaScript.Rendering.json",
+      "key": "JavaScriptRenderingEndpoints"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Design.JavaScript.json",
+      "key": "JavaScriptWorkflowsDesign"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Reconciliation.Json.json",
+      "key": "JsonActivityReconciliation"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Design.Reconciliation.Json.json",
+      "key": "JsonWorkflowReconciliation"
+    },
+    {
+      "file": "fragments/Elsa.Expressions.Liquid.json",
+      "key": "Liquid"
+    },
+    {
+      "file": "fragments/Elsa.Mediator.json",
+      "key": "Mediator"
+    },
+    {
+      "file": "fragments/Elsa.Caching.Memory.json",
+      "key": "MemoryCache"
+    },
+    {
+      "file": "fragments/Elsa.Modularity.Api.json",
+      "key": "ModularityApi"
+    },
+    {
+      "file": "fragments/Elsa.Modularity.Attention.json",
+      "key": "ModularityAttention"
+    },
+    {
+      "file": "fragments/Elsa.Primitives.Hosting.json",
+      "key": "Primitives"
+    },
+    {
+      "file": "fragments/Elsa.Secrets.json",
+      "key": "Secrets"
+    },
+    {
+      "file": "fragments/Elsa.Secrets.Api.json",
+      "key": "SecretsApi"
+    },
+    {
+      "file": "fragments/Elsa.Secrets.Attention.json",
+      "key": "SecretsAttention"
+    },
+    {
+      "file": "fragments/Elsa.Secrets.Persistence.Groundwork.json",
+      "key": "SecretsGroundworkPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Serialization.SystemText.json",
+      "key": "Serialization"
+    },
+    {
+      "file": "fragments/Elsa.Serialization.Newtonsoft.json",
+      "key": "Serialization.Newtonsoft"
+    },
+    {
+      "file": "fragments/Elsa.Studio.Preferences.Api.json",
+      "key": "StudioPreferences"
+    },
+    {
+      "file": "fragments/Elsa.Studio.Preferences.Api.json",
+      "key": "StudioPreferencesApi"
+    },
+    {
+      "file": "fragments/Elsa.Studio.Preferences.Persistence.Groundwork.json",
+      "key": "StudioPreferencesGroundworkPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Tasks.json",
+      "key": "Tasks"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Design.Validations.json",
+      "key": "WorkflowDesignValidations"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Dashboard.json",
+      "key": "WorkflowsDashboard"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Design.Api.json",
+      "key": "WorkflowsDesignApi"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Design.Reconciliation.Git.json",
+      "key": "WorkflowsDesignGitReconciliation"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.ExecutionEvidence.json",
+      "key": "WorkflowsExecutionEvidence"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Publishing.json",
+      "key": "WorkflowsPublishing"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Publishing.Api.json",
+      "key": "WorkflowsPublishingApi"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Publishing.Persistence.Groundwork.json",
+      "key": "WorkflowsPublishingGroundwork"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Api.json",
+      "key": "WorkflowsRuntimeApi"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Attention.json",
+      "key": "WorkflowsRuntimeAttention"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Api.json",
+      "key": "WorkflowsRuntimeCheckpointPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Distributed.json",
+      "key": "WorkflowsRuntimeDistributed"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.json",
+      "key": "WorkflowsRuntimeDistributedGroundworkPersistence"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Http.json",
+      "key": "WorkflowsRuntimeHttp"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Scheduling.json",
+      "key": "WorkflowsRuntimeRecurringTriggers"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.ReferenceGarbageCollection.json",
+      "key": "WorkflowsRuntimeReferenceGarbageCollection"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Resumption.json",
+      "key": "WorkflowsRuntimeResumption"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Scheduling.json",
+      "key": "WorkflowsRuntimeScheduling"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Tracing.json",
+      "key": "WorkflowsRuntimeTracing"
+    },
+    {
+      "file": "fragments/Elsa.Workflows.Runtime.Api.json",
+      "key": "WorkflowsRuntimeTriggers"
+    }
+  ],
+  "howToUse": "Resolve the key you need here, then open ONLY that file. The corpus is roughly 850k tokens and is not meant to be read whole; a single fragment is about 810. \u0060activities\u0060, \u0060intrinsics\u0060, \u0060structures\u0060 and \u0060expressionTypes\u0060 are keyed by the identifier you would author; \u0060features\u0060 by shells.json feature id; \u0060routes\u0060 by \u0027VERB /path\u0027, pointing at the OpenAPI part that documents it.",
+  "intrinsics": [
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "Elsa.Finish"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "Elsa.SetCorrelationId"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "Elsa.SetInstanceName"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "Elsa.SetOutput"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "Elsa.SetVariable"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "elsa.intrinsic.finish@1"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "elsa.intrinsic.set-correlation-id@1"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "elsa.intrinsic.set-instance-name@1"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "elsa.intrinsic.set-output@1"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Design.Api.json",
+      "key": "elsa.intrinsic.set@1"
+    }
+  ],
+  "routes": [
+    {
+      "file": "openapi/elsa-execution-evidence.json",
+      "key": "DELETE /_elsa/execution-evidence"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "DELETE /design/activities/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "DELETE /design/workflows/definitions/{definitionId}"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "DELETE /design/workflows/definitions/{definitionId}/permanent"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "DELETE /design/workflows/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "DELETE /publishing/workflows/{definitionId}/slots/{slotName}"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "DELETE /secrets/{name}"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "GET /_elsa/agent/audit"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "GET /_elsa/agent/bootstrap"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "GET /_elsa/agent/sessions/{sessionId}"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "GET /_elsa/agent/sessions/{sessionId}/stream"
+    },
+    {
+      "file": "openapi/elsa-attention.json",
+      "key": "GET /_elsa/attention/items"
+    },
+    {
+      "file": "openapi/elsa-execution-evidence.json",
+      "key": "GET /_elsa/execution-evidence"
+    },
+    {
+      "file": "openapi/elsa-execution-evidence.json",
+      "key": "GET /_elsa/execution-evidence/workflows/{workflowExecutionId}"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/bootstrap"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/capabilities"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/challenge/{provider}"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/login"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/session"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "GET /_elsa/identity/token"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "GET /_elsa/studio/diagnostics/opentelemetry/stream"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "GET /_elsa/studio/diagnostics/structured-logs/recent"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "GET /_elsa/studio/diagnostics/structured-logs/sources"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "GET /_elsa/studio/diagnostics/structured-logs/stream"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "GET /_elsa/studio/preferences/{namespace}"
+    },
+    {
+      "file": "openapi/elsa-workflows.json",
+      "key": "GET /_elsa/workflows/dashboard/definitions"
+    },
+    {
+      "file": "openapi/elsa-workflows.json",
+      "key": "GET /_elsa/workflows/dashboard/runs"
+    },
+    {
+      "file": "openapi/capabilities.json",
+      "key": "GET /capabilities"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/authoring-capabilities"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/availability/diagnostics"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/availability/settings"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/catalog"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/definitions"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/definitions/picker"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/definitions/{definitionId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/definitions/{definitionId}/drafts"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/definitions/{definitionId}/versions"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/forks/{idempotencyKey}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/publications/{idempotencyKey}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/upgrade-plans/{planId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/upgrade-plans/{planId}/receipts/{receiptId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/versions/{fromVersionId}/diff/{toVersionId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/versions/{versionId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "GET /design/activities/versions/{versionId}/dependencies"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/definitions"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/definitions/submit/schema"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/definitions/{definitionId}"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/definitions/{definitionId}/versions"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/drafts/{draftId}/validations"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/expression-tooling/descriptors"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/structures"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "GET /design/workflows/versions/{versionId}"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "GET /diagnostics/opentelemetry/collector-configuration"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "GET /diagnostics/opentelemetry/storage"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "GET /diagnostics/opentelemetry/traces/{traceId}"
+    },
+    {
+      "file": "openapi/expressions-descriptors.json",
+      "key": "GET /expressions/descriptors"
+    },
+    {
+      "file": "openapi/expressions-variable-types.json",
+      "key": "GET /expressions/variable-types"
+    },
+    {
+      "file": "openapi/javascript-documents.json",
+      "key": "GET /javascript/documents/render"
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "key": "GET /migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis"
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "key": "GET /migration/elsa3/reusable-activities/imports/{idempotencyKey}"
+    },
+    {
+      "file": "openapi/modularity-features.json",
+      "key": "GET /modularity/features"
+    },
+    {
+      "file": "openapi/publishing-activities.json",
+      "key": "GET /publishing/activities"
+    },
+    {
+      "file": "openapi/publishing-activities.json",
+      "key": "GET /publishing/activities/{activityId}/construct"
+    },
+    {
+      "file": "openapi/publishing-activity-drafts.json",
+      "key": "GET /publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}"
+    },
+    {
+      "file": "openapi/publishing-activity-test-runs.json",
+      "key": "GET /publishing/activity-test-runs/{testRunId}"
+    },
+    {
+      "file": "openapi/publishing-incident-strategies.json",
+      "key": "GET /publishing/incident-strategies"
+    },
+    {
+      "file": "openapi/publishing-value-conversion.json",
+      "key": "GET /publishing/value-conversion/profiles"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "GET /publishing/workflows/{definitionId}/policy"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "GET /publishing/workflows/{definitionId}/slots"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "GET /publishing/workflows/{definitionId}/slots/{slotName}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/alteration-plans/{planId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/alteration-plans/{planId}/jobs/page"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/diagnostics/settings"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/dispatches"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/dispatches/{dispatchId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/executables"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/executables/{artifactId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/executables/{artifactId}/provenance"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/page"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "GET /runtime/workflows/instances/{workflowExecutionId}/incidents"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "GET /secrets/"
+    },
+    {
+      "file": "openapi/secrets-descriptors.json",
+      "key": "GET /secrets/descriptors"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "GET /secrets/{name}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "PATCH /design/activities/definitions/{definitionId}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "PATCH /design/activities/drafts/{draftId}/presentation"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "PATCH /design/workflows/definitions/{definitionId}"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/feedback"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/proposals/{proposalId}/approve"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/proposals/{proposalId}/deny"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/proposals/{proposalId}/execute"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/sessions"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/sessions/{sessionId}/messages"
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "key": "POST /_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "POST /_elsa/identity/login"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "POST /_elsa/identity/logout/{provider}"
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "key": "POST /_elsa/identity/refresh"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/definitions"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/definitions/{definitionId}/drafts"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/definitions/{definitionId}/fork-previews"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/conflict-copies"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/contract-proposals"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/contract-proposals/apply"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/diff"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/migrate-provider"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/publication-preflight"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/publish"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/drafts/{draftId}/validate"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/fork-candidates/{candidateId}/apply"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/upgrade-plans"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/upgrade-plans/{planId}/apply"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/upgrade-plans/{planId}/refresh"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/versions/{versionId}/restore"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/versions/{versionId}/retire"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "POST /design/activities/versions/{versionId}/revoke"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/definitions"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/definitions/submit"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/definitions/{definitionId}/restore"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/drafts/{draftId}/promote"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/drafts/{draftId}/promotion-preflight"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/expression-tooling/completions"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/expression-tooling/context"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/expression-tooling/hover"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/expression-tooling/symbols"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/expression-tooling/validate"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/scoped-variables/analyze"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "POST /design/workflows/versions/ingest"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "POST /diagnostics/opentelemetry/logs/search"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "POST /diagnostics/opentelemetry/metrics/search"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "POST /diagnostics/opentelemetry/resources/search"
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "key": "POST /diagnostics/opentelemetry/traces/search"
+    },
+    {
+      "file": "openapi/elsa-otlp.json",
+      "key": "POST /elsa/otlp/v1/logs"
+    },
+    {
+      "file": "openapi/elsa-otlp.json",
+      "key": "POST /elsa/otlp/v1/metrics"
+    },
+    {
+      "file": "openapi/elsa-otlp.json",
+      "key": "POST /elsa/otlp/v1/traces"
+    },
+    {
+      "file": "openapi/interchange-bpmn.json",
+      "key": "POST /interchange/bpmn/analyze"
+    },
+    {
+      "file": "openapi/interchange-bpmn.json",
+      "key": "POST /interchange/bpmn/export"
+    },
+    {
+      "file": "openapi/interchange-bpmn.json",
+      "key": "POST /interchange/bpmn/import"
+    },
+    {
+      "file": "openapi/javascript-execute.json",
+      "key": "POST /javascript/execute"
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "key": "POST /migration/elsa3/reusable-activities/collections"
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "key": "POST /migration/elsa3/reusable-activities/collections/{collectionHandle}/apply"
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "key": "POST /migration/elsa3/reusable-activities/collections/{collectionHandle}/selection"
+    },
+    {
+      "file": "openapi/modularity-features.json",
+      "key": "POST /modularity/features/apply"
+    },
+    {
+      "file": "openapi/publishing-activity-drafts.json",
+      "key": "POST /publishing/activity-drafts/{draftId}/test-runs"
+    },
+    {
+      "file": "openapi/publishing-activity-test-runs.json",
+      "key": "POST /publishing/activity-test-runs/{testRunId}/cancel"
+    },
+    {
+      "file": "openapi/publishing-preflight.json",
+      "key": "POST /publishing/preflight"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/drafts/test-runs"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/preflight"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/{definitionId}/slots/{slotName}/restore"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "POST /runtime/workflows/alteration-plans"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "POST /runtime/workflows/alteration-plans/{planId}/cancel"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "POST /runtime/workflows/dispatches/{dispatchId}/redrive"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "POST /runtime/workflows/executables/{artifactId}/execute"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "POST /runtime/workflows/stimuli"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "POST /secrets/"
+    },
+    {
+      "file": "openapi/secrets-picker.json",
+      "key": "POST /secrets/picker"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "POST /secrets/{name}/revoke"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "POST /secrets/{name}/rotate"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "POST /secrets/{name}/test"
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "key": "PUT /_elsa/studio/preferences/{namespace}"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "PUT /design/activities/availability/settings"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "PUT /design/activities/definitions/{definitionId}/recommendation"
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "key": "PUT /design/activities/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "key": "PUT /design/workflows/drafts/{draftId}"
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "key": "PUT /publishing/workflows/{definitionId}/policy"
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "key": "PUT /runtime/workflows/diagnostics/settings"
+    },
+    {
+      "file": "openapi/secrets.json",
+      "key": "PUT /secrets/{name}"
+    }
+  ],
+  "schemaVersion": "1.2.0",
+  "structures": [
+    {
+      "file": "fragments/Elsa.Activities.Bpmn.json",
+      "key": "elsa.bpmn.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.do.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Flowchart.json",
+      "key": "elsa.flowchart.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.for.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.foreach.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.if.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.parallel.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.Sequence.json",
+      "key": "elsa.sequence.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.switch.structure"
+    },
+    {
+      "file": "fragments/Elsa.Activities.ControlFlow.json",
+      "key": "elsa.while.structure"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Distributed",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Tasks"
+      ],
+      "description": "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by W5\u0027s fencing token at checkpoint commit. Compose alongside the Tasks feature.",
+      "displayName": "Workflows Runtime Distributed",
+      "id": "WorkflowsRuntimeDistributed",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 30,
+          "description": "Placement and transport visibility lease TTL. A node that stops renewing within this window loses its executions to a survivor.",
+          "displayName": "Lease duration (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "LeaseDurationSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 5,
+          "description": "Upper bound the sweep interval widens to under sustained failure.",
+          "displayName": "Max backoff interval (minutes)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "MaxBackoffIntervalMinutes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.",
+          "displayName": "Max executions per sweep",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxExecutionsPerSweep",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Stable identity of this node as a placement owner, up to 128 well-formed UTF-16 code units. Defaults to a machine/process-derived value.",
+          "displayName": "Node ID",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "NodeId",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 10,
+          "description": "Baseline seconds between placement sweeps (lease renewal \u002B backlog re-drive) while the node is healthy.",
+          "displayName": "Sweep interval (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "SweepIntervalSeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": "Maximum transport items leased per owned execution per sweep.",
+          "displayName": "Transport lease batch size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "TransportLeaseBatchSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
@@ -42,7 +43,14 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.Equal(new DesignOperationKey("replace-1"), update.OperationKey);
     }
 
+    /// <summary>
+    /// Also pins <c>publishing.deleting-a-definition-does-not-unpublish-it</c>. Deleting a definition is a
+    /// design-side soft delete — it stamps <c>DeletedAt</c> and nothing else. The handler's dependencies are
+    /// the definition store, the save command and a clock: it has no way to reach a publication, which is the
+    /// structural reason the published route keeps serving after a 204.
+    /// </summary>
     [Fact]
+    [ConsumerContract("publishing.deleting-a-definition-does-not-unpublish-it")]
     public async Task Definition_must_pass_through_soft_delete_before_permanent_delete_and_restore_clears_lifecycle_facts()
     {
         var definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" };

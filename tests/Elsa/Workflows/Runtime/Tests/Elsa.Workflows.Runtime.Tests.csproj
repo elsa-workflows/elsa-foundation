@@ -12,6 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- [ConsumerContract] pins for docs/consumer-guide/claims.json. -->
+    <ProjectReference Include="..\..\..\ConsumerGuide\Testing\Elsa.ConsumerGuide.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

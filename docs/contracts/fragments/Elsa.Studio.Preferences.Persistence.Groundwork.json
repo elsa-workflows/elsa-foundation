@@ -1,0 +1,22 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Studio.Preferences.Persistence.Groundwork",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "StudioPreferences"
+      ],
+      "description": "Replaces the in-memory Studio preference store with Groundwork persistence.",
+      "displayName": "Studio Preferences Groundwork Persistence",
+      "id": "StudioPreferencesGroundworkPersistence",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

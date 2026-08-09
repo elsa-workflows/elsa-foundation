@@ -1,0 +1,395 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+      "category": "Sequence",
+      "containerStructure": {
+        "initialPayload": {
+          "activities": []
+        },
+        "mode": "sequence",
+        "slots": [
+          {
+            "cardinality": "many",
+            "childProperty": null,
+            "collectionProperty": null,
+            "displayName": "Activities",
+            "labelProperty": null,
+            "name": "Sequence.Activities",
+            "property": "activities",
+            "slotNameTemplate": null
+          }
+        ],
+        "supportsScopedVariables": true
+      },
+      "contentHash": "FC12C1725576C2143BDAFD470F6B6E2782F9AA1E0A3237B7560D3CB96C462F82",
+      "description": null,
+      "displayName": "Sequence",
+      "executionType": "Action",
+      "featureId": "ActivitiesSequence",
+      "inputs": [],
+      "notes": null,
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Break",
+          "isBrowsable": true,
+          "name": "Break",
+          "referenceKey": "Break",
+          "type": "outcome"
+        }
+      ],
+      "version": "1.0.0"
+    }
+  ],
+  "assembly": "Elsa.Activities.Sequence",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Sequence composite activity and executable-node child slot contracts.",
+      "displayName": "Activities Sequence",
+      "id": "ActivitiesSequence",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": [
+    {
+      "featureId": "ActivitiesSequence",
+      "kind": "elsa.sequence.structure",
+      "payloadSchema": {
+        "properties": {
+          "activities": {
+            "default": null,
+            "items": {
+              "properties": {
+                "activityVersionId": {
+                  "type": "string"
+                },
+                "inputs": {
+                  "items": {
+                    "properties": {
+                      "autoEvaluate": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "conversion": {
+                        "default": null,
+                        "properties": {
+                          "limits": {
+                            "default": null,
+                            "properties": {
+                              "maxCollectionItems": {
+                                "default": null,
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "maxDepth": {
+                                "default": null,
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "maxPayloadBytes": {
+                                "default": null,
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "mode": {
+                            "default": "auto",
+                            "enum": [
+                              "auto",
+                              "none",
+                              "json",
+                              "xml",
+                              "profile"
+                            ]
+                          },
+                          "options": {
+                            "default": null
+                          },
+                          "profile": {
+                            "default": null,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          }
+                        },
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "evaluatorType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isSensitive": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      },
+                      "storageDriverType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "properties": {
+                          "expressionType": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "value": true
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "referenceKey",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "intrinsic": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "set",
+                        "merge",
+                        "reduce",
+                        "return",
+                        "control",
+                        "setCorrelationId",
+                        "setInstanceName",
+                        "setOutput",
+                        "finish"
+                      ]
+                    },
+                    "valueType": {
+                      "default": null,
+                      "properties": {
+                        "alias": {
+                          "type": "string"
+                        },
+                        "collectionKind": {
+                          "default": "single",
+                          "enum": [
+                            "single",
+                            "array",
+                            "list",
+                            "hashSet",
+                            "dictionary"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "alias"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "variable": {
+                      "default": null,
+                      "properties": {
+                        "declaringScopeId": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "isWorkflowScope": {
+                          "type": "boolean"
+                        },
+                        "referenceKey": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "referenceKey"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "nodeId": {
+                  "type": "string"
+                },
+                "outputs": {
+                  "items": {
+                    "$ref": "#/properties/activities/items/properties/inputs/items"
+                  },
+                  "type": "array"
+                },
+                "structure": {
+                  "default": null,
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "payload": true,
+                    "schemaVersion": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "schemaVersion",
+                    "payload"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "nodeId",
+                "activityVersionId",
+                "inputs",
+                "outputs"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "variables": {
+            "default": null,
+            "items": {
+              "properties": {
+                "default": {
+                  "properties": {
+                    "expressionType": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": true
+                  },
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "referenceKey": {
+                  "type": "string"
+                },
+                "storageDriverType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "collectionKind": {
+                      "default": "single",
+                      "enum": [
+                        "single",
+                        "array",
+                        "list",
+                        "hashSet",
+                        "dictionary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "alias"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "referenceKey",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "schemaVersion": "1.0.0",
+      "supportsScopedVariables": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Caching.Memory",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides in-memory caching capabilities.",
+      "displayName": "Memory Cache",
+      "id": "MemoryCache",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Caching",
+          "clrType": "System.TimeSpan",
+          "defaultValue": null,
+          "description": "Default duration for entries stored by the memory cache.",
+          "displayName": "Cache duration",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "CacheDuration",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

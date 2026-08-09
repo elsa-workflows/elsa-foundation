@@ -1,0 +1,151 @@
+{
+  "description": "The HTTP surface, split by route group so no single document has to be read whole. Each part in \u0060parts\u0060 is a complete OpenAPI 3.1 document with its own components \u2014 open only the one you need. \u0060index.json\u0060 maps \u0027VERB /path\u0027 straight to its part.",
+  "parts": [
+    {
+      "file": "openapi/capabilities.json",
+      "group": "capabilities",
+      "operations": 1
+    },
+    {
+      "file": "openapi/design-activities.json",
+      "group": "design-activities",
+      "operations": 41
+    },
+    {
+      "file": "openapi/design-workflows.json",
+      "group": "design-workflows",
+      "operations": 27
+    },
+    {
+      "file": "openapi/diagnostics-opentelemetry.json",
+      "group": "diagnostics-opentelemetry",
+      "operations": 7
+    },
+    {
+      "file": "openapi/elsa-agent.json",
+      "group": "elsa-agent",
+      "operations": 11
+    },
+    {
+      "file": "openapi/elsa-attention.json",
+      "group": "elsa-attention",
+      "operations": 1
+    },
+    {
+      "file": "openapi/elsa-execution-evidence.json",
+      "group": "elsa-execution-evidence",
+      "operations": 3
+    },
+    {
+      "file": "openapi/elsa-identity.json",
+      "group": "elsa-identity",
+      "operations": 9
+    },
+    {
+      "file": "openapi/elsa-otlp.json",
+      "group": "elsa-otlp",
+      "operations": 3
+    },
+    {
+      "file": "openapi/elsa-studio.json",
+      "group": "elsa-studio",
+      "operations": 6
+    },
+    {
+      "file": "openapi/elsa-workflows.json",
+      "group": "elsa-workflows",
+      "operations": 2
+    },
+    {
+      "file": "openapi/expressions-descriptors.json",
+      "group": "expressions-descriptors",
+      "operations": 1
+    },
+    {
+      "file": "openapi/expressions-variable-types.json",
+      "group": "expressions-variable-types",
+      "operations": 1
+    },
+    {
+      "file": "openapi/interchange-bpmn.json",
+      "group": "interchange-bpmn",
+      "operations": 3
+    },
+    {
+      "file": "openapi/javascript-documents.json",
+      "group": "javascript-documents",
+      "operations": 1
+    },
+    {
+      "file": "openapi/javascript-execute.json",
+      "group": "javascript-execute",
+      "operations": 1
+    },
+    {
+      "file": "openapi/migration-elsa3.json",
+      "group": "migration-elsa3",
+      "operations": 5
+    },
+    {
+      "file": "openapi/modularity-features.json",
+      "group": "modularity-features",
+      "operations": 2
+    },
+    {
+      "file": "openapi/publishing-activities.json",
+      "group": "publishing-activities",
+      "operations": 2
+    },
+    {
+      "file": "openapi/publishing-activity-drafts.json",
+      "group": "publishing-activity-drafts",
+      "operations": 2
+    },
+    {
+      "file": "openapi/publishing-activity-test-runs.json",
+      "group": "publishing-activity-test-runs",
+      "operations": 2
+    },
+    {
+      "file": "openapi/publishing-incident-strategies.json",
+      "group": "publishing-incident-strategies",
+      "operations": 1
+    },
+    {
+      "file": "openapi/publishing-preflight.json",
+      "group": "publishing-preflight",
+      "operations": 1
+    },
+    {
+      "file": "openapi/publishing-value-conversion.json",
+      "group": "publishing-value-conversion",
+      "operations": 1
+    },
+    {
+      "file": "openapi/publishing-workflows.json",
+      "group": "publishing-workflows",
+      "operations": 11
+    },
+    {
+      "file": "openapi/runtime-workflows.json",
+      "group": "runtime-workflows",
+      "operations": 24
+    },
+    {
+      "file": "openapi/secrets.json",
+      "group": "secrets",
+      "operations": 8
+    },
+    {
+      "file": "openapi/secrets-descriptors.json",
+      "group": "secrets-descriptors",
+      "operations": 1
+    },
+    {
+      "file": "openapi/secrets-picker.json",
+      "group": "secrets-picker",
+      "operations": 1
+    }
+  ],
+  "schemaVersion": "1.2.0"
+}

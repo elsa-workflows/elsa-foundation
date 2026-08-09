@@ -1,0 +1,382 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Diagnostics.OpenTelemetry",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.CollectorConfiguration",
+      "route": "/diagnostics/opentelemetry/collector-configuration",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryLogFilter",
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryLogResult",
+      "route": "/diagnostics/opentelemetry/logs/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryMetricFilter",
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryMetricResult",
+      "route": "/diagnostics/opentelemetry/metrics/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryResourceFilter",
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryResourceResult",
+      "route": "/diagnostics/opentelemetry/resources/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryStorageDiagnostics",
+      "route": "/diagnostics/opentelemetry/storage",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceFilter",
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceResult",
+      "route": "/diagnostics/opentelemetry/traces/search",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [
+        "*",
+        "Diagnostics:OpenTelemetry"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceDetail",
+      "route": "/diagnostics/opentelemetry/traces/{traceId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/logs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/metrics",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsOpenTelemetry",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/elsa/otlp/v1/traces",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming.",
+      "displayName": "Diagnostics: OpenTelemetry",
+      "id": "DiagnosticsOpenTelemetry",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Allow OTLP ingestion from loopback addresses without an API key.",
+          "displayName": "Allow unauthenticated loopback",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "AllowUnauthenticatedLoopback",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Optional API key required on the OTLP collector endpoints. When empty, loopback ingestion is allowed unauthenticated.",
+          "displayName": "API key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ApiKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.String",
+          "defaultValue": "x-otlp-api-key",
+          "description": "Header name carrying the OTLP ingestion API key.",
+          "displayName": "API key header",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ApiKeyHeaderName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 10000,
+          "description": "Maximum number of recent OTLP log records retained in memory.",
+          "displayName": "Log record capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "LogRecordCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int64",
+          "defaultValue": 10485760,
+          "description": "Maximum OTLP HTTP/protobuf request body size in bytes.",
+          "displayName": "Max HTTP request body size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxHttpRequestBodySize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 1000,
+          "description": "Upper clamp applied to a query result size.",
+          "displayName": "Max query size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxQuerySize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 5000,
+          "description": "Maximum number of recent metric instruments retained in the catalog.",
+          "displayName": "Metric instrument capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MetricInstrumentCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 25000,
+          "description": "Maximum number of recent metric points retained in memory.",
+          "displayName": "Metric point capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MetricPointCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 500,
+          "description": "Maximum number of recent telemetry resources retained in memory.",
+          "displayName": "Resource capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "ResourceCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 25000,
+          "description": "Maximum number of recent spans retained in memory.",
+          "displayName": "Span capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "SpanCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 1000,
+          "description": "Maximum queued live updates per subscriber before updates are dropped.",
+          "displayName": "Subscriber channel capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "SubscriberChannelCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 5000,
+          "description": "Maximum number of recent traces retained in memory.",
+          "displayName": "Trace capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "TraceCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

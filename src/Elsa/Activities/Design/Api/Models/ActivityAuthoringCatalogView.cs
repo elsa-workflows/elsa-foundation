@@ -47,6 +47,13 @@ public sealed record ActivityAuthoringProvenanceView(
 /// (e.g. <c>Set</c>, <c>SetOutput</c>); the input-key fields name which descriptor inputs the client maps
 /// onto the intrinsic's variable target, value, and (for Set Output) literal output name.
 /// </summary>
+/// <remarks>
+/// <see cref="Kind"/> is emitted in the wire spelling of <c>AuthoredWorkflowIntrinsicKind</c> (camelCase,
+/// e.g. <c>set</c>) so a client can echo it into a submission verbatim. It previously used the CLR casing
+/// (<c>Set</c>), which disagreed with the submit schema's enum — two published spellings for one value,
+/// with no tiebreaker (consumer merge-gate evaluation of `35363cebd`). The agreement is pinned by
+/// <c>IntrinsicKindWireSpellingTests</c>.
+/// </remarks>
 public sealed record ActivityAuthoringIntrinsicView(
     string Kind,
     string ValueInputKey,
@@ -71,7 +78,13 @@ public sealed record ActivityInputDescriptorView(
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications);
+    JsonElement? UiSpecifications,
+    // G1 (spec 149 / RFC #1191): disambiguates DefaultValue — true with a value = concrete static default;
+    // true with null = the default is null; false = no statically representable default exists.
+    bool HasStaticDefault = false,
+    // Accepted members of an enum-typed input, in wire spelling; null for every other type. Without it a
+    // client knows the type name and the default but must guess the remaining accepted values.
+    IReadOnlyList<string>? EnumValues = null);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,
@@ -80,7 +93,11 @@ public sealed record ActivityOutputDescriptorView(
     string? DisplayName,
     string? Description,
     string? Category,
-    bool IsBrowsable);
+    bool IsBrowsable,
+    // G2 (spec 149 / RFC #1191): a required output must have an authored target or the publish compile
+    // rejects the definition (RuntimeOutputCaptureCompiler); ReferenceKey is the binding key to author it.
+    bool IsRequired = false,
+    string? ReferenceKey = null);
 
 public sealed record ActivityPortDescriptorView(
     string Name,

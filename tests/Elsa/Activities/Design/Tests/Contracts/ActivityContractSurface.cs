@@ -107,6 +107,8 @@ public static class ActivityContractSurface
                 ["isNullable"] = input.IsNullable,
                 ["uiHint"] = input.UiHint,
                 ["defaultValue"] = ToNode(input.DefaultValue),
+                ["hasStaticDefault"] = input.HasStaticDefault,
+                ["enumValues"] = input.EnumValues is null ? null : new JsonArray(input.EnumValues.Select(value => (JsonNode?)value).ToArray()),
                 ["defaultSyntax"] = input.DefaultSyntax,
                 ["uiSpecifications"] = ToNode(input.UISpecifications)
             });

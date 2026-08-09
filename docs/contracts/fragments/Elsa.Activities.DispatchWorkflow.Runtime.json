@@ -1,0 +1,251 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
+      "category": "Runtime",
+      "containerStructure": null,
+      "contentHash": "0CAF4B527EA3682111E0B9A40E26FB2921FEE7F11838BEDDCF5E7B7AA17F1EDB",
+      "description": null,
+      "displayName": "Dispatch Workflow",
+      "executionType": "Action",
+      "featureId": "ActivitiesDispatchWorkflowRuntime",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Workflow Definition ID",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "WorkflowDefinitionId",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "WorkflowDefinitionId",
+          "type": "String",
+          "uiHint": "dropdown",
+          "uiSpecifications": {
+            "optionsProvider": {
+              "dependsOn": [],
+              "key": "DispatchWorkflow.WorkflowDefinitions"
+            }
+          }
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "dictionary",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Inputs",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Inputs",
+          "notes": null,
+          "order": 10,
+          "referenceKey": "Inputs",
+          "type": "System.Text.Json.JsonElement",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Wait For Completion",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "WaitForCompletion",
+          "notes": null,
+          "order": 20,
+          "referenceKey": "WaitForCompletion",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": true,
+          "description": null,
+          "displayName": "Cancel Child On Parent Cancellation",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "CancelChildOnParentCancellation",
+          "notes": null,
+          "order": 30,
+          "referenceKey": "CancelChildOnParentCancellation",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Correlation ID",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "CorrelationId",
+          "notes": null,
+          "order": 40,
+          "referenceKey": "CorrelationId",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Child Workflow Execution ID",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ChildWorkflowExecutionId",
+          "referenceKey": "ChildWorkflowExecutionId",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Result",
+          "isBrowsable": true,
+          "isRequired": false,
+          "name": "Result",
+          "referenceKey": "Result",
+          "type": "Elsa.Activities.DispatchWorkflow.Runtime.Models.DispatchWorkflowResult"
+        }
+      ],
+      "ports": [
+        {
+          "displayName": "Dispatched",
+          "isBrowsable": true,
+          "name": "Dispatched",
+          "referenceKey": "Dispatched",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Completed",
+          "isBrowsable": true,
+          "name": "Completed",
+          "referenceKey": "Completed",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Faulted",
+          "isBrowsable": true,
+          "name": "Faulted",
+          "referenceKey": "Faulted",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Cancelled",
+          "isBrowsable": true,
+          "name": "Cancelled",
+          "referenceKey": "Cancelled",
+          "type": "outcome"
+        },
+        {
+          "displayName": "DispatchFailed",
+          "isBrowsable": true,
+          "name": "DispatchFailed",
+          "referenceKey": "DispatchFailed",
+          "type": "outcome"
+        }
+      ],
+      "version": "1.0.0"
+    }
+  ],
+  "assembly": "Elsa.Activities.DispatchWorkflow.Runtime",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeResumption"
+      ],
+      "description": "Runs pinned DispatchWorkflow child starts through the runtime resumption path.",
+      "displayName": "Activities Dispatch Workflow (Runtime)",
+      "id": "ActivitiesDispatchWorkflowRuntime",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 4,
+          "description": "Total infrastructure delivery attempts for one committed child start, including the initial attempt.",
+          "displayName": "Child-start maximum delivery attempts",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "ChildStartMaxDeliveryAttempts",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Double",
+          "defaultValue": 1,
+          "description": "Positive delay between child-start infrastructure delivery attempts.",
+          "displayName": "Child-start retry delay (seconds)",
+          "experimental": false,
+          "jsonType": "number",
+          "name": "ChildStartRetryDelaySeconds",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 32,
+          "description": "Maximum number of cross-workflow dispatch edges permitted from a root execution.",
+          "displayName": "Maximum nesting depth",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxNestingDepth",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

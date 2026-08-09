@@ -1,0 +1,20 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Design.Reconciliation",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Universal activity-design reconciliation pass; discovers IActivityReconciliationSource contributions from DI.",
+      "displayName": "Activities Design Reconciliation",
+      "id": "ActivitiesDesignReconciliation",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

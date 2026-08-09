@@ -1,0 +1,105 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.OpenIddict",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "OpenIddict-backed first-party token issuance (JWT access tokens \u002B rotating refresh tokens) and bearer validation for the API surface.",
+      "displayName": "Foundation Identity OpenIddict",
+      "id": "FoundationIdentityOpenIddict",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Migrates the durable token-store schema at startup. Leave on for zero-config and single-instance deployments; turn off for multi-instance deployments that apply EF Core migrations out-of-band.",
+          "displayName": "Auto-migrate",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "AutoMigrate",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Sqlite connection string for the token store. Defaults to the shared identity database.",
+          "displayName": "Connection string",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ConnectionString",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Security",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Key material used to derive OpenIddict\u0027s encryption key. Defaults to a key derived from the signing key.",
+          "displayName": "Encryption key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "EncryptionKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": "Uses an in-memory token store and ephemeral per-process keys so a fresh checkout can issue tokens without configuration.",
+          "displayName": "Development or demo",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "IsDevelopmentOrDemo",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Logical issuer URI written into first-party access tokens.",
+          "displayName": "Issuer",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "Issuer",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Security",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Key material used to derive the token signing key. Required outside development/demo.",
+          "displayName": "Signing key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SigningKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

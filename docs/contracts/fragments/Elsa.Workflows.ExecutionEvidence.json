@@ -1,0 +1,154 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.ExecutionEvidence",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.ExecutionEvidence.Models.ExecutionEvidencePage",
+      "route": "/_elsa/execution-evidence",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsExecutionEvidence",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.ExecutionEvidence.Models.ExecutionEvidencePage",
+      "route": "/_elsa/execution-evidence/workflows/{workflowExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Records what a workflow execution did into a process-local, in-memory buffer and exposes it over HTTP so an automated test can assert over it. Evidence is never persisted, is not replicated across nodes, and is lost on restart or once the buffer caps evict it \u2014 enable this on test hosts only, not in production.",
+      "displayName": "Workflow Execution Evidence",
+      "id": "WorkflowsExecutionEvidence",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 8192,
+          "description": "Variable values whose raw JSON exceeds this many characters are recorded as Truncated.",
+          "displayName": "Maximum inline value length",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxInlineValueLength",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 10000,
+          "description": "Oldest facts are dropped once one workflow execution exceeds this many.",
+          "displayName": "Maximum records per workflow",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxRecordsPerWorkflow",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 10000,
+          "description": "Replay de-duplication window. A replayed checkpoint older than this window can be recorded twice.",
+          "displayName": "Maximum tracked checkpoints per workflow",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxTrackedCheckpointsPerWorkflow",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 1000,
+          "description": "Least-recently-written workflow executions are evicted whole once this many are tracked.",
+          "displayName": "Maximum tracked workflows",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxWorkflows",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Withholds inline values whose protection policy marks them sensitive, recording the Sensitive disposition instead.",
+          "displayName": "Redact sensitive values",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "RedactSensitiveValues",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

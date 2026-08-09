@@ -1,0 +1,143 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Diagnostics.StructuredLogs",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/structured-logs/recent",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=0.0.1.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/studio/diagnostics/structured-logs/sources",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": true,
+      "featureId": "DiagnosticsStructuredLogs",
+      "permissions": [
+        "*",
+        "Diagnostics:StructuredLogs"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/studio/diagnostics/structured-logs/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Captures structured log entries and exposes them for live tailing and recent-history queries.",
+      "displayName": "Diagnostics: Structured Logs",
+      "id": "DiagnosticsStructuredLogs",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.Int32",
+          "defaultValue": 2000,
+          "description": "Maximum number of recent entries retained in memory.",
+          "displayName": "Buffer capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "BufferCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.String",
+          "defaultValue": "Information",
+          "description": "Lowest log level captured into the diagnostics pipeline.",
+          "displayName": "Minimum level",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "MinimumLevel",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Identifies the local log source. Defaults to the process name.",
+          "displayName": "Service name",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ServiceName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Diagnostics",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "UI label for the local log source.",
+          "displayName": "Source display name",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SourceDisplayName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

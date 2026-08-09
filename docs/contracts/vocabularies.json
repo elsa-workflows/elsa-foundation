@@ -1,0 +1,82 @@
+{
+  "authoredVia": [
+    {
+      "meaning": "The input is authored as an entry in the node\u0027s \u0060inputs\u0060 collection. This is the default and covers every activity input.",
+      "value": "argument"
+    },
+    {
+      "meaning": "The input is carried by the node\u0027s sibling \u0060intrinsic\u0060 block rather than by an \u0060inputs\u0060 entry \u2014 an intrinsic\u0027s variable target is descriptor-only and has no argument binding. Authoring it as a plain input is rejected.",
+      "value": "intrinsicBlock"
+    }
+  ],
+  "collectionKinds": [
+    "array",
+    "dictionary",
+    "hashSet",
+    "list",
+    "single"
+  ],
+  "expressionTypeSemantics": [
+    {
+      "meaning": "A constant value carried verbatim in the binding. The expression type used on nearly every authored input.",
+      "value": "Literal"
+    },
+    {
+      "meaning": "A structured JSON literal, deserialized straight into the input\u0027s CLR type without reaching any expression evaluator. This is the expression type a collection-typed input takes: the payload is a JSON array for Array/List/HashSet and a JSON object for Dictionary.",
+      "value": "Object"
+    },
+    {
+      "meaning": "A reference to a workflow input rather than an inline value.",
+      "value": "Input"
+    },
+    {
+      "meaning": "A reference to a declared variable, keyed by the variable\u0027s referenceKey and NOT by its name. Two payload forms are accepted: the bare string \u0060\u0022orderId\u0022\u0060, which defaults the scope to workflow scope, or the object \u0060{\u0022referenceKey\u0022:\u0022orderId\u0022,\u0022declaringScopeId\u0022:\u0022workflow\u0022}\u0060 when the scope must be explicit. Required as the expression type of any authored output target.",
+      "value": "Variable"
+    }
+  ],
+  "intrinsicKinds": [
+    "control",
+    "finish",
+    "merge",
+    "reduce",
+    "return",
+    "set",
+    "setCorrelationId",
+    "setInstanceName",
+    "setOutput"
+  ],
+  "publication": {
+    "defaultSlotName": "default",
+    "operationKeyNote": "\u0060operationKey\u0060 on a submit or publish body is an IDEMPOTENCY token, not a way to address an existing definition. Repeating a request with the same key replays the original outcome instead of performing it again; omitting it generates a fresh key, making every call a distinct operation. It cannot be used to add a version to an existing definition \u2014 nothing in the submit body can, which is why re-submitting a name creates a second definition.",
+    "slotNote": "Publishing without naming a slot targets this one. It is also the {slotName} to pass to DELETE /publishing/workflows/{definitionId}/slots/{slotName}, which is the documented way to release an exclusive HTTP route \u2014 a consumer that cannot name the default slot cannot perform the remedy the contracts prescribe."
+  },
+  "schemaVersion": "1.2.0",
+  "typeAliases": {
+    "governs": "These are the aliases that appear as the \u0060type\u0060 of a published activity input or output. They are NOT the set a variable may be declared as \u2014 that set is smaller and is published per fragment under \u0060expressions.variableTypes\u0060 (the runtime serves the same union at GET /expressions/variable-types). Declaring a variable as a reserved alias outside that smaller set fails.",
+    "note": "\u0027Any\u0027 is accepted as a result-type alias on an expression definition and means \u0027do not constrain the result\u0027. It is not a variable type.",
+    "nullableRule": "A nullable value type is the underlying alias with a \u0027?\u0027 suffix (\u0027Int32?\u0027). The nullable companion is derived automatically, so it is never registered separately.",
+    "nullableSuffix": "?",
+    "otherTypesRule": "Any type outside the reserved set is aliased by its namespace-qualified CLR full name, with no assembly name and no version (for example \u0027Elsa.Activities.Http.Models.HttpRequestModel\u0027). Aliases resolve case-insensitively.",
+    "reservedBare": [
+      "Boolean",
+      "Byte",
+      "Char",
+      "DateTime",
+      "DateTimeOffset",
+      "Decimal",
+      "Double",
+      "Guid",
+      "Int16",
+      "Int32",
+      "Int64",
+      "Object",
+      "SByte",
+      "Single",
+      "String",
+      "TimeSpan",
+      "UInt16",
+      "UInt32",
+      "UInt64"
+    ]
+  }
+}

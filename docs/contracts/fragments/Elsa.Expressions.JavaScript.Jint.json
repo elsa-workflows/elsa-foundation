@@ -1,0 +1,229 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Expressions.JavaScript.Jint",
+  "endpoints": [],
+  "expressions": {
+    "descriptors": [],
+    "javaScriptDeclarations": [],
+    "scriptSandbox": [
+      {
+        "availability": "Installed when the expression declares parameters; frozen (non-writable, non-extensible).",
+        "kind": "frozenObject",
+        "name": "args",
+        "signature": "const args: Readonly\u003CRecord\u003Cstring, any\u003E\u003E"
+      },
+      {
+        "availability": "Installed when the workflow exposes visible variables; frozen (non-writable, non-extensible).",
+        "kind": "frozenObject",
+        "name": "variables",
+        "signature": "const variables: Readonly\u003CRecord\u003Cstring, any\u003E\u003E"
+      },
+      {
+        "availability": "Installed when the workflow exposes visible variables; returns undefined for unknown names.",
+        "kind": "function",
+        "name": "getVariable",
+        "signature": "getVariable(name: string): any"
+      },
+      {
+        "availability": "One accessor per visible variable whose name is a bare JavaScript identifier.",
+        "kind": "perVariableAccessor",
+        "name": "get{VariableName}",
+        "signature": "get{PascalCaseVariableName}(): any"
+      },
+      {
+        "availability": "Undefined by design: time enters through pinned args, never ambient capability.",
+        "kind": "disabledIntrinsic",
+        "name": "Date",
+        "signature": null
+      },
+      {
+        "availability": "Undefined by design: time enters through pinned args, never ambient capability.",
+        "kind": "disabledIntrinsic",
+        "name": "Temporal",
+        "signature": null
+      },
+      {
+        "availability": "Undefined by design: locale data enters through pinned args, never ambient capability.",
+        "kind": "disabledIntrinsic",
+        "name": "Intl",
+        "signature": null
+      },
+      {
+        "availability": "Undefined by design: randomness enters through pinned args, never ambient capability.",
+        "kind": "disabledIntrinsic",
+        "name": "Math.random",
+        "signature": null
+      }
+    ],
+    "variableTypes": null
+  },
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides JavaScript evaluation using the Jint engine.",
+      "displayName": "JavaScript Jint engine",
+      "id": "JavaScriptJintEngine",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Security",
+          "clrType": "System.Nullable\u00601[[System.TimeSpan, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": null,
+          "description": "Maximum wall-clock time a single script evaluation may run before it is aborted; empty disables the timeout. Guards against infinite loops.",
+          "displayName": "Execution timeout",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ExecutionTimeout",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Nullable\u00601[[System.UInt32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": 100000,
+          "description": "Maximum JavaScript array length, including sparse arrays; empty or zero disables the limit.",
+          "displayName": "Max array length",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxArrayLength",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 1048576,
+          "description": "Maximum aggregate UTF-8 size of declared JSON parameter values before JavaScript evaluation.",
+          "displayName": "Max input bytes",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxInputBytes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 64,
+          "description": "Maximum nesting depth of a declared JSON parameter value before JavaScript evaluation.",
+          "displayName": "Max input depth",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxInputDepth",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 100000,
+          "description": "Maximum aggregate number of JSON values across declared parameters before JavaScript evaluation.",
+          "displayName": "Max input nodes",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxInputNodes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Nullable\u00601[[System.Int64, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": 67108864,
+          "description": "Maximum managed memory Jint may allocate during one evaluation; empty or zero disables the limit.",
+          "displayName": "Max memory bytes",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxMemoryBytes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": 300,
+          "description": "Maximum call-stack recursion depth for a single script evaluation; empty or zero disables the limit.",
+          "displayName": "Max recursion depth",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxRecursionDepth",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 1048576,
+          "description": "Maximum UTF-8 size of a JavaScript result after canonical JSON conversion.",
+          "displayName": "Max result bytes",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxResultBytes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 64,
+          "description": "Maximum nesting depth of a JavaScript result after canonical JSON conversion.",
+          "displayName": "Max result depth",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxResultDepth",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Int32",
+          "defaultValue": 100000,
+          "description": "Maximum number of JSON values in a JavaScript result after canonical JSON conversion.",
+          "displayName": "Max result nodes",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxResultNodes",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Security",
+          "clrType": "System.Nullable\u00601[[System.Int32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": 10000000,
+          "description": "Maximum number of statements a single script evaluation may execute before it is aborted; empty or zero disables the limit.",
+          "displayName": "Max statements",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxStatements",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

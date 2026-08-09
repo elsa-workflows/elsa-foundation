@@ -1,0 +1,20 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Publishing.Persistence.Groundwork",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Atomic reusable-activity publication across Design and Runtime Groundwork units.",
+      "displayName": "Workflows Publishing (Groundwork)",
+      "id": "WorkflowsPublishingGroundwork",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

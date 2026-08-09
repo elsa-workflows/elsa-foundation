@@ -1,0 +1,167 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Cron",
+      "category": "Scheduling",
+      "containerStructure": null,
+      "contentHash": "2440F0F0B6E5BBB03A0ECEBE5FAC2F75CCDB7049CED9B170BD99F156B6DCE0B6",
+      "description": null,
+      "displayName": "Cron",
+      "executionType": "Action",
+      "featureId": "ActivitiesScheduling",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Expression",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Expression",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Expression",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Expression",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Expression",
+          "referenceKey": "Result",
+          "type": "String"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Delay",
+      "category": "Scheduling",
+      "containerStructure": null,
+      "contentHash": "7644A07A0EB88FE163FBB747AD3D1EE4283F109F666BA03CE817CC474F4AC0B4",
+      "description": null,
+      "displayName": "Delay",
+      "executionType": "Action",
+      "featureId": "ActivitiesScheduling",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": "00:00:00",
+          "description": null,
+          "displayName": "Duration",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Duration",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Duration",
+          "type": "TimeSpan",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": "outcome"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Timer",
+      "category": "Scheduling",
+      "containerStructure": null,
+      "contentHash": "CD9092A20CE7CBF663A16BD503E8AC486F15E56D5C0F13896787B79A4CC1ECE7",
+      "description": null,
+      "displayName": "Timer",
+      "executionType": "Action",
+      "featureId": "ActivitiesScheduling",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Interval",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Interval",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Interval",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Interval",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Interval",
+          "referenceKey": "Result",
+          "type": "String"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0"
+    }
+  ],
+  "assembly": "Elsa.Activities.Scheduling",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeRecurringTriggers",
+        "WorkflowsRuntimeScheduling"
+      ],
+      "description": "Scheduling activities: Delay (durable one-shot suspend/resume) and the recurring Timer/Cron start triggers.",
+      "displayName": "Activities Scheduling",
+      "id": "ActivitiesScheduling",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

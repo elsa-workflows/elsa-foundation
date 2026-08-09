@@ -1,0 +1,836 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentRequest": {
+        "properties": {
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentRequest": {
+        "properties": {
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "processNode": {
+            "properties": {
+              "activityVersionId": {
+                "type": "string"
+              },
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "autoEvaluate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "conversion": {
+                      "default": null,
+                      "properties": {
+                        "limits": {
+                          "default": null,
+                          "properties": {
+                            "maxCollectionItems": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxDepth": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxPayloadBytes": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "default": "auto",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "json",
+                            "xml",
+                            "profile"
+                          ]
+                        },
+                        "options": {
+                          "default": null
+                        },
+                        "profile": {
+                          "default": null,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evaluatorType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "isSensitive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": {}
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "intrinsic": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "set",
+                      "merge",
+                      "reduce",
+                      "return",
+                      "control",
+                      "setCorrelationId",
+                      "setInstanceName",
+                      "setOutput",
+                      "finish"
+                    ]
+                  },
+                  "valueType": {
+                    "default": null,
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "collectionKind": {
+                        "default": "single",
+                        "enum": [
+                          "single",
+                          "array",
+                          "list",
+                          "hashSet",
+                          "dictionary"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "alias"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "variable": {
+                    "default": null,
+                    "properties": {
+                      "declaringScopeId": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isWorkflowScope": {
+                        "type": "boolean"
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "referenceKey"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "outputs": {
+                "items": {
+                  "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentRequest/properties/processNode/properties/inputs/items"
+                },
+                "type": "array"
+              },
+              "structure": {
+                "default": null,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "payload": {},
+                  "schemaVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "schemaVersion",
+                  "payload"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "activityVersionId",
+              "inputs",
+              "outputs"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "processNode"
+        ],
+        "type": "object"
+      },
+      "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentResult": {
+        "properties": {
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentRequest": {
+        "properties": {
+          "nodeIdPrefix": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "processId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "xml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "type": "object"
+      },
+      "Elsa.Activities.Bpmn.Interchange.Models.BpmnImportAnalysis": {
+        "properties": {
+          "elementCounts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "issues": {
+            "items": {
+              "properties": {
+                "elementId": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "severity": {
+                  "enum": [
+                    "info",
+                    "degraded",
+                    "dropped"
+                  ]
+                }
+              },
+              "required": [
+                "severity",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "processIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "processIds",
+          "elementCounts",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult": {
+        "properties": {
+          "analysis": {
+            "properties": {
+              "elementCounts": {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              "issues": {
+                "items": {
+                  "properties": {
+                    "elementId": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "enum": [
+                        "info",
+                        "degraded",
+                        "dropped"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "severity",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "processIds": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "processIds",
+              "elementCounts",
+              "issues"
+            ],
+            "type": "object"
+          },
+          "processNode": {
+            "properties": {
+              "activityVersionId": {
+                "type": "string"
+              },
+              "inputs": {
+                "items": {
+                  "properties": {
+                    "autoEvaluate": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "conversion": {
+                      "default": null,
+                      "properties": {
+                        "limits": {
+                          "default": null,
+                          "properties": {
+                            "maxCollectionItems": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxDepth": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "maxPayloadBytes": {
+                              "default": null,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "default": "auto",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "json",
+                            "xml",
+                            "profile"
+                          ]
+                        },
+                        "options": {
+                          "default": null
+                        },
+                        "profile": {
+                          "default": null,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evaluatorType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "isSensitive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "referenceKey": {
+                      "type": "string"
+                    },
+                    "storageDriverType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "properties": {
+                        "expressionType": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": {}
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "referenceKey",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "intrinsic": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "set",
+                      "merge",
+                      "reduce",
+                      "return",
+                      "control",
+                      "setCorrelationId",
+                      "setInstanceName",
+                      "setOutput",
+                      "finish"
+                    ]
+                  },
+                  "valueType": {
+                    "default": null,
+                    "properties": {
+                      "alias": {
+                        "type": "string"
+                      },
+                      "collectionKind": {
+                        "default": "single",
+                        "enum": [
+                          "single",
+                          "array",
+                          "list",
+                          "hashSet",
+                          "dictionary"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "alias"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "variable": {
+                    "default": null,
+                    "properties": {
+                      "declaringScopeId": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isWorkflowScope": {
+                        "type": "boolean"
+                      },
+                      "referenceKey": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "referenceKey"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "outputs": {
+                "items": {
+                  "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult/properties/processNode/properties/inputs/items"
+                },
+                "type": "array"
+              },
+              "structure": {
+                "default": null,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "payload": {},
+                  "schemaVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "schemaVersion",
+                  "payload"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "activityVersionId",
+              "inputs",
+              "outputs"
+            ],
+            "type": "object"
+          },
+          "processNodes": {
+            "items": {
+              "properties": {
+                "node": {
+                  "properties": {
+                    "activityVersionId": {
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult/properties/processNode/properties/inputs"
+                    },
+                    "intrinsic": {
+                      "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult/properties/processNode/properties/intrinsic"
+                    },
+                    "nodeId": {
+                      "type": "string"
+                    },
+                    "outputs": {
+                      "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult/properties/processNode/properties/outputs"
+                    },
+                    "structure": {
+                      "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult/properties/processNode/properties/structure",
+                      "default": null
+                    }
+                  },
+                  "required": [
+                    "nodeId",
+                    "activityVersionId",
+                    "inputs",
+                    "outputs"
+                  ],
+                  "type": "object"
+                },
+                "participantId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "participantName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "processId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "processId",
+                "node"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "processNode",
+          "analysis",
+          "processNodes"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/interchange/bpmn/analyze": {
+      "post": {
+        "description": "Requires one of: *, bpmn-interchange.read.",
+        "operationId": "postInterchangeBpmnAnalyze",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportAnalysis"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Activities.Bpmn.Interchange",
+        "x-elsa-feature-id": "ActivitiesBpmnInterchange",
+        "x-elsa-permissions": [
+          "*",
+          "bpmn-interchange.read"
+        ]
+      }
+    },
+    "/interchange/bpmn/export": {
+      "post": {
+        "description": "Requires one of: *, bpmn-interchange.read.",
+        "operationId": "postInterchangeBpmnExport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Activities.Bpmn.Interchange",
+        "x-elsa-feature-id": "ActivitiesBpmnInterchange",
+        "x-elsa-permissions": [
+          "*",
+          "bpmn-interchange.read"
+        ]
+      }
+    },
+    "/interchange/bpmn/import": {
+      "post": {
+        "description": "Requires one of: *, bpmn-interchange.manage.",
+        "operationId": "postInterchangeBpmnImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Activities.Bpmn.Interchange.Models.BpmnImportResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Activities.Bpmn.Interchange",
+        "x-elsa-feature-id": "ActivitiesBpmnInterchange",
+        "x-elsa-permissions": [
+          "*",
+          "bpmn-interchange.manage"
+        ]
+      }
+    }
+  }
+}

@@ -155,6 +155,31 @@ Focus on high-signal findings. Limit to 50 findings total; aggregate remainder i
 - Task ordering contradictions (e.g., integration tasks before foundational setup tasks without dependency note)
 - Conflicting requirements (e.g., one requires Next.js while other specifies Vue)
 
+#### G. Consumer-Visible Behaviour (findings F1–F3, RFC #1191 Part 2)
+
+These are **ADVISORY**. Surface them; never block on them, never demand a waiver, and never write the note
+yourself into the spec. They exist to put the question in front of the person who has the answer, at the
+moment they have it — a note written to satisfy a gate is filler, and filler reads as an answer.
+
+Raise them only when the change actually touches consumer-facing surface:
+
+- **F1 — Enum branches.** A new or changed enum-typed activity input yields one finding per member:
+  "describe the observable effect of choosing this value." An enum member name is not an explanation —
+  `ResponseMode.async` reads as a scheduling detail and actually means "your response will not arrive".
+  Accepted answers materialize as `[ConsumerNote(ConsumerNoteKind.Default, "...", Member = "async")]`.
+- **F2 — Consumer-facing surface.** A new or changed activity, structure, or feature option set yields:
+  "does this carry limitations, edge cases, or invariants a consumer must know? Consider `[ConsumerNote]`."
+- **F3 — Behavioural triggers.** A changed default, a new publish-time validator, or a new degrade path
+  yields: "state the cause→effect a consumer must anticipate." An accepted answer becomes a claim in
+  `docs/consumer-guide/claims.json` **with a pinning test** — Gate A rejects a claim that names none.
+
+Severity for F1–F3 is always **LOW** regardless of how load-bearing the behaviour is: the severity column
+drives blocking decisions elsewhere in this report, and these must not block. Report the omission in the
+overflow summary if the author declines; the finding staying in the pull-request record is the point.
+
+Run `dotnet run --project tools/contracts/Elsa.Contracts.Generator -- notes` (gate G4) to see which
+consumer-facing surface currently carries no note. That report also never fails.
+
 ### 5. Severity Assignment
 
 Use this heuristic to prioritize findings:

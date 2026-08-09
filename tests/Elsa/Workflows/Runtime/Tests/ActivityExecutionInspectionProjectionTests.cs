@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Security.Claims;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -14,6 +15,39 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public class ActivityExecutionInspectionProjectionTests
 {
+    /// <summary>
+    /// Pins the published claim <c>evidence.snapshot-name-is-not-unique</c>. A snapshot's <c>name</c> is
+    /// scoped by its <c>subject</c>, not unique on its own: an input and an output on the same activity
+    /// execution can both be called <c>result</c>. A test that filters value evidence on name alone silently
+    /// asserts against whichever one the projection ordered first.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("evidence.snapshot-name-is-not-unique")]
+    public void A_snapshot_name_repeats_across_subjects_within_one_activity_execution()
+    {
+        JsonElement Value(string text) => JsonSerializer.SerializeToElement(text);
+        ActivityExecutionInspectionValueSnapshot Snapshot(ActivityExecutionInspectionValueSubject subject, string payload) =>
+            new("result", subject, RuntimePayloadCaptureMode.Payload, null, DateTimeOffset.UnixEpoch,
+                Value(payload), "captured", false, new Dictionary<string, string>());
+
+        var projection = Projection("node", "node", null, 1, ActivityExecutionStatus.Completed) with
+        {
+            ValueSnapshots =
+            [
+                Snapshot(ActivityExecutionInspectionValueSubject.ActivityInput, "the-input"),
+                Snapshot(ActivityExecutionInspectionValueSubject.ActivityOutput, "the-output")
+            ]
+        };
+
+        var byName = projection.ValueSnapshots.Where(snapshot => snapshot.Name == "result").ToArray();
+        Assert.Equal(2, byName.Length);
+
+        // Name AND subject is what identifies one: either alone is ambiguous.
+        var output = Assert.Single(projection.ValueSnapshots, snapshot =>
+            snapshot.Name == "result" && snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
+        Assert.Equal("the-output", output.Payload!.Value.GetString());
+    }
+
     [Fact]
     public void Detail_Projects_Attempt_Boundary_Aggregate_And_Explicit_Value_Redaction()
     {

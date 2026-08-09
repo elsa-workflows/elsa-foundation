@@ -17,6 +17,8 @@ using PublishWorkflowRequest = Elsa.Workflows.Publishing.Api.Requests.PublishWor
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
+[SuccessStatus(201, 200,
+    Condition = "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies).")]
 internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILogger<PublishWorkflowEndpoint> logger)
     : ElsaEndpoint<PublishWorkflowRequest, PublishedWorkflowView>
 {

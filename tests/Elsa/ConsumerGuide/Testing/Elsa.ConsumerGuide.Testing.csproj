@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Marker attribute only, referenced by test projects across the tree; deliberately dependency-free
+         so carrying a claim never drags a package into an unrelated suite. -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+</Project>

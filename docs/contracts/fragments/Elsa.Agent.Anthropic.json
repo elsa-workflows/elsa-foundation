@@ -1,0 +1,119 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Agent.Anthropic",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers the Anthropic Claude agent provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other agent harnesses (single active harness).",
+      "displayName": "Anthropic (Claude) Agent Provider",
+      "id": "AnthropicAgent",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Api Key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ApiKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": "ANTHROPIC_API_KEY",
+          "description": null,
+          "displayName": "Api Key Environment Variable",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ApiKeyEnvironmentVariable",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Enabled",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "Enabled",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Include Sensitive Context Content",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "IncludeSensitiveContextContent",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Int32",
+          "defaultValue": 4096,
+          "description": null,
+          "displayName": "Max Output Tokens",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxOutputTokens",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": "claude-opus-4-8",
+          "description": null,
+          "displayName": "Model",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "Model",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "System Message",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SystemMessage",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

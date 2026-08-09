@@ -1,0 +1,1035 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Activities.Design.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.GetActivityAuthoringCapabilities",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityAuthoringCapabilitiesView",
+      "route": "/design/activities/authoring-capabilities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilityDiagnostics",
+      "route": "/design/activities/availability/diagnostics",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.GetActivityAvailabilitySettings",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
+      "route": "/design/activities/availability/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.SaveActivityAvailabilitySettings",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
+      "route": "/design/activities/availability/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.ListActivityAuthoringCatalog",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityAuthoringCatalogView",
+      "route": "/design/activities/catalog",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/design/activities/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDefinition",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionMutationView",
+      "route": "/design/activities/definitions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.RecommendedActivityDefinitionPageView",
+      "route": "/design/activities/definitions/picker",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.GetReusableActivityDefinition",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView",
+      "route": "/design/activities/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDefinition",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityDefinitionIdentityView",
+      "route": "/design/activities/definitions/{definitionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PATCH"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/design/activities/definitions/{definitionId}/drafts",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/definitions/{definitionId}/drafts",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.PreviewReusableActivityFork",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityForkPreviewView",
+      "route": "/design/activities/definitions/{definitionId}/fork-previews",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.SetRecommendedReusableActivityVersion",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityDefinitionRecommendationView",
+      "route": "/design/activities/definitions/{definitionId}/recommendation",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/design/activities/definitions/{definitionId}/versions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.DiscardReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftConflictCopy",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}/conflict-copies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ProposeReusableActivityContract",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityContractProposalView",
+      "route": "/design/activities/drafts/{draftId}/contract-proposals",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ApplyReusableActivityContractProposal",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}/contract-proposals/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.PreviewActivityDraftDiff",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityVersionDiffView",
+      "route": "/design/activities/drafts/{draftId}/diff",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.MigrateReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}/migrate-provider",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDraftPresentation",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+      "route": "/design/activities/drafts/{draftId}/presentation",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PATCH"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ValidateReusableActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityDraftValidationView",
+      "route": "/design/activities/drafts/{draftId}/validate",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ApplyReusableActivityFork",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityForkReceiptView",
+      "route": "/design/activities/fork-candidates/{candidateId}/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.GetReusableActivityForkStatus",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityForkReceiptView",
+      "route": "/design/activities/forks/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.CreateActivityUpgradePlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+      "route": "/design/activities/upgrade-plans",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.GetActivityUpgradePlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+      "route": "/design/activities/upgrade-plans/{planId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.ApplyActivityUpgradePlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityUpgradeApplyResultView",
+      "route": "/design/activities/upgrade-plans/{planId}/apply",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.GetActivityUpgradeApplyReceipt",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityUpgradeApplyReceiptView",
+      "route": "/design/activities/upgrade-plans/{planId}/receipts/{receiptId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.RefreshActivityUpgradePlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+      "route": "/design/activities/upgrade-plans/{planId}/refresh",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.CompareActivityVersions",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityVersionDiffView",
+      "route": "/design/activities/versions/{fromVersionId}/diff/{toVersionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.GetReusableActivityVersion",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionView",
+      "route": "/design/activities/versions/{versionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Requests.GetActivityDependencies",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ActivityDependencyPageView",
+      "route": "/design/activities/versions/{versionId}/dependencies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.RestoreReusableActivityVersion",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+      "route": "/design/activities/versions/{versionId}/restore",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.RetireReusableActivityVersion",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+      "route": "/design/activities/versions/{versionId}/retire",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "ActivitiesDesignApi",
+      "permissions": [
+        "*",
+        "activity-design.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Activities.Design.Api.Commands.RevokeReusableActivityVersion",
+      "responseSchema": null,
+      "responseType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+      "route": "/design/activities/versions/{versionId}/revoke",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ApiCapabilities",
+        "Expressions"
+      ],
+      "description": "Contains endpoints to manage data in the Activities Design Domain",
+      "displayName": "Activities Design API",
+      "id": "ActivitiesDesignApi",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Dependency Cursor Signing Key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "DependencyCursorSigningKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Int32",
+          "defaultValue": 100,
+          "description": null,
+          "displayName": "Dependency Default Page Size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "DependencyDefaultPageSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Int32",
+          "defaultValue": 500,
+          "description": null,
+          "displayName": "Dependency Maximum Page Size",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "DependencyMaximumPageSize",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.TimeSpan",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Fork Reservation Lifetime",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ForkReservationLifetime",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.TimeSpan",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Fork Reservation Retention",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ForkReservationRetention",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [
+    {
+      "activityTypeKey": "Elsa.Finish",
+      "category": "Primitives",
+      "description": "Completes the workflow with a named outcome.",
+      "descriptorId": "elsa.intrinsic.finish@1",
+      "displayName": "Finish",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The outcome the workflow completes with.",
+          "displayName": "Outcome",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Outcome",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "outcome",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "finish",
+        "outputNameInputKey": null,
+        "valueInputKey": "outcome",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetCorrelationId",
+      "category": "Primitives",
+      "description": "Assigns the correlation id of the running workflow instance.",
+      "descriptorId": "elsa.intrinsic.set-correlation-id@1",
+      "displayName": "Set Correlation Id",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The correlation id to assign to this instance.",
+          "displayName": "Value",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Value",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "value",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "setCorrelationId",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetInstanceName",
+      "category": "Primitives",
+      "description": "Assigns the display name of the running workflow instance.",
+      "descriptorId": "elsa.intrinsic.set-instance-name@1",
+      "displayName": "Set Instance Name",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The name to assign to this instance.",
+          "displayName": "Value",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Value",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "value",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "setInstanceName",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetOutput",
+      "category": "Primitives",
+      "description": "Assigns a value to a named workflow output.",
+      "descriptorId": "elsa.intrinsic.set-output@1",
+      "displayName": "Set Output",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The name of the workflow output to assign.",
+          "displayName": "Output Name",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Output Name",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "name",
+          "type": "String",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The value to assign to the output.",
+          "displayName": "Value",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": true,
+          "name": "Value",
+          "notes": null,
+          "order": 1,
+          "referenceKey": "value",
+          "type": "Elsa.Any",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "setOutput",
+        "outputNameInputKey": "name",
+        "valueInputKey": "value",
+        "variableInputKey": null
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    },
+    {
+      "activityTypeKey": "Elsa.SetVariable",
+      "category": "Primitives",
+      "description": "Assigns a value to a declared workflow variable, resolved to its nearest visible scope.",
+      "descriptorId": "elsa.intrinsic.set@1",
+      "displayName": "Set Variable",
+      "executionType": "Action",
+      "featureId": "ActivitiesDesignApi",
+      "inputs": [
+        {
+          "authoredVia": "intrinsicBlock",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The declared variable to assign.",
+          "displayName": "Variable",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Variable",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "variable",
+          "type": "String",
+          "uiHint": "variable-picker",
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": "The value to assign to the variable.",
+          "displayName": "Value",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": true,
+          "name": "Value",
+          "notes": null,
+          "order": 1,
+          "referenceKey": "value",
+          "type": "Elsa.Any",
+          "uiHint": "single-line",
+          "uiSpecifications": null
+        }
+      ],
+      "intrinsic": {
+        "kind": "set",
+        "outputNameInputKey": null,
+        "valueInputKey": "value",
+        "variableInputKey": "variable"
+      },
+      "outputs": [],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": null
+        }
+      ],
+      "version": "1"
+    }
+  ],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

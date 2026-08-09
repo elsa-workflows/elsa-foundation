@@ -1,0 +1,710 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "10435BE68B6DD481137942EE185B6586EE8503BFC7E072CA2996475DC35786F0",
+      "description": null,
+      "displayName": "Http Endpoint",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": "Simple",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Path",
+          "enumValues": null,
+          "hasStaticDefault": false,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Path",
+          "notes": [
+            {
+              "kind": "constraint",
+              "member": null,
+              "note": "Endpoint-relative and normalised before matching: surrounding slashes are stripped and literal text and parameter names are lower-cased, so \u0027Orders/{OrderId}\u0027 and \u0027/orders/{orderid}\u0027 are the same route. Inline constraint bodies and default values are preserved verbatim because the matcher treats them as case-significant. The route this answers on is this path under the ActivitiesHttp feature\u0027s BasePath, not the path alone."
+            }
+          ],
+          "order": 10,
+          "referenceKey": "Path",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Simple",
+          "collectionKind": "list",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Supported Methods",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "SupportedMethods",
+          "notes": null,
+          "order": 20,
+          "referenceKey": "SupportedMethods",
+          "type": "String",
+          "uiHint": "checklist",
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              }
+            ]
+          }
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Simple",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Can Start Workflow",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "CanStartWorkflow",
+          "notes": [
+            {
+              "kind": "requirement",
+              "member": null,
+              "note": "Defaults to FALSE. An endpoint meant to start a workflow from an incoming request must set this to true, or publication produces zero trigger bindings and the route never fires \u2014 the definition publishes cleanly and the request 404s, with nothing to indicate why. Leave it false only for a mid-flow endpoint that resumes an already-running workflow."
+            }
+          ],
+          "order": 0,
+          "referenceKey": "CanStartWorkflow",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Advanced",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Authorize",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Authorize",
+          "notes": null,
+          "order": 100,
+          "referenceKey": "Authorize",
+          "type": "Boolean",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Advanced",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Policy",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Policy",
+          "notes": null,
+          "order": 110,
+          "referenceKey": "Policy",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Advanced",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Timeout",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestTimeout",
+          "notes": null,
+          "order": 120,
+          "referenceKey": "RequestTimeout",
+          "type": "TimeSpan?",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Advanced",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Size Limit",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestSizeLimit",
+          "notes": null,
+          "order": 130,
+          "referenceKey": "RequestSizeLimit",
+          "type": "Int64?",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": "Simple",
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": "async",
+          "description": null,
+          "displayName": "Response Mode",
+          "enumValues": [
+            "async",
+            "sync"
+          ],
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "ResponseMode",
+          "notes": [
+            {
+              "kind": "default",
+              "member": "async",
+              "note": "The default. The triggering request is answered 202 immediately with a started-workflow body, and a WriteHttpResponse later in the workflow never reaches that caller - its output goes nowhere observable and no incident is recorded. Choose this for fire-and-forget triggers only."
+            },
+            {
+              "kind": "default",
+              "member": "sync",
+              "note": "Holds the request open so a later WriteHttpResponse answers the original caller. This is what a request/response endpoint needs. It degrades back to a 202 - silently, by design - when the workflow suspends, finishes without writing a response, or dispatches non-locally."
+            }
+          ],
+          "order": 30,
+          "referenceKey": "ResponseMode",
+          "type": "Elsa.Http.Core.ResponseMode",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Request",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Request",
+          "referenceKey": "Request",
+          "type": "Elsa.Activities.Http.Models.HttpRequestModel"
+        },
+        {
+          "category": null,
+          "collectionKind": "dictionary",
+          "description": null,
+          "displayName": "Route Data",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "RouteData",
+          "referenceKey": "RouteData",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Parsed Content",
+          "isBrowsable": true,
+          "isRequired": false,
+          "name": "ParsedContent",
+          "referenceKey": "ParsedContent",
+          "type": "System.Text.Json.JsonElement?"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.SendHttpRequest",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "242B14647A98385B8938FAC629BEAAB6AD3853D1ABBFF4AE65986DF589A2A85E",
+      "description": null,
+      "displayName": "Send Http Request",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "URL",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Url",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Url",
+          "type": "System.Uri",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": "GET",
+          "description": null,
+          "displayName": "Method",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Method",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Method",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "GET",
+                "value": "GET"
+              },
+              {
+                "label": "POST",
+                "value": "POST"
+              },
+              {
+                "label": "PUT",
+                "value": "PUT"
+              },
+              {
+                "label": "DELETE",
+                "value": "DELETE"
+              },
+              {
+                "label": "HEAD",
+                "value": "HEAD"
+              }
+            ]
+          }
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Content",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Content",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Content",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": "text/plain",
+          "description": null,
+          "displayName": "Content Type",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ContentType",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "ContentType",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": {
+            "options": [
+              {
+                "label": "text/plain",
+                "value": "text/plain"
+              },
+              {
+                "label": "application/json",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "dictionary",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Request Headers",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "RequestHeaders",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "RequestHeaders",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "list",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Expected Status Codes",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ExpectedStatusCodes",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "ExpectedStatusCodes",
+          "type": "Int32",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Timeout",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Timeout",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Timeout",
+          "type": "TimeSpan?",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Status Code",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "StatusCode",
+          "referenceKey": "StatusCode",
+          "type": "Int32?"
+        },
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Response Body",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ResponseBody",
+          "referenceKey": "ResponseBody",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "dictionary",
+          "description": null,
+          "displayName": "Response Headers",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ResponseHeaders",
+          "referenceKey": "ResponseHeaders",
+          "type": "System.String[]"
+        }
+      ],
+      "ports": [
+        {
+          "displayName": "Done",
+          "isBrowsable": true,
+          "name": "Done",
+          "referenceKey": "Done",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Failed",
+          "isBrowsable": true,
+          "name": "Failed",
+          "referenceKey": "Failed",
+          "type": "outcome"
+        },
+        {
+          "displayName": "Timeout",
+          "isBrowsable": true,
+          "name": "Timeout",
+          "referenceKey": "Timeout",
+          "type": "outcome"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+      "category": "Http",
+      "containerStructure": null,
+      "contentHash": "86A3A09C48E0A4D068DB0DDA30D285BCC06BA08A31FCAB8436FFB1CC4B3E136B",
+      "description": null,
+      "displayName": "Write Http Response",
+      "executionType": "Action",
+      "featureId": "ActivitiesHttp",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": "Literal",
+          "defaultValue": 200,
+          "description": null,
+          "displayName": "Status Code",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "StatusCode",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "StatusCode",
+          "type": "Int32",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Body",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Body",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Body",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Content Type",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "ContentType",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "ContentType",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "dictionary",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Headers",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "Headers",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "Headers",
+          "type": "System.String[]",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Status Code",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "StatusCode",
+          "referenceKey": "StatusCode",
+          "type": "Int32"
+        },
+        {
+          "category": null,
+          "collectionKind": "dictionary",
+          "description": null,
+          "displayName": "Headers",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Headers",
+          "referenceKey": "Headers",
+          "type": "System.String[]"
+        },
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Body",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "Body",
+          "referenceKey": "Body",
+          "type": "String"
+        },
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Content Type",
+          "isBrowsable": true,
+          "isRequired": true,
+          "name": "ContentType",
+          "referenceKey": "ContentType",
+          "type": "String"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0"
+    }
+  ],
+  "assembly": "Elsa.Activities.Http",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Http",
+        "WorkflowsRuntimeHttp"
+      ],
+      "description": "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
+      "displayName": "Activities HTTP",
+      "id": "ActivitiesHttp",
+      "notes": [
+        {
+          "kind": "composition",
+          "member": null,
+          "note": "Workflow HTTP endpoints are served under this feature\u0027s BasePath (\u0027/workflows/http\u0027 by default), not at the bare path an HttpEndpoint activity declares. An activity whose path is \u0027orders\u0027 answers at \u0027/workflows/http/orders\u0027. Requesting the bare path returns 404, which reads as a publication failure."
+        }
+      ],
+      "options": [
+        {
+          "advanced": false,
+          "category": "Routing",
+          "clrType": "System.String",
+          "defaultValue": "/workflows/http",
+          "description": "Base HTTP path used by workflow endpoints.",
+          "displayName": "Base path",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "BasePath",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

@@ -1,0 +1,52 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Attention.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "AttentionApi",
+      "permissions": [
+        "*"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Attention.Core.AttentionAggregationResult",
+      "route": "/_elsa/attention/items",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Aggregates permission-scoped attention contributors through a shared query endpoint.",
+      "displayName": "Attention API",
+      "id": "AttentionApi",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

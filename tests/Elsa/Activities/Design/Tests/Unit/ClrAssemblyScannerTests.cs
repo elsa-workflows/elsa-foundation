@@ -93,10 +93,15 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(CollectionKind.List, supportedMethods.Type.CollectionKind);
     }
 
+    // HttpEndpoint's hash is re-pinned whenever descriptor content deliberately grows: first for G1
+    // (HasStaticDefault + initializer/default(T)-derived DefaultValue), now for published enum members
+    // (EnumValues). Both are same-version content changes, which Model X surfaces as a hash mismatch on
+    // databases reconciled before the change — see the spec's deployment note (fresh DB or version bump).
+    // TriggerFixtureActivity has no inputs, so its unchanged hash proves input-less content is untouched.
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
+        { typeof(HttpEndpoint), "10435BE68B6DD481137942EE185B6586EE8503BFC7E072CA2996475DC35786F0" }
     };
 
     [Theory]

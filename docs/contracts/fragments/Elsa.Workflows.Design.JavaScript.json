@@ -1,0 +1,39 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Design.JavaScript",
+  "endpoints": [],
+  "expressions": {
+    "descriptors": [],
+    "javaScriptDeclarations": [
+      {
+        "contributor": "Elsa.Workflows.Design.JavaScript.Contributors.BindingPureArgsDeclarationContributor",
+        "featureId": "JavaScriptWorkflowsDesign",
+        "functions": [],
+        "types": [],
+        "variables": [
+          {
+            "declarationKeyword": "const",
+            "name": "args",
+            "type": "Readonly\u003CRecord\u003Cstring, any\u003E\u003E"
+          }
+        ]
+      }
+    ],
+    "scriptSandbox": [],
+    "variableTypes": null
+  },
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Contributes workflow design declarations for JavaScript expression authoring.",
+      "displayName": "JavaScript Workflows Design",
+      "id": "JavaScriptWorkflowsDesign",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

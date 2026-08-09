@@ -1,0 +1,537 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.Alterations.SubmitWorkflowAlterationPlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanSubmissionView",
+      "route": "/runtime/workflows/alteration-plans",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationPlan",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanView",
+      "route": "/runtime/workflows/alteration-plans/{planId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanView",
+      "route": "/runtime/workflows/alteration-plans/{planId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.Alterations.PageWorkflowAlterationJobs",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationJobPageView",
+      "route": "/runtime/workflows/alteration-plans/{planId}/jobs/page",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.Alterations.GetWorkflowAlterationJob",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationJobView",
+      "route": "/runtime/workflows/alteration-plans/{planId}/jobs/{jobId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetRuntimeDiagnosticsSettings",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSettingsView",
+      "route": "/runtime/workflows/diagnostics/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Commands.SaveRuntimeDiagnosticsSettings",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSettingsView",
+      "route": "/runtime/workflows/diagnostics/settings",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowDispatches",
+      "responseSchema": null,
+      "responseType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/runtime/workflows/dispatches",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowDispatch",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView",
+      "route": "/runtime/workflows/dispatches/{dispatchId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.RedriveWorkflowDispatch",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchRedriveView",
+      "route": "/runtime/workflows/dispatches/{dispatchId}/redrive",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowExecutables",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView",
+      "route": "/runtime/workflows/executables",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutable",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableDetailsView",
+      "route": "/runtime/workflows/executables/{artifactId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.execute"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ExecuteWorkflow",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutionStartDispatchView",
+      "route": "/runtime/workflows/executables/{artifactId}/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableProvenance",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.ExecutableProvenanceView",
+      "route": "/runtime/workflows/executables/{artifactId}/provenance",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableInputSources",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableInputSourcesView",
+      "route": "/runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowInstances",
+      "responseSchema": null,
+      "responseType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/runtime/workflows/instances",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ListWorkflowInstances",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceListView",
+      "route": "/runtime/workflows/instances/page",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowInstance",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecution",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionInspectionView",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionDescendants",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionHierarchyPageView",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionLayout",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionLayoutView",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.GetActivityExecutionValuePayload",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Contracts.ActivityExecutionValuePayloadView",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.ListIncidents",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Requests.ListIncidentsResponse",
+      "route": "/runtime/workflows/instances/{workflowExecutionId}/incidents",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsRuntimeApi",
+      "permissions": [
+        "*",
+        "workflow-runtime.execute"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Runtime.Api.Requests.DispatchStimulus",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Runtime.Api.Models.DispatchStimulusResponse",
+      "route": "/runtime/workflows/stimuli",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ApiCapabilities"
+      ],
+      "description": "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
+      "displayName": "Workflows Runtime API",
+      "id": "WorkflowsRuntimeApi",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Activity Execution Hierarchy Cursor Signing Key",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ActivityExecutionHierarchyCursorSigningKey",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Workflow Alteration Payload Protection Active Key Id",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "WorkflowAlterationPayloadProtectionActiveKeyId",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IDictionary\u00602[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Workflow Alteration Payload Protection Keys",
+          "experimental": false,
+          "jsonType": "object",
+          "name": "WorkflowAlterationPayloadProtectionKeys",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeApi"
+      ],
+      "description": "Selects immediate or bounded coalesced checkpoint persistence after the shell\u0027s runtime provider is configured.",
+      "displayName": "Workflows Runtime Checkpoint Persistence",
+      "id": "WorkflowsRuntimeCheckpointPersistence",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "System.Int32",
+          "defaultValue": 50,
+          "description": "Maximum replayable checkpoints buffered by Coalesced mode before an intermediate flush. Must be greater than zero.",
+          "displayName": "Maximum segment checkpoints",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "MaxSegmentCheckpoints",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Runtime",
+          "clrType": "Elsa.Workflows.Runtime.Api.Coalescing.CheckpointPersistenceMode",
+          "defaultValue": "Immediate",
+          "description": "Immediate persists each checkpoint; Coalesced folds replayable checkpoints until a durable boundary.",
+          "displayName": "Checkpoint persistence mode",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "Mode",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    },
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeApi"
+      ],
+      "description": "Trigger index over published workflows plus global stimulus routing: start new instances from an external stimulus with no explicit execution id, and fan a single stimulus in to every waiting instance across executions. Exposes POST runtime/workflows/stimuli. Compose alongside the Workflows Runtime API.",
+      "displayName": "Workflows Runtime Triggers",
+      "id": "WorkflowsRuntimeTriggers",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

@@ -1,0 +1,20 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Runtime.Tracing",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Emits engine ActivitySource spans (drain, dispatch, activity execution, checkpoint commit) from the Elsa.Workflows.Runtime source for whatever ActivityListener the host attaches. Zero per-phase allocation when no listener is attached. This is engine self-observability, distinct from the OpenTelemetry ingestion feature that exports telemetry to a backend.",
+      "displayName": "Workflows Runtime Tracing",
+      "id": "WorkflowsRuntimeTracing",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

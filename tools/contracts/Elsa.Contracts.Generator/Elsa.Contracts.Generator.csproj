@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Elsa.Contracts.Generator</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One-projection rule (spec 149 / RFC #1191): the generator composes the SAME product code the runtime
+    catalog is reconciled from (ClrAssemblyScanner, AuthoringSchemaExporter, ManifestHintReader, the
+    structure/expression/intrinsic provider types), never a parallel projection. No product project
+    references this tool, so these references create no cycles.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The full CShells family: feature classes implement interfaces from all three packages
+      (e.g. IMiddlewareShellFeature from CShells.AspNetCore); without them such feature types fail to
+      load and their fragments would silently lose feature metadata.
+    -->
+    <PackageReference Include="CShells" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore" />
+    <!-- Endpoint projection instantiates endpoints the way the API contract tests do. -->
+    <PackageReference Include="CShells.FastEndpoints" />
+  </ItemGroup>
+
+</Project>
+

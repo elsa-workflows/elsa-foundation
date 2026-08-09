@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
@@ -26,6 +27,7 @@ public sealed class SetVariableDurabilityExecutionTests
     [InlineData(WorkflowIntrinsicKind.Set)]
     [InlineData(WorkflowIntrinsicKind.Merge)]
     [InlineData(WorkflowIntrinsicKind.Reduce)]
+    [ConsumerContract("evidence.intrinsics-capture-nothing")]
     public async Task Variable_write_intrinsic_commits_frame_change_before_continuation_and_recovery_does_not_reapply_it(
         WorkflowIntrinsicKind intrinsicKind)
     {
@@ -48,6 +50,14 @@ public sealed class SetVariableDurabilityExecutionTests
         var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal(1, persistedWorkflow!.RootVariableFrame!.Revision);
         Assert.Equal("updated", persistedWorkflow.RootVariableFrame.Values["greeting"].InlineValue!.Value.GetString());
+
+        // Pins evidence.intrinsics-capture-nothing on the fact the claim actually asserts. The intrinsic
+        // path never passes valueSnapshots to the inspection accumulator, so the write above is observable
+        // in the variable frame and nowhere in value evidence. (The claim previously rested on an assertion
+        // about OutputCaptures, which is a different mechanism — the same conflation that made a sibling
+        // claim flatly wrong.)
+        var intrinsicInspection = await harness.InspectionStore.FindAsync("wfexec-1", "actexec-set");
+        Assert.Empty(intrinsicInspection!.ValueSnapshots);
 
         await harness.Handler.HandleAsync(harness.WorkItem);
 
@@ -399,7 +409,8 @@ public sealed class SetVariableDurabilityExecutionTests
             NewStartWorkItem(identity, node),
             commitStore,
             workflowStore,
-            serviceProvider);
+            serviceProvider,
+            inspectionStore);
     }
 
     private static WorkflowExecutionState NewWorkflowState(WorkflowExecutableIdentity identity) =>
@@ -489,7 +500,8 @@ public sealed class SetVariableDurabilityExecutionTests
         RuntimeSchedulerWorkItem WorkItem,
         InMemoryRuntimeCheckpointCommitStore CommitStore,
         InMemoryWorkflowExecutionStateStore WorkflowStore,
-        ServiceProvider ServiceProvider) : IAsyncDisposable
+        ServiceProvider ServiceProvider,
+        InMemoryActivityExecutionInspectionStore InspectionStore) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() => ServiceProvider.DisposeAsync();
     }

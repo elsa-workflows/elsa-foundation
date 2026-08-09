@@ -1,0 +1,433 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Publishing.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightActivityDraftPublication",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationPreflightView",
+      "route": "/design/activities/drafts/{draftId}/publication-preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PublishActivityDraft",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
+      "route": "/design/activities/drafts/{draftId}/publish",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
+      "route": "/design/activities/publications/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ListConstructableActivities",
+      "responseSchema": null,
+      "responseType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/publishing/activities",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ConstructActivity",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ConstructedActivityView",
+      "route": "/publishing/activities/{activityId}/construct",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Models.StartActivityDraftTestRun",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+      "route": "/publishing/activity-drafts/{draftId}/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+      "route": "/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+      "route": "/publishing/activity-test-runs/{testRunId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+      "route": "/publishing/activity-test-runs/{testRunId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.IncidentStrategiesResponse",
+      "route": "/publishing/incident-strategies",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.RunRuntimeRequirementPreflight",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.RuntimeRequirementPreflightView",
+      "route": "/publishing/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.ValueConversionProfilesResponse",
+      "route": "/publishing/value-conversion/profiles",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+      "route": "/publishing/workflows/drafts/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublicationSnapshot",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSnapshotPreflightView",
+      "route": "/publishing/workflows/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.GetWorkflowPublicationPolicy",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+      "route": "/publishing/workflows/{definitionId}/policy",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.SetWorkflowPublicationPolicy",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+      "route": "/publishing/workflows/{definitionId}/policy",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "PUT"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.ListPublicationSlots",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotListResponse",
+      "route": "/publishing/workflows/{definitionId}/slots",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "DELETE"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.GetPublicationSlot",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.RestorePublicationSlotRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+      "route": "/publishing/workflows/{definitionId}/slots/{slotName}/restore",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.read"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublication",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.PublicationPreflightView",
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.PublishWorkflowRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView",
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
+      "successStatusCondition": "201 Created when this publish creates the publication; 200 OK when it updates an existing publication in place (republishing a definition into the slot it already occupies).",
+      "successStatuses": [
+        201,
+        200
+      ],
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "WorkflowsPublishingApi",
+      "permissions": [
+        "*",
+        "workflow-publishing.manage"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Workflows.Publishing.Api.Requests.StartWorkflowTestRun",
+      "responseSchema": null,
+      "responseType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+      "route": "/publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "ApiCapabilities",
+        "WorkflowsPublishing"
+      ],
+      "description": "Bridge endpoints that compile persisted catalog metadata into canonical workflow executables.",
+      "displayName": "Workflows Publishing API",
+      "id": "WorkflowsPublishingApi",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

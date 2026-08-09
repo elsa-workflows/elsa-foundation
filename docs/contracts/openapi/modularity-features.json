@@ -1,0 +1,556 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Modularity.Core.Models.FeatureApplyRequest": {
+        "properties": {
+          "features": {
+            "items": {
+              "properties": {
+                "configuration": {},
+                "enabled": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "enabled",
+                "configuration"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "features"
+        ],
+        "type": "object"
+      },
+      "Elsa.Modularity.Core.Models.FeatureApplyResult": {
+        "properties": {
+          "catalog": {
+            "properties": {
+              "features": {
+                "items": {
+                  "properties": {
+                    "advanced": {
+                      "type": "boolean"
+                    },
+                    "categories": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "configuration": {},
+                    "dependencies": {
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "optional": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "optional"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "experimental": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "manifestHash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "manifestPath": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "packageId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "packageVersion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "readError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "settings": {
+                      "items": {
+                        "properties": {
+                          "advanced": {
+                            "type": "boolean"
+                          },
+                          "category": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "clrType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "defaultValue": {},
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "experimental": {
+                            "type": "boolean"
+                          },
+                          "group": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "jsonType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "items": {
+                              "properties": {
+                                "description": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {}
+                              },
+                              "required": [
+                                "label",
+                                "value"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "optionsProvider": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "restartRequired": {
+                            "type": "boolean"
+                          },
+                          "secret": {
+                            "type": "boolean"
+                          },
+                          "sensitive": {
+                            "type": "boolean"
+                          },
+                          "uiHint": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName",
+                          "required",
+                          "secret",
+                          "sensitive",
+                          "restartRequired",
+                          "advanced",
+                          "experimental",
+                          "options"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sourceKind": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "displayName",
+                    "categories",
+                    "sourceKind",
+                    "enabled",
+                    "configuration",
+                    "advanced",
+                    "experimental",
+                    "settings",
+                    "dependencies"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "revision",
+              "features"
+            ],
+            "type": "object"
+          },
+          "featureDescriptorCount": {
+            "type": "integer"
+          },
+          "reloadedShellCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "catalog",
+          "featureDescriptorCount",
+          "reloadedShellCount"
+        ],
+        "type": "object"
+      },
+      "Elsa.Modularity.Core.Models.FeatureCatalogResponse": {
+        "properties": {
+          "features": {
+            "items": {
+              "properties": {
+                "advanced": {
+                  "type": "boolean"
+                },
+                "categories": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "configuration": {},
+                "dependencies": {
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "optional": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "optional"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "experimental": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "manifestHash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "manifestPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "packageId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "packageVersion": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "readError": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "settings": {
+                  "items": {
+                    "properties": {
+                      "advanced": {
+                        "type": "boolean"
+                      },
+                      "category": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "clrType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "defaultValue": {},
+                      "description": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "experimental": {
+                        "type": "boolean"
+                      },
+                      "group": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "jsonType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "properties": {
+                            "description": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "value": {}
+                          },
+                          "required": [
+                            "label",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "optionsProvider": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "restartRequired": {
+                        "type": "boolean"
+                      },
+                      "secret": {
+                        "type": "boolean"
+                      },
+                      "sensitive": {
+                        "type": "boolean"
+                      },
+                      "uiHint": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "displayName",
+                      "required",
+                      "secret",
+                      "sensitive",
+                      "restartRequired",
+                      "advanced",
+                      "experimental",
+                      "options"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "sourceKind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "displayName",
+                "categories",
+                "sourceKind",
+                "enabled",
+                "configuration",
+                "advanced",
+                "experimental",
+                "settings",
+                "dependencies"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "features"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/modularity/features": {
+      "get": {
+        "description": "Requires one of: *.",
+        "operationId": "getModularityFeatures",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Modularity.Core.Models.FeatureCatalogResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Modularity.Api",
+        "x-elsa-feature-id": "ModularityApi",
+        "x-elsa-permissions": [
+          "*"
+        ]
+      }
+    },
+    "/modularity/features/apply": {
+      "post": {
+        "description": "Requires one of: *.",
+        "operationId": "postModularityFeaturesApply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Modularity.Core.Models.FeatureApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Modularity.Core.Models.FeatureApplyResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Modularity.Api",
+        "x-elsa-feature-id": "ModularityApi",
+        "x-elsa-permissions": [
+          "*"
+        ]
+      }
+    }
+  }
+}

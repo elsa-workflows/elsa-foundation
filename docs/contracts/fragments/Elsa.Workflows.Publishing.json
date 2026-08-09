@@ -1,0 +1,23 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Publishing",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "Events",
+        "WorkflowsRuntimeTriggers"
+      ],
+      "description": "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
+      "displayName": "Workflows Publishing",
+      "id": "WorkflowsPublishing",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

@@ -1,0 +1,79 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Persistence.Groundwork.PostgreSql",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "WorkflowsRuntimeResumption"
+      ],
+      "description": "Backs the workflow runtime persistence seams with Groundwork over PostgreSQL. Durable storage keeps checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
+      "displayName": "Groundwork PostgreSQL Runtime Persistence",
+      "id": "GroundworkRuntimePersistencePostgreSql",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "When enabled, safe pending schema operations are applied automatically at startup instead of requiring Groundwork.Tool. Destructive operations are never auto-applied.",
+          "displayName": "Auto-apply schema on startup",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "AutoApplySchemaOnStartup",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Performance",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
+          "displayName": "Cache workflow executables",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "CacheWorkflowExecutables",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "PostgreSQL connection string used by the Groundwork runtime document store.",
+          "displayName": "Connection string",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ConnectionString",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Performance",
+          "clrType": "System.Int32",
+          "defaultValue": 256,
+          "description": "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+          "displayName": "Workflow executable cache capacity",
+          "experimental": false,
+          "jsonType": "integer",
+          "name": "WorkflowExecutableCacheCapacity",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

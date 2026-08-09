@@ -9,4 +9,19 @@
     <WarningsAsErrors>$(WarningsAsErrors);GW0004</WarningsAsErrors>
   </PropertyGroup>
 
+  <!--
+    Consumer contract fragments (spec 149 / RFC #1191): every contributing assembly embeds its COMMITTED
+    fragment (docs/contracts/fragments/<AssemblyName>.json) as the manifest resource "elsa.contract.json".
+    The bytes are the committed bytes by construction; the contracts CI check keeps the committed files
+    equal to what the tree regenerates, so at any green commit: embedded == committed == projected.
+    No fragment file -> nothing embedded (the assembly contributes no consumer-visible authoring surface).
+    Regenerate with the contracts generator's merge command; see docs/contracts/README.md.
+  -->
+  <PropertyGroup>
+    <ElsaContractFragmentPath>$(MSBuildThisFileDirectory)..\..\docs\contracts\fragments\$(AssemblyName).json</ElsaContractFragmentPath>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(ElsaContractFragmentPath)')">
+    <EmbeddedResource Include="$(ElsaContractFragmentPath)" LogicalName="elsa.contract.json" Visible="false" />
+  </ItemGroup>
+
 </Project>

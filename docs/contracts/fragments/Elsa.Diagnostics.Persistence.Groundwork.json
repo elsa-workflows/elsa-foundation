@@ -1,0 +1,23 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Diagnostics.Persistence.Groundwork",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "DiagnosticsOpenTelemetry",
+        "DiagnosticsStructuredLogs"
+      ],
+      "description": "Replaces both diagnostics stores with Groundwork adapters and contributes their combined document and diagnostic-record schema to the host-selected Groundwork composition and Groundwork.Tool.",
+      "displayName": "Diagnostics Groundwork Persistence",
+      "id": "DiagnosticsGroundworkPersistence",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

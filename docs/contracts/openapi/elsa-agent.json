@@ -1,0 +1,1700 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentBootstrapResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "capabilities": {
+                "items": {
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "moduleId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "requiredPermissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "risk": {
+                      "type": "string"
+                    },
+                    "surfaces": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "displayName",
+                    "description",
+                    "kind",
+                    "risk",
+                    "surfaces",
+                    "requiredPermissions",
+                    "requiresApproval"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "modes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "properties": {
+                  "allowedAutonomyModes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "contextVisibility": {
+                    "type": "boolean"
+                  },
+                  "defaultAutonomyMode": {
+                    "type": "string"
+                  },
+                  "maxAutonomyMode": {
+                    "type": "string"
+                  },
+                  "retentionLabel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "contextVisibility",
+                  "defaultAutonomyMode",
+                  "maxAutonomyMode",
+                  "allowedAutonomyModes"
+                ],
+                "type": "object"
+              },
+              "provider": {
+                "properties": {
+                  "isAvailable": {
+                    "type": "boolean"
+                  },
+                  "metadata": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "providerId": {
+                    "type": "string"
+                  },
+                  "providerKind": {
+                    "type": "string"
+                  },
+                  "riskProfile": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "supportedOperations": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "providerId",
+                  "isAvailable",
+                  "status",
+                  "providerKind",
+                  "supportedOperations",
+                  "riskProfile",
+                  "metadata"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "providerStatus": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "enabled",
+              "providerStatus",
+              "modes",
+              "capabilities",
+              "policy"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentCreateSessionResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "contextAttachments": {
+                "items": {
+                  "properties": {
+                    "content": {},
+                    "contentType": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "sensitivity": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "sourceId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "source",
+                    "label",
+                    "contentType",
+                    "sensitivity",
+                    "scope"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "sessionId",
+              "status",
+              "contextAttachments"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentMessageAcceptedResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "message": {
+                "properties": {
+                  "capabilityId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "completedAt": {
+                    "format": "date-time",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "context": {
+                    "items": {
+                      "properties": {
+                        "content": {},
+                        "contentType": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "references": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "sensitivity": {
+                          "enum": [
+                            "public",
+                            "internal",
+                            "sensitive",
+                            "secretRedacted",
+                            "secret"
+                          ]
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "sourceId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "source",
+                        "label",
+                        "contentType",
+                        "sensitivity",
+                        "scope",
+                        "summary",
+                        "references"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "contextAttachmentIds": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "createdAt": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "error": {
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "statusCode": {
+                        "default": 400,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "proposalIds": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "role": {
+                    "enum": [
+                      "user",
+                      "assistant",
+                      "system",
+                      "tool",
+                      "progress",
+                      "error"
+                    ]
+                  },
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "streaming",
+                      "completed",
+                      "failed",
+                      "cancelled"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "sessionId",
+                  "role",
+                  "content",
+                  "status",
+                  "createdAt",
+                  "contextAttachmentIds",
+                  "proposalIds",
+                  "context"
+                ],
+                "type": "object"
+              },
+              "warnings": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "message",
+              "warnings"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentSessionDetailsResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "contextAttachments": {
+                "items": {
+                  "properties": {
+                    "content": {},
+                    "contentType": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "sensitivity": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "sourceId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "source",
+                    "label",
+                    "contentType",
+                    "sensitivity",
+                    "scope"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "messages": {
+                "items": {
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "role",
+                    "content",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "sessionId",
+              "status",
+              "contextAttachments",
+              "messages"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentTurnCancelResponse": {
+        "properties": {
+          "data": {
+            "properties": {
+              "cancelled": {
+                "type": "boolean"
+              },
+              "turnId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "turnId",
+              "cancelled"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentActionProposal": {
+        "properties": {
+          "data": {
+            "properties": {
+              "approvedAt": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "approvedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "baseRevision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "capabilityId": {
+                "type": "string"
+              },
+              "changes": {
+                "items": {
+                  "properties": {
+                    "changeType": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "changeType",
+                    "summary"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "messageId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operations": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "requiredPermissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "requiresApproval": {
+                "type": "boolean"
+              },
+              "resourceId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resourceType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "risk": {
+                "enum": [
+                  "readOnly",
+                  "reviewRequired",
+                  "destructive",
+                  "admin"
+                ]
+              },
+              "risks": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rollback": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "draft",
+                  "awaitingApproval",
+                  "approved",
+                  "denied",
+                  "edited",
+                  "expired",
+                  "executed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "sessionId",
+              "capabilityId",
+              "kind",
+              "title",
+              "summary",
+              "risk",
+              "changes",
+              "operations",
+              "risks",
+              "requiredPermissions",
+              "requiresApproval",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentFeedback": {
+        "properties": {
+          "data": {
+            "properties": {
+              "actorId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "comment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "messageId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rating": {
+                "type": "string"
+              },
+              "sessionId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "sessionId",
+              "rating",
+              "createdAt"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentProposalExecutionResult": {
+        "properties": {
+          "data": {
+            "properties": {
+              "executed": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "proposalId": {
+                "type": "string"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "resourceType": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "proposalId",
+              "executed",
+              "resourceType",
+              "resourceId",
+              "summary"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentApiResponse_System.Collections.Generic.IReadOnlyCollection_Elsa.Agent.Core.Models.AgentAuditEvent": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "actorId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "sessionCreated",
+                    "messageAccepted",
+                    "contextCollected",
+                    "contextDenied",
+                    "proposalCreated",
+                    "proposalApproved",
+                    "proposalDenied",
+                    "proposalExecuted",
+                    "proposalFailed",
+                    "feedbackReceived",
+                    "providerDiagnostic",
+                    "workflowAuthoringInteraction",
+                    "toolInvoked"
+                  ]
+                },
+                "metadata": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "sessionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "summary",
+                "createdAt",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "statusCode": {
+                "default": 400,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentCreateSessionRequest": {
+        "properties": {
+          "activeSurface": {
+            "properties": {
+              "resourceId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resourceType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "route": {
+                "type": "string"
+              },
+              "selection": {}
+            },
+            "type": "object"
+          },
+          "autonomyMode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientContext": {
+            "properties": {
+              "moduleIds": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "sdkVersion": {
+                "type": "string"
+              },
+              "studioVersion": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentFeedbackApiRequest": {
+        "properties": {
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentMessageRequest": {
+        "properties": {
+          "capabilityId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "contextAttachmentIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "contextAttachments": {
+            "items": {
+              "properties": {
+                "content": {},
+                "displayName": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "references": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "sensitivity": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "requestedCapabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentProposalDecisionRequest": {
+        "properties": {
+          "actorId": {
+            "type": "string"
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Elsa.Agent.Api.Models.AgentTurnCancelRequest": {
+        "properties": {},
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/_elsa/agent/audit": {
+      "get": {
+        "description": "Requires one of: *, agent.audit.",
+        "operationId": "getElsaAgentAudit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sessionId",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_System.Collections.Generic.IReadOnlyCollection_Elsa.Agent.Core.Models.AgentAuditEvent"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.audit"
+        ]
+      }
+    },
+    "/_elsa/agent/bootstrap": {
+      "get": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "getElsaAgentBootstrap",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentBootstrapResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/feedback": {
+      "post": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "postElsaAgentFeedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentFeedbackApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentFeedback"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/proposals/{proposalId}/approve": {
+      "post": {
+        "description": "Requires one of: *, agent.proposals.",
+        "operationId": "postElsaAgentProposalsProposalIdApprove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentProposalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentActionProposal"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.proposals"
+        ]
+      }
+    },
+    "/_elsa/agent/proposals/{proposalId}/deny": {
+      "post": {
+        "description": "Requires one of: *, agent.proposals.",
+        "operationId": "postElsaAgentProposalsProposalIdDeny",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentProposalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentActionProposal"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.proposals"
+        ]
+      }
+    },
+    "/_elsa/agent/proposals/{proposalId}/execute": {
+      "post": {
+        "description": "Requires one of: *, agent.proposals.",
+        "operationId": "postElsaAgentProposalsProposalIdExecute",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentProposalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Core.Models.AgentProposalExecutionResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.proposals"
+        ]
+      }
+    },
+    "/_elsa/agent/sessions": {
+      "post": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "postElsaAgentSessions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentCreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentCreateSessionResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/sessions/{sessionId}": {
+      "get": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "getElsaAgentSessionsSessionId",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentSessionDetailsResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/sessions/{sessionId}/messages": {
+      "post": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "postElsaAgentSessionsSessionIdMessages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentMessageAcceptedResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/sessions/{sessionId}/stream": {
+      "get": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "getElsaAgentSessionsSessionIdStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    },
+    "/_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel": {
+      "post": {
+        "description": "Requires one of: *, agent.use.",
+        "operationId": "postElsaAgentSessionsSessionIdTurnsTurnIdCancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turnId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentTurnCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Agent.Api.Models.AgentApiResponse_Elsa.Agent.Api.Models.AgentTurnCancelResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Agent.Api",
+        "x-elsa-feature-id": "FoundationAgentApi",
+        "x-elsa-permissions": [
+          "*",
+          "agent.use"
+        ]
+      }
+    }
+  }
+}

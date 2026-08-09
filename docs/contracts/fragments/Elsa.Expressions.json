@@ -1,0 +1,187 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Expressions",
+  "endpoints": [],
+  "expressions": {
+    "descriptors": [
+      {
+        "displayName": "Variable",
+        "editingMode": "reference",
+        "featureId": "Expressions",
+        "type": "Variable"
+      }
+    ],
+    "javaScriptDeclarations": [],
+    "scriptSandbox": [],
+    "variableTypes": [
+      {
+        "alias": "Boolean",
+        "category": "Primitives",
+        "displayName": "Boolean",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "DateTime",
+        "category": "Primitives",
+        "displayName": "Date/Time",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "DateTimeOffset",
+        "category": "Primitives",
+        "displayName": "Date/Time Offset",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Decimal",
+        "category": "Primitives",
+        "displayName": "Decimal",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Double",
+        "category": "Primitives",
+        "displayName": "Double",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Guid",
+        "category": "Primitives",
+        "displayName": "GUID",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Int32",
+        "category": "Primitives",
+        "displayName": "Integer",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Int64",
+        "category": "Primitives",
+        "displayName": "Long",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      },
+      {
+        "alias": "Object",
+        "category": "Primitives",
+        "displayName": "Object",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": true
+      },
+      {
+        "alias": "String",
+        "category": "Primitives",
+        "displayName": "String",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": true
+      },
+      {
+        "alias": "TimeSpan",
+        "category": "Primitives",
+        "displayName": "Duration",
+        "featureId": "Expressions",
+        "supportedCollectionKinds": [
+          "array",
+          "dictionary",
+          "hashSet",
+          "list",
+          "single"
+        ],
+        "supportsNull": false
+      }
+    ]
+  },
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Installs and configures the required services for using expressions.",
+      "displayName": "Expressions",
+      "id": "Expressions",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

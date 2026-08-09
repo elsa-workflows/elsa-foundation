@@ -1,0 +1,92 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+  "endpoints": [
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": false,
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": true,
+      "configurationDependent": false,
+      "featureId": "FoundationIdentityAspNetCoreIdentity",
+      "permissions": [],
+      "requestSchema": null,
+      "requestType": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginRequest",
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/identity/login",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers the ASP.NET Core Identity-backed IAM substrate, cookie sign-in surface, and principal factory.",
+      "displayName": "Foundation Identity ASP.NET Core Identity",
+      "id": "FoundationIdentityAspNetCoreIdentity",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String[]",
+          "defaultValue": null,
+          "description": "Absolute origins (e.g. https://localhost:7030) a post-login returnUrl may redirect back to, in addition to same-origin paths. Set to the Studio origin when Studio is hosted separately from the backend.",
+          "displayName": "Allowed return URL origins",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "AllowedReturnUrlOrigins",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": "Advertises this password/login-page provider as the default in bootstrap, so Studio challenges it (redirecting to the login page) when a session is required.",
+          "displayName": "Is default provider",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "IsDefault",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

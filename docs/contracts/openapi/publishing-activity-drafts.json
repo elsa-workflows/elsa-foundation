@@ -1,0 +1,473 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView": {
+        "properties": {
+          "artifactId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancellation": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "capabilityAdvertised": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "capabilityAdvertised",
+              "available",
+              "status"
+            ],
+            "type": "object"
+          },
+          "commandDispatchStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "draftRevision": {
+            "type": "integer"
+          },
+          "expiration": {
+            "properties": {
+              "evidenceExpiresAt": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evidenceRetained": {
+                "type": "boolean"
+              },
+              "evidenceRetention": {
+                "type": "string"
+              },
+              "receiptExpiresAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "runExpiresAt": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runStillActive": {
+                "type": "boolean"
+              },
+              "sourceReferenceExpired": {
+                "type": "boolean"
+              },
+              "sourceReferenceExpiresAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "sourceReferenceRetained": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sourceReferenceExpiresAt",
+              "sourceReferenceExpired",
+              "sourceReferenceRetained",
+              "evidenceRetention",
+              "evidenceRetained",
+              "runStillActive",
+              "receiptExpiresAt"
+            ],
+            "type": "object"
+          },
+          "failure": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "diagnostics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "default": null,
+                      "properties": {
+                        "dependencyPath": {
+                          "default": null,
+                          "items": {
+                            "properties": {
+                              "definitionId": {
+                                "type": "string"
+                              },
+                              "templateHash": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "versionId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "definitionId",
+                              "versionId",
+                              "version",
+                              "templateHash"
+                            ],
+                            "type": "object"
+                          },
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "jsonPointer": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "nodeOrigin": {
+                          "default": null,
+                          "items": {
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "type": "object"
+                          },
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "providerKey": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "referenceKey": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": null,
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "remediation": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "severity": {
+                      "enum": [
+                        "info",
+                        "warning",
+                        "error"
+                      ]
+                    },
+                    "subject": {
+                      "properties": {
+                        "definitionId": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "default": null,
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "versionId": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "severity",
+                    "message",
+                    "subject"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "code",
+              "message",
+              "diagnostics"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "outerActivityExecutionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceReferenceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "testRunId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workflowExecutionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "testRunId",
+          "draftId",
+          "draftRevision",
+          "workflowExecutionId",
+          "status",
+          "expiration",
+          "cancellation",
+          "requestedAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Elsa.Workflows.Publishing.Api.Models.StartActivityDraftTestRun": {
+        "properties": {
+          "correlationId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedRevision": {
+            "type": "integer"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "properties": {
+                "state": {
+                  "type": "string"
+                },
+                "value": {
+                  "default": null
+                }
+              },
+              "required": [
+                "state"
+              ],
+              "type": "object"
+            },
+            "default": null,
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/publishing/activity-drafts/{draftId}/test-runs": {
+      "post": {
+        "description": "Requires one of: *, workflow-publishing.manage.",
+        "operationId": "postPublishingActivitydraftsDraftIdTestruns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draftId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Models.StartActivityDraftTestRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Workflows.Publishing.Api",
+        "x-elsa-feature-id": "WorkflowsPublishingApi",
+        "x-elsa-permissions": [
+          "*",
+          "workflow-publishing.manage"
+        ]
+      }
+    },
+    "/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}": {
+      "get": {
+        "description": "Requires one of: *, workflow-publishing.manage.",
+        "operationId": "getPublishingActivitydraftsDraftIdTestrunsIdempotencyIdempotencyKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draftId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "idempotencyKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Workflows.Publishing.Api",
+        "x-elsa-feature-id": "WorkflowsPublishingApi",
+        "x-elsa-permissions": [
+          "*",
+          "workflow-publishing.manage"
+        ]
+      }
+    }
+  }
+}

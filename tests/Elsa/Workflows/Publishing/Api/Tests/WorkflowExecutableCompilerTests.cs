@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
@@ -622,7 +623,13 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
     }
 
+    /// <summary>
+    /// Also pins <c>design.variable-reads-key-on-name-bindings-key-on-reference-key</c>: the authored
+    /// Variable payload below is <c>{referenceKey, declaringScopeId}</c> — reference key, not name — while
+    /// the resulting capture reports the variable's Name.
+    /// </summary>
     [Fact]
+    [ConsumerContract("design.variable-reads-key-on-name-bindings-key-on-reference-key")]
     public void Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture()
     {
         // The ordinary leaf path lowers an authored ActivityNode.Outputs binding through the same compiler the
@@ -760,6 +767,98 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains(
             new RuntimeStorageDriverRequirement(WellKnownRuntimeDurableValueStorageDrivers.Json),
             executable.StorageDriverRequirements);
+    }
+
+    /// <summary>
+    /// First half of the published required-output rule (docs/consumer-guide claim
+    /// <c>publishing.required-output-enforcement-is-per-node</c>): a node that authors NO outputs is not
+    /// checked at all, even though its contract declares a required one. <c>[Output]</c> defaults
+    /// <c>IsRequired</c> to true, so this is the common case, and reading <c>isRequired</c> as "the runtime
+    /// demands this" is what made the flag look inconsistent between activities.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.required-output-enforcement-is-per-node")]
+    public async Task A_required_output_is_unenforced_when_the_node_authors_no_output_at_all()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        var alias = TypeAliasConvention.CanonicalAlias(typeof(OutputProducingActivity));
+        registry.RegisterType(typeof(OutputProducingActivity), alias);
+        var activityVersion = ClrActivityVersion("activity-output-producer", "Test.OutputProducer", alias);
+        var root = new ActivityNode("read-value", activityVersion.Id, [], []);
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(root)),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Empty(executable.RootActivity.OutputCaptures);
+    }
+
+    /// <summary>
+    /// Second half of the same rule: bind one output and every required output on that node becomes
+    /// mandatory. This is why pre-binding an output "to be safe" is what turns a working definition into a
+    /// publish-time 400.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.required-output-enforcement-is-per-node")]
+    public void Binding_one_output_makes_every_required_output_on_that_node_mandatory()
+    {
+        ActivityResultProjectionContract Projection(string key, bool isRequired) => new(
+            key,
+            key.ToLowerInvariant(),
+            new ValueTypeDescriptor("String"),
+            isRequired,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+
+        var bound = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+
+        var exception = Assert.Throws<ArgumentException>(() => LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [Projection("Value", isRequired: false), Projection("Trace", isRequired: true)],
+            [bound],
+            [new("orderId", "OrderId", new TypeReference("String"), null, null)]));
+
+        Assert.Contains("missing required output target 'Trace'", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Pins <c>publishing.output-to-variable-types-are-not-checked</c>. A benchmarked consumer looked for a
+    /// compatibility rule between an output's type and the variable alias receiving it, found none, and
+    /// guessed — correctly, because nothing checks. A conversion plan is resolved ONLY when the author
+    /// requests one; otherwise the value lands in the variable slot as-is.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.output-to-variable-types-are-not-checked")]
+    public void An_output_binds_to_a_variable_of_an_unrelated_type_without_complaint()
+    {
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("Elsa.Http.Core.Models.HttpRequestModel"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "note", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+
+        var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [outputTarget],
+            // A String variable receiving an HttpRequestModel output: no conversion authored, no complaint.
+            [new("note", "Note", new TypeReference("String"), null, null)]);
+
+        Assert.Null(captures["Value"].ConversionPlan);
     }
 
     private static RuntimeOutputCaptureCompiler LeafOutputCompiler() =>
@@ -1650,6 +1749,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    [ConsumerContract("evidence.intrinsics-capture-nothing")]
     public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
     {
         var message = new Elsa.Expressions.Core.Models.VariableDefinition(
@@ -1667,6 +1767,11 @@ public sealed class WorkflowExecutableCompilerTests
         var setNode = executable.NodesById["set-1"];
         Assert.Equal(WorkflowIntrinsicKind.Set, setNode.IntrinsicKind);
         Assert.Equal("var-message", setNode.IntrinsicVariable?.VariableKey);
+
+        // Pins evidence.intrinsics-capture-nothing: an intrinsic writes its variable through the frame and
+        // produces no output capture, so it leaves no value evidence to assert against. Asserting on a Set
+        // node's evidence looks like the workflow never ran; read the variable's own evidence instead.
+        Assert.Empty(setNode.OutputCaptures);
     }
 
     private static ActivityNode SetIntrinsicNode(string nodeId, string variableKey) =>
@@ -2314,6 +2419,41 @@ public sealed class WorkflowExecutableCompilerTests
                     policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement("test.boundary", "test"));
+    }
+
+    /// <summary>
+    /// Pins how an authored input declares expression parameters — the `args` surface. A benchmarked
+    /// session found `args` documented but unauthorable: the published claim said captured values arrive
+    /// "under the args namespace", nothing showed how to declare them, and all three sessions routed around
+    /// it via a workflow variable. They can be declared: the input's `value` may be a portable expression
+    /// DEFINITION object rather than a bare source string.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("javascript.args-are-declared-by-a-portable-expression-definition")]
+    public async Task An_input_value_may_be_a_portable_expression_definition_that_declares_parameters()
+    {
+        // Serialized from the real type so this pin cannot encode a shape the server would not accept —
+        // including the polymorphic `kind` discriminator every parameter binding requires.
+        var definition = JsonSerializer.SerializeToElement(new Elsa.Expressions.Core.Models.ExpressionDefinition(
+            "JavaScript",
+            "args.greeting + '!'",
+            new TypeReference("String"),
+            new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+            {
+                ["greeting"] = new Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding(
+                    JsonSerializer.SerializeToElement("hello"))
+            },
+            JsonSerializer.SerializeToElement(new { }),
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1));
+        var authored = new WorkflowArgumentState("Text", new ArgumentValue(definition, "JavaScript"), null, null, null, null);
+        var compiler = Compiler(WorkflowVersion(new ActivityNode("write-one", _writeLineActivity.Id, [authored], [])));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.RootActivity.InputBindings["Text"];
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        // The declared parameter survives compilation, which is what makes `args.greeting` resolvable.
+        Assert.Equal(["greeting"], binding.Expression!.Parameters.Keys);
     }
 
     private static WorkflowArgumentState Text(string value) =>

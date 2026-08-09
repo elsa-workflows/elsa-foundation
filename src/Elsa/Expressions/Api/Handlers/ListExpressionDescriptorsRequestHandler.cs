@@ -9,12 +9,17 @@ namespace Elsa.Expressions.Api.Handlers;
 public sealed class ListExpressionDescriptorsRequestHandler(IExpressionDescriptorRegistry registry)
     : IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>
 {
+    // Sourced from Elsa.Expressions.Core so the build-time contract fragments publish the same intrinsic
+    // set this endpoint serves (one-projection rule, spec 149 / RFC #1191). Hardcoding them here made
+    // Literal — used on nearly every input — undiscoverable to a contracts-only consumer.
     private static readonly ExpressionDescriptorView[] IntrinsicAuthoringDescriptors =
-    [
-        new("Literal", "Literal", null, ExpressionEditingModeView.Literal),
-        new("Object", "Object", null, ExpressionEditingModeView.Structured),
-        new("Input", "Input", null, ExpressionEditingModeView.Reference)
-    ];
+        IntrinsicExpressionDescriptors.All
+            .Select(descriptor => new ExpressionDescriptorView(
+                descriptor.TypeName,
+                descriptor.DisplayName,
+                Description: null,
+                ToView(descriptor.EditingMode)))
+            .ToArray();
 
     public Task<ExpressionDescriptorsResponse> Handle(ListExpressionDescriptors request, CancellationToken cancellationToken)
     {

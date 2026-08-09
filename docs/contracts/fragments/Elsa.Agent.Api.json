@@ -1,0 +1,223 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Agent.Api",
+  "endpoints": [
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.audit"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentAuditQueryRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Agent.Core.Models.AgentAuditEvent, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+      "route": "/_elsa/agent/audit",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": null,
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentBootstrapResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/bootstrap",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentFeedbackApiRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentFeedback, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/feedback",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentActionProposal, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/proposals/{proposalId}/approve",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentActionProposal, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/proposals/{proposalId}/deny",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.proposals"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentProposalDecisionRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Core.Models.AgentProposalExecutionResult, Elsa.Agent.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/proposals/{proposalId}/execute",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentCreateSessionRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentCreateSessionResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/sessions",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentSessionRouteRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentSessionDetailsResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/sessions/{sessionId}",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentMessageRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentMessageAcceptedResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/sessions/{sessionId}/messages",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentSessionRouteRequest",
+      "responseSchema": null,
+      "responseType": null,
+      "route": "/_elsa/agent/sessions/{sessionId}/stream",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "GET"
+    },
+    {
+      "allowsAnonymous": false,
+      "configurationDependent": false,
+      "featureId": "FoundationAgentApi",
+      "permissions": [
+        "*",
+        "agent.use"
+      ],
+      "requestSchema": null,
+      "requestType": "Elsa.Agent.Api.Models.AgentTurnCancelRequest",
+      "responseSchema": null,
+      "responseType": "Elsa.Agent.Api.Models.AgentApiResponse\u00601[[Elsa.Agent.Api.Models.AgentTurnCancelResponse, Elsa.Agent.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+      "route": "/_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel",
+      "successStatusCondition": null,
+      "successStatuses": null,
+      "verb": "POST"
+    }
+  ],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints.",
+      "displayName": "Foundation Agent API",
+      "id": "FoundationAgentApi",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Api.FastEndpoints.Filters.FastEndpointsFilter, Elsa.Api.FastEndpoints, Version=0.0.2.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Endpoint Filters",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "EndpointFilters",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

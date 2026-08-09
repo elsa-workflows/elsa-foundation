@@ -19,12 +19,13 @@ public sealed class ActivityContractCompatibilityTests
         var constructor = Assert.Single(typeof(InputDefinition).GetConstructors());
         var parameters = constructor.GetParameters();
 
-        Assert.Equal(17, parameters.Length);
+        // 19 = 17 pre-G1 parameters + HasStaticDefault (G1) + EnumValues (enum members are contract).
+        Assert.Equal(19, parameters.Length);
         var nullability = Assert.Single(parameters, parameter => parameter.Name == nameof(InputDefinition.IsNullable));
         Assert.Equal(typeof(bool), nullability.ParameterType);
         Assert.False(nullability.HasDefaultValue);
         Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 17);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 19);
     }
 
     [Fact]

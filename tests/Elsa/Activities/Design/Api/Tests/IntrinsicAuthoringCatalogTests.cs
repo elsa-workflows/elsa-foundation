@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
@@ -27,8 +28,12 @@ public sealed class IntrinsicAuthoringCatalogTests
     {
         var descriptors = _provider.GetDescriptors();
 
+        // Kinds are pinned in the submit schema's wire spelling (camelCase) rather than the CLR casing
+        // they previously used: a client echoes this value into a submission, and the two published
+        // spellings disagreed with no tiebreaker (spec 149 / RFC #1191, consumer merge-gate evaluation).
+        // PublishedContractAgreementTests keeps this aligned with AuthoredWorkflowIntrinsicKind.
         Assert.Equal(
-            ["Set", "SetOutput", "SetCorrelationId", "SetInstanceName", "Finish"],
+            ["set", "setOutput", "setCorrelationId", "setInstanceName", "finish"],
             descriptors.Select(descriptor => descriptor.Intrinsic!.Kind));
         Assert.All(descriptors, descriptor =>
         {
@@ -41,7 +46,7 @@ public sealed class IntrinsicAuthoringCatalogTests
 
         // Every descriptor but Finish continues the graph; Finish terminates the run and so has no outgoing port.
         Assert.All(
-            descriptors.Where(descriptor => descriptor.Intrinsic!.Kind != "Finish"),
+            descriptors.Where(descriptor => descriptor.Intrinsic!.Kind != "finish"),
             descriptor => Assert.Contains(descriptor.Ports, port => port.Name == "Done"));
     }
 
@@ -60,9 +65,9 @@ public sealed class IntrinsicAuthoringCatalogTests
 
     /// <summary>#1113: each of these replaces a first-class Elsa 3 activity, so each must be discoverable.</summary>
     [Theory]
-    [InlineData("Elsa.SetCorrelationId", "elsa.intrinsic.set-correlation-id@1", "SetCorrelationId", "value")]
-    [InlineData("Elsa.SetInstanceName", "elsa.intrinsic.set-instance-name@1", "SetInstanceName", "value")]
-    [InlineData("Elsa.Finish", "elsa.intrinsic.finish@1", "Finish", "outcome")]
+    [InlineData("Elsa.SetCorrelationId", "elsa.intrinsic.set-correlation-id@1", "setCorrelationId", "value")]
+    [InlineData("Elsa.SetInstanceName", "elsa.intrinsic.set-instance-name@1", "setInstanceName", "value")]
+    [InlineData("Elsa.Finish", "elsa.intrinsic.finish@1", "finish", "outcome")]
     public void Elsa3_replacement_intrinsics_author_the_matching_engine_node(
         string activityTypeKey,
         string versionId,
@@ -85,6 +90,7 @@ public sealed class IntrinsicAuthoringCatalogTests
     }
 
     [Fact]
+    [ConsumerContract("design.intrinsic-descriptor-id-is-the-activity-version-id")]
     public void Set_variable_descriptor_authors_a_set_intrinsic_with_a_variable_target()
     {
         var setVariable = Single("Elsa.SetVariable");
@@ -92,7 +98,7 @@ public sealed class IntrinsicAuthoringCatalogTests
         Assert.Equal("Set Variable", setVariable.DisplayName);
         Assert.Equal("elsa.intrinsic.set@1", setVariable.ActivityVersionId);
         Assert.Equal("elsa.intrinsic.set@1", setVariable.AuthoringTemplate.ActivityVersionId);
-        Assert.Equal("Set", setVariable.Intrinsic!.Kind);
+        Assert.Equal("set", setVariable.Intrinsic!.Kind);
         Assert.Equal("value", setVariable.Intrinsic.ValueInputKey);
         Assert.Equal("variable", setVariable.Intrinsic.VariableInputKey);
         Assert.Null(setVariable.Intrinsic.OutputNameInputKey);
@@ -112,7 +118,7 @@ public sealed class IntrinsicAuthoringCatalogTests
 
         Assert.Equal("Set Output", setOutput.DisplayName);
         Assert.Equal("elsa.intrinsic.set-output@1", setOutput.ActivityVersionId);
-        Assert.Equal("SetOutput", setOutput.Intrinsic!.Kind);
+        Assert.Equal("setOutput", setOutput.Intrinsic!.Kind);
         Assert.Equal("value", setOutput.Intrinsic.ValueInputKey);
         Assert.Null(setOutput.Intrinsic.VariableInputKey);
         Assert.Equal("name", setOutput.Intrinsic.OutputNameInputKey);
@@ -123,7 +129,13 @@ public sealed class IntrinsicAuthoringCatalogTests
         Assert.Equal("Elsa.Any", valueInput.Type);
     }
 
+    /// <summary>
+    /// Also pins <c>design.intrinsics-are-catalog-only</c>: the stores here are EMPTY, so every intrinsic in
+    /// the result came from the built-in provider rather than from persisted rows. That is exactly why
+    /// <c>/design/activities/definitions</c> — which lists persisted definitions — never shows them.
+    /// </summary>
     [Fact]
+    [ConsumerContract("design.intrinsics-are-catalog-only")]
     public async Task Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog()
     {
         var handler = new ListActivityAuthoringCatalogRequestHandler(

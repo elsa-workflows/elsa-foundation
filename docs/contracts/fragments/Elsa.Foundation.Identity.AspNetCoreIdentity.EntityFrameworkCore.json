@@ -1,0 +1,105 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Durable EF Core persistence and SignInManager-backed cookie sign-in for the ASP.NET Core Identity provider.",
+      "displayName": "Foundation Identity ASP.NET Core Identity EF Core",
+      "id": "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Sqlite connection string for the identity database.",
+          "displayName": "Connection string",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ConnectionString",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": "Uses an in-memory database and seeds an admin account for a fresh checkout.",
+          "displayName": "Development or demo",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "IsDevelopmentOrDemo",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Email for the seeded administrator. Defaults to \u003Cusername\u003E@elsa.local.",
+          "displayName": "Seed admin email",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SeedAdminEmail",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Password for the seeded administrator. Outside development/demo, supply via a secret (user-secrets/environment variable), never in committed config.",
+          "displayName": "Seed admin password",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SeedAdminPassword",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Role granted to the seeded administrator. Defaults to \u0027administrator\u0027.",
+          "displayName": "Seed admin role",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SeedAdminRoleName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Provisions this administrator at startup. Requires a password.",
+          "displayName": "Seed admin username",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "SeedAdminUserName",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

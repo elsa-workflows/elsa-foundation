@@ -1,0 +1,105 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Provides Sqlite persistence for diagnostics OpenTelemetry traces, metrics, logs, and resources",
+      "displayName": "Sqlite OpenTelemetry Persistence",
+      "id": "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.String",
+          "defaultValue": null,
+          "description": "Database connection string used by this persistence feature.",
+          "displayName": "Connection string",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "ConnectionString",
+          "required": false,
+          "restartRequired": false,
+          "secret": true
+        },
+        {
+          "advanced": true,
+          "category": "Persistence",
+          "clrType": "System.Nullable\u00601[[Microsoft.Extensions.DependencyInjection.ServiceLifetime, Microsoft.Extensions.DependencyInjection.Abstractions, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60]]",
+          "defaultValue": null,
+          "description": "Service lifetime used for the EF Core DbContext factory.",
+          "displayName": "DbContext factory lifetime",
+          "experimental": false,
+          "jsonType": "string",
+          "name": "DbContextFactoryLifetime",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": false,
+          "category": "Persistence",
+          "clrType": "System.Nullable\u00601[[System.Boolean, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": true,
+          "description": "Controls whether database migrations run during startup.",
+          "displayName": "Run migrations",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "RunMigrations",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Persistence",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Registers command-side EF Core persistence services and entity saving handlers.",
+          "displayName": "Use commands",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "UseCommands",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Persistence",
+          "clrType": "System.Nullable\u00601[[System.Boolean, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+          "defaultValue": null,
+          "description": "Controls whether EF Core DbContext pooling is enabled for this persistence feature.",
+          "displayName": "Use context pooling",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "UseContextPooling",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        },
+        {
+          "advanced": true,
+          "category": "Persistence",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Registers query-side EF Core persistence services and entity loading handlers.",
+          "displayName": "Use queries",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "UseQueries",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

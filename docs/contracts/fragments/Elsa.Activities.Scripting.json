@@ -1,0 +1,114 @@
+{
+  "activities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Scripting.Activities.RunJavaScript",
+      "category": "Scripting",
+      "containerStructure": null,
+      "contentHash": "4E37E77ED440923062C48E1D60F06F8180937AEA7ECE86082056995A4601AC38",
+      "description": null,
+      "displayName": "Run Java Script",
+      "executionType": "Action",
+      "featureId": "ActivitiesScripting",
+      "inputs": [
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Script",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": true,
+          "name": "Script",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "script",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "single",
+          "defaultSyntax": null,
+          "defaultValue": "{}",
+          "description": null,
+          "displayName": "Arguments",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": false,
+          "isRequired": false,
+          "name": "Arguments",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "arguments",
+          "type": "System.Text.Json.JsonElement",
+          "uiHint": null,
+          "uiSpecifications": null
+        },
+        {
+          "authoredVia": "argument",
+          "category": null,
+          "collectionKind": "list",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Possible Outcomes",
+          "enumValues": null,
+          "hasStaticDefault": true,
+          "isBrowsable": true,
+          "isNullable": true,
+          "isRequired": false,
+          "name": "PossibleOutcomes",
+          "notes": null,
+          "order": 0,
+          "referenceKey": "possibleOutcomes",
+          "type": "String",
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "notes": null,
+      "outputs": [
+        {
+          "category": null,
+          "collectionKind": "single",
+          "description": null,
+          "displayName": "Value",
+          "isBrowsable": true,
+          "isRequired": false,
+          "name": "Value",
+          "referenceKey": "result",
+          "type": "System.Text.Json.JsonElement?"
+        }
+      ],
+      "ports": [],
+      "version": "1.0.0"
+    }
+  ],
+  "assembly": "Elsa.Activities.Scripting",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [
+        "JavaScriptJintEngine"
+      ],
+      "description": "Scripting activities: RunJavaScript executes an authored JavaScript script through the shared Jint evaluator.",
+      "displayName": "Activities Scripting",
+      "id": "ActivitiesScripting",
+      "notes": null,
+      "options": []
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

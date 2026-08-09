@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Http.Core;
+using Elsa.Primitives.Models;
 using Elsa.Http.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
@@ -30,6 +31,12 @@ public sealed class HttpEndpoint :
     /// <summary>The endpoint-relative route template.</summary>
     [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10)]
     [Required]
+    [ConsumerNote(ConsumerNoteKind.Constraint,
+        "Endpoint-relative and normalised before matching: surrounding slashes are stripped and literal text "
+        + "and parameter names are lower-cased, so 'Orders/{OrderId}' and '/orders/{orderid}' are the same "
+        + "route. Inline constraint bodies and default values are preserved verbatim because the matcher "
+        + "treats them as case-significant. The route this answers on is this path under the ActivitiesHttp "
+        + "feature's BasePath, not the path alone.")]
     public string Path { get; set; } = string.Empty;
 
     /// <summary>The accepted HTTP methods; defaults to GET.</summary>
@@ -43,6 +50,11 @@ public sealed class HttpEndpoint :
 
     /// <summary>Whether this node may start a workflow.</summary>
     [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0)]
+    [ConsumerNote(ConsumerNoteKind.Requirement,
+        "Defaults to FALSE. An endpoint meant to start a workflow from an incoming request must set this to "
+        + "true, or publication produces zero trigger bindings and the route never fires — the definition "
+        + "publishes cleanly and the request 404s, with nothing to indicate why. Leave it false only for a "
+        + "mid-flow endpoint that resumes an already-running workflow.")]
     public bool CanStartWorkflow { get; set; }
 
     [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100)]
@@ -58,6 +70,16 @@ public sealed class HttpEndpoint :
     public long? RequestSizeLimit { get; set; }
 
     [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30)]
+    [ConsumerNote(ConsumerNoteKind.Default,
+        "The default. The triggering request is answered 202 immediately with a started-workflow body, and a "
+        + "WriteHttpResponse later in the workflow never reaches that caller - its output goes nowhere "
+        + "observable and no incident is recorded. Choose this for fire-and-forget triggers only.",
+        Member = "async")]
+    [ConsumerNote(ConsumerNoteKind.Default,
+        "Holds the request open so a later WriteHttpResponse answers the original caller. This is what a "
+        + "request/response endpoint needs. It degrades back to a 202 - silently, by design - when the "
+        + "workflow suspends, finishes without writing a response, or dispatches non-locally.",
+        Member = "sync")]
     public ResponseMode ResponseMode { get; set; } = ResponseMode.Async;
 
     protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(

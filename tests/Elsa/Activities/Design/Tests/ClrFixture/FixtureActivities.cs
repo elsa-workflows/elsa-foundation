@@ -259,3 +259,71 @@ public sealed class PlainFixtureActivity : Activity<PlainFixtureResult>
 
 public sealed record PlainFixtureResult(
     [property: Output(Key = "length", Path = "length")] int Length);
+
+/// <summary>
+/// Exercises the G1 static-default ladder (spec 149 / RFC #1191): compiled property-initializer constants,
+/// synthesized <c>default(T)</c> for non-nullable value types, explicit-null defaults for nullable/reference
+/// types, the not-statically-representable escape hatch, and attribute-default precedence.
+/// </summary>
+public sealed class InitializerDefaultsFixtureActivity : FixtureActivity
+{
+    [ActivityInput]
+    public FixtureMode EnumWithInitializer { get; set; } = FixtureMode.Auto;
+
+    [ActivityInput]
+    public FixtureMode EnumZeroDefault { get; set; }
+
+    [ActivityInput]
+    public int IntWithInitializer { get; set; } = 42;
+
+    [ActivityInput]
+    public long LongWithInitializer { get; set; } = 5;
+
+    [ActivityInput]
+    public double DoubleWithInitializer { get; set; } = 1.5;
+
+    [ActivityInput]
+    public float FloatWithInitializer { get; set; } = 2.5f;
+
+    [ActivityInput]
+    public string StringWithInitializer { get; set; } = "hello";
+
+    [ActivityInput]
+    public bool BoolWithInitializer { get; set; } = true;
+
+    [ActivityInput]
+    public bool BoolZeroDefault { get; set; }
+
+    [ActivityInput]
+    public string? NullableStringNoInitializer { get; set; }
+
+    [ActivityInput]
+    public int? NullableIntWithInitializer { get; set; } = 7;
+
+    [ActivityInput]
+    public int? NullableIntNoInitializer { get; set; }
+
+    [ActivityInput]
+    public string ComputedInitializer { get; set; } = Guid.NewGuid().ToString("N");
+
+    [ActivityInput]
+    public List<string> ConstructedInitializer { get; set; } = [];
+
+    [ActivityInput]
+    public TimeSpan NonSynthesizableStruct { get; set; }
+
+    [ActivityInput(DefaultValue = "attribute-wins")]
+    public string AttributeBeatsInitializer { get; set; } = "initializer-value";
+}
+
+/// <summary>
+/// Base activity with an initializer-defaulted input declared on the base class; the derived
+/// <see cref="InheritedInitializerFixtureActivity"/> must surface the base declaration's compiled default.
+/// </summary>
+public abstract class InitializerBaseActivity : FixtureActivity
+{
+    [ActivityInput]
+    public string BaseInitialized { get; set; } = "from-base";
+}
+
+public sealed class InheritedInitializerFixtureActivity : InitializerBaseActivity;

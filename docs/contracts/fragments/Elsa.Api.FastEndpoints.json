@@ -1,0 +1,35 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Api.FastEndpoints",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Binds per-shell Elsa endpoint security options. Allows explicitly disabling endpoint security for a single shell (development/testing only).",
+      "displayName": "Elsa API Security",
+      "id": "ApiSecurity",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Boolean",
+          "defaultValue": false,
+          "description": null,
+          "displayName": "Allow Anonymous",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "AllowAnonymous",
+          "required": true,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

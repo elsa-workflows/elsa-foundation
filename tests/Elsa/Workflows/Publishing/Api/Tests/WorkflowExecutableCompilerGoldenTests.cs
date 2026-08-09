@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using Elsa.Workflows.Publishing.Services;
 using System.Reflection;
 using System.Text.Json;
@@ -141,6 +142,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     }
 
     [Fact]
+    [ConsumerContract("publishing.artifact-ids-are-content-addressed")]
     public async Task ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash()
     {
         // ADR 0038: the ArtifactHash covers Execution Material only. The same authored tree published under
@@ -163,6 +165,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     }
 
     [Fact]
+    [ConsumerContract("publishing.artifact-ids-are-content-addressed")]
     public async Task ArtifactHashIsBehavioralOnly_ChangingAnInputBindingLiteralYieldsDifferentHash()
     {
         // Behavioral counter-check: a change to Execution Material (here an input-binding literal) must move

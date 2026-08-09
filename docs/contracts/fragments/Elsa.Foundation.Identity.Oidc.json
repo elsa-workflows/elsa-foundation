@@ -1,0 +1,35 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Foundation.Identity.Oidc",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Registers the external OIDC authentication provider module and ASP.NET Core OIDC/JWT handlers.",
+      "displayName": "Foundation Identity OIDC",
+      "id": "FoundationIdentityOidc",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": "Identity",
+          "clrType": "System.Boolean",
+          "defaultValue": true,
+          "description": "Advertises the external OIDC provider as the default in bootstrap. Turn off when first-party (ASP.NET Core Identity) login should be the default sign-in experience.",
+          "displayName": "Is default provider",
+          "experimental": false,
+          "jsonType": "boolean",
+          "name": "IsDefault",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}

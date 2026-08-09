@@ -11,6 +11,15 @@ namespace Elsa.Activities.Design.Api.Services;
 /// shell that composes neither the serialization feature nor a CShells host degrades to null attribution
 /// instead of failing catalog reads.
 /// </summary>
+/// <remarks>
+/// KNOWN DUPLICATION (accepted, tracked): the build-time contract generator
+/// (<c>tools/contracts/Elsa.Contracts.Generator</c>, <c>FragmentProjector.Project</c>) restates this
+/// attribution rule — assembly → owning feature, ties broken by the min-ordinal feature id — because this
+/// resolver's dependencies are runtime-only and unavailable to a build-time projection. The two are a
+/// two-line rule rather than a shared parser (contrast <c>ActivityPortDesignFacetReader</c>, which unifies
+/// the ports facet convention), so §2.17 applies; if the tie-break changes here, change it there too or
+/// fragments and the served catalog will attribute activities differently.
+/// </remarks>
 public sealed class ActivityFeatureAttributionResolver(
     IWellKnownTypeRegistry? typeRegistry = null,
     IRuntimeFeatureCatalog? featureCatalog = null) : IActivityFeatureAttributionResolver

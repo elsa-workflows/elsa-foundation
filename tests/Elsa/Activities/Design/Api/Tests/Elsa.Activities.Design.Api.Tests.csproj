@@ -16,6 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- [ConsumerContract] pins for docs/consumer-guide/claims.json. -->
+    <ProjectReference Include="../../../../ConsumerGuide/Testing/Elsa.ConsumerGuide.Testing.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
   </ItemGroup>
 

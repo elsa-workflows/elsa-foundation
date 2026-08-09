@@ -1,0 +1,35 @@
+{
+  "activities": [],
+  "assembly": "Elsa.Workflows.Design.Reconciliation.Json",
+  "endpoints": [],
+  "expressions": null,
+  "features": [
+    {
+      "dependsOn": [],
+      "description": "Reconciliation source that reads workflow definitions from JSON files.",
+      "displayName": "Workflow Design JSON Reconciliation",
+      "id": "JsonWorkflowReconciliation",
+      "notes": null,
+      "options": [
+        {
+          "advanced": false,
+          "category": null,
+          "clrType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Design.Reconciliation.Contracts.IWorkflowReconciliationSource, Elsa.Workflows.Design.Reconciliation, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "defaultValue": null,
+          "description": null,
+          "displayName": "Sources",
+          "experimental": false,
+          "jsonType": "array",
+          "name": "Sources",
+          "required": false,
+          "restartRequired": false,
+          "secret": false
+        }
+      ]
+    }
+  ],
+  "hasContributions": true,
+  "intrinsics": [],
+  "schemaVersion": "1.2.0",
+  "structures": []
+}
