@@ -47,13 +47,17 @@ public sealed class VocabularyTests
             Strings(raw.RootElement.GetProperty("typeAliases").GetProperty("reservedBare")));
     }
 
+    /// <summary>
+    /// The WIRE spelling, not the CLR name: publishing `Single` while the submit schema enumerates `single`
+    /// is a value a consumer cannot use, which is exactly what happened.
+    /// </summary>
     [Fact]
-    public void The_collection_kinds_are_the_enum_the_binder_reads()
+    public void The_collection_kinds_are_the_enum_the_binder_reads_in_wire_spelling()
     {
         using var raw = Raw();
 
         Assert.Equal(
-            Enum.GetNames<CollectionKind>().Order(StringComparer.Ordinal),
+            Enum.GetValues<CollectionKind>().Select(WireSpelling.Of).Order(StringComparer.Ordinal),
             Strings(raw.RootElement.GetProperty("collectionKinds")));
     }
 

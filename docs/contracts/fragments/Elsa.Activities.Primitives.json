@@ -36,7 +36,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -57,7 +57,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -78,7 +78,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": true,
           "description": null,
@@ -101,7 +101,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Event Name",
           "isBrowsable": true,
@@ -127,7 +127,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -148,7 +148,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -169,7 +169,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -190,7 +190,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -227,7 +227,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -264,7 +264,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -285,7 +285,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -306,7 +306,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -327,7 +327,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
@@ -373,7 +373,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Line",
           "isBrowsable": true,
@@ -399,7 +399,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -444,7 +444,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "List",
+          "collectionKind": "list",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,

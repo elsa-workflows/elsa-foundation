@@ -54,7 +54,8 @@
         "name": "Math.random",
         "signature": null
       }
-    ]
+    ],
+    "variableTypes": null
   },
   "features": [
     {

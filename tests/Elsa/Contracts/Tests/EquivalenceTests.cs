@@ -249,12 +249,12 @@ public sealed class EquivalenceTests
         item.Description,
         item.ExecutionType,
         item.Inputs.Select(input => new InputContract(
-            input.ReferenceKey, input.Name, input.Type, input.CollectionKind.ToString(), input.DisplayName,
+            input.ReferenceKey, input.Name, input.Type, WireSpelling.Of(input.CollectionKind), input.DisplayName,
             input.Description, input.Order, input.Category, input.IsBrowsable, input.IsRequired, input.IsNullable,
             input.UiHint, input.DefaultValue, input.HasStaticDefault, input.DefaultSyntax, input.UiSpecifications,
             input.EnumValues)).ToArray(),
         item.Outputs.Select(output => new OutputContract(
-            output.ReferenceKey ?? output.Name, output.Name, output.Type, output.CollectionKind.ToString(),
+            output.ReferenceKey ?? output.Name, output.Name, output.Type, WireSpelling.Of(output.CollectionKind),
             output.DisplayName, output.Description, output.Category, output.IsBrowsable, output.IsRequired)).ToArray(),
         item.Ports.Select(port => new PortContract(port.Name, port.DisplayName, port.Type, port.IsBrowsable, port.ReferenceKey ?? port.Name)).ToArray(),
         item.ContainerStructure);

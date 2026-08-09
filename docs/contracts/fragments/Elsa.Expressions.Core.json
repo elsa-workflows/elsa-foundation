@@ -6,25 +6,26 @@
     "descriptors": [
       {
         "displayName": "Input",
-        "editingMode": "Reference",
+        "editingMode": "reference",
         "featureId": null,
         "type": "Input"
       },
       {
         "displayName": "Literal",
-        "editingMode": "Literal",
+        "editingMode": "literal",
         "featureId": null,
         "type": "Literal"
       },
       {
         "displayName": "Object",
-        "editingMode": "Structured",
+        "editingMode": "structured",
         "featureId": null,
         "type": "Object"
       }
     ],
     "javaScriptDeclarations": [],
-    "scriptSandbox": []
+    "scriptSandbox": [],
+    "variableTypes": null
   },
   "features": [],
   "hasContributions": true,

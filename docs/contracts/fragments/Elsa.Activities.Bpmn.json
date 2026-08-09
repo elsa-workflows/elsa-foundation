@@ -13,7 +13,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -68,7 +68,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": true,
           "description": null,

@@ -13,7 +13,7 @@ to author workflow definitions against it: no server boot, no endpoint dumps, no
 | `submit-schema.json` | The workflow-definition submit-body schema — produced by the same handler that serves `GET design/workflows/definitions/submit/schema`. |
 | `openapi.json` | The HTTP surface as an **OpenAPI 3.1** document: every published route, its verb, path parameters, request/response body schemas (hoisted into `components/schemas`), the permissions it accepts (`x-elsa-permissions`) and the assembly that provides it (`x-elsa-assembly`). Readable by any OpenAPI client generator or validator. |
 | `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains, plus the features and expression types it serves — the third term of availability, see below. |
-| `vocabularies.json` | The closed value spaces you must match exactly: variable type aliases (the reserved bare set plus the rule for everything else), collection kinds, intrinsic kinds, the `authoredVia` terms, and what each expression type means on the wire. Generated from the product types that define them. |
+| `vocabularies.json` | The closed value spaces you must match exactly: the type-alias convention, collection kinds, intrinsic kinds, the `authoredVia` terms, and what each expression type means on the wire. Generated from the product types that define them. **Every value is in wire spelling** — copy it into a submission as published. |
 | `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json`, `hosts.json`, `openapi.json` and `vocabularies.json`. Verify "these contracts match my pinned commit" by string compare. |
 
 Deliberately **not** in fragments: assigned activity version ids and availability (`addable`) — server

@@ -6,13 +6,14 @@
     "descriptors": [
       {
         "displayName": "Liquid",
-        "editingMode": "Text",
+        "editingMode": "text",
         "featureId": "Liquid",
         "type": "Liquid"
       }
     ],
     "javaScriptDeclarations": [],
-    "scriptSandbox": []
+    "scriptSandbox": [],
+    "variableTypes": null
   },
   "features": [
     {

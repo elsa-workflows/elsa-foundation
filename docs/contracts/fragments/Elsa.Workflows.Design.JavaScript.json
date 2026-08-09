@@ -19,7 +19,8 @@
         ]
       }
     ],
-    "scriptSandbox": []
+    "scriptSandbox": [],
+    "variableTypes": null
   },
   "features": [
     {

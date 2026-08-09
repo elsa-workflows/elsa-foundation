@@ -14818,7 +14818,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The outcome the workflow completes with.",
@@ -14859,7 +14859,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The correlation id to assign to this instance.",
@@ -14908,7 +14908,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The name to assign to this instance.",
@@ -14957,7 +14957,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The name of the workflow output to assign.",
@@ -14978,7 +14978,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The value to assign to the output.",
@@ -15027,7 +15027,7 @@
         {
           "authoredVia": "intrinsicBlock",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The declared variable to assign.",
@@ -15048,7 +15048,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": "The value to assign to the variable.",

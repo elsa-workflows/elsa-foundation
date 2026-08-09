@@ -176,7 +176,22 @@ public sealed record StructureContract(
 public sealed record ExpressionSurface(
     IReadOnlyList<ExpressionDescriptorContract> Descriptors,
     IReadOnlyList<JsDeclarationContract> JavaScriptDeclarations,
-    IReadOnlyList<SandboxGlobalContract> ScriptSandbox);
+    IReadOnlyList<SandboxGlobalContract> ScriptSandbox,
+    // The aliases a VARIABLE may be declared as. Strictly smaller than the alias convention's reserved set
+    // — that set governs the `type` of any published input or output, not what a variable can be.
+    IReadOnlyList<VariableTypeContract>? VariableTypes = null);
+
+/// <summary>
+/// One selectable variable type. The runtime serves the same union at <c>GET /expressions/variable-types</c>;
+/// a consumer declaring a variable must use one of these aliases, not any reserved bare alias.
+/// </summary>
+public sealed record VariableTypeContract(
+    string? FeatureId,
+    string Alias,
+    string DisplayName,
+    string Category,
+    bool SupportsNull,
+    IReadOnlyList<string> SupportedCollectionKinds);
 
 public sealed record ExpressionDescriptorContract(
     string? FeatureId,

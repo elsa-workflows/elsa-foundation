@@ -189,7 +189,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         input.ReferenceKey,
         input.Name,
         input.Type.Alias,
-        input.Type.CollectionKind.ToString(),
+        WireSpelling.Of(input.Type.CollectionKind),
         input.DisplayName,
         input.Description,
         input.Order,
@@ -211,7 +211,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         output.ReferenceKey,
         output.Name,
         output.Type.Alias,
-        output.Type.CollectionKind.ToString(),
+        WireSpelling.Of(output.Type.CollectionKind),
         output.DisplayName,
         output.Description,
         output.Category,
@@ -435,7 +435,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                 owningFeatureId,
                 descriptor.TypeName,
                 descriptor.DisplayName,
-                descriptor.EditingMode.ToString())));
+                WireSpelling.Of(descriptor.EditingMode))));
         }
 
         // The always-available expression types (Literal, Object, Input) are not provider-registered —
@@ -449,7 +449,24 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                 FeatureId: null,
                 descriptor.TypeName,
                 descriptor.DisplayName,
-                descriptor.EditingMode.ToString())));
+                WireSpelling.Of(descriptor.EditingMode))));
+        }
+
+        // The aliases a VARIABLE may be declared as — a strictly smaller set than the alias convention's
+        // reserved names, and the distinction cost a benchmarked consumer real time: `vocabularies.json`
+        // published 19 reserved bare aliases while only these are registrable variable types. Provider-fed
+        // because a module can contribute its own (the runtime serves the same union at
+        // GET /expressions/variable-types).
+        var variableTypes = new List<VariableTypeContract>();
+        foreach (var provider in contributions.Resolve<IVariableTypeDescriptorProvider>("variable type descriptor provider"))
+        {
+            variableTypes.AddRange(provider.GetDescriptors().Select(descriptor => new VariableTypeContract(
+                owningFeatureId,
+                descriptor.Alias,
+                descriptor.DisplayName,
+                descriptor.Category,
+                descriptor.SupportsNull,
+                descriptor.SupportedCollectionKinds.Select(WireSpelling.Of).Order(StringComparer.Ordinal).ToArray())));
         }
 
         foreach (var contributor in contributions.Resolve<IJavaScriptDeclarationContributor>("JavaScript declaration contributor"))
@@ -472,13 +489,16 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                 .ToArray()
             : [];
 
-        if (descriptors.Count == 0 && declarations.Count == 0 && sandbox.Length == 0)
+        if (descriptors.Count == 0 && declarations.Count == 0 && sandbox.Length == 0 && variableTypes.Count == 0)
             return null;
 
         return new ExpressionSurface(
             descriptors.OrderBy(descriptor => descriptor.Type, StringComparer.Ordinal).ToArray(),
             declarations.OrderBy(declaration => declaration.Contributor, StringComparer.Ordinal).ToArray(),
-            sandbox);
+            sandbox,
+            variableTypes.Count == 0
+                ? null
+                : variableTypes.OrderBy(type => type.Alias, StringComparer.Ordinal).ToArray());
     }
 
     private static JsonElement Serialize<T>(T value) =>
@@ -529,7 +549,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         view.ReferenceKey,
         view.Name,
         view.Type,
-        view.CollectionKind.ToString(),
+        WireSpelling.Of(view.CollectionKind),
         view.DisplayName,
         view.Description,
         view.Order,
@@ -551,7 +571,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         view.ReferenceKey ?? view.Name,
         view.Name,
         view.Type,
-        view.CollectionKind.ToString(),
+        WireSpelling.Of(view.CollectionKind),
         view.DisplayName,
         view.Description,
         view.Category,

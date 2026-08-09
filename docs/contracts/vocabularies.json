@@ -10,11 +10,11 @@
     }
   ],
   "collectionKinds": [
-    "Array",
-    "Dictionary",
-    "HashSet",
-    "List",
-    "Single"
+    "array",
+    "dictionary",
+    "hashSet",
+    "list",
+    "single"
   ],
   "expressionTypeSemantics": [
     {
@@ -30,7 +30,7 @@
       "value": "Input"
     },
     {
-      "meaning": "A reference to a declared variable. The payload is an object \u0060{\u0022referenceKey\u0022:\u0022...\u0022,\u0022declaringScopeId\u0022:\u0022...\u0022}\u0060 \u2014 keyed by the variable\u0027s referenceKey, NOT its name. \u0060declaringScopeId\u0060 is \u0060\u0022workflow\u0022\u0060 for a workflow-scope variable. Required as the expression type of any authored output target.",
+      "meaning": "A reference to a declared variable, keyed by the variable\u0027s referenceKey and NOT by its name. Two payload forms are accepted: the bare string \u0060\u0022orderId\u0022\u0060, which defaults the scope to workflow scope, or the object \u0060{\u0022referenceKey\u0022:\u0022orderId\u0022,\u0022declaringScopeId\u0022:\u0022workflow\u0022}\u0060 when the scope must be explicit. Required as the expression type of any authored output target.",
       "value": "Variable"
     }
   ],
@@ -47,10 +47,11 @@
   ],
   "schemaVersion": "1.2.0",
   "typeAliases": {
+    "governs": "These are the aliases that appear as the \u0060type\u0060 of a published activity input or output. They are NOT the set a variable may be declared as \u2014 that set is smaller and is published per fragment under \u0060expressions.variableTypes\u0060 (the runtime serves the same union at GET /expressions/variable-types). Declaring a variable as a reserved alias outside that smaller set fails.",
     "note": "\u0027Any\u0027 is accepted as a result-type alias on an expression definition and means \u0027do not constrain the result\u0027. It is not a variable type.",
     "nullableRule": "A nullable value type is the underlying alias with a \u0027?\u0027 suffix (\u0027Int32?\u0027). The nullable companion is derived automatically, so it is never registered separately.",
     "nullableSuffix": "?",
-    "otherTypesRule": "Any type outside the reserved set is aliased by its namespace-qualified CLR full name, with no assembly name and no version (for example \u0027Elsa.Http.Core.Models.HttpRequestModel\u0027). Aliases resolve case-insensitively.",
+    "otherTypesRule": "Any type outside the reserved set is aliased by its namespace-qualified CLR full name, with no assembly name and no version (for example \u0027Elsa.Activities.Http.Models.HttpRequestModel\u0027). Aliases resolve case-insensitively.",
     "reservedBare": [
       "Boolean",
       "Byte",

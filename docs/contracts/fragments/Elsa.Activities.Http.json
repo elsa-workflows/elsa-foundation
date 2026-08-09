@@ -13,7 +13,7 @@
         {
           "authoredVia": "argument",
           "category": "Simple",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -34,7 +34,7 @@
         {
           "authoredVia": "argument",
           "category": "Simple",
-          "collectionKind": "List",
+          "collectionKind": "list",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -78,7 +78,7 @@
         {
           "authoredVia": "argument",
           "category": "Simple",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
@@ -99,7 +99,7 @@
         {
           "authoredVia": "argument",
           "category": "Advanced",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": false,
           "description": null,
@@ -120,7 +120,7 @@
         {
           "authoredVia": "argument",
           "category": "Advanced",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -141,7 +141,7 @@
         {
           "authoredVia": "argument",
           "category": "Advanced",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -162,7 +162,7 @@
         {
           "authoredVia": "argument",
           "category": "Advanced",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -183,7 +183,7 @@
         {
           "authoredVia": "argument",
           "category": "Simple",
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": "async",
           "description": null,
@@ -220,7 +220,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Request",
           "isBrowsable": true,
@@ -231,7 +231,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "description": null,
           "displayName": "Route Data",
           "isBrowsable": true,
@@ -242,7 +242,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Parsed Content",
           "isBrowsable": true,
@@ -268,7 +268,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -289,7 +289,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": "GET",
           "description": null,
@@ -333,7 +333,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -354,7 +354,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": "text/plain",
           "description": null,
@@ -386,7 +386,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -407,7 +407,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "List",
+          "collectionKind": "list",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -428,7 +428,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -451,7 +451,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Status Code",
           "isBrowsable": true,
@@ -462,7 +462,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Response Body",
           "isBrowsable": true,
@@ -473,7 +473,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "description": null,
           "displayName": "Response Headers",
           "isBrowsable": true,
@@ -521,7 +521,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": 200,
           "description": null,
@@ -542,7 +542,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -563,7 +563,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -584,7 +584,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -607,7 +607,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Status Code",
           "isBrowsable": true,
@@ -618,7 +618,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "description": null,
           "displayName": "Headers",
           "isBrowsable": true,
@@ -629,7 +629,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Body",
           "isBrowsable": true,
@@ -640,7 +640,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Content Type",
           "isBrowsable": true,

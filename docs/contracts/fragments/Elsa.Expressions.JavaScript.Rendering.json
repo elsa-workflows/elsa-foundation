@@ -8439,7 +8439,8 @@
         "variables": []
       }
     ],
-    "scriptSandbox": []
+    "scriptSandbox": [],
+    "variableTypes": null
   },
   "features": [
     {

@@ -13,7 +13,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -39,7 +39,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Dictionary",
+          "collectionKind": "dictionary",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -60,7 +60,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": false,
           "description": null,
@@ -81,7 +81,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": true,
           "description": null,
@@ -102,7 +102,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -125,7 +125,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Child Workflow Execution ID",
           "isBrowsable": true,
@@ -136,7 +136,7 @@
         },
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Result",
           "isBrowsable": true,

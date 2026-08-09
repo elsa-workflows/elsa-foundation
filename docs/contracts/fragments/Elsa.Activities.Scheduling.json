@@ -13,7 +13,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -36,7 +36,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Expression",
           "isBrowsable": true,
@@ -62,7 +62,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": "Literal",
           "defaultValue": "00:00:00",
           "description": null,
@@ -107,7 +107,7 @@
         {
           "authoredVia": "argument",
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "defaultSyntax": null,
           "defaultValue": null,
           "description": null,
@@ -130,7 +130,7 @@
       "outputs": [
         {
           "category": null,
-          "collectionKind": "Single",
+          "collectionKind": "single",
           "description": null,
           "displayName": "Interval",
           "isBrowsable": true,

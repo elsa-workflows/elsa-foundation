@@ -6,13 +6,14 @@
     "descriptors": [
       {
         "displayName": "JavaScript",
-        "editingMode": "Text",
+        "editingMode": "text",
         "featureId": "JavaScriptExpressions",
         "type": "JavaScript"
       }
     ],
     "javaScriptDeclarations": [],
-    "scriptSandbox": []
+    "scriptSandbox": [],
+    "variableTypes": null
   },
   "features": [
     {

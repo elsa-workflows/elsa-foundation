@@ -23,17 +23,23 @@ public static class VocabularyProjector
             // is rejected at registration, so a consumer cannot invent one.
             ReservedBare: TypeAliasConvention.ReservedBareAliases.Order(StringComparer.Ordinal).ToArray(),
             NullableSuffix: "?",
+            Governs:
+                "These are the aliases that appear as the `type` of a published activity input or output. They "
+                + "are NOT the set a variable may be declared as — that set is smaller and is published per "
+                + "fragment under `expressions.variableTypes` (the runtime serves the same union at "
+                + "GET /expressions/variable-types). Declaring a variable as a reserved alias outside that "
+                + "smaller set fails.",
             OtherTypesRule:
                 "Any type outside the reserved set is aliased by its namespace-qualified CLR full name, with no "
-                + "assembly name and no version (for example 'Elsa.Http.Core.Models.HttpRequestModel'). Aliases "
-                + "resolve case-insensitively.",
+                + "assembly name and no version (for example 'Elsa.Activities.Http.Models.HttpRequestModel'). "
+                + "Aliases resolve case-insensitively.",
             NullableRule:
                 "A nullable value type is the underlying alias with a '?' suffix ('Int32?'). The nullable "
                 + "companion is derived automatically, so it is never registered separately.",
             Note:
                 "'Any' is accepted as a result-type alias on an expression definition and means 'do not constrain "
                 + "the result'. It is not a variable type."),
-        CollectionKinds: Enum.GetNames<CollectionKind>().Order(StringComparer.Ordinal).ToArray(),
+        CollectionKinds: Enum.GetValues<CollectionKind>().Select(WireSpelling.Of).Order(StringComparer.Ordinal).ToArray(),
         IntrinsicKinds: Enum.GetNames<AuthoredWorkflowIntrinsicKind>()
             .Select(name => char.ToLowerInvariant(name[0]) + name[1..])
             .Order(StringComparer.Ordinal)
@@ -60,10 +66,11 @@ public static class VocabularyProjector
             new VocabularyTerm("Input",
                 "A reference to a workflow input rather than an inline value."),
             new VocabularyTerm("Variable",
-                "A reference to a declared variable. The payload is an object "
-                + "`{\"referenceKey\":\"...\",\"declaringScopeId\":\"...\"}` — keyed by the variable's "
-                + "referenceKey, NOT its name. `declaringScopeId` is `\"workflow\"` for a workflow-scope "
-                + "variable. Required as the expression type of any authored output target.")
+                "A reference to a declared variable, keyed by the variable's referenceKey and NOT by its name. "
+                + "Two payload forms are accepted: the bare string `\"orderId\"`, which defaults the scope to "
+                + "workflow scope, or the object `{\"referenceKey\":\"orderId\",\"declaringScopeId\":\"workflow\"}` "
+                + "when the scope must be explicit. Required as the expression type of any authored output "
+                + "target.")
         ]);
 }
 
@@ -79,6 +86,7 @@ public sealed record ContractVocabularies(
 public sealed record TypeAliasVocabulary(
     IReadOnlyList<string> ReservedBare,
     string NullableSuffix,
+    string Governs,
     string OtherTypesRule,
     string NullableRule,
     string Note);
