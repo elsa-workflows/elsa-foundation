@@ -340,7 +340,9 @@ public sealed class ReplaySafeFusionGuardrailTests
         null => null,
         { ValueKind: JsonValueKind.Object } snapshot when snapshot.TryGetProperty("preview", out var preview) => preview.GetString(),
         { ValueKind: JsonValueKind.String } inline => inline.GetString(),
-        var other => other.Value.GetRawText()
+        // Discard rather than a variable pattern: the arm is unconditional, so naming it read as a test that could
+        // fail when it never can. The null case is already handled above, so the value is non-null here.
+        _ => projection.Value.Value.GetRawText()
     };
 
     private static string FingerprintCommits(IReadOnlyCollection<RuntimeCheckpointCommitRecord> commits) =>
