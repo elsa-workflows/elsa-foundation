@@ -122,6 +122,29 @@ public sealed class MongoDbWorkflowDashboardLaneWiringTests
         Assert.Contains("runtime-elsewhere", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The source owns its <see cref="MongoDB.Driver.MongoClient"/>, so it disposes it — but constructing a
+    /// client starts the driver's cluster monitoring, so a target whose tile is never rendered must not build
+    /// one just to release it. An unparseable connection string makes both halves observable without a
+    /// server: constructing and disposing stay silent, and only reaching for the database throws.
+    /// </summary>
+    [Fact]
+    public void The_database_source_builds_its_client_lazily_and_disposes_only_what_it_built()
+    {
+        var source = new GroundworkTargetMongoDatabaseSource(
+            GroundworkTargetNames.Default,
+            "this-is-not-a-mongodb-connection-string",
+            "elsa");
+
+        source.Dispose();
+
+        var reused = new GroundworkTargetMongoDatabaseSource(
+            GroundworkTargetNames.Default,
+            "this-is-not-a-mongodb-connection-string",
+            "elsa");
+        Assert.ThrowsAny<Exception>(() => reused.GetDatabase());
+    }
+
     private static ServiceCollection Services()
     {
         var services = new ServiceCollection();
