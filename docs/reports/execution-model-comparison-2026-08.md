@@ -850,15 +850,21 @@ successfully must not poison work that already committed, so the deadline is sup
 dispatch produced no failure. Claim-lost keeps its precedence over a successful dispatch; a deadline
 does not. Three tests cover the breach, that race, and the infinite-ceiling escape hatch.
 
-### R4. Decide the Flowchart/BPMN sharing question before ADR 0063 executes. Cost: S to decide, S to
-extract.
+### R4. Decide the Flowchart/BPMN sharing question before ADR 0063 executes. **Decided — do not share code.**
 
-Extract the activation-aware join predicate and the sequence-id discipline into one neutral place, or
-record explicitly that they stay duplicated and why. Either outcome is fine; drifting into the split
-without deciding is not.
+Resolved as [ADR 0064](../adr/0064-flowchart-infers-joins-from-propagated-dead-paths.md), which **withdraws the
+extraction this recommendation proposed**, for two reasons that only became clear on looking harder at the
+Flowchart engine:
 
-*What would have to be true:* that ADR 0063 has not been executed. It is currently Proposed, so this is
-a sequencing window that closes.
+1. ADR 0063 moves BPMN to its own repository, so any shared abstraction becomes a third cross-repository package.
+2. More decisively, the duplicated algorithm should not exist on the Flowchart side at all. Flowchart infers its
+   joins by searching for live work that can still reach an un-arrived inbound — over a *cyclic* reachability
+   oracle, with scope partitioning silently compensating for the cycles. Replacing that with propagated dead
+   arrivals makes the join local, which removes the thing there was to share.
+
+What is shared instead is a **conformance corpus**: the same routing scenarios run against both engines, asserting
+identical answers where the semantics agree and recording deliberate divergence where they do not. That survives
+the repository split; shared code would not.
 
 ### R5. Decouple inspection projection from the checkpoint commit. Cost: L.
 
