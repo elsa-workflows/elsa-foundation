@@ -153,15 +153,20 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
+            // A node whose outcome matched no connection is still a completion that took none of the ones it
+            // has, so its outbound edges are dead even though nothing was scheduled from it.
+            state = RouteUntakenOutbound(context, state, graph, completionContext, continuationScope, path, new HashSet<string>(StringComparer.Ordinal));
             state = joinCoordinator.ReleaseReadyWaitingJoins(context, state, graph);
 
             return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
         var scheduledTargets = new HashSet<string>(StringComparer.Ordinal);
+        var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
+            takenConnectionIds.Add(connectionId);
             var targetScope = ResolveTargetScope(reachabilityAnalyzer, state, graph, continuationScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, targetScope.ExecutionScopeId)))
                 state = AddScope(state, targetScope);
@@ -178,7 +183,7 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
 
-            if (FlowchartJoinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
+            if (joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");
@@ -188,6 +193,10 @@ public sealed class FlowchartExecutionEngine(
             if (scheduledTargets.Add(connection.Target.NodeId))
                 state = joinCoordinator.FireJoinOrContinuation(context, state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey, completionContext.CompletedChildActivityExecutionId, connectionId);
         }
+
+        // The taken edges are routed above; the rest of the completion is the edges it did not take. Routed
+        // after them so the live branches keep the scheduling order they have always had.
+        state = RouteUntakenOutbound(context, state, graph, completionContext, continuationScope, path, takenConnectionIds);
 
         state = UpdatePath(state, path with
         {
@@ -229,6 +238,29 @@ public sealed class FlowchartExecutionEngine(
             RuntimeStructuralContinuation.Faulted(new ActivityFault("flowchart.child.faulted", message)),
             state));
     }
+
+    /// <summary>
+    /// Hands the untaken outbound connections of a completing child to the join coordinator. Dead arrivals stay
+    /// in the continuation scope and never cross a loop-closing edge, so the emitting scope and iteration key
+    /// are the ones the live arrivals of the same completion carry.
+    /// </summary>
+    private FlowchartExecutionState RouteUntakenOutbound(
+        IRuntimeActivityExecutionContext context,
+        FlowchartExecutionState state,
+        FlowchartGraph graph,
+        ActivityChildCompletedContext completionContext,
+        ExecutionScope continuationScope,
+        ExecutionPath path,
+        IReadOnlySet<string> takenConnectionIds) =>
+        joinCoordinator.RouteUntakenOutbound(
+            context,
+            state,
+            graph,
+            completionContext.CompletedChildExecutableNodeId,
+            continuationScope.ExecutionScopeId,
+            continuationScope.LoopIterationKey ?? path.IterationKey,
+            takenConnectionIds,
+            completionContext.CompletedChildActivityExecutionId);
 
     private RuntimeStructuralContinuation PersistAndMaybeComplete(FlowchartExecutionState state)
     {

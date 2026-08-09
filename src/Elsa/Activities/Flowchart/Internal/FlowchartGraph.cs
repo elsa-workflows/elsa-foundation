@@ -174,6 +174,20 @@ public sealed class FlowchartGraph
             .ToArray();
     }
 
+    /// <summary>
+    /// Every outbound connection of <paramref name="sourceNodeId"/> in declaration order, regardless of which
+    /// outcome port it hangs off. <see cref="SelectOutboundConnections"/> answers "which edges did this
+    /// completion take"; this answers "which edges exist", which is what routing the <em>untaken</em> half of a
+    /// completion needs (ADR 0064).
+    /// </summary>
+    public IReadOnlyCollection<FlowchartConnection> GetOutboundConnections(string sourceNodeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
+        return _outboundBySource.TryGetValue(sourceNodeId, out var outbound)
+            ? outbound.ToArray()
+            : [];
+    }
+
     public IReadOnlyCollection<FlowchartConnection> GetInboundConnections(string targetNodeId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);

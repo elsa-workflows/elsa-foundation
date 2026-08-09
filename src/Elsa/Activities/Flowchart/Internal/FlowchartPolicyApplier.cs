@@ -29,6 +29,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
     {
         ArgumentNullException.ThrowIfNull(decision);
         var scheduledNodes = new HashSet<string>(StringComparer.Ordinal);
+        var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
         var firstWinsScopeId = ResolveFirstWinsScopeId(state, decision, currentPath, policyKind);
         if (firstWinsScopeId is not null)
         {
@@ -57,7 +58,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             }
             state = command.Kind switch
             {
-                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes),
+                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes, takenConnectionIds),
                 FlowchartPolicyCommandKind.WriteDiagnostic => ApplyDiagnosticCommand(state, effectiveCommand, currentPath),
                 FlowchartPolicyCommandKind.CompleteExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Completed }),
                 FlowchartPolicyCommandKind.WaitExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Waiting }),
@@ -66,7 +67,21 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             };
         }
 
-        return state;
+        // A policy decides which of its node's outbound connections to take, so the ones it left out are the
+        // untaken half of this completion, exactly as an unmatched outcome port is on the routing path. Dead
+        // arrivals land in the same scope the schedule commands used, so live and dead answers to one join
+        // share a partition key.
+        return currentPath.CurrentNodeId is not { } sourceNodeId
+            ? state
+            : joinCoordinator.RouteUntakenOutbound(
+                context,
+                state,
+                graph,
+                sourceNodeId,
+                firstWinsScopeId ?? defaultScheduleScopeId ?? currentPath.ExecutionScopeId,
+                currentPath.IterationKey,
+                takenConnectionIds,
+                schedulingActivityExecutionId);
     }
 
     private FlowchartExecutionState ApplyScheduleNodeCommand(
@@ -77,7 +92,8 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         ExecutionPath currentPath,
         string schedulingActivityExecutionId,
         string policyKind,
-        HashSet<string> scheduledNodes)
+        HashSet<string> scheduledNodes,
+        HashSet<string> takenConnectionIds)
     {
         if (string.IsNullOrWhiteSpace(command.NodeId))
             throw NewInvalidPolicyCommand(policyKind, "ScheduleNode command requires a node id.");
@@ -93,6 +109,8 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
 
         var iterationKey = currentPath.IterationKey;
         var connection = ResolveScheduleConnection(graph, command, currentPath, nodeId, policyKind);
+        if (connection is not null)
+            takenConnectionIds.Add(graph.GetConnectionId(connection));
         if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
         {
             var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
@@ -112,7 +130,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
 
-            if (FlowchartJoinCoordinator.ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
+            if (joinCoordinator.ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 return FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");

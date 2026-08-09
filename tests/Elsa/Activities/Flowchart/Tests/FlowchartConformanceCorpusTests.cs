@@ -29,13 +29,25 @@ namespace Elsa.Activities.Flowchart.Tests;
 public sealed class FlowchartConformanceCorpusTests
 {
     /// <summary>
+    /// Both join semantics, run over the same graphs. A scenario asserting one expectation for both rows is
+    /// the corpus recording that they agree; a scenario that has to branch on this argument is recording a
+    /// deliberate divergence, and there is nowhere else to hide one.
+    /// </summary>
+    public static TheoryData<string> JoinPolicies =>
+    [
+        FlowchartPolicyKinds.ReachabilityJoin,
+        FlowchartPolicyKinds.DeadPathJoin
+    ];
+
+    /// <summary>
     /// C1 — diamond with one dead branch. A decision takes <c>Left</c>, so the <c>Right</c> branch never runs
     /// and the reconvergence must still fire, exactly once, on the single live inbound.
     /// </summary>
-    [Fact]
-    public async Task C1_DiamondWithOneDeadBranch_JoinFiresOnceOnTheLiveInbound()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C1_DiamondWithOneDeadBranch_JoinFiresOnceOnTheLiveInbound(string joinPolicyKind)
     {
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-decide", ["Left"]),
@@ -63,11 +75,12 @@ public sealed class FlowchartConformanceCorpusTests
     /// round. The join must fire exactly once per iteration: once per <em>pair</em> of arrivals, never once
     /// per arrival, and never carrying an arrival over into the next iteration.
     /// </summary>
-    [Fact]
-    public async Task C2_LoopContainingAJoin_JoinFiresOncePerIteration()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C2_LoopContainingAJoin_JoinFiresOncePerIteration(string joinPolicyKind)
     {
         var gate = new ScriptedPolicy("corpus/gate", "node-head", "node-head", "node-end");
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-head"),
@@ -152,12 +165,13 @@ public sealed class FlowchartConformanceCorpusTests
     /// iteration would fire early and produce a different order here. Three iterations, alternating
     /// left/right/left, so a one-iteration leak in either direction is visible.
     /// </summary>
-    [Fact]
-    public async Task C4_JoinInsideLoop_WithAlternatingLiveBranch_FiresOncePerIterationAfterItsOwnBranch()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C4_JoinInsideLoop_WithAlternatingLiveBranch_FiresOncePerIterationAfterItsOwnBranch(string joinPolicyKind)
     {
         var pick = new ScriptedPolicy("corpus/pick", "node-left", "node-right", "node-left");
         var gate = new ScriptedPolicy("corpus/gate", "node-head", "node-head", "node-end");
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-head"),
@@ -203,10 +217,11 @@ public sealed class FlowchartConformanceCorpusTests
     /// resolves, so the loser still executes; its completion must be absorbed rather than routed, and the
     /// reconvergence must fire once, on the winner.
     /// </summary>
-    [Fact]
-    public async Task C5_FirstWinsRace_LosingBranchStillExecutesButDoesNotRoute()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C5_FirstWinsRace_LosingBranchStillExecutesButDoesNotRoute(string joinPolicyKind)
     {
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-fork"),
@@ -237,10 +252,11 @@ public sealed class FlowchartConformanceCorpusTests
     /// reconvergence: the whole Flowchart ends with the Break outcome and the waiting branch is canceled, so
     /// the node behind the join never runs (#304).
     /// </summary>
-    [Fact]
-    public async Task C6_BreakInsideAParallelFork_EndsTheFlowchartAndCancelsTheWaitingJoin()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C6_BreakInsideAParallelFork_EndsTheFlowchartAndCancelsTheWaitingJoin(string joinPolicyKind)
     {
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-fork"),
@@ -269,10 +285,11 @@ public sealed class FlowchartConformanceCorpusTests
     /// first node never runs, so neither does the node behind it, and the join must still fire on the live
     /// inbound alone rather than wait for a chain that will never move.
     /// </summary>
-    [Fact]
-    public async Task C7_JoinWithOneDeadAndOneLiveInbound_FiresWithoutWaitingOnTheDeadChain()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C7_JoinWithOneDeadAndOneLiveInbound_FiresWithoutWaitingOnTheDeadChain(string joinPolicyKind)
     {
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-fork"),
@@ -304,10 +321,11 @@ public sealed class FlowchartConformanceCorpusTests
     /// travelling: the node <em>after</em> the all-dead join has a second, live inbound, and it must still run
     /// exactly once. A join that stalled here instead of propagating would leave the Flowchart parked forever.
     /// </summary>
-    [Fact]
-    public async Task C8_JoinWithAllInboundsDead_PropagatesInsteadOfStalling()
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C8_JoinWithAllInboundsDead_PropagatesInsteadOfStalling(string joinPolicyKind)
     {
-        var run = await RunAsync(fixture => fixture.NewExecutable(
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
             children:
             [
                 fixture.NewProbeNode("node-decide", ["Live"]),

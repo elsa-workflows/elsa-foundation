@@ -30,6 +30,7 @@ internal static class FlowchartConformanceCorpus
     private static IEnumerable<string> ExecutionIdPool => Enumerable.Range(0, 96).Select(index => $"actexec-{index:D2}");
 
     public static async Task<CorpusRun> RunAsync(
+        string joinPolicyKind,
         Func<FlowchartRuntimeFixture, WorkflowExecutable> buildExecutable,
         params IFlowchartPolicy[] policies)
     {
@@ -37,6 +38,9 @@ internal static class FlowchartConformanceCorpus
             ExecutionIdPool,
             services =>
             {
+                // The A/B is a configuration flip on the registry both semantics already live in — the corpus
+                // runs one engine twice, not two engines.
+                services.AddSingleton(new FlowchartOptions { JoinPolicyKind = joinPolicyKind });
                 foreach (var policy in policies)
                     services.AddSingleton<IFlowchartPolicy>(policy);
                 // A corpus loop runs more drain cycles than the default 64 allows; the limit exists to catch
