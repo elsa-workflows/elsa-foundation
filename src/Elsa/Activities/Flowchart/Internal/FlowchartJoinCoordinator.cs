@@ -95,6 +95,16 @@ public sealed class FlowchartJoinCoordinator
             StringComparer.Ordinal.Equals(arrival.ExecutionScopeId, executionScopeId) &&
             StringComparer.Ordinal.Equals(arrival.IterationKey, iterationKey));
 
+    /// <summary>
+    /// The reachability join predicate: wait while some live child in the same execution scope can still
+    /// reach an inbound source that has not arrived. The walk runs over the graph's <b>forward projection</b>
+    /// (<see cref="FlowchartGraph.CanReachForward"/>), not the whole connection set — ADR 0064 WU-1. Walking
+    /// backward edges too makes every node of a loop reach every other, so the predicate answered "are these
+    /// in the same loop" and was nearly always true inside one; the only thing that kept it from deadlocking
+    /// was the <see cref="FlowchartExecutionState.ActiveChildren"/> filter on <paramref name="executionScopeId"/>,
+    /// which left join accounting entangled with the scope model. Over the forward projection the question is
+    /// the one a join actually asks — can a live token still arrive <em>this iteration</em>.
+    /// </summary>
     private static bool ShouldWaitForImplicitJoin(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
     {
         var inboundConnections = graph.GetInboundConnections(targetNodeId);
@@ -110,7 +120,7 @@ public sealed class FlowchartJoinCoordinator
             if (arrivedSourceIds.Contains(inboundConnection.Source.NodeId))
                 continue;
 
-            if (state.ActiveChildren.Any(child => StringComparer.Ordinal.Equals(child.ExecutionScopeId, executionScopeId) && graph.CanReach(child.NodeId, inboundConnection.Source.NodeId)))
+            if (state.ActiveChildren.Any(child => StringComparer.Ordinal.Equals(child.ExecutionScopeId, executionScopeId) && graph.CanReachForward(child.NodeId, inboundConnection.Source.NodeId)))
                 return true;
         }
 

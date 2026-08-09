@@ -230,7 +230,28 @@ public sealed class FlowchartGraph
         return _connectionMetadata.TryGetValue(connectionId, out var metadata) ? metadata : new FlowchartConnectionMetadata();
     }
 
-    public bool CanReach(string sourceNodeId, string targetNodeId)
+    /// <summary>
+    /// Whether <paramref name="targetNodeId"/> is reachable from <paramref name="sourceNodeId"/> over the
+    /// <b>whole</b> connection set, backward (loop-closing) edges included. Inside a cycle this is nearly
+    /// always true in both directions — every node of a loop reaches every other — so it answers "are these
+    /// two nodes in the same loop", not "can a token still get there". Use it only where a cyclic answer is
+    /// what is wanted; the join predicate uses <see cref="CanReachForward"/>.
+    /// </summary>
+    public bool CanReach(string sourceNodeId, string targetNodeId) =>
+        CanReach(sourceNodeId, targetNodeId, forwardOnly: false);
+
+    /// <summary>
+    /// Whether <paramref name="targetNodeId"/> is reachable from <paramref name="sourceNodeId"/> over the
+    /// graph's <b>forward projection</b>: every connection except those <see cref="IsBackwardEdge"/>
+    /// classifies as backward. The projection is acyclic by construction (removing the DFS back-edge set
+    /// removes every cycle), so this answers the question a join actually asks — can a token at
+    /// <paramref name="sourceNodeId"/> still arrive at <paramref name="targetNodeId"/> <em>within this
+    /// iteration</em> — instead of collapsing to "both are somewhere in the same loop" (ADR 0064).
+    /// </summary>
+    public bool CanReachForward(string sourceNodeId, string targetNodeId) =>
+        CanReach(sourceNodeId, targetNodeId, forwardOnly: true);
+
+    private bool CanReach(string sourceNodeId, string targetNodeId, bool forwardOnly)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
@@ -249,8 +270,12 @@ public sealed class FlowchartGraph
             var outbound = _outboundBySource.TryGetValue(current, out var connections)
                 ? connections
                 : [];
-            foreach (var next in outbound.Select(connection => connection.Target.NodeId))
+            foreach (var connection in outbound)
             {
+                var next = connection.Target.NodeId;
+                if (forwardOnly && _backwardEdges.Contains((current, next)))
+                    continue;
+
                 if (StringComparer.Ordinal.Equals(next, targetNodeId))
                     return true;
 
