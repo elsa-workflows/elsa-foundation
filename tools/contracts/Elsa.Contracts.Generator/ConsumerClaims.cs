@@ -22,10 +22,64 @@ public sealed record ConsumerClaim(
     string Kind,
     string Stability,
     string Statement,
-    IReadOnlyList<string> Tests,
+    IReadOnlyList<ClaimPinReference> Tests,
     string Since,
     // Optional: why the claim exists at all — usually the concrete failure it prevents.
     string? Rationale = null);
+
+/// <summary>
+/// A claim's pin: the test that guards it, and the exact assertion within that test the claim rests on.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="Asserts"/> exists because naming a test is not enough. A published claim once asserted that a
+/// node with no authored outputs produces no output evidence, pinned to a test named
+/// <c>…_is_unenforced_when_the_node_authors_no_output_at_all</c>. That test is about publish-time
+/// ENFORCEMENT; the claim was about runtime CAPTURE. The test passed, the gate stayed green, and the claim
+/// was the opposite of the truth — a consumer following it concluded it could not assert on an unbound
+/// output at all.
+/// </para>
+/// <para>
+/// Quoting the assertion does not prove the claim follows from it — no gate can check entailment. It does
+/// two things that would have caught that defect: it forces whoever writes the claim to read what is
+/// actually asserted, and it fails loudly when the assertion is later edited or removed, which naming the
+/// test alone does not.
+/// </para>
+/// </remarks>
+[JsonConverter(typeof(ClaimPinReferenceConverter))]
+public sealed record ClaimPinReference(string Test, string Asserts);
+
+/// <summary>Accepts the object form only; a bare string is rejected with the reason, not silently upgraded.</summary>
+public sealed class ClaimPinReferenceConverter : JsonConverter<ClaimPinReference>
+{
+    public override ClaimPinReference Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            throw new JsonException(
+                $"Claim pin '{reader.GetString()}' is a bare test name. Pins must name the assertion they rest " +
+                "on: {\"test\": \"…\", \"asserts\": \"…\"}.");
+        }
+
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        var test = root.TryGetProperty("test", out var testValue) ? testValue.GetString() : null;
+        var asserts = root.TryGetProperty("asserts", out var assertsValue) ? assertsValue.GetString() : null;
+
+        if (string.IsNullOrWhiteSpace(test) || string.IsNullOrWhiteSpace(asserts))
+            throw new JsonException("A claim pin requires both 'test' and 'asserts'.");
+
+        return new ClaimPinReference(test, asserts);
+    }
+
+    public override void Write(Utf8JsonWriter writer, ClaimPinReference value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("test", value.Test);
+        writer.WriteString("asserts", value.Asserts);
+        writer.WriteEndObject();
+    }
+}
 
 /// <summary>Vocabulary for <see cref="ConsumerClaim.Kind"/>; a closed set so consumers can branch on it.</summary>
 public static class ConsumerClaimKinds
@@ -62,8 +116,12 @@ public static class ConsumerClaimStability
 /// </remarks>
 public sealed class ConsumerClaimsGate(Diagnostics diagnostics)
 {
+    private TestSourceIndex _sources = null!;
+
     public int Run(string repoRoot, string configuration)
     {
+        _sources = new TestSourceIndex(repoRoot);
+
         var claimsPath = Path.Combine(repoRoot, "docs", "consumer-guide", "claims.json");
         if (!File.Exists(claimsPath))
         {
@@ -107,28 +165,57 @@ public sealed class ConsumerClaimsGate(Diagnostics diagnostics)
             return;
         }
 
-        foreach (var test in claim.Tests)
+        foreach (var reference in claim.Tests)
         {
             // [ConsumerContract] is AllowMultiple: one test can pin more than one claim, which is right when
             // a single behaviour is the evidence for two separate statements. Match against ALL of that
             // test's pins — looking only at the first rejected every claim but one.
             var pinned = pins
-                .Where(candidate => string.Equals(candidate.Method, test, StringComparison.Ordinal))
+                .Where(candidate => string.Equals(candidate.Method, reference.Test, StringComparison.Ordinal))
                 .Select(candidate => candidate.ClaimId)
                 .ToArray();
 
             if (pinned.Length == 0)
             {
                 diagnostics.Error(claimsPath, "ELSACT021",
-                    $"Claim '{claim.Id}' names test '{test}', which does not exist or does not carry [ConsumerContract].");
+                    $"Claim '{claim.Id}' names test '{reference.Test}', which does not exist or does not carry [ConsumerContract].");
+                continue;
             }
-            else if (!pinned.Contains(claim.Id, StringComparer.Ordinal))
+
+            if (!pinned.Contains(claim.Id, StringComparer.Ordinal))
             {
                 diagnostics.Error(claimsPath, "ELSACT021",
-                    $"Claim '{claim.Id}' names test '{test}', but that test pins {string.Join(", ", pinned.Select(id => $"'{id}'"))}.");
+                    $"Claim '{claim.Id}' names test '{reference.Test}', but that test pins {string.Join(", ", pinned.Select(id => $"'{id}'"))}.");
+                continue;
             }
+
+            CheckAssertion(claimsPath, claim, reference);
         }
     }
+
+    /// <summary>Gate A2: the quoted assertion must actually be in the named test's body.</summary>
+    private void CheckAssertion(string claimsPath, ConsumerClaim claim, ClaimPinReference reference)
+    {
+        var body = _sources.MethodBody(reference.Test);
+        if (body is null)
+        {
+            diagnostics.Error(claimsPath, "ELSACT023",
+                $"Claim '{claim.Id}': the source of test '{reference.Test}' could not be located, so its " +
+                "assertion cannot be verified.");
+            return;
+        }
+
+        // Whitespace-insensitive: an assertion wrapped across lines by a formatter is the same assertion.
+        if (!Collapse(body).Contains(Collapse(reference.Asserts), StringComparison.Ordinal))
+        {
+            diagnostics.Error(claimsPath, "ELSACT023",
+                $"Claim '{claim.Id}' rests on assertion `{reference.Asserts}`, which is not in " +
+                $"'{reference.Test}'. Either the assertion moved, or the claim is resting on something the " +
+                "test does not actually check.");
+        }
+    }
+
+    private static string Collapse(string text) => string.Concat(text.Where(character => !char.IsWhiteSpace(character)));
 
     /// <summary>Every <c>[ConsumerContract]</c>-marked method in every built test assembly, read as metadata.</summary>
     private static IReadOnlyList<ClaimPin> DiscoverPins(string repoRoot, string configuration)

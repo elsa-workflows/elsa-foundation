@@ -9,8 +9,8 @@
       "statement": "A JavaScript expression input is parsed as a single expression, not a script: a bare statement such as `var x = 1;` is a syntax error, and multi-statement logic must be wrapped in an IIFE — `(() => { ...; return value; })()` — which is itself an expression.",
       "rationale": "Three benchmarked sessions hit `Unexpected token 'var'` and concluded multi-line JavaScript was impossible. The published `MaxStatements` sandbox option actively implies the opposite, and nothing published the rule.",
       "tests": [
-        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_rejects_a_bare_statement",
-        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_accepts_multi_statement_logic_wrapped_in_an_iife"
+        { "test": "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_rejects_a_bare_statement", "asserts": "Assert.Contains(\"var\", failure.ToString(), StringComparison.OrdinalIgnoreCase)" },
+        { "test": "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.An_expression_input_accepts_multi_statement_logic_wrapped_in_an_iife", "asserts": "Assert.Equal(6, result.GetInt32())" }
       ],
       "since": "1.1.0"
     },
@@ -22,7 +22,7 @@
       "statement": "The `RunJavaScript` activity's script input is the opposite case: the evaluator supplies the function body, so statements and a bare `return` work directly and must not be wrapped in an IIFE.",
       "rationale": "The same source string is legal in one slot and a syntax error in the other; without this pair a consumer generalises the wrong half of the rule.",
       "tests": [
-        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.The_script_evaluator_accepts_statements_and_return_without_a_wrapper"
+        { "test": "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.The_script_evaluator_accepts_statements_and_return_without_a_wrapper", "asserts": "Assert.Equal(\"hello world\", result!.Value.GetString())" }
       ],
       "since": "1.1.0"
     },
@@ -34,8 +34,8 @@
       "statement": "Required-output enforcement is per node and all-or-nothing: a node that authors no output bindings is never checked, and binding a single output makes every required output on that node mandatory — so `isRequired` means \"must be bound if you bind anything here\", not \"the runtime fills this in\".",
       "rationale": "`HttpEndpoint` rejects a missing `RouteData` once `Request` is bound while `WriteHttpResponse` publishes with all four required outputs unbound; that looks like a per-activity difference and is one rule about binding state. `[Output]` defaults `IsRequired` to true, so most published `isRequired: true` values are an unreviewed default — pre-binding an output \"to be safe\" is what turns a working definition into a publish-time 400.",
       "tests": [
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_required_output_is_unenforced_when_the_node_authors_no_output_at_all",
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Binding_one_output_makes_every_required_output_on_that_node_mandatory"
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_required_output_is_unenforced_when_the_node_authors_no_output_at_all", "asserts": "Assert.Empty(executable.RootActivity.OutputCaptures)" },
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Binding_one_output_makes_every_required_output_on_that_node_mandatory", "asserts": "Assert.Contains(\"missing required output target 'Trace'\", exception.Message, StringComparison.Ordinal)" }
       ],
       "since": "1.1.0"
     },
@@ -47,9 +47,9 @@
       "statement": "An HTTP `(route template, method)` pair is exclusive across workflow definitions — a second definition claiming a pair another definition already holds fails the publish — while republishing a definition into the slot it already occupies is exempt, and two definitions may hold the same template under different methods.",
       "rationale": "The exclusivity is what makes a second run of the same authoring script fail where the first succeeded: submitting again creates a NEW definition, and that new definition then collides with the route the first one already claimed.",
       "tests": [
-        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.Throws_WhenAnotherDefinitionAlreadyClaimsTheTemplateAndMethod",
-        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsExclusiveClaimToReplaceTheActivePublicationInItsOwnSlot",
-        "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsDifferentMethods_OnTheSameTemplate_AcrossDefinitions"
+        { "test": "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.Throws_WhenAnotherDefinitionAlreadyClaimsTheTemplateAndMethod", "asserts": "Assert.Equal(\"GET orders/{id}\", exception.Endpoint)" },
+        { "test": "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsExclusiveClaimToReplaceTheActivePublicationInItsOwnSlot", "asserts": "await Validator().ValidateAsync(Snapshot(replacement))" },
+        { "test": "Elsa.Workflows.Runtime.Http.Tests.HttpEndpointRoutingUniquenessValidatorTests.AllowsDifferentMethods_OnTheSameTemplate_AcrossDefinitions", "asserts": "await Validator().ValidateAsync(incoming)" }
       ],
       "since": "1.1.0"
     },
@@ -61,7 +61,7 @@
       "statement": "Submitting a definition whose name already exists creates a second, independent definition — a name is not an identity, and there is no upsert-by-name — so to add a version to an existing definition you must address that definition by id rather than re-submit its name.",
       "rationale": "This is what makes route exclusivity bite on re-runs: running the same authoring script twice produces two definitions, and the second collides with the HTTP route the first already claimed.",
       "tests": [
-        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_with_an_existing_name_creates_a_second_definition"
+        { "test": "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_with_an_existing_name_creates_a_second_definition", "asserts": "Assert.NotEqual(first.DefinitionId, second.DefinitionId)" }
       ],
       "since": "1.1.0"
     },
@@ -73,8 +73,8 @@
       "statement": "An executable artifact id is derived from a hash of execution material only, so two definitions with identical authored behaviour share one artifact id regardless of which definition version, artifact version or source produced them — while any change to execution material (down to an input-binding literal) moves it.",
       "rationale": "A consumer that assumes one artifact id per definition will read another definition's executions as its own; a consumer that assumes the id changes per publish will miss that a no-op republish reuses it.",
       "tests": [
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash",
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_ChangingAnInputBindingLiteralYieldsDifferentHash"
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash", "asserts": "Assert.Equal(first.Identity.ArtifactId, second.Identity.ArtifactId)" },
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests.ArtifactHashIsBehavioralOnly_ChangingAnInputBindingLiteralYieldsDifferentHash", "asserts": "Assert.NotEqual(sourceExecutable.Identity.ArtifactId, changedExecutable.Identity.ArtifactId)" }
       ],
       "since": "1.1.0"
     },
@@ -86,8 +86,8 @@
       "statement": "A captured value's `preview` is capped at 256 characters by default and the capture then carries `truncated: true` alongside the value's real `length` — so an equality assertion against a captured value is only sound after checking `truncated` is false.",
       "rationale": "A benchmarked session asserted equality against a 256-character prefix and read the mismatch as a workflow defect. The cap is a display bound, not a statement about what the workflow produced.",
       "tests": [
-        "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_caps_a_preview_at_the_default_limit_and_declares_the_truncation",
-        "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_of_a_value_within_the_limit_carries_it_whole"
+        { "test": "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_caps_a_preview_at_the_default_limit_and_declares_the_truncation", "asserts": "Assert.Equal(DiagnosticSnapshotLimits.Default.MaxStringLength, snapshot.GetProperty(\"preview\").GetString()!.Length)" },
+        { "test": "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_of_a_value_within_the_limit_carries_it_whole", "asserts": "Assert.False(snapshot.TryGetProperty(\"truncated\", out var truncated) && truncated.GetBoolean())" }
       ],
       "since": "1.1.0"
     },
@@ -99,8 +99,8 @@
       "statement": "A captured JSON value (an `HttpEndpoint`'s `ParsedContent`, for instance) reaches a JavaScript expression under the `args` namespace as a native value — objects, arrays, numbers and booleans walkable with plain `args.name.field[0]` access, no accessor call and no `JSON.parse` — but every such object is frozen, so writing to one throws under the evaluator's strict-mode wrapper instead of being silently dropped.",
       "rationale": "A benchmarked session published a throwaway probe workflow purely to learn this shape. The freezing matters separately: code that mutates its input as a scratch buffer fails at runtime rather than degrading quietly.",
       "tests": [
-        "Elsa.Expressions.JavaScript.Jint.Tests.ExplicitExpressionParametersTests.Evaluates_declared_json_parameters_through_args",
-        "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.Writing_to_a_json_parameter_throws_rather_than_being_silently_dropped"
+        { "test": "Elsa.Expressions.JavaScript.Jint.Tests.ExplicitExpressionParametersTests.Evaluates_declared_json_parameters_through_args", "asserts": "Assert.Equal(\"Ada:3:7\", result.GetString())" },
+        { "test": "Elsa.Expressions.JavaScript.Jint.Tests.MultiStatementAuthoringTests.Writing_to_a_json_parameter_throws_rather_than_being_silently_dropped", "asserts": "Assert.Contains(\"read only\", failure.ToString(), StringComparison.OrdinalIgnoreCase)" }
       ],
       "since": "1.1.0"
     },
@@ -112,7 +112,7 @@
       "statement": "An intrinsic's published `descriptorId` (`elsa.intrinsic.set@1`) *is* the value a node must carry as its required `activityVersionId` — there is nothing to resolve and no catalog lookup to perform, unlike a CLR activity whose version id is assigned server state.",
       "rationale": "A consumer that treats every activityVersionId as server-assigned will look for an intrinsic's id where it cannot exist, then guess.",
       "tests": [
-        "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Set_variable_descriptor_authors_a_set_intrinsic_with_a_variable_target"
+        { "test": "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Set_variable_descriptor_authors_a_set_intrinsic_with_a_variable_target", "asserts": "Assert.Equal(\"elsa.intrinsic.set@1\", setVariable.AuthoringTemplate.ActivityVersionId)" }
       ],
       "since": "1.1.0"
     },
@@ -124,7 +124,7 @@
       "statement": "Intrinsics are contributed by built-in providers rather than persisted, so they appear in `GET /design/activities/catalog` and never in `GET /design/activities/definitions`, which lists persisted definitions only.",
       "rationale": "Enumerating definitions and finding no intrinsic reads as \"this build has none\"; it means the wrong endpoint was asked.",
       "tests": [
-        "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog"
+        { "test": "Elsa.Activities.Design.Api.Tests.IntrinsicAuthoringCatalogTests.Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog", "asserts": "Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == \"Elsa.SetVariable\")" }
       ],
       "since": "1.1.0"
     },
@@ -136,8 +136,8 @@
       "statement": "A variable is addressed two different ways: a `Variable` expression payload — including every authored output target — is `{\"referenceKey\":\"...\",\"declaringScopeId\":\"...\"}` and keys on the **referenceKey**, while the JavaScript read surface `variables.X` / `getVariable('X')` keys on the variable's author-facing **name**.",
       "rationale": "The two are routinely different strings (`orderId` vs `OrderId`). Using the name in a binding, or the reference key in an expression, fails in ways that look like the variable does not exist.",
       "tests": [
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture",
-        "Elsa.Workflows.Runtime.Tests.RuntimeContainerScopeServiceTests.Scoped_variable_envelopes_project_by_name_innermost_scope_wins"
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Leaf_result_projection_output_compiles_a_workflow_scope_variable_capture", "asserts": "Assert.Equal(\"variable:OrderId\", capture.ValueId)" },
+        { "test": "Elsa.Workflows.Runtime.Tests.RuntimeContainerScopeServiceTests.Scoped_variable_envelopes_project_by_name_innermost_scope_wins", "asserts": "Assert.Equal(\"container-value\", envelopes[\"Shadowed\"].InlineValue!.Value.GetString())" }
       ],
       "since": "1.1.0"
     },
@@ -149,8 +149,8 @@
       "statement": "Submit checks structural well-formedness only — every node must carry a non-empty node id and activity version id — and stores whatever else it is given, including a node referencing an activity version that exists nowhere. Publication is the gate that resolves activity versions, enforces required inputs and output bindings, and claims routes.",
       "rationale": "A 2xx from submit says the definition was stored, not that it can run. Treating it as acceptance moves every real failure to publish time, where it arrives without the context of which submit caused it.",
       "tests": [
-        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_accepts_a_node_referencing_an_activity_version_that_does_not_exist",
-        "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_rejects_a_node_without_an_activity_version_id"
+        { "test": "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_accepts_a_node_referencing_an_activity_version_that_does_not_exist", "asserts": "Assert.NotNull(version)" },
+        { "test": "Elsa.Workflows.Design.Persistence.Groundwork.Tests.GroundworkWorkflowDefinitionCommandTests.SubmitWorkflowDefinition_rejects_a_node_without_an_activity_version_id", "asserts": "await Assert.ThrowsAnyAsync<Exception>" }
       ],
       "since": "1.1.0"
     },
@@ -162,7 +162,7 @@
       "statement": "An intrinsic node (`set`, `setOutput`, `finish`, …) writes through the variable frame and produces no output capture, so it contributes no value evidence of its own — assert against the variable's evidence, not against the intrinsic node's.",
       "rationale": "Querying a Set node's value evidence returns nothing, which reads identically to \"the workflow never reached this node\".",
       "tests": [
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Set_intrinsic_targeting_a_declared_workflow_variable_compiles"
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.Set_intrinsic_targeting_a_declared_workflow_variable_compiles", "asserts": "Assert.Empty(setNode.OutputCaptures)" }
       ],
       "since": "1.1.0"
     },
@@ -174,7 +174,7 @@
       "statement": "A value snapshot's `name` is scoped by its `subject` (`ActivityInput` / `ActivityOutput` / `ContainerVariable`) and is not unique within an activity execution — an input and an output on the same execution can both be named `result` — so a filter must match name **and** subject.",
       "rationale": "Filtering on name alone silently asserts against whichever snapshot the projection happened to order first, which passes or fails for reasons unrelated to the workflow.",
       "tests": [
-        "Elsa.Workflows.Runtime.Tests.ActivityExecutionInspectionProjectionTests.A_snapshot_name_repeats_across_subjects_within_one_activity_execution"
+        { "test": "Elsa.Workflows.Runtime.Tests.ActivityExecutionInspectionProjectionTests.A_snapshot_name_repeats_across_subjects_within_one_activity_execution", "asserts": "Assert.Equal(2, byName.Length)" }
       ],
       "since": "1.1.0"
     },
@@ -186,7 +186,7 @@
       "statement": "`?search=` on the activity-definitions endpoint is a case-insensitive **substring** match OR'd across display name, activity type key, category, description and id — so `WriteLine` also returns `WriteLines`, and `Http-Greeting` also returns `JTest-Http-Greeting`. It is a discovery aid, never an identity lookup: to resolve one activity, match `activityTypeKey` exactly on the result set.",
       "rationale": "Treating the first search hit as the intended activity caused a wrong-workflow deletion in a benchmarked session. The endpoint is doing what a palette search should; the mistake is reading a ranked substring result as an identity.",
       "tests": [
-        "Elsa.Activities.Design.Persistence.Groundwork.Tests.GroundworkActivityDefinitionStoreTests.Find_by_filter_search_term_also_returns_longer_names_that_merely_contain_it"
+        { "test": "Elsa.Activities.Design.Persistence.Groundwork.Tests.GroundworkActivityDefinitionStoreTests.Find_by_filter_search_term_also_returns_longer_names_that_merely_contain_it", "asserts": "Assert.Equal([\"a1\", \"a2\"], hits.Select(definition => definition.Id).OrderBy(id => id, StringComparer.Ordinal))" }
       ],
       "since": "1.1.0"
     },
@@ -198,19 +198,26 @@
       "statement": "`DELETE /design/workflows/definitions/{definitionId}` is a design-side **soft** delete: it stamps the definition deleted and removes it from design listings, while its publication stays live and keeps serving its route. To stop a route serving, unpublish the slot with `DELETE /publishing/workflows/{definitionId}/slots/{slotName}`. A permanent delete is refused with 409 while the definition is not soft-deleted.",
       "rationale": "A 204 from the delete plus an empty definition list reads as \"it is gone\", and the still-live route then looks like a caching bug. Design and publication are separate lifecycles; nothing cascades between them.",
       "tests": [
-        "Elsa.Workflows.Design.Api.Tests.Unit.WorkflowLifecycleHandlerTests.Definition_must_pass_through_soft_delete_before_permanent_delete_and_restore_clears_lifecycle_facts"
+        { "test": "Elsa.Workflows.Design.Api.Tests.Unit.WorkflowLifecycleHandlerTests.Definition_must_pass_through_soft_delete_before_permanent_delete_and_restore_clears_lifecycle_facts", "asserts": "Assert.Equal(DateTimeOffset.UnixEpoch, definition.DeletedAt)" }
       ],
       "since": "1.1.0"
     },
     {
-      "id": "evidence.capture-is-opt-in-per-authored-output",
+      "id": "evidence.output-evidence-does-not-require-an-authored-target",
       "scope": "runtime.evidence",
       "kind": "behaviour",
       "stability": "stable",
-      "statement": "Output value evidence is produced only for outputs you actually authored a target for: a node with no authored outputs — a bare root activity being the common case — produces no output captures at all, and so leaves no output evidence to assert against no matter what its contract declares.",
-      "rationale": "Querying a bare root's output evidence returns nothing, which reads as \"the workflow did not run\" rather than \"nothing was asked to be captured\". Bind the output you intend to assert on — but note that binding one opts the whole node into required-output enforcement.",
+      "statement": "Output value evidence is recorded for every result an activity actually produces, whether or not you authored an output target for it — so a `WriteHttpResponse` that binds nothing still yields assertable evidence for its outputs. Authoring an output target is a separate mechanism that writes the value into a workflow variable; do not bind one merely to observe a value, because binding any output opts that whole node into required-output enforcement.",
+      "rationale": "Evidence is projected from what the activity returned; authored targets are projected separately. Conflating them cuts both ways — it invites either pointless binding or the conclusion that an unbound output cannot be asserted on at all.",
       "tests": [
-        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_required_output_is_unenforced_when_the_node_authors_no_output_at_all"
+        {
+          "test": "Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically",
+          "asserts": "Assert.Empty(NewTypedExecutable().RootActivity.OutputCaptures)"
+        },
+        {
+          "test": "Elsa.Activities.Runtime.Tests.WorkflowInvokeActivitySchedulerWorkHandlerTests.HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically",
+          "asserts": "Assert.Equal(5, outputSnapshot.Payload!.Value.GetProperty(\"value\").GetInt32())"
+        }
       ],
       "since": "1.2.0"
     }

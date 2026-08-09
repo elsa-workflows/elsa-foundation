@@ -1,3 +1,4 @@
+using Elsa.ConsumerGuide.Testing;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -39,6 +40,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    [ConsumerContract("evidence.output-evidence-does-not-require-an-authored-target")]
     public async Task HandleAsync_TypedNode_UsesActivationLeaseAndCommitsReturnedResultAtomically()
     {
         var activator = new RecordingTypedActivator();
@@ -56,9 +58,19 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(5, state.Completion?.Result.InlineValue!.Value.GetProperty("length").GetInt32());
         Assert.NotNull(Assert.Single(state.Attempts!).EndedAt);
         var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        // Pins evidence.output-evidence-does-not-require-an-authored-target: this node authors NO output
+        // targets at all, and its produced result is still recorded as evidence with a real payload.
+        // Evidence comes from what the activity RETURNED (the result projections); authored targets are a
+        // separate mechanism that writes values into workflow variables. Conflating the two is what made an
+        // earlier published claim assert the opposite of the truth.
+        Assert.Empty(NewTypedExecutable().RootActivity.OutputCaptures);
         var outputSnapshot = Assert.Single(inspection!.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
         Assert.Equal("length", outputSnapshot.Name);
         Assert.Equal("Int32", outputSnapshot.Type!.Id);
+        // The payload is a DIAGNOSTIC SNAPSHOT of the produced value, not the raw value: {kind, typeName,
+        // value}. A consumer reading `payload` expecting the bare number gets an object.
+        Assert.Equal("number", outputSnapshot.Payload!.Value.GetProperty("kind").GetString());
+        Assert.Equal(5, outputSnapshot.Payload!.Value.GetProperty("value").GetInt32());
         await AssertCompletionWorkAsync();
     }
 
