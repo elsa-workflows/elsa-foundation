@@ -18,8 +18,14 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    private const string PendingTargetFingerprint = "8e475dc3097262805b2913ba9ecab8f4447129c1d5525b0e81aea3aff2b04b97";
-    private const string PendingPlanFingerprint = "81b67c2ff3588bea311e2098286e7ee93b3be6c94c502560f2953837b96e9535";
+    // 2026-08-10 (#1171): the design lane gained the designPostCommitIntent outbox unit, which changes the
+    // physical target. Only the PENDING fingerprint moves; AcceptedTargetFingerprint is the ratified floor at
+    // preview.81 and is deliberately left alone, so this records a head that has moved rather than
+    // re-ratifying anything.
+    private const string PendingTargetFingerprint = "7bd64f04a343338ca50638c7a22876e40639f82526ca4f7ec802dba1ddb315a6";
+    // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit changes the
+    // provisioning plan. AcceptedPlanFingerprint is untouched.
+    private const string PendingPlanFingerprint = "eef4659e98b4d98512da94f729de422a5deae907f522959e18a4dd9a6a9cd5f8";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
