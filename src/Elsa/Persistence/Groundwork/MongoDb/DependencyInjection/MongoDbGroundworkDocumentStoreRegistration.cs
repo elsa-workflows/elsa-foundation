@@ -1,19 +1,17 @@
-using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Scoping;
-using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
 
 /// <summary>
-/// Registers the MongoDB provider leaf. The document store remains unavailable until the startup
-/// initializer has admitted a transaction-capable replica set and the exact deployment-owned schema.
+/// Declares one MongoDB-backed Groundwork target. The document store remains unavailable until the startup
+/// admission has observed a transaction-capable replica set and the exact deployment-owned schema.
 /// </summary>
 public static class MongoDbGroundworkDocumentStoreRegistration
 {
@@ -21,46 +19,43 @@ public static class MongoDbGroundworkDocumentStoreRegistration
         this IServiceCollection services,
         string connectionString,
         string databaseName,
-        bool autoApplyOnStartup = false)
+        bool autoApplyOnStartup = false,
+        string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
-        services.SelectGroundworkProviderLeaf("mongodb");
+        var target = GroundworkTargetNames.Normalize(targetName);
+        services.AddGroundworkStorageComposition();
 
-        if (services.Any(descriptor =>
-                descriptor.ServiceType == typeof(MongoDbGroundworkDocumentStoreInitializer)))
+        // The database name is part of what the target addresses, so it participates in the declaration
+        // fingerprint. Two targets against one cluster but different databases are distinct stores.
+        if (services.DeclareGroundworkTarget(target, ProviderIdentity, $"{connectionString}|{databaseName}")
+            is GroundworkTargetDeclarationResult.AlreadyDeclared)
         {
             return services;
         }
 
-        services.AddGroundworkStorageComposition();
-        services.AddGroundworkStoreSessions();
+        services.AddGroundworkStoreSessions(target);
 
         services.TryAddSingleton<IMongoDbGroundworkRuntimeAdmission, MongoDbGroundworkRuntimeAdmission>();
-        services.AddSingleton(serviceProvider => new MongoDbGroundworkDocumentStoreInitializer(
+        services.AddKeyedSingleton(target, (serviceProvider, key) => new MongoDbGroundworkDocumentStoreInitializer(
+            (string)key,
             connectionString,
             databaseName,
             autoApplyOnStartup,
-            serviceProvider.GetRequiredService<GroundworkStoreSessionSource>(),
+            serviceProvider.GetRequiredKeyedService<GroundworkStoreSessionSource>(key),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             serviceProvider.GetRequiredService<IMongoDbGroundworkRuntimeAdmission>(),
             // Provider composition is also used by source-only tooling hosts that intentionally omit logging.
             serviceProvider.GetService<ILogger<MongoDbGroundworkDocumentStoreInitializer>>()
             ?? NullLogger<MongoDbGroundworkDocumentStoreInitializer>.Instance,
             serviceProvider.GetRequiredService<Elsa.Persistence.Groundwork.Unified.Composition.GroundworkProviderCapabilityAdmission>()));
-        services.AddHostedService(serviceProvider =>
-            serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());
-        services.AddSingleton<IShellInitializer>(serviceProvider =>
-            serviceProvider.GetRequiredService<MongoDbGroundworkDocumentStoreInitializer>());
-        services.AddSingleton(new ShellInitializerRegistration(
-            typeof(MongoDbGroundworkDocumentStoreInitializer),
-            LifecyclePhase.Prepare,
-            Order: 0,
-            RegistrationIndex: -1,
-            IsExplicit: true,
-            Source: $"{nameof(MongoDbGroundworkDocumentStoreRegistration)}.{nameof(AddMongoDbGroundworkDocumentStore)}"));
+        services.AddGroundworkTargetAdmission<MongoDbGroundworkDocumentStoreInitializer>(target);
         services.AddGroundworkSchemaReadinessGuard();
         return services;
     }
+
+    /// <summary>The concrete Groundwork provider leaf identity recorded on every target this leaf declares.</summary>
+    public const string ProviderIdentity = "mongodb";
 }

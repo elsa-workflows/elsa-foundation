@@ -1,7 +1,7 @@
-using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -10,7 +10,6 @@ using Groundwork.MongoDb;
 using Groundwork.MongoDb.Documents;
 using Groundwork.MongoDb.Materialization;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -22,7 +21,7 @@ namespace Elsa.Persistence.Groundwork.MongoDb;
 /// topology and schema only; enable <c>autoApplyOnStartup</c> to apply safe pending operations
 /// automatically.
 /// </summary>
-public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, IShellInitializer
+public sealed class MongoDbGroundworkDocumentStoreInitializer : IGroundworkTargetAdmission
 {
     private readonly string _connectionString;
     private readonly string _databaseName;
@@ -36,6 +35,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
     private bool _initialized;
 
     public MongoDbGroundworkDocumentStoreInitializer(
+        string targetName,
         string connectionString,
         string databaseName,
         bool autoApplyOnStartup,
@@ -44,6 +44,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         ILogger<MongoDbGroundworkDocumentStoreInitializer> logger,
         GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
         : this(
+            targetName,
             connectionString,
             databaseName,
             autoApplyOnStartup,
@@ -56,6 +57,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
     }
 
     internal MongoDbGroundworkDocumentStoreInitializer(
+        string targetName,
         string connectionString,
         string databaseName,
         bool autoApplyOnStartup,
@@ -65,6 +67,7 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         ILogger<MongoDbGroundworkDocumentStoreInitializer> logger,
         GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
     {
+        TargetName = GroundworkTargetNames.Normalize(targetName);
         _connectionString = connectionString;
         _databaseName = databaseName;
         _autoApplyOnStartup = autoApplyOnStartup;
@@ -75,13 +78,10 @@ public sealed class MongoDbGroundworkDocumentStoreInitializer : IHostedService, 
         _capabilityAdmission = capabilityAdmission;
     }
 
-    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
-        EnsureInitializedAsync(cancellationToken);
+    public string TargetName { get; }
 
-    public Task StartAsync(CancellationToken cancellationToken) =>
+    public Task AdmitAsync(CancellationToken cancellationToken = default) =>
         EnsureInitializedAsync(cancellationToken);
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {

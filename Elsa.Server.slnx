@@ -492,6 +492,9 @@
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/Targets/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Targets/Tests/Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj" />
   </Folder>

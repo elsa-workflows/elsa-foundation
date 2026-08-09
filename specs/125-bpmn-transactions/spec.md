@@ -1,5 +1,8 @@
 # 125 — BPMN transactions + cancel events (transaction subprocess, cancel end event, cancel boundary event — riding the spec-124 compensation log) (BPMN Phase 3)
 
+**Status**: Implemented
+**Merged**: PR #970
+
 ## Goal
 
 Let a published BPMN process model a **transaction subprocess**: a subprocess variant whose nested

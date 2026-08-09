@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -39,11 +40,12 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     {
         var services = ConfiguredServices();
 
-        // IDocumentStore is scoped and opens immutable access-bound provider sessions from the static source
-        // published at startup by the initializer (registered as both hosted and shell initializer).
-        Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
-        Assert.Single(services, d => d.ServiceType == typeof(IBoundedDocumentStore));
-        Assert.Single(services, d => d.ServiceType == typeof(GroundworkStoreSessionSource));
+        // IDocumentStore is scoped and opens immutable access-bound provider sessions from the source
+        // published at startup by the target's admission. Each store contract is published twice: once under
+        // the target key, and once unkeyed because this preset declares the default target.
+        AssertPublishedOncePerShape<IDocumentStore>(services);
+        AssertPublishedOncePerShape<IBoundedDocumentStore>(services);
+        AssertPublishedOncePerShape<GroundworkStoreSessionSource>(services);
         Assert.Single(services, d => d.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Contains(services, d => d.ServiceType == typeof(IHostedService));
         Assert.Contains(services, d => d.ServiceType == typeof(IShellInitializer));
@@ -55,7 +57,9 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
                 Phase: LifecyclePhase.Prepare,
                 RegistrationIndex: -1
             }
-            && initializerType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
+            // Admission is registered once under the shared driver type rather than once per provider, so
+            // a host can declare several targets of one provider without a duplicate CLR type.
+            && initializerType == typeof(GroundworkTargetAdmissionInitializer));
     }
 
     [Fact]
@@ -94,7 +98,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = "   " }.ConfigureServices(services);
 
         // The feature still wires a document store; the default connection string is used internally.
-        Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
+        AssertPublishedOncePerShape<IDocumentStore>(services);
         Assert.False(string.IsNullOrWhiteSpace(PostgreSqlGroundworkRuntimePersistenceShellFeature.DefaultConnectionString));
     }
 
@@ -138,11 +142,11 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         feature.ConfigureServices(services);
         feature.ConfigureServices(services);
 
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
+        AssertPublishedOncePerShape<GroundworkStoreSessionSource>(services);
+        AssertPublishedOncePerShape<IBoundedDocumentStore>(services);
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        // Two distinct shell initializers are expected: the document-store initializer (Prepare)
+        // Two distinct shell initializers are expected: the shared target-admission driver (Prepare)
         // and the schema readiness guard (Start). Idempotency means re-registration adds no third.
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkSchemaReadinessTask));
         Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
@@ -189,5 +193,19 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         var property = feature.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         property!.SetValue(feature, value);
+    }
+
+    /// <summary>
+    /// Each store contract is registered once under the target key and once unkeyed, because this preset
+    /// declares the default target and the unkeyed publication is what target-unaware stores resolve.
+    /// </summary>
+    private static void AssertPublishedOncePerShape<TService>(IServiceCollection services)
+    {
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(TService)
+            && descriptor.IsKeyedService
+            && Equals(descriptor.ServiceKey, GroundworkTargetNames.Default));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService);
     }
 }
