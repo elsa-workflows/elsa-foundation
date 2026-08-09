@@ -21,29 +21,7 @@
       "configurationDependent": false,
       "featureId": "FoundationIdentityAspNetCoreIdentity",
       "permissions": [],
-      "requestSchema": {
-        "properties": {
-          "password": {
-            "type": "string"
-          },
-          "returnUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "tenantId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "username": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
+      "requestSchema": null,
       "requestType": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginRequest",
       "responseSchema": null,
       "responseType": null,

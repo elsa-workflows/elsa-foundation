@@ -24,6 +24,78 @@ namespace Elsa.Contracts.Generator;
 /// </remarks>
 public static class OpenApiDocumentBuilder
 {
+    /// <summary>
+    /// Splits the surface into one document per route group, each self-contained (its own
+    /// <c>components/schemas</c>), plus a root document that lists the parts.
+    /// </summary>
+    /// <remarks>
+    /// A single 1.2 MB / ~301k-token document is unusable by anything that cannot stream it, and a consumer
+    /// looking for five endpoints had to scan all of it. Grouping by first route segment matches how a
+    /// consumer actually arrives — it knows it wants to publish, or to query runtime instances — and keeps
+    /// each part near the rest of the corpus in size. Each part is a valid OpenAPI document on its own, so
+    /// existing tooling works against one part without the root.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, JsonObject> BuildParts(
+        IReadOnlyList<OpenApiEndpoint> endpoints,
+        string contractVersion)
+    {
+        var parts = new SortedDictionary<string, JsonObject>(StringComparer.Ordinal);
+        foreach (var group in endpoints.GroupBy(GroupOf))
+            parts[group.Key] = Build(group.OrderBy(endpoint => endpoint.Route, StringComparer.Ordinal).ToArray(), contractVersion);
+
+        return parts;
+    }
+
+    /// <summary>
+    /// The first two literal route segments — `design/workflows`, `publishing/workflows`, `runtime/instances`
+    /// — which is how the API is already organised and how a consumer arrives at it.
+    /// </summary>
+    /// <remarks>
+    /// One segment was too coarse: grouping by `design` alone still produced a 660 KB part, because that
+    /// prefix covers workflows, activities and their drafts. Two segments keeps each part in the same size
+    /// class as the rest of the corpus without inventing a taxonomy the API does not already have.
+    /// </remarks>
+    public static string GroupOf(OpenApiEndpoint endpoint)
+    {
+        var segments = endpoint.Route
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            // A `{parameter}` segment names an instance, not a group, so it never contributes to the name.
+            .TakeWhile(segment => !segment.StartsWith('{'))
+            .Take(2)
+            // `_elsa` prefixes the first-party studio/identity surface; keep it readable as a file name.
+            .Select(segment => segment.TrimStart('_').ToLowerInvariant())
+            .Where(segment => segment.Length > 0)
+            .ToArray();
+
+        return segments.Length == 0 ? "root" : string.Join('-', segments);
+    }
+
+    public static JsonObject BuildRoot(IReadOnlyDictionary<string, JsonObject> parts, string contractVersion)
+    {
+        var partList = new JsonArray();
+        foreach (var (name, document) in parts.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            partList.Add(new JsonObject
+            {
+                ["group"] = name,
+                ["file"] = $"openapi/{name}.json",
+                ["operations"] = document["paths"] is JsonObject paths
+                    ? paths.Sum(path => path.Value is JsonObject item ? item.Count(member => !member.Key.StartsWith("x-", StringComparison.Ordinal)) : 0)
+                    : 0
+            });
+        }
+
+        return new JsonObject
+        {
+            ["schemaVersion"] = contractVersion,
+            ["description"] =
+                "The HTTP surface, split by route group so no single document has to be read whole. Each part "
+                + "in `parts` is a complete OpenAPI 3.1 document with its own components — open only the one "
+                + "you need. `index.json` maps 'VERB /path' straight to its part.",
+            ["parts"] = partList
+        };
+    }
+
     public static JsonObject Build(IReadOnlyList<OpenApiEndpoint> endpoints, string contractVersion)
     {
         var components = new JsonObject();

@@ -1,138 +1,4 @@
 {
-  "activityIndex": [
-    {
-      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
-      "fragment": "Elsa.Activities.Bpmn"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
-      "fragment": "Elsa.Activities.Bpmn"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
-      "fragment": "Elsa.Activities.DispatchWorkflow.Runtime"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Do.Activities.Do",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
-      "fragment": "Elsa.Activities.Flowchart"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.For.Activities.For",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.ForEach.Activities.ForEach",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
-      "fragment": "Elsa.Activities.Graph.Runtime"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
-      "fragment": "Elsa.Activities.Http"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Http.Activities.SendHttpRequest",
-      "fragment": "Elsa.Activities.Http"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
-      "fragment": "Elsa.Activities.Http"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.If.Activities.If",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Parallel.Activities.Parallel",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Break",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Event",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Fault",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.PublishEvent",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.ReadLine",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLines",
-      "fragment": "Elsa.Activities.Primitives"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Cron",
-      "fragment": "Elsa.Activities.Scheduling"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Delay",
-      "fragment": "Elsa.Activities.Scheduling"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Timer",
-      "fragment": "Elsa.Activities.Scheduling"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Scripting.Activities.RunJavaScript",
-      "fragment": "Elsa.Activities.Scripting"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
-      "fragment": "Elsa.Activities.Sequence"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.Switch.Activities.Switch",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Activities.While.Activities.While",
-      "fragment": "Elsa.Activities.ControlFlow"
-    },
-    {
-      "activityTypeKey": "Elsa.Finish",
-      "fragment": "Elsa.Activities.Design.Api"
-    },
-    {
-      "activityTypeKey": "Elsa.SetCorrelationId",
-      "fragment": "Elsa.Activities.Design.Api"
-    },
-    {
-      "activityTypeKey": "Elsa.SetInstanceName",
-      "fragment": "Elsa.Activities.Design.Api"
-    },
-    {
-      "activityTypeKey": "Elsa.SetOutput",
-      "fragment": "Elsa.Activities.Design.Api"
-    },
-    {
-      "activityTypeKey": "Elsa.SetVariable",
-      "fragment": "Elsa.Activities.Design.Api"
-    }
-  ],
   "counts": {
     "activities": 28,
     "features": 100,
@@ -147,7 +13,7 @@
     },
     {
       "assembly": "Elsa.Activities.Bpmn.Interchange",
-      "fingerprint": "sha256:357ab06cf8be235c38b271ebc2f4822496993b1b7ceacce6d166285e83c6fc92"
+      "fingerprint": "sha256:53584a14880b6a533843aa9d524d06943696f6e27e8e5f335e87dcd02cdd7ac4"
     },
     {
       "assembly": "Elsa.Activities.ControlFlow",
@@ -155,7 +21,7 @@
     },
     {
       "assembly": "Elsa.Activities.Design.Api",
-      "fingerprint": "sha256:4443dad9d2c0af85e45269d6d6b29722b7fc3241e43c9a0be690bfe4ff56d8e7"
+      "fingerprint": "sha256:218ba4a2988b24f42a8f95f641fc061448ee63c022d29c718b290ddaf54abae8"
     },
     {
       "assembly": "Elsa.Activities.Design.Reconciliation",
@@ -219,7 +85,7 @@
     },
     {
       "assembly": "Elsa.Agent.Api",
-      "fingerprint": "sha256:b8b11df8d3a9a7154d256d2e956ac8ad69d23942e22bebe5966e5f597aa1188e"
+      "fingerprint": "sha256:7cf4c04c9de875e037eb3db11d1986abcd05e1367d5f1debf93b50c050f3ebba"
     },
     {
       "assembly": "Elsa.Agent.Core",
@@ -235,7 +101,7 @@
     },
     {
       "assembly": "Elsa.Api.Capabilities",
-      "fingerprint": "sha256:8ee8543d2a0d5274406365468cfb6bf2ff92e7097672215e99eb014b0a4b84e9"
+      "fingerprint": "sha256:141fef9f2738396ba5cd3c1dff742eee687969fea83efa9aff27c98d25994b41"
     },
     {
       "assembly": "Elsa.Api.FastEndpoints",
@@ -243,7 +109,7 @@
     },
     {
       "assembly": "Elsa.Attention.Api",
-      "fingerprint": "sha256:03e722cab85fff28fe88c9b174559f45fc33740bb3a4d9c688d53b6feb219f2a"
+      "fingerprint": "sha256:da4ddee5fceecfda06101aa72eab9a90a54b75d7b7171c44656023cdbe9a455a"
     },
     {
       "assembly": "Elsa.Caching.Memory",
@@ -251,7 +117,7 @@
     },
     {
       "assembly": "Elsa.Diagnostics.OpenTelemetry",
-      "fingerprint": "sha256:7497072846600b7ccbc9f6e4dd8a7323b97967658ae5b0b1f2c85c0d47548b9f"
+      "fingerprint": "sha256:04a492f9caae439e3ac0821872194cf03e75cf4844d3a5560e35ca1ac95b255d"
     },
     {
       "assembly": "Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite",
@@ -263,7 +129,7 @@
     },
     {
       "assembly": "Elsa.Diagnostics.StructuredLogs",
-      "fingerprint": "sha256:72fcf0a313e0a47e1176237c697851c2b27b8afa7e31b957bdca6e40464631e2"
+      "fingerprint": "sha256:5b4c954fbbb99f6bba4d5df103109613d163644e0724fe942bc08a490a0c5584"
     },
     {
       "assembly": "Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite",
@@ -279,7 +145,7 @@
     },
     {
       "assembly": "Elsa.Expressions.Api",
-      "fingerprint": "sha256:7f65807c220ba1d63c225c1f92a0b28f03b5cff781b73c9cfe33c9ad24fa66a5"
+      "fingerprint": "sha256:37ea4983ae282f3a4ef76b8becb4d169139a81ef374279612ee970b9c465a75b"
     },
     {
       "assembly": "Elsa.Expressions.Core",
@@ -307,11 +173,11 @@
     },
     {
       "assembly": "Elsa.Foundation.Identity.Api",
-      "fingerprint": "sha256:a71dea7da077d93d8b85de671ebba627fc8ede0fb60b8191f9e4fbe1efe3fe3f"
+      "fingerprint": "sha256:13e316d95de6eba67729bf08ae2c27eec6d6b055e1bfc3176b727ae3fcf3002a"
     },
     {
       "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
-      "fingerprint": "sha256:325c7ba8411465d49f5d7cbdf4c57908f8c757a7e57ab7a5f08272194e584afa"
+      "fingerprint": "sha256:88f836ba34139b4aa5fc45ec25414e98deb8f2401dcefdb4f5200b733f11610c"
     },
     {
       "assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
@@ -351,7 +217,7 @@
     },
     {
       "assembly": "Elsa.Modularity.Api",
-      "fingerprint": "sha256:f856a3010a5e375c5689ae7aae072c02bb8068e0b9e0938eb60da8a3b645bda0"
+      "fingerprint": "sha256:30ecf2daedfeae94b7762ef8b7284ff114cd49ff6ea365b285f21fa553510105"
     },
     {
       "assembly": "Elsa.Modularity.Attention",
@@ -399,7 +265,7 @@
     },
     {
       "assembly": "Elsa.Secrets.Api",
-      "fingerprint": "sha256:23c86f834d4b49b909decbb107e961377b6fbad30669c732f220777f1f7d8b2a"
+      "fingerprint": "sha256:2a33b6712f172b130615864b1e911b1270ca0afd2ce74f974f71e4dcf65a3185"
     },
     {
       "assembly": "Elsa.Secrets.Attention",
@@ -419,7 +285,7 @@
     },
     {
       "assembly": "Elsa.Studio.Preferences.Api",
-      "fingerprint": "sha256:fa05459090e43ce94f7981ac9478241c32c88b4e09f9e41dd5edf55a22215f5a"
+      "fingerprint": "sha256:c2db2bdb85f918881c5d11f036c67738858c548d5bea0727588ebcf235a20fd1"
     },
     {
       "assembly": "Elsa.Studio.Preferences.Persistence.Groundwork",
@@ -431,11 +297,11 @@
     },
     {
       "assembly": "Elsa.Workflows.Dashboard",
-      "fingerprint": "sha256:daa69513928979971018b76cb819903c8d6bc9a0a895b89f6d77adb005c04dbb"
+      "fingerprint": "sha256:f79d80178e7a68bf8f206399874f03880f9cc12e1abcbaafc285b3719e8bfee0"
     },
     {
       "assembly": "Elsa.Workflows.Design.Api",
-      "fingerprint": "sha256:86d73abd44c958c8bc4e21ffb7d51a1f9ff9de3a76077c88cc1a4f445c8a9bc5"
+      "fingerprint": "sha256:b8010a558e039d9de1ddf47974d475ad8bce8f88748876098eb9b278a127a708"
     },
     {
       "assembly": "Elsa.Workflows.Design.JavaScript",
@@ -455,7 +321,7 @@
     },
     {
       "assembly": "Elsa.Workflows.ExecutionEvidence",
-      "fingerprint": "sha256:738c98c278887c342f4a70d01375188f0310357e732c4afa1681b07600e0811a"
+      "fingerprint": "sha256:2d97f2270be03cde64234381c01e4b7c20d5ae6157ac01e01573c2839817d431"
     },
     {
       "assembly": "Elsa.Workflows.Publishing",
@@ -463,7 +329,7 @@
     },
     {
       "assembly": "Elsa.Workflows.Publishing.Api",
-      "fingerprint": "sha256:f6754deaf02cdbcab2efba0793c0cf8bf485c3a8ba0b2b013ffef4cc2c36a311"
+      "fingerprint": "sha256:be409ec53c526a697821ae1e471c961c575a5574adc7633c7013e4bedb4ea897"
     },
     {
       "assembly": "Elsa.Workflows.Publishing.Persistence.Groundwork",
@@ -471,7 +337,7 @@
     },
     {
       "assembly": "Elsa.Workflows.Runtime.Api",
-      "fingerprint": "sha256:3608f8a6f0ef8e72f825c880c4bf7840b025b0326268f113422de5f80422efea"
+      "fingerprint": "sha256:d156052d9f78717b74ce6907df29b2eb396432ce04381a6bc709cd8f028ed007"
     },
     {
       "assembly": "Elsa.Workflows.Runtime.Attention",
@@ -491,7 +357,7 @@
     },
     {
       "assembly": "Elsa.Workflows.Runtime.JavaScript",
-      "fingerprint": "sha256:cc87ae187c5054bf3537ba5da9fef82647db4d0f508a4041b283431f3c4e020b"
+      "fingerprint": "sha256:7e2e48f673e9b0d07cfa1394db740f1f259a04413c6742addf2160954545fb7f"
     },
     {
       "assembly": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
@@ -511,7 +377,7 @@
     },
     {
       "assembly": "Elsa3.Activities.Design.Import",
-      "fingerprint": "sha256:819f612d951827136315fdbd3af49bf893a29b32732c951b43d76c9dbb9a3d25"
+      "fingerprint": "sha256:0cb1a1684fdd6b56c73d9a1ca7616c6f4e1faa1c03c7b57a18fd5d898e09f063"
     },
     {
       "assembly": "Elsa3.Activities.Design.Import.Persistence.Groundwork",
@@ -524,7 +390,8 @@
   ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
   "hosts": "sha256:8d936b8e8569148de4c34b2639c59094b338554b07fc32ff43a3b870985c311b",
-  "openApi": "sha256:542b6cb6dc6e2b8e4aff686f69d5b09c48388a1f8452ca3f44b3d36f14d2ec04",
+  "index": "sha256:b60cda9580d0a00f4ce3cd92d8eeca268683803452d28e4cefec791705805e2b",
+  "openApi": "sha256:1a90661ab4a01d9be5c13d297b6da3d3397f074ae0dfc5830c78f7209c1f651c",
   "schemaVersion": "1.0",
   "submitSchema": "sha256:063d4d085bf85db11b1de13c93aac8fdedf69deb86a2d612a9652a99b85c1d13",
   "vocabularies": "sha256:dd96f671f9acd15b4921cb1eaaaf54a06d50851abe62a72311b6704a5f683cb4"

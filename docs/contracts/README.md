@@ -5,16 +5,44 @@ contributes, published as a build output per [RFC #1191](https://github.com/elsa
 (spec `specs/149-consumer-contract-fragments/`). A consumer pins a commit and *reads* everything needed
 to author workflow definitions against it: no server boot, no endpoint dumps, no source reading.
 
+## How to read this
+
+**Start at [`index.json`](index.json). Resolve the one key you need. Open only that file.**
+
+This corpus is **not meant to be read whole** — it is roughly half a million tokens, several times any
+agent's task budget. It is designed to be *navigated*, and the individual files are small: the median
+fragment is about 2 KB. Reading it whole, or grepping across it, costs more than asking a running server
+the same questions — a benchmarked agent given the corpus without an index cost 209k tokens against a
+163k baseline for an agent given nothing at all. The index is the fix.
+
+`index.json` maps every identifier you might arrive with — an activity type key, an intrinsic id, a
+structure kind, an expression type, a feature id, or a `VERB /path` — to the single file that carries it.
+Resolve, open that file, stop.
+
+```
+"I need Elsa.SetVariable"        → index.json → fragments/Elsa.Activities.Design.Api.json
+"I need POST /publishing/…"      → index.json → openapi/publishing-workflows.json
+"what can a variable be typed?"  → any fragment's expressions.variableTypes, or vocabularies.json
+```
+
 ## Layout
 
 | Path | Content |
 |---|---|
-| `fragments/<Assembly>.json` | One fragment per contributing assembly: feature metadata (id, `dependsOn`, options), activity contracts (inputs with `defaultValue`/`hasStaticDefault`, outputs with `isRequired`, ports, container structure), structure kinds with payload schemas, expression surface (descriptors, JS declarations, script-sandbox globals), engine intrinsics. |
+| `index.json` | **Start here.** Every published identifier → the file that carries it. A few KB. |
+| `fragments/<Assembly>.json` | One fragment per contributing assembly: feature metadata (id, `dependsOn`, options), activity contracts (inputs with `defaultValue`/`hasStaticDefault`, outputs with `isRequired`, ports, container structure), structure kinds with payload schemas, expression surface (descriptors, JS declarations, script-sandbox globals, variable types), engine intrinsics, and the endpoints the assembly provides. |
 | `submit-schema.json` | The workflow-definition submit-body schema — produced by the same handler that serves `GET design/workflows/definitions/submit/schema`. |
-| `openapi.json` | The HTTP surface as an **OpenAPI 3.1** document: every published route, its verb, path parameters, request/response body schemas (hoisted into `components/schemas`), the permissions it accepts (`x-elsa-permissions`) and the assembly that provides it (`x-elsa-assembly`). Readable by any OpenAPI client generator or validator. |
+| `openapi.json` | A small root listing the OpenAPI parts. The surface is split so no one document has to be read whole. |
+| `openapi/<group>.json` | One **complete OpenAPI 3.1 document** per route group (`design-workflows`, `publishing-workflows`, `runtime-workflows`, …), each with its own `components/schemas`: routes, verbs, path and query parameters, body schemas, permissions (`x-elsa-permissions`) and the providing assembly (`x-elsa-assembly`). Any OpenAPI tool reads one part without the root. |
 | `hosts.json` | Which fragments each shipped host (`src/Apps/*`) actually contains, plus the features and expression types it serves — the third term of availability, see below. |
 | `vocabularies.json` | The closed value spaces you must match exactly: the type-alias convention, collection kinds, intrinsic kinds, the `authoredVia` terms, and what each expression type means on the wire. Generated from the product types that define them. **Every value is in wire spelling** — copy it into a submission as published. |
-| `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json`, `hosts.json`, `openapi.json` and `vocabularies.json`. Verify "these contracts match my pinned commit" by string compare. |
+| `manifest.json` | Per-fragment `sha256:` fingerprints, plus fingerprints of `submit-schema.json`, `hosts.json`, `openapi.json`, `vocabularies.json` and `index.json`. Verify "these contracts match my pinned commit" by string compare. Not a navigation aid — that is `index.json`. |
+
+**Endpoint body schemas live in the OpenAPI parts, not in fragments.** A fragment's `endpoints` entry
+carries the route, verb, permissions, declared statuses and the request/response *type names* — which are
+exactly the `components/schemas` keys in the matching OpenAPI part. They were previously inlined in both
+places, which was 93% of the largest fragment (451 KB, of which the intrinsics everyone actually wanted
+were 5 KB).
 
 Deliberately **not** in fragments: assigned activity version ids and availability (`addable`) — server
 state is never published as contract. Resolve version ids at submit time via

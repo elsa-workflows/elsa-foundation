@@ -10,41 +10,9 @@
         "*",
         "studio.preferences.read"
       ],
-      "requestSchema": {
-        "properties": {
-          "namespace": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
+      "requestSchema": null,
       "requestType": "Elsa.Studio.Preferences.Api.Models.GetStudioPreferenceRequest",
-      "responseSchema": {
-        "properties": {
-          "namespace": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "string"
-          },
-          "schemaVersion": {
-            "type": "integer"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "value": true
-        },
-        "required": [
-          "namespace",
-          "schemaVersion",
-          "revision",
-          "value",
-          "updatedAt"
-        ],
-        "type": "object"
-      },
+      "responseSchema": null,
       "responseType": "Elsa.Studio.Preferences.Core.Models.StudioPreferenceDocument",
       "route": "/_elsa/studio/preferences/{namespace}",
       "successStatusCondition": null,
@@ -59,45 +27,9 @@
         "*",
         "studio.preferences.write"
       ],
-      "requestSchema": {
-        "properties": {
-          "namespace": {
-            "type": "string"
-          },
-          "schemaVersion": {
-            "type": "integer"
-          },
-          "value": true
-        },
-        "type": "object"
-      },
+      "requestSchema": null,
       "requestType": "Elsa.Studio.Preferences.Api.Models.PutStudioPreferenceRequest",
-      "responseSchema": {
-        "properties": {
-          "namespace": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "string"
-          },
-          "schemaVersion": {
-            "type": "integer"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "value": true
-        },
-        "required": [
-          "namespace",
-          "schemaVersion",
-          "revision",
-          "value",
-          "updatedAt"
-        ],
-        "type": "object"
-      },
+      "responseSchema": null,
       "responseType": "Elsa.Studio.Preferences.Core.Models.StudioPreferenceDocument",
       "route": "/_elsa/studio/preferences/{namespace}",
       "successStatusCondition": null,

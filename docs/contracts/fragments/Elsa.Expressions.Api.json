@@ -12,47 +12,7 @@
       ],
       "requestSchema": null,
       "requestType": null,
-      "responseSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "displayName": {
-                  "type": "string"
-                },
-                "editingMode": {
-                  "enum": [
-                    "literal",
-                    "text",
-                    "structured",
-                    "reference"
-                  ]
-                },
-                "type": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type",
-                "displayName",
-                "editingMode"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "type": "object"
-      },
+      "responseSchema": null,
       "responseType": "Elsa.Expressions.Api.Models.ExpressionDescriptorsResponse",
       "route": "/expressions/descriptors",
       "successStatusCondition": null,
@@ -69,72 +29,7 @@
       ],
       "requestSchema": null,
       "requestType": null,
-      "responseSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "alias": {
-                  "type": "string"
-                },
-                "category": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "compatibleStorageDriverKeys": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "defaultEditor": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "displayName": {
-                  "type": "string"
-                },
-                "supportedCollectionKinds": {
-                  "items": {
-                    "enum": [
-                      "single",
-                      "array",
-                      "list",
-                      "hashSet",
-                      "dictionary"
-                    ]
-                  },
-                  "type": "array"
-                },
-                "supportsDurability": {
-                  "type": "boolean"
-                },
-                "supportsNull": {
-                  "type": "boolean"
-                }
-              },
-              "required": [
-                "alias",
-                "displayName",
-                "supportedCollectionKinds",
-                "supportsNull",
-                "supportsDurability",
-                "compatibleStorageDriverKeys"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "type": "object"
-      },
+      "responseSchema": null,
       "responseType": "Elsa.Expressions.Api.Models.VariableTypeDescriptorsResponse",
       "route": "/expressions/variable-types",
       "successStatusCondition": null,

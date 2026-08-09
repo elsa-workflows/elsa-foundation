@@ -9,17 +9,7 @@
       "permissions": [
         "*"
       ],
-      "requestSchema": {
-        "properties": {
-          "script": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
+      "requestSchema": null,
       "requestType": "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.RequestModel",
       "responseSchema": null,
       "responseType": null,

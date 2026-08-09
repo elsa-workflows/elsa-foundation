@@ -1,0 +1,561 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Foundation.Identity.Abstractions.Authentication.AuthSession": {
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenFreshness": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "roles",
+          "permissions",
+          "tokenFreshness"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Abstractions.Authentication.TokenRefreshResult": {
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "refreshToken": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Api.Models.AccessTokenResponse": {
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Api.Models.IdentityBootstrapResponse": {
+        "properties": {
+          "ownershipMode": {
+            "enum": [
+              "foundationOwned",
+              "externalOwned",
+              "hybrid"
+            ]
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "challenge": {
+                  "properties": {
+                    "method": {
+                      "default": "GET",
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": null,
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "scheme": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "isDefault": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "displayName",
+                "isDefault",
+                "enabled"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ownershipMode",
+          "providers"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Api.Models.IdentityCapabilitiesResponse": {
+        "properties": {
+          "ownershipMode": {
+            "enum": [
+              "foundationOwned",
+              "externalOwned",
+              "hybrid"
+            ]
+          },
+          "permissions": {
+            "items": {
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "implies": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "displayName",
+                "category",
+                "description",
+                "implies"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "capabilities": {
+                  "properties": {
+                    "canIssueTokens": {
+                      "type": "boolean"
+                    },
+                    "canManageApplications": {
+                      "type": "boolean"
+                    },
+                    "canManageRoles": {
+                      "type": "boolean"
+                    },
+                    "canManageUsers": {
+                      "type": "boolean"
+                    },
+                    "canMapGroups": {
+                      "type": "boolean"
+                    },
+                    "canRefreshTokens": {
+                      "type": "boolean"
+                    },
+                    "canRevokeTokens": {
+                      "type": "boolean"
+                    },
+                    "permissionPropagation": {
+                      "enum": [
+                        "immediateServerSide",
+                        "tokenRefreshBoundary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "canManageUsers",
+                    "canManageRoles",
+                    "canManageApplications",
+                    "canMapGroups",
+                    "canIssueTokens",
+                    "canRefreshTokens",
+                    "canRevokeTokens",
+                    "permissionPropagation"
+                  ],
+                  "type": "object"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "isDefault": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "displayName",
+                "isDefault",
+                "enabled",
+                "capabilities"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ownershipMode",
+          "providers",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest": {
+        "properties": {},
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.Api.Models.RefreshTokenRequest": {
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object"
+      },
+      "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "returnUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/_elsa/identity/bootstrap": {
+      "get": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "getElsaIdentityBootstrap",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.IdentityBootstrapResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    },
+    "/_elsa/identity/capabilities": {
+      "get": {
+        "description": "Requires one of: *, identity.providers.read.",
+        "operationId": "getElsaIdentityCapabilities",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.IdentityCapabilitiesResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi",
+        "x-elsa-permissions": [
+          "*",
+          "identity.providers.read"
+        ]
+      }
+    },
+    "/_elsa/identity/challenge/{provider}": {
+      "get": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "getElsaIdentityChallengeProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    },
+    "/_elsa/identity/login": {
+      "get": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "getElsaIdentityLogin",
+        "responses": {
+          "default": {
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+        "x-elsa-feature-id": "FoundationIdentityAspNetCoreIdentity"
+      },
+      "post": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "postElsaIdentityLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+        "x-elsa-feature-id": "FoundationIdentityAspNetCoreIdentity"
+      }
+    },
+    "/_elsa/identity/logout/{provider}": {
+      "post": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "postElsaIdentityLogoutProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    },
+    "/_elsa/identity/refresh": {
+      "post": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "postElsaIdentityRefresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Foundation.Identity.Abstractions.Authentication.TokenRefreshResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    },
+    "/_elsa/identity/session": {
+      "get": {
+        "description": "No permission is declared for this endpoint.",
+        "operationId": "getElsaIdentitySession",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Foundation.Identity.Abstractions.Authentication.AuthSession"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    },
+    "/_elsa/identity/token": {
+      "get": {
+        "description": "No permission is declared for this endpoint. This endpoint configures itself from host options; the route and authentication shown are this build\u0027s defaults and a host that overrides them serves something else.",
+        "operationId": "getElsaIdentityToken",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Foundation.Identity.Api.Models.AccessTokenResponse"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-allows-anonymous": true,
+        "x-elsa-assembly": "Elsa.Foundation.Identity.Api",
+        "x-elsa-configuration-dependent": true,
+        "x-elsa-feature-id": "FoundationIdentityApi"
+      }
+    }
+  }
+}

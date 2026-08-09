@@ -1,0 +1,831 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportApplyHttpRequest": {
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "selectedSourceVersionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "planId",
+          "selectedSourceVersionIds",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportSelectionRequest": {
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "selectedSourceVersionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "planId",
+          "selectedSourceVersionIds"
+        ],
+        "type": "object"
+      },
+      "Elsa3.Activities.Design.Import.Models.ReusableActivityImportAnalysisPage": {
+        "properties": {
+          "collectionHandle": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportAnalysisPage/properties/items/items/properties/diagnostics/items"
+            },
+            "type": "array"
+          },
+          "isComplete": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "activityDefinitionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityDefinitionVersionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityTypeKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "canApply": {
+                  "type": "boolean"
+                },
+                "dependencies": {
+                  "items": {
+                    "properties": {
+                      "nodeId": {
+                        "type": "string"
+                      },
+                      "ownerSourceVersionId": {
+                        "type": "string"
+                      },
+                      "targetActivityDefinitionVersionId": {
+                        "type": "string"
+                      },
+                      "targetSourceDefinitionId": {
+                        "type": "string"
+                      },
+                      "targetSourceVersionId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "ownerSourceVersionId",
+                      "targetSourceDefinitionId",
+                      "targetSourceVersionId",
+                      "targetActivityDefinitionVersionId",
+                      "nodeId"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "diagnostics": {
+                  "items": {
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "cycle": {
+                        "default": null,
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": [
+                          "array",
+                          "null"
+                        ]
+                      },
+                      "guidance": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "isError": {
+                        "type": "boolean"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "metadata": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": null,
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "path": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "pathSegments": {
+                        "default": null,
+                        "items": {
+                          "properties": {
+                            "identity": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "enum": [
+                                "sourceVersion",
+                                "node",
+                                "dependencySourceDefinition",
+                                "dependencySourceVersion"
+                              ]
+                            },
+                            "location": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "identity"
+                          ],
+                          "type": "object"
+                        },
+                        "type": [
+                          "array",
+                          "null"
+                        ]
+                      },
+                      "severity": {
+                        "enum": [
+                          "info",
+                          "warning",
+                          "error"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "severity",
+                      "code",
+                      "message"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "directStarts": {
+                  "items": {
+                    "properties": {
+                      "activityType": {
+                        "type": "string"
+                      },
+                      "nodeId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "nodeId",
+                      "activityType"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "isReusable": {
+                  "type": "boolean"
+                },
+                "rewrites": {
+                  "items": {
+                    "properties": {
+                      "nodeId": {
+                        "type": "string"
+                      },
+                      "ownerSourceVersionId": {
+                        "type": "string"
+                      },
+                      "targetActivityDefinitionVersionId": {
+                        "type": "string"
+                      },
+                      "targetSourceVersionId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "ownerSourceVersionId",
+                      "nodeId",
+                      "targetSourceVersionId",
+                      "targetActivityDefinitionVersionId"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "sourceDefinitionId": {
+                  "type": "string"
+                },
+                "sourceFingerprint": {
+                  "type": "string"
+                },
+                "sourceVersion": {
+                  "type": "integer"
+                },
+                "sourceVersionId": {
+                  "type": "string"
+                },
+                "workflowDefinitionId": {
+                  "type": "string"
+                },
+                "workflowVersionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sourceDefinitionId",
+                "sourceVersionId",
+                "sourceVersion",
+                "sourceFingerprint",
+                "isReusable",
+                "workflowDefinitionId",
+                "workflowVersionId",
+                "dependencies",
+                "rewrites",
+                "directStarts",
+                "diagnostics"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "processed": {
+            "type": "integer"
+          },
+          "processedDiagnostics": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "totalDiagnostics": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "collectionHandle",
+          "planId",
+          "offset",
+          "limit",
+          "processed",
+          "total",
+          "processedDiagnostics",
+          "totalDiagnostics",
+          "isComplete",
+          "items",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "Elsa3.Activities.Design.Import.Models.ReusableActivityImportReceipt": {
+        "properties": {
+          "accessScope": {
+            "properties": {
+              "tenantId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tenantScope": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "userId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "userId"
+            ],
+            "type": "object"
+          },
+          "collectionHandle": {
+            "type": "string"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "receiptId": {
+            "type": "string"
+          },
+          "selectionFingerprint": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "activityDefinitionDisposition": {
+                  "enum": [
+                    "created",
+                    "reused",
+                    null
+                  ]
+                },
+                "activityDefinitionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityDefinitionNavigationIdentity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityDefinitionVersionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "activityVersionDisposition": {
+                  "enum": [
+                    "created",
+                    "reused",
+                    null
+                  ]
+                },
+                "activityVersionNavigationIdentity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sourceDefinitionId": {
+                  "type": "string"
+                },
+                "sourceVersionId": {
+                  "type": "string"
+                },
+                "workflowDefinitionId": {
+                  "type": "string"
+                },
+                "workflowDisposition": {
+                  "enum": [
+                    "created",
+                    "reused"
+                  ]
+                },
+                "workflowNavigationIdentity": {
+                  "type": "string"
+                },
+                "workflowVersionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sourceDefinitionId",
+                "sourceVersionId",
+                "workflowDefinitionId",
+                "workflowVersionId",
+                "workflowDisposition",
+                "workflowNavigationIdentity"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "applied",
+              "alreadyImported"
+            ]
+          }
+        },
+        "required": [
+          "receiptId",
+          "collectionHandle",
+          "planId",
+          "idempotencyKey",
+          "selectionFingerprint",
+          "accessScope",
+          "status",
+          "completedAt",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "Elsa3.Activities.Design.Import.Models.ReusableActivityImportSelectionReadiness": {
+        "properties": {
+          "addedDependencySourceVersionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "collectionHandle": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "cycle": {
+                  "default": null,
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "guidance": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "isError": {
+                  "type": "boolean"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "default": null,
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "path": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pathSegments": {
+                  "default": null,
+                  "items": {
+                    "properties": {
+                      "identity": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "sourceVersion",
+                          "node",
+                          "dependencySourceDefinition",
+                          "dependencySourceVersion"
+                        ]
+                      },
+                      "location": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "identity"
+                    ],
+                    "type": "object"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "severity": {
+                  "enum": [
+                    "info",
+                    "warning",
+                    "error"
+                  ]
+                }
+              },
+              "required": [
+                "severity",
+                "code",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "expandedSourceVersionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isReady": {
+            "type": "boolean"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "requestedSourceVersionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collectionHandle",
+          "planId",
+          "requestedSourceVersionIds",
+          "expandedSourceVersionIds",
+          "addedDependencySourceVersionIds",
+          "isReady",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "Elsa3.Activities.Design.Import.Models.ReusableActivityImportUploadResult": {
+        "properties": {
+          "collectionHandle": {
+            "type": "string"
+          },
+          "contentLength": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceVersionCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "collectionHandle",
+          "createdAt",
+          "expiresAt",
+          "sourceVersionCount",
+          "contentLength"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/migration/elsa3/reusable-activities/collections": {
+      "post": {
+        "description": "Requires one of: *, elsa3-import.manage.",
+        "operationId": "postMigrationElsa3ReusableactivitiesCollections",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportUploadResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa3.Activities.Design.Import",
+        "x-elsa-feature-id": "Elsa3ImportJsonActivities",
+        "x-elsa-permissions": [
+          "*",
+          "elsa3-import.manage"
+        ]
+      }
+    },
+    "/migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis": {
+      "get": {
+        "description": "Requires one of: *, elsa3-import.read.",
+        "operationId": "getMigrationElsa3ReusableactivitiesCollectionsCollectionHandleAnalysis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionHandle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportAnalysisPage"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa3.Activities.Design.Import",
+        "x-elsa-feature-id": "Elsa3ImportJsonActivities",
+        "x-elsa-permissions": [
+          "*",
+          "elsa3-import.read"
+        ]
+      }
+    },
+    "/migration/elsa3/reusable-activities/collections/{collectionHandle}/apply": {
+      "post": {
+        "description": "Requires one of: *, elsa3-import.manage.",
+        "operationId": "postMigrationElsa3ReusableactivitiesCollectionsCollectionHandleApply",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionHandle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportApplyHttpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportReceipt"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa3.Activities.Design.Import",
+        "x-elsa-feature-id": "Elsa3ImportJsonActivities",
+        "x-elsa-permissions": [
+          "*",
+          "elsa3-import.manage"
+        ]
+      }
+    },
+    "/migration/elsa3/reusable-activities/collections/{collectionHandle}/selection": {
+      "post": {
+        "description": "Requires one of: *, elsa3-import.read.",
+        "operationId": "postMigrationElsa3ReusableactivitiesCollectionsCollectionHandleSelection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionHandle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportSelectionReadiness"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa3.Activities.Design.Import",
+        "x-elsa-feature-id": "Elsa3ImportJsonActivities",
+        "x-elsa-permissions": [
+          "*",
+          "elsa3-import.read"
+        ]
+      }
+    },
+    "/migration/elsa3/reusable-activities/imports/{idempotencyKey}": {
+      "get": {
+        "description": "Requires one of: *, elsa3-import.read.",
+        "operationId": "getMigrationElsa3ReusableactivitiesImportsIdempotencyKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idempotencyKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa3.Activities.Design.Import.Models.ReusableActivityImportReceipt"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa3.Activities.Design.Import",
+        "x-elsa-feature-id": "Elsa3ImportJsonActivities",
+        "x-elsa-permissions": [
+          "*",
+          "elsa3-import.read"
+        ]
+      }
+    }
+  }
+}

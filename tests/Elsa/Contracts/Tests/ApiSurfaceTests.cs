@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Contracts.Generator;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Reader;
@@ -27,24 +28,74 @@ public sealed class ApiSurfaceTests
 
     private static string DocumentPath() => Path.Combine(ContractsRoot(), "openapi.json");
 
-    private static JsonDocument Raw() => JsonDocument.Parse(File.ReadAllBytes(DocumentPath()));
+    private static IReadOnlyList<string> PartPaths() =>
+        Directory.EnumerateFiles(Path.Combine(ContractsRoot(), "openapi"), "*.json")
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// The surface is published as one document per route group, so assertions about "the API" have to
+    /// span the parts. Merging them here keeps each test about the contract rather than about the split.
+    /// </summary>
+    private static JsonDocument Raw()
+    {
+        var paths = new JsonObject();
+        var components = new JsonObject();
+
+        foreach (var partPath in PartPaths())
+        {
+            var part = JsonNode.Parse(File.ReadAllText(partPath))!.AsObject();
+            foreach (var path in part["paths"]?.AsObject() ?? [])
+                paths[path.Key] = path.Value?.DeepClone();
+            foreach (var schema in part["components"]?["schemas"]?.AsObject() ?? [])
+                components[schema.Key] ??= schema.Value?.DeepClone();
+        }
+
+        return JsonDocument.Parse(new JsonObject
+        {
+            ["paths"] = paths,
+            ["components"] = new JsonObject { ["schemas"] = components }
+        }.ToJsonString());
+    }
 
     /// <summary>
     /// Parsed by the real reader, not by our own assumptions: a document our writer is happy with but
     /// consumer tooling rejects would be worse than publishing nothing.
     /// </summary>
     [Fact]
-    public void The_published_document_parses_as_valid_openapi()
+    public void Every_published_part_parses_as_a_valid_standalone_openapi_document()
     {
-        using var stream = new MemoryStream(File.ReadAllBytes(DocumentPath()));
-        var result = OpenApiDocument.Load(stream, "json");
+        var parts = PartPaths();
+        Assert.NotEmpty(parts);
 
-        Assert.NotNull(result.Document);
-        var errors = result.Diagnostic?.Errors ?? [];
-        Assert.True(errors.Count == 0,
-            "docs/contracts/openapi.json is not a valid OpenAPI document: " +
-            string.Join("; ", errors.Select(error => $"{error.Pointer}: {error.Message}")));
-        Assert.NotEmpty(result.Document!.Paths);
+        // EVERY part, not the merged whole: the promise is that a consumer can open one part and hand it
+        // straight to its tooling without the root and without the siblings.
+        foreach (var partPath in parts)
+        {
+            using var stream = new MemoryStream(File.ReadAllBytes(partPath));
+            var result = OpenApiDocument.Load(stream, "json");
+
+            Assert.NotNull(result.Document);
+            var errors = result.Diagnostic?.Errors ?? [];
+            Assert.True(errors.Count == 0,
+                $"{Path.GetFileName(partPath)} is not a valid OpenAPI document: " +
+                string.Join("; ", errors.Select(error => $"{error.Pointer}: {error.Message}")));
+            Assert.NotEmpty(result.Document!.Paths);
+        }
+    }
+
+    /// <summary>The root is an index of the parts, not a document — every part it lists must exist.</summary>
+    [Fact]
+    public void The_root_lists_every_published_part()
+    {
+        using var root = JsonDocument.Parse(File.ReadAllBytes(DocumentPath()));
+        var listed = root.RootElement.GetProperty("parts").EnumerateArray()
+            .Select(part => part.GetProperty("file").GetString()!)
+            .ToArray();
+
+        Assert.Equal(PartPaths().Count, listed.Length);
+        foreach (var file in listed)
+            Assert.True(File.Exists(Path.Combine(ContractsRoot(), file)), $"openapi.json lists '{file}', which does not exist.");
     }
 
     /// <summary>

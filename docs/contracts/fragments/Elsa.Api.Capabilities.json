@@ -12,55 +12,7 @@
       ],
       "requestSchema": null,
       "requestType": null,
-      "responseSchema": {
-        "properties": {
-          "capabilities": {
-            "items": {
-              "properties": {
-                "contractVersion": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "links": {
-                  "items": {
-                    "properties": {
-                      "href": {
-                        "type": "string"
-                      },
-                      "rel": {
-                        "type": "string"
-                      },
-                      "templated": {
-                        "default": false,
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "rel",
-                      "href"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "id",
-                "contractVersion",
-                "links"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "capabilities"
-        ],
-        "type": "object"
-      },
+      "responseSchema": null,
       "responseType": "Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument",
       "route": "/capabilities",
       "successStatusCondition": null,

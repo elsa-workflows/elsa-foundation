@@ -65,7 +65,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var featureIndex = FeatureIndex.Build(assemblyPaths, diagnostics);
         var projector = new FragmentProjector(diagnostics, featureIndex);
         var fragments = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
-        var activityIndex = new List<ActivityIndexEntry>();
+        var projectedFragments = new SortedDictionary<string, ContractFragment>(StringComparer.Ordinal);
         var featureIdsByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var expressionTypesByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var apiEndpoints = new List<OpenApiEndpoint>();
@@ -91,11 +91,12 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             if (!fragment.HasContributions)
                 continue;
 
-            fragments.Add(fragment.Assembly, DeterministicJson.SerializeToBytes(fragment));
-            activityIndex.AddRange(fragment.Activities
-                .Select(activity => new ActivityIndexEntry(activity.ActivityTypeKey, fragment.Assembly)));
-            activityIndex.AddRange(fragment.Intrinsics
-                .Select(intrinsic => new ActivityIndexEntry(intrinsic.ActivityTypeKey, fragment.Assembly)));
+            // Serialize WITHOUT the endpoint body schemas. They are published once, in openapi.json's
+            // components, and embedding them here too was 93% of the largest fragment (451 KB, of which
+            // intrinsics were 5 KB). The endpoint entry keeps its request/response TYPE names, which are
+            // exactly the component keys, so the schema is one hop away instead of duplicated 95 times.
+            fragments.Add(fragment.Assembly, DeterministicJson.SerializeToBytes(WithoutEndpointSchemas(fragment)));
+            projectedFragments.Add(fragment.Assembly, fragment);
             featureIdsByFragment[fragment.Assembly] = fragment.Features.Select(feature => feature.Id).ToArray();
             expressionTypesByFragment[fragment.Assembly] = fragment.Expressions?.Descriptors
                 .Select(descriptor => descriptor.Type).ToArray() ?? [];
@@ -132,8 +133,20 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var hostsIndex = BuildHostsIndex(hostAssemblyPaths, featureIdsByFragment, expressionTypesByFragment);
         var hostsBytes = DeterministicJson.SerializeToBytes(hostsIndex);
 
-        var openApiDocument = OpenApiDocumentBuilder.Build(apiEndpoints, ContractFragment.CurrentSchemaVersion);
-        var apiBytes = DeterministicJson.SerializeToBytes(openApiDocument);
+        var openApiParts = OpenApiDocumentBuilder.BuildParts(apiEndpoints, ContractFragment.CurrentSchemaVersion);
+        var openApiRoot = OpenApiDocumentBuilder.BuildRoot(openApiParts, ContractFragment.CurrentSchemaVersion);
+        var apiBytes = DeterministicJson.SerializeToBytes(openApiRoot);
+        var openApiPartBytes = openApiParts.ToDictionary(
+            part => part.Key,
+            part => DeterministicJson.SerializeToBytes(part.Value),
+            StringComparer.Ordinal);
+
+        var indexBytes = DeterministicJson.SerializeToBytes(ContractsIndexBuilder.Build(
+            projectedFragments,
+            apiEndpoints.ToDictionary(
+                endpoint => $"{endpoint.Verb} {endpoint.Route}",
+                endpoint => $"openapi/{OpenApiDocumentBuilder.GroupOf(endpoint)}.json",
+                StringComparer.Ordinal)));
 
         var vocabularyBytes = DeterministicJson.SerializeToBytes(VocabularyProjector.Project());
 
@@ -147,10 +160,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             Vocabularies: DeterministicJson.Fingerprint(vocabularyBytes),
             Counts: new ContractsManifestCounts(
                 fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics),
-            ActivityIndex: activityIndex
-                .OrderBy(entry => entry.ActivityTypeKey, StringComparer.Ordinal)
-                .ThenBy(entry => entry.Fragment, StringComparer.Ordinal)
-                .ToArray());
+            Index: DeterministicJson.Fingerprint(indexBytes));
 
         var fragmentsDirectory = Path.Combine(outputDirectory, "fragments");
         if (Directory.Exists(fragmentsDirectory))
@@ -159,7 +169,13 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             DeterministicJson.WriteFile(Path.Combine(fragmentsDirectory, name + ".json"), bytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "submit-schema.json"), submitSchemaBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "hosts.json"), hostsBytes);
+        var openApiDirectory = Path.Combine(outputDirectory, "openapi");
+        if (Directory.Exists(openApiDirectory))
+            Directory.Delete(openApiDirectory, recursive: true);
+        foreach (var (group, bytes) in openApiPartBytes.OrderBy(part => part.Key, StringComparer.Ordinal))
+            DeterministicJson.WriteFile(Path.Combine(openApiDirectory, group + ".json"), bytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "openapi.json"), apiBytes);
+        DeterministicJson.WriteFile(Path.Combine(outputDirectory, "index.json"), indexBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "vocabularies.json"), vocabularyBytes);
         DeterministicJson.WriteFile(Path.Combine(outputDirectory, "manifest.json"), DeterministicJson.SerializeToBytes(manifest));
 
@@ -240,6 +256,23 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
     /// Contribution detection happens by projecting — a project with nothing to declare yields no fragment,
     /// so absence stays meaningful without any opt-in flag to forget (spec FR-001 completeness rule).
     /// </summary>
+    /// <summary>
+    /// Drops the inline endpoint body schemas before a fragment is written.
+    /// </summary>
+    /// <remarks>
+    /// Navigation cost, not content: a benchmarked contracts-equipped agent cost MORE than one with no
+    /// contracts at all, because it had to search a corpus it could not read. The median fragment is 3 KB;
+    /// the outliers were 450 KB, and in every case the bulk was endpoint request/response schemas that
+    /// <c>openapi.json</c> already publishes in <c>components/schemas</c>. Removing the duplicate keeps the
+    /// fragment about the assembly's authoring surface, which is what a consumer opens it for.
+    /// </remarks>
+    private static ContractFragment WithoutEndpointSchemas(ContractFragment fragment) => fragment with
+    {
+        Endpoints = fragment.Endpoints
+            .Select(endpoint => endpoint with { RequestSchema = null, ResponseSchema = null })
+            .ToArray()
+    };
+
     public static IEnumerable<string> EnumerateContractProjects(string sourceRoot) =>
         Directory.EnumerateFiles(sourceRoot, "*.csproj", SearchOption.AllDirectories)
             .Where(path => !RelativeTo(sourceRoot, path).StartsWith("Apps" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))

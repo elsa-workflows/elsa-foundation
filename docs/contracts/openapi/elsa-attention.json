@@ -1,0 +1,217 @@
+{
+  "components": {
+    "schemas": {
+      "Elsa.Attention.Core.AttentionAggregationResult": {
+        "properties": {
+          "contributors": {
+            "items": {
+              "properties": {
+                "contributorId": {
+                  "type": "string"
+                },
+                "detail": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "diagnosticDestination": {
+                  "default": null,
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "label"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "errorCode": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "evaluatedAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "isTruncated": {
+                  "type": "boolean"
+                },
+                "items": {
+                  "items": {
+                    "properties": {
+                      "correlations": {
+                        "items": {
+                          "properties": {
+                            "kind": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "count": {
+                        "type": "integer"
+                      },
+                      "destination": {
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "label"
+                        ],
+                        "type": "object"
+                      },
+                      "generation": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "lastObservedAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "occurredAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "sensitivity": {
+                        "enum": [
+                          "metadata",
+                          "restricted"
+                        ]
+                      },
+                      "severity": {
+                        "enum": [
+                          "critical",
+                          "warning",
+                          "info"
+                        ]
+                      },
+                      "summary": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "generation",
+                      "severity",
+                      "title",
+                      "occurredAt",
+                      "lastObservedAt",
+                      "count",
+                      "destination",
+                      "correlations",
+                      "sensitivity"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "enum": [
+                    "ready",
+                    "forbidden",
+                    "unavailable",
+                    "timedOut",
+                    "failed"
+                  ]
+                },
+                "totalCount": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "contributorId",
+                "displayName",
+                "status",
+                "evaluatedAt",
+                "totalCount",
+                "isTruncated",
+                "items"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "contributors"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from the built assemblies at this commit. Success statuses appear only where an endpoint declares them; an operation without a declared status documents its body under \u0060default\u0060 rather than asserting a guessed 200. Permissions are published as \u0060x-elsa-permissions\u0060, and the providing assembly/feature as \u0060x-elsa-assembly\u0060/\u0060x-elsa-feature-id\u0060 so operations can be intersected with hosts.json exactly like features and expression types.",
+    "title": "Elsa HTTP API",
+    "version": "1.2.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/_elsa/attention/items": {
+      "get": {
+        "description": "Requires one of: *.",
+        "operationId": "getElsaAttentionItems",
+        "responses": {
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Elsa.Attention.Core.AttentionAggregationResult"
+                }
+              }
+            },
+            "description": "Success. This endpoint does not declare its success status, so the specific code is not published."
+          }
+        },
+        "x-elsa-assembly": "Elsa.Attention.Api",
+        "x-elsa-feature-id": "AttentionApi",
+        "x-elsa-permissions": [
+          "*"
+        ]
+      }
+    }
+  }
+}
