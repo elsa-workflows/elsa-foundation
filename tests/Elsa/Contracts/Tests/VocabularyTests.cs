@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Contracts.Generator;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Publishing.Core.Models;
 using Xunit;
 
 namespace Elsa.Contracts.Tests;
@@ -168,6 +169,24 @@ public sealed class VocabularyTests
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The default slot name is duplicated into the generator rather than pulled in by project reference;
+    /// this is what stops the two drifting. A consumer that cannot name the default slot cannot call the
+    /// unpublish endpoint the claims prescribe as the remedy for an exclusive route.
+    /// </summary>
+    [Fact]
+    public void The_published_default_slot_name_is_the_one_publication_actually_uses()
+    {
+        using var raw = Raw();
+
+        var defaultSlotName = typeof(PublicationRecord)
+            .GetConstructors().Single()
+            .GetParameters().Single(parameter => parameter.Name == "SlotName")
+            .DefaultValue as string;
+
+        Assert.Equal(defaultSlotName, raw.RootElement.GetProperty("publication").GetProperty("defaultSlotName").GetString());
     }
 
     [Fact]

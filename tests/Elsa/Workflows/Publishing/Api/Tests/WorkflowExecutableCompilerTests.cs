@@ -828,6 +828,39 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains("missing required output target 'Trace'", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Pins <c>publishing.output-to-variable-types-are-not-checked</c>. A benchmarked consumer looked for a
+    /// compatibility rule between an output's type and the variable alias receiving it, found none, and
+    /// guessed — correctly, because nothing checks. A conversion plan is resolved ONLY when the author
+    /// requests one; otherwise the value lands in the variable slot as-is.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("publishing.output-to-variable-types-are-not-checked")]
+    public void An_output_binds_to_a_variable_of_an_unrelated_type_without_complaint()
+    {
+        var projection = new ActivityResultProjectionContract(
+            "Value",
+            "value",
+            new ValueTypeDescriptor("Elsa.Http.Core.Models.HttpRequestModel"),
+            isRequired: false,
+            policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
+        var outputTarget = new WorkflowArgumentState(
+            "Value",
+            new ArgumentValue(
+                JsonSerializer.SerializeToElement(new { referenceKey = "note", declaringScopeId = "workflow" }),
+                "Variable"),
+            null, null, null, null);
+
+        var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
+            "read-value",
+            [projection],
+            [outputTarget],
+            // A String variable receiving an HttpRequestModel output: no conversion authored, no complaint.
+            [new("note", "Note", new TypeReference("String"), null, null)]);
+
+        Assert.Null(captures["Value"].ConversionPlan);
+    }
+
     private static RuntimeOutputCaptureCompiler LeafOutputCompiler() =>
         new(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
 
@@ -2386,6 +2419,41 @@ public sealed class WorkflowExecutableCompilerTests
                     policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement("test.boundary", "test"));
+    }
+
+    /// <summary>
+    /// Pins how an authored input declares expression parameters — the `args` surface. A benchmarked
+    /// session found `args` documented but unauthorable: the published claim said captured values arrive
+    /// "under the args namespace", nothing showed how to declare them, and all three sessions routed around
+    /// it via a workflow variable. They can be declared: the input's `value` may be a portable expression
+    /// DEFINITION object rather than a bare source string.
+    /// </summary>
+    [Fact]
+    [ConsumerContract("javascript.args-are-declared-by-a-portable-expression-definition")]
+    public async Task An_input_value_may_be_a_portable_expression_definition_that_declares_parameters()
+    {
+        // Serialized from the real type so this pin cannot encode a shape the server would not accept —
+        // including the polymorphic `kind` discriminator every parameter binding requires.
+        var definition = JsonSerializer.SerializeToElement(new Elsa.Expressions.Core.Models.ExpressionDefinition(
+            "JavaScript",
+            "args.greeting + '!'",
+            new TypeReference("String"),
+            new Dictionary<string, Elsa.Expressions.Core.Models.ExpressionParameterBinding>
+            {
+                ["greeting"] = new Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding(
+                    JsonSerializer.SerializeToElement("hello"))
+            },
+            JsonSerializer.SerializeToElement(new { }),
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1));
+        var authored = new WorkflowArgumentState("Text", new ArgumentValue(definition, "JavaScript"), null, null, null, null);
+        var compiler = Compiler(WorkflowVersion(new ActivityNode("write-one", _writeLineActivity.Id, [authored], [])));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.RootActivity.InputBindings["Text"];
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        // The declared parameter survives compilation, which is what makes `args.greeting` resolvable.
+        Assert.Equal(["greeting"], binding.Expression!.Parameters.Keys);
     }
 
     private static WorkflowArgumentState Text(string value) =>

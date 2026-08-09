@@ -244,7 +244,14 @@ public sealed record ContractsManifest(
     string Hosts,
     string OpenApi,
     string Vocabularies,
-    ContractsManifestCounts Counts);
+    ContractsManifestCounts Counts,
+    // activityTypeKey -> the fragment file that describes it. A consumer that knows the key it wants had to
+    // grep all 95 fragments to find it — Elsa.SetVariable lives in Elsa.Activities.Design.Api.json, a name
+    // that reads like an API-surface fragment. Intrinsics are included, keyed the same way.
+    IReadOnlyList<ActivityIndexEntry>? ActivityIndex = null);
+
+/// <summary>Where to find the contract for an activity type key, without opening every fragment.</summary>
+public sealed record ActivityIndexEntry(string ActivityTypeKey, string Fragment);
 
 public sealed record FragmentFingerprint(string Assembly, string Fingerprint);
 

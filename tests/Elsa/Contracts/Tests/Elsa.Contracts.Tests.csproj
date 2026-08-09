@@ -20,6 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="../../../../tools/contracts/Elsa.Contracts.Generator/Elsa.Contracts.Generator.csproj" />
     <!-- Representative-host surface for the equivalence tests: activities, structures, expressions, intrinsics. -->
+    <!-- Pins the duplicated default slot name in VocabularyProjector against the type that owns it. -->
+    <ProjectReference Include="../../../../src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="../../../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
     <ProjectReference Include="../../../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />

@@ -95,7 +95,7 @@ public static class OpenApiDocumentBuilder
                     ["required"] = true,
                     ["content"] = new JsonObject
                     {
-                        ["application/json"] = new JsonObject { ["schema"] = Reference(requestType, request, components) }
+                        ["application/json"] = new JsonObject { ["schema"] = Reference(requestType, request, components, PathParameterNames(parameters)) }
                     }
                 };
         }
@@ -266,17 +266,63 @@ public static class OpenApiDocumentBuilder
     /// Registers the schema under <c>components/schemas</c> (once per body type) and returns a reference
     /// to it, re-prefixing the schema's own root-relative pointers so they still resolve.
     /// </summary>
-    private static JsonObject Reference(string typeName, JsonElement schema, JsonObject components)
+    private static JsonObject Reference(
+        string typeName,
+        JsonElement schema,
+        JsonObject components,
+        IReadOnlySet<string>? boundFromRoute = null)
     {
         var componentName = ToComponentName(typeName);
         if (components[componentName] is null)
         {
             var node = JsonNode.Parse(schema.GetRawText())!;
             RewritePointers(node, $"#/components/schemas/{componentName}/");
+            if (boundFromRoute is { Count: > 0 })
+                RemoveRouteBoundProperties(node, boundFromRoute);
             components[componentName] = NormalizeBooleanSchemas(node);
         }
 
         return new JsonObject { ["$ref"] = $"#/components/schemas/{componentName}" };
+    }
+
+    private static IReadOnlySet<string> PathParameterNames(JsonArray parameters) =>
+        parameters
+            .Where(parameter => parameter?["in"]?.GetValue<string>() == "path")
+            .Select(parameter => parameter?["name"]?.GetValue<string>())
+            .OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Drops properties the binder fills from the route, so they are not also demanded in the body.
+    /// </summary>
+    /// <remarks>
+    /// <c>POST /publishing/workflows/{versionId}/publish</c> published <c>versionId</c> as a REQUIRED body
+    /// property while the server accepts <c>{}</c> — the value comes from the path. A consumer following the
+    /// document sends a field that is ignored, and one validating against it rejects the body the server
+    /// actually wants. The parameter is still declared, once, in <c>parameters</c>.
+    /// </remarks>
+    private static void RemoveRouteBoundProperties(JsonNode node, IReadOnlySet<string> boundFromRoute)
+    {
+        if (node is not JsonObject schema)
+            return;
+
+        if (schema["properties"] is JsonObject properties)
+        {
+            foreach (var name in properties.Select(property => property.Key).Where(boundFromRoute.Contains).ToArray())
+                properties.Remove(name);
+        }
+
+        if (schema["required"] is JsonArray required)
+        {
+            for (var index = required.Count - 1; index >= 0; index--)
+            {
+                if (required[index]?.GetValue<string>() is { } name && boundFromRoute.Contains(name))
+                    required.RemoveAt(index);
+            }
+
+            if (required.Count == 0)
+                schema.Remove("required");
+        }
     }
 
     /// <summary>

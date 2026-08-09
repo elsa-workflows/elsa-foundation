@@ -24,7 +24,13 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Path",
-          "notes": null,
+          "notes": [
+            {
+              "kind": "constraint",
+              "member": null,
+              "note": "Endpoint-relative and normalised before matching: surrounding slashes are stripped and literal text and parameter names are lower-cased, so \u0027Orders/{OrderId}\u0027 and \u0027/orders/{orderid}\u0027 are the same route. Inline constraint bodies and default values are preserved verbatim because the matcher treats them as case-significant. The route this answers on is this path under the ActivitiesHttp feature\u0027s BasePath, not the path alone."
+            }
+          ],
           "order": 10,
           "referenceKey": "Path",
           "type": "String",
@@ -89,7 +95,13 @@
           "isNullable": false,
           "isRequired": false,
           "name": "CanStartWorkflow",
-          "notes": null,
+          "notes": [
+            {
+              "kind": "requirement",
+              "member": null,
+              "note": "Defaults to FALSE. An endpoint meant to start a workflow from an incoming request must set this to true, or publication produces zero trigger bindings and the route never fires \u2014 the definition publishes cleanly and the request 404s, with nothing to indicate why. Leave it false only for a mid-flow endpoint that resumes an already-running workflow."
+            }
+          ],
           "order": 0,
           "referenceKey": "CanStartWorkflow",
           "type": "Boolean",

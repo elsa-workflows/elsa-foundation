@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 153
 - Test projects: 102
-- Direct project references: 1265
+- Direct project references: 1266
 
 ## Projects
 
@@ -194,7 +194,7 @@ Records direct project references only.
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | - | default | Elsa.Caching.Core<br>Elsa.Caching.Memory |
 | [Elsa.ConsumerGuide.Testing](../../tests/Elsa/ConsumerGuide/Testing/Elsa.ConsumerGuide.Testing.csproj) | test | Elsa.ConsumerGuide | - | default | - |
-| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | test | Elsa.Contracts | - | default | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Sequence<br>Elsa.Contracts.Generator<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Http.JavaScript |
+| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | test | Elsa.Contracts | - | default | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Sequence<br>Elsa.Contracts.Generator<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Http.JavaScript<br>Elsa.Workflows.Publishing.Core |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.Groundwork |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Persistence.Groundwork<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |

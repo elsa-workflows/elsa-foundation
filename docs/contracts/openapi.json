@@ -10191,9 +10191,6 @@
           },
           "role": {
             "type": "string"
-          },
-          "sessionId": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -10208,9 +10205,6 @@
               "string",
               "null"
             ]
-          },
-          "proposalId": {
-            "type": "string"
           },
           "reason": {
             "type": [
@@ -10228,14 +10222,7 @@
         "type": "object"
       },
       "Elsa.Agent.Api.Models.AgentTurnCancelRequest": {
-        "properties": {
-          "sessionId": {
-            "type": "string"
-          },
-          "turnId": {
-            "type": "string"
-          }
-        },
+        "properties": {},
         "type": "object"
       },
       "Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument": {
@@ -11860,11 +11847,7 @@
         "type": "object"
       },
       "Elsa.Foundation.Identity.Api.Models.ProviderRouteRequest": {
-        "properties": {
-          "provider": {
-            "type": "string"
-          }
-        },
+        "properties": {},
         "type": "object"
       },
       "Elsa.Foundation.Identity.Api.Models.RefreshTokenRequest": {
@@ -12388,11 +12371,7 @@
         "type": "object"
       },
       "Elsa.Secrets.Api.Requests.RevokeSecretRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
+        "properties": {},
         "type": "object"
       },
       "Elsa.Secrets.Api.Requests.RotateSecretApiRequest": {
@@ -12416,9 +12395,6 @@
             },
             "type": "object"
           },
-          "name": {
-            "type": "string"
-          },
           "value": {
             "type": [
               "string",
@@ -12429,11 +12405,7 @@
         "type": "object"
       },
       "Elsa.Secrets.Api.Requests.TestSecretRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
+        "properties": {},
         "type": "object"
       },
       "Elsa.Secrets.Api.Requests.UpdateSecretApiRequest": {
@@ -12449,9 +12421,6 @@
               "string",
               "null"
             ]
-          },
-          "name": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -12882,9 +12851,6 @@
       },
       "Elsa.Studio.Preferences.Api.Models.PutStudioPreferenceRequest": {
         "properties": {
-          "namespace": {
-            "type": "string"
-          },
           "schemaVersion": {
             "type": "integer"
           },
@@ -14485,9 +14451,6 @@
       },
       "Elsa.Workflows.Design.Api.Commands.PromoteDraft": {
         "properties": {
-          "draftId": {
-            "type": "string"
-          },
           "operationKey": {
             "type": [
               "string",
@@ -14502,9 +14465,6 @@
             ]
           }
         },
-        "required": [
-          "draftId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Design.Api.Commands.ReplaceDraft": {
@@ -14540,9 +14500,6 @@
               "array",
               "null"
             ]
-          },
-          "draftId": {
-            "type": "string"
           },
           "layout": {
             "default": null,
@@ -15215,16 +15172,12 @@
           }
         },
         "required": [
-          "draftId",
           "state"
         ],
         "type": "object"
       },
       "Elsa.Workflows.Design.Api.Commands.RestoreDefinition": {
         "properties": {
-          "definitionId": {
-            "type": "string"
-          },
           "operationKey": {
             "type": [
               "string",
@@ -15232,9 +15185,6 @@
             ]
           }
         },
-        "required": [
-          "definitionId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Design.Api.Commands.SubmitDefinition": {
@@ -15887,9 +15837,6 @@
       },
       "Elsa.Workflows.Design.Api.Commands.UpdateDefinitionMetadata": {
         "properties": {
-          "definitionId": {
-            "type": "string"
-          },
           "description": {
             "default": null
           },
@@ -15907,19 +15854,10 @@
             ]
           }
         },
-        "required": [
-          "definitionId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Design.Api.Models.ActivityInputOptionsRequest": {
         "properties": {
-          "activityVersionId": {
-            "type": "string"
-          },
-          "inputName": {
-            "type": "string"
-          },
           "nodeId": {
             "type": [
               "string",
@@ -22108,9 +22046,6 @@
       },
       "Elsa.Workflows.Design.Api.Requests.PreflightDraftPromotion": {
         "properties": {
-          "draftId": {
-            "type": "string"
-          },
           "requestedVersion": {
             "default": null,
             "type": [
@@ -22119,9 +22054,6 @@
             ]
           }
         },
-        "required": [
-          "draftId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.ExecutionEvidence.Models.ExecutionEvidencePage": {
@@ -24491,14 +24423,8 @@
               "string",
               "null"
             ]
-          },
-          "versionId": {
-            "type": "string"
           }
         },
-        "required": [
-          "versionId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublicationSnapshot": {
@@ -25249,29 +25175,12 @@
               "string",
               "null"
             ]
-          },
-          "versionId": {
-            "type": "string"
           }
         },
-        "required": [
-          "versionId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Publishing.Api.Requests.RestorePublicationSlotRequest": {
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "slotName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definitionId",
-          "slotName"
-        ],
+        "properties": {},
         "type": "object"
       },
       "Elsa.Workflows.Publishing.Api.Requests.RunRuntimeRequirementPreflight": {
@@ -25306,16 +25215,12 @@
             "default": "default",
             "type": "string"
           },
-          "definitionId": {
-            "type": "string"
-          },
           "expectedRevision": {
             "default": 0,
             "type": "integer"
           }
         },
         "required": [
-          "definitionId",
           "defaultAction"
         ],
         "type": "object"
@@ -26016,14 +25921,8 @@
               "object",
               "null"
             ]
-          },
-          "versionId": {
-            "type": "string"
           }
         },
-        "required": [
-          "versionId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView": {
@@ -30941,9 +30840,6 @@
       },
       "Elsa.Workflows.Runtime.Api.Requests.ExecuteWorkflow": {
         "properties": {
-          "artifactId": {
-            "type": "string"
-          },
           "inputs": {
             "default": null,
             "type": [
@@ -30959,9 +30855,6 @@
             ]
           }
         },
-        "required": [
-          "artifactId"
-        ],
         "type": "object"
       },
       "Elsa.Workflows.Runtime.Api.Requests.ListIncidentsResponse": {
@@ -31101,15 +30994,11 @@
       },
       "Elsa.Workflows.Runtime.Api.Requests.RedriveWorkflowDispatch": {
         "properties": {
-          "dispatchId": {
-            "type": "string"
-          },
           "requestId": {
             "type": "string"
           }
         },
         "required": [
-          "dispatchId",
           "requestId"
         ],
         "type": "object"

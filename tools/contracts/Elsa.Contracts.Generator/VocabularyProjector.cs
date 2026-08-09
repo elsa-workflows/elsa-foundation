@@ -54,6 +54,23 @@ public static class VocabularyProjector
                 + "an intrinsic's variable target is descriptor-only and has no argument binding. Authoring it as "
                 + "a plain input is rejected.")
         ],
+        Publication: new PublicationVocabulary(
+            // DUPLICATED (accepted, pinned): the default lives on PublicationAuthority in
+            // Elsa.Workflows.Publishing.Core, which this tool does not reference — a whole project reference
+            // to read one string is the wrong trade (§2.17). VocabularyTests asserts the published value
+            // equals that type's default, so the two cannot drift silently.
+            DefaultSlotName: "default",
+            SlotNote:
+                "Publishing without naming a slot targets this one. It is also the {slotName} to pass to "
+                + "DELETE /publishing/workflows/{definitionId}/slots/{slotName}, which is the documented way "
+                + "to release an exclusive HTTP route — a consumer that cannot name the default slot cannot "
+                + "perform the remedy the contracts prescribe.",
+            OperationKeyNote:
+                "`operationKey` on a submit or publish body is an IDEMPOTENCY token, not a way to address an "
+                + "existing definition. Repeating a request with the same key replays the original outcome "
+                + "instead of performing it again; omitting it generates a fresh key, making every call a "
+                + "distinct operation. It cannot be used to add a version to an existing definition — nothing "
+                + "in the submit body can, which is why re-submitting a name creates a second definition."),
         ExpressionTypeSemantics:
         [
             new VocabularyTerm("Literal",
@@ -81,6 +98,7 @@ public sealed record ContractVocabularies(
     IReadOnlyList<string> CollectionKinds,
     IReadOnlyList<string> IntrinsicKinds,
     IReadOnlyList<VocabularyTerm> AuthoredVia,
+    PublicationVocabulary Publication,
     IReadOnlyList<VocabularyTerm> ExpressionTypeSemantics);
 
 public sealed record TypeAliasVocabulary(
@@ -92,3 +110,6 @@ public sealed record TypeAliasVocabulary(
     string Note);
 
 public sealed record VocabularyTerm(string Value, string Meaning);
+
+/// <summary>Publication facts a consumer needs before it can perform the remedies the contracts prescribe.</summary>
+public sealed record PublicationVocabulary(string DefaultSlotName, string SlotNote, string OperationKeyNote);

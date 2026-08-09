@@ -45,6 +45,11 @@
     "setInstanceName",
     "setOutput"
   ],
+  "publication": {
+    "defaultSlotName": "default",
+    "operationKeyNote": "\u0060operationKey\u0060 on a submit or publish body is an IDEMPOTENCY token, not a way to address an existing definition. Repeating a request with the same key replays the original outcome instead of performing it again; omitting it generates a fresh key, making every call a distinct operation. It cannot be used to add a version to an existing definition \u2014 nothing in the submit body can, which is why re-submitting a name creates a second definition.",
+    "slotNote": "Publishing without naming a slot targets this one. It is also the {slotName} to pass to DELETE /publishing/workflows/{definitionId}/slots/{slotName}, which is the documented way to release an exclusive HTTP route \u2014 a consumer that cannot name the default slot cannot perform the remedy the contracts prescribe."
+  },
   "schemaVersion": "1.2.0",
   "typeAliases": {
     "governs": "These are the aliases that appear as the \u0060type\u0060 of a published activity input or output. They are NOT the set a variable may be declared as \u2014 that set is smaller and is published per fragment under \u0060expressions.variableTypes\u0060 (the runtime serves the same union at GET /expressions/variable-types). Declaring a variable as a reserved alias outside that smaller set fails.",

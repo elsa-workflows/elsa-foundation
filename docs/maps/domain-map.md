@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 153
 - Test projects: 102
 - Domains: 29
-- Direct cross-domain references: 730
+- Direct cross-domain references: 731
 
 ## Domains
 
@@ -229,7 +229,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | Core.Tests | test | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | Tests | test | Elsa.Caching.Core<br>Elsa.Caching.Memory |
 | [Elsa.ConsumerGuide.Testing](../../tests/Elsa/ConsumerGuide/Testing/Elsa.ConsumerGuide.Testing.csproj) | test | Elsa.ConsumerGuide | Testing | test | - |
-| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | test | Elsa.Contracts | Tests | test | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Sequence<br>Elsa.Contracts.Generator<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Http.JavaScript |
+| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | test | Elsa.Contracts | Tests | test | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Sequence<br>Elsa.Contracts.Generator<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Http.JavaScript<br>Elsa.Workflows.Publishing.Core |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.Groundwork.Tests | test | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.Groundwork |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.Tests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Persistence.Groundwork<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
@@ -505,6 +505,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | Elsa.Contracts | [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | Elsa.Expressions |
 | [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | Elsa.Contracts | [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | Elsa.Expressions |
 | [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | Elsa.Contracts | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | Elsa.Http |
+| [Elsa.Contracts.Tests](../../tests/Elsa/Contracts/Tests/Elsa.Contracts.Tests.csproj) | Elsa.Contracts | [Elsa.Workflows.Publishing.Core](../../src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj) | Elsa.Workflows |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj) | Elsa.Diagnostics | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |

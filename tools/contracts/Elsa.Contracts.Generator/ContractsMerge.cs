@@ -65,6 +65,7 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
         var featureIndex = FeatureIndex.Build(assemblyPaths, diagnostics);
         var projector = new FragmentProjector(diagnostics, featureIndex);
         var fragments = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
+        var activityIndex = new List<ActivityIndexEntry>();
         var featureIdsByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var expressionTypesByFragment = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var apiEndpoints = new List<OpenApiEndpoint>();
@@ -91,6 +92,10 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
                 continue;
 
             fragments.Add(fragment.Assembly, DeterministicJson.SerializeToBytes(fragment));
+            activityIndex.AddRange(fragment.Activities
+                .Select(activity => new ActivityIndexEntry(activity.ActivityTypeKey, fragment.Assembly)));
+            activityIndex.AddRange(fragment.Intrinsics
+                .Select(intrinsic => new ActivityIndexEntry(intrinsic.ActivityTypeKey, fragment.Assembly)));
             featureIdsByFragment[fragment.Assembly] = fragment.Features.Select(feature => feature.Id).ToArray();
             expressionTypesByFragment[fragment.Assembly] = fragment.Expressions?.Descriptors
                 .Select(descriptor => descriptor.Type).ToArray() ?? [];
@@ -141,7 +146,11 @@ public sealed class ContractsMerge(Diagnostics diagnostics)
             OpenApi: DeterministicJson.Fingerprint(apiBytes),
             Vocabularies: DeterministicJson.Fingerprint(vocabularyBytes),
             Counts: new ContractsManifestCounts(
-                fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics));
+                fragments.Count, counts.Features, counts.Activities, counts.Structures, counts.Intrinsics),
+            ActivityIndex: activityIndex
+                .OrderBy(entry => entry.ActivityTypeKey, StringComparer.Ordinal)
+                .ThenBy(entry => entry.Fragment, StringComparer.Ordinal)
+                .ToArray());
 
         var fragmentsDirectory = Path.Combine(outputDirectory, "fragments");
         if (Directory.Exists(fragmentsDirectory))

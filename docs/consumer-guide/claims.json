@@ -40,6 +40,18 @@
       "since": "1.1.0"
     },
     {
+      "id": "publishing.output-to-variable-types-are-not-checked",
+      "scope": "publishing",
+      "kind": "behaviour",
+      "stability": "provisional",
+      "statement": "There is no compatibility rule between an output's declared type and the alias of the variable receiving it: publication resolves a conversion plan only when the binding authors an explicit `conversion`, and otherwise captures the value into the variable slot as-is. A `String` variable will accept a structured output without complaint at publish time.",
+      "rationale": "A consumer looking for the rule will not find one, because there is not one. Knowing that is what stops the search — but it also means the variable's declared type is a slot label, not a guarantee, so read the value back through evidence rather than trusting the alias.",
+      "tests": [
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.An_output_binds_to_a_variable_of_an_unrelated_type_without_complaint", "asserts": "Assert.Null(captures[\"Value\"].ConversionPlan)" }
+      ],
+      "since": "1.2.0"
+    },
+    {
       "id": "publishing.http-route-method-pair-is-exclusive",
       "scope": "publishing",
       "kind": "constraint",
@@ -90,6 +102,18 @@
         { "test": "Elsa.Workflows.Runtime.Tests.RuntimeDiagnosticSnapshotTests.Capture_of_a_value_within_the_limit_carries_it_whole", "asserts": "Assert.False(snapshot.TryGetProperty(\"truncated\", out var truncated) && truncated.GetBoolean())" }
       ],
       "since": "1.1.0"
+    },
+    {
+      "id": "javascript.args-are-declared-by-a-portable-expression-definition",
+      "scope": "expressions.javascript",
+      "kind": "constraint",
+      "stability": "stable",
+      "statement": "The `args` namespace is populated only by parameters the expression declares, and an authored input declares them by making its `value` a portable expression **definition object** — `{\"language\",\"source\",\"resultType\",\"parameters\",\"options\",\"capabilityProfile\"}` — instead of a bare source string. Each entry in `parameters` needs a `kind` discriminator (`Literal`, `Variable`, `WorkflowRequest`, `ActivityResult`), and `resultType` must equal the input's declared type and collectionKind or publication rejects it. An input whose value is a plain string has no `args` at all; read visible variables with `variables.X` / `getVariable('X')` instead.",
+      "rationale": "Three benchmarked sessions found `args` described but with no way to author it, and all three routed around it via a workflow variable. The definition form is the missing half; without it the published `args` statement describes a mechanism a consumer cannot reach.",
+      "tests": [
+        { "test": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.An_input_value_may_be_a_portable_expression_definition_that_declares_parameters", "asserts": "Assert.Equal([\"greeting\"], binding.Expression!.Parameters.Keys)" }
+      ],
+      "since": "1.2.0"
     },
     {
       "id": "javascript.json-parameters-are-native-frozen-values",

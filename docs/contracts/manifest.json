@@ -1,4 +1,138 @@
 {
+  "activityIndex": [
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "fragment": "Elsa.Activities.Bpmn"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "fragment": "Elsa.Activities.Bpmn"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
+      "fragment": "Elsa.Activities.DispatchWorkflow.Runtime"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Do.Activities.Do",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+      "fragment": "Elsa.Activities.Flowchart"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.For.Activities.For",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.ForEach.Activities.ForEach",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
+      "fragment": "Elsa.Activities.Graph.Runtime"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
+      "fragment": "Elsa.Activities.Http"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.SendHttpRequest",
+      "fragment": "Elsa.Activities.Http"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+      "fragment": "Elsa.Activities.Http"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.If.Activities.If",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Parallel.Activities.Parallel",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Break",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Event",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Fault",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.PublishEvent",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.ReadLine",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLines",
+      "fragment": "Elsa.Activities.Primitives"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Cron",
+      "fragment": "Elsa.Activities.Scheduling"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Delay",
+      "fragment": "Elsa.Activities.Scheduling"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scheduling.Activities.Timer",
+      "fragment": "Elsa.Activities.Scheduling"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Scripting.Activities.RunJavaScript",
+      "fragment": "Elsa.Activities.Scripting"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+      "fragment": "Elsa.Activities.Sequence"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Switch.Activities.Switch",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.While.Activities.While",
+      "fragment": "Elsa.Activities.ControlFlow"
+    },
+    {
+      "activityTypeKey": "Elsa.Finish",
+      "fragment": "Elsa.Activities.Design.Api"
+    },
+    {
+      "activityTypeKey": "Elsa.SetCorrelationId",
+      "fragment": "Elsa.Activities.Design.Api"
+    },
+    {
+      "activityTypeKey": "Elsa.SetInstanceName",
+      "fragment": "Elsa.Activities.Design.Api"
+    },
+    {
+      "activityTypeKey": "Elsa.SetOutput",
+      "fragment": "Elsa.Activities.Design.Api"
+    },
+    {
+      "activityTypeKey": "Elsa.SetVariable",
+      "fragment": "Elsa.Activities.Design.Api"
+    }
+  ],
   "counts": {
     "activities": 28,
     "features": 100,
@@ -57,7 +191,7 @@
     },
     {
       "assembly": "Elsa.Activities.Http",
-      "fingerprint": "sha256:43a58506f01761501a523c1c517fac9f773078bbccb8092bde968f5ef8818617"
+      "fingerprint": "sha256:79798950e90d214ea7c367352052e0f0919842f1ccc4eb1f74971af32498203b"
     },
     {
       "assembly": "Elsa.Activities.Primitives",
@@ -390,8 +524,8 @@
   ],
   "generator": "tools/contracts/Elsa.Contracts.Generator",
   "hosts": "sha256:8d936b8e8569148de4c34b2639c59094b338554b07fc32ff43a3b870985c311b",
-  "openApi": "sha256:ad1b0a0ff503069efc18f4bcbd482e6d079162f2e698dd75ad0b2c0cfefce39e",
+  "openApi": "sha256:542b6cb6dc6e2b8e4aff686f69d5b09c48388a1f8452ca3f44b3d36f14d2ec04",
   "schemaVersion": "1.0",
   "submitSchema": "sha256:063d4d085bf85db11b1de13c93aac8fdedf69deb86a2d612a9652a99b85c1d13",
-  "vocabularies": "sha256:c48852208ccbd83fbd6705932745b528f33f9fee768e15db8ec86f9d9372e9d5"
+  "vocabularies": "sha256:dd96f671f9acd15b4921cb1eaaaf54a06d50851abe62a72311b6704a5f683cb4"
 }
