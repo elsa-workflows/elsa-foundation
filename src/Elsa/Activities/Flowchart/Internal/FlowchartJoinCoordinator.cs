@@ -79,7 +79,13 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         var bound = state.ExecutionPaths.Count(path => path.Status == ExecutionPathStatus.Waiting);
         for (var pass = 0; pass < bound && state.ActiveChildren.Count == 0; pass++)
         {
-            var waiting = WaitingJoinKeys(state);
+            // Only joins. A path waits at a join because it recorded an arrival and the target is short others,
+            // so an outstanding arrival is what identifies one — and a path a policy parked with WaitExecutionPath
+            // has none. That wait is a decision the policy made, not a join the engine is owed, and quiescence is
+            // no reason to overrule it.
+            var waiting = WaitingJoinKeys(state)
+                .Where(group => PendingArrivals(state, group.TargetNodeId, group.ExecutionScopeId, group.IterationKey).Any())
+                .ToArray();
             if (waiting.Length == 0)
                 break;
 

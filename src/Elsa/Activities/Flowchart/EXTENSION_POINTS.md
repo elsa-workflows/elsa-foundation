@@ -45,8 +45,8 @@ ADR 0064 ships two, and keeps both registered so the choice is one setting rathe
 
 | Kind | Decides from | Notes |
 | --- | --- | --- |
-| `deadPathJoin` | the arrivals the target already holds — every inbound answered, at least one live | No graph walk; decidable inside a loop without special-casing. |
-| `reachabilityJoin` | a search over live work in the same scope, on the graph's forward projection | The historical semantics, and the current default. |
+| `deadPathJoin` | the arrivals the target already holds — every inbound answered, at least one live | **Default.** No graph walk; decidable inside a loop without special-casing. |
+| `reachabilityJoin` | a search over live work in the same scope, on the graph's forward projection | The historical semantics, retained for validation and as a fallback. |
 
 ## Activity-owned structure contracts
 
