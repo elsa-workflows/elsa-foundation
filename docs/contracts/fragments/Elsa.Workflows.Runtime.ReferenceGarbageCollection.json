@@ -11,6 +11,7 @@
       "description": "Background pump that periodically prunes expired/retired workflow-executable source references and the content-addressed artifacts no live reference points at any more (ADR 0040). Compose alongside the Tasks feature.",
       "displayName": "Workflows Runtime Reference Garbage Collection",
       "id": "WorkflowsRuntimeReferenceGarbageCollection",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -59,6 +60,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

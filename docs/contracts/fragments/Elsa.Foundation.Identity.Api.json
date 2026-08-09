@@ -426,6 +426,7 @@
       "description": "Exposes provider-agnostic identity bootstrap, capability, session, challenge, logout, and token refresh endpoints.",
       "displayName": "Foundation Identity API",
       "id": "FoundationIdentityApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -446,6 +447,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -11,6 +11,7 @@
       "description": "Backs workflow runtime persistence with one deployment-owned Groundwork MongoDB target. A writable transaction-capable replica set and the exact pre-applied schema are required at startup.",
       "displayName": "Groundwork MongoDB Runtime Persistence",
       "id": "GroundworkRuntimePersistenceMongoDb",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -87,6 +88,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -9,6 +9,7 @@
       "description": "Reconciliation source that reads workflow definitions from JSON files.",
       "displayName": "Workflow Design JSON Reconciliation",
       "id": "JsonWorkflowReconciliation",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -29,6 +30,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

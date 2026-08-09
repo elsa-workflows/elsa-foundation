@@ -11,6 +11,7 @@
       "description": "Background pump that periodically re-delivers stranded post-commit outbox items and re-drives workflow executions with durable scheduler-work backlog after a restart or crash. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature.",
       "displayName": "Workflows Runtime Resumption",
       "id": "WorkflowsRuntimeResumption",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -129,6 +130,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -129,7 +129,9 @@ public sealed class EquivalenceTests
             // Strip the server-state overlay (ActivityVersionId, Available, AvailabilityReason,
             // Provenance) and the server-generated template; the remaining content must be equal.
             var servedAsContract = ToComparableContract(item, fragmentActivity!.FeatureId, ContentHashOf(versions, item));
-            Assert.Equal(DeterministicJson.Serialize(fragmentActivity), DeterministicJson.Serialize(servedAsContract));
+            Assert.Equal(
+                DeterministicJson.Serialize(WithoutNotes(fragmentActivity)),
+                DeterministicJson.Serialize(servedAsContract));
         }
     }
 
@@ -218,6 +220,22 @@ public sealed class EquivalenceTests
     /// if either the endpoint projection or the fragment projection changes a field, the equality below
     /// breaks â€” which is exactly the drift signal this test exists to give.
     /// </summary>
+    /// <summary>
+    /// Drops <c>[ConsumerNote]</c> content before comparing, because notes are deliberately fragment-only:
+    /// they are excluded from the activity content hash so a documentation edit cannot force a new activity
+    /// version, which means the persisted rows the catalog endpoint serves from never carry them.
+    /// </summary>
+    /// <remarks>
+    /// This is the ONE field the two projections may legitimately differ on, and narrowing the exclusion to
+    /// exactly it is the point: every other difference still breaks the equality above. If notes ever become
+    /// server-served, delete this and the test tightens by itself.
+    /// </remarks>
+    private static ActivityContract WithoutNotes(ActivityContract activity) => activity with
+    {
+        Notes = null,
+        Inputs = activity.Inputs.Select(input => input with { Notes = null }).ToArray()
+    };
+
     private static ActivityContract ToComparableContract(ActivityAuthoringDescriptorView item, string? featureId, string contentHash) => new(
         featureId,
         item.ActivityTypeKey,

@@ -11,6 +11,7 @@
       "description": "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by W5\u0027s fencing token at checkpoint commit. Compose alongside the Tasks feature.",
       "displayName": "Workflows Runtime Distributed",
       "id": "WorkflowsRuntimeDistributed",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -101,6 +102,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

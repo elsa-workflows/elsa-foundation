@@ -1166,6 +1166,7 @@
       "description": "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming.",
       "displayName": "Diagnostics: OpenTelemetry",
       "id": "DiagnosticsOpenTelemetry",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -1354,6 +1355,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -58,7 +58,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         // for types its features did not register.
         using var contributions = new ContributionResolver(assembly, assemblyPath, diagnostics, featureIndex);
 
-        var activities = ProjectActivities(assemblyPath, referencePaths, assemblyName, owningFeatureId);
+        var activities = ProjectActivities(assembly, assemblyPath, referencePaths, assemblyName, owningFeatureId);
         var structures = ProjectStructures(contributions, owningFeatureId);
         var expressions = ProjectExpressions(contributions, assemblyName, owningFeatureId);
         var intrinsics = ProjectIntrinsics(contributions, owningFeatureId);
@@ -76,6 +76,7 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
     }
 
     private IReadOnlyList<ActivityContract> ProjectActivities(
+        Assembly assembly,
         string assemblyPath,
         IReadOnlyCollection<string> referencePaths,
         string assemblyName,
@@ -88,16 +89,34 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
         var models = scanner.ScanAssembly(assemblyPath, referencePaths);
         return models
-            .Select(model => ToActivityContract(model, assemblyName, owningFeatureId))
+            .Select(model => ToActivityContract(model, assemblyName, owningFeatureId, NoteSource(assembly, model.ActivityTypeKey)))
             .OrderBy(activity => activity.ActivityTypeKey, StringComparer.Ordinal)
             .ThenBy(activity => activity.Version, StringComparer.Ordinal)
             .ToArray();
     }
 
+    /// <summary>
+    /// The execution-loaded activity type, for reading its <c>[ConsumerNote]</c> declarations. The scanner's
+    /// <c>ActivityTypeKey</c> is the CLR full name, so it resolves directly; a type the scanner saw but this
+    /// load did not is simply note-less rather than an error.
+    /// </summary>
+    private static Type? NoteSource(Assembly assembly, string activityTypeKey)
+    {
+        try
+        {
+            return assembly.GetType(activityTypeKey, throwOnError: false);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private static ActivityContract ToActivityContract(
         ActivityVersionReconciliationModel model,
         string assemblyName,
-        string? owningFeatureId)
+        string? owningFeatureId,
+        Type? noteSource)
     {
         // Same hash pipeline as reconciliation (DefaultActivityDefinitionHasher via the version factory);
         // the fixed ids are excluded from the canonical form, so the hash equals the persisted row's.
@@ -127,6 +146,13 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
 
         ActivityStructureDesignFacetReader.TryReadSingle(model.DesignFacets, out var structureFacet);
 
+        // Read AFTER the hash is produced above, and never fed into it: a note is documentation, and editing
+        // one must not force a new activity version (see ConsumerNoteReader).
+        var typeNotes = noteSource is null ? [] : ConsumerNoteReader.ForType(noteSource);
+        var propertyNotes = noteSource is null
+            ? new Dictionary<string, IReadOnlyList<ConsumerNoteContract>>(StringComparer.Ordinal)
+            : ConsumerNoteReader.ForProperties(noteSource);
+
         return new ActivityContract(
             owningFeatureId,
             model.ActivityTypeKey,
@@ -136,11 +162,15 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
             model.Category,
             model.Description,
             model.ExecutionType.ToString(),
-            model.Inputs.Select(ToInputContract).ToArray(),
+            model.Inputs.Select(input => ToInputContract(input, propertyNotes)).ToArray(),
             model.Outputs.Select(ToOutputContract).ToArray(),
             model.DesignFacets.SelectMany(ToPorts).ToArray(),
-            structureFacet?.Payload.Clone());
+            structureFacet?.Payload.Clone(),
+            NullIfEmpty(typeNotes));
     }
+
+    private static IReadOnlyList<ConsumerNoteContract>? NullIfEmpty(IReadOnlyList<ConsumerNoteContract> notes) =>
+        notes.Count == 0 ? null : notes;
 
     /// <summary>
     /// SemVer build metadata carries the SourceLink commit sha (<c>1.0.0+&lt;sha&gt;</c>): activity identity
@@ -153,7 +183,9 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         return plus < 0 ? version : version[..plus];
     }
 
-    private static InputContract ToInputContract(InputDefinition input) => new(
+    private static InputContract ToInputContract(
+        InputDefinition input,
+        IReadOnlyDictionary<string, IReadOnlyList<ConsumerNoteContract>> propertyNotes) => new(
         input.ReferenceKey,
         input.Name,
         input.Type.Alias,
@@ -170,7 +202,10 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
         input.HasStaticDefault || input.DefaultValue is not null,
         input.DefaultSyntax,
         input.UISpecifications,
-        input.EnumValues);
+        input.EnumValues,
+        InputAuthoringSites.Argument,
+        // Notes live on the CLR property, so they key on Name rather than ReferenceKey.
+        propertyNotes.TryGetValue(input.Name, out var notes) ? notes : null);
 
     private static OutputContract ToOutputContract(OutputDefinition output) => new(
         output.ReferenceKey,
@@ -266,7 +301,8 @@ public sealed class FragmentProjector(Diagnostics diagnostics, FeatureIndex? fea
                 ReadNamedString(attribute, "DisplayName"),
                 ReadNamedString(attribute, "Description"),
                 dependsOn,
-                options));
+                options,
+                NullIfEmpty(ConsumerNoteReader.ForType(type))));
         }
 
         return features.OrderBy(feature => feature.Id, StringComparer.Ordinal).ToArray();

@@ -9,6 +9,7 @@
       "description": "Binds per-shell Elsa endpoint security options. Allows explicitly disabling endpoint security for a single shell (development/testing only).",
       "displayName": "Elsa API Security",
       "id": "ApiSecurity",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -29,6 +30,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -10,6 +10,7 @@
       "executionType": "Action",
       "featureId": "ActivitiesGraphRuntime",
       "inputs": [],
+      "notes": null,
       "outputs": [],
       "ports": [],
       "version": "1.0.0"
@@ -26,11 +27,12 @@
       "description": "Runtime construction and activity-execution scoping for reusable activity graphs.",
       "displayName": "Activities Graph (Runtime)",
       "id": "ActivitiesGraphRuntime",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

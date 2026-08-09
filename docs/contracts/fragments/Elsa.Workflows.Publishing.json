@@ -12,11 +12,12 @@
       "description": "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
       "displayName": "Workflows Publishing",
       "id": "WorkflowsPublishing",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

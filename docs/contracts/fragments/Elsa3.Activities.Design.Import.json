@@ -866,6 +866,7 @@
       "description": "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
       "displayName": "Elsa 3 Import Activities",
       "id": "Elsa3ImportJsonActivities",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -900,6 +901,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

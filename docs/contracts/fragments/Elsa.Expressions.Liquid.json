@@ -20,11 +20,12 @@
       "description": "Provides portable Liquid expression evaluation",
       "displayName": "Liquid Expressions",
       "id": "Liquid",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

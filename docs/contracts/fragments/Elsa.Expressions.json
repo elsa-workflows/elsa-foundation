@@ -20,11 +20,12 @@
       "description": "Installs and configures the required services for using expressions.",
       "displayName": "Expressions",
       "id": "Expressions",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

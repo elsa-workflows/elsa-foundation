@@ -11,6 +11,7 @@
       "description": "Backs workflow runtime persistence with an admission-gated Groundwork SQL Server target. Apply schema through Groundwork.Tool before host startup.",
       "displayName": "Groundwork SQL Server Runtime Persistence",
       "id": "GroundworkRuntimePersistenceSqlServer",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -73,6 +74,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

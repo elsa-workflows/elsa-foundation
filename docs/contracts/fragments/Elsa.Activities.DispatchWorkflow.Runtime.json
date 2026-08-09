@@ -24,6 +24,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "WorkflowDefinitionId",
+          "notes": null,
           "order": 0,
           "referenceKey": "WorkflowDefinitionId",
           "type": "String",
@@ -49,6 +50,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Inputs",
+          "notes": null,
           "order": 10,
           "referenceKey": "Inputs",
           "type": "System.Text.Json.JsonElement",
@@ -69,6 +71,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "WaitForCompletion",
+          "notes": null,
           "order": 20,
           "referenceKey": "WaitForCompletion",
           "type": "Boolean",
@@ -89,6 +92,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "CancelChildOnParentCancellation",
+          "notes": null,
           "order": 30,
           "referenceKey": "CancelChildOnParentCancellation",
           "type": "Boolean",
@@ -109,6 +113,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "CorrelationId",
+          "notes": null,
           "order": 40,
           "referenceKey": "CorrelationId",
           "type": "String",
@@ -116,6 +121,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -191,6 +197,7 @@
       "description": "Runs pinned DispatchWorkflow child starts through the runtime resumption path.",
       "displayName": "Activities Dispatch Workflow (Runtime)",
       "id": "ActivitiesDispatchWorkflowRuntime",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -239,6 +246,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

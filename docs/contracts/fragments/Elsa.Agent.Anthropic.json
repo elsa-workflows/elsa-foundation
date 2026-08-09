@@ -9,6 +9,7 @@
       "description": "Registers the Anthropic Claude agent provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other agent harnesses (single active harness).",
       "displayName": "Anthropic (Claude) Agent Provider",
       "id": "AnthropicAgent",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -113,6 +114,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -14715,6 +14715,7 @@
       "description": "Contains endpoints to manage data in the Activities Design Domain",
       "displayName": "Activities Design API",
       "id": "ActivitiesDesignApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -14828,6 +14829,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Outcome",
+          "notes": null,
           "order": 0,
           "referenceKey": "outcome",
           "type": "String",
@@ -14868,6 +14870,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Value",
+          "notes": null,
           "order": 0,
           "referenceKey": "value",
           "type": "String",
@@ -14916,6 +14919,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Value",
+          "notes": null,
           "order": 0,
           "referenceKey": "value",
           "type": "String",
@@ -14964,6 +14968,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Output Name",
+          "notes": null,
           "order": 0,
           "referenceKey": "name",
           "type": "String",
@@ -14984,6 +14989,7 @@
           "isNullable": true,
           "isRequired": true,
           "name": "Value",
+          "notes": null,
           "order": 1,
           "referenceKey": "value",
           "type": "Elsa.Any",
@@ -15032,6 +15038,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Variable",
+          "notes": null,
           "order": 0,
           "referenceKey": "variable",
           "type": "String",
@@ -15052,6 +15059,7 @@
           "isNullable": true,
           "isRequired": true,
           "name": "Value",
+          "notes": null,
           "order": 1,
           "referenceKey": "value",
           "type": "Elsa.Any",
@@ -15078,6 +15086,6 @@
       "version": "1"
     }
   ],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

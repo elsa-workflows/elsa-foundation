@@ -9,6 +9,7 @@
       "description": "Provides HTTP content parsing, routing, downloading, and cache services.",
       "displayName": "HTTP",
       "id": "Http",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -99,6 +100,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

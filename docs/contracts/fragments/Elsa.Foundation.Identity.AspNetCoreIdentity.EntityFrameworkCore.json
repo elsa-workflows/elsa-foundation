@@ -9,6 +9,7 @@
       "description": "Durable EF Core persistence and SignInManager-backed cookie sign-in for the ASP.NET Core Identity provider.",
       "displayName": "Foundation Identity ASP.NET Core Identity EF Core",
       "id": "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -99,6 +100,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

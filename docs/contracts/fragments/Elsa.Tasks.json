@@ -9,11 +9,12 @@
       "description": "Provides services to enable and configure tasks (e.g. background- and recurring tasks). To register tasks yourself, implement the appropriate task interfaces and register them in the DI container (e.g. IRecurringTask, IStartupTask, or IBackgroundTask).",
       "displayName": "Tasks",
       "id": "Tasks",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

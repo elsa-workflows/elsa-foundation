@@ -9,11 +9,12 @@
       "description": "Registers primitive hosting services shared by Elsa foundation features.",
       "displayName": "Primitives",
       "id": "Primitives",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

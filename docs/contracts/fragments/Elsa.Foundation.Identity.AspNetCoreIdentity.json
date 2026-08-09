@@ -60,6 +60,7 @@
       "description": "Registers the ASP.NET Core Identity-backed IAM substrate, cookie sign-in surface, and principal factory.",
       "displayName": "Foundation Identity ASP.NET Core Identity",
       "id": "FoundationIdentityAspNetCoreIdentity",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -108,6 +109,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

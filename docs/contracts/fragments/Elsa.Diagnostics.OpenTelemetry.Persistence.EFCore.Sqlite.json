@@ -9,6 +9,7 @@
       "description": "Provides Sqlite persistence for diagnostics OpenTelemetry traces, metrics, logs, and resources",
       "displayName": "Sqlite OpenTelemetry Persistence",
       "id": "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -99,6 +100,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

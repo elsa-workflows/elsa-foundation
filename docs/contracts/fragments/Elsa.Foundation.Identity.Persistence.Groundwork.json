@@ -9,11 +9,12 @@
       "description": "Replaces the default in-memory identity stores with Groundwork-backed, durable stores so users, roles, external identities, and tenant memberships survive restarts.",
       "displayName": "Identity Groundwork Persistence",
       "id": "IdentityGroundworkPersistence",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

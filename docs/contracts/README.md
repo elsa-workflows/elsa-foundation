@@ -36,15 +36,22 @@ present*; it is not a claim that any particular host ships it. Enabling a featur
 does not carry is a silent no-op — the shell logs `requested N feature(s) that are not available in the
 runtime feature catalog` and the activities simply never appear.
 
-This is not a rare edge: 14 of the 94 fragments describe assemblies that `Elsa.Workbench` does not
-reference, and two of those carry authoring surface — `ActivitiesScripting` publishes the `RunJavaScript`
-activity, and `Liquid` publishes an expression descriptor for a language the Workbench cannot evaluate at
-all. Consult `hosts.json` before concluding an activity or expression language is usable.
+It was not a rare edge. Fourteen of the fragments described assemblies `Elsa.Workbench` did not reference,
+and two of those carried authoring surface: `ActivitiesScripting` publishes the `RunJavaScript` activity,
+and `Liquid` publishes an expression descriptor for a language the Workbench could not evaluate at all.
+
+Those eight incidental omissions have since been added to the Workbench (spec 150 FR-E1), so **6 of the 95
+fragments** remain outside it — every one a deliberate exclusion, and all of the same kind: alternative
+providers of a role the host already fills (MongoDB and SQL Server persistence where it ships SQLite and
+PostgreSQL; EF Core diagnostics persistence where it ships Groundwork). None carries authoring surface.
+
+The rule still holds for any host, including yours: an assembly-level check is the only honest one, because
+a feature whose assembly is absent cannot be enabled no matter what its fragment declares.
 
 **Validated against the running server**: requesting all fragment-declared features against a Workbench
-image built from this branch made the shell report exactly these 14 as *not available in the runtime
-feature catalog* — the same 14, feature id for feature id, that this build-time index excludes. The index
-is therefore a faithful stand-in for booting the image and asking it.
+image built before that change made the shell report exactly the fourteen as *not available in the runtime
+feature catalog* — the same fourteen, feature id for feature id, that this build-time index excluded. The
+index is therefore a faithful stand-in for booting the image and asking it.
 
 A runtime-kind attribute would **not** substitute for this: `Elsa.Activities.Scripting` and
 `Elsa.Activities.Http` both declare `elsa.server`, yet only one ships in the Workbench.
@@ -62,6 +69,23 @@ fragment names.
 Each fragment also ships inside its assembly as the embedded resource `elsa.contract.json` (byte-identical
 to the committed file at any green commit), which is another way to answer "is this contract actually in
 my image?" for a host built elsewhere.
+
+## Versioning signal
+
+Every fragment carries a `schemaVersion`, and **it bumps on any change to the published shape, additive
+included.** A minor bump means additive and backward-compatible; a major bump means a removal or a
+reinterpretation of an existing field.
+
+That decision is deliberate and the alternative was measured. The submit-schema fingerprint moved three
+times across three builds — `ca01ff0d… → 45ad34de… → e755046f…` — while `schemaVersion` stood still at
+`"1"`, because each change was "only additive". Fields entered a published contract twice with no version
+signal, and a consumer holding a cached copy had no way to tell a stale artifact from a current one short of
+re-fetching and diffing. A version that only moves on breaking changes answers "will my code still compile",
+which is the question a *generator* asks; a consumer caching artifacts is asking "is what I hold still what
+you publish", and only an always-bumping version answers that.
+
+For a byte-exact answer, compare `manifest.json` fingerprints — the version tells you *that* something
+changed and how severely, the fingerprints tell you *what*.
 
 ## Regenerating
 
@@ -123,6 +147,27 @@ rather than silently omitted; there are currently none, so `openapi.json` is the
 The document is regenerated from the same endpoint projection as the fragments on every build, so a new
 FastEndpoint appears in it without anyone remembering to update a list; the freshness gate fails the PR
 if it does not.
+
+## Consumer notes
+
+Features, activities and inputs may carry `notes` — short statements of behaviour their shape does not
+express, written on the code they describe and projected into the fragment. A note has a `kind`
+(`default` | `requirement` | `constraint` | `failureMode` | `limit` | `composition`) and, where it is about
+one enum member rather than the whole input, a `member`.
+
+`HttpEndpoint.ResponseMode` is the worked example: its `enumValues` publish `["async","sync"]`, and its
+notes say what choosing each one *does* — that the default answers the caller `202` and a later
+`WriteHttpResponse` never reaches them, and that `sync` degrades back to `202` on suspend. The value space
+without that is a coin flip.
+
+Two properties worth knowing:
+
+- **Notes never enter an activity's `contentHash`.** Editing documentation must not force a new activity
+  version, so they are a build-time enrichment of the contract, not part of identity. The consequence,
+  stated rather than hidden: the running catalog endpoint does not serve notes — only these fragments do.
+- **Nothing requires a note.** `… -- notes` (gate G4) reports which surface carries none and always exits
+  0. A note written to satisfy a gate would be filler restating the member's name, and filler reads as an
+  answer.
 
 ## Behavioural rules the fields alone do not tell you
 

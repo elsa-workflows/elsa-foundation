@@ -9,6 +9,7 @@
       "description": "OpenIddict-backed first-party token issuance (JWT access tokens \u002B rotating refresh tokens) and bearer validation for the API surface.",
       "displayName": "Foundation Identity OpenIddict",
       "id": "FoundationIdentityOpenIddict",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -99,6 +100,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

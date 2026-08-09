@@ -24,6 +24,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Script",
+          "notes": null,
           "order": 0,
           "referenceKey": "script",
           "type": "String",
@@ -44,6 +45,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "Arguments",
+          "notes": null,
           "order": 0,
           "referenceKey": "arguments",
           "type": "System.Text.Json.JsonElement",
@@ -64,6 +66,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "PossibleOutcomes",
+          "notes": null,
           "order": 0,
           "referenceKey": "possibleOutcomes",
           "type": "String",
@@ -71,6 +74,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -99,11 +103,12 @@
       "description": "Scripting activities: RunJavaScript executes an authored JavaScript script through the shared Jint evaluator.",
       "displayName": "Activities Scripting",
       "id": "ActivitiesScripting",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

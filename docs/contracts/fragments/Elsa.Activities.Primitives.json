@@ -10,6 +10,7 @@
       "executionType": "Action",
       "featureId": "ActivitiesPrimitives",
       "inputs": [],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -46,6 +47,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "EventName",
+          "notes": null,
           "order": 0,
           "referenceKey": "EventName",
           "type": "String",
@@ -66,6 +68,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "CorrelationId",
+          "notes": null,
           "order": 0,
           "referenceKey": "CorrelationId",
           "type": "String",
@@ -86,6 +89,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "CanStartWorkflow",
+          "notes": null,
           "order": 0,
           "referenceKey": "CanStartWorkflow",
           "type": "Boolean",
@@ -93,6 +97,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -133,6 +138,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Code",
+          "notes": null,
           "order": 0,
           "referenceKey": "code",
           "type": "String",
@@ -153,6 +159,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Message",
+          "notes": null,
           "order": 10,
           "referenceKey": "message",
           "type": "String",
@@ -173,6 +180,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Category",
+          "notes": null,
           "order": 20,
           "referenceKey": "category",
           "type": "String",
@@ -193,6 +201,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "FaultType",
+          "notes": null,
           "order": 30,
           "referenceKey": "faultType",
           "type": "String",
@@ -200,6 +209,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [],
       "version": "1.0.0"
@@ -228,6 +238,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Expression",
+          "notes": null,
           "order": 0,
           "referenceKey": "Expression",
           "type": "Object",
@@ -235,6 +246,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [],
       "version": "1.0.0"
@@ -263,6 +275,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "EventName",
+          "notes": null,
           "order": 0,
           "referenceKey": "EventName",
           "type": "String",
@@ -283,6 +296,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "CorrelationId",
+          "notes": null,
           "order": 0,
           "referenceKey": "CorrelationId",
           "type": "String",
@@ -303,6 +317,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Payload",
+          "notes": null,
           "order": 0,
           "referenceKey": "Payload",
           "type": "System.Text.Json.JsonElement?",
@@ -323,6 +338,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "IsLocalEvent",
+          "notes": null,
           "order": 0,
           "referenceKey": "IsLocalEvent",
           "type": "Boolean",
@@ -330,6 +346,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -352,6 +369,7 @@
       "executionType": "Action",
       "featureId": "ActivitiesPrimitives",
       "inputs": [],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -392,6 +410,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Text",
+          "notes": null,
           "order": 0,
           "referenceKey": "text",
           "type": "String",
@@ -399,6 +418,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -435,6 +455,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Lines",
+          "notes": null,
           "order": 0,
           "referenceKey": "Lines",
           "type": "String",
@@ -442,6 +463,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [],
       "version": "1.0.0"
@@ -456,11 +478,12 @@
       "description": "Primitive activities and transient CLR activation.",
       "displayName": "Activities Primitives",
       "id": "ActivitiesPrimitives",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

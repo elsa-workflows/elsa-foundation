@@ -9,11 +9,12 @@
       "description": "Commits reviewed Elsa 3 reusable-activity collection closures atomically across Activity and Workflow Design documents.",
       "displayName": "Elsa 3 Activity Import Groundwork",
       "id": "Elsa3ImportActivitiesGroundwork",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

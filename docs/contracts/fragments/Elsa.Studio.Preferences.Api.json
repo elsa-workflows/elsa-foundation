@@ -112,6 +112,7 @@
       "description": "Provides governed, user and tenant scoped Studio preference documents.",
       "displayName": "Studio Preferences",
       "id": "StudioPreferences",
+      "notes": null,
       "options": []
     },
     {
@@ -121,6 +122,7 @@
       "description": "Exposes authenticated, conditionally updated Studio preference documents.",
       "displayName": "Studio Preferences API",
       "id": "StudioPreferencesApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -141,6 +143,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

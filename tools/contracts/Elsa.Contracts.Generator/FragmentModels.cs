@@ -18,11 +18,14 @@ public sealed record ContractFragment(
     IReadOnlyList<IntrinsicContract> Intrinsics,
     IReadOnlyList<EndpointContract> Endpoints)
 {
-    // 1.1.0: additive — endpoints, input enumValues/authoredVia, host expressionTypes. The schema version
-    // bumps on ANY published-shape change, additive included (spec 150 Part D): three builds moved the
-    // submit-schema fingerprint while the version stood still, so a consumer could not tell a stale cache
-    // from a current one. Minor = additive and backward-compatible; major = a removal or reinterpretation.
-    public const string CurrentSchemaVersion = "1.1.0";
+    // The schema version bumps on ANY published-shape change, additive included (spec 150 FR-D1): three
+    // builds moved the submit-schema fingerprint while the version stood still at "1", so a consumer could
+    // not tell a stale cache from a current one. Minor = additive and backward-compatible; major = a removal
+    // or a reinterpretation of an existing field.
+    //
+    //   1.1.0 — endpoints, input enumValues/authoredVia, host expressionTypes.
+    //   1.2.0 — [ConsumerNote] notes on features, activities and inputs; vocabularies.json.
+    public const string CurrentSchemaVersion = "1.2.0";
 
     public bool HasContributions =>
         Features.Count > 0 || Activities.Count > 0 || Structures.Count > 0 ||
@@ -61,7 +64,10 @@ public sealed record FeatureContract(
     string? DisplayName,
     string? Description,
     IReadOnlyList<string> DependsOn,
-    IReadOnlyList<FeatureOptionContract> Options);
+    IReadOnlyList<FeatureOptionContract> Options,
+    // [ConsumerNote] declarations on the feature class — typically composition notes (a route prefix a
+    // feature imposes, an interaction with another feature) that no option describes.
+    IReadOnlyList<ConsumerNoteContract>? Notes = null);
 
 /// <summary>Mirrors the projection of Elsa.Modularity's ManifestHintReader (same code produces both).</summary>
 public sealed record FeatureOptionContract(
@@ -95,7 +101,17 @@ public sealed record ActivityContract(
     IReadOnlyList<InputContract> Inputs,
     IReadOnlyList<OutputContract> Outputs,
     IReadOnlyList<PortContract> Ports,
-    JsonElement? ContainerStructure);
+    JsonElement? ContainerStructure,
+    // [ConsumerNote] declarations on the activity type. Build-time enrichment only: notes are deliberately
+    // excluded from ContentHash so editing documentation never forces a new activity version.
+    IReadOnlyList<ConsumerNoteContract>? Notes = null);
+
+/// <summary>
+/// One <c>[ConsumerNote]</c>: behaviour the shape does not express, attached to the code it describes.
+/// <see cref="Member"/> names the enum member or property the note is about when it is narrower than its
+/// declaring type.
+/// </summary>
+public sealed record ConsumerNoteContract(string Kind, string Note, string? Member = null);
 
 public sealed record InputContract(
     string ReferenceKey,
@@ -120,7 +136,10 @@ public sealed record InputContract(
     // `inputs`; "intrinsicBlock" means it is carried by the node's sibling `intrinsic` block instead —
     // an intrinsic's variable target is descriptor-only and has no argument binding. Publishing it as a
     // plain required input contradicted the submit schema with no tiebreaker.
-    string AuthoredVia = InputAuthoringSites.Argument);
+    string AuthoredVia = InputAuthoringSites.Argument,
+    // [ConsumerNote] declarations on the input's property. A note carrying `member` describes one enum
+    // value (RFC finding F1) — for example what choosing `ResponseMode.async` actually does.
+    IReadOnlyList<ConsumerNoteContract>? Notes = null);
 
 /// <summary>Where an input is authored in a submission.</summary>
 public static class InputAuthoringSites

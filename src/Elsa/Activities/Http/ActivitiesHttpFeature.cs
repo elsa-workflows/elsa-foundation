@@ -6,6 +6,7 @@ using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,10 @@ namespace Elsa.Activities.Http;
     Description = "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
     DependsOn = new object[] { "Http", "WorkflowsRuntimeHttp" }
 )]
+[ConsumerNote(ConsumerNoteKind.Composition,
+    "Workflow HTTP endpoints are served under this feature's BasePath ('/workflows/http' by default), not at the "
+    + "bare path an HttpEndpoint activity declares. An activity whose path is 'orders' answers at "
+    + "'/workflows/http/orders'. Requesting the bare path returns 404, which reads as a publication failure.")]
 public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeature
 {
     [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow endpoints.", Category = "Routing")]

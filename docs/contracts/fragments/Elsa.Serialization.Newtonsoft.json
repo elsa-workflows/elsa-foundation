@@ -9,11 +9,12 @@
       "description": "Contributes Newtonsoft JSON island handling for the payload serializer.",
       "displayName": "Serialization - Newtonsoft",
       "id": "Serialization.Newtonsoft",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

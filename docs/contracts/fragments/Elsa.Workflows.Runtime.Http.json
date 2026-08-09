@@ -12,6 +12,7 @@
       "description": "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints.",
       "displayName": "Workflows Runtime HTTP",
       "id": "WorkflowsRuntimeHttp",
+      "notes": null,
       "options": [
         {
           "advanced": true,
@@ -60,6 +61,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -9,11 +9,12 @@
       "description": "Provides request and command dispatch pipelines for synchronous in-process mediation.",
       "displayName": "Mediator",
       "id": "Mediator",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

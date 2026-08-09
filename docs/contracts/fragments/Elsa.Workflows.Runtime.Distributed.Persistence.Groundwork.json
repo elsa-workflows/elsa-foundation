@@ -11,11 +11,12 @@
       "description": "Replaces the distributed runtime\u0027s in-memory placement store and cross-node command transport with durable Groundwork-backed stores, so per-execution placement leases and the durable command inbox survive restarts and are shared across nodes through the host-selected document store.",
       "displayName": "Workflows Runtime Distributed Groundwork Persistence",
       "id": "WorkflowsRuntimeDistributedGroundworkPersistence",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

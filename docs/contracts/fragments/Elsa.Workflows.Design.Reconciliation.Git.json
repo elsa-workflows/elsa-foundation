@@ -9,6 +9,7 @@
       "description": "Reconciles workflow-definition versions from a git repository into the catalog, and (Writer role) exports the catalog\u0027s versions back to git.",
       "displayName": "Workflow Design Git Reconciliation",
       "id": "WorkflowsDesignGitReconciliation",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -141,6 +142,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -9,11 +9,12 @@
       "description": "Registers provider-agnostic agent sessions, policy, context, proposal, streaming, feedback, audit, and provider facade contracts.",
       "displayName": "Foundation Agent Abstractions",
       "id": "FoundationAgentAbstractions",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

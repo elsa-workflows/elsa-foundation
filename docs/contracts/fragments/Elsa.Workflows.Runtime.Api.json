@@ -6603,6 +6603,7 @@
       "description": "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
       "displayName": "Workflows Runtime API",
       "id": "WorkflowsRuntimeApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -6669,6 +6670,7 @@
       "description": "Selects immediate or bounded coalesced checkpoint persistence after the shell\u0027s runtime provider is configured.",
       "displayName": "Workflows Runtime Checkpoint Persistence",
       "id": "WorkflowsRuntimeCheckpointPersistence",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -6707,11 +6709,12 @@
       "description": "Trigger index over published workflows plus global stimulus routing: start new instances from an external stimulus with no explicit execution id, and fan a single stimulus in to every waiting instance across executions. Exposes POST runtime/workflows/stimuli. Compose alongside the Workflows Runtime API.",
       "displayName": "Workflows Runtime Triggers",
       "id": "WorkflowsRuntimeTriggers",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

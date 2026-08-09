@@ -9,11 +9,12 @@
       "description": "Registers the Groundwork-backed ASP.NET Core Identity stores and Elsa IAM adapters.",
       "displayName": "Foundation Identity ASP.NET Core Identity Groundwork",
       "id": "FoundationIdentityAspNetCoreIdentityGroundwork",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

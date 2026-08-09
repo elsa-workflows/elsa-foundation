@@ -8447,6 +8447,7 @@
       "description": "Builds JavaScript declaration documents for design-time expression rendering.",
       "displayName": "JavaScript rendering",
       "id": "JavaScriptRendering",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -8497,6 +8498,7 @@
       "description": "Exposes JavaScript rendering endpoints for design-time declaration document generation.",
       "displayName": "JavaScript rendering endpoints",
       "id": "JavaScriptRenderingEndpoints",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -8517,6 +8519,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Http.Core;
+using Elsa.Primitives.Models;
 using Elsa.Http.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
@@ -58,6 +59,16 @@ public sealed class HttpEndpoint :
     public long? RequestSizeLimit { get; set; }
 
     [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30)]
+    [ConsumerNote(ConsumerNoteKind.Default,
+        "The default. The triggering request is answered 202 immediately with a started-workflow body, and a "
+        + "WriteHttpResponse later in the workflow never reaches that caller - its output goes nowhere "
+        + "observable and no incident is recorded. Choose this for fire-and-forget triggers only.",
+        Member = "async")]
+    [ConsumerNote(ConsumerNoteKind.Default,
+        "Holds the request open so a later WriteHttpResponse answers the original caller. This is what a "
+        + "request/response endpoint needs. It degrades back to a 202 - silently, by design - when the "
+        + "workflow suspends, finishes without writing a response, or dispatches non-locally.",
+        Member = "sync")]
     public ResponseMode ResponseMode { get; set; } = ResponseMode.Async;
 
     protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(

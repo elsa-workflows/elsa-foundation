@@ -9,6 +9,7 @@
       "description": "Provides in-memory caching capabilities.",
       "displayName": "Memory Cache",
       "id": "MemoryCache",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -29,6 +30,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

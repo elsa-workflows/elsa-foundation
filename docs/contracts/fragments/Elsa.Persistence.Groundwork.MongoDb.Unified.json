@@ -11,6 +11,7 @@
       "description": "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required; safe missing document structures and diagnostic streams can be auto-applied at startup.",
       "displayName": "Groundwork MongoDB Unified Persistence",
       "id": "GroundworkUnifiedPersistenceMongoDb",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -87,6 +88,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

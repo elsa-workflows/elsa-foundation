@@ -20,11 +20,12 @@
       "description": "Provides portable JavaScript expression evaluation",
       "displayName": "JavaScript Expressions",
       "id": "JavaScriptExpressions",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

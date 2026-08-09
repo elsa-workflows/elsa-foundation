@@ -5,11 +5,13 @@
 //   dotnet run --project tools/contracts/Elsa.Contracts.Generator -- check [--configuration Release]
 //   dotnet run --project tools/contracts/Elsa.Contracts.Generator -- emit --assembly <dll> [--references <rsp>] --output <dir>
 //   dotnet run --project tools/contracts/Elsa.Contracts.Generator -- claims [--configuration Release]
+//   dotnet run --project tools/contracts/Elsa.Contracts.Generator -- notes  [--configuration Release]
 //
 // merge  — project every contributing src assembly and write docs/contracts/ (fragments, submit-schema, manifest).
 // check  — regenerate to a scratch directory and byte-compare against the committed docs/contracts/ (CI gate; exit 1 = stale).
 // emit   — project a single assembly (the standalone mode consumers run against their own activity packages).
 // claims — gate docs/consumer-guide/claims.json against its [ConsumerContract] pins, both directions (CI gate).
+// notes  — G4: report consumer-facing surface carrying no [ConsumerNote]. ADVISORY: always exits 0.
 //
 // Exit codes: 0 success/fresh, 1 diagnostics or stale artifacts, 2 usage error.
 
@@ -24,6 +26,7 @@ try
         ["check", .. var rest] => new ContractsFreshness(diagnostics).Run(RepoRoot(), Options.Parse(rest).Configuration),
         ["emit", .. var rest] => RunEmit(Options.Parse(rest)),
         ["claims", .. var rest] => new ConsumerClaimsGate(diagnostics).Run(RepoRoot(), Options.Parse(rest).Configuration),
+        ["notes", .. var rest] => new ConsumerNoteReport().Run(RepoRoot(), Options.Parse(rest).Configuration),
         _ => Usage()
     };
 }
@@ -66,7 +69,7 @@ int RunEmit(Options options)
 
 static int Usage()
 {
-    Console.Error.WriteLine("Usage: Elsa.Contracts.Generator <merge|check|emit|claims> [options] (see Program.cs header).");
+    Console.Error.WriteLine("Usage: Elsa.Contracts.Generator <merge|check|emit|claims|notes> [options] (see Program.cs header).");
     return 2;
 }
 

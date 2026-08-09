@@ -62,6 +62,7 @@
       "description": "Provides JavaScript evaluation using the Jint engine.",
       "displayName": "JavaScript Jint engine",
       "id": "JavaScriptJintEngine",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -222,6 +223,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

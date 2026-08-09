@@ -152,6 +152,7 @@
       "description": "Canonical management-client endpoints for expression and variable-type descriptors.",
       "displayName": "Expressions API",
       "id": "ExpressionsApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -172,6 +173,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

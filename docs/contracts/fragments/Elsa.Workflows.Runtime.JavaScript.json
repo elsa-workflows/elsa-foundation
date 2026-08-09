@@ -38,6 +38,7 @@
       "description": "Provides runtime support for JavaScript-backed workflow activities.",
       "displayName": "JavaScript activities",
       "id": "JavaScriptActivities",
+      "notes": null,
       "options": []
     },
     {
@@ -47,6 +48,7 @@
       "description": "Exposes runtime API endpoints for JavaScript workflow activities.",
       "displayName": "JavaScript FastEndpoints",
       "id": "JavaScriptEndpoints",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -67,6 +69,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

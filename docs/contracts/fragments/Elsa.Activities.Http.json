@@ -24,6 +24,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Path",
+          "notes": null,
           "order": 10,
           "referenceKey": "Path",
           "type": "String",
@@ -44,6 +45,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "SupportedMethods",
+          "notes": null,
           "order": 20,
           "referenceKey": "SupportedMethods",
           "type": "String",
@@ -87,6 +89,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "CanStartWorkflow",
+          "notes": null,
           "order": 0,
           "referenceKey": "CanStartWorkflow",
           "type": "Boolean",
@@ -107,6 +110,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "Authorize",
+          "notes": null,
           "order": 100,
           "referenceKey": "Authorize",
           "type": "Boolean",
@@ -127,6 +131,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Policy",
+          "notes": null,
           "order": 110,
           "referenceKey": "Policy",
           "type": "String",
@@ -147,6 +152,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "RequestTimeout",
+          "notes": null,
           "order": 120,
           "referenceKey": "RequestTimeout",
           "type": "TimeSpan?",
@@ -167,6 +173,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "RequestSizeLimit",
+          "notes": null,
           "order": 130,
           "referenceKey": "RequestSizeLimit",
           "type": "Int64?",
@@ -190,6 +197,18 @@
           "isNullable": false,
           "isRequired": false,
           "name": "ResponseMode",
+          "notes": [
+            {
+              "kind": "default",
+              "member": "async",
+              "note": "The default. The triggering request is answered 202 immediately with a started-workflow body, and a WriteHttpResponse later in the workflow never reaches that caller - its output goes nowhere observable and no incident is recorded. Choose this for fire-and-forget triggers only."
+            },
+            {
+              "kind": "default",
+              "member": "sync",
+              "note": "Holds the request open so a later WriteHttpResponse answers the original caller. This is what a request/response endpoint needs. It degrades back to a 202 - silently, by design - when the workflow suspends, finishes without writing a response, or dispatches non-locally."
+            }
+          ],
           "order": 30,
           "referenceKey": "ResponseMode",
           "type": "Elsa.Http.Core.ResponseMode",
@@ -197,6 +216,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -259,6 +279,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Url",
+          "notes": null,
           "order": 0,
           "referenceKey": "Url",
           "type": "System.Uri",
@@ -279,6 +300,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "Method",
+          "notes": null,
           "order": 0,
           "referenceKey": "Method",
           "type": "String",
@@ -322,6 +344,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Content",
+          "notes": null,
           "order": 0,
           "referenceKey": "Content",
           "type": "String",
@@ -342,6 +365,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "ContentType",
+          "notes": null,
           "order": 0,
           "referenceKey": "ContentType",
           "type": "String",
@@ -373,6 +397,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "RequestHeaders",
+          "notes": null,
           "order": 0,
           "referenceKey": "RequestHeaders",
           "type": "String",
@@ -393,6 +418,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "ExpectedStatusCodes",
+          "notes": null,
           "order": 0,
           "referenceKey": "ExpectedStatusCodes",
           "type": "Int32",
@@ -413,6 +439,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Timeout",
+          "notes": null,
           "order": 0,
           "referenceKey": "Timeout",
           "type": "TimeSpan?",
@@ -420,6 +447,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -504,6 +532,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "StatusCode",
+          "notes": null,
           "order": 0,
           "referenceKey": "StatusCode",
           "type": "Int32",
@@ -524,6 +553,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Body",
+          "notes": null,
           "order": 0,
           "referenceKey": "Body",
           "type": "String",
@@ -544,6 +574,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "ContentType",
+          "notes": null,
           "order": 0,
           "referenceKey": "ContentType",
           "type": "String",
@@ -564,6 +595,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Headers",
+          "notes": null,
           "order": 0,
           "referenceKey": "Headers",
           "type": "System.String[]",
@@ -571,6 +603,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -633,6 +666,13 @@
       "description": "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
       "displayName": "Activities HTTP",
       "id": "ActivitiesHttp",
+      "notes": [
+        {
+          "kind": "composition",
+          "member": null,
+          "note": "Workflow HTTP endpoints are served under this feature\u0027s BasePath (\u0027/workflows/http\u0027 by default), not at the bare path an HttpEndpoint activity declares. An activity whose path is \u0027orders\u0027 answers at \u0027/workflows/http/orders\u0027. Requesting the bare path returns 404, which reads as a publication failure."
+        }
+      ],
       "options": [
         {
           "advanced": false,
@@ -653,6 +693,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

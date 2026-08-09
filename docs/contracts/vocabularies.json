@@ -45,7 +45,7 @@
     "setInstanceName",
     "setOutput"
   ],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "typeAliases": {
     "note": "\u0027Any\u0027 is accepted as a result-type alias on an expression definition and means \u0027do not constrain the result\u0027. It is not a variable type.",
     "nullableRule": "A nullable value type is the underlying alias with a \u0027?\u0027 suffix (\u0027Int32?\u0027). The nullable companion is derived automatically, so it is never registered separately.",

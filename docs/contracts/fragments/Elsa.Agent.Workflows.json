@@ -9,11 +9,12 @@
       "description": "Registers workflow explanation, troubleshooting, and reviewable workflow-change proposal seams for the agent foundation.",
       "displayName": "Foundation Workflows Agent",
       "id": "FoundationWorkflowsAgent",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

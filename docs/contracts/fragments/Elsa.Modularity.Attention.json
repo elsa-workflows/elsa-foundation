@@ -12,11 +12,12 @@
       "description": "Contributes manifest diagnostics and incompatible module dependencies to Attention.",
       "displayName": "Module Management Attention",
       "id": "ModularityAttention",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

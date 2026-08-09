@@ -13671,6 +13671,7 @@
       "description": "Contains endpoints to manage data in the Workflows Design Domain",
       "displayName": "Workflows Design API",
       "id": "WorkflowsDesignApi",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -13691,6 +13692,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

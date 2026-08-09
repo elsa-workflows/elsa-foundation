@@ -27,11 +27,12 @@
       "description": "Contributes workflow design declarations for JavaScript expression authoring.",
       "displayName": "JavaScript Workflows Design",
       "id": "JavaScriptWorkflowsDesign",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

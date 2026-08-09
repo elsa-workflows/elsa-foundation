@@ -11,6 +11,7 @@
       "description": "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool.",
       "displayName": "Groundwork SQL Server Unified Persistence",
       "id": "GroundworkUnifiedPersistenceSqlServer",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -73,6 +74,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

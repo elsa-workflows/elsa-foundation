@@ -9,6 +9,7 @@
       "description": "Registers the GitHub Copilot agent provider facade seam without leaking SDK-specific details to Studio or workflow modules.",
       "displayName": "GitHub Copilot Agent Provider",
       "id": "GitHubCopilotAgent",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -169,6 +170,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

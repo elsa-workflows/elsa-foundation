@@ -24,6 +24,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Expression",
+          "notes": null,
           "order": 0,
           "referenceKey": "Expression",
           "type": "String",
@@ -31,6 +32,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -71,6 +73,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "Duration",
+          "notes": null,
           "order": 0,
           "referenceKey": "Duration",
           "type": "TimeSpan",
@@ -78,6 +81,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -114,6 +118,7 @@
           "isNullable": false,
           "isRequired": true,
           "name": "Interval",
+          "notes": null,
           "order": 0,
           "referenceKey": "Interval",
           "type": "String",
@@ -121,6 +126,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [
         {
           "category": null,
@@ -150,11 +156,12 @@
       "description": "Scheduling activities: Delay (durable one-shot suspend/resume) and the recurring Timer/Cron start triggers.",
       "displayName": "Activities Scheduling",
       "id": "ActivitiesScheduling",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

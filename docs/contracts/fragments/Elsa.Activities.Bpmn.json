@@ -24,6 +24,7 @@
           "isNullable": true,
           "isRequired": false,
           "name": "Outcome",
+          "notes": null,
           "order": 0,
           "referenceKey": "Outcome",
           "type": "String",
@@ -31,6 +32,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [],
       "version": "1.0.0"
@@ -77,6 +79,7 @@
           "isNullable": false,
           "isRequired": false,
           "name": "CanStartWorkflow",
+          "notes": null,
           "order": 0,
           "referenceKey": "CanStartWorkflow",
           "type": "Boolean",
@@ -84,6 +87,7 @@
           "uiSpecifications": null
         }
       ],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -106,12 +110,13 @@
       "description": "BPMN 2.0 process composite activity and executable element-graph contracts.",
       "displayName": "Activities BPMN",
       "id": "ActivitiesBpmn",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": [
     {
       "featureId": "ActivitiesBpmn",

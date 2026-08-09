@@ -12,6 +12,7 @@
       "description": "Background pump that fires recurring Timer/Cron start triggers, starting new workflow instances on a schedule through the stimulus router. Populates the recurring-schedule store at publish time. Compose alongside the Workflows Runtime Triggers feature and the Tasks feature.",
       "displayName": "Workflows Runtime Recurring Triggers",
       "id": "WorkflowsRuntimeRecurringTriggers",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -64,6 +65,7 @@
       "description": "Background pump that fires durable timers, resuming suspended workflows (e.g. Delay) at their due time through the bookmark-resume dispatcher. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature to make timers restart-durable.",
       "displayName": "Workflows Runtime Scheduling",
       "id": "WorkflowsRuntimeScheduling",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -140,6 +142,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

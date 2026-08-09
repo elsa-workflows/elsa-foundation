@@ -32,6 +32,7 @@
       "executionType": "Action",
       "featureId": "ActivitiesFlowchart",
       "inputs": [],
+      "notes": null,
       "outputs": [],
       "ports": [
         {
@@ -61,12 +62,13 @@
       "description": "Flowchart composite activity and executable-node graph contracts.",
       "displayName": "Activities Flowchart",
       "id": "ActivitiesFlowchart",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": [
     {
       "featureId": "ActivitiesFlowchart",

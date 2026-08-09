@@ -92,6 +92,7 @@
       "description": "Captures structured log entries and exposes them for live tailing and recent-history queries.",
       "displayName": "Diagnostics: Structured Logs",
       "id": "DiagnosticsStructuredLogs",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -168,6 +169,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

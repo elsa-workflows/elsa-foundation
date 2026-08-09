@@ -9,6 +9,7 @@
       "description": "Registers the external OIDC authentication provider module and ASP.NET Core OIDC/JWT handlers.",
       "displayName": "Foundation Identity OIDC",
       "id": "FoundationIdentityOidc",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -29,6 +30,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

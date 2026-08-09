@@ -9,11 +9,12 @@
       "description": "Provides event publishing, event pipeline dispatch, and background event processing services.",
       "displayName": "Events",
       "id": "Events",
+      "notes": null,
       "options": []
     }
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }

@@ -11,6 +11,7 @@
       "description": "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
       "displayName": "Groundwork PostgreSQL Unified Persistence",
       "id": "GroundworkUnifiedPersistencePostgreSql",
+      "notes": null,
       "options": [
         {
           "advanced": false,
@@ -73,6 +74,6 @@
   ],
   "hasContributions": true,
   "intrinsics": [],
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "structures": []
 }
