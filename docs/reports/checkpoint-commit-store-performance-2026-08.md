@@ -183,6 +183,12 @@ cohort is admitted silently.
 | SQLite manifest | `e8faff0a1d42d0614268b4222dfc4c103087a384b617b8b11394d71d2f7f42dd` |
 | PostgreSQL manifest | `32c5e4e526fea153b66c0f1f8ab800bbb77d20cb8747c9fe010a419de627d8c4` |
 
+**The measurement commit is an ancestor of the branch tip, and that is intended.** Everything committed
+after `93e441b72` is documentation; `CheckpointCommitAdapter.cs` is byte-identical between that commit and
+the tip, verifiable with `git diff 93e441b72 HEAD -- <that file>`. Evidence records the commit it was taken
+at, so re-measuring for a documentation change would only churn the numbers. A change to the *leaf* is a
+different matter and must re-measure both providers in the same PR — see issue #1198.
+
 The physical form is a **label**, not a selected shape: Groundwork ships one shape per store, and the label
 exists only so a future two-form comparison has something to name.
 
