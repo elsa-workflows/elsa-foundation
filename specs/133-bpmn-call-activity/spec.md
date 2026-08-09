@@ -1,5 +1,8 @@
 # 133 — BPMN call activity (invoke a published workflow via DispatchWorkflow; engine-owned fault-outcome translation) (BPMN Phase 3)
 
+**Status**: Implemented
+**Merged**: PR #999
+
 ## Goal
 
 Let a published BPMN process contain a **call activity**: a `callActivity` element that invokes a

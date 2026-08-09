@@ -1,5 +1,8 @@
 # 134 — BPMN event subprocesses, tier 2: message/signal/timer triggers (scope listeners, token-kind discriminator, listener-aware completion) (BPMN Phase 3)
 
+**Status**: Implemented
+**Merged**: PR #1000
+
 ## Goal
 
 Complete the event-subprocess construct: **message-, signal-, and timer-triggered** event

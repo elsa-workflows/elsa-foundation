@@ -1,5 +1,8 @@
 # 124 — BPMN compensation (reverse-order compensation log; compensation boundary events + compensate throw/end events) (BPMN Phase 3, first large construct)
 
+**Status**: Implemented
+**Merged**: PR #966
+
 ## Goal
 
 Let a published BPMN process **compensate completed work**: a **compensation boundary event** attaches

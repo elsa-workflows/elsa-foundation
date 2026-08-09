@@ -1,5 +1,8 @@
 # 108 — BPMN Container Activity (Phase 1 slice)
 
+**Status**: Implemented
+**Merged**: PR #865
+
 ## Goal
 
 Introduce a third structural container next to `Flowchart` and `Sequence`: `BpmnProcess`, executing a

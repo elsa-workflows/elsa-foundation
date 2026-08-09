@@ -1,5 +1,8 @@
 # 117 — BPMN event-defined start events (message/signal/timer) (BPMN Phase 2, event-start slice)
 
+**Status**: Implemented
+**Merged**: PR #935
+
 ## Goal
 
 Let a published BPMN process be *started* by an external stimulus: a `startEvent` element carrying a
