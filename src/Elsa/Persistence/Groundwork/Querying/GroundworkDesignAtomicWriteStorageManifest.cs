@@ -56,6 +56,15 @@ public static class GroundworkDesignAtomicWriteStorageManifest
     public const string DesignPostCommitIntentRecordedAtField = "recordedAt";
     public const string DesignPostCommitIntentIdField = "intentId";
 
+    /// <summary>
+    /// Bound on the projected intent id. SQL Server refuses an unbounded string as an index key column, so a
+    /// length is required rather than optional here — SQLite and PostgreSQL accept the unbounded form, which
+    /// is exactly why this has to be settled against all four providers rather than the convenient one.
+    /// Writers project longer ids through a digest, as the runtime outbox does, so the durable logical id
+    /// stays whatever it needs to be.
+    /// </summary>
+    public const int DesignPostCommitIntentIdProjectionLength = 256;
+
     public static StorageManifest Create()
     {
 #pragma warning disable GW0001 // The physical declaration below is the authoritative storage contract.
@@ -174,6 +183,7 @@ public static class GroundworkDesignAtomicWriteStorageManifest
                     DesignPostCommitIntentIdField,
                     DesignPostCommitIntentIdField,
                     PortablePhysicalType.String,
+                    Length: DesignPostCommitIntentIdProjectionLength,
                     IsNullable: false)
             ],
             linkedProjectionLogicalName: $"{DesignPostCommitIntentPhysicalTableName}_indexes");
