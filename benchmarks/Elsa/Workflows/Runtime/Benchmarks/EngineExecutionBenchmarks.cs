@@ -12,6 +12,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -273,6 +274,58 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             $"Expected ReplaySafe-leaf commits/run ({coalescedCommits}) < External-leaf commits/run ({coalescedExternalCommits}) under Coalesced.");
     }
 
+    /// <summary>
+    /// The production-shape column (R9b). Every headline hot-loop figure in this repository uses a
+    /// <see cref="NoOpStep"/> leaf that exists only in this benchmark assembly, so it measures the best case rather
+    /// than anything a user can compose. This method reports the three shapes a real workflow is actually built from,
+    /// under one policy (Coalesced) so the leaf class is the only variable:
+    /// <list type="bullet">
+    /// <item><b>External CLR leaf</b> (<see cref="WriteLine"/>, unmarked ⇒ fail-safe External) — what almost every
+    /// shipped leaf is, and what a workflow of HTTP calls / message sends / database writes costs.</item>
+    /// <item><b>Set intrinsic</b> — where Elsa 4's pure value work actually happens. Fusable only since the blanket
+    /// intrinsic exclusion became per-kind, so this column did not previously exist.</item>
+    /// <item><b>ReplaySafe CLR leaf</b> — the benchmark-only best case, kept as the reference bound.</item>
+    /// </list>
+    /// Commit and dispatch counts are deterministic and are the evidence; wall times carry the usual host-load caveat.
+    /// </summary>
+    [Fact]
+    public async Task Durable_Sqlite_HotLoop_ProductionShapes()
+    {
+        var external = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (External CLR leaf: WriteLine) · durable-sqlite · Coalesced", external);
+
+        var intrinsic = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(BenchmarkWorkflows.SetIntrinsicLeaf),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (Set intrinsic leaf) · durable-sqlite · Coalesced", intrinsic);
+
+        var replaySafe = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(NewPureLoopNode),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (ReplaySafe CLR leaf: benchmark-only NoOpStep) · durable-sqlite · Coalesced", replaySafe);
+
+        output.WriteLine(
+            $"=== production-shape summary (hot-loop×{HotLoopLength}, Coalesced cap {HotLoopSegmentCap}) ===" +
+            $"\n  External CLR leaf : commits={TypicalCommits(external)}/run  dispatches={Modal(external.Dispatches)}/run" +
+            $"\n  Set intrinsic     : commits={TypicalCommits(intrinsic)}/run  dispatches={Modal(intrinsic.Dispatches)}/run" +
+            $"\n  ReplaySafe CLR    : commits={TypicalCommits(replaySafe)}/run  dispatches={Modal(replaySafe.Dispatches)}/run");
+
+        // Deterministic relationships (counts are stable across iterations in this harness):
+        // the External leaf keeps its per-leaf mandatory attempt-claim flush, so it commits strictly more than either
+        // fusable shape; and both fusable shapes elide hops, so they dispatch strictly less than the External shape.
+        Assert.True(
+            TypicalCommits(external) > TypicalCommits(replaySafe),
+            $"Expected External commits/run ({TypicalCommits(external)}) > ReplaySafe ({TypicalCommits(replaySafe)}).");
+        Assert.True(
+            Modal(intrinsic.Dispatches) < Modal(external.Dispatches),
+            $"Expected Set-intrinsic dispatches/run ({Modal(intrinsic.Dispatches)}) < External ({Modal(external.Dispatches)}).");
+    }
+
     // ---- In-process-hop fast path A/B (spec 109, ADR 0031 follow-up (a)) ------------------------------------
     // Before/after for the in-process-hop payload short-circuit: the same shape measured with the fast path DISABLED
     // (durable deserialize path everywhere) and ENABLED (default). Step-0 profiling found the per-hop JSON round-trip is
@@ -329,17 +382,19 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         var walls = new List<double>(IterationCount);
         var commits = new List<long>(IterationCount);
         var reads = new List<long>(IterationCount);
+        var dispatches = new List<long>(IterationCount);
         for (var iteration = 0; iteration < IterationCount; iteration++)
         {
             var stopwatch = new Stopwatch();
-            var (commitCount, readCount) = await RunOnceAsync(newLease, executableFactory, stopwatch, assert);
+            var (commitCount, readCount, dispatchCount) = await RunOnceAsync(newLease, executableFactory, stopwatch, assert);
             walls.Add(stopwatch.Elapsed.TotalMilliseconds);
             if (commitCount is { } value)
                 commits.Add(value);
             reads.Add(readCount);
+            dispatches.Add(dispatchCount);
         }
 
-        return new Measurement(walls, commits, reads);
+        return new Measurement(walls, commits, reads, dispatches);
     }
 
     /// <summary>
@@ -347,7 +402,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     /// (dispatch + scheduler drain), then — outside the timed window — counts durable checkpoint commits.
     /// Returns the commit count for durable harnesses, or <c>null</c> for the in-memory harness.
     /// </summary>
-    private async Task<(long? Commits, long Reads)> RunOnceAsync(
+    private async Task<(long? Commits, long Reads, long Dispatches)> RunOnceAsync(
         Func<ValueTask<HarnessLease>> newLease,
         Func<WorkflowExecutable> executableFactory,
         Stopwatch? stopwatch,
@@ -356,6 +411,11 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         await using var lease = await newLease();
         var executable = executableFactory();
 
+        // spec 123 FR-008: scheduler dispatches are the deterministic, load-proof hop-count evidence — the counter
+        // behind ADR 0047's 58 -> 36 -> 5. Reset per run so the reported figure is per-run, not cumulative.
+        var dispatchDiagnostics = lease.Harness.Services.GetService<RuntimeSchedulerDispatchDiagnostics>();
+        dispatchDiagnostics?.Reset();
+
         stopwatch?.Start();
         var run = await lease.Harness.RunAsync(executable);
         stopwatch?.Stop();
@@ -363,7 +423,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         assert(run);
 
         var commits = lease.Store is null ? (long?)null : await CountCheckpointCommitsAsync(lease.Store);
-        return (commits, lease.ExecutableReads);
+        return (commits, lease.ExecutableReads, dispatchDiagnostics?.Dispatches ?? 0);
     }
 
     /// <summary>
@@ -481,6 +541,13 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             output.WriteLine($"durable executable reads/run: typical={TypicalReads(measurement)}  " +
                              $"min={reads.Min()}  max={reads.Max()}  " +
                              $"(stable={(reads.Min() == reads.Max() ? "yes" : "no")})");
+        }
+        if (measurement.Dispatches.Count > 0 && measurement.Dispatches.Max() > 0)
+        {
+            var dispatches = measurement.Dispatches;
+            output.WriteLine($"scheduler dispatches/run: typical={Modal(dispatches)}  " +
+                             $"min={dispatches.Min()}  max={dispatches.Max()}  " +
+                             $"(stable={(dispatches.Min() == dispatches.Max() ? "yes" : "no")})");
         }
         output.WriteLine("per-run wall (ms): " + string.Join(", ", measurement.Walls.Select(value => value.ToString("F2"))));
     }
@@ -602,7 +669,11 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     private static ExecutableNode NewWriteLineNode(string nodeId, string text) => BenchmarkWorkflows.NewWriteLineNode(nodeId, text);
 
     /// <summary>A run measurement: per-iteration wall times, per-iteration commit counts (durable only), and executable-read counts.</summary>
-    private sealed record Measurement(IReadOnlyList<double> Walls, IReadOnlyList<long> Commits, IReadOnlyList<long> Reads);
+    private sealed record Measurement(
+        IReadOnlyList<double> Walls,
+        IReadOnlyList<long> Commits,
+        IReadOnlyList<long> Reads,
+        IReadOnlyList<long> Dispatches);
 
     private sealed class ExecutableReadCounter
     {

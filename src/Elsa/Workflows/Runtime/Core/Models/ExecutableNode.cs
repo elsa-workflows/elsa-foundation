@@ -258,3 +258,51 @@ public static class WorkflowIntrinsicInputKeys
     public const string Outcome = "outcome";
     public const string Name = "name";
 }
+
+/// <summary>
+/// Per-kind replay-safety for engine intrinsics — the intrinsic analogue of a CLR activity's
+/// <c>ActivityContract.SideEffectProfile</c> (ADR 0032 R1), used to decide whether an intrinsic node may execute as a
+/// fused hop inside a burst (ADR 0047 D1).
+/// </summary>
+/// <remarks>
+/// <para>
+/// The classification is a pure function of <see cref="ExecutableNode.IntrinsicKind"/>, which is already pinned into
+/// the executable, so it needs no synthetic <c>ActivityContract</c> and changes no artifact hash. It is deliberately
+/// <b>not</b> host-configurable: unlike an activity author's <c>[ActivitySideEffectProfile]</c> declaration, the nine
+/// intrinsic kinds are engine-owned and their effects are known here.
+/// </para>
+/// <para>
+/// <b>Fusable — in-workflow value and routing only.</b> <see cref="WorkflowIntrinsicKind.Set"/>,
+/// <see cref="WorkflowIntrinsicKind.Merge"/> and <see cref="WorkflowIntrinsicKind.Reduce"/> write a variable frame;
+/// <see cref="WorkflowIntrinsicKind.Return"/> and <see cref="WorkflowIntrinsicKind.Control"/> set the invocation's
+/// result and outcome. All five are deterministic functions of state the segment replay reproduces, so re-running one
+/// inside a coalesced segment is indistinguishable from running it once.
+/// </para>
+/// <para>
+/// <b>Not fusable.</b> <see cref="WorkflowIntrinsicKind.SetCorrelationId"/> and
+/// <see cref="WorkflowIntrinsicKind.SetInstanceName"/> mutate externally queryable workflow identity (correlation is a
+/// message-correlation key, so a transiently missing value is observable). <see cref="WorkflowIntrinsicKind.Finish"/>
+/// terminates the run and commits the unconditionally mandatory <c>WorkflowCompleted</c> boundary.
+/// <see cref="WorkflowIntrinsicKind.SetOutput"/> is held back deliberately rather than on proof: a workflow output is a
+/// value published for the caller, which is the boundary case ADR 0032 puts on the mandatory side, and the fail-safe
+/// direction costs only throughput. Promoting it is a separate, evidence-backed decision.
+/// </para>
+/// </remarks>
+public static class WorkflowIntrinsicFusion
+{
+    /// <summary>Whether an intrinsic of this kind may run as a fused hop inside a burst.</summary>
+    public static bool IsFusable(WorkflowIntrinsicKind kind) => kind switch
+    {
+        WorkflowIntrinsicKind.Set
+            or WorkflowIntrinsicKind.Merge
+            or WorkflowIntrinsicKind.Reduce
+            or WorkflowIntrinsicKind.Return
+            or WorkflowIntrinsicKind.Control => true,
+        WorkflowIntrinsicKind.SetCorrelationId
+            or WorkflowIntrinsicKind.SetInstanceName
+            or WorkflowIntrinsicKind.SetOutput
+            or WorkflowIntrinsicKind.Finish => false,
+        // A new kind is not fusable until it is classified here: the fail-safe direction is the durable one.
+        _ => false
+    };
+}

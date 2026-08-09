@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Testing;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -166,6 +168,83 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(0, disabled.FusedSpans);
     }
 
+    // Shape (f): a straight-line hot loop of Set intrinsics. Intrinsics were previously excluded from fusion as a
+    // class; the exclusion is now per kind (WorkflowIntrinsicFusion), so the pure value/routing kinds fuse. An
+    // intrinsic has no invoke stage — its start stage is the whole execution — so this also exercises the
+    // CompletedAtStart fused shape, which the typed-leaf shapes above never reach.
+    [Fact]
+    public async Task SetIntrinsicHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages()
+    {
+        var enabled = await DriveAsync(BuildSetIntrinsicHotLoop, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildSetIntrinsicHotLoop, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+        Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
+        Assert.NotEqual(string.Empty, enabled.CommitFingerprint);
+
+        // Non-vacuous: every intrinsic fused, the cascade pumped inline, and the ON run paid materially fewer
+        // dispatches. A guardrail that passes with zero fused spans is a failed guardrail.
+        Assert.True(enabled.FusedSpans >= HotLoopLength,
+            $"Expected >= {HotLoopLength} fused intrinsic spans in the ON run, saw {enabled.FusedSpans}.");
+        Assert.Equal(0, disabled.FusedSpans);
+        Assert.True(enabled.InlineCascadeDispatches > 0,
+            $"Expected the D2 pump to dispatch cascade items inline, saw {enabled.InlineCascadeDispatches}.");
+        Assert.True(enabled.Dispatches < disabled.Dispatches,
+            $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
+    }
+
+    // Shape (g): a SetOutput intrinsic — a kind deliberately held back from fusion because a workflow output is a value
+    // published for the caller. It must take the discrete chain even with fusion ON, and commit identically.
+    [Fact]
+    public async Task NonFusableIntrinsic_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses()
+    {
+        var enabled = await DriveAsync(BuildSetOutputIntrinsicLine, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildSetOutputIntrinsicLine, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+        Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
+
+        // The SetOutput nodes must not fuse. The hosting Flowchart composite is ReplaySafe and may fuse, so the bound
+        // is "strictly fewer fused spans than there are intrinsics", mirroring the External-leaf assertion above.
+        Assert.True(enabled.FusedSpans < HotLoopLength,
+            $"SetOutput intrinsics must not fuse, but saw {enabled.FusedSpans} fused spans for {HotLoopLength} nodes.");
+        Assert.Equal(0, disabled.FusedSpans);
+    }
+
+    // The per-kind classification itself, asserted directly so a newly added intrinsic kind cannot silently default
+    // into the fusable set: the classifier's fall-through is deliberately non-fusable.
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.Set, true)]
+    [InlineData(WorkflowIntrinsicKind.Merge, true)]
+    [InlineData(WorkflowIntrinsicKind.Reduce, true)]
+    [InlineData(WorkflowIntrinsicKind.Return, true)]
+    [InlineData(WorkflowIntrinsicKind.Control, true)]
+    [InlineData(WorkflowIntrinsicKind.SetCorrelationId, false)]
+    [InlineData(WorkflowIntrinsicKind.SetInstanceName, false)]
+    [InlineData(WorkflowIntrinsicKind.SetOutput, false)]
+    [InlineData(WorkflowIntrinsicKind.Finish, false)]
+    public void IntrinsicFusability_IsClassifiedPerKind(WorkflowIntrinsicKind kind, bool expected) =>
+        Assert.Equal(expected, WorkflowIntrinsicFusion.IsFusable(kind));
+
+    // Completeness: the theory above must name every intrinsic kind. Adding a kind without classifying it here fails
+    // this test rather than silently inheriting the classifier's non-fusable fall-through unexamined.
+    [Fact]
+    public void IntrinsicFusabilityTheory_CoversEveryIntrinsicKind()
+    {
+        var classified = typeof(ReplaySafeFusionGuardrailTests)
+            .GetMethod(nameof(IntrinsicFusability_IsClassifiedPerKind))!
+            .GetCustomAttributes(typeof(InlineDataAttribute), inherit: false)
+            .Cast<InlineDataAttribute>()
+            .Select(attribute => (WorkflowIntrinsicKind)attribute.GetData(null!).Single()[0]!)
+            .ToHashSet();
+
+        Assert.Equal(Enum.GetValues<WorkflowIntrinsicKind>().ToHashSet(), classified);
+    }
+
     // Self-check: the fingerprint is deterministic across two identical (fusion-OFF) runs, so the enabled-vs-disabled
     // equality above is a real convergence claim rather than an artifact of a non-deterministic capture.
     [Fact]
@@ -287,7 +366,10 @@ public sealed class ReplaySafeFusionGuardrailTests
             startNodeId: "node-fork");
     }
 
-    private static WorkflowExecutable BuildStraightLine(ExecutableNode[] leaves, string? waitingNodeId = null)
+    private static WorkflowExecutable BuildStraightLine(
+        ExecutableNode[] leaves,
+        string? waitingNodeId = null,
+        RuntimeVariableDeclaration[]? workflowVariables = null)
     {
         var connections = Enumerable.Range(0, leaves.Length - 1)
             .Select(index => new FlowchartConnection(
@@ -295,14 +377,15 @@ public sealed class ReplaySafeFusionGuardrailTests
                 new FlowchartEndpoint(leaves[index + 1].ExecutableNodeId)))
             .ToArray();
 
-        return BuildFlowchart(leaves, connections, leaves[0].ExecutableNodeId, waitingNodeId);
+        return BuildFlowchart(leaves, connections, leaves[0].ExecutableNodeId, waitingNodeId, workflowVariables);
     }
 
     private static WorkflowExecutable BuildFlowchart(
         ExecutableNode[] leaves,
         FlowchartConnection[] connections,
         string startNodeId,
-        string? waitingNodeId = null)
+        string? waitingNodeId = null,
+        RuntimeVariableDeclaration[]? workflowVariables = null)
     {
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
@@ -338,8 +421,74 @@ public sealed class ReplaySafeFusionGuardrailTests
             resumeTargets: resumeTargets,
             createdAt: FixedNow,
             compatibilityMetadata: new Dictionary<string, string>(),
-            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            inputContract: null,
+            dependencies: null,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
+            workflowVariables: workflowVariables);
     }
+
+    private static readonly ValueTypeDescriptor StringType = new("String");
+
+    // A straight line of Set intrinsics, each rewriting the same declared workflow variable. Every node is a fusable
+    // kind, so every node exercises the intrinsic (CompletedAtStart) fused shape.
+    private static WorkflowExecutable BuildSetIntrinsicHotLoop() =>
+        BuildStraightLine(
+            Enumerable.Range(0, HotLoopLength)
+                .Select(index => NewIntrinsicNode($"node-loop-{index}", WorkflowIntrinsicKind.Set, $"value-{index}"))
+                .ToArray(),
+            waitingNodeId: null,
+            workflowVariables: [new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline)]);
+
+    private static WorkflowExecutable BuildSetOutputIntrinsicLine() =>
+        BuildStraightLine(
+            Enumerable.Range(0, HotLoopLength)
+                .Select(index => NewIntrinsicNode($"node-loop-{index}", WorkflowIntrinsicKind.SetOutput, $"value-{index}", outputName: $"output-{index}"))
+                .ToArray());
+
+    private static ExecutableNode NewIntrinsicNode(
+        string nodeId,
+        WorkflowIntrinsicKind intrinsicKind,
+        string value,
+        string? outputName = null)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+        {
+            [WorkflowIntrinsicInputKeys.Value] = new(
+                WorkflowIntrinsicInputKeys.Value,
+                StringType,
+                ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal,
+                literal: InlineString(value))
+        };
+        if (outputName is not null)
+        {
+            bindings[WorkflowIntrinsicInputKeys.Name] = new(
+                WorkflowIntrinsicInputKeys.Name,
+                StringType,
+                ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal,
+                literal: InlineString(outputName));
+        }
+
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: $"elsa.intrinsic.{intrinsicKind.ToString().ToLowerInvariant()}",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = intrinsicKind.ToString(), schemaVersion = "1.0.0" }),
+            inputBindings: bindings,
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: intrinsicKind,
+            intrinsicVariable: intrinsicKind is WorkflowIntrinsicKind.Set or WorkflowIntrinsicKind.Merge or WorkflowIntrinsicKind.Reduce
+                ? new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId)
+                : null);
+    }
+
+    private static ValueEnvelope InlineString(string value) =>
+        ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
 
     private static ExecutableNode NewReplaySafeWaitingNode(string nodeId) =>
         new(
