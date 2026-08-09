@@ -90,7 +90,7 @@ list going in (admission control locus, read-model coupling).
 | **Admission control / backpressure** | **None that sheds.** A `SemaphoreSlim(1,1)` store connection gate queues without bound or timeout (§4.1; measured in [spec 114](../../specs/114-concurrency-throughput-instrument/research.md)) | Adaptive per-partition limiter that rejects commands | Bounded job queue + acquisition backoff (up to 60 s) | Not addressed |
 | **Intra-instance parallelism** | Interleaved on one writer, never concurrent (ADR 0031) | Interleaved on one processor thread | Serialized by exclusive jobs | Concurrent tokens; parallelism is a host choice |
 | **Poison containment** | Per work item: ack, poison record, blocking incident; no retry by default; escalation to the workflow is an authored `IIncidentStrategy` | Instance is banned; partition keeps processing everything else | Retry counter (default 3) then incident; other jobs unaffected | Not addressed |
-| **Hung-work detection** | **None**: the work claim *and* the ownership heartbeat both renew for as long as the dispatch runs, and those are the recovery scanner's only two signals | Absolute job timeout; the job is reassigned | Job lock expiry; another node re-acquires | Not addressed |
+| **Hung-work detection** | Absolute per-dispatch ceiling (`MaxDispatchDuration`, default 30 min) that stops renewal, cancels, and poisons. Cooperative-cancellation limits apply | Absolute job timeout; the job is reassigned | Job lock expiry; another node re-acquires | Not addressed |
 | **Read model derivation** | Folded into the same commit (`activityExecutionInspections`; ADR 0001, ADR 0032 R3) | Separate exporters reading the log asynchronously | Same DB, queried directly; history tables written in the same transaction | Not addressed |
 | **Semantics/host separation** | **Pure**, in the BPMN core: `(graph, state, event) -> (state, continuation, commands)` ([Bpmn.Semantics ADR 0002](https://github.com/valence-works/bpmn)). Impure in Flowchart and in the runtime | Semantics live inside the stream processor | Semantics live in behavior classes coupled to the persistence session | Defines the semantics, not the seam |
 | **Operational substrate** | Whatever store the host already runs (SQLite, Postgres, Mongo) inside the host process | A dedicated broker cluster, RocksDB, gateways, plus an exporter target | An app server plus a relational DB | N/A |
@@ -308,6 +308,12 @@ exactly two signals: `IsLeaseExpired(lease, request)` against the lease's `Expir
 refreshed by the two loops above for as long as the dispatch is stuck. An activity blocked on a socket
 with no timeout therefore keeps its work claim, keeps its ownership lease, keeps its heartbeat fresh,
 occupies its execution's single writer, and presents to every store and scanner as perfectly healthy.
+
+**Fixed — see R3, now closed.** `MaxDispatchDuration` bounds the dispatch loop, and a breach ends the
+drain, which releases the ownership lease. One correction to what follows: only the *dispatch* loop's
+unboundedness indicates a hang. An ownership heartbeat that keeps beating while dispatches keep
+completing is reporting genuine progress, so bounding it too would have killed legitimately long
+workflows.
 
 **The underlying error, stated plainly.** Both loops answer "is the renewer alive?" when the question
 that matters is "is the work progressing?" A renewal loop running on a healthy thread pool thread proves
@@ -810,29 +816,39 @@ this whole line is SQLite-specific.
 stores with expensive per-commit fsyncs (`synchronous=FULL`, network filesystems, a provider without
 WAL). It is a correct feature with an honest default, not a dead end.
 
-### R3. Bound both renewal loops so a hung dispatch can be revoked. Cost: S.
+### R3. Bound the dispatch so a hung one can be revoked. **Done.**
 
-Give `RenewClaimUntilStoppedAsync` and `RenewOwnershipUntilStoppedAsync` a maximum *total* duration
-(distinct from their renewal intervals), and cancel `dispatchCancellation` / `drainCancellation` when it
-is exceeded. Both loops already hold the cancellation source they would need to trigger; this is adding
-a ceiling to an unbounded loop in two places and deciding what the default is.
+`RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` (default 30 minutes;
+`Timeout.InfiniteTimeSpan` restores the previous behavior) is an absolute ceiling on one dispatch. Past
+it the renewal loop stops renewing, cancels the dispatch, and throws a deadline exception that is
+deliberately neither an `OperationCanceledException` (which must leave the item queued) nor a claim-lost
+(which must not poison, since a successor may own the work) — so it lands in the drainer's general fault
+arm and the item is ack-deleted, poisoned, and surfaced as a blocking incident. A hang becomes bounded
+and visible instead of invisible.
 
-Verification (§4.2) both confirmed and enlarged this: it is two loops, not one, and fixing only the work
-claim would leave the ownership heartbeat still masking the hang from the recovery scanner. They must be
-bounded together or the fix does nothing observable.
+**One correction to this recommendation, made while implementing it.** I wrote "bound *both* loops",
+because §4.2 found both unbounded. That was wrong. An unbounded *ownership* heartbeat is not a hang
+signal: a drain that keeps completing dispatches is making genuine progress, and killing it would break
+legitimately long workflows. Only the dispatch loop's unboundedness means *stuck* — and bounding it is
+sufficient, because a breach ends the drain, which releases the ownership lease anyway. One ceiling, in
+the right place, beats two.
 
-Resolve the ceiling the way `IRuntimeVolatileWaitPolicy` already resolves a declared wait's
-`maximumDuration`: a policy with a host default, overridable per activity contract. That existing policy
-is the precedent for the shape, so the design question is narrower than it looks.
+**The default is generous rather than absent, and that is the arguable part.** A dispatch holds its
+execution's single writer for its whole duration, so in Elsa's model a genuinely long wait is meant to
+suspend on a bookmark or timer, not block a dispatch. Thirty minutes sits far outside any legitimate
+synchronous activity while still catching a hang in bounded time. Shipping it unbounded-by-default would
+have preserved behavior exactly and left the hole open, which seemed the worse trade for a pre-release
+runtime.
 
-*What would have to be true:* that activities cooperate with cancellation. They receive a
-`CancellationToken`, so the mechanism is there, but an activity blocking in unmanaged code will not
-respond, and the design has to decide what to do then. Two defensible answers: stop renewing and let the
-claim lapse so a survivor can take the work (correct for the store, but the stuck thread is still stuck),
-or poison the item and surface an incident. I would do both, in that order.
+**What it does not fix, stated plainly:** cancellation is cooperative, so an activity blocked in
+unmanaged code will not observe it. The deadline still stops renewal, so the claim lapses and a survivor
+can take the work — the store-side stays correct even when the thread does not unwind. That is the
+"stop renewing *and* poison, in that order" answer this recommendation originally sketched.
 
-This remains the highest value-per-cost item on the list, and verification raised its value: an
-unbounded hang is currently indistinguishable from healthy work at every layer that could detect it.
+*Implementation note worth reviewing:* a deadline firing in the same instant a dispatch completes
+successfully must not poison work that already committed, so the deadline is suppressed when the
+dispatch produced no failure. Claim-lost keeps its precedence over a successful dispatch; a deadline
+does not. Three tests cover the breach, that race, and the infinite-ceiling escape hatch.
 
 ### R4. Decide the Flowchart/BPMN sharing question before ADR 0063 executes. Cost: S to decide, S to
 extract.
