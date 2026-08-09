@@ -243,7 +243,8 @@ internal static class TenantMembershipDifferentialProbes
         // context can be left tracking an entity whose INSERT already committed, and the re-drive
         // then re-INSERTs a live key and trips the (TenantId, UserId) unique index. Both comparands
         // reopen over the same durable data, exactly as RestartObservation does, so the re-drive
-        // stays symmetric.
+        // stays symmetric. TenantMembershipTrackerHazardTests pins that sequence deterministically —
+        // read it before deleting these two lines (issue #1204).
         await target.CloseAsync();
         store = await target.OpenAsync();
 
