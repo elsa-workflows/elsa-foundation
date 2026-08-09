@@ -4,6 +4,7 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -195,10 +196,11 @@ public sealed class ReplaySafeFusionGuardrailTests
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
     }
 
-    // Shape (g): a SetOutput intrinsic — a kind deliberately held back from fusion because a workflow output is a value
-    // published for the caller. It must take the discrete chain even with fusion ON, and commit identically.
+    // Shape (g): a SetOutput intrinsic chain. SetOutput writes a workflow output, which is the value most at risk from
+    // a replayed write, so this shape asserts the OUTPUT VALUES as well as the durable fingerprints: the output state
+    // id is a pure function of the output name, so a replayed write folds last-writer-per-state-id onto the same value.
     [Fact]
-    public async Task NonFusableIntrinsic_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses()
+    public async Task SetOutputIntrinsicChain_EnabledVersusDisabled_IsByteIdentical_AndOutputsAreCorrect()
     {
         var enabled = await DriveAsync(BuildSetOutputIntrinsicLine, fusionEnabled: true);
         var disabled = await DriveAsync(BuildSetOutputIntrinsicLine, fusionEnabled: false);
@@ -208,10 +210,36 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
         Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
 
-        // The SetOutput nodes must not fuse. The hosting Flowchart composite is ReplaySafe and may fuse, so the bound
-        // is "strictly fewer fused spans than there are intrinsics", mirroring the External-leaf assertion above.
+        // Every declared output carries the value its node wrote, under fusion and without it. This is the assertion
+        // that would fail if a fused SetOutput dropped, reordered, or double-applied a workflow-output write.
+        var expected = Enumerable.Range(0, HotLoopLength).ToDictionary(index => $"output-{index}", index => $"value-{index}");
+        Assert.Equal(expected, enabled.WorkflowOutputs);
+        Assert.Equal(expected, disabled.WorkflowOutputs);
+
+        Assert.True(enabled.FusedSpans >= HotLoopLength,
+            $"Expected >= {HotLoopLength} fused SetOutput spans in the ON run, saw {enabled.FusedSpans}.");
+        Assert.Equal(0, disabled.FusedSpans);
+        Assert.True(enabled.Dispatches < disabled.Dispatches,
+            $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
+    }
+
+    // Shape (h): a SetCorrelationId chain — a kind that stays non-fusable because it mutates externally queryable
+    // workflow identity. It must take the discrete chain even with fusion ON, and commit identically.
+    [Fact]
+    public async Task NonFusableIntrinsic_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses()
+    {
+        var enabled = await DriveAsync(BuildSetCorrelationIdIntrinsicLine, fusionEnabled: true);
+        var disabled = await DriveAsync(BuildSetCorrelationIdIntrinsicLine, fusionEnabled: false);
+
+        Assert.True(enabled.Completed);
+        Assert.True(disabled.Completed);
+        Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
+        Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
+
+        // The identity-mutating nodes must not fuse. The hosting Flowchart composite is ReplaySafe and may fuse, so the
+        // bound is "strictly fewer fused spans than there are intrinsics", mirroring the External-leaf assertion above.
         Assert.True(enabled.FusedSpans < HotLoopLength,
-            $"SetOutput intrinsics must not fuse, but saw {enabled.FusedSpans} fused spans for {HotLoopLength} nodes.");
+            $"SetCorrelationId intrinsics must not fuse, but saw {enabled.FusedSpans} fused spans for {HotLoopLength} nodes.");
         Assert.Equal(0, disabled.FusedSpans);
     }
 
@@ -225,7 +253,7 @@ public sealed class ReplaySafeFusionGuardrailTests
     [InlineData(WorkflowIntrinsicKind.Control, true)]
     [InlineData(WorkflowIntrinsicKind.SetCorrelationId, false)]
     [InlineData(WorkflowIntrinsicKind.SetInstanceName, false)]
-    [InlineData(WorkflowIntrinsicKind.SetOutput, false)]
+    [InlineData(WorkflowIntrinsicKind.SetOutput, true)]
     [InlineData(WorkflowIntrinsicKind.Finish, false)]
     public void IntrinsicFusability_IsClassifiedPerKind(WorkflowIntrinsicKind kind, bool expected) =>
         Assert.Equal(expected, WorkflowIntrinsicFusion.IsFusable(kind));
@@ -288,8 +316,32 @@ public sealed class ReplaySafeFusionGuardrailTests
             FusedSpans: diagnostics.FusedSpans,
             Dispatches: diagnostics.Dispatches,
             InlineCascadeDispatches: diagnostics.InlineCascadeDispatches,
-            CascadeJoinFallbacks: diagnostics.CascadeJoinFallbacks);
+            CascadeJoinFallbacks: diagnostics.CascadeJoinFallbacks,
+            WorkflowOutputs: await ProjectWorkflowOutputsAsync(harness.Services));
     }
+
+    // The named workflow outputs as the instance read API would surface them. Read through the production projection
+    // (RuntimeWorkflowOutputStateProjection) rather than raw durable values, so a fused SetOutput is asserted on the
+    // surface a caller actually observes. Under the harness's default capture policy an output projects as a bounded
+    // diagnostic snapshot whose `preview` carries the value (the shape
+    // WorkflowOutputReadBackEndToEndExecutionTests.ExecuteWorkflow_DefaultPolicy_SurfacesOutputAsDiagnosticSnapshot_NotAbsent
+    // pins), so read `preview` when present and fall back to a plain string for an exposing policy.
+    private static async Task<IReadOnlyDictionary<string, string?>> ProjectWorkflowOutputsAsync(IServiceProvider services)
+    {
+        var durableValues = await services.GetRequiredService<IDurableValueStateStore>()
+            .ListAllDurableValueStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        return RuntimeWorkflowOutputStateProjection
+            .Project(durableValues, services.GetRequiredService<IRuntimePayloadCapturePolicy>())
+            .ToDictionary(projection => projection.Name, ReadOutputValue, StringComparer.Ordinal);
+    }
+
+    private static string? ReadOutputValue(WorkflowOutputProjection projection) => projection.Value switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Object } snapshot when snapshot.TryGetProperty("preview", out var preview) => preview.GetString(),
+        { ValueKind: JsonValueKind.String } inline => inline.GetString(),
+        var other => other.Value.GetRawText()
+    };
 
     private static string FingerprintCommits(IReadOnlyCollection<RuntimeCheckpointCommitRecord> commits) =>
         Normalize(string.Join(
@@ -447,6 +499,12 @@ public sealed class ReplaySafeFusionGuardrailTests
                 .Select(index => NewIntrinsicNode($"node-loop-{index}", WorkflowIntrinsicKind.SetOutput, $"value-{index}", outputName: $"output-{index}"))
                 .ToArray());
 
+    private static WorkflowExecutable BuildSetCorrelationIdIntrinsicLine() =>
+        BuildStraightLine(
+            Enumerable.Range(0, HotLoopLength)
+                .Select(index => NewIntrinsicNode($"node-loop-{index}", WorkflowIntrinsicKind.SetCorrelationId, $"correlation-{index}"))
+                .ToArray());
+
     private static ExecutableNode NewIntrinsicNode(
         string nodeId,
         WorkflowIntrinsicKind intrinsicKind,
@@ -508,7 +566,8 @@ public sealed class ReplaySafeFusionGuardrailTests
         long FusedSpans,
         long Dispatches,
         long InlineCascadeDispatches,
-        long CascadeJoinFallbacks);
+        long CascadeJoinFallbacks,
+        IReadOnlyDictionary<string, string?> WorkflowOutputs);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

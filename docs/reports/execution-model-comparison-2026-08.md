@@ -908,9 +908,19 @@ was worth doing to learn that it is not the lever.
 | --- | --- | --- |
 | `Set`, `Merge`, `Reduce` | Yes | Write a variable frame — in-workflow state a segment replay reproduces |
 | `Return`, `Control` | Yes | Set the invocation's result and outcome from a materialized binding |
+| `SetOutput` | Yes | Writes a durable value whose state id is a pure function of the output name, so a replayed write folds last-writer-per-state-id onto the same value |
 | `SetCorrelationId`, `SetInstanceName` | No | Mutate externally queryable identity; correlation is a message-correlation key |
 | `Finish` | No | Terminates the run and commits the unconditionally mandatory `WorkflowCompleted` |
-| `SetOutput` | No | Held back deliberately rather than on proof: a workflow output is published for the caller, the boundary case ADR 0032 puts on the mandatory side |
+
+**`SetOutput` was held back in a first revision, and that was a mistake worth naming.** The stated reason
+was that a workflow output is "published for the caller" and so belongs on ADR 0032's mandatory side.
+That conflated two independent dials. *When* an output becomes durable is decided by the checkpoint
+persistence policy, and `IntrinsicCompleted` is not in
+`CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames` — so under coalescing a
+`SetOutput` was **already deferring and folding into the segment flush**, with or without fusion. Fusion
+decides only how many dispatches the node costs. Excluding it protected nothing about output visibility
+and bought only hops. A host that needs an output durable the instant it is written selects
+`Mode = Immediate`; that lever is untouched.
 
 **What shipped:**
 
@@ -934,8 +944,8 @@ new kill points in `ReplaySafeFusionCrashConvergenceTests` walk the intrinsic sp
 intrinsic, in the inline completion pass between intrinsics, and across the D2→D1 recursion boundary —
 and all converge to the crash-free terminal.
 
-Suites run green: 269 activities-runtime, 1564 workflows-runtime, 747 Groundwork, 358 architecture, and
-23 engine benchmarks (which also covers the R9b instrument change).
+Suites run green: 270 activities-runtime, 1564 workflows-runtime, 752 Groundwork, 358 architecture, and
+the engine benchmarks (which also cover the R9b instrument change).
 
 **One correction to my own §4.5 reasoning, found while implementing.** I had assumed intrinsics paid a
 mandatory flush per node because every intrinsic commit is stamped
@@ -958,7 +968,8 @@ times are from a machine at load ~2.4–3.3 and carry the usual caveat:
 | Leaf shape | commits/run | dispatches/run | p50 |
 |---|---:|---:|---:|
 | **External CLR leaf** (`WriteLine`, unmarked) — the production shape | 11 | **56** | ~259 ms |
-| **`Set` intrinsic** — newly fusable via R9 | 1 | **5** | ~35.7 ms |
+| **`Set` intrinsic** — newly fusable via R9 | 1 | **5** | ~37 ms |
+| **`SetOutput` intrinsic** — newly fusable via R9 | 1 | **5** | ~39 ms |
 | ReplaySafe CLR leaf (`NoOpStep`, benchmark-only) — the published best case | 1 | 5 | ~79 ms |
 
 **Three things this settles.**
@@ -967,9 +978,9 @@ times are from a machine at load ~2.4–3.3 and carry the usual caveat:
    pays **56 dispatches**, which is ADR 0047's *pre-fusion* figure of 58. The headline `5` was never
    reachable by anything a user could compose. The production shape costs 11× the commits and 11.2× the
    dispatches of the number the campaign reports.
-2. **R9 moved a real workflow onto the floor.** A `Set`-intrinsic loop now hits 1 commit and 5
-   dispatches — the same floor as the benchmark-only leaf, and reachable, because intrinsics are what
-   `Set`/`Merge`/`Reduce` authoring compiles to.
+2. **R9 moved a real workflow onto the floor.** `Set` and `SetOutput` intrinsic loops both hit 1 commit
+   and 5 dispatches — the same floor as the benchmark-only leaf, and reachable, because intrinsics are
+   what `Set`/`Merge`/`Reduce`/`SetOutput` authoring compiles to.
 3. **An unexpected result worth acting on: the intrinsic is ~2.2× faster than the fused CLR leaf at
    identical commits and dispatches** (~35.7 ms vs ~79 ms). Hop count and commit count are equal, so the
    difference is everything a CLR activity costs *inside* a hop: DI activation, input-snapshot

@@ -120,6 +120,34 @@ internal static class BenchmarkWorkflows
             intrinsicKind: WorkflowIntrinsicKind.Set,
             intrinsicVariable: new RuntimeVariableReference(IntrinsicVariableKey, VariableReference.WorkflowScopeId));
 
+    /// <summary>A <c>SetOutput</c> engine-intrinsic leaf, each writing a distinct named workflow output.</summary>
+    public static ExecutableNode SetOutputIntrinsicLeaf(int index) =>
+        new(
+            executableNodeId: LoopNodeId(index),
+            authoredActivityId: $"authored-{LoopNodeId(index)}",
+            activityType: "elsa.intrinsic.set-output",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "SetOutput", schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+            {
+                [WorkflowIntrinsicInputKeys.Name] = IntrinsicLiteral(WorkflowIntrinsicInputKeys.Name, $"output-{index}"),
+                [WorkflowIntrinsicInputKeys.Value] = IntrinsicLiteral(WorkflowIntrinsicInputKeys.Value, $"value-{index}")
+            },
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.SetOutput);
+
+    private static RuntimeInputBinding IntrinsicLiteral(string key, string value) =>
+        new(
+            key,
+            IntrinsicValueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                IntrinsicValueType,
+                JsonSerializer.SerializeToElement(value),
+                ValueProtectionPolicy.InstanceInline));
+
     private static WorkflowExecutable Flowchart(
         IReadOnlyCollection<ExecutableNode> leaves,
         IReadOnlyCollection<FlowchartConnection> connections,

@@ -303,6 +303,12 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             AssertHotLoopCompleted);
         Report($"hot-loop×{HotLoopLength} (Set intrinsic leaf) · durable-sqlite · Coalesced", intrinsic);
 
+        var setOutput = await MeasureAsync(
+            () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
+            () => BuildHotLoopFlowchart(BenchmarkWorkflows.SetOutputIntrinsicLeaf),
+            AssertHotLoopCompleted);
+        Report($"hot-loop×{HotLoopLength} (SetOutput intrinsic leaf) · durable-sqlite · Coalesced", setOutput);
+
         var replaySafe = await MeasureAsync(
             () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
             () => BuildHotLoopFlowchart(NewPureLoopNode),
@@ -313,6 +319,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             $"=== production-shape summary (hot-loop×{HotLoopLength}, Coalesced cap {HotLoopSegmentCap}) ===" +
             $"\n  External CLR leaf : commits={TypicalCommits(external)}/run  dispatches={Modal(external.Dispatches)}/run" +
             $"\n  Set intrinsic     : commits={TypicalCommits(intrinsic)}/run  dispatches={Modal(intrinsic.Dispatches)}/run" +
+            $"\n  SetOutput intrinsic: commits={TypicalCommits(setOutput)}/run  dispatches={Modal(setOutput.Dispatches)}/run" +
             $"\n  ReplaySafe CLR    : commits={TypicalCommits(replaySafe)}/run  dispatches={Modal(replaySafe.Dispatches)}/run");
 
         // Deterministic relationships (counts are stable across iterations in this harness):

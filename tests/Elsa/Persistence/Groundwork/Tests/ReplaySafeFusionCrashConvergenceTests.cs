@@ -68,6 +68,47 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
     public Task CrashInsideFusedIntrinsicSpan_RetainsDurableRedriveSource_ThenSweepConverges(int crashOnCommit) =>
         AssertCrashConvergesAsync(crashOnCommit, BuildSetIntrinsicFlowchart);
 
+    /// <summary>
+    /// The <c>SetOutput</c> chain specifically. A workflow output is the value most at risk from a replayed write, so
+    /// this walks the same kill points over a chain of <c>SetOutput</c> intrinsics and additionally asserts that every
+    /// named output holds its correct value after recovery — the durable-value state id is a pure function of the
+    /// output name, so a replayed write must fold onto the same id rather than duplicate or drop.
+    /// </summary>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(9)]
+    public async Task CrashInsideFusedSetOutputSpan_ConvergesAndPreservesEveryOutput(int crashOnCommit)
+    {
+        await AssertCrashConvergesAsync(crashOnCommit, BuildSetOutputFlowchart);
+
+        // Convergence alone would not catch a lost or duplicated output write, because the activity-status snapshot
+        // AssertCrashConvergesAsync compares says nothing about durable values. Re-run the crash-free control and pin
+        // the outputs themselves.
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
+        var store = new InMemoryDocumentStore(manifest);
+        await using var harness = BuildHarness(store, customize: null);
+        var run = await harness.RunAsync(BuildSetOutputFlowchart());
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+
+        var durableValues = await harness.Services.GetRequiredService<IDurableValueStateStore>()
+            .ListAllDurableValueStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        var outputs = RuntimeWorkflowOutputStateProjection
+            .Project(durableValues, harness.Services.GetRequiredService<IRuntimePayloadCapturePolicy>())
+            .ToDictionary(projection => projection.Name, projection => projection.Value, StringComparer.Ordinal);
+
+        Assert.Equal(5, outputs.Count);
+        for (var index = 0; index < 5; index++)
+        {
+            var value = Assert.Contains($"output-{index}", outputs);
+            // Under the harness's default capture policy an output projects as a bounded diagnostic snapshot whose
+            // `preview` carries the value.
+            Assert.Equal($"value-{index}", value!.Value.GetProperty("preview").GetString());
+        }
+    }
+
     private static async Task AssertCrashConvergesAsync(int crashOnCommit, Func<WorkflowExecutable> buildExecutable)
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
@@ -198,6 +239,64 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
                     new FlowchartStructure(connections: connections, startNodeId: leaves[0].ExecutableNodeId))));
 
         return WorkflowExecutionHarness.NewExecutable(root);
+    }
+
+    // Wraps a straight-line chain of leaves in the standard Flowchart root. Shared by every intrinsic shape so the only
+    // difference between them is the leaf kind.
+    private static ExecutableNode FlowchartRootOver(ExecutableNode[] leaves)
+    {
+        var connections = Enumerable.Range(0, leaves.Length - 1)
+            .Select(index => new FlowchartConnection(
+                new FlowchartEndpoint(leaves[index].ExecutableNodeId),
+                new FlowchartEndpoint(leaves[index + 1].ExecutableNodeId)))
+            .ToArray();
+
+        return new ExecutableNode(
+            executableNodeId: "node-flowchart",
+            authoredActivityId: "authored-flowchart",
+            activityType: typeof(FlowchartActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "elsa.flowchart",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, leaves)],
+            structure: new ExecutableActivityStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(
+                    new FlowchartStructure(connections: connections, startNodeId: leaves[0].ExecutableNodeId))));
+    }
+
+    // The SetOutput counterpart: a chain of SetOutput intrinsics, each writing a distinct named workflow output.
+    private static WorkflowExecutable BuildSetOutputFlowchart()
+    {
+        var stringType = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        RuntimeInputBinding Literal(string key, string value) => new(
+            key,
+            stringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(stringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+
+        var leaves = Enumerable.Range(0, 5)
+            .Select(index => new ExecutableNode(
+                executableNodeId: $"node-loop-{index}",
+                authoredActivityId: $"authored-node-loop-{index}",
+                activityType: "elsa.intrinsic.set-output",
+                activityTypeVersion: "1.0.0",
+                descriptorType: "intrinsic",
+                descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "SetOutput", schemaVersion = "1.0.0" }),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+                {
+                    [WorkflowIntrinsicInputKeys.Name] = Literal(WorkflowIntrinsicInputKeys.Name, $"output-{index}"),
+                    [WorkflowIntrinsicInputKeys.Value] = Literal(WorkflowIntrinsicInputKeys.Value, $"value-{index}")
+                },
+                metadata: new Dictionary<string, string>(),
+                intrinsicKind: WorkflowIntrinsicKind.SetOutput))
+            .ToArray();
+
+        return WorkflowExecutionHarness.NewExecutable(FlowchartRootOver(leaves));
     }
 
     // The intrinsic counterpart: a chain of Set intrinsics, each rewriting the same declared workflow variable. Every

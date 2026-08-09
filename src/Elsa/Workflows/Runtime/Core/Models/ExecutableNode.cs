@@ -275,17 +275,27 @@ public static class WorkflowIntrinsicInputKeys
 /// <b>Fusable — in-workflow value and routing only.</b> <see cref="WorkflowIntrinsicKind.Set"/>,
 /// <see cref="WorkflowIntrinsicKind.Merge"/> and <see cref="WorkflowIntrinsicKind.Reduce"/> write a variable frame;
 /// <see cref="WorkflowIntrinsicKind.Return"/> and <see cref="WorkflowIntrinsicKind.Control"/> set the invocation's
-/// result and outcome. All five are deterministic functions of state the segment replay reproduces, so re-running one
-/// inside a coalesced segment is indistinguishable from running it once.
+/// result and outcome; <see cref="WorkflowIntrinsicKind.SetOutput"/> writes a workflow output as a durable value whose
+/// state id is a pure function of the output name (<c>durable-{OutputValueIdPrefix}{name}</c>), so a replayed write
+/// lands on the same id with the same value and the checkpoint fold's last-writer-per-state-id collapses it. All six
+/// are deterministic functions of state the segment replay reproduces, so re-running one inside a coalesced segment is
+/// indistinguishable from running it once.
 /// </para>
 /// <para>
 /// <b>Not fusable.</b> <see cref="WorkflowIntrinsicKind.SetCorrelationId"/> and
 /// <see cref="WorkflowIntrinsicKind.SetInstanceName"/> mutate externally queryable workflow identity (correlation is a
 /// message-correlation key, so a transiently missing value is observable). <see cref="WorkflowIntrinsicKind.Finish"/>
 /// terminates the run and commits the unconditionally mandatory <c>WorkflowCompleted</c> boundary.
-/// <see cref="WorkflowIntrinsicKind.SetOutput"/> is held back deliberately rather than on proof: a workflow output is a
-/// value published for the caller, which is the boundary case ADR 0032 puts on the mandatory side, and the fail-safe
-/// direction costs only throughput. Promoting it is a separate, evidence-backed decision.
+/// </para>
+/// <para>
+/// <b>On <see cref="WorkflowIntrinsicKind.SetOutput"/>, which an earlier revision held back.</b> The stated reason was
+/// that a workflow output is "published for the caller" and so belongs on ADR 0032's mandatory side. That conflated two
+/// independent dials. <em>When</em> an output becomes durable is decided by the checkpoint persistence policy, and
+/// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>
+/// — so under coalescing a <c>SetOutput</c> already deferred and folded into the segment flush, with or without fusion.
+/// Fusion decides only <em>how many dispatches</em> the node costs. Excluding it therefore protected nothing about
+/// output visibility and bought only hops. A host that needs an output durable the instant it is written selects
+/// <c>Mode = Immediate</c>; that lever is unchanged here.
 /// </para>
 /// </remarks>
 public static class WorkflowIntrinsicFusion
@@ -297,10 +307,10 @@ public static class WorkflowIntrinsicFusion
             or WorkflowIntrinsicKind.Merge
             or WorkflowIntrinsicKind.Reduce
             or WorkflowIntrinsicKind.Return
-            or WorkflowIntrinsicKind.Control => true,
+            or WorkflowIntrinsicKind.Control
+            or WorkflowIntrinsicKind.SetOutput => true,
         WorkflowIntrinsicKind.SetCorrelationId
             or WorkflowIntrinsicKind.SetInstanceName
-            or WorkflowIntrinsicKind.SetOutput
             or WorkflowIntrinsicKind.Finish => false,
         // A new kind is not fusable until it is classified here: the fail-safe direction is the durable one.
         _ => false
