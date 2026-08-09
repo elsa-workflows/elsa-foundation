@@ -45,6 +45,9 @@ namespace Elsa.Activities.Runtime.Tests;
 /// (<c>result = "all-iterated"</c>), proving the branch evaluated and the loop's effect is observable downstream.</item>
 /// </list>
 /// </summary>
+// Runs WriteLine activities, which write to the real Console.Out that ConsoleCapture redirects
+// process-wide. Without this collection those writes land inside a capturing class's output.
+[Collection("ConsoleCapture")]
 public sealed class ActivityLibraryAcceptanceTests
 {
     public static TheoryData<Type, Type, string[]> MigratedPrimitiveLeafContracts =>
