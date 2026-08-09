@@ -71,17 +71,19 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         // untaken half of this completion, exactly as an unmatched outcome port is on the routing path. Dead
         // arrivals land in the same scope the schedule commands used, so live and dead answers to one join
         // share a partition key.
-        return currentPath.CurrentNodeId is not { } sourceNodeId
-            ? state
-            : joinCoordinator.RouteUntakenOutbound(
-                context,
-                state,
-                graph,
-                sourceNodeId,
-                firstWinsScopeId ?? defaultScheduleScopeId ?? currentPath.ExecutionScopeId,
-                currentPath.IterationKey,
-                takenConnectionIds,
-                schedulingActivityExecutionId);
+        if (currentPath.CurrentNodeId is not { } sourceNodeId)
+            return state;
+
+        var deadPathScopeId = firstWinsScopeId ?? defaultScheduleScopeId ?? currentPath.ExecutionScopeId;
+        return joinCoordinator.RouteUntakenOutbound(
+            context,
+            state,
+            graph,
+            sourceNodeId,
+            deadPathScopeId,
+            ResolveIterationKey(state, deadPathScopeId),
+            takenConnectionIds,
+            schedulingActivityExecutionId);
     }
 
     private FlowchartExecutionState ApplyScheduleNodeCommand(
@@ -107,7 +109,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         if (state.Scopes.All(scope => !StringComparer.Ordinal.Equals(scope.ExecutionScopeId, executionScopeId)))
             throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command references unknown execution scope '{executionScopeId}'.");
 
-        var iterationKey = currentPath.IterationKey;
+        var iterationKey = ResolveIterationKey(state, executionScopeId);
         var connection = ResolveScheduleConnection(graph, command, currentPath, nodeId, policyKind);
         if (connection is not null)
             takenConnectionIds.Add(graph.GetConnectionId(connection));
@@ -119,7 +121,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, loopScope.ExecutionScopeId)))
                 state = AddScope(state, loopScope);
             executionScopeId = loopScope.ExecutionScopeId;
-            iterationKey = loopScope.LoopIterationKey;
+            iterationKey = ResolveIterationKey(state, executionScopeId);
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.LoopIteration, nodeId, graph.GetConnectionId(connection), currentPath.ExecutionPathId, executionScopeId, $"Flowchart created loop iteration scope '{executionScopeId}' for loopback to '{nodeId}'.");
         }
 

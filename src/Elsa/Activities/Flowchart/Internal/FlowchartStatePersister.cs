@@ -136,6 +136,7 @@ public sealed class FlowchartStatePersister
             retainedScopeIds.Add(path.ExecutionScopeId);
         foreach (var child in state.ActiveChildren)
             retainedScopeIds.Add(child.ExecutionScopeId);
+        RetainAncestorsUpToNearestLoopIteration(state, retainedScopeIds);
 
         var scopes = state.Scopes
             .Where(scope => scope.Kind != ExecutionScopeKind.LoopIteration
@@ -147,6 +148,37 @@ public sealed class FlowchartStatePersister
             : state.Diagnostics.Skip(state.Diagnostics.Count - DiagnosticsCap).ToArray();
 
         return state with { Arrivals = arrivals, ExecutionPaths = paths, Scopes = scopes, Diagnostics = diagnostics };
+    }
+
+    /// <summary>
+    /// Extends the retained scope set with each retained scope's ancestors, stopping at (and including) the
+    /// first <see cref="ExecutionScopeKind.LoopIteration"/> one.
+    /// <para>
+    /// ADR 0064 WU-4 derives a path's iteration key by walking up to its nearest enclosing loop iteration, so
+    /// that walk must not run off a pruned parent. Without this, a live path inside a race scope nested in a
+    /// loop iteration would keep its own scope but lose the loop scope above it, and the derived key would
+    /// silently read <c>null</c>. Stopping at the first loop iteration is what keeps this bounded: iteration
+    /// <i>n+1</i>'s scope is parented to iteration <i>n</i>'s, so retaining the whole chain would pin every
+    /// iteration ever run and undo the #382 growth fix.
+    /// </para>
+    /// </summary>
+    private static void RetainAncestorsUpToNearestLoopIteration(FlowchartExecutionState state, HashSet<string> retainedScopeIds)
+    {
+        var scopesById = state.Scopes.ToDictionary(scope => scope.ExecutionScopeId, StringComparer.Ordinal);
+
+        foreach (var scopeId in retainedScopeIds.ToArray())
+        {
+            var current = scopeId;
+            while (scopesById.TryGetValue(current, out var scope) &&
+                   scope.Kind != ExecutionScopeKind.LoopIteration &&
+                   scope.ParentExecutionScopeId is { } parentScopeId)
+            {
+                if (!retainedScopeIds.Add(parentScopeId))
+                    break;
+
+                current = parentScopeId;
+            }
+        }
     }
 
     public RuntimeStructuralContinuation StageState(
