@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 153
 - Test projects: 100
-- Direct project references: 1239
+- Direct project references: 1241
 
 ## Projects
 
@@ -248,7 +248,7 @@ Records direct project references only.
 | [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks |
 | [Elsa.Workflows.Dashboard.MongoDb.Tests](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/Elsa.Workflows.Dashboard.MongoDb.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Workflows.Dashboard.SqlServer.Tests](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
-| [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
+| [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Mediator.Core<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.CodeGeneration.Tests](../../tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.Design.Reconciliation<br>Elsa.Workflows.Design.CodeGeneration |
 | [Elsa.Workflows.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Design.Persistence.Groundwork |

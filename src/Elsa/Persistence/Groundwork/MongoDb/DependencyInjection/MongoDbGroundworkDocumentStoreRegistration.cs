@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.MongoDb.Targets;
 using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Scoping;
@@ -39,6 +40,12 @@ public static class MongoDbGroundworkDocumentStoreRegistration
         services.AddGroundworkStoreSessions(target);
 
         services.AddGroundworkProviderCapabilityAdmission(target);
+
+        // Aggregate dashboard reads address this target's database directly, the same way the relational
+        // leaves supply IGroundworkTargetConnectionSource for theirs.
+        services.AddKeyedSingleton<IGroundworkTargetMongoDatabaseSource>(
+            target,
+            (_, key) => new GroundworkTargetMongoDatabaseSource((string)key, connectionString, databaseName));
 
         services.TryAddSingleton<IMongoDbGroundworkRuntimeAdmission, MongoDbGroundworkRuntimeAdmission>();
         services.AddKeyedSingleton(target, (serviceProvider, key) => new MongoDbGroundworkDocumentStoreInitializer(
