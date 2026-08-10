@@ -2,7 +2,9 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,6 +41,13 @@ public static class GroundworkPublishingStoreRegistration
         lane.Replace<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>();
         lane.Replace<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>();
         lane.Replace<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>();
+
+        // Answers for the receipt intent a split publication records in the design commit. Registered
+        // unkeyed: it addresses the publishing lane through GroundworkLaneStores rather than being handed a
+        // store, because the design lane's redrive resolves it and has no business knowing this target.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<
+            IDesignPostCommitIntentDeliverer,
+            ActivityPublicationReceiptIntentDeliverer>());
         return services;
     }
 }
