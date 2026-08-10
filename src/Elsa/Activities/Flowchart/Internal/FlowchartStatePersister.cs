@@ -64,8 +64,13 @@ public sealed class FlowchartStatePersister
     /// completion — O(n²) in CPU and storage across n iterations.
     /// <list type="bullet">
     /// <item><b>Arrivals:</b> <see cref="FlowchartArrivalStatus.Consumed"/> arrivals are dropped
-    /// unconditionally — the only arrival reader (<see cref="FlowchartJoinCoordinator.MatchingArrivals"/>) filters on
-    /// <see cref="FlowchartArrivalStatus.Arrived"/>.</item>
+    /// unconditionally — every arrival reader (<see cref="FlowchartJoinCoordinator.PendingArrivals"/>) skips
+    /// them. <see cref="FlowchartArrivalStatus.Dead"/> arrivals are dropped once their execution scope is no
+    /// longer live (ADR 0064): a dead arrival is retained only while some Active/Waiting path or active child
+    /// still sits in its scope, which is what keeps a loop from accumulating one stranded dead arrival per
+    /// iteration. Dropping one early is safe for the same reason its iteration key is: the join it was owed to
+    /// can no longer fire in that scope, and a later iteration mints a fresh key it could not have matched
+    /// anyway.</item>
     /// <item><b>Paths:</b> only <see cref="ExecutionPathStatus.Completed"/> paths are dropped, and then
     /// only unless they are (a) the root path, (b) referenced by an
     /// <see cref="FlowchartExecutionState.ActiveChildren"/> entry, or (c) referenced by a surviving
@@ -100,7 +105,20 @@ public sealed class FlowchartStatePersister
     /// </summary>
     private static FlowchartExecutionState PruneForPersistence(FlowchartExecutionState state)
     {
-        var arrivals = state.Arrivals.Where(arrival => arrival.Status == FlowchartArrivalStatus.Arrived).ToArray();
+        var liveScopeIds = new HashSet<string>(StringComparer.Ordinal) { state.RootExecutionScopeId };
+        foreach (var path in state.ExecutionPaths.Where(path => path.Status is ExecutionPathStatus.Active or ExecutionPathStatus.Waiting))
+            liveScopeIds.Add(path.ExecutionScopeId);
+        foreach (var child in state.ActiveChildren)
+            liveScopeIds.Add(child.ExecutionScopeId);
+
+        var arrivals = state.Arrivals
+            .Where(arrival => arrival.Status switch
+            {
+                FlowchartArrivalStatus.Arrived => true,
+                FlowchartArrivalStatus.Dead => liveScopeIds.Contains(arrival.ExecutionScopeId),
+                _ => false
+            })
+            .ToArray();
 
         var retainedPathIds = new HashSet<string>(StringComparer.Ordinal) { RootPathId };
         foreach (var child in state.ActiveChildren)
@@ -118,6 +136,7 @@ public sealed class FlowchartStatePersister
             retainedScopeIds.Add(path.ExecutionScopeId);
         foreach (var child in state.ActiveChildren)
             retainedScopeIds.Add(child.ExecutionScopeId);
+        RetainAncestorsUpToNearestLoopIteration(state, retainedScopeIds);
 
         var scopes = state.Scopes
             .Where(scope => scope.Kind != ExecutionScopeKind.LoopIteration
@@ -129,6 +148,37 @@ public sealed class FlowchartStatePersister
             : state.Diagnostics.Skip(state.Diagnostics.Count - DiagnosticsCap).ToArray();
 
         return state with { Arrivals = arrivals, ExecutionPaths = paths, Scopes = scopes, Diagnostics = diagnostics };
+    }
+
+    /// <summary>
+    /// Extends the retained scope set with each retained scope's ancestors, stopping at (and including) the
+    /// first <see cref="ExecutionScopeKind.LoopIteration"/> one.
+    /// <para>
+    /// ADR 0064 WU-4 derives a path's iteration key by walking up to its nearest enclosing loop iteration, so
+    /// that walk must not run off a pruned parent. Without this, a live path inside a race scope nested in a
+    /// loop iteration would keep its own scope but lose the loop scope above it, and the derived key would
+    /// silently read <c>null</c>. Stopping at the first loop iteration is what keeps this bounded: iteration
+    /// <i>n+1</i>'s scope is parented to iteration <i>n</i>'s, so retaining the whole chain would pin every
+    /// iteration ever run and undo the #382 growth fix.
+    /// </para>
+    /// </summary>
+    private static void RetainAncestorsUpToNearestLoopIteration(FlowchartExecutionState state, HashSet<string> retainedScopeIds)
+    {
+        var scopesById = state.Scopes.ToDictionary(scope => scope.ExecutionScopeId, StringComparer.Ordinal);
+
+        foreach (var scopeId in retainedScopeIds.ToArray())
+        {
+            var current = scopeId;
+            while (scopesById.TryGetValue(current, out var scope) &&
+                   scope.Kind != ExecutionScopeKind.LoopIteration &&
+                   scope.ParentExecutionScopeId is { } parentScopeId)
+            {
+                if (!retainedScopeIds.Add(parentScopeId))
+                    break;
+
+                current = parentScopeId;
+            }
+        }
     }
 
     public RuntimeStructuralContinuation StageState(
