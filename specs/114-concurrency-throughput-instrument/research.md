@@ -1,5 +1,15 @@
 # Research: concurrency scaling curve + bottleneck analysis (spec 114)
 
+> **Leaf-shape correction (2026-08).** Every curve below was measured with `NoOpStep`, a `ReplaySafe` leaf that
+> exists only in the benchmark assembly and commits once per run. No *shipped* leaf activity is `ReplaySafe`, so
+> these numbers describe the fusable floor, not production traffic. The curve has since been re-run over three leaf
+> shapes — see
+> [Concurrency curve re-measured with production leaf shapes](../../docs/reports/concurrency-curve-production-shapes-2026-08.md).
+> The bottleneck analysis in §Bottleneck analysis stands; the **shape** does not. The `External` shape pays 11
+> commits and 56 dispatches per run, its throughput curve has no rising region at all (it peaks at N=1, where this
+> one peaks at N=32), and at N=128 it converts into lease-expiry faults rather than merely slow runs. Size admission
+> control off that report, not off the table below.
+
 Instrument: `benchmarks/Elsa/Workflows/Runtime/Benchmarks/EngineConcurrencyBenchmarks.cs`
 (`ConcurrencyScalingCurve` + `ConcurrencyScalingCurve_SharedPostgres`). Method: N concurrent hot-loop×10
 executions, N ∈ {1, 8, 32, 128}, backends that peel off one cost layer at a time. Durable backends run the
