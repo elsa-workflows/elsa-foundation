@@ -138,7 +138,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         // The renewal loop woke, recognized its own consume, and stopped renewing instead of calling a queue that would
         // report the item gone. Waiting on the check itself keeps the assertion below from passing vacuously.
-        await accessor.OwnConsumeRecognized.WaitAsync(TimeSpan.FromSeconds(5));
+        await accessor.OwnConsumeObserved.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(0, queue.RenewalAttempts);
         handler.Release();
 
@@ -183,7 +183,7 @@ public sealed class RuntimeSchedulerDrainTests
 
         Assert.Contains("was lost during 'renew'", exception.Message);
         Assert.True(handler.CancellationObserved);
-        Assert.False(accessor.OwnConsumeRecognized.IsCompleted);
+        Assert.False(accessor.OwnConsumeObserved.IsCompleted);
         Assert.Collection(
             await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
             item => Assert.Equal("work-1", item.WorkItemId));
@@ -1587,17 +1587,19 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     // Decorates the real accessor so a test can wait for the exact moment the renewal loop recognizes its own consume,
-    // rather than inferring it from timing.
+    // rather than inferring it from timing. Both signals are watched because the loop consults them in order: a landed
+    // consume ends the loop on WasConsumedDurably alone and never reaches the in-flight predicate. Until the handler is
+    // released the renewal loop is the only reader of either, so a completion here means the loop looked.
     private sealed class ConsumeCheckObservingClaimAccessor(IRuntimeConsumedSchedulerWorkClaimAccessor inner)
         : IRuntimeConsumedSchedulerWorkClaimAccessor
     {
-        private readonly TaskCompletionSource _recognized = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _observed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task OwnConsumeRecognized => _recognized.Task;
+        public Task OwnConsumeObserved => _observed.Task;
 
         public ConsumedSchedulerWorkItem? PendingConsume => inner.PendingConsume;
 
-        public bool WasConsumedDurably => inner.WasConsumedDurably;
+        public bool WasConsumedDurably => Observe(inner.WasConsumedDurably);
 
         public IDisposable Begin(ConsumedSchedulerWorkItem consume) => inner.Begin(consume);
 
@@ -1605,11 +1607,12 @@ public sealed class RuntimeSchedulerDrainTests
 
         public IDisposable BeginConsumeAttempt(string workItemId) => inner.BeginConsumeAttempt(workItemId);
 
-        public bool IsConsumeInFlightOrDurable(string workItemId)
+        public bool IsConsumeInFlightOrDurable(string workItemId) => Observe(inner.IsConsumeInFlightOrDurable(workItemId));
+
+        private bool Observe(bool recognized)
         {
-            var recognized = inner.IsConsumeInFlightOrDurable(workItemId);
             if (recognized)
-                _recognized.TrySetResult();
+                _observed.TrySetResult();
             return recognized;
         }
     }

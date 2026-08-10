@@ -141,31 +141,35 @@ public sealed class RuntimeCheckpointCommitter
             ? commit
             : commit with { StateChanges = stateChanges };
 
-        // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably below can only run once it
+        // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
-        // item. Publishing the attempt for the duration of the call lets the drainer's renewal loop recognize its own
-        // consume as the explanation instead.
+        // item. Publishing the attempt lets the drainer's renewal loop recognize its own consume as the explanation
+        // instead. The attempt has to stay open until the durable mark lands, not just until the store call returns:
+        // the row is already gone the moment it returns, so closing the attempt any earlier reopens this same window
+        // around the validations below.
         RuntimeCheckpointCommitStoreResult storeResult;
         using (BeginConsumeAttempt(consumedWorkItems))
+        {
             storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
-        if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
-            throw new InvalidOperationException(
-                $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
-                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
-                "post-commit outbox item it is handed.");
+            if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
+                throw new InvalidOperationException(
+                    $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
+                    $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                    $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
+                    "post-commit outbox item it is handed.");
 
-        if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
-            throw new InvalidOperationException(
-                $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
-                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
-                "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
+            if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
+                throw new InvalidOperationException(
+                    $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
+                    $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                    $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
+                    "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
 
-        // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
-        foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
-            _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+            // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
+            foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
+                _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+        }
 
         // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
         // live drain owns this execution's delivery, hand the still-materialized continuation work items to its

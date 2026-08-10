@@ -497,11 +497,17 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // #1254: this dispatch's own checkpoint commit consumes the claim, so once that consume has landed there is
             // nothing left to renew — the item is gone by design and the exclusivity the claim bought is permanent.
             // Renewing anyway finds no document and reads as a lost claim, which would cancel and abort a dispatch whose
-            // work already committed. The same check covers a consume still in flight: skipping a renewal costs at most
-            // one cadence of visibility (the timeout is three cadences), and renewing into the store call that is
-            // deleting the very same document is the interleaving worth avoiding.
-            if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+            // work already committed.
+            if (_consumedWorkClaimAccessor?.WasConsumedDurably == true)
                 return;
+
+            // A consume that is still in flight only justifies skipping this one renewal, never ending the loop: the
+            // commit can still fail and leave the item queued, and a dispatch that then ran on without renewing would
+            // let the claim lapse and a successor re-drive work still in progress. Skipping costs at most one cadence
+            // of visibility (the timeout is three cadences), and renewing into the store call that is deleting this
+            // very document is the interleaving worth avoiding.
+            if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                continue;
 
             RuntimeSchedulerWorkClaimTransitionResult result;
             try
@@ -519,7 +525,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             catch (Exception exception)
             {
                 if (IsOwnConsumeSettlingOrSettled(renewal.Current))
-                    return;
+                    continue;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", status: null, exception);
             }
@@ -528,9 +534,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             {
                 // Re-checked rather than keyed on the status: our own consume surfaces as AlreadyApplied or as Stale
                 // depending on where the renewal's load and save fell around the delete, and the in-memory queue reports
-                // a missing item as Stale in every case. A genuine successor still lands here and still wins.
+                // a missing item as Stale in every case. A genuine successor still lands here and still wins. Looping
+                // rather than returning lets the next cadence settle it: the durable check above ends the loop once the
+                // consume lands, and a commit that failed instead gets renewed again.
                 if (IsOwnConsumeSettlingOrSettled(renewal.Current))
-                    return;
+                    continue;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", result.Status);
             }

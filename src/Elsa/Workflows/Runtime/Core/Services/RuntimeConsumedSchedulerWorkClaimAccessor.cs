@@ -10,8 +10,11 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 /// <remarks>
 /// The frame is written by the dispatch thread and read by the drainer's claim-renewal loop, which runs on its own
-/// task for the duration of the dispatch (#1254). Only the two consume signals cross that boundary, so they are the
-/// only members that need the volatile read/interlocked write.
+/// task for the duration of the dispatch (#1254). The consume signals are written mid-dispatch, so they carry the
+/// volatile read and interlocked count. <see cref="_pending"/> is read on that same renewal task through
+/// <see cref="IsPending"/> but needs no synchronization of its own only because it is never written while the loop is
+/// live: the drainer calls <see cref="Begin"/> before creating the renewal task and disposes the frame after the loop
+/// has ended. Anything that starts writing it mid-dispatch has to revisit that.
 /// </remarks>
 public sealed class RuntimeConsumedSchedulerWorkClaimAccessor : IRuntimeConsumedSchedulerWorkClaimAccessor
 {
