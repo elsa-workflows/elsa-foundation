@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Serialization.Core;
@@ -19,20 +20,39 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 
 /// <summary>Atomic Groundwork closure for source-owned catalog versions and Runtime templates.</summary>
 public sealed class GroundworkSourceActivityPublicationCommand(
-    IDocumentStore store,
-    IBoundedDocumentStore boundedStore,
     IPayloadSerializer payloadSerializer,
     IGroundworkRuntimeDocumentSerializer runtimeSerializer,
-    GroundworkActivityManagementProjectionWriter managementProjectionWriter)
+    GroundworkActivityManagementProjectionWriter managementProjectionWriter,
+    GroundworkLaneTargets laneTargets,
+    GroundworkLaneStores laneStores)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
+    /// <summary>
+    /// This command reads and writes two lanes, so it cannot use one ambient store: on a split host the
+    /// design documents live in a different database from the runtime ones. Every read is routed by the
+    /// document kind it addresses. On a single-target host both resolve to the same store, as before.
+    /// </summary>
+    private IDocumentStore DesignStore => laneStores.For<ActivitiesDesignGroundworkStorageManifestSource>();
+
+    private IDocumentStore RuntimeStore => laneStores.For<RuntimeGroundworkStorageManifestSource>();
+
+    private IBoundedDocumentStore DesignBounded => laneStores.BoundedFor<ActivitiesDesignGroundworkStorageManifestSource>();
+
+    /// <summary>The lane store owning <paramref name="documentKind"/>.</summary>
+    private IDocumentStore StoreForKind(string documentKind) =>
+        documentKind is ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind
+            or ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+            ? RuntimeStore
+            : DesignStore;
+
     public async Task ExecuteAsync(
         SourceActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit,
         CancellationToken cancellationToken = default)
     {
         Validate(commit);
+        var colocated = ActivityPublicationLaneColocation.AreColocated(laneTargets);
         var requests = new List<SaveDocumentRequest>();
-        var definitionEnvelope = await store.LoadAsync(
+        var definitionEnvelope = await DesignStore.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             commit.Definition.Id,
             cancellationToken);
@@ -82,7 +102,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
             effectiveAuthoring = existing;
         }
 
-        var catalogEnvelope = await store.LoadAsync(
+        var catalogEnvelope = await DesignStore.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
             commit.CatalogVersion.Id,
             cancellationToken);
@@ -140,23 +160,62 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 [],
                 [commit.Publication]),
             cancellationToken);
+        string[] designKinds =
+        [
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind
+        ];
+        string[] runtimeKinds =
+        [
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+        ];
+
+        if (colocated)
+        {
+            await managementProjection.CommitAsync(
+                [.. designKinds, .. runtimeKinds],
+                requests,
+                cancellationToken);
+            return;
+        }
+
+        // Runtime first: a template written without the design commit is unreferenced and collectable, and
+        // the design commit is the linearization point, exactly as in the reusable-activity path. The source
+        // reference is create-only though, so an interruption between the two phases would make the retry
+        // conflict on it; recognising this publication's own reference is what keeps the retry finishable.
+        var runtimeAlreadyCommitted = await RuntimePublicationPhase.AlreadyCommittedAsync(
+            RuntimeStore,
+            runtimeSerializer,
+            commit.SourceReference.SourceReferenceId,
+            commit.SourceReference.ArtifactId,
+            colocated,
+            cancellationToken);
+        var runtimeRequests = requests.Where(request => runtimeKinds.Contains(request.DocumentKind)).ToArray();
+        if (runtimeRequests.Length > 0 && !runtimeAlreadyCommitted)
+        {
+            await laneStores.For<RuntimeGroundworkStorageManifestSource>().SaveAllAsync(
+                DocumentCommitScope.Of(runtimeKinds),
+                runtimeRequests,
+                cancellationToken);
+        }
+
+        // The design commit is last here, so there is no third phase and nothing to converge on afterwards.
+        // The reusable-activity path records a post-commit intent at this point because its publishing receipt
+        // lives on a further target; a source-owned publication has no publishing lane at all, so an intent
+        // would describe an obligation that does not exist. See ADR 0066 and issue #1171.
         await managementProjection.CommitAsync(
-            [
-                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
-                ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind
-            ],
-            requests,
+            designKinds,
+            requests.Where(request => !runtimeKinds.Contains(request.DocumentKind)).ToArray(),
             cancellationToken);
     }
 
     private async Task<DocumentEnvelope?> FindAuthoringAsync(string definitionId, CancellationToken cancellationToken)
     {
-        var matches = await boundedStore.QueryAsync(
+        var matches = await DesignBounded.QueryAsync(
             new DocumentQuery(
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 "list-by-definition",
@@ -181,7 +240,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
     {
         if (currentHeadVersionId is null)
             return true;
-        var currentEnvelope = await store.LoadAsync(
+        var currentEnvelope = await DesignStore.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
             currentHeadVersionId,
             cancellationToken);
@@ -197,7 +256,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
 
     private async Task<SaveDocumentRequest?> TemplateRequest(ExecutableActivityTemplate template, CancellationToken cancellationToken)
     {
-        var existing = await store.LoadAsync(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, template.TemplateId, cancellationToken);
+        var existing = await RuntimeStore.LoadAsync(ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind, template.TemplateId, cancellationToken);
         if (existing is not null)
         {
             var persisted = runtimeSerializer.Deserialize<TemplateDocument>(existing).Template;
@@ -219,7 +278,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
 
     private async Task EnsureAbsent(string kind, string id, CancellationToken cancellationToken)
     {
-        if (await store.LoadAsync(kind, id, cancellationToken) is not null)
+        if (await StoreForKind(kind).LoadAsync(kind, id, cancellationToken) is not null)
             throw Conflict($"Document '{kind}/{id}' already exists.");
     }
 
@@ -266,6 +325,4 @@ public sealed class GroundworkSourceActivityPublicationCommand(
 
     private static InvalidOperationException Conflict(string message) => new(message);
 
-    private sealed record TemplateDocument(string Collection, string TemplateHash, ExecutableActivityTemplate Template);
-    private sealed record SourceReferenceDocument(string Collection, string ArtifactId, WorkflowExecutableSourceReference Reference);
 }

@@ -33,7 +33,12 @@ namespace Elsa.Activities.Primitives.Activities;
 // the catalog: without the attribute the scanner emits no outcomes facet at all, the studio falls back to its own
 // "Done" default, and the designer shows a port that can never be taken while hiding the one that always is
 // (found by the behavioural drive, #1119).
+// ReplaySafe (ADR 0032 R1): the body takes no inputs, performs no I/O, and returns a constant transition, so
+// re-running it on segment replay is indistinguishable from running it once. It is the only shipped leaf that
+// meets that bar without an author-supplied judgement — see the marking-pass classification in
+// docs/reports/execution-model-comparison-2026-08.md §4.5.
 [ActivityOutcome(ActivityOutcomes.Break)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Break : Activity<ActivityUnit>
 {
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>

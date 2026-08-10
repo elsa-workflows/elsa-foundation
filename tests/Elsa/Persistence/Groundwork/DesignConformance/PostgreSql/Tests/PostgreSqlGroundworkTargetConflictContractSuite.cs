@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DesignConformance.Tests;
+using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 using Elsa.Persistence.Groundwork.PostgreSql.DependencyInjection;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
@@ -9,15 +9,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests;
 
-/// <summary>Composes the PostgreSQL reference-host shapes and proves a second (SQLite) leaf is rejected.</summary>
-public sealed class PostgreSqlProviderLeafConflictContractSuite : ProviderLeafConflictContractSuite
+/// <summary>Composes the PostgreSQL reference-host shapes against a second (SQLite) store.</summary>
+public sealed class PostgreSqlGroundworkTargetConflictContractSuite : GroundworkTargetConflictContractSuite
 {
     private const string PostgreSqlConnectionString =
         "Host=localhost;Port=5432;Database=elsa;Username=postgres;Password=postgres";
     private const string SqliteConnectionString = "Data Source=:memory:";
 
-    protected override string PrimaryProviderIdentity => "postgresql";
-    protected override string ConflictingProviderIdentity => "sqlite";
+    protected override string PrimaryProviderIdentity => PostgreSqlGroundworkDocumentStoreRegistration.ProviderIdentity;
+    protected override string SecondProviderIdentity => SqliteGroundworkDocumentStoreRegistration.ProviderIdentity;
 
     protected override void ComposePrimary(ReferenceHostShape shape, IServiceCollection services)
     {
@@ -40,6 +40,6 @@ public sealed class PostgreSqlProviderLeafConflictContractSuite : ProviderLeafCo
         }
     }
 
-    protected override void AddConflictingProviderLeaf(IServiceCollection services) =>
-        services.AddSqliteGroundworkDocumentStore(SqliteConnectionString);
+    protected override void AddSecondStore(IServiceCollection services, string? targetName) =>
+        services.AddSqliteGroundworkDocumentStore(SqliteConnectionString, targetName: targetName);
 }

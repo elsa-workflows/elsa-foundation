@@ -1,5 +1,8 @@
 # 128 — BPMN event subprocesses, tier 1: escalation + error triggers (dormant catchers; scheduled-start seeding) (BPMN Phase 3)
 
+**Status**: Implemented
+**Merged**: PR #992
+
 ## Goal
 
 Let a published BPMN process contain **event subprocesses**: flow-less `subProcess` elements marked

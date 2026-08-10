@@ -29,6 +29,24 @@ Known implementations:
 - `InclusiveJoinFlowchartPolicy` *(intra-domain — default)*
 - `FirstWinsFlowchartPolicy` *(intra-domain — default)*
 - `MergeFlowchartPolicy` *(intra-domain — default)*
+- `ReachabilityJoinFlowchartPolicy` *(intra-domain — join semantics, see below)*
+- `DeadPathJoinFlowchartPolicy` *(intra-domain — join semantics, see below)*
+
+### `IFlowchartJoinPolicy`
+
+- **Kind:** Contributor (implicit-join decision provider), extends `IFlowchartPolicy`
+- **Contract:** `Elsa.Activities.Flowchart.Contracts.IFlowchartJoinPolicy`
+- **Policy contract:** given a `FlowchartJoinContext` — the execution state, the target's inbound connections, the `(node, scope, iteration)` partition key, and a forward-projection reachability oracle — decide whether the target must wait. `PropagatesDeadPaths` additionally tells the engine whether a completing node emits `FlowchartArrivalStatus.Dead` arrivals on the outbound connections its outcomes did not take.
+- **Registration:** DI as `IFlowchartPolicy`, alongside every other policy.
+- **Selection:** unlike node policies, exactly one join policy is active per host and it is named by `FlowchartOptions.JoinPolicyKind` — implicit joins are a property of the model, not of a node, so this is not selected through `FlowchartStructure.NodeMetadata`.
+- **Decision boundary:** join policies decide only *whether to wait*; consuming arrivals, scheduling the target, propagating deadness, and the quiescence backstop stay in `FlowchartJoinCoordinator`.
+
+ADR 0064 ships two, and keeps both registered so the choice is one setting rather than a fork of the engine:
+
+| Kind | Decides from | Notes |
+| --- | --- | --- |
+| `deadPathJoin` | the arrivals the target already holds — every inbound answered, at least one live | **Default.** No graph walk; decidable inside a loop without special-casing. |
+| `reachabilityJoin` | a search over live work in the same scope, on the graph's forward projection | The historical semantics, retained for validation and as a fallback. |
 
 ## Activity-owned structure contracts
 

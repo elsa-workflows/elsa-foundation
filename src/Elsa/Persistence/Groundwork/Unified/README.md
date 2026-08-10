@@ -1,9 +1,14 @@
 # Unified Groundwork persistence — provider selection and schema operations
 
-One host-level choice backs every Groundwork-persisted Elsa store family (runtime, secrets,
-studio preferences, distributed runtime, workflows design, activities design, design atomic
-writes, and publishing). A host selects exactly one provider by enabling one unified shell
-feature; feature code never chooses physical providers (Spec 093 FR-017).
+The unified features are a **convenience preset**: they declare one Groundwork target and bind
+every store family to it (runtime, secrets, studio preferences, distributed runtime, workflows
+design, activities design, design atomic writes, and publishing). Feature code never chooses
+physical providers (Spec 093 FR-017).
+
+A host that wants lanes in **different databases** does not use these. It enables
+`GroundworkTargets` plus the provider leaf features, then enables the per-lane persistence
+features and names a target on each — see [issue #1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156).
+The unified preset remains the right choice when one database is wanted for everything.
 
 ## Selecting a provider
 
@@ -14,9 +19,11 @@ feature; feature code never chooses physical providers (Spec 093 FR-017).
 | SQL Server | `GroundworkUnifiedPersistenceSqlServer` | `AddGroundworkSqlServerUnifiedPersistence(connectionString, …)` |
 | MongoDB | `GroundworkUnifiedPersistenceMongoDb` | `AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName, …)` |
 
-Exactly one provider leaf may be selected per host: `SelectGroundworkProviderLeaf` rejects a
-second, different provider before either leaf can overwrite shared registrations. Repeating the
-same provider is idempotent.
+A host may declare **several** Groundwork targets, on the same or different providers. What is
+rejected is declaring one target name twice against different stores: an exact repeat is
+idempotent, a second and different connection under the same name throws rather than being
+silently discarded. Each target composes and admits only the lanes bound to it, and derives its
+own manifest identity, so two targets never contend for one Groundwork schema-state row.
 
 ### Connection inputs
 

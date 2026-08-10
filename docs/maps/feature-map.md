@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 103
+- Discovered feature classes: 112
 
 ## Features
 
@@ -16,6 +16,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesBpmnInterchangeFeature | FastEndpoints feature | Elsa.Activities.Bpmn.Interchange | FastEndpointsFeatureBase | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| ActivitiesDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.Groundwork | IShellFeature | [ActivitiesDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkPersistenceFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
 | JsonActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Json | IShellFeature | [JsonActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Json/JsonActivityReconciliationFeature.cs) |
@@ -68,12 +69,18 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
 | ModularityApiFeature | FastEndpoints feature | Elsa.Modularity.Api | FastEndpointsFeatureBase | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
 | ModularityAttentionFeature | direct IShellFeature | Elsa.Modularity.Attention | IShellFeature | [ModularityAttentionFeature.cs](../../src/Elsa/Modularity/Attention/ModularityAttentionFeature.cs) |
+| GroundworkTargetsFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkTargetsFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkTargetsFeature.cs) |
+| WorkflowsRuntimeGroundworkPersistenceFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [WorkflowsRuntimeGroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/WorkflowsRuntimeGroundworkPersistenceFeature.cs) |
+| MongoDbGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb | IShellFeature | [MongoDbGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/MongoDbGroundworkProviderFeature.cs) |
 | MongoDbGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb | IShellFeature | [MongoDbGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/MongoDbGroundworkRuntimePersistenceShellFeature.cs) |
 | MongoDbGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.MongoDb.Unified | IShellFeature | [MongoDbGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs) |
+| PostgreSqlGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql | IShellFeature | [PostgreSqlGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkProviderFeature.cs) |
 | PostgreSqlGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql | IShellFeature | [PostgreSqlGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs) |
 | PostgreSqlGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql.Unified | IShellFeature | [PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs) |
+| SqlServerGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer | IShellFeature | [SqlServerGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/SqlServerGroundworkProviderFeature.cs) |
 | SqlServerGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer | IShellFeature | [SqlServerGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/SqlServerGroundworkRuntimePersistenceShellFeature.cs) |
 | SqlServerGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.SqlServer.Unified | IShellFeature | [SqlServerGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/SqlServerGroundworkUnifiedPersistenceShellFeature.cs) |
+| SqliteGroundworkProviderFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkProviderFeature.cs) |
 | SqliteGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | SqliteGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite.Unified | IShellFeature | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
@@ -90,8 +97,10 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | OpenTelemetryEngineTracingBridgeFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [OpenTelemetryEngineTracingBridge.cs](../../src/Apps/Elsa.Workbench/OpenTelemetryEngineTracingBridge.cs) |
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
 | WorkflowsDashboardFeature | FastEndpoints feature | Elsa.Workflows.Dashboard | FastEndpointsFeatureBase | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
+| WorkflowsDashboardGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Dashboard.Persistence.Groundwork | IShellFeature | [WorkflowsDashboardGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/WorkflowsDashboardGroundworkPersistenceFeature.cs) |
 | WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
+| WorkflowsDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Design.Persistence.Groundwork | IShellFeature | [WorkflowsDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkPersistenceFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsExecutionEvidenceFeature | FastEndpoints feature | Elsa.Workflows.ExecutionEvidence | FastEndpointsFeatureBase | [WorkflowsExecutionEvidenceFeature.cs](../../src/Elsa/Workflows/ExecutionEvidence/WorkflowsExecutionEvidenceFeature.cs) |

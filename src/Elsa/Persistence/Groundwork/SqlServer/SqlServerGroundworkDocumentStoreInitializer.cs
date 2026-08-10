@@ -1,6 +1,6 @@
-using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Transactions;
@@ -12,7 +12,6 @@ using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
 using Groundwork.SqlServer.PhysicalStorage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.Groundwork.SqlServer;
@@ -22,7 +21,7 @@ namespace Elsa.Persistence.Groundwork.SqlServer;
 /// startup only inspects schema; enable <c>autoApplyOnStartup</c> to apply safe pending operations
 /// automatically.
 /// </summary>
-public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService, IShellInitializer
+public sealed class SqlServerGroundworkDocumentStoreInitializer : IGroundworkTargetAdmission
 {
     private readonly string _connectionString;
     private readonly bool _autoApplyOnStartup;
@@ -34,6 +33,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
     private bool _initialized;
 
     internal SqlServerGroundworkDocumentStoreInitializer(
+        string targetName,
         string connectionString,
         bool autoApplyOnStartup,
         IServiceScopeFactory scopeFactory,
@@ -42,6 +42,7 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         GroundworkProviderCapabilityAdmission? capabilityAdmission = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        TargetName = GroundworkTargetNames.Normalize(targetName);
         _connectionString = connectionString;
         _autoApplyOnStartup = autoApplyOnStartup;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -50,12 +51,10 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
         _capabilityAdmission = capabilityAdmission;
     }
 
-    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+    public string TargetName { get; }
+
+    public Task AdmitAsync(CancellationToken cancellationToken = default) =>
         EnsureInitializedAsync(cancellationToken);
-
-    public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
@@ -153,12 +152,14 @@ public sealed class SqlServerGroundworkDocumentStoreInitializer : IHostedService
                 {
                     RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
                 }),
-            scope.ServiceProvider.GetServices<IGroundworkStorageManifestSource>(),
+            GroundworkTargetManifestSources.ForTarget(scope.ServiceProvider, TargetName),
             cancellationToken);
         var source = await compositionFactory.CreateSourceAsync(
             capabilities,
             SqlServerGroundworkCapabilities.PhysicalNames,
-            cancellationToken);
+            cancellationToken,
+            targetCompiler: null,
+            targetName: TargetName);
         return new GroundworkProviderSchemaSource(source, capabilities);
     }
 

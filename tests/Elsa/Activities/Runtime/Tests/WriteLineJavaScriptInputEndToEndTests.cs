@@ -24,6 +24,9 @@ namespace Elsa.Activities.Runtime.Tests;
 /// hand-built resolution context — so a regression that leaves the runtime unable to evaluate a JS-bound input
 /// (the reported "JavaScript expressions are entirely broken at runtime") is caught here.
 /// </summary>
+// Runs WriteLine activities, which write to the real Console.Out that ConsoleCapture redirects
+// process-wide. Without this collection those writes land inside a capturing class's output.
+[Collection("ConsoleCapture")]
 public sealed class WriteLineJavaScriptInputEndToEndTests
 {
     [Fact]

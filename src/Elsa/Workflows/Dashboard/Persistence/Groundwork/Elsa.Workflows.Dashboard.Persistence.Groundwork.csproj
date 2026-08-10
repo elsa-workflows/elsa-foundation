@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <!-- The dashboard host feature needs the shell-feature and manifest hint attributes. -->
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
   <ItemGroup>
