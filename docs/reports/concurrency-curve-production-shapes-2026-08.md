@@ -33,13 +33,13 @@ Two changes to the instrument's method were needed and both matter for reading t
 1. **Sweep order is backend → N → leaf shape**, so the three shapes at a given (backend, N) are measured
    back-to-back. The comparison this report exists to make is *across leaf shapes at fixed N*, and the host's load
    drifts over a sweep this long. Pairing the shapes tightly is what keeps that comparison readable when the
-   absolute walls are not — the same pairing discipline the spec 115 group-commit A/B uses.
+   absolute walls are not. This is the same pairing discipline the spec 115 group-commit A/B uses.
 2. **Console stdout is parked for the sweep.** The External leaf is a real `WriteLine`; without this, N×10 console
    writes would serialize on `Console`'s own global lock and be charged to the store writer.
 
 `ITestOutputHelper` output is unaffected by (2), so the curve is still emitted.
 
-### Measurement environment — read this before reading any wall time
+### Measurement environment: read this before reading any wall time
 
 - Machine: 8 logical processors, Apple Silicon (Mac14,2), Darwin 25.5.0. Debug build, as in spec 114.
 - **The host was heavily loaded throughout, by unrelated concurrent work: 1-minute load average between ~230 and
@@ -52,7 +52,7 @@ Two changes to the instrument's method were needed and both matter for reading t
 - A clean capture on a quiet machine is still worth doing to firm up magnitudes. Every finding below is stated so
   that it rests on counts or on a ratio that reproduced, not on an absolute.
 
-## Result 1 — the deterministic counts (load-proof)
+## Result 1: the deterministic counts (load-proof)
 
 Identical at every N, on both durable backends, in both runs. These reproduce P1's single-run table exactly.
 
@@ -63,7 +63,7 @@ Identical at every N, on both durable backends, in both runs. These reproduce P1
 | ReplaySafe CLR leaf (`NoOpStep`) | 1 | 5 |
 
 The External shape pays **11× the durable commits and 11.2× the scheduler dispatches** of either fusable shape, and
-that ratio is flat in N — it is a per-run property of the leaf class, not something concurrency changes. This is the
+that ratio is flat in N. It is a per-run property of the leaf class, not something concurrency changes. This is the
 part of the curve that can falsify its own claim: it separates "the engine is doing more work" from "the shared
 writer is congested", and it says the extra work is real and constant.
 
@@ -74,7 +74,7 @@ ADR 0047's pre-fusion baseline. The instrument's original header labelled all th
 that label was wrong for in-memory and is corrected here, because it invites reading a 58-vs-5 gap as a leaf effect
 when it is a policy effect.
 
-## Result 2 — the External curve has no rising region
+## Result 2: the External curve has no rising region
 
 Shared-SQLite throughput (runs/s), the deployment shape. Spec 114's published `NoOpStep` curve is shown for
 reference; the two 2026-08 runs are this capture.
@@ -88,7 +88,7 @@ reference; the two 2026-08 runs are this capture.
 
 The shape difference is the answer to the question this item asked:
 
-- The `NoOpStep` curve **rises to a knee and then falls** — 2.2 → 3.5 → 5.6 → 1.5, peaking at N=32. That knee is
+- The `NoOpStep` curve **rises to a knee and then falls**: 2.2, 3.5, 5.6, 1.5, peaking at N=32. That knee is
   what an admission-control limiter sized off spec 114 would be set to.
 - The **External curve never rises**. Peak throughput is at **N=1** in both runs, and every increase in N makes it
   worse. There is no concurrency at which the shared writer serves an External-dominated workflow better than
@@ -112,7 +112,7 @@ hours apart at different host loads. The `NoOpStep` shape's penalty at the same 
 and is smaller in both runs. Below N=8 the fusable shapes are *faster* shared than isolated, because isolated pays
 for N separate databases' WAL traffic; the External shape is already paying to share at N=8.
 
-## Result 3 — past a threshold the collapse stops being a throughput problem and becomes a fault
+## Result 3: past a threshold the collapse stops being a throughput problem and becomes a fault
 
 This is the finding that was not anticipated, and it is the one RB1 should be sized against.
 
@@ -121,21 +121,21 @@ exception on each:
 
 | Backend | N=128 External outcome |
 |---|---|
-| in-memory | `RuntimeSchedulerWorkClaimLostException` — work claim lost during `renew`, status `Stale` |
-| isolated-SQLite | `RuntimeStaleFencingTokenException` — checkpoint commit fenced out as `ExpiredLease` |
-| shared-SQLite | `RuntimeExecutionOwnershipLostException` — ownership lease `Expired` while heartbeating |
+| in-memory | `RuntimeSchedulerWorkClaimLostException`, work claim lost during `renew`, status `Stale` |
+| isolated-SQLite | `RuntimeStaleFencingTokenException`, checkpoint commit fenced out as `ExpiredLease` |
+| shared-SQLite | `RuntimeExecutionOwnershipLostException`, ownership lease `Expired` while heartbeating |
 
 Three different deadlines, one mechanism: each is a **wall-clock lease or claim that a drain must renew while its
 work is queued**. `WorkflowDrainOrchestrator` renews ownership on a `LeaseDuration / 3` cadence against a default
 `RuntimeExecutionOwnershipOptions.LeaseDuration` of one minute. Under enough offered concurrency the renewal itself
-is starved — of the connection gate on the durable backends, of the thread pool on in-memory — and a **healthy
+is starved (of the connection gate on the durable backends, of the thread pool on in-memory) and a **healthy
 execution that was merely slow is converted into a failed one**.
 
 The ordering across the three shapes, measured back-to-back in the same load window, is the load-robust part:
 
 - **External faults at N=128 on every backend**, including in-memory where there is no store and no shared writer.
 - **`Set` faulted at N=128 only on the contended shared writer**, and completed on the other two backends.
-- **`NoOpStep` never faulted**, even at N=128 on the shared writer with a p50 of 163.9 s — i.e. a per-run latency
+- **`NoOpStep` never faulted**, even at N=128 on the shared writer with a p50 of 163.9 s, i.e. a per-run latency
   nearly 3× the lease duration. Exceeding the lease duration does not itself cause the fault; being *starved of the
   renewal* does.
 
@@ -146,13 +146,13 @@ on the writer), which is what makes it a work-volume effect rather than a coinci
 isolated-SQLite (69.1 s) and faulted only on the shared writer; in run 2, at higher load, it faulted on all three.
 The threshold moves with host load, which is exactly what one expects of a wall-clock deadline with no admission
 control in front of it. The claim supported by this evidence is *"there exists an offered concurrency at which the
-External shape converts into lease-expiry faults, and it is lower than for either fusable shape"* — not a specific N.
+External shape converts into lease-expiry faults, and it is lower than for either fusable shape"*, not a specific N.
 
 ## What this means for RB1 (#1235, admission control)
 
 1. **Size the limiter off the External column, and expect a single-digit limit.** The External curve peaks at N=1 on
    a shared SQLite writer and falls monotonically. A limiter sized off spec 114's `NoOpStep` knee would be set
-   around 32 — roughly an order of magnitude too permissive for the shape production traffic actually has.
+   around 32, roughly an order of magnitude too permissive for the shape production traffic actually has.
 2. **The limiter's job is not only throughput; it is preventing lease-expiry faults.** RB1's brief says "Done when
    the P2 curve shows throughput plateauing rather than falling". That is necessary but not sufficient. The stronger
    acceptance criterion this capture supports: **beyond the limit, requests are shed with a visible refusal instead
@@ -175,6 +175,6 @@ External shape converts into lease-expiry faults, and it is lower than for eithe
 - **Shared-Postgres for the production shapes.** `ConcurrencyScalingCurve_SharedPostgres` still runs the `NoOpStep`
   leaf only, and is still capped by the stock container's `max_connections` at N=128 (spec 114 §Postgres).
 - **The group-commit A/B (`ConcurrencyScalingCurve_GroupCommit`) also still runs `NoOpStep` only.** Spec 115 set the
-  group-commit default to off because the win did not survive a quiet machine — measured at 1 commit/run. The
+  group-commit default to off because the win did not survive a quiet machine, measured at 1 commit/run. The
   External shape commits 11 times per run, so the folding opportunity is 11× larger and that default deserves
   re-testing against this shape before it is treated as settled.
