@@ -203,6 +203,10 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 cancellationToken);
         }
 
+        // The design commit is last here, so there is no third phase and nothing to converge on afterwards.
+        // The reusable-activity path records a post-commit intent at this point because its publishing receipt
+        // lives on a further target; a source-owned publication has no publishing lane at all, so an intent
+        // would describe an obligation that does not exist. See ADR 0066 and issue #1171.
         await managementProjection.CommitAsync(
             designKinds,
             requests.Where(request => !runtimeKinds.Contains(request.DocumentKind)).ToArray(),

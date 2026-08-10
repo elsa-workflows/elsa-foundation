@@ -58,6 +58,39 @@ public sealed class FlowchartCyclicJoinTests
         Assert.False(analyzer.IsBackwardEdge(graph, "node-gate", "node-end"));
     }
 
+    /// <summary>
+    /// ADR 0064 WU-1: the join predicate walks the graph's forward projection, not the whole connection set.
+    /// The cyclic walk cannot distinguish "a token can still get there" from "both nodes sit in the same
+    /// loop" — inside a cycle every node reaches every other, in both directions. Removing the loop-closing
+    /// edge makes the projection acyclic, so the answer becomes directional again.
+    /// </summary>
+    [Fact]
+    public async Task CanReachForward_ExcludesBackwardEdges_WhereTheCyclicWalkSaysEverythingReachesEverything()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart"]);
+        var graph = FlowchartGraph.From(BuildCyclicForkJoinExecutable(fixture).RootActivity);
+        var analyzer = new FlowchartReachabilityAnalyzer();
+
+        // Forward reachability inside the loop body is unchanged: the fork still reaches the join.
+        Assert.True(analyzer.CanReach(graph, "node-fork", "node-join"));
+        Assert.True(analyzer.CanReachForward(graph, "node-fork", "node-join"));
+
+        // Backwards, the two disagree. The cyclic walk gets from the join back round to the fork through the
+        // loop-closing edge, so it reports the join can still reach the fork's own branches — the false
+        // "still live" answer that kept the old predicate waiting inside every loop.
+        Assert.True(analyzer.CanReach(graph, "node-join", "node-a"));
+        Assert.False(analyzer.CanReachForward(graph, "node-join", "node-a"));
+
+        // Sibling branches of the fork are unrelated in the projection, and reachable in the cyclic walk only
+        // by going all the way round the loop.
+        Assert.True(analyzer.CanReach(graph, "node-a", "node-b"));
+        Assert.False(analyzer.CanReachForward(graph, "node-a", "node-b"));
+
+        // The exit node leaves the cycle, so neither walk gets back in.
+        Assert.False(analyzer.CanReach(graph, "node-end", "node-fork"));
+        Assert.False(analyzer.CanReachForward(graph, "node-end", "node-fork"));
+    }
+
     [Fact]
     public async Task ParallelForkJoinInsideLoop_JoinPairsOncePerIteration_OverTwoIterations()
     {
