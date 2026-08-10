@@ -286,8 +286,9 @@ public sealed class GroundworkActivityPublicationCommand(
     /// <list type="number">
     /// <item>
     /// Runtime first. The template is content-addressed and the source reference is create-only, so a repeat
-    /// is a no-op and a template written without the rest is unreferenced: nothing can reach it until the
-    /// design commit lands, and reference garbage collection can reclaim it.
+    /// is a no-op and a template written without the rest is unreachable: nothing resolves it until the
+    /// design commit lands. Unreachable is not collectable — the source reference committed alongside it is a
+    /// live retention root — so a crash here strands both until a retry adopts them (ADR 0066).
     /// </item>
     /// <item>
     /// Design second, and this is the linearization point. The publication is done when this commits; the
