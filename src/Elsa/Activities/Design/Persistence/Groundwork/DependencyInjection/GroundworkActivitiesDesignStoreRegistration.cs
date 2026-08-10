@@ -39,6 +39,10 @@ public static class GroundworkActivitiesDesignStoreRegistration
         lane.Manifest<ActivitiesDesignGroundworkStorageManifestSource>();
         lane.Manifest<GroundworkDesignAtomicWriteStorageManifestSource>();
         lane.TryAdd<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        // The design lane's post-commit outbox and its redrive. Both design lanes register them because both
+        // share the ledger they ride in and are pinned to one target; TryAdd keeps that one instance.
+        lane.TryAddSelf<GroundworkDesignPostCommitOutbox>();
+        lane.TryAddSelf<GroundworkDesignPostCommitRedrive>();
 
         lane.Replace<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
         lane.Replace<IActivityDefinitionVersionStore, GroundworkActivityDefinitionVersionStore>();
