@@ -20,6 +20,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <see cref="RuntimeSchedulerPoisonDisposition.RetryScheduled"/> record is still being re-driven by the retry
 /// policy and must not fault the workflow. Incident ids are deterministic per work item and an existing incident
 /// is never overwritten, so an operator-resolved incident stays resolved and repeated drains are idempotent.</para>
+///
+/// <para>This is the tail of the <b>handler</b>-fault path only; an activity fault takes an entirely different route and
+/// ends in an authored incident strategy. Both are mapped in <c>docs/runtime-fault-behavior.md</c>.</para>
 /// </summary>
 public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDrainObserver
 {

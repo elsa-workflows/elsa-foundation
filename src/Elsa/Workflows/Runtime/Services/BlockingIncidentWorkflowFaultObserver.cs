@@ -14,6 +14,12 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <para><b>Faulted semantics.</b> <see cref="WorkflowExecutionStatus.Faulted"/> is a terminal status: once set, the
 /// drainer's terminal-status gate stops further scheduler work. Recovering a faulted workflow (resolving the blocking
 /// incident and resuming) is a separate operator/intervention surface, not part of this transition.</para>
+///
+/// <para><b>This is the backstop, not the primary decision.</b> On a drain that quiesced,
+/// <see cref="IncidentStrategyResolutionDrainObserver"/> has already applied the authored strategy and written a
+/// resolution outcome, which this observer then leaves alone. It acts on incidents nobody decided — typically because
+/// the drain stopped on a fault or a pause. <c>docs/runtime-fault-behavior.md</c> maps both fault paths and the skip
+/// conditions below.</para>
 /// </summary>
 public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDrainObserver
 {
