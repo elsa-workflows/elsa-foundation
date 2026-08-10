@@ -31,6 +31,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests.Alterations;
 
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
 {
     [Fact]

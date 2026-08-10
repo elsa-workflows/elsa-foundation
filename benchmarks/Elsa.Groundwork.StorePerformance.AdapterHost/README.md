@@ -12,9 +12,11 @@ Groundwork provider drivers.
 | CLI, run-request wire contract, native-plan staging | **done**, covered offline by `tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests` |
 | `capture-plan` for routeless workloads | **done** (`checkpoint-commit` is the only one) |
 | `capture-plan` for workloads with native routes | **not started** — refuses rather than fakes |
-| adapter leaves | **none registered** — `BenchmarkAdapterFactory` is empty and fails closed |
+| adapter leaves | **`checkpoint-commit`** (#1175). Every other workload is still a blocked run |
 
-No workload can be measured yet. The next unit is the `checkpoint-commit` leaf on SQLite.
+`checkpoint-commit` can be measured on any of the four providers; SQLite and PostgreSQL have been run.
+The next unit is a leaf for a workload with native routes, which needs the route-capture side of
+`capture-plan` first.
 
 ## Operating it
 
@@ -24,13 +26,40 @@ re-verifies a clean HEAD with `--untracked-files=all`, so a stray file inside th
 Build this host and the harness in the **same configuration**. Each child re-verifies the harness assembly
 digest, and a Debug host cannot satisfy a Release matrix.
 
+**Build once, then stage, then run — never rebuild in between.** The harness assembly is not byte-
+deterministic: rebuilding it with no source change produces a different digest. Building the harness
+project alone leaves this host's copied reference stale, and `capture-plan` bakes whichever digest *it*
+loaded into the staged evidence — so a rebuild between staging and `matrix` fails every child closed. The
+safe order is: build both projects, confirm the two copies of
+`Elsa.Groundwork.StorePerformance.Benchmarks.dll` hash identically, then `capture-plan`, then `matrix`.
+
 ```bash
+# Confirm digest parity before staging anything.
+shasum -a 256 \
+  benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/bin/Release/net10.0/Elsa.Groundwork.StorePerformance.Benchmarks.dll \
+  benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/bin/Release/net10.0/Elsa.Groundwork.StorePerformance.Benchmarks.dll
+```
+
+Run the matrix **detached** (`nohup … & disown`). A cohort is tens of minutes of provider I/O, and a
+terminal or session teardown kills it outright — leaving a partial artifact directory, which is deliberately
+not resumable.
+
+**Prefer a checkout you are not working in.** Because every child re-verifies a clean HEAD, *any* edit to
+the repository while a cohort is running aborts the remaining children — including edits unrelated to the
+benchmark, such as touching this README. Running the matrix from a dedicated clean checkout removes the
+whole hazard; otherwise, stop editing for the duration of the run.
+
+```bash
+# 0. Read the provenance values off the provider itself. Correctness binds the *observed* provider
+#    configuration to the requested one entry for entry, so these cannot be guessed.
+adapter-host probe-provider --provider sqlite
+
 # 1. Stage the native-plan evidence and copy the three values it prints.
 adapter-host capture-plan --workload checkpoint-commit --provider sqlite \
   --cohort tierb-001 --measurement-set groundwork-shared-linked \
   --adapter groundwork --form shared-documents-with-linked-index-tables --scale 100k \
   --commit "$(git rev-parse HEAD)" --composition <64-hex> --provider-version <version> \
-  --provider-setting journalMode=wal --provider-setting synchronous=full \
+  --provider-setting <name=value from probe-provider> \
   --identity checkpoint-commit-sqlite-routeless --out "$STAGING"
 
 # 2. Run the matrix. --child-command must be the built apphost binary, never `dotnet run`.
@@ -65,7 +94,7 @@ options are PascalCase and register no string-enum converter, so `ProcessKind` t
 local copy would drift the moment a converter is added, and the drift would surface as a fail-closed
 rejection minutes into a cohort — or, worse, parse a warmup request as measured.
 
-## Notes for the next unit (the `checkpoint-commit` leaf)
+## How the `checkpoint-commit` leaf works, and why
 
 **Store composition — verified, and not obvious.** `GroundworkProviderClient.Services` contains *only*
 `IDocumentStore` (plus `IBoundedDocumentStore` in physical mode). `AddGroundworkRuntimeStores()` does not
@@ -73,9 +102,21 @@ register everything the workload needs either: `IRuntimeExecutionOwnershipServic
 `AddWorkflowRuntime()` (`src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs:169`)
 and has no Groundwork replacement. The order is therefore:
 
-1. `services.AddSingleton<IDocumentStore>(client.DocumentStore)` (+ `IBoundedDocumentStore` in physical mode)
-2. `services.AddWorkflowRuntime()` — registers the in-memory defaults *and* the ownership service
-3. `services.AddGroundworkRuntimeStores()` — `RemoveAll`s the in-memory defaults and swaps in the bridges
+1. `services.AddSingleton<IPersistenceAccessContextAccessor>(...)` — **first**, because `AddPersistenceCore`
+   uses `TryAdd` and its default `"default"`-scope accessor would otherwise win
+2. `services.AddSingleton<IDocumentStore>(client.DocumentStore)` (+ `IBoundedDocumentStore` in physical mode)
+3. `services.AddWorkflowRuntime()` — registers the in-memory defaults, the ownership service, and
+   `IWorkflowExecutableRootWriteLeaseManager`, which `GroundworkRuntimeCheckpointWriter` requires
+4. `services.AddGroundworkRuntimeStores()` — `RemoveAll`s the in-memory defaults and swaps in the bridges
+
+**Physical mode is required, not preferred.** `BoundedDocumentStore` is only populated in physical mode,
+and `GroundworkWorkflowExecutionStateStore` throws without one. It is also the only mode with a compiled
+physical target, so a logical-mode shortcut would not describe the system the Spec 094 evidence describes.
+
+**The correctness storage scope is dictated by the contract.** The frozen scenario stamps
+`TenantId = "tenant-checkpoint"` onto every committed `WorkflowExecutionState`, and the bridges call
+`PersistenceAccessContext.EnsureTenantScope(state.TenantId)` before any provider I/O — so the correctness
+scope *must* be `tenant-checkpoint`. The benchmark rows live in a separate scope of the leaf's choosing.
 
 **Operation decomposition.** `MeasureAsync` loops `while samples.Count < 100 || elapsed < 30s` — 30 seconds
 *per operation*, always — and times everything inside `InvokeAsync`. So:
@@ -88,6 +129,13 @@ and has no Groundwork replacement. The order is therefore:
   workload's input carries `"timedSetup": "excluded"`.
 - Warmup calls `InvokeAsync(-1L - i)` for 50 **negative** ordinals. Key identities so the warmup and
   measured namespaces cannot collide.
+
+**Provider configuration is observed, never asserted.** `ValidateCorrectness` requires the observed
+configuration to match the request entry for entry, so `probe-provider` reads it off the driver's own
+sanitized diagnostics and prints the flags to pass. The `journalMode=wal --provider-setting
+synchronous=full` pairing in the example above is *illustrative and false for this driver*: the provider
+driver builds its SQLite connection string directly and bypasses Groundwork's connection factory, so it
+applies no journal or synchronous pragma at all. Do not copy it — run the probe.
 
 **Provider-configuration values are screened.** `ArtifactSafety` rejects any artifact string containing
 `://` or a `keyword=`/`keyword:` pattern, where the keywords include `server`, `host`, `port` and

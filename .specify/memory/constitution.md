@@ -3,7 +3,23 @@ Draft history moved to ../../docs/reports/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
-SYNC IMPACT REPORT — 3.4.0 -> 4.0.0 (2026-08-08)
+Sync Impact Report (3.4.0 -> 3.5.0, 2026-08-07)
+- Bump rationale: MINOR. Materially expanded Elsa-specific guidance; no rule removed or redefined
+  incompatibly.
+- Modified: §E5, retitled "Elsa packaging snapshot" to "Elsa packaging and versioning". Adds the
+  workbench/product distinction, the two version lines, computed versions with selective publishing,
+  magnitude enforcement, and Line A stability policy. Rewrites the Nuplane strategy paragraph, which
+  named the removed `Elsa.Server` project and claimed the host pins all `.Core` libraries.
+- Modified: §E2.4, "the host" clarified to "the workbench host" following the Elsa.Server rename.
+- Modified: Pinned root, "Application instance = `Elsa.Server`" corrected to name `Elsa.Workbench`
+  and note that the product host is not yet built.
+- Source: ADR 0063, agreed on issue #1144 by Joey Barten, Sipke Schoorstra and Frans van Ek.
+- Open: Line A membership is partial. Six candidate packages are deferred to the clean host
+  specification (#1145).
+- Templates requiring review: plan-template.md, spec-template.md, tasks-template.md for any
+  Constitution Check text that assumes uniform package versions.
+
+SYNC IMPACT REPORT — 3.5.0 -> 4.0.0 (2026-08-08)
 Amendment: tracks framework constitution 4.0.0 — event types are never named with an `On` prefix.
   MAJOR because this document normatively PINS event names that are now redefined
   (§2.9 specialization and §E5 lifecycle/validation events), not merely illustrated.
@@ -74,7 +90,7 @@ This document is the **Elsa-specific** layer of a two-layer constitution. It is 
 **Pinned root.**
 
 - `<App>` = `Elsa`. Every framework-level token of the form `<App>.<Domain>` resolves to `Elsa.<Domain>` in this constitution.
-- Application instance = `Elsa.Server` (the host project).
+- Application instance = the host project. Today that is `Elsa.Workbench`, a development and demo host; the product host is not yet built (§E5).
 - Foundation repo = `github.com/elsa-workflows/elsa-foundation` (created 2026-05-08).
 
 ---
@@ -201,7 +217,7 @@ surface identified by §E1.
 
 ### §E2.4 Elsa foundation repo composition
 
-**framework §2.15 — Elsa specialization.** Elsa's foundation repo is this repository (`elsa-foundation`). It contains the host, the baseline domain cores, and default implementations needed for local development. Heavy provider-specific or optional integrations remain candidates for standalone feature packages.
+**framework §2.15 — Elsa specialization.** Elsa's foundation repo is this repository (`elsa-foundation`). It contains the workbench host (§E5), the baseline domain cores, and default implementations needed for local development. Heavy provider-specific or optional integrations remain candidates for standalone feature packages.
 
 The current composition remains revisable as evidence accrues.
 
@@ -402,15 +418,32 @@ The Configuration & Settings classification (framework §2.12) is deferred to th
 
 ---
 
-## §E5 Elsa packaging snapshot
+## §E5 Elsa packaging and versioning
 
-**framework §2.13 — Elsa specialization.** Elsa's current packaging is the snapshot in §E2.4 above. The framework rule (packaging cohesion follows dependency cohesion; packaging is application-level and revisable) governs.
+**framework §2.13 — Elsa specialization.** Elsa's current packaging is the snapshot in §E2.4 above. The framework rule (packaging cohesion follows dependency cohesion; packaging is application-level and revisable) governs. Framework §2.13 places the choice of how versions are shared with the application; Elsa's choice is recorded below.
+
+**The workbench is not the product.** `src/Apps/Elsa.Workbench` is a development and demo host used to build out modules. It is not the deliverable executable, and no product host has existed in any Elsa major version. A clean host is therefore a product specification rather than a refactor of the workbench, and the `Elsa.Server` name and the `elsaworkflows/elsa-server` image are reserved for it. The workbench publishes as `elsaworkflows/elsa-workbench`.
+
+**Two version lines.** Elsa uses neither whole-version sharing nor fully independent versioning, both of which framework §2.13 permits.
+
+- **Line A, the host baseline.** The cross-cutting contract packages a host pins share one version that moves only when the contract surface changes, governed by framework §4.2. Membership begins with `Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`, `Elsa.Mediator.Core`, `Elsa.Persistence.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`. Membership is recorded in the dependency map and is not final; packages whose cross-domain reach and churn do not decide the question are settled by the clean host specification.
+- **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a domain is a delivery unit.
+
+The rule this expresses: **a dependency floor must state what a package actually needs.** Uniform versioning inflates floors, which under Strategy B prevents a feature from being installed into a host pinned at an older contract version.
+
+**Versions are computed, not authored.** The patch digit is derived from the count of commits touching a package's own files since the release tag, with file ownership resolved through the dependency map. No `<Version>` element is hand-maintained. Publishing is selective: a package whose own files did not change is not republished, so its floors are never restamped for a change it did not take part in. Preview builds carry no run-number counter, and a release promotes the artifact already built rather than rebuilding from a tag.
+
+**Version magnitude is enforced, not asserted.** Public API additions and breaks are detected mechanically against the last released baseline, and a gate fails when the version bump is smaller than the detected delta requires. A compatible dependency update does not oblige dependents to republish; only a major change propagates. Dependency ranges carry an upper bound at the next major.
+
+**Line A stabilizes by policy after 4.0.** Breaking contract changes batch into planned majors. Without this the contract line churns and the two-line split degrades to uniform versioning.
+
+Rationale, rejected alternatives and the supporting measurements are recorded in [ADR 0063](../../docs/adr/0063-package-versioning-uses-two-lines-with-computed-patch.md).
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
 **Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Workflows.Primitives`, `Elsa.Expressions.JavaScript.Primitives`), provider leaves (`Elsa.Locking.FileSystem`, `Elsa.Persistence.EFCore.Sqlite`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
 
-**Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host (`Elsa.Server`) pins `.Core` libraries; Nuplane focuses on dynamically loading Layer-3 implementations, helper libraries, and optional features. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
+**Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host pins the Line A baseline contracts; Nuplane dynamically loads Layer-3 implementations, helper libraries, and optional features. A domain's `.Core` is not host-pinned, because a clean host carries no domains; Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, for first-party and third-party domains alike. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
 
 ---
 

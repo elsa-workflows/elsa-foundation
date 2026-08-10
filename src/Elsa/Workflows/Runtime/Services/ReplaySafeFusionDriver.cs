@@ -65,18 +65,30 @@ public sealed class ReplaySafeFusionDriver
     }
 
     /// <summary>
-    /// Whether a fresh <c>ScheduleActivity</c> targeting <paramref name="node"/> should fuse: the toggle is on, the node
-    /// is a ReplaySafe typed leaf (never an intrinsic — those keep their durable pre-activation boundary), and a live
+    /// Whether a fresh <c>ScheduleActivity</c> targeting <paramref name="node"/> should fuse: the toggle is on, a live
     /// coalescing session owns this execution (fusion is a burst-only locality optimization; outside a burst the
-    /// spec-109 carrier / Immediate path stands and every hop is discrete).
+    /// spec-109 carrier / Immediate path stands and every hop is discrete), and the node is one of
+    /// <list type="bullet">
+    /// <item>a ReplaySafe typed CLR leaf (the original ADR 0047 D1 population), or</item>
+    /// <item>an engine intrinsic whose kind is fusable per <see cref="WorkflowIntrinsicFusion"/>. An intrinsic has no
+    /// <c>ActivityContract</c> to carry a profile, so its replay-safety comes from the pinned
+    /// <see cref="ExecutableNode.IntrinsicKind"/> instead. Intrinsics were previously excluded as a class; the
+    /// exclusion is now per kind, because the identity-mutating and terminal kinds are the ones that need the durable
+    /// pre-activation boundary, and the pure value/routing kinds are exactly the hot-loop body.</item>
+    /// </list>
     /// </summary>
     public bool ShouldFuse(string workflowExecutionId, ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        return _options.Enabled
-            && node.IntrinsicKind is null
-            && node.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe
+        if (!_options.Enabled)
+            return false;
+
+        var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
+            ? WorkflowIntrinsicFusion.IsFusable(intrinsicKind)
+            : node.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe;
+
+        return nodeIsFusable
             && _coalescingSessionAccessor?.Current is { } session
             && session.AppliesTo(workflowExecutionId);
     }
@@ -92,10 +104,10 @@ public sealed class ReplaySafeFusionDriver
     {
         ArgumentNullException.ThrowIfNull(startWorkItem);
 
-        var invokeWorkItem = await _startHandler.ExecuteFusedStartAsync(startWorkItem, _serviceProvider, cancellationToken);
-        if (invokeWorkItem is null)
+        var startResult = await _startHandler.ExecuteFusedStartAsync(startWorkItem, _serviceProvider, cancellationToken);
+        if (!startResult.Fused)
         {
-            // Fallback: not a fresh Scheduled ReplaySafe leaf. Hand the StartActivity item to the overlay queue so the
+            // Fallback: not a fresh Scheduled fusable node. Hand the StartActivity item to the overlay queue so the
             // discrete StartActivity handler processes it — discrete-equivalent, nothing dropped (research §4).
             await _schedulerWorkQueue.EnqueueAsync(startWorkItem, cancellationToken);
             return;
@@ -103,11 +115,16 @@ public sealed class ReplaySafeFusionDriver
 
         _diagnostics?.RecordFusedSpan();
 
-        // Dispatch the invoke stage through the existing, unchanged handler inline (research §8.1). Its terminal commit
-        // (completion + parent-completion intent, or suspension / fault / child-scheduling) flows via the overlay outbox
-        // exactly as the discrete path.
-        var invokeHandler = ResolveHandler(invokeWorkItem);
-        await invokeHandler.HandleAsync(invokeWorkItem, cancellationToken);
+        // A fusable intrinsic has no invoke stage — its start stage already executed and committed the completion, whose
+        // continuation rides the same post-commit intent the discrete path emits. Go straight to the D2 pump.
+        if (startResult.InvokeWorkItem is { } invokeWorkItem)
+        {
+            // Dispatch the invoke stage through the existing, unchanged handler inline (research §8.1). Its terminal
+            // commit (completion + parent-completion intent, or suspension / fault / child-scheduling) flows via the
+            // overlay outbox exactly as the discrete path.
+            var invokeHandler = ResolveHandler(invokeWorkItem);
+            await invokeHandler.HandleAsync(invokeWorkItem, cancellationToken);
+        }
 
         await PumpCompletionCascadeAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
     }

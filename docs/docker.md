@@ -120,8 +120,10 @@ server outside Docker; the compose file adds the Studio container origin.
 `docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for a single Groundwork
 PostgreSQL document store:
 
-- **`GroundworkUnifiedPersistencePostgreSql`** backs the **runtime**, **workflows-design** and
-  **activities-design** lanes from one database. Its connection string binds from a **top-level
+- **`GroundworkUnifiedPersistencePostgreSql`** is the one-database preset: it declares a single Groundwork
+  target and binds the **runtime**, **workflows-design** and **activities-design** lanes to it. A host that
+  wants those lanes in separate databases enables `GroundworkTargets` and the per-lane persistence features
+  instead — see the Groundwork extension-points catalog. Its connection string binds from a **top-level
   `ConnectionString` property** on the feature section (not an `Options` wrapper):
 
   ```json

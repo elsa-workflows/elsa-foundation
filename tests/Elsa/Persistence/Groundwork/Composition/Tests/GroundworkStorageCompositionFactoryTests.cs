@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
@@ -301,6 +302,90 @@ public sealed class GroundworkStorageCompositionFactoryTests
 
         protected override GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>
             new("design-host-prefix-v1", context => $"host_{context.FeatureDefaultLogicalName}");
+    }
+
+    [Fact]
+    public async Task Each_target_composes_only_the_lanes_bound_to_it()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkStorageComposition();
+
+        // Stage 4 threads this through the lane registrations; binding directly here proves the
+        // composition seam independently of how a host expresses the binding.
+        var bindings = services.GroundworkManifestBindings();
+        bindings.Bind(typeof(WorkflowsDesignGroundworkStorageManifestSource), "authoring");
+        bindings.Bind(typeof(GroundworkDesignAtomicWriteStorageManifestSource), "authoring");
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var factory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
+
+        var runtime = await factory.CreateSourceAsync(
+            await CapabilitiesForTargetAsync(scope.ServiceProvider),
+            ProviderPhysicalNameNormalizer.Identity);
+        var authoring = await factory.CreateSourceAsync(
+            await CapabilitiesForTargetAsync(scope.ServiceProvider, "authoring"),
+            ProviderPhysicalNameNormalizer.Identity,
+            targetName: "authoring");
+
+        // The default target keeps the bare identity so databases admitted before targets are unaffected;
+        // a named target derives its own so two targets never share one Groundwork schema-state row.
+        Assert.Equal("elsa-documents", runtime.PhysicalTarget.ManifestIdentity.Value);
+        Assert.Equal("elsa-documents.authoring", authoring.PhysicalTarget.ManifestIdentity.Value);
+
+        Assert.Contains(runtime.Snapshot.ManifestSources, item => item.FeatureIdentity == "elsa-workflows-runtime");
+        Assert.DoesNotContain(runtime.Snapshot.ManifestSources, item => item.FeatureIdentity == "elsa-workflows-design");
+        Assert.Contains(authoring.Snapshot.ManifestSources, item => item.FeatureIdentity == "elsa-workflows-design");
+        Assert.DoesNotContain(authoring.Snapshot.ManifestSources, item => item.FeatureIdentity == "elsa-workflows-runtime");
+    }
+
+    [Fact]
+    public async Task A_target_with_no_bound_lane_fails_rather_than_admitting_an_empty_schema()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkStorageComposition();
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var factory = scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>();
+
+        var failure = await Assert.ThrowsAsync<GroundworkStorageCompositionException>(async () =>
+            await factory.CreateSourceAsync(
+                ProviderCapabilities(), ProviderPhysicalNameNormalizer.Identity, targetName: "unused"));
+
+        Assert.Contains("'unused'", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("no storage manifest bound to it", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Builds capability evidence the way provider admission does: over the manifest sources bound to one
+    /// target, so each target's routes are activated from its own lanes and no others.
+    /// </summary>
+    private static ValueTask<GroundworkProviderCapabilitySnapshot> CapabilitiesForTargetAsync(
+        IServiceProvider serviceProvider,
+        string? targetName = null)
+    {
+        var provider = new ProviderIdentity("groundwork-sqlite", "1.0.0");
+        return GroundworkProviderCapabilitySnapshotBuilder.ForSelectedSourcesAsync(
+            new ProviderCapabilityReport(
+                provider,
+                new HashSet<CapabilityId> { WellKnownCapabilities.AtomicCommit },
+                new HashSet<CapabilityId> { WellKnownCapabilities.AtomicCommit },
+                IndexCapabilities.All,
+                Enum.GetValues<PortableQueryOperation>().ToHashSet(),
+                Enum.GetValues<ConcurrencyKind>().ToHashSet(),
+                []),
+            new GroundworkProviderTopologySnapshot(
+                provider.Name,
+                "sqlite-file",
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
+                }),
+            GroundworkTargetManifestSources.ForTarget(serviceProvider, targetName));
     }
 
     private static GroundworkProviderCapabilitySnapshot ProviderCapabilities()

@@ -14,6 +14,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// pipeline. Covers the anonymous→401 contract the Studio client relies on, claim round-tripping from the
 /// cookie principal into the issued JWT, and the full login→token→protected-call→logout flow.
 /// </summary>
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class TokenEndpointTests : IAsyncLifetime
 {
     private const string TokenRoute = "/_elsa/identity/token";

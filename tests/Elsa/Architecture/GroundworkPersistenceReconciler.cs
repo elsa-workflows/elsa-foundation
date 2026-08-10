@@ -453,7 +453,10 @@ internal sealed class GroundworkPersistenceReconciler
     // their owning work-unit evidence instead of the frozen spec 094 ALL32 contract denominator.
     private static readonly GroundworkInternalStorageUnitMapping[] InternalStorageUnits =
     [
-        new("runtime", "DesignOperationDocumentKind", "#641/T030")
+        new("runtime", "DesignOperationDocumentKind", "#641/T030"),
+        // The design lane's post-commit intent outbox. Infrastructure for forward convergence of a
+        // cross-target publication, not a store behind a public persistence contract.
+        new("runtime", "DesignPostCommitIntentDocumentKind", "#1171")
     ];
 
     private static GroundworkPersistenceRowMapping Map(

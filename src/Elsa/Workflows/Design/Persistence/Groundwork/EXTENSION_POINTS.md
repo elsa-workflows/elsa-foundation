@@ -88,6 +88,39 @@ Its durable ledger is the shared `designOperation` document declared by
 contribute `GroundworkDesignAtomicWriteStorageManifestSource` via `TryAddEnumerable`, so the operation
 document is declared exactly once regardless of composition order.
 
+## Design post-commit outbox — extend
+
+The same manifest owns a second document, `designPostCommitIntent`. A design mutation whose lanes are on
+different Groundwork targets becomes done when the design commit lands, but anything it derives on another
+target has to be written afterwards, by the caller. An intent staged **inside** the design commit is durable
+at exactly that instant, so the derived write gains a second driver and no longer depends on the caller
+coming back ([#1171](https://github.com/elsa-workflows/elsa-foundation/issues/1171), ADR 0066).
+
+| Contract | Kind | Responsibility |
+|---|---|---|
+| `IDesignPostCommitIntentDeliverer` | Contributor (extend — one per intent kind) | Performs one kind of deferred write. Registered with `TryAddEnumerable` by the feature that owns the target lane, so the design lane never learns which target the write lands on. Delivery must be idempotent: a redrive can only learn an attempt succeeded by completing it, so a crash between a successful write and the intent's deletion redelivers. Two deliverers claiming one kind is a composition error. |
+
+`GroundworkDesignPostCommitOutbox` owns the storage: `CreateSaveRequest` produces the write a command stages
+in its own design commit, and `ClaimAsync`/`TryCompleteAsync`/`TryReleaseAsync` give a redrive a
+visibility-bounded, fenced lease. `GroundworkDesignPostCommitRedrive.SweepAsync` claims one bounded page,
+delivers each intent, and deletes the ones that land; a failure is released with an exponential backoff
+capped at five minutes. There is no dead letter — the mutation already committed, so the obligation cannot be
+abandoned, and an intent stuck at the backoff ceiling is the operator's signal.
+
+Two shapes are load-bearing and easy to break silently:
+
+- **The claim index fields are bare top-level document properties** (`claimableAt`, `recordedAt`, `intentId`),
+  not the `content.entity.*` nesting `GroundworkDocumentWriter` produces for design entities. Writing an
+  intent through the entity envelope puts all three one level too deep, and the declared index then matches
+  nothing while every write and every by-id read still succeeds.
+- **The projected `intentId` column is bounded at 256** (`DesignPostCommitIntentIdProjectionLength`), because
+  SQL Server refuses an unbounded string as an index key column. `ProjectIntentId` digests anything longer and
+  the document keeps the durable logical id.
+
+**Known implementations:** `ActivityPublicationReceiptIntentDeliverer` in
+`Elsa.Workflows.Publishing.Persistence.Groundwork` *(cross-domain)* — writes the publishing receipt of a
+reusable-activity publication whose publishing lane is on another target.
+
 ## Registration and manifest sources
 
 `AddGroundworkWorkflowsDesignStores()`

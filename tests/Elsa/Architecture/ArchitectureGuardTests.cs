@@ -235,23 +235,69 @@ public sealed class ArchitectureGuardTests
         Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
     }
 
+    /// <summary>
+    /// The reference shell keeps every lane in one database, which the unified preset expresses. Composing a
+    /// second Groundwork target is supported since #1156 and no longer a violation, so this asserts the
+    /// reference shape rather than a host-wide invariant: the preset is selected, and nothing overrides a
+    /// lane it already covers.
+    /// </summary>
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
-    public void Server_default_shell_selects_one_unified_Groundwork_persistence_leaf(string fileName)
+    public void Server_default_shell_keeps_every_lane_on_the_unified_Groundwork_preset(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must select one Groundwork SQLite target for the six provider-level persistence families.");
+            $"{fileName} must select the unified Groundwork SQLite preset for the reference composition.");
         Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
-            $"{fileName} must not compose a second Groundwork provider leaf.");
-        Assert.False(features.ContainsKey("GroundworkPublishingPersistenceSqlite"),
-            $"{fileName} must not select the retired standalone Publishing lane.");
+            $"{fileName} must not also compose the runtime-only preset over the unified one.");
+        Assert.False(features.ContainsKey("GroundworkTargets"),
+            $"{fileName} is the single-database reference shape and must not declare targets explicitly.");
         Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
             $"{fileName} must not override unified workflow-design persistence with EF Core.");
         Assert.False(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
             $"{fileName} must not override unified activity-design persistence with EF Core.");
+    }
+
+    /// <summary>
+    /// Groundwork target names are opaque operator-chosen labels. A provider leaf must never learn what a
+    /// persistence lane is, or the neutrality the target registry depends on quietly erodes.
+    /// </summary>
+    [Fact]
+    public void Groundwork_provider_projects_carry_no_persistence_lane_vocabulary()
+    {
+        string[] laneWords = ["Design", "Runtime", "Publishing", "Secrets", "Dashboard"];
+        var providerRoots = new[] { "Sqlite", "PostgreSql", "SqlServer", "MongoDb" }
+            .Select(provider => Path.Combine(
+                RepoRoot, "src", "Elsa", "Persistence", "Groundwork", provider))
+            .Where(Directory.Exists)
+            .ToArray();
+        Assert.NotEmpty(providerRoots);
+
+        var violations = new List<string>();
+        foreach (var root in providerRoots)
+        {
+            // Provider leaf files only. Presets — the Unified subfolder and the runtime-only shell features —
+            // exist precisely to bind lanes to a target, so naming lanes is their job, not a leak.
+            var files = Directory
+                .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Unified{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Where(file => !Path.GetFileName(file).EndsWith("PersistenceShellFeature.cs", StringComparison.Ordinal));
+
+            foreach (var file in files)
+            {
+                var text = File.ReadAllText(file);
+                violations.AddRange(laneWords
+                    .Where(word => text.Contains($"Groundwork{word}Stores", StringComparison.Ordinal)
+                                   || text.Contains($"AddGroundwork{word}", StringComparison.Ordinal))
+                    .Select(word => $"{Path.GetFileName(file)} references the {word} lane"));
+            }
+        }
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations.Distinct()));
     }
 
     [Theory]

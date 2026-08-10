@@ -33,9 +33,9 @@ public sealed class DeploymentShapeLaneExclusionTests
         services.AddSqliteGroundworkDocumentStore(ConnectionString);
         services.AddGroundworkRuntimeStores();
 
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkStateStore) &&
-            descriptor.ImplementationType == typeof(GroundworkBookmarkStateStore));
+        // The runtime lane binds its adapters to a Groundwork target, so they register through a factory
+        // and the implementation type is not visible on the descriptor.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
             descriptor.ImplementationType == typeof(RuntimeGroundworkStorageManifestSource));
@@ -65,9 +65,9 @@ public sealed class DeploymentShapeLaneExclusionTests
         var services = new ServiceCollection();
         services.AddGroundworkSqliteUnifiedPersistence(ConnectionString);
 
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkStateStore) &&
-            descriptor.ImplementationType == typeof(GroundworkBookmarkStateStore));
+        // The runtime lane binds its adapters to a Groundwork target, so they register through a factory
+        // and the implementation type is not visible on the descriptor.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         AssertDesignLanePresent(services);
     }
 

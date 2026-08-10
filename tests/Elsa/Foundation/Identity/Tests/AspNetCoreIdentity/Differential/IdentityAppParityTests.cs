@@ -36,6 +36,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Differential;
 /// second composition of them to compare.
 /// </para>
 /// </remarks>
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class IdentityAppParityTests(ITestOutputHelper output)
 {
     [Fact]

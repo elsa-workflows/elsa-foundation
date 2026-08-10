@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -55,8 +56,7 @@ public static class AspNetCoreIdentityGroundworkRegistration
         services.RemoveAll<IIdentityEmailUniquenessPolicy>();
         services.AddScoped<IIdentityEmailUniquenessPolicy, AspNetCoreIdentityEmailUniquenessPolicy>();
 
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, IdentityGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<IdentityGroundworkStorageManifestSource>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IConfigureOptions<AuthenticationOptions>, ConfigureAspNetCoreIdentityDefaultAuthenticationSchemes>());
 

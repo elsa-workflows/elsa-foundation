@@ -146,14 +146,23 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     }
 
     /// <summary>
-    /// Fused-mode start stage (spec 123 D1): runs the same resolve → materialize → transition-to-Running →
-    /// <c>ActivityStarted</c> commit path the discrete handler runs, but for a fresh Scheduled typed ReplaySafe leaf
-    /// commits the intent-free <c>ActivityStarted</c> checkpoint (buffered into the active coalescing session) and
-    /// returns the derived <c>InvokeActivity</c> work item for the driver to dispatch inline — never enqueuing it.
-    /// Returns <see langword="null"/> for anything that is not a fresh Scheduled ReplaySafe leaf (intrinsic, already
-    /// Running/Completed, non-ReplaySafe): the driver then falls back to the discrete queue for that work item.
+    /// Fused-mode start stage (spec 123 D1). Two fused shapes, distinguished by the returned
+    /// <see cref="FusedStartResult"/>:
+    /// <list type="bullet">
+    /// <item><b>Typed ReplaySafe leaf</b> — runs the same resolve → materialize → transition-to-Running →
+    /// <c>ActivityStarted</c> commit path the discrete handler runs, commits the intent-free <c>ActivityStarted</c>
+    /// checkpoint (buffered into the active coalescing session) and returns the derived <c>InvokeActivity</c> work item
+    /// for the driver to dispatch inline — never enqueuing it.</item>
+    /// <item><b>Fusable intrinsic</b> — an intrinsic has no invoke stage: the start stage <em>is</em> its whole
+    /// execution. It runs the same <see cref="WorkflowIntrinsicExecutor"/> the discrete path runs, commits the returned
+    /// commit (buffered identically), and reports the span already complete so the driver skips straight to the D2
+    /// completion pump. The completion work item travels as the commit's own post-commit intent, exactly as it does
+    /// discretely.</item>
+    /// </list>
+    /// Anything else (already Running/Completed, non-ReplaySafe leaf, non-fusable intrinsic kind) reports a fallback so
+    /// the driver hands the work item to the discrete queue unchanged.
     /// </summary>
-    internal async ValueTask<RuntimeSchedulerWorkItem?> ExecuteFusedStartAsync(
+    internal async ValueTask<FusedStartResult> ExecuteFusedStartAsync(
         RuntimeSchedulerWorkItem workItem,
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
@@ -165,17 +174,54 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var executableNode = resolution.ExecutableNode;
         var state = resolution.State;
 
-        // Fusion only continues for a fresh Scheduled typed ReplaySafe leaf; every other shape falls back so the
-        // discrete chain (intrinsic executor, Running re-enqueue, no-op) runs unchanged.
-        if (executableNode.IntrinsicKind is not null ||
-            executableNode.ActivityContract?.SideEffectProfile != SideEffectProfile.ReplaySafe ||
-            state.Status != ActivityExecutionStatus.Scheduled)
-            return null;
+        // Both fused shapes require a fresh Scheduled execution; a redelivery or an already-advanced state falls back so
+        // the discrete chain's own no-op/re-enqueue handling runs unchanged.
+        if (state.Status != ActivityExecutionStatus.Scheduled)
+            return FusedStartResult.Fallback;
+
+        if (executableNode.IntrinsicKind is { } intrinsicKind)
+        {
+            // Guarded twice on purpose: the driver's ShouldFuse decided this at ScheduleActivity dispatch, and the same
+            // predicate is re-asserted here so the stage can never fuse a kind the gate would have refused.
+            if (!WorkflowIntrinsicFusion.IsFusable(intrinsicKind))
+                return FusedStartResult.Fallback;
+
+            var executor = serviceProvider.GetService<WorkflowIntrinsicExecutor>()
+                ?? throw new InvalidOperationException($"Executable node '{executableNode.ExecutableNodeId}' requires the workflow intrinsic executor.");
+            var intrinsicCommit = await executor.ExecuteAsync(
+                workItem,
+                resolution.StartPayload,
+                resolution.Executable,
+                executableNode,
+                state,
+                cancellationToken);
+            await _checkpointCommitter.CommitAsync(intrinsicCommit, cancellationToken);
+            return FusedStartResult.CompletedAtStart;
+        }
+
+        if (executableNode.ActivityContract?.SideEffectProfile != SideEffectProfile.ReplaySafe)
+            return FusedStartResult.Fallback;
 
         var runningState = await ProduceRunningStateAsync(workItem, resolution.StartPayload, resolution.Executable, executableNode, state, serviceProvider, cancellationToken);
         var core = await BuildStartedCommitAsync(workItem, resolution.StartPayload, runningState, cancellationToken);
         await _checkpointCommitter.CommitAsync(core.Commit, cancellationToken);
-        return core.InvokeWorkItem;
+        return FusedStartResult.Invoke(core.InvokeWorkItem);
+    }
+
+    /// <summary>
+    /// Outcome of a fused start stage: continue inline with an invoke work item, stop because the span already
+    /// completed (intrinsic), or fall back to the discrete queue.
+    /// </summary>
+    internal readonly record struct FusedStartResult(RuntimeSchedulerWorkItem? InvokeWorkItem, bool Fused)
+    {
+        /// <summary>The stage declined to fuse; the caller must hand the work item to the discrete queue.</summary>
+        public static FusedStartResult Fallback => new(null, Fused: false);
+
+        /// <summary>The intrinsic span executed and committed in the start stage; there is no invoke stage to run.</summary>
+        public static FusedStartResult CompletedAtStart => new(null, Fused: true);
+
+        /// <summary>The typed leaf started; <paramref name="invokeWorkItem"/> must be dispatched inline.</summary>
+        public static FusedStartResult Invoke(RuntimeSchedulerWorkItem invokeWorkItem) => new(invokeWorkItem, Fused: true);
     }
 
     // Resolve → validate → optional variable-frame activation. Shared verbatim by the discrete handler and the fused

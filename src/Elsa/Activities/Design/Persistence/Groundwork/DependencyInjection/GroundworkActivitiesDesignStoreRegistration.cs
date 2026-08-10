@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -17,103 +18,77 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 
 /// <summary>
-/// Registers the Groundwork (document) implementations of the activity-design read ports. A provider
-/// feature is responsible for registering the concrete <see cref="Groundwork.Documents.Store.IDocumentStore"/>
-/// and <see cref="Groundwork.Documents.Store.IBoundedDocumentStore"/> supplied by the same provider boundary
-/// (plus the host's <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>). The bounded store is required
-/// for the admitted activity-management and reusable-activity queries; this method only swaps the read-port
-/// contracts over to the document-backed implementations, mirroring the runtime lane's
-/// <c>AddGroundworkRuntimeStores</c> and the workflows-design lane's <c>AddGroundworkWorkflowsDesignStores</c>.
+/// Registers the Groundwork (document) implementations of the activity-design read ports against one named
+/// Groundwork target. A provider feature declares the target and supplies the host's
+/// <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>; the admitted activity-management and
+/// reusable-activity queries run against that target's bounded store.
+/// <para>
+/// The activities-design lane shares the design-operation ledger with the workflows-design lane, so both
+/// must name the same target. Binding them apart is rejected when the manifest binding is recorded.
+/// </para>
 /// </summary>
 public static class GroundworkActivitiesDesignStoreRegistration
 {
-    public static IServiceCollection AddGroundworkActivitiesDesignStores(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkActivitiesDesignStores(
+        this IServiceCollection services,
+        string? targetName = null)
     {
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, ActivitiesDesignGroundworkStorageManifestSource>());
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, GroundworkDesignAtomicWriteStorageManifestSource>());
-        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        var lane = services.GroundworkLane(targetName);
 
-        services.RemoveAll<IActivityDefinitionStore>();
-        services.AddScoped<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
+        lane.Manifest<ActivitiesDesignGroundworkStorageManifestSource>();
+        lane.Manifest<GroundworkDesignAtomicWriteStorageManifestSource>();
+        lane.TryAdd<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        // The design lane's post-commit outbox and its redrive. Both design lanes register them because both
+        // share the ledger they ride in and are pinned to one target; TryAdd keeps that one instance.
+        lane.TryAddSelf<GroundworkDesignPostCommitOutbox>();
+        lane.TryAddSelf<GroundworkDesignPostCommitRedrive>();
 
-        services.RemoveAll<IActivityDefinitionVersionStore>();
-        services.AddScoped<IActivityDefinitionVersionStore, GroundworkActivityDefinitionVersionStore>();
+        lane.Replace<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
+        lane.Replace<IActivityDefinitionVersionStore, GroundworkActivityDefinitionVersionStore>();
+        lane.Replace<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>();
+        lane.Replace<IAddActivityDefinitionVersionCommand, GroundworkAddActivityDefinitionVersionCommand>();
+        lane.Replace<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
+        lane.Replace<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>();
 
-        services.RemoveAll<IAddActivityDefinitionCommand>();
-        services.AddScoped<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>();
-
-        services.RemoveAll<IAddActivityDefinitionVersionCommand>();
-        services.AddScoped<IAddActivityDefinitionVersionCommand, GroundworkAddActivityDefinitionVersionCommand>();
-
+        // The lookup composes the ports above rather than a store, so it needs no target binding.
         services.RemoveAll<IActivityDefinitionLookup>();
         services.AddScoped<IActivityDefinitionLookup, ActivityDefinitionLookup>();
 
-        services.RemoveAll<IActivityAvailabilitySettingsStore>();
-        services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
+        // Several contracts are served by one adapter each; bind the adapter to the target once and alias.
+        lane.TryAddSelf<GroundworkReusableActivityStores>();
+        lane.TryAddSelf<GroundworkActivityManagementProjectionWriter>();
+        lane.TryAddSelf<GroundworkActivityManagementProjectionRetention>();
+        lane.TryAddSelf<GroundworkActivityDependencyProjection>();
+        lane.TryAddSelf<GroundworkActivityUpgradePlanStore>();
 
-        services.TryAddScoped<GroundworkReusableActivityStores>();
-        services.TryAddScoped<GroundworkActivityManagementProjectionWriter>();
-        services.TryAddScoped<GroundworkActivityManagementProjectionRetention>();
-        services.RemoveAll<IActivityDefinitionManagementProjectionStore>();
-        services.AddScoped<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>();
-        services.RemoveAll<IActivityDefinitionAuthoringStore>();
-        services.AddScoped<IActivityDefinitionAuthoringStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDefinitionDraftStore>();
-        services.AddScoped<IActivityDefinitionDraftStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDefinitionVersionPublicationStore>();
-        services.AddScoped<IActivityDefinitionVersionPublicationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IRecommendedActivityDefinitionPickerStore>();
-        services.AddScoped<IRecommendedActivityDefinitionPickerStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDefinitionLayoutStore>();
-        services.AddScoped<IActivityDefinitionLayoutStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDraftValidationStore>();
-        services.AddScoped<IActivityDraftValidationStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityForkStore>();
-        services.AddScoped<IActivityForkStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IActivityDirectDependencyStore>();
-        services.AddScoped<IActivityDirectDependencyStore>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.TryAddScoped<GroundworkActivityDependencyProjection>();
-        services.RemoveAll<IActivityDependencyProjectionStore>();
-        services.AddScoped<IActivityDependencyProjectionStore>(sp => sp.GetRequiredService<GroundworkActivityDependencyProjection>());
-        services.RemoveAll<IActivityDependencyProjectionRebuilder>();
-        services.AddScoped<IActivityDependencyProjectionRebuilder>(sp => sp.GetRequiredService<GroundworkActivityDependencyProjection>());
-        services.RemoveAll<IActivityUpgradePlanStore>();
-        services.TryAddScoped<GroundworkActivityUpgradePlanStore>();
-        services.AddScoped<IActivityUpgradePlanStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
-        services.RemoveAll<IActivityUpgradeApplyReceiptStore>();
-        services.AddScoped<IActivityUpgradeApplyReceiptStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
+        lane.Alias<IActivityDefinitionAuthoringStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityDefinitionDraftStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityDefinitionVersionPublicationStore, GroundworkReusableActivityStores>();
+        lane.Alias<IRecommendedActivityDefinitionPickerStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityDefinitionLayoutStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityDraftValidationStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityForkStore, GroundworkReusableActivityStores>();
+        lane.Alias<IActivityDirectDependencyStore, GroundworkReusableActivityStores>();
+        lane.Alias<ICreateActivityDefinitionCommand, GroundworkReusableActivityStores>();
+        lane.Alias<ISaveActivityForkCandidateCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IPruneActivityForkCandidatesCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IApplyActivityForkCandidateCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IUpdateActivityDefinitionPresentationCommand, GroundworkReusableActivityStores>();
+        lane.Alias<ICreateActivityDraftCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IUpdateActivityDraftPresentationCommand, GroundworkReusableActivityStores>();
+        lane.Alias<ICreateActivityDraftConflictCopyCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IReplaceActivityDraftCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IApplyActivityContractProposalCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IDiscardActivityDraftCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IStoreActivityDraftValidationCommand, GroundworkReusableActivityStores>();
+        lane.Alias<IChangeActivityVersionLifecycleCommand, GroundworkReusableActivityStores>();
+        lane.Alias<ISetActivityDefinitionRecommendationCommand, GroundworkReusableActivityStores>();
 
-        services.RemoveAll<ICreateActivityDefinitionCommand>();
-        services.AddScoped<ICreateActivityDefinitionCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<ISaveActivityForkCandidateCommand>();
-        services.AddScoped<ISaveActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IPruneActivityForkCandidatesCommand>();
-        services.AddScoped<IPruneActivityForkCandidatesCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IApplyActivityForkCandidateCommand>();
-        services.AddScoped<IApplyActivityForkCandidateCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IUpdateActivityDefinitionPresentationCommand>();
-        services.AddScoped<IUpdateActivityDefinitionPresentationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<ICreateActivityDraftCommand>();
-        services.AddScoped<ICreateActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IUpdateActivityDraftPresentationCommand>();
-        services.AddScoped<IUpdateActivityDraftPresentationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<ICreateActivityDraftConflictCopyCommand>();
-        services.AddScoped<ICreateActivityDraftConflictCopyCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IReplaceActivityDraftCommand>();
-        services.AddScoped<IReplaceActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IApplyActivityContractProposalCommand>();
-        services.AddScoped<IApplyActivityContractProposalCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IDiscardActivityDraftCommand>();
-        services.AddScoped<IDiscardActivityDraftCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IStoreActivityDraftValidationCommand>();
-        services.AddScoped<IStoreActivityDraftValidationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<IChangeActivityVersionLifecycleCommand>();
-        services.AddScoped<IChangeActivityVersionLifecycleCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
-        services.RemoveAll<ISetActivityDefinitionRecommendationCommand>();
-        services.AddScoped<ISetActivityDefinitionRecommendationCommand>(sp => sp.GetRequiredService<GroundworkReusableActivityStores>());
+        lane.Alias<IActivityDependencyProjectionStore, GroundworkActivityDependencyProjection>();
+        lane.Alias<IActivityDependencyProjectionRebuilder, GroundworkActivityDependencyProjection>();
+        lane.Alias<IActivityUpgradePlanStore, GroundworkActivityUpgradePlanStore>();
+        lane.Alias<IActivityUpgradeApplyReceiptStore, GroundworkActivityUpgradePlanStore>();
 
         services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
         services.TryAddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();

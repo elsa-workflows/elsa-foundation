@@ -22,5 +22,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
     DependsOn = new object[] { "WorkflowsRuntimeDistributed" })]
 public sealed class WorkflowsRuntimeDistributedGroundworkPersistenceFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkDistributedRuntimeStores();
+    [ManifestSetting(
+        DisplayName = "Target",
+        Description = "The Groundwork target this lane's documents live in. Defaults to 'default'.",
+        Category = "Persistence")]
+    public string? Target { get; set; }
+
+    public void ConfigureServices(IServiceCollection services) => services.AddGroundworkDistributedRuntimeStores(Target);
 }

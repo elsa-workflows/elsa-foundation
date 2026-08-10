@@ -1,5 +1,7 @@
 using Elsa.Events.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Groundwork.Core.SchemaEvolution;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,13 +61,35 @@ public static class GroundworkStorageCompositionRegistration
     }
 
     /// <summary>
+    /// Registers the capability-admission holder for one target. Capability evidence is published once per
+    /// admitted store, so a host with two targets keeps two independent snapshots and one target's evidence
+    /// can never stand in for another's. The default target is also exposed unkeyed for the consumers that
+    /// resolve admission without knowing about targets.
+    /// </summary>
+    public static IServiceCollection AddGroundworkProviderCapabilityAdmission(
+        this IServiceCollection services,
+        string? targetName = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        var target = GroundworkTargetNames.Normalize(targetName);
+        services.TryAddKeyedSingleton<GroundworkProviderCapabilityAdmission>(target);
+        if (GroundworkTargetNames.IsDefault(target))
+        {
+            services.TryAddSingleton(serviceProvider =>
+                serviceProvider.GetRequiredKeyedService<GroundworkProviderCapabilityAdmission>(target));
+        }
+
+        return services;
+    }
+
+    /// <summary>
     /// Adds idempotent defaults. A host may register its own naming policy before this method is called.
     /// </summary>
     public static IServiceCollection AddGroundworkStorageComposition(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(GroundworkStorageNamingPolicyOptions.Identity);
-        services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
+        services.GroundworkManifestBindings();
         services.TryAddScoped<GroundworkStorageCompositionValidator>();
         services.TryAddScoped<GroundworkStorageCompositionHandler>();
         services.TryAddEventHandler<GroundworkStorageComposing, GroundworkStorageCompositionHandler>();
@@ -74,6 +98,8 @@ public static class GroundworkStorageCompositionRegistration
             sp.GetRequiredService<GroundworkStorageCompositionValidator>(),
             sp.GetRequiredService<GroundworkStorageNamingPolicyOptions>(),
             sp.GetService<Elsa.Events.Core.Contracts.IInlineEventPublisher>(),
+            sp.GetServices<IGroundworkStorageManifestSource>(),
+            sp.GetRequiredService<GroundworkManifestBindings>(),
             sp.GetService<GroundworkDeploymentSchemaSelection>()));
         return services;
     }

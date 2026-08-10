@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Targets;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Tests;
@@ -16,7 +17,7 @@ public sealed class SqliteGroundworkInitializationTests
 
         try
         {
-            await provider.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>().InitializeAsync();
+            await Initializer(provider).AdmitAsync();
 
             Assert.True(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
             telemetry.AssertSingle(SqliteGroundworkTelemetry.MaterializedOutcome);
@@ -32,14 +33,14 @@ public sealed class SqliteGroundworkInitializationTests
     {
         var databasePath = NewDatabasePath();
         await using var provider = NewProvider($"Data Source={databasePath}");
-        var initializer = provider.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>();
+        var initializer = Initializer(provider);
 
         try
         {
-            await initializer.InitializeAsync();
+            await initializer.AdmitAsync();
             using var telemetry = new TelemetryCapture();
 
-            await initializer.InitializeAsync();
+            await initializer.AdmitAsync();
 
             telemetry.AssertSingle(SqliteGroundworkTelemetry.HistoryHitOutcome);
         }
@@ -55,11 +56,11 @@ public sealed class SqliteGroundworkInitializationTests
         const string secret = "sqlite-admission-secret";
         await using var provider = NewProvider(
             $"Data Source=:memory:;Mode=DefinitelyNotAValidMode;Password={secret}");
-        var initializer = provider.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>();
+        var initializer = Initializer(provider);
         using var telemetry = new TelemetryCapture();
 
         var exception = await Assert.ThrowsAsync<SqliteGroundworkPersistenceException>(
-            () => initializer.InitializeAsync());
+            () => initializer.AdmitAsync());
 
         Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
@@ -78,8 +79,8 @@ public sealed class SqliteGroundworkInitializationTests
         try
         {
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => provider.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>()
-                    .InitializeAsync(cancellation.Token));
+                () => Initializer(provider)
+                    .AdmitAsync(cancellation.Token));
 
             Assert.False(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
             telemetry.AssertSingle(SqliteGroundworkTelemetry.CancelledOutcome);
@@ -107,7 +108,7 @@ public sealed class SqliteGroundworkInitializationTests
 
         try
         {
-            await provider.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>().InitializeAsync();
+            await Initializer(provider).AdmitAsync();
 
             Assert.True(provider.GetRequiredService<GroundworkStoreSessionSource>().IsInitialized);
             Assert.Same(ambientActivity, Activity.Current);
@@ -117,6 +118,10 @@ public sealed class SqliteGroundworkInitializationTests
             DeleteDatabase(databasePath);
         }
     }
+
+    /// <summary>The runtime preset declares the default target, so its admission is resolved by that key.</summary>
+    private static SqliteGroundworkDocumentStoreInitializer Initializer(IServiceProvider provider) =>
+        provider.GetRequiredKeyedService<SqliteGroundworkDocumentStoreInitializer>(GroundworkTargetNames.Default);
 
     private static ServiceProvider NewProvider(string connectionString)
     {

@@ -6,11 +6,11 @@ namespace Elsa.Architecture.Tests;
 public sealed class GroundworkPersistenceLifetimeTests
 {
     private static readonly Regex GenericRegistrationPattern = new(
-        @"(?:\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add|\bServiceDescriptor\s*\.\s*)(?<lifetime>Singleton|Scoped|Transient)\s*<(?<types>(?:[^<>]|<[^<>]*>)+)>",
+        @"(?:\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add(?:Keyed)?|\bServiceDescriptor\s*\.\s*(?:Keyed)?)(?<lifetime>Singleton|Scoped|Transient)\s*<(?<types>(?:[^<>]|<[^<>]*>)+)>",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex NonGenericNewRegistrationPattern = new(
-        @"\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add(?<lifetime>Singleton|Scoped|Transient)\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*=>\s*)?new\s+(?<implementation>(?:global::)?[A-Za-z_][A-Za-z0-9_.]*(?:<[^;()]+>)?)",
+        @"\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*(?:Try)?Add(?:Keyed)?(?<lifetime>Singleton|Scoped|Transient)\s*\(\s*(?:[^;{}]*?=>\s*)?new\s+(?<implementation>(?:global::)?[A-Za-z_][A-Za-z0-9_.]*(?:<[^;()]+>)?)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex NewFactoryImplementationPattern = new(
@@ -57,6 +57,18 @@ public sealed class GroundworkPersistenceLifetimeTests
             "IDiagnosticRecordDeploymentManifestSource",
             "The diagnostics deployment contract aliases the selected immutable application-wide reference schema; it carries no request context or mutable operation state."),
         new(
+            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
+            "GroundworkTargetAdmissionInitializer",
+            "One driver admits every declared target once at startup and holds no request context; per-target admission state lives in the provider initializers it drives."),
+        new(
+            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
+            "IShellInitializer",
+            "This application-lifetime alias exposes the same admission driver through the shell contract."),
+        new(
+            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
+            "IGroundworkTargetAdmission",
+            "Each provider leaf contributes one application-lifetime admission per target; admission runs once at startup and retains no request state."),
+        new(
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
             "GroundworkStoreSessionSource",
             "The provider publishes one application-lifetime factory over admitted static resources; every invocation returns a fresh access-bound session and the source stores no request context."),
@@ -85,33 +97,17 @@ public sealed class GroundworkPersistenceLifetimeTests
             "SqliteGroundworkDocumentStoreInitializer",
             "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
         new(
-            "src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same provider startup initializer through the shell contract."),
-        new(
             "src/Elsa/Persistence/Groundwork/SqlServer/DependencyInjection/SqlServerGroundworkDocumentStoreRegistration.cs",
             "SqlServerGroundworkDocumentStoreInitializer",
             "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/SqlServer/DependencyInjection/SqlServerGroundworkDocumentStoreRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same provider startup initializer through the shell contract."),
         new(
             "src/Elsa/Persistence/Groundwork/PostgreSql/DependencyInjection/PostgreSqlGroundworkDocumentStoreRegistration.cs",
             "PostgreSqlGroundworkDocumentStoreInitializer",
             "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
         new(
-            "src/Elsa/Persistence/Groundwork/PostgreSql/DependencyInjection/PostgreSqlGroundworkDocumentStoreRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same provider startup initializer through the shell contract."),
-        new(
             "src/Elsa/Persistence/Groundwork/MongoDb/DependencyInjection/MongoDbGroundworkDocumentStoreRegistration.cs",
             "MongoDbGroundworkDocumentStoreInitializer",
             "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/MongoDb/DependencyInjection/MongoDbGroundworkDocumentStoreRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same provider startup initializer through the shell contract."),
         new(
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
             "GroundworkSchemaReadinessTask",
@@ -227,10 +223,21 @@ public sealed class GroundworkPersistenceLifetimeTests
         Assert.All(LongerLivedExceptions, exception =>
         {
             Assert.False(string.IsNullOrWhiteSpace(exception.Rationale));
-            var registration = Assert.Single(registrations, candidate =>
-                candidate.SourcePath == exception.SourcePath &&
-                candidate.ServiceType == exception.ServiceType);
-            Assert.Equal("Singleton", registration.Lifetime);
+
+            // A service is registered once per Groundwork target, and the default target is additionally
+            // published unkeyed, so one documented exception legitimately covers several registrations.
+            // What must hold is that the exception is live and that every registration it covers is a
+            // singleton; an exception matching nothing is stale and still fails.
+            var matches = registrations
+                .Where(candidate =>
+                    candidate.SourcePath == exception.SourcePath &&
+                    candidate.ServiceType == exception.ServiceType)
+                .ToArray();
+            Assert.True(
+                matches.Length > 0,
+                $"{exception.SourcePath} no longer registers '{exception.ServiceType}'; the documented " +
+                "longer-lived exception is stale.");
+            Assert.All(matches, registration => Assert.Equal("Singleton", registration.Lifetime));
         });
 
         var duplicateKeys = LongerLivedExceptions
