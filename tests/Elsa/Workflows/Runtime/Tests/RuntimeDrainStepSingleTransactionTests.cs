@@ -238,12 +238,10 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         new(
             new ImmediatePolicy(),
             store,
-            ownershipContextAccessor: null,
-            tracer: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             enrichers: [],
             intentHandlerContributions: [],
-            consumedWorkClaimAccessor: accessor,
-            coalescingSessionAccessor: null);
+            consumedWorkClaimAccessor: accessor);
 
     private WorkflowSchedulerDrainer NewDrainer(
         IWorkflowSchedulerWorkQueue queue,

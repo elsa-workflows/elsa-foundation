@@ -429,7 +429,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(_now),
             workflowExecutionStateStore: workflowExecutionStateStore,

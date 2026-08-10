@@ -372,7 +372,9 @@ public sealed class RuntimeCancellationContractTests
         private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
         private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
         private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
-        private IRuntimeExecutionOwnershipContextAccessor? _ownershipAccessor;
+        // The committer requires the fence accessor by construction (C1); with no lease pushed it behaves exactly like
+        // the former null accessor — AttachExpectedFence finds no ambient lease and leaves the commit unfenced.
+        private IRuntimeExecutionOwnershipContextAccessor _ownershipAccessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
 
         public Harness(
             DateTimeOffset now,
@@ -421,7 +423,6 @@ public sealed class RuntimeCancellationContractTests
                     _persistencePolicy,
                     CommitStore,
                     _ownershipAccessor,
-                    tracer: null,
                     _enrichers,
                     _intentHandlerContributions),
                 new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
