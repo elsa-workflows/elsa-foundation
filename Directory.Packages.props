@@ -7,6 +7,8 @@
   <ItemGroup>
     <PackageVersion Include="Acornima" Version="1.6.1" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageVersion Include="Bpmn.Interchange" Version="0.1.0-preview.11" />
+    <PackageVersion Include="Bpmn.Model" Version="0.1.0-preview.11" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
     <PackageVersion Include="Cronos" Version="0.13.0" />

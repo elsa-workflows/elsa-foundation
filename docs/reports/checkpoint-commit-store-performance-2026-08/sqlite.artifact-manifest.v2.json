@@ -1,0 +1,14 @@
+{
+  "SchemaVersion": 2,
+  "ComparisonCohortId": "tierb-001",
+  "ExpectedCommitSha": "93e441b72e4dcefb91527ad63828d712216794fe",
+  "ExpectedHarnessAssemblySha256": "5f7fb83d5c07fdb3715a3702c7a6e2c5dfa1855dd941d09a5ff493ae05258871",
+  "ExpectedHostFingerprintSha256": "9d8f1d014c7b81873534bf82b81756b0c441645541cd1c475a9345c2a308b153",
+  "ArtifactsSha256": {
+    "checkpoint-commit.sqlite.native-plan.json": "d2124d89d2adf91f8b708584154d1b1891a8f5630c2c9589badf34bf95bb4f47",
+    "tierb-001.groundwork-sqlite.checkpoint-commit.sqlite.groundwork.shared-documents-with-linked-index-tables.measured1.process.json": "fdb43f85139701f2719b7ebc7f786cfe782c4a83fe62d712b08536d24613647a",
+    "tierb-001.groundwork-sqlite.checkpoint-commit.sqlite.groundwork.shared-documents-with-linked-index-tables.measured2.process.json": "d68dfd3ae8cd7c06da932cc5c627f7743107d1cf23a38bdbd6b8f894820eb5de",
+    "tierb-001.groundwork-sqlite.checkpoint-commit.sqlite.groundwork.shared-documents-with-linked-index-tables.measured3.process.json": "0fcde60ef68de0209d6dafa80c8b4c511a03bb52f596ef5619c6085b949a3f7a",
+    "tierb-001.groundwork-sqlite.checkpoint-commit.sqlite.groundwork.shared-documents-with-linked-index-tables.warmup0.process.json": "a3d7e034409cbdad5d4a6cd70d1b93dbe98f4a8bb4228ef846c1d6708240ffb9"
+  }
+}

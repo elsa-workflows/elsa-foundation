@@ -73,6 +73,20 @@ jobs:
         shell: pwsh
         run: ./tools/performance/prepare-http-workflow.ps1
 
+      # Budget derivation (2026-08-09, issue #1212). Measured from 55 historical runs of this job rather
+      # than chosen: median p95 236.7 ms, p90 249.8, p95 256.0, max 274.1, min 79.4 -- a 3.4x spread.
+      # The old 250 ms sat inside the dense part of that distribution and would have failed 6 of the 55
+      # for no cause; 275 and above would have failed none. 290 keeps ~6% over the observed maximum.
+      #
+      # Passes went 3 -> 5 because a median of three is moved by one slow pass, which is what failed
+      # #1183 (per-pass 230.3 / 253.6 / 269.6, median 253.6, budget 250).
+      #
+      # Known limit, and the reason this budget is loose: the dominant variance is BETWEEN runs, not
+      # within them. Within-run pass spread is ~40 ms median; the medians themselves span 194.6 ms and
+      # are bimodal (12 of 55 runs land at 79-180 ms, 43 at 218-274 ms), which looks like runner-class
+      # variation. More passes cannot fix that, so any absolute threshold wide enough to be stable is
+      # too wide to catch a modest regression. Normalizing against a calibration workload measured on
+      # the same runner is the real fix -- see #1212.
       - name: Measure default-on warm path
         run: |
           mkdir -p artifacts/http-workflow-performance
@@ -89,8 +103,8 @@ jobs:
             --output-json artifacts/http-workflow-performance/report.json \
             --output-markdown artifacts/http-workflow-performance/report.md \
             --output-samples artifacts/http-workflow-performance/samples.txt \
-            --passes 3 \
-            --enforce-p95-ms 250
+            --passes 5 \
+            --enforce-p95-ms 290
 
       - name: Stop server
         if: always()

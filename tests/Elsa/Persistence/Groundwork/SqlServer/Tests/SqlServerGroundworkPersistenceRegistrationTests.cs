@@ -6,6 +6,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Targets;
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
@@ -225,28 +227,48 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         await using var provider = services.BuildServiceProvider();
 
         Assert.Null(provider.GetService<IGroundworkRuntimeDocumentSerializer>());
-        Assert.NotNull(provider.GetRequiredService<SqlServerGroundworkDocumentStoreInitializer>());
+        Assert.NotNull(provider.GetRequiredKeyedService<SqlServerGroundworkDocumentStoreInitializer>(
+            GroundworkTargetNames.Default));
+        // Admission runs behind the shared driver, so the hosted service and shell initializer are that
+        // driver; the provider's own admission reaches it through IGroundworkTargetAdmission.
         Assert.NotNull(Assert.Single(provider.GetServices<IHostedService>()
-            .OfType<SqlServerGroundworkDocumentStoreInitializer>()));
+            .OfType<GroundworkTargetAdmissionInitializer>()));
         Assert.NotNull(Assert.Single(provider.GetServices<CShells.Lifecycle.IShellInitializer>()
+            .OfType<GroundworkTargetAdmissionInitializer>()));
+        Assert.NotNull(Assert.Single(provider.GetServices<IGroundworkTargetAdmission>()
             .OfType<SqlServerGroundworkDocumentStoreInitializer>()));
     }
 
     [Fact]
-    public void Conflicting_relational_provider_leaves_are_rejected_deterministically_in_both_orders()
+    /// <summary>
+    /// Two providers in one host is a supported topology since #1156; what is rejected is a second, different
+    /// store CLAIMING AN ALREADY-DECLARED TARGET NAME. Both orders must fail identically, and the loser must
+    /// leave no partial registration behind.
+    /// </summary>
+    public void Conflicting_relational_leaves_on_one_target_are_rejected_deterministically_in_both_orders()
     {
         var sqlServerFirst = new ServiceCollection();
         sqlServerFirst.AddSqlServerGroundworkDocumentStore(ConnectionString);
-        var sqlServerThenSqlite = Assert.Throws<InvalidOperationException>(() =>
+        var sqlServerThenSqlite = Assert.Throws<GroundworkTargetConflictException>(() =>
             sqlServerFirst.AddSqliteGroundworkDocumentStore("Data Source=:memory:"));
 
         var sqliteFirst = new ServiceCollection();
         sqliteFirst.AddSqliteGroundworkDocumentStore("Data Source=:memory:");
-        var sqliteThenSqlServer = Assert.Throws<InvalidOperationException>(() =>
+        var sqliteThenSqlServer = Assert.Throws<GroundworkTargetConflictException>(() =>
             sqliteFirst.AddSqlServerGroundworkDocumentStore(ConnectionString));
 
-        Assert.Equal(sqlServerThenSqlite.Message, sqliteThenSqlServer.Message);
-        Assert.Contains("'sqlite', 'sqlserver'", sqlServerThenSqlite.Message, StringComparison.Ordinal);
+        foreach (var conflict in new[] { sqlServerThenSqlite, sqliteThenSqlServer })
+        {
+            Assert.Contains(
+                $"Groundwork target '{GroundworkTargetNames.Default}' was declared twice against different stores:",
+                conflict.Message,
+                StringComparison.Ordinal);
+            Assert.Contains("provider 'sqlite'", conflict.Message, StringComparison.Ordinal);
+            Assert.Contains("provider 'sqlserver'", conflict.Message, StringComparison.Ordinal);
+            // The diagnostic identifies each store without ever quoting a connection string.
+            Assert.Contains("connection fingerprint", conflict.Message, StringComparison.Ordinal);
+        }
+
         Assert.Single(sqlServerFirst, descriptor =>
             descriptor.ServiceType == typeof(SqlServerGroundworkDocumentStoreInitializer));
         Assert.DoesNotContain(sqlServerFirst, descriptor =>
@@ -255,6 +277,19 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
             descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
         Assert.DoesNotContain(sqliteFirst, descriptor =>
             descriptor.ServiceType == typeof(SqlServerGroundworkDocumentStoreInitializer));
+    }
+
+    [Fact]
+    /// <summary>The capability the conflict above deliberately does not block: two providers, two targets.</summary>
+    public void Two_relational_leaves_on_distinct_targets_are_accepted()
+    {
+        var services = new ServiceCollection();
+        services.AddSqlServerGroundworkDocumentStore(ConnectionString);
+        services.AddSqliteGroundworkDocumentStore("Data Source=:memory:", targetName: "authoring");
+
+        Assert.Equal(
+            ["authoring", GroundworkTargetNames.Default],
+            services.GroundworkTargets().TargetNames);
     }
 
     [Fact]

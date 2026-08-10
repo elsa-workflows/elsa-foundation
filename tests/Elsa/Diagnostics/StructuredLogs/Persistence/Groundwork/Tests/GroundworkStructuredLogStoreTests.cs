@@ -141,8 +141,9 @@ public sealed class GroundworkStructuredLogStoreTests : GroundworkStructuredLogS
 
         await store.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
 
-        Assert.True(append.IsCompleted);
-        await Assert.ThrowsAsync<StructuredLogsException>(() => append);
+        // The hard stop is the only thing that can settle the append inside this window, because the
+        // provider stays blocked until Release below.
+        await Assert.ThrowsAsync<StructuredLogsException>(() => append.WaitAsync(TimeSpan.FromSeconds(1)));
         Assert.Equal(1, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.ShutdownTimeout]);
         hanging.Release();
         await hanging.Exited.WaitAsync(TimeSpan.FromSeconds(10));

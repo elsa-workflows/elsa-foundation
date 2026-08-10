@@ -1,5 +1,7 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
+using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -21,18 +23,23 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyIn
 /// </summary>
 public static class GroundworkDistributedStoresRegistration
 {
-    public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkDistributedRuntimeStores(
+        this IServiceCollection services,
+        string? targetName = null)
     {
-        services.TryAddSingleton<GroundworkProviderCapabilityAdmission>();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DistributedGroundworkStorageManifestSource>());
+        // Admission is published for this feature's own target, in the same shape the provider leaf uses:
+        // keyed, plus an unkeyed alias when the target is the default one. The fencing capability below
+        // depends on it and a host may compose the distributed bridges without any provider leaf, so this
+        // cannot be left to the leaf. The helper is idempotent and order-independent, so a leaf declaring
+        // the same target converges on one instance instead of racing a second, empty one through TryAdd.
+        services.AddGroundworkProviderCapabilityAdmission(targetName);
+        var lane = services.GroundworkLane(targetName);
+        lane.Manifest<DistributedGroundworkStorageManifestSource>();
 
         // RemoveAll guarantees the bridge wins regardless of feature composition order (the distributed feature
         // registers its in-memory defaults with TryAddScoped, so bridge-first ordering also composes correctly).
-        services.RemoveAll<IExecutionPlacementStore>();
-        services.AddScoped<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
-        services.RemoveAll<IExecutionCommandTransport>();
-        services.AddScoped<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
+        lane.Replace<IExecutionPlacementStore, GroundworkExecutionPlacementStore>();
+        lane.Replace<IExecutionCommandTransport, GroundworkExecutionCommandTransport>();
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability, GroundworkWorkflowExecutionLeaseFencingCapability>());

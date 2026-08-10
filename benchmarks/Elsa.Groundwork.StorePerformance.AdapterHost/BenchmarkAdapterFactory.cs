@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -16,7 +17,12 @@ internal sealed record AdapterContext(RunRequest Request, PerformanceWorkload Wo
 internal static class BenchmarkAdapterFactory
 {
     private static readonly IReadOnlyDictionary<string, Func<AdapterContext, CancellationToken, ValueTask<IBenchmarkAdapter>>> Leaves =
-        new Dictionary<string, Func<AdapterContext, CancellationToken, ValueTask<IBenchmarkAdapter>>>(StringComparer.Ordinal);
+        new Dictionary<string, Func<AdapterContext, CancellationToken, ValueTask<IBenchmarkAdapter>>>(StringComparer.Ordinal)
+        {
+            // Keyed by workload id alone, so one entry covers every provider and physical form; the leaf
+            // itself validates the requested provider against the frozen topology contract.
+            [RuntimeCheckpointCommitWorkload.WorkloadId] = CheckpointCommitAdapter.CreateAsync
+        };
 
     public static IReadOnlyCollection<string> RegisteredWorkloads => Leaves.Keys.Order(StringComparer.Ordinal).ToArray();
 

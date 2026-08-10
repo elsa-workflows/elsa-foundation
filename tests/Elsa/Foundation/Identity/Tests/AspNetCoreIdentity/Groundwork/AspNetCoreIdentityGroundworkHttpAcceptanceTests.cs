@@ -8,12 +8,14 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.Tests;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
 
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class AspNetCoreIdentityGroundworkHttpAcceptanceTests
 {
     private const string LoginRoute = "/_elsa/identity/login";

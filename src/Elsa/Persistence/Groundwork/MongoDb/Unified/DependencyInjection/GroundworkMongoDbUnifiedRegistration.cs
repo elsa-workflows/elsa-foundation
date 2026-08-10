@@ -128,10 +128,11 @@ public static class GroundworkMongoDbUnifiedRegistration
             _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
         services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        services.AddGroundworkMongoDbWorkflowRunHealth(
-            _ => new MongoClient(connectionString).GetDatabase(databaseName));
-        services.AddGroundworkMongoDbWorkflowPortfolio(
-            _ => new MongoClient(connectionString).GetDatabase(databaseName));
+        // Resolved per lane rather than closed over this preset's single database. The preset is a
+        // one-target default, not a promise that the lanes stay together: a host can bind the design lane to
+        // a second target afterwards, and the tiles have to follow it there instead of quietly counting the
+        // wrong database.
+        services.AddGroundworkMongoDbWorkflowDashboardForLanes();
         return services;
     }
 }

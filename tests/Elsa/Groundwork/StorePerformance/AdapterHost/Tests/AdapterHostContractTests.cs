@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -175,16 +176,79 @@ public sealed class AdapterHostContractTests : IDisposable
     /// <summary>
     /// An unregistered workload must be a hard failure. The harness's contract — "a missing adapter is a
     /// blocked run, never a simulated result" — only holds if the host refuses to improvise.
+    ///
+    /// Driven through <c>bookmark-lookup</c> rather than <c>checkpoint-commit</c>, which now has a leaf: the
+    /// point of the fact is the empty-registry path, so it has to be asked of a workload that is genuinely
+    /// unregistered.
     /// </summary>
     [Fact]
     public async Task An_unregistered_workload_is_a_blocked_run_not_a_fallback()
     {
-        var context = new AdapterContext(CreateRequest(ProcessKind.Measured, 1), Workload);
+        var unregistered = _catalog.Workloads["bookmark-lookup"];
+        Assert.DoesNotContain(unregistered.Id, BenchmarkAdapterFactory.RegisteredWorkloads);
+        var context = new AdapterContext(CreateRequest(ProcessKind.Measured, 1), unregistered);
 
         var exception = await Assert.ThrowsAsync<PerformanceContractException>(
             async () => await BenchmarkAdapterFactory.CreateAsync(context, CancellationToken.None));
 
         Assert.Contains("blocked run", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The registry is the whole reason the matrix can run at all, and it is keyed by workload id alone —
+    /// so an entry that was renamed, or registered under a provider-qualified key, would leave every
+    /// <c>checkpoint-commit</c> run blocked while looking registered from the outside.
+    /// </summary>
+    [Fact]
+    public void The_checkpoint_commit_leaf_is_registered()
+    {
+        Assert.Contains(WorkloadId, BenchmarkAdapterFactory.RegisteredWorkloads);
+        Assert.Equal(RuntimeCheckpointCommitWorkload.WorkloadId, Workload.Id);
+    }
+
+    /// <summary>
+    /// The leaf must reject a provider the frozen contract does not admit before it opens a driver. Deferring
+    /// the check would start a container — and, for a typo'd provider key, fail with an
+    /// <c>ArgumentOutOfRangeException</c> from the driver factory rather than a contract message.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_outside_the_frozen_topology_contract_is_refused_without_opening_a_driver()
+    {
+        var request = CreateRequest(ProcessKind.Measured, 1) with { Provider = "oracle" };
+        var context = new AdapterContext(request, Workload);
+
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            async () => await BenchmarkAdapterFactory.CreateAsync(context, CancellationToken.None));
+
+        Assert.Contains("oracle", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every timed sample is labelled with its operation id, and the Tier B ceiling is read off per
+    /// operation — so an id that drifts from the frozen <c>operationSequence</c> would quietly attribute a
+    /// ceiling to the wrong phase. Order matters too: the harness measures in declaration order.
+    /// </summary>
+    [Fact]
+    public void The_timed_operations_match_the_frozen_operation_sequence()
+    {
+        Assert.Equal(Workload.OperationSequence, CheckpointCommitAdapter.OperationIds);
+    }
+
+    /// <summary>
+    /// Warm-up runs at <c>InvokeAsync(-1L - i)</c> and measurement at <c>0, 1, 2, …</c>. Both write real rows
+    /// keyed by the ordinal, so an identity function that collapsed the two namespaces would have warm-up
+    /// commits colliding with measured ones — surfacing as a replay conflict rather than as the aliasing bug
+    /// it is.
+    /// </summary>
+    [Fact]
+    public void Warmup_and_measured_ordinals_produce_disjoint_identity_keys()
+    {
+        var warmup = Enumerable.Range(0, 50).Select(index => CheckpointCommitAdapter.IdentityKey(-1L - index)).ToArray();
+        var measured = Enumerable.Range(0, 50).Select(index => CheckpointCommitAdapter.IdentityKey(index)).ToArray();
+
+        Assert.Equal(warmup.Length, warmup.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(measured.Length, measured.Distinct(StringComparer.Ordinal).Count());
+        Assert.Empty(warmup.Intersect(measured, StringComparer.Ordinal));
     }
 
     private RunRequest CreateRequest(ProcessKind kind, int index)

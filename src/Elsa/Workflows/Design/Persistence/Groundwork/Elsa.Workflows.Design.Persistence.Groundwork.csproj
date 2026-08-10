@@ -5,6 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <!-- The lane's host feature needs the shell-feature and manifest hint attributes. -->
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Groundwork.Documents" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>

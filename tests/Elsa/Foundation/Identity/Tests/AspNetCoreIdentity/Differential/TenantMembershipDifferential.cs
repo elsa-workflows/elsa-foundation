@@ -81,6 +81,7 @@ internal abstract class TenantMembershipDifferentialTarget : IAsyncDisposable
     {
         private ServiceProvider? _provider;
         private IServiceScope? _scope;
+        private bool _reset;
 
         public override async Task<ITenantMembershipStore> OpenAsync()
         {
@@ -89,6 +90,18 @@ internal abstract class TenantMembershipDifferentialTarget : IAsyncDisposable
             _provider = services.BuildServiceProvider();
             _scope = _provider.CreateScope();
             var db = _scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+
+            // Mirror GroundworkTarget's first-open ResetPhysicalAsync. The registration hard-codes one
+            // data source, so a database left behind by an interrupted run carries its rows into the
+            // next one and fails the probe on a stale unique key — the EF side was the only comparand
+            // without this reset. Reopens *within* a probe must not reset: RestartObservation and the
+            // ProducerOrdering re-drive both depend on durable data surviving Close/Open.
+            if (!_reset)
+            {
+                await db.Database.EnsureDeletedAsync();
+                _reset = true;
+            }
+
             await db.Database.EnsureCreatedAsync();
             return new EfCoreTenantMembershipStore(db);
         }
@@ -225,7 +238,16 @@ internal static class TenantMembershipDifferentialProbes
             .ToArray()));
 
         // Whatever the concurrent attempt did, re-drive it serially so the readback below measures
-        // durable outcome rather than how far the concurrent attempt happened to get.
+        // durable outcome rather than how far the concurrent attempt happened to get. Reopen first,
+        // because re-driving through the instance the attempt above just faulted is unsound: EF's
+        // context can be left tracking an entity whose INSERT already committed, and the re-drive
+        // then re-INSERTs a live key and trips the (TenantId, UserId) unique index. Both comparands
+        // reopen over the same durable data, exactly as RestartObservation does, so the re-drive
+        // stays symmetric. TenantMembershipTrackerHazardTests pins that sequence deterministically —
+        // read it before deleting these two lines (issue #1204).
+        await target.CloseAsync();
+        store = await target.OpenAsync();
+
         for (var i = 0; i < count; i++)
             await store.SaveAsync(Membership($"user-{i:D2}", [$"role-{i:D2}"]));
 

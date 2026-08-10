@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Groundwork.Core.Capabilities;
@@ -95,12 +96,30 @@ public sealed class UnifiedSchemaReadinessTests
 
         services.AddGroundworkStorageComposition();
         services.AddGroundworkStorageComposition();
+        // Capability admission is per target, not per composition: a provider leaf declares a target and
+        // registers admission for it. Composing storage on its own admits nothing.
+        services.AddGroundworkProviderCapabilityAdmission();
+        services.AddGroundworkProviderCapabilityAdmission();
 
         Assert.Single(services, d => d.ServiceType == typeof(GroundworkStorageNamingPolicyOptions));
-        Assert.Single(services, d => d.ServiceType == typeof(GroundworkProviderCapabilityAdmission));
+        Assert.Single(services, d => d.ServiceType == typeof(GroundworkManifestBindings));
+        Assert.Single(services, d =>
+            d.ServiceType == typeof(GroundworkProviderCapabilityAdmission) && d.IsKeyedService);
+        Assert.Single(services, d =>
+            d.ServiceType == typeof(GroundworkProviderCapabilityAdmission) && !d.IsKeyedService);
         Assert.Single(services, d => d.ServiceType == typeof(GroundworkStorageCompositionValidator));
         Assert.Single(services, d => d.ServiceType == typeof(GroundworkStorageCompositionHandler));
         Assert.Single(services, d => d.ServiceType == typeof(GroundworkStorageCompositionFactory));
+    }
+
+    [Fact]
+    public void Composing_storage_alone_registers_no_capability_admission()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkStorageComposition();
+
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(GroundworkProviderCapabilityAdmission));
     }
 
     [Fact]
@@ -109,12 +128,17 @@ public sealed class UnifiedSchemaReadinessTests
         var services = new ServiceCollection();
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkStorageComposition();
+        services.AddGroundworkProviderCapabilityAdmission();
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         // Singletons resolve from the root.
         Assert.NotNull(provider.GetRequiredService<GroundworkStorageNamingPolicyOptions>());
-        Assert.NotNull(provider.GetRequiredService<GroundworkProviderCapabilityAdmission>());
+        Assert.NotNull(provider.GetRequiredService<GroundworkManifestBindings>());
+        // The default target is reachable both by key and unkeyed, and they are the same instance.
+        Assert.Same(
+            provider.GetRequiredService<GroundworkProviderCapabilityAdmission>(),
+            provider.GetRequiredKeyedService<GroundworkProviderCapabilityAdmission>(GroundworkTargetNames.Default));
 
         // Scoped composition services resolve from a scope.
         await using var scope = provider.CreateAsyncScope();

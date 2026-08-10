@@ -1,5 +1,8 @@
 # 127 — BPMN escalation (escalation throw/end events + escalation boundary events, riding runtime seam C) (BPMN Phase 3)
 
+**Status**: Implemented
+**Merged**: PR #975
+
 ## Goal
 
 Let a published BPMN process **escalate**: an **escalation throw event** (intermediate throw or end
