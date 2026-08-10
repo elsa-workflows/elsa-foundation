@@ -31,6 +31,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// The Development-only behaviour of the ApiSecurity.AllowAnonymous kill-switch (c) is proven directly by
 /// <c>ApiSecurityConfiguratorTests</c> and <c>PerShellApiSecurityIntegrationTests</c>.
 /// </summary>
+[Collection(FastEndpointsHostCollection.Name)]
 public sealed class EnabledShellCompositionTests : IAsyncLifetime
 {
     private const string TokenRoute = "/_elsa/identity/token";

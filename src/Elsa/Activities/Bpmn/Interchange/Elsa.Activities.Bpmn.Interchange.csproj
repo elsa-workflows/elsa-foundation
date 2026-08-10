@@ -5,6 +5,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Bpmn.Interchange" />
+    <PackageReference Include="Bpmn.Model" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>

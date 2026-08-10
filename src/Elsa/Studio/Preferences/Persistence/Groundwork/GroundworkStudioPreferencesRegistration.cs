@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,11 +8,13 @@ namespace Elsa.Studio.Preferences.Persistence.Groundwork;
 
 public static class GroundworkStudioPreferencesRegistration
 {
-    public static IServiceCollection AddGroundworkStudioPreferences(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkStudioPreferences(
+        this IServiceCollection services,
+        string? targetName = null)
     {
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, StudioPreferencesGroundworkStorageManifestSource>());
-        services.RemoveAll<IStudioPreferenceStore>();
-        services.AddScoped<IStudioPreferenceStore, GroundworkStudioPreferenceStore>();
+        var lane = services.GroundworkLane(targetName);
+        lane.Manifest<StudioPreferencesGroundworkStorageManifestSource>();
+        lane.Replace<IStudioPreferenceStore, GroundworkStudioPreferenceStore>();
         return services;
     }
 }

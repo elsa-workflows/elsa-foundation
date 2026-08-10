@@ -1,5 +1,8 @@
 # 122 — BPMN cyclic sequence flows (token iteration keys) (BPMN Phase 2, events tier — CLOSING unit)
 
+**Status**: Implemented
+**Merged**: PR #956
+
 ## Goal
 
 Lift the Phase-1 **acyclic-graph restriction** so a published BPMN process may model **loop-back sequence

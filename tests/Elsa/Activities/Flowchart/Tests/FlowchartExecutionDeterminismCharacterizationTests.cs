@@ -26,6 +26,17 @@ namespace Elsa.Activities.Flowchart.Tests;
 /// </summary>
 public sealed class FlowchartExecutionDeterminismCharacterizationTests
 {
+    /// <summary>
+    /// These byte-locks were frozen against the pre-decomposition engine and their value is that they stay
+    /// green on a revert of #275. ADR 0064 moved the shipping default to the dead-path join, which emits
+    /// arrivals on untaken edges and so legitimately mints a different id stream — re-freezing them under it
+    /// would quietly retire the green-on-revert property they exist for. They stay pinned to the semantics
+    /// they characterize; <see cref="FlowchartDeadPathDeterminismTests"/> carries the equivalent lock for the
+    /// default.
+    /// </summary>
+    private static void PinReachabilityJoin(IServiceCollection services) =>
+        services.AddSingleton(new FlowchartOptions { JoinPolicyKind = Internal.Policies.FlowchartPolicyKinds.ReachabilityJoin });
+
     // CT-1: byte-identical persisted blob for the multi-feature run below. Any reordered/added/dropped
     // Sequence bump corrupts an id and fails this. The > (>) and ' (') escapes are the Web
     // serializer's own output — pinned literally. Re-frozen after the backward-edge fix (DFS back-edge
@@ -78,7 +89,8 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
         // the losing branch is canceled. The race scope id and the losing-path cancellation diagnostic ids
         // are Sequence-derived, so this pins that a reordered scope/diagnostic bump can't drift them.
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
-            ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-c", "actexec-d"]);
+            ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-c", "actexec-d"],
+            PinReachabilityJoin);
         var executable = fixture.NewExecutable(
             children:
             [
@@ -130,7 +142,11 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
                 "actexec-a2", "actexec-b2",
                 "actexec-c", "actexec-d", "actexec-e", "actexec-f"
             ],
-            services => services.AddSingleton<IFlowchartPolicy>(loopPolicy));
+            services =>
+            {
+                services.AddSingleton<IFlowchartPolicy>(loopPolicy);
+                PinReachabilityJoin(services);
+            });
         var executable = fixture.NewExecutable(
             children:
             [

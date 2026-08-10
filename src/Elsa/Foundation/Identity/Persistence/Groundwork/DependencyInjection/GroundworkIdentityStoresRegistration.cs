@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core.DependencyInjection;
@@ -20,8 +21,7 @@ public static class GroundworkIdentityStoresRegistration
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, IdentityGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<IdentityGroundworkStorageManifestSource>();
         services.TryAddSingleton<IdentityMutationReceiptCleanupCoordinator>();
         services.TryAddScoped(serviceProvider =>
         {

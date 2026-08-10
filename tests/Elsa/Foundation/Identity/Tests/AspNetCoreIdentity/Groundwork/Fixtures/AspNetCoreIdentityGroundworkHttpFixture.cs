@@ -65,6 +65,10 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
 
     public HttpClient CreateClient() => _host.GetTestClient();
 
+    /// <remarks>
+    /// Mapping FastEndpoints mutates process-global state, so the calling test class must join
+    /// <see cref="Elsa.Foundation.Identity.Tests.FastEndpointsHostCollection"/>.
+    /// </remarks>
     public static async Task<AspNetCoreIdentityGroundworkHttpFixture> StartAsync(
         Action<IServiceCollection>? configureServices = null)
     {

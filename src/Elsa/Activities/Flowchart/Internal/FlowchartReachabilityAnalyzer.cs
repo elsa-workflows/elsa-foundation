@@ -7,6 +7,10 @@ public sealed class FlowchartReachabilityAnalyzer
     public bool CanReach(FlowchartGraph graph, string sourceNodeId, string targetNodeId) =>
         graph.CanReach(sourceNodeId, targetNodeId);
 
+    /// <inheritdoc cref="FlowchartGraph.CanReachForward"/>
+    public bool CanReachForward(FlowchartGraph graph, string sourceNodeId, string targetNodeId) =>
+        graph.CanReachForward(sourceNodeId, targetNodeId);
+
     public bool IsBackwardEdge(FlowchartGraph graph, string sourceNodeId, string targetNodeId) =>
         graph.IsBackwardEdge(sourceNodeId, targetNodeId);
 

@@ -1,6 +1,7 @@
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Persistence.Groundwork.Testing;
 
 return await AdapterHostCli.RunAsync(args);
 
@@ -22,6 +23,7 @@ internal static class AdapterHostCli
             {
                 "run" => await RunChildAsync(args[1..]),
                 "capture-plan" => CapturePlan(args[1..]),
+                "probe-provider" => await ProbeProviderAsync(args[1..]),
                 "help" or "--help" or "-h" => Help(),
                 var command => Fail($"Unknown command '{command}'.")
             };
@@ -107,6 +109,36 @@ internal static class AdapterHostCli
         return 0;
     }
 
+    /// <summary>
+    /// Prints the provenance values <c>capture-plan</c> and <c>matrix</c> need, read from the same driver the
+    /// adapter opens at run time.
+    ///
+    /// It exists because <c>ValidateCorrectness</c> requires the observed provider configuration to match the
+    /// requested one entry for entry, and the real values are only knowable by opening the provider. Guessing
+    /// them — the README's <c>journalMode=wal</c> example is illustrative, and false for this driver, which
+    /// bypasses Groundwork's connection factory entirely — costs a full correctness run to discover.
+    /// </summary>
+    private static async Task<int> ProbeProviderAsync(string[] args)
+    {
+        const string Command = "probe-provider";
+        var provider = HostArguments.Require(args, Command, "--provider");
+        await using var driver = GroundworkProviderDriverFactory.Create(provider);
+        await driver.InitializeAsync(CancellationToken.None);
+        await driver.ResetPhysicalAsync(CancellationToken.None);
+        var configuration = await CheckpointCommitAdapter.CaptureProviderConfigurationAsync(driver, CancellationToken.None);
+
+        Console.WriteLine($"provider           {driver.Descriptor.ProviderKey}");
+        Console.WriteLine($"provider identity  {driver.Descriptor.ProviderIdentity}");
+        Console.WriteLine($"topology           {driver.Descriptor.Topology.Description}");
+        Console.WriteLine();
+        Console.WriteLine("Pass these to capture-plan and matrix verbatim:");
+        Console.WriteLine($"  --provider-version {driver.Descriptor.ProviderVersion}");
+        Console.WriteLine($"  --composition {driver.CompositionFingerprint.Value}");
+        foreach (var (key, value) in configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            Console.WriteLine($"  --provider-setting {key}={value}");
+        return 0;
+    }
+
     private static PerformanceWorkload Workload(string workloadId) =>
         WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads.TryGetValue(workloadId, out var workload)
             ? workload
@@ -117,6 +149,11 @@ internal static class AdapterHostCli
         Console.WriteLine(
             """
             #646 store-performance adapter child host
+
+              probe-provider --provider <provider>
+                  Opens the provider driver and prints the --provider-version, --composition and
+                  --provider-setting values the other two commands must be given. Run this first:
+                  correctness binds the observed provider configuration to the requested one.
 
               capture-plan --workload <id> --provider <provider> --cohort <safe-id> --measurement-set <safe-id>
                            --adapter <adapter> --form <physical-form> --scale <scale> --commit <40-hex>

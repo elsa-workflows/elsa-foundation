@@ -1,0 +1,77 @@
+[
+  {
+    "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+    "alias": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+    "category": "BPMN",
+    "executionType": "Action",
+    "inputs": [
+      {
+        "collectionKind": "Single",
+        "defaultSyntax": null,
+        "defaultValue": null,
+        "isNullable": true,
+        "isRequired": false,
+        "key": "Outcome",
+        "name": "Outcome",
+        "type": "String",
+        "uiHint": null,
+        "uiSpecifications": null
+      }
+    ],
+    "outcomes": {
+      "declared": false,
+      "dynamic": null,
+      "ports": []
+    },
+    "outputs": [],
+    "structure": null,
+    "version": "1.0.0"
+  },
+  {
+    "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+    "alias": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+    "category": "BPMN",
+    "executionType": "Action",
+    "inputs": [
+      {
+        "collectionKind": "Single",
+        "defaultSyntax": null,
+        "defaultValue": true,
+        "isNullable": false,
+        "isRequired": false,
+        "key": "CanStartWorkflow",
+        "name": "CanStartWorkflow",
+        "type": "Boolean",
+        "uiHint": null,
+        "uiSpecifications": null
+      }
+    ],
+    "outcomes": {
+      "declared": true,
+      "dynamic": null,
+      "ports": [
+        "Done"
+      ]
+    },
+    "outputs": [],
+    "structure": {
+      "kind": "elsa.bpmn.structure",
+      "mode": "bpmn",
+      "schemaVersion": "1.0.0",
+      "slots": [
+        {
+          "cardinality": "many",
+          "childProperty": null,
+          "collectionProperty": null,
+          "displayName": "Activities",
+          "labelProperty": null,
+          "name": "Bpmn.Activities",
+          "property": "activities",
+          "slotNameTemplate": null
+        }
+      ],
+      "supportsScopedVariables": true
+    },
+    "version": "1.0.0"
+  }
+]

@@ -1,5 +1,8 @@
 # 135 — BPMN message send surface: PublishEvent primitive (durable-first stimulus publish) + message throw/end events and send/receive tasks (BPMN Phase 3, collaborations slice 1 of 2)
 
+**Status**: Implemented
+**Merged**: PR #1002
+
 ## Goal
 
 Give running workflows a **message send surface** — the one missing half of executable

@@ -123,6 +123,10 @@ versions and their floors did not move.
 - A rewritten history on `main`: versions renumber. Accepted, and recorded as an operational
   constraint rather than defended against.
 - A commit touching only files owned by no project: no package advances.
+- A commit editing only documentation inside a project directory: no package advances, per FR-002a.
+- A project that later starts shipping a file kind currently treated as non-affecting: that kind
+  becomes package-affecting for that project, which is why FR-002a defines the exclusion by effect
+  rather than by extension.
 - A newly added project: its height starts from the base tag like any other, not from its first
   commit.
 
@@ -135,6 +139,13 @@ versions and their floors did not move.
   the dependency map.
 - **FR-002**: The patch digit MUST be computed as the count of commits since the base tag that touch
   files owned by that project, with ownership resolved from the dependency map.
+- **FR-002a**: A change to an owned file that does not affect the produced package MUST NOT advance
+  the version. Documentation inside a project directory is the motivating case: a README edit ships
+  nothing and must not oblige consumers to take a new package. The excluded set MUST be defined as
+  files that do not contribute to the package artifact, rather than as a fixed list of extensions, so
+  that if a file kind starts shipping it stops being excluded. A README packed through
+  `PackageReadmeFile` is the worked example: no project sets that property today, so READMEs ship
+  nothing; were one to set it, that project's README would become package-affecting.
 - **FR-003**: A change to an entry in `Directory.Packages.props` MUST advance every project that has
   an external edge to the affected package, and only those projects.
 - **FR-004**: A change to a repository-wide build input that has no external edge, specifically
@@ -185,6 +196,8 @@ versions and their floors did not move.
   artifact untouched, and those artifacts still resolve against the new contract version.
 - **SC-008**: The affected set is computed with no network access, and is identical when the same
   commit and baseline ref are built on a machine with no feed connectivity.
+- **SC-009**: A commit that changes only documentation advances no package version and publishes
+  nothing.
 
 ## Assumptions
 
@@ -208,8 +221,6 @@ versions and their floors did not move.
 
 ## Open Questions
 
-- Should a documentation-only change inside a project directory, such as its `README.md`, advance the
-  package? It changes no shipped content, but excluding it means classifying owned files by kind.
 - FR-006 puts the publish baseline in a git ref. Is a ref the right home, against the alternative of
   a committed file? A ref adds no commit noise, but it is less visible in review and can drift from
   the feed if a publish fails in a way the run does not detect.

@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using CShells.Features;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
@@ -38,7 +39,7 @@ public class DiagnosticsGroundworkPersistenceFeature : IShellFeature
         // cataloged shell features: selecting this one feature makes the two diagnostics replacements atomic.
         new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
         new GroundworkStructuredLogsPersistenceFeature().ConfigureServices(services);
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, DiagnosticsGroundworkStorageManifestSource>());
+        services.AddGroundworkManifestSource<DiagnosticsGroundworkStorageManifestSource>();
     }
 }
 

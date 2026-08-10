@@ -5,6 +5,7 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -484,14 +485,29 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         feature.ConfigureServices(services);
         feature.ConfigureServices(services);
 
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStoreSessionSource));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBoundedDocumentStore));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
+        // Each store contract is published exactly twice: once under the target key, and once unkeyed
+        // because this preset declares the default target. Composing again adds neither.
+        AssertPublishedOncePerShape<GroundworkStoreSessionSource>(services);
+        AssertPublishedOncePerShape<IBoundedDocumentStore>(services);
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(SqliteGroundworkDocumentStoreInitializer));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        // Exactly two shell initializers: the provider admission initializer and, registered after
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IGroundworkTargetAdmission));
+        // Exactly two shell initializers: the shared target-admission driver and, registered after
         // it, the provider-neutral schema readiness guard.
         Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkSchemaReadinessTask));
+        Assert.Equal([GroundworkTargetNames.Default], services.GroundworkTargets().TargetNames);
+    }
+
+    private static void AssertPublishedOncePerShape<TService>(IServiceCollection services)
+    {
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(TService)
+            && descriptor.IsKeyedService
+            && Equals(descriptor.ServiceKey, GroundworkTargetNames.Default));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService);
     }
 
     [Fact]
@@ -506,12 +522,14 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
             ConnectionString = "Data Source=registration.db"
         }.ConfigureServices(services);
 
+        // Admission is registered once under the shared driver type, not once per provider, so a host
+        // can declare several targets of the same provider without registering a duplicate CLR type.
         var registration = Assert.Single(
             services
                 .Where(descriptor => descriptor.ServiceType == typeof(ShellInitializerRegistration))
                 .Select(descriptor => descriptor.ImplementationInstance)
                 .OfType<ShellInitializerRegistration>(),
-            candidate => candidate.InitializerType == typeof(SqliteGroundworkDocumentStoreInitializer));
+            candidate => candidate.InitializerType == typeof(GroundworkTargetAdmissionInitializer));
 
         Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
         Assert.Equal(-1, registration.RegistrationIndex);

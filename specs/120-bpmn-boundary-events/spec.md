@@ -1,5 +1,8 @@
 # 120 — BPMN boundary events (timer/message/signal listener-child + error absorption) (BPMN Phase 2, events tier, seam-A + seam-B consumer)
 
+**Status**: Implemented
+**Merged**: PR #950
+
 ## Goal
 
 Let a published BPMN process attach a **boundary event** to a host element (a task-family element or an

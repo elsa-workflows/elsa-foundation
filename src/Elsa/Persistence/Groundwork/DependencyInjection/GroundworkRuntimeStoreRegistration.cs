@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
@@ -28,14 +29,20 @@ public static class GroundworkRuntimeStoreRegistration
     public const string WorkflowExecutableProviderKey = "Elsa.Persistence.Groundwork.WorkflowExecutableProvider";
 
     /// <summary>Registers Groundwork runtime stores with the bounded executable cache enabled by default.</summary>
+    /// <remarks>
+    /// There is deliberately no <c>(services, targetName)</c> overload: <c>null</c> would be ambiguous
+    /// between it and the cache-options overload. A host naming a target passes options explicitly.
+    /// </remarks>
     public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services) =>
         services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
 
     /// <summary>Registers Groundwork runtime stores with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkRuntimeStores(
         this IServiceCollection services,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
+        string? targetName = null)
     {
+        var lane = services.GroundworkLane(targetName);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
 
         var cacheOptions = new WorkflowExecutableCacheOptions
@@ -47,13 +54,11 @@ public static class GroundworkRuntimeStoreRegistration
 
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkWorkflowTestScopeStore));
         services.AddPersistenceCore();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Scoped<IGroundworkStorageManifestSource, RuntimeGroundworkStorageManifestSource>());
+        lane.Manifest<RuntimeGroundworkStorageManifestSource>();
 
         // Replace the in-memory defaults registered by the runtime API feature. RemoveAll guarantees
         // the bridge wins regardless of feature composition order.
-        services.RemoveAll<IBookmarkStateStore>();
-        services.AddScoped<IBookmarkStateStore, GroundworkBookmarkStateStore>();
+        lane.Replace<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.RemoveAll<CachingWorkflowExecutableStore>();
         services.RemoveAll<InvalidatingWorkflowExecutableStore>();
@@ -108,64 +113,52 @@ public static class GroundworkRuntimeStoreRegistration
             services.AddScoped<IWorkflowExecutableStore>(serviceProvider =>
                 serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(WorkflowExecutableProviderKey));
         }
-        services.RemoveAll<IExecutableActivityTemplateStore>();
-        services.AddScoped<IExecutableActivityTemplateStore, GroundworkExecutableActivityTemplateStore>();
-        services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
-        services.AddScoped<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();
-        services.RemoveAll<IActivityExecutionStateStore>();
-        services.AddScoped<IActivityExecutionStateStore, GroundworkActivityExecutionStateStore>();
+        lane.Replace<IExecutableActivityTemplateStore, GroundworkExecutableActivityTemplateStore>();
+        lane.Replace<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();
+        lane.Replace<IActivityExecutionStateStore, GroundworkActivityExecutionStateStore>();
         services.RemoveAll<IActivityExecutionInspectionStore>();
         services.RemoveAll<IActivityExecutionInspectionWriter>();
         services.RemoveAll<GroundworkActivityExecutionInspectionStore>();
-        services.AddScoped<GroundworkActivityExecutionInspectionStore>();
-        services.AddScoped<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
-        services.AddScoped<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
+        lane.AddSelf<GroundworkActivityExecutionInspectionStore>();
+        lane.Alias<IActivityExecutionInspectionStore, GroundworkActivityExecutionInspectionStore>();
+        lane.Alias<IActivityExecutionInspectionWriter, GroundworkActivityExecutionInspectionStore>();
         services.RemoveAll<IActivityExecutionHierarchyStore>();
         services.RemoveAll<IActivityExecutionHierarchyReader>();
         services.RemoveAll<IActivityExecutionHierarchyWriter>();
         services.AddScoped<IActivityExecutionHierarchyStore, GroundworkActivityExecutionHierarchyStore>();
-        services.AddScoped<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
-        services.AddScoped<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
+        lane.Alias<IActivityExecutionHierarchyReader, IActivityExecutionHierarchyStore>();
+        lane.Alias<IActivityExecutionHierarchyWriter, IActivityExecutionHierarchyStore>();
         services.RemoveAll<IWorkflowExecutionStateStore>();
         services.RemoveAll<GroundworkWorkflowExecutionStateStore>();
         services.AddScoped<GroundworkWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
-            serviceProvider.GetRequiredService<IDocumentStore>(),
+            lane.Store(serviceProvider),
             serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
             serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             serviceProvider.GetService<IBoundedDocumentStore>()
-            ?? serviceProvider.GetRequiredService<IDocumentStore>() as IBoundedDocumentStore
+            ?? lane.Store(serviceProvider) as IBoundedDocumentStore
             ?? throw new InvalidOperationException("Workflow-execution queries require an admitted bounded document-store runtime.")));
-        services.AddScoped<IWorkflowExecutionStateStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkWorkflowExecutionStateStore>());
+        lane.Alias<IWorkflowExecutionStateStore, GroundworkWorkflowExecutionStateStore>();
         services.RemoveAll<IWorkflowAlterationStore>();
         services.RemoveAll<GroundworkWorkflowAlterationStore>();
-        services.AddScoped<GroundworkWorkflowAlterationStore>();
-        services.AddScoped<IWorkflowAlterationStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkWorkflowAlterationStore>());
+        lane.AddSelf<GroundworkWorkflowAlterationStore>();
+        lane.Alias<IWorkflowAlterationStore, GroundworkWorkflowAlterationStore>();
         services.RemoveAll<IWorkflowTestScopeStore>();
         services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
         services.RemoveAll<IWorkflowTestScopeCleanupStore>();
         services.RemoveAll<GroundworkWorkflowTestScopeStore>();
-        services.AddScoped<GroundworkWorkflowTestScopeStore>();
-        services.AddScoped<IWorkflowTestScopeStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowTestScopeStore>());
-        services.AddScoped<IWorkflowTestScopeAdmissionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowTestScopeStore>());
-        services.RemoveAll<IDurableValueStateStore>();
-        services.AddScoped<IDurableValueStateStore, GroundworkDurableValueStateStore>();
-        services.RemoveAll<ISchedulerStateStore>();
-        services.AddScoped<ISchedulerStateStore, GroundworkSchedulerStateStore>();
-        services.RemoveAll<IExecutionLivenessStateStore>();
-        services.AddScoped<IExecutionLivenessStateStore, GroundworkExecutionLivenessStateStore>();
-        services.RemoveAll<IRuntimeRecoveryScanner>();
-        services.AddScoped<IRuntimeRecoveryScanner, GroundworkRuntimeRecoveryScanner>();
-        services.RemoveAll<IWorkflowHoldStateStore>();
-        services.AddScoped<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>();
+        lane.AddSelf<GroundworkWorkflowTestScopeStore>();
+        lane.Alias<IWorkflowTestScopeStore, GroundworkWorkflowTestScopeStore>();
+        lane.Alias<IWorkflowTestScopeAdmissionStore, GroundworkWorkflowTestScopeStore>();
+        lane.Replace<IDurableValueStateStore, GroundworkDurableValueStateStore>();
+        lane.Replace<ISchedulerStateStore, GroundworkSchedulerStateStore>();
+        lane.Replace<IExecutionLivenessStateStore, GroundworkExecutionLivenessStateStore>();
+        lane.Replace<IRuntimeRecoveryScanner, GroundworkRuntimeRecoveryScanner>();
+        lane.Replace<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>();
         services.RemoveAll<IIncidentStateStore>();
         services.RemoveAll<GroundworkIncidentStateStore>();
-        services.AddScoped<GroundworkIncidentStateStore>();
-        services.AddScoped<IIncidentStateStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<GroundworkIncidentStateStore>());
-        services.RemoveAll<IWorkflowRuntimeAttentionQuery>();
-        services.AddScoped<IWorkflowRuntimeAttentionQuery, GroundworkWorkflowRuntimeAttentionQuery>();
+        lane.AddSelf<GroundworkIncidentStateStore>();
+        lane.Alias<IIncidentStateStore, GroundworkIncidentStateStore>();
+        lane.Replace<IWorkflowRuntimeAttentionQuery, GroundworkWorkflowRuntimeAttentionQuery>();
         services.RemoveAll<IWorkflowDispatchStore>();
         services.RemoveAll<IWorkflowDispatchQueryStore>();
         services.RemoveAll<IWorkflowDispatchDeleteStore>();
@@ -173,18 +166,17 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowDispatchAdmissionStore>();
         services.RemoveAll<IWorkflowDispatchCancellationStore>();
         services.RemoveAll<GroundworkWorkflowDispatchStore>();
-        services.AddScoped<GroundworkWorkflowDispatchStore>();
-        services.AddScoped<IWorkflowDispatchStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
-        services.AddScoped<IWorkflowDispatchQueryStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
-        services.AddScoped<IWorkflowDispatchDeleteStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
-        services.AddScoped<IWorkflowDispatchRetentionRootStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
-        services.AddScoped<IWorkflowDispatchAdmissionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
-        services.AddScoped<IWorkflowDispatchCancellationStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkWorkflowDispatchStore>());
+        lane.AddSelf<GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchStore, GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchQueryStore, GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchDeleteStore, GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchRetentionRootStore, GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchAdmissionStore, GroundworkWorkflowDispatchStore>();
+        lane.Alias<IWorkflowDispatchCancellationStore, GroundworkWorkflowDispatchStore>();
 
         // Durable checkpoint writer. It orchestrates the Groundwork-backed seam stores above and records a
         // restart-safe per-CommitId marker, replacing the in-memory writer registered by the runtime feature.
-        services.RemoveAll<IRuntimeCheckpointCommitStore>();
-        services.AddScoped<IRuntimeCheckpointCommitStore, GroundworkRuntimeCheckpointWriter>();
+        lane.Replace<IRuntimeCheckpointCommitStore, GroundworkRuntimeCheckpointWriter>();
 
         services.RemoveAll<IRuntimePostCommitOutboxStore>();
         services.RemoveAll<IPostCommitOutboxLookupStore>();
@@ -192,12 +184,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IRuntimePostCommitOutboxClaimCompletionStore>();
         services.RemoveAll<IWorkflowDispatchRedriveStore>();
         services.RemoveAll<GroundworkRuntimePostCommitOutboxStore>();
-        services.AddScoped<GroundworkRuntimePostCommitOutboxStore>();
-        services.AddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
-        services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
-        services.AddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
-        services.AddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
-        services.AddScoped<IWorkflowDispatchRedriveStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkRuntimePostCommitOutboxStore>());
+        lane.AddSelf<GroundworkRuntimePostCommitOutboxStore>();
+        lane.Alias<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();
+        lane.Alias<IPostCommitOutboxLookupStore, GroundworkRuntimePostCommitOutboxStore>();
+        lane.Alias<IRuntimePostCommitOutboxClaimStore, GroundworkRuntimePostCommitOutboxStore>();
+        lane.Alias<IRuntimePostCommitOutboxClaimCompletionStore, GroundworkRuntimePostCommitOutboxStore>();
+        lane.Alias<IWorkflowDispatchRedriveStore, GroundworkRuntimePostCommitOutboxStore>();
         services.AddScoped<IWorkflowTestScopeCleanupStore, GroundworkTestScopeCleanupStore>();
 
         // Versioned document serialization: every bridge store routes its content JSON through the
@@ -207,18 +199,15 @@ public static class GroundworkRuntimeStoreRegistration
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
         // process-local in-memory queue, and a crash after checkpoint commit loses the continuation
         // even though state and outbox items were stored durably.
-        services.RemoveAll<IWorkflowSchedulerWorkQueue>();
-        services.AddScoped<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
+        lane.Replace<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
 
         // Durable scheduler poison store. Without this swap handler crashes recorded by the drainer live only
         // in process memory and disappear on restart.
-        services.RemoveAll<IWorkflowSchedulerPoisonStore>();
-        services.AddScoped<IWorkflowSchedulerPoisonStore, GroundworkWorkflowSchedulerPoisonStore>();
+        lane.Replace<IWorkflowSchedulerPoisonStore, GroundworkWorkflowSchedulerPoisonStore>();
 
         // Durable timer store. Without this swap timers live only in the process-local in-memory store and
         // are lost on restart, so a Delay would never resume after a crash.
-        services.RemoveAll<IDurableTimerStore>();
-        services.AddScoped<IDurableTimerStore, GroundworkDurableTimerStore>();
+        lane.Replace<IDurableTimerStore, GroundworkDurableTimerStore>();
 
         // Readiness evidence is contributed per durability boundary. Distinct implementation types are
         // intentional: TryAddEnumerable de-duplicates by implementation type, and the readiness assessor
@@ -231,14 +220,12 @@ public static class GroundworkRuntimeStoreRegistration
         // Durable trigger index (W7, E3-1). Without this swap the trigger bindings written at publish time
         // live only in the process-local in-memory store, so a restart loses the ability to start workflows
         // from a stimulus even though the published executable is durable.
-        services.RemoveAll<IWorkflowTriggerBindingStore>();
-        services.AddScoped<IWorkflowTriggerBindingStore, GroundworkWorkflowTriggerBindingStore>();
+        lane.Replace<IWorkflowTriggerBindingStore, GroundworkWorkflowTriggerBindingStore>();
 
         // Durable recurring-trigger schedule store (W16). Without this swap the Timer/Cron schedules written at
         // publish time live only in the process-local in-memory store, so a restart forgets every recurring
         // start trigger until the workflow is republished.
-        services.RemoveAll<IRecurringTriggerScheduleStore>();
-        services.AddScoped<IRecurringTriggerScheduleStore, GroundworkRecurringTriggerScheduleStore>();
+        lane.Replace<IRecurringTriggerScheduleStore, GroundworkRecurringTriggerScheduleStore>();
 
         return services;
     }
