@@ -177,6 +177,33 @@ public sealed class FlowchartDeadPathJoinTests
             message => message.Contains("no work remains that could produce the outstanding inbound branch(es): node-c", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A policy that parks its path instead of routing has not declined its outbound connections — it has not
+    /// answered yet. Reading that silence as "took none of them" would declare every branch behind the node
+    /// dead on the strength of a decision the policy never made, which is unrecoverable: the park is meant to
+    /// be resumed.
+    /// </summary>
+    [Fact]
+    public async Task PolicyThatParksWithoutScheduling_DoesNotDeclareItsOutboundBranchesDead()
+    {
+        var run = await RunAsync(FlowchartPolicyKinds.DeadPathJoin, fixture => fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-park"),
+                fixture.NewProbeNode("node-next")
+            ],
+            connections: [fixture.NewConnection("node-park", "node-next")],
+            startNodeId: "node-park",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-park"] = new(ParkPolicy.Kind) }),
+            new ParkPolicy());
+
+        // The parked node ran; nothing behind it was scheduled, and nothing behind it was killed either.
+        Assert.Equal(["node-park"], run.Order);
+        Assert.NotNull(run.FlowchartState);
+        Assert.Empty(DiagnosticMessages(run, FlowchartDiagnosticKind.DeadPath));
+        Assert.Contains(run.FlowchartState.ExecutionPaths, path => path.Status == ExecutionPathStatus.Waiting);
+    }
+
     [Fact]
     public void JoinPolicyKind_MustNameARegisteredJoinPolicy()
     {
@@ -209,6 +236,18 @@ public sealed class FlowchartDeadPathJoinTests
                 fixture.NewConnection("node-right", "node-join")
             ],
             startNodeId: "node-decide"));
+
+    /// <summary>Parks its path rather than routing — the "I have not decided yet" decision.</summary>
+    private sealed class ParkPolicy : IFlowchartPolicy
+    {
+        public const string Kind = "dead/park";
+
+        public string PolicyKind => Kind;
+        public string DisplayName => "Park";
+
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) =>
+            new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.WaitExecutionPath)]);
+    }
 
     private static string[] DiagnosticMessages(CorpusRun run, FlowchartDiagnosticKind kind)
     {

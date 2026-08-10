@@ -71,7 +71,12 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         // untaken half of this completion, exactly as an unmatched outcome port is on the routing path. Dead
         // arrivals land in the same scope the schedule commands used, so live and dead answers to one join
         // share a partition key.
-        if (currentPath.CurrentNodeId is not { } sourceNodeId)
+        //
+        // Only when the policy actually routed. A decision that schedules nothing — one that parks the path
+        // with WaitExecutionPath, or cancels it — has not answered the routing question at all, and reading its
+        // silence as "took none of them" would declare every branch behind that node dead on the strength of a
+        // decision the policy has not made yet.
+        if (currentPath.CurrentNodeId is not { } sourceNodeId || scheduledNodes.Count == 0)
             return state;
 
         var deadPathScopeId = firstWinsScopeId ?? defaultScheduleScopeId ?? currentPath.ExecutionScopeId;
