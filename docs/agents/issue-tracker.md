@@ -13,6 +13,33 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Infer the repo from `git remote -v` - `gh` does this automatically when run inside a clone.
 
+## Claiming a unit before working on it
+
+See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md) for when this applies.
+
+- **Check for an existing claim**: `gh issue view <number> --comments`, then list the PRs whose branch names the issue:
+
+  ```bash
+  gh pr list --state all --limit 20 --json number,title,state,headRefName,baseRefName \
+    --jq '.[] | select(.headRefName|test("<number>")) | "#\(.number) [\(.state)] \(.headRefName) -> \(.baseRefName): \(.title)"'
+  ```
+
+  An open PR whose branch names the issue is a claim even when no comment exists, and it is usually the fresher signal of the two. A branch name that collides with the one you were about to create is also evidence: stop and inspect before forcing it.
+
+- **Post a claim**: `gh issue comment <number> --body "Claiming <scope>, worktree <name>."`
+- **Release it**: comment again when the work ships or is dropped.
+
+## Keeping an issue current
+
+An issue in a program is the record of progress, so comment at each transition rather than only at the end. See "Program bookkeeping" in [AGENTS.md](../../AGENTS.md).
+
+- Implementation started: branch name and the scope being taken.
+- PR opened: the link.
+- Each review round: what was raised and how it resolved.
+- Merged or closed: the outcome, and the gate evidence if it is not already on the PR.
+
+Keep the program's project board Status and any labels in sync in the same pass. Each program has its own board, so resolve it with `gh project list --owner <owner>` rather than assuming a fixed number.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

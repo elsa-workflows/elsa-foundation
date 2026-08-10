@@ -228,13 +228,35 @@ public sealed class HistoricalSchemaUpgradeTests
         Assert.Equal(currentSnapshot.Manifest.Identity, historicalTarget.ManifestIdentity);
         Assert.Equal(currentSnapshot.Manifest.Version, historicalTarget.ManifestVersion);
         Assert.Equal(currentSnapshot.Provider, historicalTarget.Provider);
+        // Subset, not equality. A deployment upgraded from the historical schema legitimately gains storage
+        // units that did not exist then — creating those in place, without a reset, is the very thing this
+        // test proves — so requiring equality would make any new unit unlandable forever. What must still
+        // hold is the other direction: the historical target may not carry a unit the current deployment has
+        // dropped, because then the upgrade path would be proven against something no longer deployed.
+        var currentUnits = currentSnapshot.StorageUnits.Select(unit => unit.Identity).ToHashSet();
+        var historicalUnits = historicalTarget.Routes.Select(route => route.StorageUnit).ToHashSet();
+        // Guards the subset check against passing for the wrong reason: an empty or truncated fixture is a
+        // subset of everything, and would make the upgrade proof vacuous.
+        Assert.NotEmpty(historicalUnits);
         Assert.True(
-            currentSnapshot.StorageUnits.Select(unit => unit.Identity).ToHashSet()
-                .SetEquals(historicalTarget.Routes.Select(route => route.StorageUnit)),
-            "The immutable historical target must cover exactly the current deployment storage-unit set.");
+            historicalUnits.IsSubsetOf(currentUnits),
+            "The immutable historical target carries storage units the current deployment no longer declares: " +
+            string.Join(", ", historicalUnits.Except(currentUnits).Select(unit => unit.Value).Order(StringComparer.Ordinal)));
+
+        // The historical deployment declared only the units its fixture carries routes for. Units added
+        // since are created by the upgrade rather than pre-existing, which is the case this test exists to
+        // prove — so the historical snapshot must carry the HISTORICAL manifest. Reusing the current one
+        // would trip the snapshot's own invariant that every storage unit has exactly one compiled route,
+        // and that invariant is the production rule, not a test convenience.
+        var historicalManifest = currentSnapshot.Manifest with
+        {
+            StorageUnits = currentSnapshot.Manifest.StorageUnits
+                .Where(unit => historicalUnits.Contains(unit.Identity))
+                .ToArray()
+        };
 
         var historicalSnapshot = new GroundworkStorageCompositionSnapshot(
-            currentSnapshot.Manifest,
+            historicalManifest,
             currentSnapshot.ManifestSources,
             currentSnapshot.ResolvedNames,
             currentSnapshot.RequiredCapabilities,
