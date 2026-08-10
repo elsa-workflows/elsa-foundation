@@ -88,12 +88,20 @@ public sealed class GroundworkDesignPostCommitRedrive
         {
             await deliverer.DeliverAsync(intent, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // Our own cancellation: the sweep is being torn down, so stop rather than record a failure that
+            // did not happen. The intent keeps its lease and becomes claimable again when it expires.
             throw;
         }
         catch (Exception exception)
         {
+            // Deliberately broad. A deliverer is arbitrary third-party code reaching an arbitrary provider, so
+            // the exception type is not knowable here and narrowing would let an unlisted type escape and kill
+            // the sweep — abandoning the other claims it is holding. Nothing is swallowed: the failure is
+            // recorded on the intent and it is released for a later attempt. A cancellation that is *not* ours
+            // lands here too, which is correct — a deliverer's internal timeout is a delivery failure, not a
+            // reason to abort the sweep.
             return await ReleaseAsync(claim, Summarize(exception), cancellationToken);
         }
 
