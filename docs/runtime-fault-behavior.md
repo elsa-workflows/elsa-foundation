@@ -27,10 +27,10 @@ So this map starts from the observer list and the defaults, not from the loop.
 | --- | --- | --- |
 | Caught by | the scheduler work handler that invoked it | `WorkflowSchedulerDrainer.DispatchAsync` |
 | Recorded as | a blocking `IncidentState` (severity `Error`), plus the activity state moved to `Faulted` | a `RuntimeSchedulerPoisonRecord` in the poison store |
-| Dispatch result | `Completed` — the drain loop keeps going | `Faulted` — the drain loop breaks |
+| Dispatch result | `Completed`, so the drain loop keeps going | `Faulted`, so the drain loop breaks |
 | Decided by | the workflow's authored `IIncidentStrategy`, applied at quiescence | `IRuntimeDomainRetryPolicy`, applied immediately |
 | Default outcome | workflow status becomes `Faulted` (default strategy is `Fault/1`) | item parked as `Poisoned`, projected into a blocking incident; **the workflow stays `Running`** |
-| Activity state | `Faulted` with a fault sub-status | untouched — it stays whatever it was |
+| Activity state | `Faulted` with a fault sub-status | untouched, it stays whatever it was |
 | Retried by default | no | no (`NoopRuntimeDomainRetryPolicy` returns an explicit `DoNotRetry`) |
 
 The single most load-bearing difference: an activity fault never reaches the drainer's fault arm, and
@@ -106,6 +106,15 @@ discarded and `FaultWorkflow` is applied to a fresh staging context. Both fallba
 with system source `IncidentStrategyFailure` plus a `phase` metadata entry, so a fault-by-fallback is
 distinguishable from a fault the strategy actually chose.
 
+Note that quiescence is measured by outbox delivery, not by the scheduler queue being empty, and the
+two can disagree. `WorkflowSchedulerDrainer`'s loop has four exits: the queue runs dry, an item faults,
+an item pauses, or the per-drain work-item budget (`RuntimeSchedulerDrainRequest.MaxWorkItems`,
+unbounded by default) is exhausted. Budget exhaustion is not a distinct stop reason anywhere. The
+drainer reports no explicit reason, `RuntimeSchedulerDrainResult` infers `Quiesced` from an
+all-completed item set, and the aggregate reason the observers actually see is seeded `Quiesced` by the
+orchestrator and never reconsiders the budget. So a budget-truncated drain looks exactly like a settled
+one, and the strategy is applied while work is still queued.
+
 ### The backstop, and when it takes over
 
 `BlockingIncidentWorkflowFaultObserver` runs after the strategy observer and faults the workflow
@@ -117,7 +126,7 @@ It returns without doing anything when any of these hold:
 
 - the workflow is missing or already terminal;
 - no blocking incident has a null `ResolutionOutcome` (so anything the strategy observer already
-  decided is left alone — including a deliberate `ContinueWithIncidents`);
+  decided is left alone, including a deliberate `ContinueWithIncidents`);
 - every remaining blocking incident is an `ArtifactActivationFailed` incident. A missing consumer or
   schema is a deployment problem, so the run is kept recoverable while deployment is corrected.
 
@@ -140,9 +149,9 @@ already attached. That non-null outcome is what makes both downstream observers 
 types are filtered out ahead of it and re-thrown untouched, because none of them is a decided outcome
 about this item:
 
-- `OperationCanceledException` — a real cancel or shutdown; the item must stay queued.
-- `RuntimeSchedulerWorkClaimLostException` — a successor may own the work; never ack, never poison.
-- `RuntimeSchedulerWorkConsumeConflictException` — the atomic commit's fence-checked consume lost to a
+- `OperationCanceledException`, a real cancel or shutdown. The item must stay queued.
+- `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison.
+- `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 
 A dispatch that breaches `RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` deliberately throws a
@@ -159,7 +168,8 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
    the redrive safety the claim protocol provides.) The ack is skipped when a checkpoint commit inside
    this dispatch already consumed the item durably.
 3. Calls `HandleHandlerCrashAsync`, which asks `IRuntimeDomainRetryPolicy` what to do and records a
-   `RuntimeSchedulerPoisonRecord` either way:
+   `RuntimeSchedulerPoisonRecord` whichever answer comes back (subject to the poison-store caveat
+   below):
 
 | Retry mode | Disposition | Requeue |
 | --- | --- | --- |
@@ -174,6 +184,14 @@ The **default** retry policy is `NoopRuntimeDomainRetryPolicy`, which returns an
 decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the first failure. The
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
+
+One composition edge case is worth knowing, because it inverts everything above. The drainer takes its
+poison store as an optional constructor parameter, and `HandleHandlerCrashAsync` returns immediately
+when none was supplied. Step 2 has already ack-deleted the work item by then, so with no poison store
+the item is gone with no trace: nothing recorded, no incident ever projected, and the retry policy
+never consulted, which means even a `RetryNow` decision does not re-enqueue. `AddWorkflowRuntime`
+registers the in-memory store with `TryAddSingleton`, so no host reaches this by default. It is
+reachable by constructing the drainer directly, which tests and custom compositions do.
 
 ### How it becomes visible
 
@@ -207,16 +225,29 @@ Observers run in registration order inside `WorkflowDrainOrchestrator.NotifyObse
 drain has finished (and after the coalescing flush, on a coalescing host). The order is load-bearing
 and the registrations say so:
 
-1. `NoopWorkflowSchedulerDrainObserver` — placeholder.
-2. `PoisonedSchedulerWorkIncidentObserver` — poison records to blocking incidents. Registered before
+1. `NoopWorkflowSchedulerDrainObserver`, a placeholder.
+2. `PoisonedSchedulerWorkIncidentObserver`, poison records to blocking incidents. Registered before
    the fault observer so the incident it projects is visible in the same notification pass.
-3. `IncidentStrategyResolutionDrainObserver` — the authored strategy, at quiescence only.
-4. `BlockingIncidentWorkflowFaultObserver` — the backstop that terminalizes on an undecided blocking
+3. `IncidentStrategyResolutionDrainObserver`, the authored strategy, at quiescence only.
+4. `BlockingIncidentWorkflowFaultObserver`, the backstop that terminalizes on an undecided blocking
    incident.
 
-`NotifyObserversAsync` does not stop at the first failure: it runs every observer, collects
-exceptions, and throws a single `AggregateException` at the end. One broken observer therefore cannot
-silently suppress the others, but it does surface out of the drain call.
+For an **ordinary** observer exception, `NotifyObserversAsync` does not stop at the first failure: it
+runs every observer, collects the exceptions, and throws a single `AggregateException` at the end. One
+broken observer therefore cannot silently suppress the ones behind it, though the aggregate does
+surface out of the drain call.
+
+**Cancellation is the exception, and it truncates the chain.** A `catch (OperationCanceledException)
+when (cancellationToken.IsCancellationRequested)` arm sits ahead of the general catch and throws
+immediately rather than continuing the loop: bare when nothing had failed yet, or as an
+`AggregateException` carrying the earlier failures when something had. Either way the observers behind
+it never run.
+
+That has a visible consequence on host shutdown mid-drain. If the poison observer (2nd of 4) is the
+one that observes cancellation, neither the strategy observer nor the fault observer runs, so an
+activity-fault blocking incident is left with a null `ResolutionOutcome` and the workflow stays
+`Running` with nobody having decided its outcome. The incident is durable and the next drain of that
+execution will resolve it, but until then the run looks undecided rather than faulted.
 
 The registrations themselves live at the end of `RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntime`.
 Issue #1230 (backlog item C2) is building a test-asserted inventory of the default registrations;
@@ -252,25 +283,25 @@ Changing the catalog default only affects workflows published afterwards.
 | handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / cancellation excluded | `src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
 | ack-before-poison, and the retry-mode ladder | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
-| the default retry policy returns an explicit `DoNotRetry` | `src/Elsa/Workflows/Runtime/Core/Services/NoopRuntimeDomainRetryPolicy.cs` |
+| the default retry policy returns an explicit `DoNotRetry` | `src/Elsa/Workflows/Runtime/Services/NoopRuntimeDomainRetryPolicy.cs` |
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/Elsa/Workflows/Runtime/Services/PoisonedSchedulerWorkIncidentObserver.cs` |
 | observer order, and the defaults table | `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
 | quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
 
 Behavioral guards worth reading alongside the code:
 
-- `tests/Elsa/Activities/Runtime/Tests/FaultIncidentExecutionTests.cs` —
+- `tests/Elsa/Activities/Runtime/Tests/FaultIncidentExecutionTests.cs`:
   `FaultActivity_WorkflowFault_IsAuthoredByTheIncidentStrategy` and
   `FaultActivity_WithContinueWithIncidentsStrategy_LeavesTheWorkflowRunning` establish, end to end,
   that the strategy and not the fault observer decides Path A's outcome.
-- `tests/Elsa/Workflows/Runtime/Tests/PoisonedSchedulerWorkIncidentObserverTests.cs` —
+- `tests/Elsa/Workflows/Runtime/Tests/PoisonedSchedulerWorkIncidentObserverTests.cs`:
   `ObserverChain_PoisonedRecord_PreservesSystemWaitAndNonterminalWorkflow` establishes that Path B
   leaves the workflow non-terminal.
-- `tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs` — the retry-mode ladder,
+- `tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs`: the retry-mode ladder,
   including that the default policy neither retries nor re-enqueues.
-- `tests/Elsa/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs` — every skip
+- `tests/Elsa/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs`: every skip
   condition and the ancestor-faulting rule.
-- `tests/Elsa/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs` — batch atomicity and
+- `tests/Elsa/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and
   both fail-closed fallbacks.
 
 ## Not covered here

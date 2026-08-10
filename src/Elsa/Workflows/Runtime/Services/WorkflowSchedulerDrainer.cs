@@ -9,14 +9,21 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Claims scheduler work for one workflow execution and dispatches it, one item at a time, until the queue is empty
-/// or an item faults, pauses, or the execution reaches a terminal status.
+/// Claims scheduler work for one workflow execution and dispatches it, one item at a time. The loop has four exits:
+/// the queue runs dry, an item faults, an item pauses, or the per-drain work-item budget
+/// (<see cref="RuntimeSchedulerDrainRequest.MaxWorkItems"/>, unbounded by default) is exhausted. The terminal-status
+/// gate stops it as well, checked on entry and after each dispatched item.
+///
+/// <para>Only the first three are reported. This method names no stop reason of its own except
+/// <see cref="RuntimeSchedulerDrainStopReason.WorkflowTerminated"/>, so a budget-truncated drain is inferred as
+/// <see cref="RuntimeSchedulerDrainStopReason.Quiesced"/> and is indistinguishable downstream from a settled one,
+/// even though work is still queued.</para>
 ///
 /// <para><b>This loop does not decide what a fault does to a workflow.</b> Every collaborator that decides an outcome
 /// sits behind an interface this class does not name, so reading it end to end will not tell you what happens when
 /// something throws. Two paths exist and they are not the same path:</para>
 /// <list type="bullet">
-/// <item><description>An <b>activity</b> fault never reaches <see cref="DispatchAsync"/>'s fault arm at all — the
+/// <item><description>An <b>activity</b> fault never reaches <see cref="DispatchAsync"/>'s fault arm at all. The
 /// invoking work handler catches it and records a blocking incident, and the dispatch reports
 /// <see cref="RuntimeSchedulerWorkItemResultStatus.Completed"/>. Whether that incident terminates the workflow is
 /// decided later by the workflow's authored <c>IIncidentStrategy</c>, applied by
@@ -24,7 +31,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
 /// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
 /// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
-/// <c>PoisonedSchedulerWorkIncidentObserver</c> — which deliberately leaves the workflow non-terminal.</description></item>
+/// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal.</description></item>
 /// </list>
 ///
 /// <para>Both paths, the defaults that decide them, and the source for each claim are mapped in
