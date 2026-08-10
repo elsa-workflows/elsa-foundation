@@ -197,7 +197,7 @@ public sealed class WorkflowAlterationActorIntegrationTests
             workflowExecutionStateStore: workflowStore,
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
             alterationStore: alterationStore);
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var checkpointWriter = new RuntimeWorkflowAlterationCheckpointWriter(committer, alterationStore, TimeProvider.System);
         var handler = new CompletingHandler();
         var jobExecutor = new WorkflowAlterationJobExecutor(new SingleHandlerResolver(handler), checkpointWriter, TimeProvider.System);
@@ -230,7 +230,7 @@ public sealed class WorkflowAlterationActorIntegrationTests
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
             alterationStore: alterationStore);
         var checkpointWriter = new RuntimeWorkflowAlterationCheckpointWriter(
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore), alterationStore, TimeProvider.System);
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []), alterationStore, TimeProvider.System);
         var handler = new CompletingHandler();
         var actorExecutor = new WorkflowAlterationActorCommandExecutor(
             alterationStore,

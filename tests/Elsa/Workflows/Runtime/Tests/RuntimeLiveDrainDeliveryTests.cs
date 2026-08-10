@@ -115,9 +115,9 @@ public sealed class RuntimeLiveDrainDeliveryTests
             drainer,
             processor,
             schedulerDrainObservers: [],
+            ownershipService: new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
+            ownershipContextAccessor: new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             options: new WorkflowDrainOrchestratorOptions(),
-            ownershipService: null,
-            ownershipContextAccessor: null,
             liveDrainDeliveryAccessor: liveDrain,
             timeProvider: new FixedTimeProvider(Now));
 

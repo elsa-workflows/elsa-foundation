@@ -164,6 +164,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
         services.AddSingleton<RuntimeWorkflowInvokeMiddleware>();
