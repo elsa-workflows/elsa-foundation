@@ -56,9 +56,16 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 /// A level may also FAIL outright rather than merely slow down, and that outcome is part of the curve: the
 /// <c>WorkflowDrainOrchestrator</c> renews its ownership lease (<c>RuntimeExecutionOwnershipOptions.LeaseDuration</c>,
 /// 1 minute by default) on a duration/3 cadence, and that renewal is itself a store write behind the same connection
-/// gate the drains are queued on. Past a queue depth the renewal starves and the execution faults with
-/// <c>RuntimeExecutionOwnershipLostException</c> — congestion collapse becoming correctness-visible. Such a level is
-/// recorded as FAULTED and the sweep continues, so the rest of the curve is not lost with it.
+/// gate the drains are queued on. Past a queue depth the renewal starves and the execution faults, which is congestion
+/// collapse becoming correctness-visible. Such a level is recorded as FAULTED and the sweep continues, so the rest of
+/// the curve is not lost with it.
+///
+/// The fault surfaces as a DIFFERENT exception type per backend, all of them lease loss under load:
+/// <c>RuntimeSchedulerWorkClaimLostException</c> (in-memory), <c>RuntimeStaleFencingTokenException</c> (isolated
+/// SQLite), <c>RuntimeExecutionOwnershipLostException</c> (shared SQLite). Which one surfaces is not fixed either: the
+/// threshold moves with ambient host load. That is why the catch below is deliberately broad and records the exception
+/// TYPE rather than filtering on one of them. See issue #1249, which is scoped to reproducing this on a quiet machine
+/// before anyone concludes what the mechanism is.
 ///
 /// There are deliberately NO hard latency/throughput assertions (they would flake); each run only asserts its
 /// workflow completed. Commit AND scheduler-dispatch counts are the deterministic, load-proof evidence — a curve
@@ -145,11 +152,20 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                 foreach (var shape in LeafShapes)
                 {
                     // A level can FAIL rather than merely slow down. On the shared writer the External shape queues so
-                    // deep behind the connection gate that the drain's own ownership heartbeat — itself a store write
-                    // behind that same gate — misses its renewal and the execution faults with
-                    // RuntimeExecutionOwnershipLostException. That outcome IS the measurement (it is the congestion
-                    // collapse turning into a correctness-visible fault), so record it and carry on to the remaining
-                    // cells instead of aborting the sweep and losing them.
+                    // deep behind the connection gate that the drain's own ownership heartbeat, itself a store write
+                    // behind that same gate, misses its renewal and the execution faults. That outcome IS the
+                    // measurement (it is the congestion collapse turning into a correctness-visible fault), so record
+                    // it and carry on to the remaining cells instead of aborting the sweep and losing them.
+                    //
+                    // The catch is deliberately BROAD and must stay that way. The observed fault is a different
+                    // exception type per backend -- RuntimeSchedulerWorkClaimLostException (in-memory),
+                    // RuntimeStaleFencingTokenException (isolated), RuntimeExecutionOwnershipLostException (shared) --
+                    // so narrowing it to any one of them aborts the sweep on the other two and loses every remaining
+                    // cell, which is the exact failure this arm was added to prevent. The threshold is not
+                    // deterministic (it moves with host load), so which type surfaces is not fixed either. The
+                    // diagnosability cost is paid by recording exception.GetType().Name below: an unexpected exception
+                    // is visible as itself rather than silently absorbed, so a harness bug stays distinguishable from
+                    // a lease fault.
                     ConcurrencyResult result;
                     try
                     {
