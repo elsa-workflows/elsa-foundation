@@ -21,10 +21,10 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
     /// <summary>
     /// Creates the orchestrator. C1 (#1227): the six telescoping constructors collapsed into this single primary
-    /// constructor — five required collaborators followed by optional collaborators that default to their
+    /// constructor: five required collaborators followed by optional collaborators that default to their
     /// no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
-    /// construction</b> so the RT-2 single-writer lease — which fences every checkpoint commit made during the drain
-    /// and cancels the drain when the lease is lost — can never be silently disabled by picking a narrower
+    /// construction</b> so the RT-2 single-writer lease, which fences every checkpoint commit made during the drain
+    /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
     /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
     /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately.
     /// </summary>
