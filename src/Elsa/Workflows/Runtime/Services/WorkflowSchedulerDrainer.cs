@@ -494,6 +494,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     _claimOptions.MaxDispatchDuration);
             }
 
+            // #1254: this dispatch's own checkpoint commit consumes the claim, so once that consume has landed there is
+            // nothing left to renew — the item is gone by design and the exclusivity the claim bought is permanent.
+            // Renewing anyway finds no document and reads as a lost claim, which would cancel and abort a dispatch whose
+            // work already committed. The same check covers a consume still in flight: skipping a renewal costs at most
+            // one cadence of visibility (the timeout is three cadences), and renewing into the store call that is
+            // deleting the very same document is the interleaving worth avoiding.
+            if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                return;
+
             RuntimeSchedulerWorkClaimTransitionResult result;
             try
             {
@@ -509,12 +518,19 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             }
             catch (Exception exception)
             {
+                if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                    return;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", status: null, exception);
             }
 
             if (result.Status != RuntimeSchedulerWorkClaimTransitionStatus.Succeeded || result.Claim is null)
             {
+                // Re-checked rather than keyed on the status: our own consume surfaces as AlreadyApplied or as Stale
+                // depending on where the renewal's load and save fell around the delete, and the in-memory queue reports
+                // a missing item as Stale in every case. A genuine successor still lands here and still wins.
+                if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                    return;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", result.Status);
             }
@@ -522,6 +538,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             renewal.Current = result.Claim;
         }
     }
+
+    // Whether this dispatch's own consume explains a claim the queue no longer honors. A landed consume is fence-checked
+    // on owner+token (a successor reclaim advances the token and rolls the commit back as a consume conflict), so this
+    // never trusts the effects of a dispatch a successor stole.
+    private bool IsOwnConsumeSettlingOrSettled(RuntimeSchedulerWorkClaim claim) =>
+        _consumedWorkClaimAccessor?.IsConsumeInFlightOrDurable(claim.Item.WorkItemId) == true;
 
     private static RuntimeSchedulerWorkClaimLostException NewClaimLost(
         RuntimeSchedulerWorkClaim claim,

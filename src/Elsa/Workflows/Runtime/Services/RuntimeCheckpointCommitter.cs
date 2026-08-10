@@ -141,7 +141,13 @@ public sealed class RuntimeCheckpointCommitter
             ? commit
             : commit with { StateChanges = stateChanges };
 
-        var storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
+        // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably below can only run once it
+        // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
+        // item. Publishing the attempt for the duration of the call lets the drainer's renewal loop recognize its own
+        // consume as the explanation instead.
+        RuntimeCheckpointCommitStoreResult storeResult;
+        using (BeginConsumeAttempt(consumedWorkItems))
+            storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
         if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
             throw new InvalidOperationException(
@@ -193,6 +199,12 @@ public sealed class RuntimeCheckpointCommitter
                 scope.PublishHopWorkItem(intent.IntentId, workItem);
         }
     }
+
+    // ResolveConsumedWorkItems yields at most the one pending claim, so a single attempt handle covers the commit.
+    private IDisposable? BeginConsumeAttempt(IReadOnlyCollection<ConsumedSchedulerWorkItem> consumedWorkItems) =>
+        _consumedWorkClaimAccessor is { } accessor && consumedWorkItems.FirstOrDefault() is { } consumed
+            ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
+            : null;
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
