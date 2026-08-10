@@ -82,7 +82,13 @@ internal static class FlowchartStateMutator
             Sequence = state.Sequence + 1
         };
 
-    public static FlowchartExecutionState AddArrival(FlowchartExecutionState state, ExecutionPath path, FlowchartConnection connection, string connectionId, string producingActivityExecutionId)
+    public static FlowchartExecutionState AddArrival(
+        FlowchartExecutionState state,
+        ExecutionPath path,
+        FlowchartConnection connection,
+        string connectionId,
+        string producingActivityExecutionId,
+        FlowchartArrivalStatus status = FlowchartArrivalStatus.Arrived)
     {
         var arrival = new FlowchartArrival(
             NewId(state, "arrival"),
@@ -93,6 +99,7 @@ internal static class FlowchartStateMutator
             connectionId,
             connection.Source.Port,
             producingActivityExecutionId,
+            status,
             iterationKey: path.IterationKey);
 
         return state with { Arrivals = state.Arrivals.Append(arrival).ToArray(), Sequence = state.Sequence + 1 };
