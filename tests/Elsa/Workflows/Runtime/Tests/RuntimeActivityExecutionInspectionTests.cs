@@ -180,7 +180,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             stateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             TimeProvider.System);
         var workItem = NewCheckpointWorkItem(terminalState.Execution.ActivityExecutionId, checkpointName);
@@ -215,7 +215,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             TimeProvider.System);
 
@@ -241,7 +241,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             new InMemoryActivityExecutionStateStore(),
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                new InMemoryRuntimeCheckpointCommitStore()),
+                new InMemoryRuntimeCheckpointCommitStore(), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
             TimeProvider.System);
 
