@@ -533,7 +533,13 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         new(
             queue,
             drainPolicy,
-            new WorkflowDrainOrchestrator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
+            new WorkflowDrainOrchestrator(
+                drainer,
+                outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance,
+                observers,
+                new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
+                new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+                options),
             timeProvider);
 
     private RuntimeSchedulerWorkItem FollowUpWorkItem() =>

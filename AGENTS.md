@@ -52,6 +52,33 @@ When triggered, keep the check concise:
 
 For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the relevant program-goal bucket.
 
+## Concurrent work claims
+
+Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
+
+Claim the unit on its issue before writing code when one of these is true:
+
+- The task names an issue or PR number.
+- The task is one slice of a unit that was split into slices, whether or not the other slices are assigned.
+- The user says another session is working on a related slice. Ask what else that session owns before starting.
+
+The claim is one comment naming the worktree and the exact scope being taken. Before posting it, read the issue's comments and the open PRs that reference it. If another session already claimed that scope, stop and tell the user rather than building a second copy. See [Issue tracker](docs/agents/issue-tracker.md) for the commands.
+
+Release the claim when the session ends: comment when the work ships, and comment when it is abandoned, so the next session does not read a stale claim as live work.
+
+Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did.
+
+A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
+
+## Program bookkeeping
+
+When work belongs to a program, the GitHub issue is the public, legible record of progress. The program's project board Status alone is not enough.
+
+- Comment on the issue at every state transition: implementation started (with branch name and scope), PR opened (with link), each review round and its outcome, and merged or closed.
+- Keep the program's project board Status and any labels in sync at the same time.
+- Throttle concurrent agent sessions on one program to two or three.
+- Merge only on a green gate. Run the build, the affected suites, the architecture guard, the generated-maps check, and a diff review; add a revert or mutation bite-proof where a behavioral change is claimed. Post that evidence as a PR comment, because that comment is the notification of record. Do not self-merge a peer session's PR without it.
+
 ## Refresh generated maps
 
 Windows / PowerShell:

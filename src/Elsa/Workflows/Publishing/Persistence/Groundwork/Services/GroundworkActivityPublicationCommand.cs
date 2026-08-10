@@ -189,7 +189,14 @@ public sealed class GroundworkActivityPublicationCommand(
             }
             else
             {
-                await CommitAcrossTargetsAsync(managementProjection, requests, runtimeAlreadyCommitted, cancellationToken);
+                // The publication instant, not the wall clock: it makes the intent's recorded order a property
+                // of the publication rather than of when the process happened to reach this line.
+                await CommitAcrossTargetsAsync(
+                    managementProjection,
+                    requests,
+                    commit.Design.Publication.PublishedAt,
+                    runtimeAlreadyCommitted,
+                    cancellationToken);
             }
         }
         catch (DocumentAtomicWriteException exception)
@@ -218,44 +225,6 @@ public sealed class GroundworkActivityPublicationCommand(
             commit.SourceReference.ArtifactId,
             colocated,
             cancellationToken);
-
-    /// <summary>
-    /// Finishes a split publication that already committed its design phase but never wrote its receipt.
-    /// <para>
-    /// The design publication document is the linearization point, so its presence means the publication is
-    /// done. Recognising this retry requires that it describe the same publication: the caller re-supplies
-    /// the whole commit, so the stored publication is compared against it before anything is written. A
-    /// different publication reusing the id is a genuine conflict and falls through to the preflight.
-    /// </para>
-    /// </summary>
-    /// <returns>The original publication's result when resumed, otherwise <c>null</c>.</returns>
-    /// <summary>
-    /// Confirms a conflicting receipt is byte-identical to the one being written. Anything else means two
-    /// different publications claimed one idempotency key, which is a genuine conflict.
-    /// </summary>
-    private async Task EnsureStoredReceiptMatchesAsync(
-        IDocumentStore publishingStore,
-        SaveDocumentRequest intended,
-        CancellationToken cancellationToken)
-    {
-        var stored = await publishingStore.LoadAsync(
-            intended.DocumentKind,
-            intended.Id,
-            cancellationToken);
-        if (stored is null)
-        {
-            throw Conflict(
-                $"The activity publication receipt '{intended.Id}' conflicted on write but is not present; " +
-                "the publishing target rejected the write for another reason.");
-        }
-
-        if (!StringComparer.Ordinal.Equals(stored.ContentJson, intended.ContentJson))
-        {
-            throw Conflict(
-                $"Activity publication receipt '{intended.Id}' already exists with different content. Two " +
-                "publications are using one idempotency key.");
-        }
-    }
 
     /// <summary>Builds the create-only receipt write, shared by the ordinary path and the resume path.</summary>
     private SaveDocumentRequest CreateReceiptRequest(ActivityPublicationReceipt receipt)
@@ -317,8 +286,9 @@ public sealed class GroundworkActivityPublicationCommand(
     /// <list type="number">
     /// <item>
     /// Runtime first. The template is content-addressed and the source reference is create-only, so a repeat
-    /// is a no-op and a template written without the rest is unreferenced: nothing can reach it until the
-    /// design commit lands, and reference garbage collection can reclaim it.
+    /// is a no-op and a template written without the rest is unreachable: nothing resolves it until the
+    /// design commit lands. Unreachable is not collectable — the source reference committed alongside it is a
+    /// live retention root — so a crash here strands both until a retry adopts them (ADR 0066).
     /// </item>
     /// <item>
     /// Design second, and this is the linearization point. The publication is done when this commits; the
@@ -331,10 +301,18 @@ public sealed class GroundworkActivityPublicationCommand(
     /// retry with the same idempotency key resumes at this step rather than redoing the publication.
     /// </item>
     /// </list>
+    /// <para>
+    /// Step 2 also stages the receipt's post-commit intent, which is what stops step 3 depending on the caller
+    /// coming back. Ordering makes each partial state inert; the intent is what makes the last one converge.
+    /// It is written inside the design transaction so it is durable at exactly the instant the publication
+    /// becomes done — a moment earlier and a rolled-back publication would leave a receipt obligation for a
+    /// publication that never happened.
+    /// </para>
     /// </summary>
     private async Task CommitAcrossTargetsAsync(
         GroundworkActivityManagementProjectionUpdate managementProjection,
         IReadOnlyList<SaveDocumentRequest> requests,
+        DateTimeOffset recordedAt,
         bool runtimeAlreadyCommitted,
         CancellationToken cancellationToken)
     {
@@ -344,6 +322,16 @@ public sealed class GroundworkActivityPublicationCommand(
             .Where(request => !RuntimeKinds.Contains(request.DocumentKind)
                               && !PublishingKinds.Contains(request.DocumentKind))
             .ToArray();
+        if (receiptRequests.Length > 0)
+        {
+            designRequests =
+            [
+                .. designRequests,
+                GroundworkDesignPostCommitOutbox.CreateSaveRequest(
+                    ActivityPublicationReceiptDelivery.CreateIntent(receiptRequests[0]),
+                    recordedAt)
+            ];
+        }
 
         if (runtimeRequests.Length > 0 && !runtimeAlreadyCommitted)
         {
@@ -361,7 +349,8 @@ public sealed class GroundworkActivityPublicationCommand(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-                ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind
+                ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
+                GroundworkDesignAtomicWriteStorageManifest.DesignPostCommitIntentDocumentKind
             ],
             designRequests,
             cancellationToken);
@@ -370,8 +359,9 @@ public sealed class GroundworkActivityPublicationCommand(
     }
 
     /// <summary>
-    /// Writes the publishing receipt after the design commit. An already-present receipt is success, not a
-    /// conflict: the caller retried after the receipt had landed.
+    /// Writes the publishing receipt after the design commit, then retires the intent that guaranteed it. The
+    /// intent is dropped only once the receipt is durable, so a crash anywhere in between leaves the
+    /// obligation standing for <see cref="GroundworkDesignPostCommitRedrive"/> to finish.
     /// </summary>
     private async Task WritePublicationReceiptAsync(
         IReadOnlyList<SaveDocumentRequest> receiptRequests,
@@ -380,23 +370,21 @@ public sealed class GroundworkActivityPublicationCommand(
         if (receiptRequests.Count == 0)
             return;
 
-        var publishingStore = laneStores.For<PublishingGroundworkStorageManifestSource>();
-        try
-        {
-            await publishingStore.SaveAllAsync(
-                DocumentCommitScope.Of(PublishingKinds),
-                receiptRequests,
-                cancellationToken);
-        }
-        catch (DocumentAtomicWriteException exception)
-            when (exception.Status is DocumentStoreWriteStatus.ConcurrencyConflict)
-        {
-            // A create-only write and a racing write surface the same status, so the conflict is only benign
-            // when what is already stored is this same receipt. A different publication reusing one
-            // idempotency key must not be reported as success.
-            await EnsureStoredReceiptMatchesAsync(publishingStore, receiptRequests[0], cancellationToken);
-        }
+        var receipt = receiptRequests[0];
+        await ActivityPublicationReceiptDelivery.WriteAsync(
+            laneStores.For<PublishingGroundworkStorageManifestSource>(),
+            receipt,
+            cancellationToken);
+        await DesignPostCommitOutbox.DiscardAsync(
+            ActivityPublicationReceiptDelivery.CreateIntent(receipt).IntentId,
+            cancellationToken);
     }
+
+    /// <summary>
+    /// The design lane's post-commit outbox. Addressed by lane rather than injected so it is unmistakably the
+    /// design target's: the intent has to be in the same transaction as the design commit to mean anything.
+    /// </summary>
+    private GroundworkDesignPostCommitOutbox DesignPostCommitOutbox => new(DesignStore, DesignBounded);
 
     private static readonly string[] RuntimeKinds =
     [
