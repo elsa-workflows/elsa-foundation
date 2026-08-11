@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -29,8 +30,14 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
     }
 
     [Fact]
-    public async Task GroupCommit_ConcurrentCommits_Fold_AndEveryRunPersistsExactlyOneMarker()
+    public async Task GroupCommit_ConcurrentCommits_EveryRunPersistsExactlyOneMarker()
     {
+        // Correctness under real concurrency: whatever mix of solo flushes and folds the scheduler happens to produce,
+        // every run must land exactly one durable marker and no batch may degrade. Deliberately asserts nothing about
+        // the SHAPE of the batching -- how many members actually overlap at the gate is a property of the machine, not
+        // of the coordinator, and asserting it here made the test fail deterministically on a 2-core runner (#1266).
+        // Fold formation is pinned separately, and deterministically, by
+        // GroupCommit_MembersQueuedBehindAnInFlightFlush_FoldIntoOneSharedTransaction.
         const int concurrency = 64;
         var dbPath = Path.Combine(Path.GetTempPath(), $"gw-groupcommit-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={dbPath}";
@@ -46,19 +53,103 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
                 await RunConcurrentCommitsAsync(store, coordinator, Enumerable.Range(0, concurrency).ToArray());
 
                 Assert.Equal(0, coordinator.DegradedBatchCount);
-                // At least one real multi-member fold formed (near-certain at 64 concurrent commits through one gate).
-                Assert.True(coordinator.BatchFlushCount > 0, "expected at least one multi-member group commit under high concurrency");
-                Assert.True(coordinator.BatchedMemberCount > coordinator.BatchFlushCount, "a batch must fold more than one member per flush");
                 // Deterministic correctness: every run persisted exactly one durable marker, none lost or duplicated.
                 for (var index = 0; index < concurrency; index++)
                     Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, $"commit-{index}"));
                 Assert.Equal(concurrency, await CountCheckpointMarkersAsync(store));
+                // Every commit was accounted for by exactly one flush, solo or folded.
+                Assert.Equal(
+                    concurrency,
+                    coordinator.SoloFlushCount + coordinator.BatchedMemberCount);
             }
         }
         finally
         {
             DeleteSqliteFiles(dbPath);
         }
+    }
+
+    [Fact]
+    public async Task GroupCommit_MembersQueuedBehindAnInFlightFlush_FoldIntoOneSharedTransaction()
+    {
+        // Fold formation, constructed rather than raced for. The coordinator folds whoever is ALREADY queued when a
+        // leader takes the gate, so the precondition is "members enqueued while a flush is in flight" -- not "N tasks
+        // running at once", which is what the machine gets to decide.
+        //
+        // Construction: the first member becomes the leader, finds itself alone, and blocks inside its solo flush while
+        // still holding the gate. Every later SubmitAsync then enqueues SYNCHRONOUSLY -- the enqueue precedes the first
+        // await, so the member is in the queue by the time the call returns -- and parks on the gate. Releasing the
+        // leader lets the next leader drain all of them into one shared unit-of-work. Nothing here depends on the
+        // thread pool running anything in parallel, so it holds at DOTNET_PROCESSOR_COUNT=1.
+        const int followers = 8;
+        var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var coordinator = new RuntimeGroupCommitCoordinator(store, new RuntimeGroupCommitOptions());
+        var leaderIsHoldingTheGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLeader = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var leader = SubmitMarkerAsync(coordinator, store, 0, async token =>
+        {
+            leaderIsHoldingTheGate.SetResult();
+            await releaseLeader.Task.WaitAsync(token);
+        }).AsTask();
+        await leaderIsHoldingTheGate.Task;
+
+        var queued = new List<Task<RuntimeCheckpointCommitStoreResult>>();
+        for (var index = 1; index <= followers; index++)
+            queued.Add(SubmitMarkerAsync(coordinator, store, index).AsTask());
+
+        releaseLeader.SetResult();
+        await leader;
+        await Task.WhenAll(queued);
+
+        // The leader flushed alone; everyone queued behind it folded into shared transactions, and at least one of
+        // those carried more than one member (that difference is the fsyncs group commit actually saved).
+        Assert.Equal(1, coordinator.SoloFlushCount);
+        Assert.Equal(0, coordinator.DegradedBatchCount);
+        Assert.True(coordinator.BatchFlushCount >= 1, "the queued members must have folded into at least one shared transaction");
+        Assert.Equal(followers, coordinator.BatchedMemberCount);
+        Assert.True(
+            coordinator.BatchedMemberCount > coordinator.BatchFlushCount,
+            "a batch must fold more than one member per flush");
+
+        // The folded writes are durable, not merely counted.
+        for (var index = 0; index <= followers; index++)
+            Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, $"fold-{index}"));
+    }
+
+    // Submits one marker write to the coordinator. The staged and solo paths write the same document, so a member's
+    // marker lands exactly once whether it was folded into a shared unit-of-work or flushed on its own.
+    private static ValueTask<RuntimeCheckpointCommitStoreResult> SubmitMarkerAsync(
+        RuntimeGroupCommitCoordinator coordinator,
+        IDocumentStore store,
+        int index,
+        Func<CancellationToken, Task>? beforeSoloFlush = null) =>
+        coordinator.SubmitAsync(
+            batchKey: string.Empty,
+            DocumentCommitScope.Of(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind),
+            async (transactionalStore, token) => await WriteFoldMarkerAsync(transactionalStore, index, token),
+            async token =>
+            {
+                if (beforeSoloFlush is not null)
+                    await beforeSoloFlush(token);
+                return await WriteFoldMarkerAsync(store, index, token);
+            },
+            CancellationToken.None);
+
+    private static async ValueTask<RuntimeCheckpointCommitStoreResult> WriteFoldMarkerAsync(
+        IDocumentStore store,
+        int index,
+        CancellationToken cancellationToken)
+    {
+        await store.SaveAsync(
+            new SaveDocumentRequest(
+                ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                $"fold-{index}",
+                "1.0.0",
+                /*lang=json,strict*/ """{"collection":"checkpointCommit"}""",
+                ExpectedVersion: 0),
+            cancellationToken);
+        return new RuntimeCheckpointCommitStoreResult([]);
     }
 
     [Fact]
