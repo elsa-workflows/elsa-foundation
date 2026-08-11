@@ -18,15 +18,15 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    // 2026-08-11: the design-lane search indexes became non-unique, gained the document-identity
-    // tie-break that uniqueness used to certify, and now declare IncludedAsNull so no provider omits
-    // rows with no name. That changes the physical target. Only the PENDING fingerprint moves;
+    // 2026-08-11: the design-lane search indexes and the trigger-binding traversal indexes now declare
+    // IncludedAsNull, so no provider omits rows whose keyed columns have no value. That changes the
+    // physical target. Only the PENDING fingerprint moves;
     // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
     // this records a head that has moved rather than re-ratifying anything.
-    private const string PendingTargetFingerprint = "db559db4e7d1a175f5a172669a0c05d57f44aacfb6b57fe8bb927c9a3fa5407b";
+    private const string PendingTargetFingerprint = "1a7ac7c4e49922fba3393a6e06765c5e7e677a14233dc895f0d95d3b7536d5a0";
     // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
     // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "2b22c63eb549c768d7907b788200940c534edbc3c12d0f4b9982c44fc08349b5";
+    private const string PendingPlanFingerprint = "f9e388a89173d129953efdb94735829e9c6f9037d36a80b70bab74715acbc7a5";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

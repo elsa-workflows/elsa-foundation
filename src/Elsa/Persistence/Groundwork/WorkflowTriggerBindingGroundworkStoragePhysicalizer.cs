@@ -224,7 +224,10 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(predicateColumn, 1),
                 new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingById, 2),
                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-            ]);
+            ],
+            // Must match the logical declaration above; the two disagreeing is itself a blocking
+            // diagnostic, and these routes sweep every binding.
+            missingValueBehavior: MissingValueBehavior.IncludedAsNull);
 
     private static BoundedQueryDeclaration OrderedLookupQuery(
         string identity,
