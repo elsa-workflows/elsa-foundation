@@ -319,7 +319,7 @@ public static class ActivitiesDesignStorageManifest
             LogicalIndex(V2("activity-definition-by-id"), [ActivityDefinitionIdField], unique: true),
             LogicalIndex(V2("activity-definition-by-type-key"), [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField], unique: true),
             LogicalIndex(V2("activity-definition-by-category"), [ActivityDefinitionCategoryField, ActivityDefinitionIdField], unique: true),
-            LogicalIndex(V2("activity-definition-by-display-name"), [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField], unique: true),
+            LogicalIndex(V2("activity-definition-by-display-name"), [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField], missingValues: MissingValueBehavior.IncludedAsNull),
             LogicalIndex(V2("activity-definition-by-description"), [ActivityDefinitionDescriptionField, ActivityDefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
@@ -333,7 +333,7 @@ public static class ActivitiesDesignStorageManifest
             UniquePhysicalIndex(V2("activity-definition-by-id"), "activity_definition_id"),
             UniquePhysicalIndex(V2("activity-definition-by-type-key"), "activity_type_key", "activity_definition_id"),
             UniquePhysicalIndex(V2("activity-definition-by-category"), "category", "activity_definition_id"),
-            UniquePhysicalIndex(V2("activity-definition-by-display-name"), "display_name", "activity_definition_id"),
+            SearchPhysicalIndex(V2("activity-definition-by-display-name"), "display_name", "activity_definition_id"),
             UniquePhysicalIndex(V2("activity-definition-by-description"), "description", "activity_definition_id")
         };
         var documentResults = new[]
@@ -806,13 +806,14 @@ public static class ActivitiesDesignStorageManifest
     private static LogicalIndexDeclaration LogicalIndex(
         string identity,
         string[] fields,
-        bool unique = false) =>
+        bool unique = false,
+        MissingValueBehavior missingValues = MissingValueBehavior.Excluded) =>
         new(
             identity,
             fields.Select(field => new IndexField(field, IndexValueKind.Keyword)).ToArray(),
             IndexValueKind.Keyword,
             unique,
-            MissingValueBehavior.Excluded);
+            missingValues);
 
     private static PhysicalIndexDefinition PhysicalIndex(string identity, params string[] columns) =>
         new(
@@ -832,6 +833,24 @@ public static class ActivitiesDesignStorageManifest
             ],
             isUnique: true,
             missingValueBehavior: MissingValueBehavior.Excluded);
+
+    /// <summary>
+    /// An index for a search that spans several optional fields. It must keep rows that have no value
+    /// for its keyed columns, because the disjunction can match them on another field, and it therefore
+    /// cannot be unique: a unique index that keeps such rows means different things per provider and is
+    /// refused at route compilation.
+    /// </summary>
+    private static PhysicalIndexDefinition SearchPhysicalIndex(string identity, params string[] columns) =>
+        new(
+            identity,
+            [
+                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1)),
+                // Uniqueness used to certify a total order for offset paging; a non-unique index has to
+                // carry the document-identity tie-break explicitly instead.
+                new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, columns.Length + 1)
+            ],
+            missingValueBehavior: MissingValueBehavior.IncludedAsNull);
 
     private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";
 
