@@ -146,13 +146,11 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         if (!JoinPolicy.PropagatesDeadPaths)
             return state;
 
-        foreach (var connection in graph.GetOutboundConnections(sourceNodeId))
-        {
-            if (takenConnectionIds.Contains(graph.GetConnectionId(connection)))
-                continue;
+        var untaken = graph.GetOutboundConnections(sourceNodeId)
+            .Where(connection => !takenConnectionIds.Contains(graph.GetConnectionId(connection)));
 
+        foreach (var connection in untaken)
             state = EmitDeadArrival(context, state, graph, connection, executionScopeId, iterationKey, producingActivityExecutionId);
-        }
 
         return ReleaseReadyWaitingJoins(context, state, graph);
     }

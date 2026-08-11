@@ -168,15 +168,13 @@ public sealed class FlowchartStatePersister
 
         foreach (var scopeId in retainedScopeIds.ToArray())
         {
-            var current = scopeId;
-            while (scopesById.TryGetValue(current, out var scope) &&
-                   scope.Kind != ExecutionScopeKind.LoopIteration &&
-                   scope.ParentExecutionScopeId is { } parentScopeId)
+            var scope = scopesById.GetValueOrDefault(scopeId);
+            while (scope is { Kind: not ExecutionScopeKind.LoopIteration, ParentExecutionScopeId: { } parentScopeId })
             {
                 if (!retainedScopeIds.Add(parentScopeId))
                     break;
 
-                current = parentScopeId;
+                scope = scopesById.GetValueOrDefault(parentScopeId);
             }
         }
     }
