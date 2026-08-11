@@ -32,8 +32,9 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 
     // Optional extra #2 — hot reload: when the feed applies a package change (folder listener or a manual
-    // reconcile), the observer reloads the active shells so a running server picks up new assemblies without
-    // a restart. It is always registered but no-ops unless Elsa:Shells:ReloadOnPackageChange is true.
+    // reconcile), the observer refreshes the CShells runtime feature catalog and reloads the active shells so a
+    // running server picks up new assemblies without a restart. Always registered; no-ops unless
+    // Elsa:Shells:ReloadOnPackageChange is true and a shell is already active.
     nuplane.OnPackagesChanged<ShellReloadOnPackagesChanged>();
 });
 
@@ -45,8 +46,16 @@ builder.Services.AddSingleton<ShellReloadOnPackagesChanged>();
 // CShells — activate shells, map them, own per-shell middleware.
 // ---------------------------------------------------------------------------------------------------------
 builder.Services.AddCShellsAspNetCore(shells => shells
-    // Feature assemblies come ONLY from the Nuplane feed; the host compiles in no features of its own.
+    // Domain feature assemblies come from the Nuplane feed; the host compiles in no Elsa features of its own.
     .WithAssemblyProvider<NuplaneAssemblyProvider>()
+    // Also scan the host's own referenced assemblies so the FastEndpoints runtime seam is available to every
+    // shell without each feed feature declaring DependsOn "FastEndpoints". The only host assembly that carries
+    // a [ShellFeature] is CShells.FastEndpoints (its built-in "FastEndpoints" feature, which scans a shell's
+    // active IFastEndpointsShellFeature assemblies and maps their endpoints). A shell enables it once via
+    // shells.json ("Features": { "FastEndpoints": {} }); feed features then only reference
+    // CShells.FastEndpoints.Abstractions. CShells.FastEndpoints.Abstractions is a shared assembly (see
+    // Nuplane:Loading:SharedAssemblies) so a feed feature's IFastEndpointsShellFeature is the same type here.
+    .WithHostAssemblies()
     // Shell composition is read from shells.json (default section name "CShells").
     .WithConfigurationProvider(configuration)
     // Path-based shell routing; the health probes below bypass shell resolution.

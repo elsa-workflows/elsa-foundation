@@ -19,6 +19,14 @@
          transitively; those are the interfaces feed features implement against this host's CShells runtime. -->
     <PackageReference Include="CShells.AspNetCore" />
 
+    <!-- CShells.FastEndpoints: the FastEndpoints runtime seam for CShells. Carries the built-in
+         "FastEndpoints" [ShellFeature] that scans a shell's feature assemblies for FastEndpoints
+         endpoints and maps them (with per-shell EndpointRoutePrefix). Feed features that expose HTTP
+         via FastEndpoints implement IFastEndpointsShellFeature (from CShells.FastEndpoints.Abstractions,
+         pulled transitively and shared via Nuplane:Loading:SharedAssemblies) and DependsOn "FastEndpoints".
+         Brings FastEndpoints 7.2.0 and depends on CShells.AspNetCore (already referenced above). -->
+    <PackageReference Include="CShells.FastEndpoints" />
+
     <!-- Nuplane: package feed + runtime assembly loading. AutoloadPackages registers the
          IPackageAssemblyCatalog that NuplaneAssemblyProvider hands to CShells. -->
     <PackageReference Include="Nuplane" />
