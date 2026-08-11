@@ -102,11 +102,44 @@ public sealed class WorkloadCatalog
         return new PerformanceWorkload(id, version, RequireString(value, "scenarioId", source), RequireString(value, "owner", source), RequireString(value, "publicOperation", source), coverageRows, input, operationSequence, requiredProviders, routes, providerEvidence, correctness, baseline, admission, physicalForms, retention);
     }
 
+    /// <summary>
+    /// Admissible driver topology per provider. This field is consumed as a topology identifier, not as
+    /// free text: <c>MatrixPlan.Create</c> requires it to equal the run request's
+    /// <c>ProviderTopology</c>, and a driver cannot report a value outside its own catalog. A workload
+    /// declaring anything else is unrunnable on every provider, which is exactly the defect the
+    /// diagnostics workload carried while every check stayed green — see
+    /// specs/094-harden-groundwork-stores/contracts/diagnostics-provider-topology-basis.md.
+    /// <c>GroundworkProviderTopologyAgreementTests</c> pins this set to the real driver vocabulary, so the
+    /// two cannot drift apart again.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AdmissibleProviderTopologies =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["sqlite"] = new HashSet<string>(["file-backed-distinct-connections"], StringComparer.Ordinal),
+            ["sqlserver"] = new HashSet<string>(["real-sqlserver-container"], StringComparer.Ordinal),
+            ["postgresql"] = new HashSet<string>(["real-postgresql-container"], StringComparer.Ordinal),
+            ["mongodb"] = new HashSet<string>(
+                ["transaction-capable-replica-set", "transaction-capable-sharded-cluster"],
+                StringComparer.Ordinal)
+        };
+
     private static IReadOnlyDictionary<string, string> ParseProviderEvidence(JsonElement value, string source)
     {
         RequireObject(value, source);
         RequireClosedProperties(value, Providers, source);
-        return Providers.ToDictionary(provider => provider, provider => RequireString(value, provider, source), StringComparer.Ordinal);
+        var evidence = Providers.ToDictionary(provider => provider, provider => RequireString(value, provider, source), StringComparer.Ordinal);
+
+        // Fail closed at load rather than at matrix planning. The former defect surfaced only when an
+        // operator tried to start a cohort, by which point the request had already been assembled against
+        // a topology no driver could report.
+        foreach (var (provider, topology) in evidence)
+            if (!AdmissibleProviderTopologies[provider].Contains(topology))
+                throw new WorkloadContractException(
+                    $"{source} declares provider evidence '{topology}' for '{provider}', which is not an admissible driver topology " +
+                    $"({string.Join(", ", AdmissibleProviderTopologies[provider].Order(StringComparer.Ordinal))}). " +
+                    "This field is a topology identifier, not free text; gate-regime prose belongs in correctness.timingGate.");
+
+        return evidence;
     }
 
     private static CorrectnessContract ParseCorrectness(JsonElement value, string source)
