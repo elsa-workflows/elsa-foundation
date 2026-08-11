@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Globalization;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -320,6 +322,31 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
 
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
+
+                // Admission shed (RB1, #1235). Deliberately BEFORE the idempotency key is remembered: the command was
+                // refused, not processed, so a retry of the same key must be evaluated afresh rather than answered
+                // Duplicate. Deferred is the truthful status — for a start nothing durable was written and the caller
+                // is expected to retry (the HTTP edge renders it 429), for anything else the work item is queued and
+                // the resumption sweep will re-drive it.
+                if (processResult.Shed)
+                {
+                    var shedMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        [RuntimeMetadataKeys.DispatchShed] = "true"
+                    };
+                    if (processResult.RetryAfter is { } retryAfter)
+                    {
+                        var seconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+                        shedMetadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = seconds.ToString(CultureInfo.InvariantCulture);
+                    }
+
+                    return DispatchResult(
+                        envelope,
+                        WorkflowExecutionCommandDispatchStatus.Deferred,
+                        processResult.FaultReason ?? "Runtime dispatch admission is at capacity.",
+                        shedMetadata);
+                }
+
                 RememberProcessedIdempotencyKey(envelope.IdempotencyKey);
 
                 if (processResult.IsFaulted)
