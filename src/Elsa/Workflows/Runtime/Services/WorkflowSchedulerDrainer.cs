@@ -43,7 +43,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
-    private readonly IWorkflowSchedulerPauseGate? _pauseGate;
+    private readonly IWorkflowSchedulerPauseGate _pauseGate;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
@@ -57,11 +57,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     /// <summary>
     /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
-    /// four required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
-    /// <paramref name="workflowExecutionStateStore"/>, <paramref name="poisonStore"/>) followed by optional
-    /// collaborators that default to their no-op/system implementations. The workflow execution state store is
-    /// <b>required by construction</b> so the W5 terminal-status guard (which stops sibling work once an execution
-    /// reaches a terminal status) can never be silently disabled by picking a narrower constructor.
+    /// five required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
+    /// <paramref name="workflowExecutionStateStore"/>, <paramref name="poisonStore"/>, <paramref name="pauseGate"/>)
+    /// followed by optional collaborators that default to their no-op/system implementations. The workflow execution
+    /// state store is <b>required by construction</b> so the W5 terminal-status guard (which stops sibling work once an
+    /// execution reaches a terminal status) can never be silently disabled by picking a narrower constructor.
     ///
     /// <para>The poison store is <b>required by construction</b> for the same reason (#1271): a handler fault is
     /// ack-deleted from the durable queue before poison handling runs, so a drainer built without a poison store loses
@@ -69,6 +69,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     /// consulted, so even a <c>RetryNow</c> decision does not re-enqueue. Requiring the store makes that configuration
     /// impossible to construct rather than merely improbable; the core composition root already registers an
     /// <c>InMemoryWorkflowSchedulerPoisonStore</c> unconditionally, so it costs nothing at composition time.</para>
+    ///
+    /// <para>The pause gate is <b>required by construction</b> for a third reason of the same kind (#1277 R1): its
+    /// absence does not degrade the drain, it defeats the pause contract outright. A null gate made the drain loop's
+    /// pause evaluation answer null, which fails its <c>{ CanAdvance: false }</c> pattern, so a workflow under an
+    /// effective hold had its queued work claimed and dispatched anyway. An empty hold
+    /// store is the way to express "nothing is held" — the gate then answers <c>CanAdvance: true</c> in band — so
+    /// there is no configuration that needs the gate itself to be absent.</para>
     ///
     /// <para><paramref name="retryPolicy"/> stays optional because its absence is indistinguishable from the registered
     /// default answering <c>DoNotRetry</c>: both park the item as <c>Poisoned</c>, and the record is written either
@@ -79,8 +86,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowSchedulerPoisonStore poisonStore,
+        IWorkflowSchedulerPauseGate pauseGate,
         TimeProvider? timeProvider = null,
-        IWorkflowSchedulerPauseGate? pauseGate = null,
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
@@ -93,6 +100,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         ArgumentNullException.ThrowIfNull(handlers);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(poisonStore);
+        ArgumentNullException.ThrowIfNull(pauseGate);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
@@ -144,7 +152,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 break;
             var nextWorkItem = delivery.Item;
 
-            var pauseDecision = await EvaluatePauseAsync(nextWorkItem, cancellationToken);
+            // A null decision here means this command kind has no pause boundary (the gate maps only StartActivity,
+            // InvokeActivity, and GeneratedEvent), not that pausing is unavailable — the gate is required by
+            // construction, so "no gate" is not a state this can be in. (#1277 R1)
+            var pauseDecision = await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
             if (pauseDecision is { CanAdvance: false })
             {
                 await ReleaseAsync(delivery, cancellationToken);
@@ -610,14 +621,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         RuntimeSchedulerWorkClaimTransitionStatus? status,
         Exception? innerException = null) =>
         new(claim, transition, status, innerException);
-
-    private async ValueTask<SchedulerPauseDecision?> EvaluatePauseAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
-    {
-        if (_pauseGate is null)
-            return null;
-
-        return await _pauseGate.EvaluateAsync(workItem, cancellationToken);
-    }
 
     private RuntimeSchedulerWorkItemResult CreatePausedResult(RuntimeSchedulerWorkItem workItem, SchedulerPauseDecision decision)
     {
