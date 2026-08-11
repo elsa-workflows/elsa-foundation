@@ -9,7 +9,7 @@ This is the narrative walkthrough of Unit B's seed flow once code lands: how a J
 
    ```
    src/Elsa.Primitives/ (TenantEntity added)
-   src/Elsa.Persistence.EFCore/ (OnEntitySaving event; IEntityModelCreatingHandler unchanged)
+   src/Elsa.Persistence.EFCore/ (EntitySaving event; IEntityModelCreatingHandler unchanged)
    src/Elsa.Activities.Design.Core/ (read contracts, smart-enums, descriptor interface, sealed records)
    src/Elsa.Activities.Design.Persistence.Core/ (3 entities)
    src/Elsa.Activities.Design.Persistence.EFCore/ (EF config + handlers)
@@ -55,9 +55,9 @@ dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
 At startup:
 
 1. **EF Core migration** — `RunMigrationsStartupTask` applies the fresh initial migration; the `Elsa.db` SQLite file is created with the new schema (catalog tables + reconciliation-state table).
-2. **Resolver registry initialization** — `ActivityImplementationResolverRegistryStartupTask` publishes `OnActivityImplementationResolversInitializing`; the activities runtime feature handles it to register `ClrActivityImplementationResolver`.
+2. **Resolver registry initialization** — `ActivityImplementationResolverRegistryStartupTask` publishes `ActivityImplementationResolversInitializing`; the activities runtime feature handles it to register `ClrActivityImplementationResolver`.
 3. **Reconciliation pass** — `ActivityVersionReconcilerStartupTask` invokes `IActivityVersionReconciler.Reconcile()`:
-   - Publishes `OnActivityVersionsReconciling` with an empty `Versions` collection.
+   - Publishes `ActivityVersionsReconciling` with an empty `Versions` collection.
    - The JSON-file source feature handles the event, reads `elsa-core-activities.json`, contributes one `IActivityDefinitionVersion` per JSON entry (each tagged `SourceKind = SourceKind.Json`, `SourceId = <assembly name>`, etc.).
    - The reconciler processes each contributed version: find-or-create the parent `ActivityDefinition`, append the `ActivityDefinitionVersion`, invoke `IActivityDefinitionHasher` to compute the hash, write/update the `ActivityDefinitionReconciliationState` sibling.
 

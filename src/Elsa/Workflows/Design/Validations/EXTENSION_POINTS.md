@@ -4,7 +4,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 
 - **Overridable contracts** — none in this domain.
 - **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam.
-- **Events** — the validation gate (`OnDraftValidating`) and outcome notification (`OnDraftValidated`).
+- **Events** — the validation gate (`DraftValidating`) and outcome notification (`DraftValidated`).
 
 ---
 
@@ -21,7 +21,7 @@ This domain exposes no swappable default-impl service. The validation *behaviour
 - **Signature:** `ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken);`
 - **Returns** the validation errors it found (empty when valid); it never mutates the event.
 - **Register:** `services.AddScoped<IDraftValidator, MyValidator>()`.
-- **Aggregated by:** the single `ExecuteValidations : IEventHandler<OnDraftValidating>` (this feature), which injects `IEnumerable<IDraftValidator>` and aggregates every implementation's errors onto the event's `Errors` collection.
+- **Aggregated by:** the single `ExecuteValidations : IEventHandler<DraftValidating>` (this feature), which injects `IEnumerable<IDraftValidator>` and aggregates every implementation's errors onto the event's `Errors` collection.
 - **Adding one does not replace the others:** all registered validators run. This is the *extend* path, not the *override* path.
 - **Faulting:** an exception escaping `Validate` propagates and faults the whole validation gate (fail-closed). In particular, `IActivityDefinitionLookup.GetVersion` **throws** `EntityNotFoundException` on a missing id — it never returns null. Catalog-consulting validators should resolve versions via `CatalogVersionResolver` (scoped; memoizes per pass and short-circuits blank ids), or call the nullable `IActivityDefinitionLookup.FindVersion` directly (null = absent); either way **skip** unresolvable nodes — the `Graph/UnknownActivityVersion` report is owned by `UnknownActivityVersionValidator`, so skipping neither hides the problem nor double-reports it. Do **not** call `GetVersion` from a validator: a missing id there faults the gate with an opaque, node-anonymous exception.
 
@@ -42,11 +42,11 @@ Both events are `IEvent` (framework §2.6.1); they differ only in **delivery str
 
 `CatalogParityTests` scans every `IEvent` type in `Elsa.Workflows.Design.Validations.Core` and asserts bidirectional alignment with the `### On…` headings in this section.
 
-**Sequential / contribution** (§2.6.6) — `OnDraftValidating`. The gate. Features implement `IDraftValidator` and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's `Errors` collection. The publishing command publishes it Sequential, awaits dispatch, and reads collected errors back.
+**Sequential / contribution** (§2.6.6) — `DraftValidating`. The gate. Features implement `IDraftValidator` and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's `Errors` collection. The publishing command publishes it Sequential, awaits dispatch, and reads collected errors back.
 
-### OnDraftValidating
+### DraftValidating
 
-**Semantic.** Mutation gate. The post-mutation Draft snapshot is presented for validation BEFORE the state is persisted. Validators implement `IDraftValidator` and **return** their errors; `ExecuteValidations` aggregates them onto `event.Errors`. The publishing command reads `event.Errors` back after dispatch and surfaces them on `OnDraftValidated` (create/update) or uses them as the promotion gate (FR-024). Errors are derived state, not persisted.
+**Semantic.** Mutation gate. The post-mutation Draft snapshot is presented for validation BEFORE the state is persisted. Validators implement `IDraftValidator` and **return** their errors; `ExecuteValidations` aggregates them onto `event.Errors`. The publishing command reads `event.Errors` back after dispatch and surfaces them on `DraftValidated` (create/update) or uses them as the promotion gate (FR-024). Errors are derived state, not persisted.
 
 **Payload.**
 - `Draft : IWorkflowDefinitionDraft` — the post-mutation Draft.
@@ -58,15 +58,15 @@ Both events are `IEvent` (framework §2.6.1); they differ only in **delivery str
 
 **Publication site.** Every mutation command, synchronously inside the per-Draft lock, after the mutation hook runs and before `SaveChangesAsync`.
 
-**Expected handler.** Exactly one `IEventHandler<OnDraftValidating>`: `ExecuteValidations` (this feature).
+**Expected handler.** Exactly one `IEventHandler<DraftValidating>`: `ExecuteValidations` (this feature).
 
 **Ordering guarantees.** Fires AFTER the mutation hook applies its in-memory mutation; BEFORE `SaveChangesAsync`. Validators run in DI-resolution order (no guaranteed inter-validator ordering). A validator that throws fails the publish and the mutation (Sequential ships no exception-shielding per §2.6.6).
 
-**Background / notification** (§2.6.6) — `OnDraftValidated`. Outcome notification published after the mutation is persisted.
+**Background / notification** (§2.6.6) — `DraftValidated`. Outcome notification published after the mutation is persisted.
 
-### OnDraftValidated
+### DraftValidated
 
-**Semantic.** The validation pass completed and carries the derived errors (or empty set). Past-tense counterpart to `OnDraftValidating`. Audit, UI push (SignalR), telemetry react.
+**Semantic.** The validation pass completed and carries the derived errors (or empty set). Past-tense counterpart to `DraftValidating`. Audit, UI push (SignalR), telemetry react.
 
 **Payload.**
 - `Draft : IWorkflowDefinitionDraft` — the same post-mutation Draft snapshot validators saw.
@@ -77,7 +77,7 @@ Both events are `IEvent` (framework §2.6.1); they differ only in **delivery str
 
 **Publication site.** Every mutation command (and `ICreateDraftCommand`), after `SaveChangesAsync` and after the per-Draft lock has been released.
 
-**Ordering guarantees.** FIFO at enqueue. A subscriber exception is caught + logged; it never breaks the publisher. (Per-diff FR-018 mutation events are not published today — see the cross-reference below — so `OnDraftValidated` is the only post-mutation event on the create/update path.)
+**Ordering guarantees.** FIFO at enqueue. A subscriber exception is caught + logged; it never breaks the publisher. (Per-diff FR-018 mutation events are not published today — see the cross-reference below — so `DraftValidated` is the only post-mutation event on the create/update path.)
 
 ---
 

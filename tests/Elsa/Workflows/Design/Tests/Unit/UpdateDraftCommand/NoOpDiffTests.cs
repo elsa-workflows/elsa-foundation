@@ -40,7 +40,7 @@ public sealed class NoOpDiffTests
         await Update(host, draftId, state);
 
         // The validation gate still ran for the no-op pass.
-        Assert.NotNull(host.EventPublisher.CapturedEvents.Skip(skip).OfType<OnDraftValidating>().LastOrDefault());
-        Assert.NotNull(host.EventPublisher.CapturedEvents.Skip(skip).OfType<OnDraftValidated>().LastOrDefault());
+        Assert.NotNull(host.EventPublisher.CapturedEvents.Skip(skip).OfType<DraftValidating>().LastOrDefault());
+        Assert.NotNull(host.EventPublisher.CapturedEvents.Skip(skip).OfType<DraftValidated>().LastOrDefault());
     }
 }

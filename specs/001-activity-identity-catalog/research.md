@@ -4,15 +4,15 @@
 
 ## R1 — Existing `ElsaDbContextBase` mechanism
 
-**Decision.** Migrate only the **saving** handlers (`IGlobalEntitySavingHandler` + typed `IEntitySavingHandler<,>`) to a new `OnEntitySaving` domain event. Keep `IEntityModelCreatingHandler` as-is — model-creating is a sync side-effect chain on the shared `ModelBuilder`, not a contribution flow in the §2.6.1 sense.
+**Decision.** Migrate only the **saving** handlers (`IGlobalEntitySavingHandler` + typed `IEntitySavingHandler<,>`) to a new `EntitySaving` domain event. Keep `IEntityModelCreatingHandler` as-is — model-creating is a sync side-effect chain on the shared `ModelBuilder`, not a contribution flow in the §2.6.1 sense.
 
 **Findings** (from [`src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs`](../../src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs)):
 
 - `SaveChangesAsync` → `BeforeSavingChanges` → calls four steps:
   1. `PreventImmutableChanges` — `[Immutable]` enforcement. **Preserve as-is.**
   2. `ApplyTimestamps` — stamps `CreatedAt` / `LastModifiedAt`. **Preserve as-is.**
-  3. `ApplyGlobalSavingHandlers` — `IGlobalEntitySavingHandler` from DI per entry. **Migrate to `OnEntitySaving(DbContext, EntityEntry)`** dispatched via `IDomainEventSender` (async; the surrounding `BeforeSavingChanges` is already async).
-  4. `ApplyEntitySavingHandlers` — typed `IEntitySavingHandler<TDbContext, TEntity>` via reflection. **Migrate to the same `OnEntitySaving` event** with entity-type filtering inside the handler.
+  3. `ApplyGlobalSavingHandlers` — `IGlobalEntitySavingHandler` from DI per entry. **Migrate to `EntitySaving(DbContext, EntityEntry)`** dispatched via `IDomainEventSender` (async; the surrounding `BeforeSavingChanges` is already async).
+  4. `ApplyEntitySavingHandlers` — typed `IEntitySavingHandler<TDbContext, TEntity>` via reflection. **Migrate to the same `EntitySaving` event** with entity-type filtering inside the handler.
 - `OnModelCreating` → `ConfigureEntityModel` → calls:
   1. `ApplyRowNumberIndex` — preserve. Pattern for `ApplyTenantIdIndex`.
   2. `ApplyEntityModelCreatingHandlers` — `IEntityModelCreatingHandler` from DI. **Preserve as-is.** `OnModelCreating` is intrinsically sync; `IDomainEventSender.Send` is async; forcing a sync-over-async dispatch is a smell with no architectural benefit. §2.6.1's domain-event contract addresses *contribution flows* (handlers contribute data the sender collects); model-creating is structurally different — each handler mutates the shared `ModelBuilder` and nothing flows back. The legacy provider-interface pattern is the right tool here.
@@ -73,7 +73,7 @@ The existing `ActivityVersionProvisioner` already consumes this contract — pat
 4. Calls `IPayloadSerializer.Deserialize(json, type)` — the existing Elsa serialisation contract. If the API is non-generic, use it directly; if generic-only, construct via reflection: `typeof(IPayloadSerializer).GetMethod(nameof(IPayloadSerializer.Deserialize)).MakeGenericMethod(type).Invoke(serializer, [json])`.
 5. Assigns the result to the entity's `[NotMapped] ImplementationDescriptor` property.
 
-The registry is populated at startup by `ImplementationDescriptorRegistryStartupTask`, which publishes `OnImplementationDescriptorsInitializing` and flushes contributions into the registry. The activities runtime feature contributes the CLR mapping; Unit G later contributes the Workflow mapping; future units contribute analogously. This is symmetric with the existing `IActivityImplementationResolverRegistry` and its `OnActivityImplementationResolversInitializing` event — two registries, two events, two startup tasks, same canonical §2.6.1 pattern.
+The registry is populated at startup by `ImplementationDescriptorRegistryStartupTask`, which publishes `OnImplementationDescriptorsInitializing` and flushes contributions into the registry. The activities runtime feature contributes the CLR mapping; Unit G later contributes the Workflow mapping; future units contribute analogously. This is symmetric with the existing `IActivityImplementationResolverRegistry` and its `ActivityImplementationResolversInitializing` event — two registries, two events, two startup tasks, same canonical §2.6.1 pattern.
 
 **Saving mechanism.** The saving handler does the inverse — `IPayloadSerializer.Serialize(entity.ImplementationDescriptor)` → write to `entry.Property("ImplementationDescriptor").CurrentValue`.
 
@@ -145,11 +145,11 @@ public sealed class ActivityFactory : IActivityFactory
 
 **Decision.** Per framework §2.6.1 sub-pattern (worked example in Elsa §E3.3):
 
-1. `Elsa.Activities.Runtime.Core` defines `IActivityImplementationResolverRegistry` and `OnActivityImplementationResolversInitializing(List<IActivityImplementationResolver>)`.
+1. `Elsa.Activities.Runtime.Core` defines `IActivityImplementationResolverRegistry` and `ActivityImplementationResolversInitializing(List<IActivityImplementationResolver>)`.
 2. The activities-runtime feature registers a StartUp task that:
    ```csharp
    var resolvers = new List<IActivityImplementationResolver>();
-   await sender.Send(new OnActivityImplementationResolversInitializing(resolvers), ct);
+   await sender.Send(new ActivityImplementationResolversInitializing(resolvers), ct);
    registry.RegisterAll(resolvers);
    ```
 3. Other features (Workflow bridge in Unit G, Remote feature later, …) handle the event to add their resolvers.

@@ -18,9 +18,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
   ```
 - **`SourceId`:** a unique, stable identifier for this source.
 - **`SourceKind`:** the category of the source (e.g. `"code-first"`, `"json"`, `"yaml"`).
-- **`RequestsPublication`:** opt-in publish-on-reconcile (spec 147). A source returning `true` asks for the latest reconciled version of each definition it contributes to be published after a successful pass; the flag is snapshotted per contribution onto `WorkflowVersionSourceClaim.PublishRequested` and acted on by the Publishing-side subscriber of `OnWorkflowVersionsReconciled` (below). Defaults to `false` — import-only.
+- **`RequestsPublication`:** opt-in publish-on-reconcile (spec 147). A source returning `true` asks for the latest reconciled version of each definition it contributes to be published after a successful pass; the flag is snapshotted per contribution onto `WorkflowVersionSourceClaim.PublishRequested` and acted on by the Publishing-side subscriber of `WorkflowVersionsReconciled` (below). Defaults to `false` — import-only.
 - **Register:** `services.AddScoped<IWorkflowReconciliationSource, MySource>()`.
-- **Consumed by:** `WorkflowVersionsReconcilingHandler : IEventHandler<OnWorkflowVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles against the workflow catalog.
+- **Consumed by:** `WorkflowVersionsReconcilingHandler : IEventHandler<WorkflowVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles against the workflow catalog.
 
 **Known implementations (shipped):**
 - `GitWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Git`, `SourceKind = "git"`) — reads immutable version files from a git repository (spec 085 / ADR 0034). Feature: `WorkflowsDesignGitReconciliation`.
@@ -33,7 +33,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 `CatalogParityTests` scans `Elsa.Workflows.Design.Reconciliation.Core` for `IEvent` types and asserts alignment with `### On…` headings here.
 
-### OnWorkflowVersionsReconciling
+### WorkflowVersionsReconciling
 `(ICollection<IWorkflowDefinitionVersion> Versions, ICollection<WorkflowVersionSourceClaim> Claims)`
 
 **Semantic.** The workflow catalog reconciliation pass is running. Sources contribute their workflow versions; the reconciler diffs against the stored catalog. `Claims` (spec 147) carries one provenance record per contributed version — `(DefinitionId, Version, SemVerSortKey, SourceId, SourceKind, PublishRequested, Deleted)` — populated by the aggregating handler beside `Versions`; source identity is not persisted on design entities, so this is the only carrier that survives the pass.
@@ -44,7 +44,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 **Expected handler.** Exactly one: `WorkflowVersionsReconcilingHandler` (this feature).
 
-### OnWorkflowVersionsReconciled
+### WorkflowVersionsReconciled
 `(IReadOnlyList<WorkflowVersionSourceClaim> Claims)`
 
 **Semantic.** A workflow-version reconcile pass completed with every contributed version materialized (or verified present). Not published when the pass aborts. Payload is the pass's provenance claims, in contribution order.

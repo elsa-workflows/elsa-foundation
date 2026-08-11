@@ -2,11 +2,31 @@
 Draft history moved to ../../docs/reports/constitution-draft-history.md.
 This constitution file is the generic quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
+
+SYNC IMPACT REPORT — 3.2.0 -> 4.0.0 (2026-08-08)
+Amendment: event types are never named with an `On` prefix.
+  MAJOR per Governance > Versioning: this REDEFINES a previously prescribed convention.
+  Code written to the old shape does not satisfy the new rule.
+Modified sections:
+  §2.6.1  - fan-in worked example renamed `On<RegistryName>Initializing` -> `<RegistryName>Initializing`;
+            aggregating-handler placeholder `IEventHandler<On<Phase>>` -> `IEventHandler<PhaseEvent>`.
+  §2.6.6  - ADDED "Event naming - no `On` prefix" rule; hybrid pattern restated as
+            `Xxxing` (Sequential gate) + `Xxxed` (Background outcome).
+  §2.22.1 - events-catalog worked examples renamed.
+  §2.24.2 - sanctioned-pattern row 3b restated: `IEventHandler<On<Phase>>` -> `IEventHandler<PhaseEvent>`
+            and `OnXxxing/OnXxxed` -> `Xxxing / Xxxed`.
+Added sections: none (the naming rule lives inside §2.6.6).
+Removed sections: none.
+Templates requiring updates: none — .specify/templates/*, .specify/workflows/*, and
+  .claude/skills/* were checked and carry no event-naming guidance.
+Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone. Governance > Amendment process
+  calls for consensus among the architects; Joey Barten and Frans van Ek did not sign off. This
+  amendment and the document-level ratification are open to revision if they dissent.
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 3.2.0 (draft)
-**Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
+**Version:** 4.0.0
+**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending ratification — whether via their own `Status:` line (§2.24) or inline wording — remain so and are **not** covered by this ratification.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
 **Knowledge boundary note:** treat this document as the generic quality-gate
@@ -267,7 +287,7 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 **Boundaries and expectations.**
 
 - **Intent.** Internal technical communication between features within the application.
-- **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
+- **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `EntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
 - **Delivery coupling follows the publisher-owned strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). The publisher owns the delivery strategy because only the publisher knows whether its caller needs handlers to have completed, whether it will read contributions back, and whether the transition has already been persisted. A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
 - **Handler-loop failure policy is publisher-owned.** The publisher owns the failure policy for the dispatch loop because only the publisher knows whether one failing handler should stop dispatch immediately, whether every handler should still get a chance to run before an aggregate failure is thrown, or whether failures should be logged/handled without breaking the publisher. The built-in baseline policies are **Throw immediately**, **Run all then throw aggregate**, and **Log/handle gracefully and continue**.
 - **Failure meaning is subscriber-owned classification.** A handler/subscriber owns the meaning of its own failure: business-critical, optional telemetry, retryable, ignorable, report-only, dead-letter-worthy, or escalated. That classification operates **inside the publisher-owned delivery and dispatcher-failure boundary**. A subscriber MAY declare its failure classification where the event substrate supports handler-level metadata, but it MUST NOT silently strengthen the publisher's delivery contract. If a subscriber must be able to fail the publisher, the domain needs a Sequential gate/contribution event or a separate phase; it is a modeling error to attach such a subscriber only to a Background notification.
@@ -280,11 +300,11 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 When a registry-style or index-style consumer needs access to contributions from sync code — e.g. a `JsonConverter` callback in a serializer, or any constructor that builds an index — the contribution is still gathered through an event. The async population happens once at startup; sync access happens afterwards. The pattern:
 
 1. The domain defines a **Registry** with a `Register<T>(item)` method (and accessor methods).
-2. The domain publishes an `On<RegistryName>Initializing` event whose payload exposes a directly-accessible `ICollection<T>`.
+2. The domain publishes an `<RegistryName>Initializing` event whose payload exposes a directly-accessible `ICollection<T>`.
 3. The feature implementing the domain registers a **StartUp task** that publishes the event Sequentially and flushes the contributions into the registry:
 
    ```
-   var event = new On<RegistryName>Initializing();
+   var event = new <RegistryName>Initializing();
    await eventPublisher.Publish(event);   // default Sequential — contributions read back
    registry.RegisterAll(event.Items);
    ```
@@ -296,19 +316,19 @@ The result: **all cross-feature contribution flows through the same event pipeli
 
 **Sub-pattern — Contributor interface + single aggregating handler.**
 
-A fan-in event that gathers contributions from many features MUST use the **contributor-interface + single-handler** shape — NOT one `IEventHandler<On<Phase>>` per contributing feature. **This rule is scoped to the contribution axis.** Features are free to register `IEventHandler<T>` for independent subscriptions — observing an event for auditing, cache invalidation, cross-cutting reactions, or any purpose unrelated to the fan-in aggregation — without any restriction. The constraint is: if you are *contributing to a fan-in*, use the typed interface rather than a scatter of handlers all doing the same kind of thing (imagine 100 JavaScript declaration contributors each implemented as a separate `IEventHandler<OnDeclarationsDocumentGenerating>` — that is the chaos this rule prevents).
+A fan-in event that gathers contributions from many features MUST use the **contributor-interface + single-handler** shape — NOT one `IEventHandler<PhaseEvent>` per contributing feature. **This rule is scoped to the contribution axis.** Features are free to register `IEventHandler<T>` for independent subscriptions — observing an event for auditing, cache invalidation, cross-cutting reactions, or any purpose unrelated to the fan-in aggregation — without any restriction. The constraint is: if you are *contributing to a fan-in*, use the typed interface rather than a scatter of handlers all doing the same kind of thing (imagine 100 JavaScript declaration contributors each implemented as a separate `IEventHandler<DeclarationsDocumentGenerating>` — that is the chaos this rule prevents).
 
 - The domain `.Core` defines a **contributor interface** that describes the *intent* of the contribution (e.g. `IDraftValidator`, `IJsonConverterSource`). Features implement it and register it via DI (`services.AddScoped<TContributor, Impl>()`) — they do **not** register a separate event handler for *this contribution purpose*.
-- The owning feature registers **exactly one** action-named `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `RegisterJsonConverters`) that injects `IEnumerable<TContributor>`, iterates every contributor, and writes the aggregate into the event.
+- The owning feature registers **exactly one** action-named `IEventHandler<PhaseEvent>` (e.g. `ExecuteValidations`, `RegisterJsonConverters`) that injects `IEnumerable<TContributor>`, iterates every contributor, and writes the aggregate into the event.
 - The event payload exposes a **directly-accessible `ICollection<T>`** (for flat-collection sinks) or a rich mutable context object (for heterogeneous sinks). No private backing list, no `AddX()` methods, no `IReadOnlyList<T>` read accessor — the single handler is the only writer, so encapsulation is met without ceremony.
 
 **The three contributor-interface kinds.** The suffix MUST match the method shape AND the event topology:
 
 - **`I<X>Source`** — the contributor **returns** its items and touches no shared object (a *pull*). Used when the sink is a flat collection. Signature returns `IEnumerable<T>` (or `ValueTask<IEnumerable<T>>`). The single handler aggregates every source's return into the event's `ICollection<T>`. **"Source" is preferred over "Provider".**
 - **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
-- **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **OnXxxing / OnXxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
+- **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **Xxxing / Xxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
 
-**Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
+**Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<PhaseEvent>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
 
 Never name a return-style interface `Contributor`, nor a context-acting interface `Source`. A *Source* yields data; a *Contributor* (incl. its action-named forms `Validator`/`Handler`) performs operations against a target; a *PreProcessor*/*PostProcessor* performs operations against a target at a named point in a before/after lifecycle.
 
@@ -432,7 +452,9 @@ The delivery strategy passed to `IEventPublisher.Publish` is:
 - Optional telemetry, audit, UI-push, or cache invalidation → classify as optional/retryable/dead-letter-worthy/operationally escalated under a graceful Background policy.
 - If the desired classification requires stronger delivery or dispatcher-failure semantics than the event provides, do not subscribe as-is; raise an architecture question and model a separate event phase.
 
-**Hybrid pattern — `OnXxxing` (Sequential gate) + `OnXxxed` (Background outcome).** When a domain has both a participation gate and an outcome signal for the same transition, the present-participle form is published **Sequential** (validators / contributors run, publisher reads back) and the past-tense form is published **Background** (notifies that the transition happened, outcome carried in the payload, fired after persistence). Worked example: `OnDraftValidating` (Sequential — validators contribute errors) followed by `OnDraftValidated` (Background — fires after the errors are persisted; audit / UI-push react). Both are `IEvent`; only the strategy differs.
+**Event naming — no `On` prefix.** An event type is named for the thing that is happening or has happened, never with an `On` prefix. `On` is reserved for the *handling* side (a method that raises or reacts to an event, as in `OnModelCreating`); putting it on the event type names the consumer instead of the fact and reads as a method where a type is meant. The BCL's own event pairs (`Closing`/`Closed`, `Saving`/`Saved`) carry no prefix, and neither do ours. Word order is subject-first (`ApiCapabilitiesCollecting`, not `CollectingApiCapabilities`) so events for one subject sort together.
+
+**Hybrid pattern — `Xxxing` (Sequential gate) + `Xxxed` (Background outcome).** When a domain has both a participation gate and an outcome signal for the same transition, the present-participle form is published **Sequential** (validators / contributors run, publisher reads back) and the past-tense form is published **Background** (notifies that the transition happened, outcome carried in the payload, fired after persistence). Worked example: `DraftValidating` (Sequential — validators contribute errors) followed by `DraftValidated` (Background — fires after the errors are persisted; audit / UI-push react). Both are `IEvent`; only the strategy differs. With no `On` prefix in the way, the tense alone carries the gate-vs-outcome distinction.
 
 **Cross-references.** §2.6.1 (the single event concept + contribution sub-pattern); §2.6.3 (named events, not anonymous dispatch — read-back requires Sequential); §2.22.1 (events catalog); §4.2 (adding an event is MINOR, renaming or removing is MAJOR).
 
@@ -733,14 +755,14 @@ The catalog has three sections: **Overridable contracts**, **Implementable contr
 
 **Events are one concept; the catalog records delivery and failure expectations.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery and failure strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses, whether it reads contributions back, which dispatcher failure policy applies, and what subscriber failure classifications are expected. The catalog SHOULD make the delivery strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
 
-- **Sequential / contribution** — publisher awaits the chain and reads handler contributions back (e.g. `OnDraftValidating` exposes a directly-accessible `ICollection<ValidationError> Errors` that the single `ExecuteValidations` handler fills from every `IDraftValidator`). Used when the publisher needs the result; a handler throw breaks the publish.
-- **Background / notification** — publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). A subscriber failure is isolated (logged, never breaks the publish); typically fired after the transition is persisted.
+- **Sequential / contribution** — publisher awaits the chain and reads handler contributions back (e.g. `DraftValidating` exposes a directly-accessible `ICollection<ValidationError> Errors` that the single `ExecuteValidations` handler fills from every `IDraftValidator`). Used when the publisher needs the result; a handler throw breaks the publish.
+- **Background / notification** — publisher fires and returns; subscribers observe but don't feed back (e.g. `DraftCreated`, `DraftValidated`). A subscriber failure is isolated (logged, never breaks the publish); typically fired after the transition is persisted.
 
-A domain may publish events of either strategy, or have a present-participle gate with a past-tense outcome sibling (e.g. `OnDraftValidating` = Sequential "validation is happening, contribute"; `OnDraftValidated` = Background "validation completed, here's the outcome"). The catalog documents whichever events the domain ships; the recorded strategy pins the dispatch contract for each.
+A domain may publish events of either strategy, or have a present-participle gate with a past-tense outcome sibling (e.g. `DraftValidating` = Sequential "validation is happening, contribute"; `DraftValidated` = Background "validation completed, here's the outcome"). The catalog documents whichever events the domain ships; the recorded strategy pins the dispatch contract for each.
 
 **Minimum required content per event in the catalog:**
 
-- **Event class name** (e.g. `OnDraftCreated`).
+- **Event class name** (e.g. `DraftCreated`).
 - **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
 - **Dispatcher failure policy** — whether handler failures throw immediately, are collected and thrown as an aggregate after all handlers run, or are logged/handled gracefully while dispatch continues.
 - **Subscriber failure classifications** — which classifications are expected or permitted for handlers of this event, especially whether business-critical subscribers are allowed or should instead use a separate Sequential gate event.
@@ -882,7 +904,7 @@ The rationale for keeping a closed pattern catalog lives in [docs/reference/arch
 | 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
 | 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IEventPublisher.Publish` with a pluggable delivery strategy. Sequential (default) for contribution; Background for notification. | Cross-feature composition through named events in a domain's `.Core`. |
 | 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
-| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. |
+| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an Xxxing / Xxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<PhaseEvent>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. |
 | 3c | *sub-rule:* Default Sequential CAN break the caller | §2.6.1 | No exception-shielding on the default path; a handler throw fails the publish (fail-fast). | Default for every Sequential publish. Resilience is opt-in via the Background strategy, NOT a default middleware. |
 | 4 | **Delivery strategies** | §2.6.6 | Select dispatch behaviour per publish: Sequential (default, awaited, propagates), Parallel, Background (isolated fire-and-forget). | Background for "X happened, react if you want" (audit, telemetry, UI-push). No separate marker type — strategy is the axis. |
 | 5 | **Replacement contracts** | §2.6.2 | One implementation per application (e.g. one `IDistributedLockProvider`). | Multiple registrations = conflict, not contribution. Detect at startup. |
@@ -1018,4 +1040,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 3.2.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-08-02
+**Version:** 4.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-08-08

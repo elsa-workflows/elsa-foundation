@@ -156,12 +156,12 @@ public abstract class WorkflowDesignContractSuite
         Assert.Equal(updatedLayout, draft.Layout);
 
         var events = await fixture.ReadObservedEventsAsync();
-        var created = Assert.Single(events.OfType<OnDraftCreated>());
+        var created = Assert.Single(events.OfType<DraftCreated>());
         Assert.Equal(cloneId, created.DraftId);
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, created.WorkflowDefinitionId);
         Assert.Equal(promotedVersionId, created.SourceVersionId);
 
-        var validations = events.OfType<OnDraftValidated>().ToArray();
+        var validations = events.OfType<DraftValidated>().ToArray();
         var updatedValidation = Assert.Single(validations.Where(x => x.Draft.Id == DesignPersistenceFixtureData.WorkflowDraftId));
         var clonedValidation = Assert.Single(validations.Where(x => x.Draft.Id == cloneId));
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, updatedValidation.Draft.WorkflowDefinitionId);
@@ -182,7 +182,7 @@ public abstract class WorkflowDesignContractSuite
             DesignPersistenceFixtureData.OperationKey("workflow-update-clone-invalid"),
             new UpdateDraftRequest(cloneId, WorkflowDefinitionState.Empty, []));
 
-        var invalidValidation = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftValidated>());
+        var invalidValidation = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<DraftValidated>());
         Assert.Equal(cloneId, invalidValidation.Draft.Id);
         Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, invalidValidation.Draft.WorkflowDefinitionId);
         Assert.Equal(
@@ -290,7 +290,7 @@ public abstract class WorkflowDesignContractSuite
             Assert.Null(await services.GetRequiredService<IWorkflowDefinitionDraftStore>()
                 .FindByIdAsync(DesignPersistenceFixtureData.WorkflowDraftId));
 
-            var discarded = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnDraftDiscarded>());
+            var discarded = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<DraftDiscarded>());
             Assert.Equal(DesignPersistenceFixtureData.WorkflowDraftId, discarded.DraftId);
             Assert.Equal(DesignPersistenceFixtureData.WorkflowDefinitionId, discarded.WorkflowDefinitionId);
         }

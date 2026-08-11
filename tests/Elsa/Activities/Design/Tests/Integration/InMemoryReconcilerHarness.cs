@@ -83,11 +83,11 @@ internal static class InMemoryReconcilerHarness
             ValueTask.FromResult<IEnumerable<ActivityVersionReconciliationModel>>(models);
     }
 
-    private sealed class DirectEventPublisher(IEventHandler<OnActivityVersionsReconciling> handler) : IInlineEventPublisher
+    private sealed class DirectEventPublisher(IEventHandler<ActivityVersionsReconciling> handler) : IInlineEventPublisher
     {
         public async Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
-            if (@event is OnActivityVersionsReconciling reconciling)
+            if (@event is ActivityVersionsReconciling reconciling)
                 await handler.Handle(reconciling, cancellationToken);
         }
     }

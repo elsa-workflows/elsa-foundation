@@ -25,7 +25,7 @@ The provider returns a definition only when the current tenant-scoped read can s
 
 ## Publication pin
 
-`DispatchPinSource` accepts only a literal nonblank `WorkflowDefinitionId`. Publishing invokes it through the named `OnExecutableNodeMetadataCollecting` fan-in event and the single `CollectExecutableNodeMetadata` handler. The source resolves one live Published source and records the full executable/source identity in compiled node metadata. Runtime reads only this pin.
+`DispatchPinSource` accepts only a literal nonblank `WorkflowDefinitionId`. Publishing invokes it through the named `ExecutableNodeMetadataCollecting` fan-in event and the single `CollectExecutableNodeMetadata` handler. The source resolves one live Published source and records the full executable/source identity in compiled node metadata. Runtime reads only this pin.
 
 ## Parent checkpoint
 

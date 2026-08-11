@@ -6,7 +6,7 @@
 
 ## Summary
 
-Complete the file-based (GitOps) workflow deployment story: package `JsonWorkflowReconciliation` into `Elsa.Workbench` (it exists but is uncatalogued and silently skipped), add a `FolderPath` option (exactly-one-of-three validation, deterministic non-recursive ordinal scan), and add opt-in `PublishOnReconcile`. The publish step is a Publishing-engine event subscriber (`PublishReconciledWorkflowVersions`) on a **new** Sequential completion event `OnWorkflowVersionsReconciled` (none exists today) whose payload carries per-source provenance claims — provenance is not persisted and survives only through the event pipeline. Sequential delivery inside the reconciler's `[SingleNodeTask]` startup task yields single-node execution and publish-before-`/health/ready` for free; the subscriber never throws (per-definition failure isolation) and pre-checks the publication slot for restart idempotency, backed by `PublishWorkflow`'s built-in `WasCreated=false` replay short-circuit. Full decisions in [research.md](research.md); shapes in [data-model.md](data-model.md); contracts in [contracts/](contracts/).
+Complete the file-based (GitOps) workflow deployment story: package `JsonWorkflowReconciliation` into `Elsa.Workbench` (it exists but is uncatalogued and silently skipped), add a `FolderPath` option (exactly-one-of-three validation, deterministic non-recursive ordinal scan), and add opt-in `PublishOnReconcile`. The publish step is a Publishing-engine event subscriber (`PublishReconciledWorkflowVersions`) on a **new** Sequential completion event `WorkflowVersionsReconciled` (none exists today) whose payload carries per-source provenance claims — provenance is not persisted and survives only through the event pipeline. Sequential delivery inside the reconciler's `[SingleNodeTask]` startup task yields single-node execution and publish-before-`/health/ready` for free; the subscriber never throws (per-definition failure isolation) and pre-checks the publication slot for restart idempotency, backed by `PublishWorkflow`'s built-in `WasCreated=false` replay short-circuit. Full decisions in [research.md](research.md); shapes in [data-model.md](data-model.md); contracts in [contracts/](contracts/).
 
 ## Technical Context
 
@@ -37,7 +37,7 @@ Complete the file-based (GitOps) workflow deployment story: package `JsonWorkflo
 | §E2.2 / §E2.6 seam | ✅ | Publish trigger is a Publishing-side subscriber; new reference `Elsa.Workflows.Publishing → Elsa.Workflows.Design.Reconciliation.Core` matches the allowed direction (engine already references the Activities equivalent). No Runtime edges change; guard tests stay green. |
 | §E2.8 / §E2.9.5 Model X | ✅ | Reconciliation policy untouched: existence-check idempotency, mismatch tripwire, duplicate policy all unchanged; no per-pass mutating fields added; provenance travels in events, not entities. |
 | §2.5 / §2.23.3 feature shape | ✅ | `JsonWorkflowReconciliationFeature` stays public non-sealed with `override ConfigureServices`; `WorkflowsPublishingFeature` stays public non-sealed `virtual`; new collaborators (`PublishReconciledWorkflowVersions`) are `public sealed`, registered and injected via contracts. |
-| §2.6.1 / §2.6.6 events | ✅ | New event = independent-subscriber notification (sanctioned); **Sequential** because the subscriber is business-critical (publish-before-ready) — Background is constitutionally forbidden for it; subscriber-must-not-throw is documented as the event's failure policy. Fan-in payload rule respected on the extended `OnWorkflowVersionsReconciling` (get-only `ICollection`). |
+| §2.6.1 / §2.6.6 events | ✅ | New event = independent-subscriber notification (sanctioned); **Sequential** because the subscriber is business-critical (publish-before-ready) — Background is constitutionally forbidden for it; subscriber-must-not-throw is documented as the event's failure policy. Fan-in payload rule respected on the extended `WorkflowVersionsReconciling` (get-only `ICollection`). |
 | §2.11 DependsOn | ✅ | No new feature ids; existing `DependsOn` chains unchanged. `PublishOnReconcile` without `WorkflowsPublishing` in the shell = no subscriber = import-only (documented in contracts/shells-configuration.md). |
 | §2.21.1 / §2.23.4 golden rule | ✅ | All existing Json/reconciliation/publishing tests pass with unmodified assertions; additive changes only (count-validation preserves every existing accept/reject case). |
 | §2.22 / §2.22.1 / §2.22.2 docs | ✅ | Same-unit updates: Reconciliation `EXTENSION_POINTS.md` (new event + `RequestsPublication` + claims), Publishing `README.md` Cross-domain contributions section, new `Json/README.md`; no new catalog file ⇒ root index unchanged; `CatalogParityTests` enforces the event entry. |
@@ -45,7 +45,7 @@ Complete the file-based (GitOps) workflow deployment story: package `JsonWorkflo
 | §2.23.5 exception boundaries | ✅ | Folder-scan `IOException`/`UnauthorizedAccessException`/`JsonException` wrap into the existing domain exception `InvalidWorkflowCatalogJsonException` (same boundary the reader already uses). |
 | §2.24 sanctioned patterns | ✅ | Event subscriber (pattern 3) + delivery strategy (4) + existing Source contract (3b). **Note 1**: no new startup task is introduced (the non-catalogued-pattern concern from research is avoided by design — publish runs inside the existing sanctioned reconcile task). |
 | §4.2 versioning | ✅ | All MINOR: additive options defaulting to current behaviour, additive default interface member, additive event, additive registration. No wire identifiers change (**Note 2**: `SourceKind` `"Json"`/`"git"` casing inconsistency is pre-existing and rename-exempt; left alone). |
-| §E6 naming | ✅ | `OnWorkflowVersionsReconciled` (event pair grammar), `WorkflowVersionSourceClaim` (concrete noun), `PublishReconciledWorkflowVersions` (verb-named handler per Publishing's own style), `FolderPath`/`PublishOnReconcile` (option nouns); ≤4 components each. |
+| §E6 naming | ✅ | `WorkflowVersionsReconciled` (event pair grammar), `WorkflowVersionSourceClaim` (concrete noun), `PublishReconciledWorkflowVersions` (verb-named handler per Publishing's own style), `FolderPath`/`PublishOnReconcile` (option nouns); ≤4 components each. |
 | §2.16.1 project size | ✅ | No new projects — subscriber lives in the existing Publishing engine; event/claim in existing `Reconciliation.Core`. |
 
 ## Project Structure
@@ -62,7 +62,7 @@ specs/147-file-workflow-deployment/
 ├── contracts/
 │   ├── shells-configuration.md
 │   ├── definition-file-format.md
-│   └── on-workflow-versions-reconciled.md
+│   └── workflow-versions-reconciled.md
 ├── checklists/requirements.md
 └── tasks.md             # Phase 2 — /speckit-tasks output (not created by plan)
 ```
@@ -72,8 +72,8 @@ specs/147-file-workflow-deployment/
 ```text
 src/Elsa/Workflows/Design/Reconciliation/
 ├── Core/
-│   ├── OnWorkflowVersionsReconciling.cs        # + Claims collection (additive)
-│   ├── OnWorkflowVersionsReconciled.cs         # NEW event
+│   ├── WorkflowVersionsReconciling.cs        # + Claims collection (additive)
+│   ├── WorkflowVersionsReconciled.cs         # NEW event
 │   └── WorkflowVersionSourceClaim.cs           # NEW payload record
 ├── Contracts/IWorkflowReconciliationSource.cs  # + RequestsPublication default member
 ├── Handlers/WorkflowVersionsReconcilingHandler.cs  # populate Claims per source entry
@@ -87,7 +87,7 @@ src/Elsa/Workflows/Design/Reconciliation/
 
 src/Elsa/Workflows/Publishing/
 ├── Elsa.Workflows.Publishing.csproj            # + ProjectReference Reconciliation.Core
-├── WorkflowsPublishingFeature.cs               # + AddEventHandler<OnWorkflowVersionsReconciled, …>
+├── WorkflowsPublishingFeature.cs               # + AddEventHandler<WorkflowVersionsReconciled, …>
 ├── Handlers/PublishReconciledWorkflowVersions.cs   # NEW subscriber
 ├── README.md                                   # + Cross-domain contributions section
 └── EXTENSION_POINTS.md                         # + cross-domain seam note

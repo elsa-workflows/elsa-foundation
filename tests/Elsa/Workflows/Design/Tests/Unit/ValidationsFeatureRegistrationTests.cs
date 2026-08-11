@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// Framework §2.23.1 + Unit C SC-021. Activates <see cref="WorkflowDesignValidationsFeature"/>
 /// against a real <see cref="IServiceCollection"/>, builds the provider, and asserts every
 /// baseline validator (FR-033) resolves as an <see cref="IDraftValidator"/> and that the feature
-/// registers exactly one <c>IEventHandler&lt;OnDraftValidating&gt;</c> — the aggregating
+/// registers exactly one <c>IEventHandler&lt;DraftValidating&gt;</c> — the aggregating
 /// <see cref="ExecuteValidations"/> handler.
 /// </summary>
 public sealed class ValidationsFeatureRegistrationTests
@@ -49,13 +49,13 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     [Fact]
-    public void Feature_registers_exactly_one_OnDraftValidating_handler()
+    public void Feature_registers_exactly_one_DraftValidating_handler()
     {
         using var provider = BuildProvider(_ => { });
 
         var handler = Assert.Single(provider.GetServices<IEventHandler>());
         Assert.IsType<ExecuteValidations>(handler);
-        Assert.IsAssignableFrom<IEventHandler<OnDraftValidating>>(handler);
+        Assert.IsAssignableFrom<IEventHandler<DraftValidating>>(handler);
     }
 
     [Fact]

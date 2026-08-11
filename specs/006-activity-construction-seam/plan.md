@@ -39,7 +39,7 @@ Scope (per clarifications): construction seam + its own tests only. `WorkflowDef
 | G15 | **Runtime ⊀ Design** (Elsa §E2.2, applied to Activities) | **PASS — central** | Whole unit restores this; enforced by a reference/structural test. The deleted leak (`Runtime.Core → Design.Core` via the descriptor) is removed. |
 | G18 | Command/query split at persistence contract | **PASS** | Save/load handlers stay split; no combined command-query method added. |
 | G20 | Refactor: existing tests preserved (subject/objective) | **PASS w/ recorded deletions** | Tests of deleted types (design descriptor registry, runtime resolver registry/resolver, `OnImplementationDescriptorsInitializing`) have their *subject removed*; deletions recorded here (architect approval: Joey, this session) per §2.21.1. Reconciliation/persistence behaviour tests are migrated, not deleted. |
-| G21 | **Contribution via domain event; Registry + StartUp Task for sync access; no `IEnumerable<TProvider>` for new code** | **PASS — by design** | `IActivityConstructorRegistry` is populated via `OnActivityConstructorsInitializing` (`IEvent`, Sequential) + a single aggregating `RegisterActivityConstructors` handler + a StartUp Task; sync-read afterward. Mirrors §E3.3. Resurrects the pattern the experiment deleted, but **Design-free**, in `Runtime.Core`/`Runtime`. |
+| G21 | **Contribution via domain event; Registry + StartUp Task for sync access; no `IEnumerable<TProvider>` for new code** | **PASS — by design** | `IActivityConstructorRegistry` is populated via `ActivityConstructorsInitializing` (`IEvent`, Sequential) + a single aggregating `RegisterActivityConstructors` handler + a StartUp Task; sync-read afterward. Mirrors §E3.3. Resurrects the pattern the experiment deleted, but **Design-free**, in `Runtime.Core`/`Runtime`. |
 | G22 | No tight logic coupling between concretes | **PASS** | Constructors interact only through the registry contract + the descriptor data shape. |
 | G23 | Generic dispatch only for fire-and-forget | **PASS** | The startup event is fire-and-forget population; the *expectation* of a specific construction outcome flows through the typed `IActivityConstructor` contract + registry, not a bus. |
 | G24 | Design-time vs runtime contract split | **PASS** | Design binds to **opaque** `(DescriptorType, JsonElement)`; runtime binds to the typed `IActivityConstructor<TDescriptor>`. The only shared shape is the serialized payload (a primitive), not a shared contract. |
@@ -81,7 +81,7 @@ src/
 │   ├── Contracts/IActivityFactory.cs        # RESHAPE → Create(descriptorType, JsonElement, inputs, outputs, ct)
 │   ├── Contracts/IActivityConstructor.cs    # NEW (non-generic + IActivityConstructor<TDescriptor>)
 │   ├── Contracts/IActivityConstructorRegistry.cs  # NEW
-│   ├── Events/OnActivityConstructorsInitializing.cs  # NEW (IEvent; Registry+StartUp pattern)
+│   ├── Events/ActivityConstructorsInitializing.cs  # NEW (IEvent; Registry+StartUp pattern)
 │   ├── Models/InputArgument.cs, OutputArgument.cs    # (existing)
 │   └── Attributes/{Required,Version}Attribute.cs     # (existing, already moved)
 ├── Elsa.Activities.Runtime/                 # construction-seam IMPL (Design-free)
@@ -146,7 +146,7 @@ tests/
 
 ## Phased implementation overview (detail → `/speckit.tasks`)
 
-- **Phase A — Runtime seam (Design-free core).** `IActivityConstructor(+<T>)`, `IActivityConstructorRegistry`, `OnActivityConstructorsInitializing`; reshape `IActivityFactory`; impl `ActivityFactory` (dispatch), `ActivityConstructorRegistry` (dup-guard throw), `RegisterActivityConstructors`, startup task; wire `ActivitiesRuntimeFeature`. Tests + §E2.2 reference test.
+- **Phase A — Runtime seam (Design-free core).** `IActivityConstructor(+<T>)`, `IActivityConstructorRegistry`, `ActivityConstructorsInitializing`; reshape `IActivityFactory`; impl `ActivityFactory` (dispatch), `ActivityConstructorRegistry` (dup-guard throw), `RegisterActivityConstructors`, startup task; wire `ActivitiesRuntimeFeature`. Tests + §E2.2 reference test.
 - **Phase B — CLR kind.** `Elsa.Activities.Primitives` (Design-free) with `ClrActivityConstructor<TypeInformation>`, the feature-internal `ActivityArgumentBinder` (fix the 3 binder bugs), and `WriteLine` ported from elsa-core (adapted to `InputArgument<string>` + `IActivity`); registration tests.
 - **Phase C — Workflow kind (split).** `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; `Elsa.Activities.Composition.Runtime` (Design-free) with `WorkflowActivityConstructor` (produces a configured `WorkflowDefinitionActivity`) + construct-only `WorkflowDefinitionActivity` (itself an ordinary CLR activity); `Elsa.Activities.Composition.Design` with `WorkflowActivityReconciliationSource`; tests.
 - **Phase D — Design purge + persistence reshape.** Delete the descriptor interface/registry/sources/event + `ClrImplementationDescriptor`/`WorkflowImplementationDescriptor` from `Design.Core`; reshape `ActivityDefinitionVersion` + read contract to `(DescriptorType, payload)`; rewrite save/load handlers (no type resolution); EF config column rename + immutability; regenerate the SQLite initial migration.

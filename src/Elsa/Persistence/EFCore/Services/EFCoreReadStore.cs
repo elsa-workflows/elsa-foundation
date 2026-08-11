@@ -89,6 +89,6 @@ public class EFCoreReadStore<TDbContext, TEntity>(IDbContextFactory<TDbContext> 
             return;
 
         foreach (var entity in entities)
-            await eventPublisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken);
+            await eventPublisher.Publish(new EntityLoading(dbContext, entity), cancellationToken);
     }
 }

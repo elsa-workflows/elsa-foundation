@@ -20,8 +20,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <para>
 /// <b>Provenance.</b> The source Version id is persisted as the immutable, optional
 /// <c>WorkflowDefinitionDraft.SourceVersionId</c> column and surfaced on the single origination
-/// event <c>OnDraftCreated.SourceVersionId</c>. There is no separate
-/// <c>OnDraftClonedFromVersion</c> event: a fresh Draft and a cloned Draft share one origination
+/// event <c>DraftCreated.SourceVersionId</c>. There is no separate
+/// <c>DraftClonedFromVersion</c> event: a fresh Draft and a cloned Draft share one origination
 /// event, distinguished by whether <c>SourceVersionId</c> is set.
 /// </para>
 /// <para>

@@ -7,7 +7,7 @@
 
 ## Summary
 
-Unit C pins the scope of `WorkflowDefinitionState` as the canonical authored document of a workflow definition, ratifies the architectural triplet (`WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable`), and lands the supporting workflow-design substrate: layout sibling entities (FR-006..FR-008), NodeId rename + `ActivityVersionId` collapse (FR-009..FR-011a), legacy `WorkflowMetadata` deletion (FR-015..FR-015a), Model X reconciliation policy (FR-016..FR-016c), Draft event-sourcing architectural slot with 16 granular mutation events + 2 lifecycle events + 16 CQS commands + 1 coarse `OnDraftValidating` event (FR-017..FR-020), validation sibling + delete-and-re-add lifecycle + "no Version with errors" promotion gate (FR-021..FR-024a), per-Draft distributed lock with mutation/promotion serialisation (FR-027..FR-027c), Clone-from-Version + Discard-Draft commands (FR-028..FR-029), DOMAIN_EVENTS catalog + reflection-based parity test (FR-030..FR-031a), and the Validations sub-domain with five baseline validators (FR-032..FR-036).
+Unit C pins the scope of `WorkflowDefinitionState` as the canonical authored document of a workflow definition, ratifies the architectural triplet (`WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable`), and lands the supporting workflow-design substrate: layout sibling entities (FR-006..FR-008), NodeId rename + `ActivityVersionId` collapse (FR-009..FR-011a), legacy `WorkflowMetadata` deletion (FR-015..FR-015a), Model X reconciliation policy (FR-016..FR-016c), Draft event-sourcing architectural slot with 16 granular mutation events + 2 lifecycle events + 16 CQS commands + 1 coarse `DraftValidating` event (FR-017..FR-020), validation sibling + delete-and-re-add lifecycle + "no Version with errors" promotion gate (FR-021..FR-024a), per-Draft distributed lock with mutation/promotion serialisation (FR-027..FR-027c), Clone-from-Version + Discard-Draft commands (FR-028..FR-029), DOMAIN_EVENTS catalog + reflection-based parity test (FR-030..FR-031a), and the Validations sub-domain with five baseline validators (FR-032..FR-036).
 
 Technical approach is conservative — the spec leans on existing constitutional rules (framework §2.6.1, §2.10, §2.20, §E2.2) and only introduces new modules where they are genuinely needed. Three new packages ship: `Elsa.Workflows.Design.Validations.Core`, `Elsa.Workflows.Design.Validations`, and (via the relocated entities in FR-006..FR-008/FR-021) the existing `Elsa.Workflows.Design.Persistence.Core` + `Elsa.Workflows.Design.Persistence.EFCore` gain new entities and EF configurations. The new `Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` and `Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` are documentation deliverables policed by an automated parity test. Five provisional constitutional sub-rules (Model X reconciliation policy, Draft event-sourcing architectural slot, "no Version with errors" gate, framework §2.6.1 method-pattern + subscriber-must-never-break-publisher, framework §2.22.1 domain-events catalog) ride through the implementation as gate-flagged items pending 2026-06-01 architecture-review ratification; the implementation provisional-adopts them so the codebase stays in sync.
 
@@ -35,14 +35,14 @@ This plan is governed by a **two-layer constitution**:
 |---|---|---|---|
 | G1 | Three-layer separation applied per feature; no global "Core" library. | **PASS** | Validations follows it (Validations.Core + Validations baseline feature + EF Core mappings co-located in existing `*.Design.Persistence.EFCore`). Layout entities follow it (read contract `IWorkflowDefinitionLayout` in `Design.Core`; entities in `Design.Persistence.Core`; mappings in `Design.Persistence.EFCore`). |
 | G2 | Naming uses domain language only. | **PASS** | No `Features.*`, `Modules.*`, `Implementations.*`, `Providers.*`, `Adapters.*`, `.Contracts`, `.Abstractions` segments introduced. `Validations.Core` / `Validations` is sub-domain naming per §2.2. |
-| G3 | No heavy dependency in any `.Core` library. | **PASS** | `Validations.Core` declares only Workflows.Design.Core cross-`.Core` reference (for `IWorkflowDefinitionDraft` in `OnDraftValidating`'s payload); no heavy NuGets. |
-| G4 | No peer references between Layer-3 impls across unrelated sub-domains. | **PASS** | `Validations` (Layer-3) subscribes to events from `Validations.Core`; does not reference any other Layer-3 implementation. Activity-feature-co-located validators (FR-034) subscribe to `OnDraftValidating` via the same Core-only seam. |
+| G3 | No heavy dependency in any `.Core` library. | **PASS** | `Validations.Core` declares only Workflows.Design.Core cross-`.Core` reference (for `IWorkflowDefinitionDraft` in `DraftValidating`'s payload); no heavy NuGets. |
+| G4 | No peer references between Layer-3 impls across unrelated sub-domains. | **PASS** | `Validations` (Layer-3) subscribes to events from `Validations.Core`; does not reference any other Layer-3 implementation. Activity-feature-co-located validators (FR-034) subscribe to `DraftValidating` via the same Core-only seam. |
 | G5 | Any new contract declares its kind: replacement or contribution. | **PASS** | All new commands are CQS contracts (replacement-style: one handler per command per framework §2.10); all new events are contribution-style domain events (§2.6.1). No ambiguous-kind contracts introduced. |
 | G6 | §2.7.1 decision rule applied. | **PASS** | New validators = independent additive contribution → domain-event handler (§2.6.1 / §2.7.1 row 3). No new inheritance chains or adapters introduced in Unit C. |
 | G7 | No `DependsOn`-style static feature declarations. | **PASS** | All new feature classes use DI-only registration; fail-fast at construction time per framework §2.11. |
 | G8 | Persistence generic constraint is `where TDbContext : DbContext`. | **PASS** | New EF configurations + entity handlers follow the existing pattern; no Elsa-specific base constraint introduced. `ElsaDbContextBase` opt-in regime preserved per §E2.5. |
 | G9 | Helper libraries are domain-owned, never referenced from `.Core`, never activatable. | **N/A** | Unit C introduces no helper libraries (§2.4). |
-| G10 | Refactor-cost test — preserve NuGet identity wherever possible. | **PASS** | No existing NuGet renames. New packages are net-new (`Elsa.Workflows.Design.Validations.Core` + `Elsa.Workflows.Design.Validations`). `ValidationError` / `OnDraftValidating` / `IWorkflowDefinitionDraftValidation` are net-new types in net-new packages — no relocation of an existing public surface. |
+| G10 | Refactor-cost test — preserve NuGet identity wherever possible. | **PASS** | No existing NuGet renames. New packages are net-new (`Elsa.Workflows.Design.Validations.Core` + `Elsa.Workflows.Design.Validations`). `ValidationError` / `DraftValidating` / `IWorkflowDefinitionDraftValidation` are net-new types in net-new packages — no relocation of an existing public surface. |
 | G11 | Duplication beats dependency; 3-repetition rule for shared utilities only. | **PASS** | Baseline validators ship as small independent handlers; no shared utility helpers extracted prematurely. |
 | G12 | Provider module decomposition: no empty umbrella; replace meta NuGet packages with specific sub-package. | **PASS** | `Elsa.Workflows.Design.Validations` ships a single baseline feature; no empty `Validations` umbrella under it. |
 | G13 | Feature `name` stable across refactors. | **PASS** | New feature class names are net-new; no in-place rename of existing feature names. |
@@ -53,10 +53,10 @@ This plan is governed by a **two-layer constitution**:
 | G18 | Persistence CQS at contract boundary. | **PASS** | All new persistence contracts are commands (`IAdd*`, `IRemove*`, `IUpdate*`, `ICreate*`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`) that mutate state; queries on the validation sibling go through `IWorkflowDefinitionDraftValidation` read contract — no combined command-query methods. |
 | G19 | No dual-integration smell. | **N/A** | Unit C introduces no dual-external-system modules. |
 | G20 | **Refactor work:** existing tests preserved across reorganization per framework §2.21.1. | **PASS** | The NodeId rename + `ActivityVersionId` collapse (FR-009..FR-011) are refactors; FR-012 explicitly invokes §2.21.1. The `IsRequired` addition (FR-036) defaults to `false` — backward-compatible. The `WorkflowMetadata` deletion (FR-015..FR-015a) explicitly walks the test surface. |
-| G21 | **Domain events are the contribution mechanism.** | **PASS** *(prov.)* | All 19 new domain events in Workflows.Design.Core + Validations.Core are `IDomainEvent`; validators subscribe via `IDomainEventHandler<OnDraftValidating>`. **Provisional:** framework §2.6.1 method-pattern (intent-revealing methods + `sealed class` + `IReadOnlyList<T>` read accessor) — provisionally adopted; ratification 2026-06-01 Item 4. |
+| G21 | **Domain events are the contribution mechanism.** | **PASS** *(prov.)* | All 19 new domain events in Workflows.Design.Core + Validations.Core are `IDomainEvent`; validators subscribe via `IDomainEventHandler<DraftValidating>`. **Provisional:** framework §2.6.1 method-pattern (intent-revealing methods + `sealed class` + `IReadOnlyList<T>` read accessor) — provisionally adopted; ratification 2026-06-01 Item 4. |
 | G22 | **No tight logic coupling between concrete implementations.** | **PASS** *(prov.)* | Validators are independent handlers; the §2.6.1 subscriber-MUST-NEVER-break-publisher rule (clarify s2 Q1) enforces this at the dispatcher level. **Provisional:** ratification 2026-06-01 Item 4b. |
 | G23 | Generic dispatch is not a coupling mechanism. | **PASS** | All event publication goes through `IDomainEventSender.Send`; no `IMediator` smuggling. The dispatcher's exception-shielding middleware reinforces this isolation. |
-| G24 | Design-time vs runtime contract split. | **PASS** | `OnDraftValidating` is a design-time event in `Validations.Core` — Workflows.Runtime never subscribes. The §E2.2 hard rule is preserved at the package boundary. |
+| G24 | Design-time vs runtime contract split. | **PASS** | `DraftValidating` is a design-time event in `Validations.Core` — Workflows.Runtime never subscribes. The §E2.2 hard rule is preserved at the package boundary. |
 | G25 | Provider-implementation dependencies. | **PASS** | New feature modules depend on Core/Validations.Core/Persistence.Core; never directly on `Persistence.EFCore` or `Persistence.EFCore.Sqlite`. EF mappings live in the provider-specific layer per §2.20 Rule 3. |
 | G26 | Feature documentation. | **PASS** | New `DOMAIN_EVENTS.md` catalogs (FR-030) document every event + handler audiences for both `Workflows.Design.Core` and `Workflows.Design.Validations.Core`. Feature-class documentation (handlers registered, tasks registered per framework §2.22) ships alongside the Validations feature. **Provisional:** §2.22.1 catalog sub-rule — ratification 2026-06-01 Item 5. |
 | G27 | **Unit test discipline §2.23.** | **PASS with one Complexity Tracking entry** | Validations feature satisfies §2.23.1 (registration test) + §2.23.2 (per-validator branch coverage). The three new `Elsa.Mediator` middleware classes (`DomainEventHandlerIteratorMiddleware`, `DomainEventExceptionShieldingMiddleware`, refactored `DomainEventHandlerInvokerMiddleware`) — already landed in this branch — require branch-covered tests per §2.23.2; deferred to a follow-on item per Complexity Tracking below (no existing `tests/Elsa.Mediator.Tests` project; creating one is scope outside Unit C). |
@@ -79,7 +79,7 @@ specs/002-workflow-state-scope/
 ├── quickstart.md                            # Phase 1 output — developer onboarding for Unit C deliverables
 ├── contracts/                               # Phase 1 output — interface contracts (commands + events + read surfaces)
 │   ├── commands.md                          # 16 FR-019 mutation commands + ICreateDraftCommand + ICloneDraftFromVersionCommand + IDiscardDraftCommand
-│   ├── events.md                            # 16 FR-018 mutation events + 2 FR-018a lifecycle events + OnDraftValidating
+│   ├── events.md                            # 16 FR-018 mutation events + 2 FR-018a lifecycle events + DraftValidating
 │   └── read-surfaces.md                     # IWorkflowDefinitionLayout + IWorkflowDefinitionDraftValidation + IsRequired contract
 └── tasks.md                                 # Phase 2 output — produced by /speckit.tasks (NOT created here)
 ```
@@ -92,24 +92,24 @@ src/
 │   ├── Contracts/
 │   │   └── IWorkflowDefinitionLayout.cs                         # NEW (FR-007) — Tier-1 read contract over both layout entities
 │   ├── Events/                                                  # NEW directory
-│   │   ├── OnDraftCreated.cs                                    # NEW (FR-018 lifecycle origination)
-│   │   ├── OnActivityAddedToDraft.cs                            # NEW (FR-018)
-│   │   ├── OnActivityRemovedFromDraft.cs                        # NEW (FR-018)
-│   │   ├── OnActivityPropertyChangedInDraft.cs                  # NEW (FR-018)
-│   │   ├── OnActivityMovedInDraft.cs                            # NEW (FR-018 layout event)
-│   │   ├── OnConnectionAddedToDraft.cs                          # NEW (FR-018)
-│   │   ├── OnConnectionRemovedFromDraft.cs                      # NEW (FR-018)
-│   │   ├── OnVariableDeclaredInDraft.cs                         # NEW (FR-018)
-│   │   ├── OnVariableUpdatedInDraft.cs                          # NEW (FR-018)
-│   │   ├── OnVariableRemovedFromDraft.cs                        # NEW (FR-018)
-│   │   ├── OnWorkflowInputAddedToDraft.cs                       # NEW (FR-018)
-│   │   ├── OnWorkflowInputUpdatedInDraft.cs                     # NEW (FR-018)
-│   │   ├── OnWorkflowInputRemovedFromDraft.cs                   # NEW (FR-018)
-│   │   ├── OnWorkflowOutputAddedToDraft.cs                      # NEW (FR-018)
-│   │   ├── OnWorkflowOutputUpdatedInDraft.cs                    # NEW (FR-018)
-│   │   ├── OnWorkflowOutputRemovedFromDraft.cs                  # NEW (FR-018)
-│   │   ├── OnDraftClonedFromVersion.cs                          # NEW (FR-018a lifecycle)
-│   │   └── OnDraftDiscarded.cs                                  # NEW (FR-018a lifecycle)
+│   │   ├── DraftCreated.cs                                    # NEW (FR-018 lifecycle origination)
+│   │   ├── ActivityAddedToDraft.cs                            # NEW (FR-018)
+│   │   ├── ActivityRemovedFromDraft.cs                        # NEW (FR-018)
+│   │   ├── ActivityPropertyChangedInDraft.cs                  # NEW (FR-018)
+│   │   ├── ActivityMovedInDraft.cs                            # NEW (FR-018 layout event)
+│   │   ├── ConnectionAddedToDraft.cs                          # NEW (FR-018)
+│   │   ├── ConnectionRemovedFromDraft.cs                      # NEW (FR-018)
+│   │   ├── VariableDeclaredInDraft.cs                         # NEW (FR-018)
+│   │   ├── VariableUpdatedInDraft.cs                          # NEW (FR-018)
+│   │   ├── VariableRemovedFromDraft.cs                        # NEW (FR-018)
+│   │   ├── WorkflowInputAddedToDraft.cs                       # NEW (FR-018)
+│   │   ├── WorkflowInputUpdatedInDraft.cs                     # NEW (FR-018)
+│   │   ├── WorkflowInputRemovedFromDraft.cs                   # NEW (FR-018)
+│   │   ├── WorkflowOutputAddedToDraft.cs                      # NEW (FR-018)
+│   │   ├── WorkflowOutputUpdatedInDraft.cs                    # NEW (FR-018)
+│   │   ├── WorkflowOutputRemovedFromDraft.cs                  # NEW (FR-018)
+│   │   ├── DraftClonedFromVersion.cs                          # NEW (FR-018a lifecycle)
+│   │   └── DraftDiscarded.cs                                  # NEW (FR-018a lifecycle)
 │   ├── Models/
 │   │   ├── WorkflowDefinitionState.cs                           # EXISTING — XML doc header added per FR-003
 │   │   ├── ActivityNode.cs                                      # EXISTING — ReferenceKey → NodeId rename (FR-009); (activityDefinitionId, version) → ActivityVersionId (FR-011)
@@ -122,7 +122,7 @@ src/
 │   ├── Contracts/
 │   │   └── IWorkflowDefinitionDraftValidation.cs                # NEW (FR-021 read surface) — relocated from Workflows.Design.Core
 │   ├── Events/
-│   │   └── OnDraftValidating.cs                                 # NEW (FR-025) — relocated from Workflows.Design.Core
+│   │   └── DraftValidating.cs                                 # NEW (FR-025) — relocated from Workflows.Design.Core
 │   ├── Models/
 │   │   └── ValidationError.cs                                   # NEW (FR-022) — relocated from Workflows.Design.Core
 │   └── DOMAIN_EVENTS.md                                         # NEW (FR-030) — catalog for Validations.Core
@@ -221,7 +221,7 @@ tests/
 |---|---|---|
 | **G27 — Mediator middleware tests deferred to follow-on unit.** | The three new middleware classes (`DomainEventHandlerIteratorMiddleware`, `DomainEventExceptionShieldingMiddleware`, refactored `DomainEventHandlerInvokerMiddleware`) require §2.23.2 branch-covered tests. No `tests/Elsa.Mediator.Tests` project exists in the codebase today. The Mediator code change is a framework-constitution cascade applied in this branch; the test project + branch coverage is a sibling deliverable that logically belongs in a *Mediator hygiene* follow-on, not in Unit C. Build is 0w/0e and the 31 existing tests confirm no contract regression at the Mediator boundary. | Adding `tests/Elsa.Mediator.Tests` to Unit C would expand scope by an entire test project, all the registration scaffolding, and ~10–15 unit tests across the three middleware classes — disproportionate against the small middleware delta. Logged in the Unit C follow-up as a follow-on item; not blocking Unit C ratification per Joey 2026-05-28 (Phase-6 cascade documentation). |
 | **5 provisional constitutional sub-rules adopted in code before ratification.** | Working-loop §5: code may be temporarily ahead of the formally-ratified constitution. The five sub-rules (Model X, Draft event-sourcing slot, "no Version with errors" gate, framework §2.6.1 method-pattern + subscriber-must-never-break-publisher, framework §2.22.1 catalog) are agenda items 1, 2, 3, 4, 4b, 5, 6 for the 2026-06-01 architecture review. Implementing under provisional adoption ensures the codebase stays in sync as ratification lands; if any sub-rule is revised on Monday, the cascade is small (refactor inside the same branch). | Waiting for formal ratification before implementing would block all of Unit C for 4 days and reintroduce code/constitution drift the working loop is designed to avoid. The agenda explicitly names the provisional adoptions; reviewers know what's pending. |
-| **`OnDraftValidating` exception semantics rely on the new exception-shielding middleware.** | FR-027c requires the mutation pipeline to be robust against handler exceptions. The default `Elsa.Mediator` pipeline (Phase-6 cascade) provides exception shielding by default. If an operator composes a custom pipeline that swaps the shielding middleware for fail-fast semantics, FR-027c's contract is broken at the operator's deliberate choice — that is the "default + escape hatch" framing of framework §2.6.1's new sub-rule. The plan accepts this as a feature, not a violation. | Mandating shielding at the framework level (no escape hatch) would over-constrain operators with legitimate fail-fast or aggregate-throw use cases. The default protects the common path; the escape hatch is named and surfaced. |
+| **`DraftValidating` exception semantics rely on the new exception-shielding middleware.** | FR-027c requires the mutation pipeline to be robust against handler exceptions. The default `Elsa.Mediator` pipeline (Phase-6 cascade) provides exception shielding by default. If an operator composes a custom pipeline that swaps the shielding middleware for fail-fast semantics, FR-027c's contract is broken at the operator's deliberate choice — that is the "default + escape hatch" framing of framework §2.6.1's new sub-rule. The plan accepts this as a feature, not a violation. | Mandating shielding at the framework level (no escape hatch) would over-constrain operators with legitimate fail-fast or aggregate-throw use cases. The default protects the common path; the escape hatch is named and surfaced. |
 
 ---
 

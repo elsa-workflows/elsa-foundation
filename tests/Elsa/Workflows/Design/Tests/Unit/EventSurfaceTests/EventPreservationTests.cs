@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 /// All 18 core mutation event types still exist in
 /// <c>Elsa.Workflows.Design.Core/Events</c>, each is an <see cref="IEvent"/>, and none was
 /// deleted alongside its former command. The 2 lifecycle events
-/// (<see cref="OnDraftCreated"/>, <see cref="OnDraftDiscarded"/>) are NOT among the events
+/// (<see cref="DraftCreated"/>, <see cref="DraftDiscarded"/>) are NOT among the events
 /// <c>IUpdateDraftCommand</c> emits — they remain bound to their lifecycle commands (FR-003).
 /// </summary>
 public sealed class EventPreservationTests
@@ -23,35 +23,35 @@ public sealed class EventPreservationTests
     private static readonly Type[] MutationEventTypes =
     [
         // Activities (graph)
-        typeof(OnActivityAddedToDraft),
-        typeof(OnActivityRemovedFromDraft),
-        typeof(OnActivityMovedInDraft),
+        typeof(ActivityAddedToDraft),
+        typeof(ActivityRemovedFromDraft),
+        typeof(ActivityMovedInDraft),
         // Per-activity inputs (full CRUD)
-        typeof(OnActivityInputAddedToDraft),
-        typeof(OnActivityInputUpdatedInDraft),
-        typeof(OnActivityInputRemovedFromDraft),
+        typeof(ActivityInputAddedToDraft),
+        typeof(ActivityInputUpdatedInDraft),
+        typeof(ActivityInputRemovedFromDraft),
         // Per-activity outputs (full CRUD)
-        typeof(OnActivityOutputAddedToDraft),
-        typeof(OnActivityOutputUpdatedInDraft),
-        typeof(OnActivityOutputRemovedFromDraft),
+        typeof(ActivityOutputAddedToDraft),
+        typeof(ActivityOutputUpdatedInDraft),
+        typeof(ActivityOutputRemovedFromDraft),
         // Variables (full CRUD)
-        typeof(OnVariableDeclaredInDraft),
-        typeof(OnVariableUpdatedInDraft),
-        typeof(OnVariableRemovedFromDraft),
+        typeof(VariableDeclaredInDraft),
+        typeof(VariableUpdatedInDraft),
+        typeof(VariableRemovedFromDraft),
         // Workflow inputs (full CRUD)
-        typeof(OnWorkflowInputAddedToDraft),
-        typeof(OnWorkflowInputUpdatedInDraft),
-        typeof(OnWorkflowInputRemovedFromDraft),
+        typeof(WorkflowInputAddedToDraft),
+        typeof(WorkflowInputUpdatedInDraft),
+        typeof(WorkflowInputRemovedFromDraft),
         // Workflow outputs (full CRUD)
-        typeof(OnWorkflowOutputAddedToDraft),
-        typeof(OnWorkflowOutputUpdatedInDraft),
-        typeof(OnWorkflowOutputRemovedFromDraft),
+        typeof(WorkflowOutputAddedToDraft),
+        typeof(WorkflowOutputUpdatedInDraft),
+        typeof(WorkflowOutputRemovedFromDraft),
     ];
 
     private static readonly Type[] LifecycleEventTypes =
     [
-        typeof(OnDraftCreated),
-        typeof(OnDraftDiscarded),
+        typeof(DraftCreated),
+        typeof(DraftDiscarded),
     ];
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class EventPreservationTests
     [Fact]
     public void No_mutation_event_type_was_deleted_from_the_Core_events_assembly()
     {
-        var declared = typeof(OnDraftCreated).Assembly
+        var declared = typeof(DraftCreated).Assembly
             .GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
             .Where(t => typeof(IEvent).IsAssignableFrom(t))
@@ -82,7 +82,7 @@ public sealed class EventPreservationTests
         // SC-008 (partial): the lifecycle events stay bound to Create/Clone/Discard — an Update
         // that produces several diffs must publish none of them.
         using var host = await WorkflowsDesignTestHost.CreateAsync();
-        var draftId = await SeedEmptyDraft(host); // emits OnDraftCreated (a lifecycle event) — pre-skip.
+        var draftId = await SeedEmptyDraft(host); // emits DraftCreated (a lifecycle event) — pre-skip.
 
         var skip = host.EventPublisher.CapturedEvents.Count;
         await Update(host, draftId, State(

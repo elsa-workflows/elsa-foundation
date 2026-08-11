@@ -63,12 +63,12 @@ Deferred for the architect / fresh pass (judgment calls, recorded so they aren't
 
 - [x] T006 [P] Define `IActivityConstructor` (non-generic) + `IActivityConstructor<TDescriptor>` in `src/Elsa.Activities.Runtime.Core/Contracts/IActivityConstructor.cs` (contribution contract; `DescriptorType => typeof(TDescriptor).FullName!`; bridge owns `Deserialize<TDescriptor>`)
 - [x] T007 [P] Define `IActivityConstructorRegistry` in `src/Elsa.Activities.Runtime.Core/Contracts/IActivityConstructorRegistry.cs` (replacement contract; `Add`/`Resolve`)
-- [x] T008 [P] Define `OnActivityConstructorsInitializing : IEvent` in `src/Elsa.Activities.Runtime.Core/Events/OnActivityConstructorsInitializing.cs` (exposes the registry/collection)
+- [x] T008 [P] Define `ActivityConstructorsInitializing : IEvent` in `src/Elsa.Activities.Runtime.Core/Events/ActivityConstructorsInitializing.cs` (exposes the registry/collection)
 - [x] T009 [P] Define `DuplicateActivityConstructorException` + `UnknownDescriptorTypeException` in `src/Elsa.Activities.Runtime.Core/Exceptions/`
 - [x] T010 Reshape `IActivityFactory` in `src/Elsa.Activities.Runtime.Core/Contracts/IActivityFactory.cs` → `Create(string descriptorType, JsonElement payload, IDictionary<string,InputArgument>?, IDictionary<string,OutputArgument>?, CancellationToken)`; remove stale `IActivityImplementationResolver*` doc crefs
 - [x] T011 [US5] Implement `ActivityConstructorRegistry` (public sealed) in `src/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs` — keyed by `DescriptorType`; `Add` throws `DuplicateActivityConstructorException`; `Resolve` throws `UnknownDescriptorTypeException`
 - [x] T012 [US2] Implement `ActivityFactory` (public sealed) in `src/Elsa.Activities.Runtime/Services/ActivityFactory.cs` — pure dispatch via the registry (delete the old `Type`/reflection-binding body)
-- [x] T013 Implement single aggregating handler `RegisterActivityConstructors` in `src/Elsa.Activities.Runtime/Handlers/RegisterActivityConstructors.cs` (`IEventHandler<OnActivityConstructorsInitializing>`; adds every registered `IActivityConstructor`)
+- [x] T013 Implement single aggregating handler `RegisterActivityConstructors` in `src/Elsa.Activities.Runtime/Handlers/RegisterActivityConstructors.cs` (`IEventHandler<ActivityConstructorsInitializing>`; adds every registered `IActivityConstructor`)
 - [x] T014 Implement `ActivityConstructorsStartupTask` in `src/Elsa.Activities.Runtime/Tasks/ActivityConstructorsStartupTask.cs` (publishes the event Sequential, once)
 - [x] T015 Wire `src/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs` — register factory, registry (singleton), handler, startup task
 - [x] T016 [P] [US5] Unit test: `ActivityConstructorRegistry` throws on a 2nd constructor for one `DescriptorType`; resolves distinct types (`tests/Elsa.Activities.Runtime.Tests/`)

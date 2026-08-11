@@ -58,7 +58,7 @@ internal static class ValidatorTestHelpers
         StrategyOptions: null
     );
 
-    public static OnDraftValidating EventFor(WorkflowDefinitionState state) =>
+    public static DraftValidating EventFor(WorkflowDefinitionState state) =>
         new(new StubDraft(state));
 
     public static async Task<IReadOnlyList<ValidationError>> Validate(IDraftValidator validator, WorkflowDefinitionState state) =>

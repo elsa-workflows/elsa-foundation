@@ -53,7 +53,7 @@ public sealed class EventPublisherSmokeTests
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -69,11 +69,11 @@ public sealed class EventPublisherSmokeTests
     {
         await using var provider = BuildProvider(services =>
         {
-            services.AddEventHandler<OnDraftValidating, StubValidator>();
+            services.AddEventHandler<DraftValidating, StubValidator>();
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -87,11 +87,11 @@ public sealed class EventPublisherSmokeTests
         // The path the EF Core persistence base uses for its aggregators.
         await using var provider = BuildProvider(services =>
         {
-            services.TryAddEventHandler<OnDraftValidating, StubValidator>();
+            services.TryAddEventHandler<DraftValidating, StubValidator>();
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -107,12 +107,12 @@ public sealed class EventPublisherSmokeTests
         // rely on the middleware's defensive DistinctBy.
         await using var provider = BuildProvider(services =>
         {
-            services.AddEventHandler<OnDraftValidating, StubValidator>();
-            services.TryAddEventHandler<OnDraftValidating, StubValidator>();
+            services.AddEventHandler<DraftValidating, StubValidator>();
+            services.TryAddEventHandler<DraftValidating, StubValidator>();
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -131,7 +131,7 @@ public sealed class EventPublisherSmokeTests
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -144,7 +144,7 @@ public sealed class EventPublisherSmokeTests
         await using var provider = BuildProvider(_ => { });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -158,12 +158,12 @@ public sealed class EventPublisherSmokeTests
         // completeness rule, enforced by the invoker).
         await using var provider = BuildProvider(services =>
         {
-            services.AddEventHandler<OnDraftValidating, StubValidator>();
-            services.AddEventHandler<OnDraftValidating, SecondStubValidator>();
+            services.AddEventHandler<DraftValidating, StubValidator>();
+            services.AddEventHandler<DraftValidating, SecondStubValidator>();
         });
 
         var publisher = provider.GetRequiredService<IEventPublisher>();
-        var evt = new OnDraftValidating(EmptyDraft());
+        var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
@@ -202,18 +202,18 @@ public sealed class EventPublisherSmokeTests
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
     }
 
-    private sealed class StubValidator : IEventHandler<OnDraftValidating>
+    private sealed class StubValidator : IEventHandler<DraftValidating>
     {
-        public Task Handle(OnDraftValidating @event, CancellationToken cancellationToken)
+        public Task Handle(DraftValidating @event, CancellationToken cancellationToken)
         {
             @event.Errors.Add(new ValidationError("$workflow", "Stub/SmokeCheck", "smoke"));
             return Task.CompletedTask;
         }
     }
 
-    private sealed class SecondStubValidator : IEventHandler<OnDraftValidating>
+    private sealed class SecondStubValidator : IEventHandler<DraftValidating>
     {
-        public Task Handle(OnDraftValidating @event, CancellationToken cancellationToken)
+        public Task Handle(DraftValidating @event, CancellationToken cancellationToken)
         {
             @event.Errors.Add(new ValidationError("$workflow", "Stub/SecondCheck", "smoke"));
             return Task.CompletedTask;

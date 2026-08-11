@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Reconciliation.Services;
 
 /// <summary>
-/// Workflow-side reconciler. Each pass publishes <see cref="OnWorkflowVersionsReconciling"/>
+/// Workflow-side reconciler. Each pass publishes <see cref="WorkflowVersionsReconciling"/>
 /// to gather candidate versions from source modules, then upserts the catalog. Mirrors the
 /// Activities-side reconciler pattern. Full Model X hash enforcement waits on FR-016a's persisted
 /// provenance/hash fields (Unit D's allocation); until they land, duplicate detection falls back to
@@ -40,7 +40,7 @@ public sealed class WorkflowsVersionReconciler(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var @event = new OnWorkflowVersionsReconciling();
+        var @event = new WorkflowVersionsReconciling();
         await eventPublisher.Publish(@event, cancellationToken);
 
         var reconciled = new HashSet<(string DefinitionId, string SemVerSortKey)>();
@@ -63,14 +63,14 @@ public sealed class WorkflowsVersionReconciler(
         // Pass completed without error ⇒ notify independent subscribers (Sequential, so e.g. the
         // publish-on-reconcile step finishes inside this startup task, before readiness turns ready).
         // A failed pass throws out of the loop above and this is never published.
-        await eventPublisher.Publish(new OnWorkflowVersionsReconciled(reconciledClaims), cancellationToken);
+        await eventPublisher.Publish(new WorkflowVersionsReconciled(reconciledClaims), cancellationToken);
     }
 
     /// <summary>
     /// Reconciles one contributed version. Returns <c>true</c> when the version is authoritative for its
     /// definition — materialized here, or already present and verified as the current version — and
     /// <c>false</c> when it was skipped as outdated (FR-008a). The caller uses that to decide whether the
-    /// version's provenance claim reaches <see cref="OnWorkflowVersionsReconciled"/>.
+    /// version's provenance claim reaches <see cref="WorkflowVersionsReconciled"/>.
     /// </summary>
     private async Task<bool> ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {

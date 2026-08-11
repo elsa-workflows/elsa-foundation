@@ -31,7 +31,7 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
             node => node.Metadata.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal),
             StringComparer.Ordinal);
         var context = new ExecutableCompilationContext(request, source, rootActivity);
-        var collecting = new OnExecutableCompilationCollecting(context);
+        var collecting = new ExecutableCompilationCollecting(context);
         await eventPublisher.Publish(collecting, cancellationToken);
 
         foreach (var contribution in collecting.Contributions.OrderBy(item => item.SourceIdentity, StringComparer.Ordinal))

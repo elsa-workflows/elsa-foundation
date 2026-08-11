@@ -72,11 +72,11 @@ The event follows the contributor-interface + single-handler sub-pattern: featur
 `Elsa.Serialization.Core` defines:
 
 - `JsonPayloadConverterRegistry`.
-- `OnJsonPayloadConvertersInitializing`, an `IEvent` exposing a directly-accessible `ICollection<JsonConverter> Converters`.
+- `JsonPayloadConvertersInitializing`, an `IEvent` exposing a directly-accessible `ICollection<JsonConverter> Converters`.
 - `IJsonConverterSource`, the return-style contributor interface.
 
 ```csharp
-public sealed class OnJsonPayloadConvertersInitializing : IEvent
+public sealed class JsonPayloadConvertersInitializing : IEvent
 {
     public ICollection<JsonConverter> Converters { get; } = [];
 }
@@ -91,9 +91,9 @@ public interface IJsonConverterSource
 
 ```csharp
 public sealed class RegisterJsonConverters(IEnumerable<IJsonConverterSource> sources)
-    : IEventHandler<OnJsonPayloadConvertersInitializing>
+    : IEventHandler<JsonPayloadConvertersInitializing>
 {
-    public Task Handle(OnJsonPayloadConvertersInitializing e, CancellationToken ct)
+    public Task Handle(JsonPayloadConvertersInitializing e, CancellationToken ct)
     {
         foreach (var source in sources)
             foreach (var converter in source.GetConverters())
@@ -102,7 +102,7 @@ public sealed class RegisterJsonConverters(IEnumerable<IJsonConverterSource> sou
     }
 }
 
-var @event = new OnJsonPayloadConvertersInitializing();
+var @event = new JsonPayloadConvertersInitializing();
 await eventPublisher.Publish(@event);
 registry.RegisterAll(@event.Converters);
 ```
@@ -168,7 +168,7 @@ A unified provider would force every contributing feature to satisfy both consum
 
 | Phase | Event | Contributor interface (`.Core`) | Kind | Single handler | Where impls live |
 |---|---|---|---|---|---|
-| Design-time | `OnDeclarationsDocumentGenerating` | `IJavaScriptDeclarationContributor` | Contributor | `BuildDeclarationsDocument` | Design-time contributors |
+| Design-time | `DeclarationsDocumentGenerating` | `IJavaScriptDeclarationContributor` | Contributor | `BuildDeclarationsDocument` | Design-time contributors |
 | Runtime before | `OnEvaluatingScript` | `IScriptPreProcessor` | PreProcessor | `PreProcessScript` | Runtime contributors |
 | Runtime after | `OnScriptEvaluated` | `IScriptPostProcessor` | PostProcessor | `PostProcessScript` | Runtime post-processors |
 

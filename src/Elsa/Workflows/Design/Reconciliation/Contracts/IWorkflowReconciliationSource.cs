@@ -22,7 +22,7 @@ public interface IWorkflowReconciliationSource
     /// definition it contributes to be published after a successful pass (spec 147). The flag is
     /// snapshotted per contribution onto <c>WorkflowVersionSourceClaim.PublishRequested</c>; the
     /// publish step itself lives on the Publishing side of the seam and only acts when a publishing
-    /// feature subscribing to <c>OnWorkflowVersionsReconciled</c> is composed. Defaults to
+    /// feature subscribing to <c>WorkflowVersionsReconciled</c> is composed. Defaults to
     /// <see langword="false"/> — existing sources keep today's import-only behaviour.
     /// </summary>
     bool RequestsPublication => false;

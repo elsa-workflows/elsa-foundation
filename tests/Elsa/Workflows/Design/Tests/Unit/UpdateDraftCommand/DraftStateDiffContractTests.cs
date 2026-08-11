@@ -15,20 +15,20 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 public sealed class DraftStateDiffContractTests
 {
     [Fact]
-    public void Adding_an_activity_emits_OnActivityAddedToDraft()
+    public void Adding_an_activity_emits_ActivityAddedToDraft()
     {
         var diff = Evaluate(State(), State(activities: [Node("node-1")]));
 
-        var added = Assert.IsType<OnActivityAddedToDraft>(Assert.Single(diff));
+        var added = Assert.IsType<ActivityAddedToDraft>(Assert.Single(diff));
         Assert.Equal("node-1", added.NodeId);
     }
 
     [Fact]
-    public void Removing_an_activity_emits_OnActivityRemovedFromDraft()
+    public void Removing_an_activity_emits_ActivityRemovedFromDraft()
     {
         var diff = Evaluate(State(activities: [Node("node-1")]), State(activities: []));
 
-        var removed = Assert.IsType<OnActivityRemovedFromDraft>(Assert.Single(diff));
+        var removed = Assert.IsType<ActivityRemovedFromDraft>(Assert.Single(diff));
         Assert.Equal("node-1", removed.NodeId);
     }
 
@@ -48,7 +48,7 @@ public sealed class DraftStateDiffContractTests
         var diff = Evaluate(stored, desired);
 
         Assert.Collection(diff,
-            e => Assert.IsType<OnVariableUpdatedInDraft>(e),
-            e => Assert.IsType<OnActivityAddedToDraft>(e));
+            e => Assert.IsType<VariableUpdatedInDraft>(e),
+            e => Assert.IsType<ActivityAddedToDraft>(e));
     }
 }

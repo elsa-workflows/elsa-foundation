@@ -201,12 +201,12 @@ a real scoped `GroundworkDesignAtomicWrite` over two admitted workflow document 
 durable marker. Its fixture-local post-commit observation proves retry/replay control flow only;
 it is not a domain-event publication. Separately, the composed SQLite host invokes the public
 `ICreateDraftCommand`, starts Elsa's real background event dispatcher, captures
-`OnDraftCreated` in its ScopeA pipeline handler only after verifying the draft through
+`DraftCreated` in its ScopeA pipeline handler only after verifying the draft through
 `IWorkflowDefinitionDraftStore`. Its test-only fault seam injects a throw after one staged write,
 a rejected provider decision, cancellation, and a post-durable lost acknowledgement. Exact replay
 uses the same logical operation identity in two storage scopes, proving that isolation comes from
 the storage boundary rather than from scope
-material embedded in the key. `OnDraftCreated` intentionally does not carry a storage scope and
+material embedded in the key. `DraftCreated` intentionally does not carry a storage scope and
 the background dispatcher opens a fresh scope, so this lifecycle-event evidence is explicitly
 limited to the ScopeA fixture; it does not prove cross-scope event-context propagation. Evidence
 schema `3` advances the immutable
@@ -221,7 +221,7 @@ The integrated pre-review candidate passed:
 - workflow design Groundwork: `82/82`;
 - activity design Groundwork: `68/68`;
 - focused SQLite atomicity/lifecycle suite: `8/8` — `7/7` provider-transaction scenarios plus
-  `1/1` public `ICreateDraftCommand`/`OnDraftCreated` durability scenario;
+  `1/1` public `ICreateDraftCommand`/`DraftCreated` durability scenario;
 - SQLite 25-scenario Target-profile baseline: `1/1`, with all `25` logical scenarios green;
 - shared design conformance: `96` passed and `1` intentional profile-shape skip;
 - temporary EF oracle: `17` passed and `10` explicitly inapplicable skips;

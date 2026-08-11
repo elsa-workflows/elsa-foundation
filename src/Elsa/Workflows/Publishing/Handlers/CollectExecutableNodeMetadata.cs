@@ -9,13 +9,13 @@ namespace Elsa.Workflows.Publishing.Handlers;
 /// The Publishing feature registers <see cref="CollectExecutableCompilation"/> as its single active fan-in handler.
 /// </summary>
 public sealed class CollectExecutableNodeMetadata(IEnumerable<IExecutableNodeMetadataSource> sources)
-    : IEventHandler<OnExecutableNodeMetadataCollecting>
+    : IEventHandler<ExecutableNodeMetadataCollecting>
 {
     private readonly IExecutableNodeMetadataSource[] _sources = sources
         .OrderBy(source => source.GetType().FullName, StringComparer.Ordinal)
         .ToArray();
 
-    public async Task Handle(OnExecutableNodeMetadataCollecting domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(ExecutableNodeMetadataCollecting domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
 

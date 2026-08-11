@@ -35,7 +35,7 @@ public class JavaScriptRenderingFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services
-            .AddEventHandler<OnDeclarationsDocumentGenerating, BuildDeclarationsDocument>()
+            .AddEventHandler<DeclarationsDocumentGenerating, BuildDeclarationsDocument>()
             .AddScoped<IJavaScriptDeclarationContributor, CommonDeclarationContributor>()
 
             .AddScoped<IJavaScriptDeclarationsDocumentFactory, JavaScriptDeclarationsDocumentFactory>()

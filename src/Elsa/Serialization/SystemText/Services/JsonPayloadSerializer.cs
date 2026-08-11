@@ -11,7 +11,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// Serializes simple DTOs from and to JSON. Reads its <see cref="JsonConverter"/> set
 /// from <see cref="JsonPayloadConverterRegistry"/> — populated once at startup by
 /// <see cref="JsonPayloadConvertersInitializingStartupTask"/> dispatching the
-/// <see cref="OnJsonPayloadConvertersInitializing"/> domain event (framework §2.6.1
+/// <see cref="JsonPayloadConvertersInitializing"/> domain event (framework §2.6.1
 /// Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).
 /// </summary>
 public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer

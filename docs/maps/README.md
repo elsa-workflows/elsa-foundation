@@ -60,7 +60,13 @@ bash tools/maps/generate-feature-dependency-map.sh
 
 Generated maps are committed point-in-time snapshots. Use [manifest.json](manifest.json) before relying on them.
 
-- `input_fingerprint` records the tracked inputs the snapshot was generated from. It is a provenance stamp, not the freshness gate: it moves on every source edit, so most changes to it mean nothing changed in any map. The authoritative signal is `Elsa.Maps.Generator -- check`, which regenerates every map and byte-compares it with what is committed. `manifest.json` itself is excluded from that comparison.
+- `input_fingerprint` records the tracked inputs the snapshot was generated from. It is a provenance stamp, not the freshness gate: it moves on every source edit, so most changes to it mean nothing changed in any map. The authoritative signal is `Elsa.Maps.Generator -- check`, which regenerates every map and byte-compares it with what is committed. `manifest.json` itself is excluded from that comparison. CI runs that check on every pull request and on every push to `main` (`.github/workflows/maps.yml`), so main going stale is reported against main.
+- **Regenerating is fine; committing the regenerated `manifest.json` is not.** `-- all` rewrites the
+  manifest, but the check never compares it, so staging it fixes nothing. Worse, `git_head` and
+  `input_fingerprint` differ per commit, so two concurrent PRs that both regenerate maps conflict on
+  it (PR #1247 went `CONFLICTING` the moment #1248 merged for exactly this reason, while #1243 left
+  the manifest alone and stayed mergeable). Stage the changed map files by explicit path and leave
+  `manifest.json` out.
 - `git_head` is advisory because maps are often generated before the commit that records them.
 - `relevant_inputs_dirty` tells you whether `src/`, `tests/`, `specs/`, or `tools/maps/` had uncommitted changes when the maps were generated.
 - Map generation is opt-in: do not refresh automatically when inputs are dirty, changed, or freshness is uncertain. Report the stale snapshot and let the user explicitly invoke or authorize the narrowest relevant map layer.
