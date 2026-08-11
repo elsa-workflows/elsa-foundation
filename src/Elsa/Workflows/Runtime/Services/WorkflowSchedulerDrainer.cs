@@ -8,6 +8,35 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
+/// <summary>
+/// Claims scheduler work for one workflow execution and dispatches it, one item at a time. The loop has four exits:
+/// the queue runs dry, an item faults, an item pauses, or the per-drain work-item budget
+/// (<see cref="RuntimeSchedulerDrainRequest.MaxWorkItems"/>, unbounded by default) is exhausted. The terminal-status
+/// gate stops it as well, checked on entry and after each dispatched item.
+///
+/// <para>Only the first three are reported. This method names no stop reason of its own except
+/// <see cref="RuntimeSchedulerDrainStopReason.WorkflowTerminated"/>, so a budget-truncated drain is inferred as
+/// <see cref="RuntimeSchedulerDrainStopReason.Quiesced"/> and is indistinguishable downstream from a settled one,
+/// even though work is still queued.</para>
+///
+/// <para><b>This loop does not decide what a fault does to a workflow.</b> Every collaborator that decides an outcome
+/// sits behind an interface this class does not name, so reading it end to end will not tell you what happens when
+/// something throws. Two paths exist and they are not the same path:</para>
+/// <list type="bullet">
+/// <item><description>An <b>activity</b> fault never reaches <see cref="DispatchAsync"/>'s fault arm at all. The
+/// invoking work handler catches it and records a blocking incident, and the dispatch reports
+/// <see cref="RuntimeSchedulerWorkItemResultStatus.Completed"/>. Whether that incident terminates the workflow is
+/// decided later by the workflow's authored <c>IIncidentStrategy</c>, applied by
+/// <c>IncidentStrategyResolutionDrainObserver</c> at quiescence, with
+/// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
+/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
+/// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
+/// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal.</description></item>
+/// </list>
+///
+/// <para>Both paths, the defaults that decide them, and the source for each claim are mapped in
+/// <c>docs/runtime-fault-behavior.md</c>. Read that before concluding anything about fault behavior from this file.</para>
+/// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
@@ -158,6 +187,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         return state is not null && state.Status.IsTerminal();
     }
 
+    /// <summary>
+    /// Dispatches one claimed work item and classifies its outcome. The fault arm below handles a <b>handler</b>
+    /// fault only. An activity that throws is caught inside the invoking handler and recorded as a blocking incident,
+    /// so it arrives here as a completed dispatch; see <c>docs/runtime-fault-behavior.md</c> for the two paths and
+    /// which collaborator decides each one.
+    /// </summary>
     private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeSchedulerWorkClaim? claim,
@@ -287,6 +322,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
     // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
     // entirely in the fault path — it does not change claim/pause/dispatch ordering.
+    //
+    // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
+    // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
+    // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,

@@ -345,7 +345,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
         // Checkpoint slot: commit the staged commit, then fire the created notification.
         var middleware = new RuntimeActivityCheckpointMiddleware(
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             notifier);
         await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
 
@@ -370,7 +370,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         var middleware = new RuntimeActivityCheckpointMiddleware(
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                new CancelAfterCommitStore(_checkpointWriter, cancellation)),
+                new CancelAfterCommitStore(_checkpointWriter, cancellation), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             notifier);
 
         await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
@@ -390,7 +390,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         context.Workspace.StageCheckpointCommit(NewUnrelatedCommit());
 
         var middleware = new RuntimeActivityCheckpointMiddleware(
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new BookmarkLifecycleNotifier([observer]));
         await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
 
@@ -427,7 +427,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             _activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointCommitStore ?? _checkpointWriter),
+                checkpointCommitStore ?? _checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now),
             notifier);

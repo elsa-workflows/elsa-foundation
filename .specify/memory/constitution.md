@@ -13,7 +13,7 @@ Sync Impact Report (3.4.0 -> 3.5.0, 2026-08-07)
 - Modified: §E2.4, "the host" clarified to "the workbench host" following the Elsa.Server rename.
 - Modified: Pinned root, "Application instance = `Elsa.Server`" corrected to name `Elsa.Workbench`
   and note that the product host is not yet built.
-- Source: ADR 0063, agreed on issue #1144 by Joey Barten, Sipke Schoorstra and Frans van Ek.
+- Source: ADR 0067, agreed on issue #1144 by Joey Barten, Sipke Schoorstra and Frans van Ek.
 - Open: Line A membership is partial. Six candidate packages are deferred to the clean host
   specification (#1145).
 - Templates requiring review: plan-template.md, spec-template.md, tasks-template.md for any
@@ -416,7 +416,7 @@ The rule this expresses: **a dependency floor must state what a package actually
 
 **Line A stabilizes by policy after 4.0.** Breaking contract changes batch into planned majors. Without this the contract line churns and the two-line split degrades to uniform versioning.
 
-Rationale, rejected alternatives and the supporting measurements are recorded in [ADR 0063](../../docs/adr/0063-package-versioning-uses-two-lines-with-computed-patch.md).
+Rationale, rejected alternatives and the supporting measurements are recorded in [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md).
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 

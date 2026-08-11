@@ -238,7 +238,7 @@ public sealed class ActivityFaultIncidentRecorderTests
 
     private ActivityFaultIncidentRecordRequest NewRequest(Exception exception, ActivityExecutionState? state = null)
     {
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _store);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _store, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         return new ActivityFaultIncidentRecordRequest(
             CheckpointCommitter: committer,
             WorkItem: NewWorkItem(),

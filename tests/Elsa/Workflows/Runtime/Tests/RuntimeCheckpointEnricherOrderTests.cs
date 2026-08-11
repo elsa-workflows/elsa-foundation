@@ -15,14 +15,14 @@ public sealed class RuntimeCheckpointEnricherOrderTests
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             store,
-            ownershipContextAccessor: null,
-            tracer: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             enrichers:
             [
                 new RecordingEnricher("late-first", 100, calls),
                 new RecordingEnricher("base-first", 0, calls),
                 new RecordingEnricher("base-second", 0, calls)
-            ]);
+            ],
+            intentHandlerContributions: []);
         var now = new DateTimeOffset(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
         var commit = new RuntimeCheckpointCommit(
             "commit-order",

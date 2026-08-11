@@ -651,6 +651,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
+        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton(sp => new ActivityFaultIncidentRecorder(
             sp.GetRequiredService<TimeProvider>(),

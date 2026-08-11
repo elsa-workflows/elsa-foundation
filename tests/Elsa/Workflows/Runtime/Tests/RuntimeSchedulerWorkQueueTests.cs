@@ -168,7 +168,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,
-            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []),
+            NewDrainOrchestrator(),
             new FixedTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
@@ -214,7 +214,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,
-            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []),
+            NewDrainOrchestrator(),
             new FixedTimeProvider(_now),
             states);
         var command = new WorkflowExecutionCommand(
@@ -245,7 +245,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,
-            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []));
+            NewDrainOrchestrator());
         var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1);
@@ -340,6 +340,16 @@ public sealed class RuntimeSchedulerWorkQueueTests
             sequence: index,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
+
+    // Ownership is required by construction (C1), so these deferred-drain cases wire the real in-memory pair; the
+    // drain policy never lets the throwing drainer run, so the lease is acquired and released without draining.
+    private static WorkflowDrainOrchestrator NewDrainOrchestrator() =>
+        new(
+            ThrowingSchedulerDrainer.Instance,
+            EmptyPostCommitOutboxProcessor.Instance,
+            [],
+            new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor());
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

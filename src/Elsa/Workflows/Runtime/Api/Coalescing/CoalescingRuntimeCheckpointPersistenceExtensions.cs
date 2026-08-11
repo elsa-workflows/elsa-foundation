@@ -54,7 +54,9 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>();
         services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>();
 
-        // The drain scope factory presence is what makes the coordinator select its coalescing constructor.
+        // The drain scope factory presence is what makes the drain orchestrator take its coalescing path: the
+        // orchestrator has one constructor and its DI factory resolves this factory with GetService, so registering it
+        // here is the whole selection mechanism.
         services.TryAddSingleton<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
         services.AddSingleton<CoalescingRegistrationMarker>();
 
