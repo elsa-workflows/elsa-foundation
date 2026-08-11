@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
@@ -298,7 +299,7 @@ public sealed class ReplaySafeFusionGuardrailTests
                 // AddSingleton (not TryAdd) supersedes the runtime's default registration for GetService resolution —
                 // the same A/B lever the spec-109 fast-path guardrail uses.
                 services.AddSingleton(fusionOptions);
-                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FixedTimeProvider(FixedNow)));
+                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FakeTimeProvider(FixedNow)));
             })
             .Build(ActivityExecutionIds);
 
@@ -570,9 +571,4 @@ public sealed class ReplaySafeFusionGuardrailTests
         long InlineCascadeDispatches,
         long CascadeJoinFallbacks,
         IReadOnlyDictionary<string, string?> WorkflowOutputs);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

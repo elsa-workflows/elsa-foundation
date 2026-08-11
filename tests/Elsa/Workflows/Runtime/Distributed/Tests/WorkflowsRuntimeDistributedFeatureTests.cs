@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
@@ -194,7 +195,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
     public async Task Direct_placement_pump_rejects_another_partition_before_dispatch_or_ack()
     {
         var now = DateTimeOffset.UtcNow;
-        var clock = new MutableTimeProvider(now);
+        var clock = new FakeTimeProvider(now);
         var transport = new CrossPartitionTransport(now);
         var actors = new CountingActorProvider();
         var placementOptions = new ExecutionPlacementOptions { NodeId = "node-a" };

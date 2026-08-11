@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Distributed.Options;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
@@ -21,7 +22,7 @@ internal sealed class NodeHarness
         string nodeId,
         IExecutionPlacementStore placementStore,
         IExecutionCommandTransport transport,
-        MutableTimeProvider clock,
+        FakeTimeProvider clock,
         IWorkflowExecutionCommandExecutor executor,
         TimeSpan leaseDuration)
     {
@@ -56,7 +57,7 @@ internal sealed class NodeHarness
 
     public string NodeId { get; }
     public IExecutionCommandTransport Transport { get; }
-    public MutableTimeProvider Clock { get; }
+    public FakeTimeProvider Clock { get; }
     public ExecutionPlacementService PlacementService { get; }
     public DistributedWorkflowExecutionActorProvider Provider { get; }
     public ExecutionPlacementPumpTask Pump { get; }

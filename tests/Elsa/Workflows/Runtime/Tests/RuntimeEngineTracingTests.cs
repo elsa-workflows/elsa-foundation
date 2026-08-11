@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -137,7 +138,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new InMemoryWorkflowExecutionStateStore(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             pauseGate: null,
             pipelineDispatcher: dispatcher,
             faultCapturePolicy: null,

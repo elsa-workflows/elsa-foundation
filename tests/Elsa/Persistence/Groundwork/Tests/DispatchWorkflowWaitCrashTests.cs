@@ -26,6 +26,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
@@ -124,7 +125,7 @@ public sealed class DispatchWorkflowWaitCrashTests
     public async Task Provider_backed_wait_cycle_converges_across_restart_expired_claim_and_uncertain_ack()
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
-        var timeProvider = new MutableTimeProvider(Now);
+        var timeProvider = new FakeTimeProvider(Now);
         var bookmarkObserver = new RecordingBookmarkObserver();
         var lostAcknowledgement = new LostAcknowledgementProbe();
         WorkflowDispatchIdentity cycleIdentity;
@@ -290,7 +291,7 @@ public sealed class DispatchWorkflowWaitCrashTests
         WaitCrashBoundary boundary)
     {
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
-        var timeProvider = new MutableTimeProvider(Now);
+        var timeProvider = new FakeTimeProvider(Now);
         var bookmarkObserver = new RecordingBookmarkObserver();
         WorkflowDispatchIdentity? identity = null;
         string? resumeOutboxItemId = null;
@@ -483,9 +484,13 @@ public sealed class DispatchWorkflowWaitCrashTests
         }
     }
 
+    // FakeTimeProvider, not a GetUtcNow-only double: the base TimeProvider.CreateTimer is backed by the system
+    // clock, so the scheduler drainer's claim-renewal loop (cadence VisibilityTimeout / 3) would still fire on wall
+    // time against a frozen clock. A renewal landing mid-dispatch cancels that dispatch and reports the claim lost,
+    // which is what turned this suite red at a random crash boundary on a loaded machine (issues #1252, #1253).
     private static ServiceProvider BuildExecutableProvider(
         IDocumentStore store,
-        MutableTimeProvider timeProvider,
+        FakeTimeProvider timeProvider,
         RecordingBookmarkObserver bookmarkObserver,
         LostAcknowledgementProbe? lostAcknowledgement = null,
         bool loseBeforeAcknowledgement = false)
@@ -1122,130 +1127,6 @@ public sealed class DispatchWorkflowWaitCrashTests
         [property: Output] string Disclosed,
         [property: Output] string Secret);
 
-    /// <summary>
-    /// Virtual clock for the crash matrix. Overriding <see cref="GetUtcNow"/> alone is not enough: the base
-    /// <see cref="TimeProvider.CreateTimer"/> is backed by the system clock, so every production
-    /// <c>Task.Delay(..., timeProvider)</c> and <c>CancellationTokenSource(..., timeProvider)</c> would still fire on
-    /// wall time while this clock stayed frozen. The one that bit this suite is the scheduler drainer's claim-renewal
-    /// loop, whose cadence is <c>VisibilityTimeout / 3</c>: a renewal that fires mid-dispatch cancels that dispatch
-    /// and reports the claim as lost, so a machine slow enough to stall one dispatch past the cadence turned this
-    /// suite red at a random crash boundary. Timers are therefore virtual too and only advance with
-    /// <see cref="Advance"/>.
-    /// </summary>
-    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private readonly Lock _gate = new();
-        private readonly List<VirtualTimer> _timers = [];
-        private DateTimeOffset _now = now;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            lock (_gate)
-                return _now;
-        }
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            ArgumentNullException.ThrowIfNull(callback);
-            var timer = new VirtualTimer(this, callback, state);
-            lock (_gate)
-                _timers.Add(timer);
-            timer.Change(dueTime, period);
-            return timer;
-        }
-
-        // Walks the clock to the target instant, firing each timer at its own due time in order (and re-arming
-        // periodic ones) rather than jumping straight there, so a caller that does advance past several periods
-        // observes every tick instead of one.
-        public void Advance(TimeSpan amount)
-        {
-            DateTimeOffset target;
-            lock (_gate)
-                target = _now.Add(amount);
-
-            while (true)
-            {
-                VirtualTimer? next = null;
-                var nextDueAt = default(DateTimeOffset);
-                lock (_gate)
-                {
-                    foreach (var timer in _timers)
-                    {
-                        if (timer.DueAt is not { } dueAt || dueAt > target)
-                            continue;
-                        if (next is null || dueAt < nextDueAt)
-                            (next, nextDueAt) = (timer, dueAt);
-                    }
-
-                    if (next is null)
-                    {
-                        _now = target;
-                        return;
-                    }
-
-                    _now = nextDueAt;
-                }
-
-                next.Fire(nextDueAt);
-            }
-        }
-
-        private void Remove(VirtualTimer timer)
-        {
-            lock (_gate)
-                _timers.Remove(timer);
-        }
-
-        private sealed class VirtualTimer(MutableTimeProvider owner, TimerCallback callback, object? state) : ITimer
-        {
-            private readonly Lock _gate = new();
-            private DateTimeOffset? _dueAt;
-            private TimeSpan _period = Timeout.InfiniteTimeSpan;
-
-            public bool Change(TimeSpan dueTime, TimeSpan period)
-            {
-                lock (_gate)
-                {
-                    _dueAt = dueTime == Timeout.InfiniteTimeSpan ? null : owner.GetUtcNow().Add(dueTime);
-                    _period = period;
-                }
-
-                return true;
-            }
-
-            public DateTimeOffset? DueAt
-            {
-                get
-                {
-                    lock (_gate)
-                        return _dueAt;
-                }
-            }
-
-            public void Fire(DateTimeOffset now)
-            {
-                lock (_gate)
-                {
-                    if (_dueAt is not { } dueAt || dueAt > now)
-                        return;
-                    _dueAt = _period == Timeout.InfiniteTimeSpan || _period <= TimeSpan.Zero
-                        ? null
-                        : now.Add(_period);
-                }
-
-                callback(state);
-            }
-
-            public void Dispose() => owner.Remove(this);
-
-            public ValueTask DisposeAsync()
-            {
-                Dispose();
-                return ValueTask.CompletedTask;
-            }
-        }
-    }
-
     private sealed class ProviderCyclePersistenceAccessContext :
         IPersistenceAccessContextAccessor,
         IPersistenceAccessContextBinder
@@ -1415,5 +1296,4 @@ public sealed class DispatchWorkflowWaitCrashTests
             throw new InvalidOperationException("Committed resume replay must not recapture outputs.");
         }
     }
-
 }

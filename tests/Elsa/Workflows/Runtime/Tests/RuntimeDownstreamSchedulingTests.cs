@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -58,11 +59,11 @@ public sealed class RuntimeDownstreamSchedulingTests
             activityStateStore,
             queue,
             executableStore,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [completeHandler, NewCheckpointHandler(activityStateStore, checkpointWriter, queue)],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 3));
 
@@ -109,7 +110,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewCompleteWorkItem(
             NewIdentity(),
@@ -129,7 +130,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewCompleteWorkItem(
             NewIdentity(),
@@ -418,7 +419,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             new InMemoryActivityExecutionStateStore(),
             queue,
             executableStore,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
@@ -431,7 +432,7 @@ public sealed class RuntimeDownstreamSchedulingTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now),
+            timeProvider: new FakeTimeProvider(_now),
             workflowExecutionStateStore: workflowExecutionStateStore,
             workflowExecutableStore: _checkpointExecutableStore);
 
@@ -603,11 +604,6 @@ public sealed class RuntimeDownstreamSchedulingTests
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator
     {

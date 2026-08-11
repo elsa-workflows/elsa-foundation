@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -59,7 +60,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             poisonStore: poisonStore,
             retryPolicy: new NoopRuntimeDomainRetryPolicy());
         await queue.EnqueueAsync(NewWorkItem(1));
@@ -147,7 +148,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             poisonStore: poisonStore,
             retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")));
 
@@ -182,7 +183,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         var noopDrainer = TestSchedulerDrainer.Create(
             noopQueue,
             [noopHandler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             poisonStore: new InMemoryWorkflowSchedulerPoisonStore(),
             retryPolicy: new NoopRuntimeDomainRetryPolicy());
         await noopQueue.EnqueueAsync(NewWorkItem(2));
@@ -201,7 +202,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         TestSchedulerDrainer.Create(
             queue,
             [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             pauseGate: null,
             workflowExecutionStateStore: null,
             pipelineDispatcher: null,
@@ -241,10 +242,5 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     private sealed class StubRetryPolicy(RuntimeDomainRetryDecision decision) : IRuntimeDomainRetryPolicy
     {
         public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) => decision;
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

@@ -11,13 +11,14 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
 /// <summary>
 /// The W20 acceptance suite: two in-process "nodes" over one shared cluster state (placement store, command transport,
-/// W5 liveness/ownership store, and a single <see cref="MutableTimeProvider"/> clock). These are the roadmap acceptance
+/// W5 liveness/ownership store, and a single <see cref="FakeTimeProvider"/> clock). These are the roadmap acceptance
 /// tests — commands for one execution are routed and serialized correctly across nodes, and a node killed mid-drain
 /// recovers on the survivor WITHOUT double-execution. Determinism comes entirely from advancing the shared fake clock
 /// and driving pumps by hand; there are no sleeps.
@@ -277,7 +278,7 @@ public abstract class TwoNodeAcceptanceTests
         IExecutionPlacementStore PlacementStore,
         IExecutionCommandTransport Transport,
         IExecutionLivenessStateStore LivenessStore,
-        MutableTimeProvider Clock,
+        FakeTimeProvider Clock,
         IRuntimeExecutionOwnershipService OwnershipA,
         IRuntimeExecutionOwnershipService OwnershipB,
         FencingCommandExecutor ExecutorA,
@@ -662,7 +663,7 @@ public abstract class TwoNodeAcceptanceTests
         IExecutionPlacementStore PlacementStore,
         IExecutionCommandTransport Transport,
         IExecutionLivenessStateStore LivenessStore,
-        MutableTimeProvider Clock,
+        FakeTimeProvider Clock,
         Func<DispatchPersistence> OpenDispatchPersistence);
 
     protected sealed class DispatchPersistence(
@@ -710,7 +711,7 @@ public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
 {
     protected override ClusterState CreateClusterState()
     {
-        var clock = new MutableTimeProvider(TestNow);
+        var clock = new FakeTimeProvider(TestNow);
         var checkpointState = new InMemoryRuntimeCheckpointStoreState();
         var workflowExecutionStore = new InMemoryWorkflowExecutionStateStore();
         var livenessStore = new InMemoryExecutionLivenessStateStore();

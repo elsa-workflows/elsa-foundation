@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
@@ -60,7 +61,6 @@ public sealed class RuntimeInProcessHopFastPathGuardrailTests
         Assert.Equal(first.StateFingerprint, second.StateFingerprint);
     }
 
-
     private static async Task<RunFingerprint> DriveAsync(bool fastPathEnabled)
     {
         await using var harness = WorkflowExecutionHarness.Create()
@@ -70,7 +70,7 @@ public sealed class RuntimeInProcessHopFastPathGuardrailTests
                 services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
                 // Pin the clock so the two runs stamp identical timestamps — the fast path never touches time stamping,
                 // so this removes wall-clock noise without weakening the byte-identity claim.
-                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FixedTimeProvider(FixedNow)));
+                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FakeTimeProvider(FixedNow)));
             })
             .Build(ActivityExecutionIds);
 
@@ -146,9 +146,4 @@ public sealed class RuntimeInProcessHopFastPathGuardrailTests
     }
 
     private sealed record RunFingerprint(bool Completed, string CommitFingerprint, string StateFingerprint);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }
