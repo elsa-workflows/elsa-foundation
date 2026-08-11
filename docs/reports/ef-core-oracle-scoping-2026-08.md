@@ -66,6 +66,19 @@ IWorkflowSchedulerWorkQueue" --include=*.cs src/Elsa/Persistence/EFCore/
 # no matches
 ```
 
+**This finding is not novel, and that strengthens it.** `runtime-absolute-budget-basis.md`, **ratified
+2026-08-04**, states the same fact for the 21 runtime coverage-ledger rows — *"None of them can ever
+receive an EF-ratio verdict, because no runtime persistence seam has ever had an EF-Core-backed
+implementation"* — and supplies a stronger historical proof than the present-tense grep above:
+
+```bash
+git log --all -- "src/Elsa/Workflows/Runtime/**EFCore**"   # empty
+```
+
+So EF's absence from the runtime seams is not merely current state that a future commit might change;
+it is the ratified basis on which the runtime rows were moved to absolute budgets. What is new here is
+the consequence for the *oracle-harvesting* obligation, which that document does not address.
+
 ### What the runtime seams' second implementation actually is
 
 It is **in-memory**, not EF. `AddGroundworkRuntimeStores` describes its own job as replacing them:
@@ -464,18 +477,30 @@ assurance. It would be weaker evidence wearing the same label — precisely the 
 
 ### Latency baseline — one decision, then one adapter
 
+> **Correction (2026-08-11): step 1 below misidentifies the blocking condition.** The block is not
+> about whether the SQLite EF ratio survives review. Per
+> [`performance-handoff.md`](../../specs/094-harden-groundwork-stores/contracts/performance-handoff.md),
+> SQLite *has* the retained EF oracle and is gradeable under the existing default policy; the workload
+> is blocked because `requiredProviders` is all four and **SQL Server, PostgreSQL and MongoDB** have no
+> EF oracle and so need numeric absolute budgets that do not yet exist. The SQLite harvest — the only
+> irreversible evidence — is blocked as collateral. The lever is therefore to narrow the workload's
+> required provider set, not to re-litigate the ratio. See
+> [`diagnostics-sqlite-split-basis.md`](../../specs/094-harden-groundwork-stores/contracts/diagnostics-sqlite-split-basis.md).
+> The spec 093 fairness precedent below remains relevant to the *three deferred providers*' eventual
+> budgets, but it does not gate the SQLite comparison.
+
 The dependency order is a decision first, build second:
 
 1. **Resolve the diagnostics gate question with the program owner** before building anything, using
    the spec 093 precedent as the reference decision. Either the 1.25× / 80% / 2× ratio stands, or
    diagnostics moves to absolute budgets with EF measurements recorded as evidence. **Blocking; ~1
-   day of review, owner-scheduled.** This is the single highest-leverage item in the whole plan: if
-   the ratio is retired, the EF diagnostics adapter below is not needed at all, and the last reason
-   to keep the diagnostics EF oracle alive disappears.
+   day of review, owner-scheduled.** *(Superseded by the correction above: this decision applies to
+   the three non-SQLite providers, and is not a precondition for harvesting the SQLite oracle.)*
 2. **If and only if the ratio survives:** build one EF diagnostics adapter leaf for the harness
    (SQLite, both diagnostics streams) and unblock `diagnostics-durable-history`. **~3–5 days**,
    including route capture, which `capture-plan` does not yet support for workloads with native
-   routes.
+   routes. *(The "if and only if" condition is withdrawn — the adapter leaf is needed for the SQLite
+   harvest regardless of how the three deferred providers are eventually graded.)*
 3. **Independently of (1) and (2):** the eleven ready workloads still need adapter leaves to produce
    any number at all. Only `checkpoint-commit` has one. These are graded on absolute budgets and
    restart-recovery evidence, not EF ratios — `specs/144-zero-ef-final-removal/quickstart.md:483`
