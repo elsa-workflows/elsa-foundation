@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Options;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
@@ -60,7 +61,7 @@ public sealed class ExecutionPlacementTests
     public async Task TryClaim_ByOtherNode_AfterExpiry_TakesOverWithGreaterToken()
     {
         var store = new InMemoryExecutionPlacementStore();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var nodeA = NewService(store, NodeA, clock);
         var nodeB = NewService(store, NodeB, clock);
 
@@ -80,7 +81,7 @@ public sealed class ExecutionPlacementTests
     public async Task Release_ByCurrentHolder_ClearsPlacement()
     {
         var store = new InMemoryExecutionPlacementStore();
-        var service = NewService(store, NodeA, new MutableTimeProvider(_now));
+        var service = NewService(store, NodeA, new FakeTimeProvider(_now));
 
         var lease = await service.TryClaimAsync(ExecutionId);
         await service.ReleaseAsync(lease.Lease);
@@ -92,7 +93,7 @@ public sealed class ExecutionPlacementTests
     public async Task Release_BySupersededHolder_DoesNotClearNewerOwner()
     {
         var store = new InMemoryExecutionPlacementStore();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var nodeA = NewService(store, NodeA, clock);
         var nodeB = NewService(store, NodeB, clock);
 
@@ -113,7 +114,7 @@ public sealed class ExecutionPlacementTests
     public async Task ListOwned_ReturnsOnlyThisNodesLiveLeases()
     {
         var store = new InMemoryExecutionPlacementStore();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var nodeA = NewService(store, NodeA, clock);
         var nodeB = NewService(store, NodeB, clock);
 
@@ -134,7 +135,7 @@ public sealed class ExecutionPlacementTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var options = new ExecutionPlacementOptions { NodeId = NodeA, LeaseDuration = TimeSpan.Zero };
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ExecutionPlacementService(store, new MutableTimeProvider(_now), options));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ExecutionPlacementService(store, new FakeTimeProvider(_now), options));
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public sealed class ExecutionPlacementTests
         };
 
         Assert.Throws<ArgumentException>(() =>
-            new ExecutionPlacementService(store, new MutableTimeProvider(_now), options));
+            new ExecutionPlacementService(store, new FakeTimeProvider(_now), options));
     }
 
     [Fact]
@@ -178,13 +179,13 @@ public sealed class ExecutionPlacementTests
             await service.ListOwnedAsync(maxItems));
     }
 
-    private ExecutionPlacementService NewService(InMemoryExecutionPlacementStore store, string nodeId, out MutableTimeProvider clock)
+    private ExecutionPlacementService NewService(InMemoryExecutionPlacementStore store, string nodeId, out FakeTimeProvider clock)
     {
-        clock = new MutableTimeProvider(_now);
+        clock = new FakeTimeProvider(_now);
         return NewService(store, nodeId, clock);
     }
 
-    private static ExecutionPlacementService NewService(InMemoryExecutionPlacementStore store, string nodeId, MutableTimeProvider clock)
+    private static ExecutionPlacementService NewService(InMemoryExecutionPlacementStore store, string nodeId, FakeTimeProvider clock)
     {
         var options = new ExecutionPlacementOptions { NodeId = nodeId, LeaseDuration = TimeSpan.FromSeconds(30) };
         return new ExecutionPlacementService(store, clock, options);

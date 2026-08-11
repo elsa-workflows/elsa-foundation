@@ -17,6 +17,7 @@ using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Activities.Scheduling.Tests;
@@ -29,7 +30,7 @@ namespace Elsa.Activities.Scheduling.Tests;
 // ServiceProvider is disposed (the "crash"), and a later generation rebuilds honest services over the
 // surviving documents and drives the workflow to the same terminal state a crash-free run reaches.
 //
-// The pump is driven manually against a controllable clock (MutableTimeProvider) so the due-time race
+// The pump is driven manually against a controllable clock (FakeTimeProvider) so the due-time race
 // and grace windows are deterministic rather than wall-clock dependent.
 public sealed class DurableTimerRestartCrashTests
 {
@@ -42,7 +43,7 @@ public sealed class DurableTimerRestartCrashTests
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
-        var clock = new MutableTimeProvider(T0);
+        var clock = new FakeTimeProvider(T0);
 
         // Generation 1: run the Delay activity to durable suspension. A durable timer (due at T0 + 5s)
         // and a matching bookmark are persisted to the shared store.
@@ -83,7 +84,7 @@ public sealed class DurableTimerRestartCrashTests
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
-        var clock = new MutableTimeProvider(T0);
+        var clock = new FakeTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
             await gen1.RunAsync(DelayTestExecutable.Create(Delay5s, T0));
@@ -117,7 +118,7 @@ public sealed class DurableTimerRestartCrashTests
     {
         var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var store = new InMemoryDocumentStore(manifest);
-        var clock = new MutableTimeProvider(T0);
+        var clock = new FakeTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
             await gen1.RunAsync(DelayTestExecutable.Create(Delay5s, T0));
@@ -236,12 +237,5 @@ public sealed class DurableTimerRestartCrashTests
         public RuntimeSchedulerDrainRequest? CreateDrainRequest(
             WorkflowExecutionCommandEnvelope envelope,
             RuntimeSchedulerWorkItem workItem) => null;
-    }
-
-    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-        public override DateTimeOffset GetUtcNow() => _now;
-        public void Advance(TimeSpan by) => _now += by;
     }
 }

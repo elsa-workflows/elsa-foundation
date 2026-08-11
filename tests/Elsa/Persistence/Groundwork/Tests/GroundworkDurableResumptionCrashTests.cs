@@ -10,6 +10,7 @@ using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -215,7 +216,7 @@ public sealed class GroundworkDurableResumptionCrashTests
     private static void UseFixedTime(IServiceCollection services, DateTimeOffset now)
     {
         services.RemoveAll<TimeProvider>();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(now));
     }
 
     private static async Task SeedAndStartAsync(ServiceProvider provider)
@@ -320,10 +321,6 @@ public sealed class GroundworkDurableResumptionCrashTests
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     // Simulates a crash between checkpoint commit and post-commit outbox delivery: the outbox row is
     // durably persisted (by the checkpoint writer) but never delivered by this generation.

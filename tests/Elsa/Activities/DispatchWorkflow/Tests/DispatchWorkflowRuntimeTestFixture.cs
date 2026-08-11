@@ -22,6 +22,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -33,9 +34,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ServiceProvider _provider;
-    private readonly AdjustableTimeProvider _timeProvider;
+    private readonly FakeTimeProvider _timeProvider;
 
-    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, AdjustableTimeProvider timeProvider)
+    private DispatchWorkflowRuntimeTestFixture(ServiceProvider provider, FakeTimeProvider timeProvider)
     {
         _provider = provider;
         _timeProvider = timeProvider;
@@ -53,7 +54,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         bool failDispatchCommit = false)
     {
         var services = new ServiceCollection();
-        var timeProvider = new AdjustableTimeProvider(Now);
+        var timeProvider = new FakeTimeProvider(Now);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
         services.AddSingleton<ChildExecutionProbe>();
@@ -687,14 +688,6 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         }
     }
 
-    private sealed class AdjustableTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-
-        public override DateTimeOffset GetUtcNow() => _now;
-
-        internal void Advance(TimeSpan duration) => _now += duration;
-    }
 }
 
 internal sealed record ParentDispatchRun(
