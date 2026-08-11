@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Deployable host, not a NuGet library. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    The whole point of this host: it compiles in NOTHING from Elsa. It is pure plumbing —
+    Nuplane (the package feed + runtime assembly loader) and CShells (shell activation, routing,
+    per-shell middleware). Every actual feature — activities, HTTP, persistence, and the Tasks
+    feature that runs startup/background/recurring tasks — arrives as a package through the Nuplane
+    feed and is discovered by CShells via NuplaneAssemblyProvider. Versions are centrally managed
+    in the repository-root Directory.Packages.props.
+  -->
+  <ItemGroup>
+    <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
+         generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
+         transitively; those are the interfaces feed features implement against this host's CShells runtime. -->
+    <PackageReference Include="CShells.AspNetCore" />
+
+    <!-- Nuplane: package feed + runtime assembly loading. AutoloadPackages registers the
+         IPackageAssemblyCatalog that NuplaneAssemblyProvider hands to CShells. -->
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Loading" />
+    <PackageReference Include="Nuplane.Sources.Directory" />
+
+    <!-- Optional extra #1 only: backs the module-management reconcile endpoint (INuplaneAdminOperations).
+         Compiled in, but the endpoints are mapped only when Elsa:ModuleManagement:Enabled is true at
+         startup (restart required to toggle). -->
+    <PackageReference Include="Nuplane.Admin" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Nuplane directory feed drop-folder. -->
+    <Folder Include="packages\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="shells.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
