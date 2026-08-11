@@ -503,8 +503,10 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   configuration) fails on clean main, independently confirmed during W13 QA; predates the
   wave. Candidate quick fix; fold into W18 identity/secrets if not fixed sooner.
 - **Map-manifest staleness signal** — `docs/maps/manifest.json` reported
-  `relevant_inputs_dirty: true` on clean checkouts during W11 (pre-existing). The generator's
-  dirtiness detection needs a sweep so freshness signals stay trustworthy.
+  `relevant_inputs_dirty: true` on clean checkouts during W11 (pre-existing). **Resolved by
+  #1278:** the field is gone, along with the rest of the manifest's per-commit provenance. It
+  was never a freshness signal, only a record of the working tree at generation time, which is
+  meaningless once committed. Freshness is `Elsa.Maps.Generator -- check`.
 - **`TaskExecutorSingleNodeTests` future home** (from W15): lives in the Runtime test project
   but exercises `Elsa.Tasks`; a dedicated `Elsa.Tasks.Tests` project is the natural home when
   the tasks domain grows its own suite.

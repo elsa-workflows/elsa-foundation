@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Maps.Generator;
@@ -441,10 +439,18 @@ public static partial class CoreMapsGenerator
     }
 
     /// <summary>
-    /// Writes the freshness manifest. <c>input_fingerprint</c> is a SHA-256 over a
-    /// <c>path=sha256</c> listing of every map input, so a stale map is detectable without re-running
-    /// the generators.
+    /// Writes the manifest: a summary of what the committed maps describe.
     /// </summary>
+    /// <remarks>
+    /// Every field is a function of the tree, so the manifest changes only when a map could change, and
+    /// the freshness check compares it like any other generated file. It deliberately carries no
+    /// provenance -- no <c>git_head</c>, no input fingerprint, no working-tree dirty flag. Those moved on
+    /// every commit while describing nothing about the tree, which made two concurrent map PRs conflict
+    /// on this file for no semantic reason, and left <c>relevant_inputs_dirty: true</c> sitting on main
+    /// as a permanent non-signal. "Are the committed maps still true?" is answered by
+    /// <c>Elsa.Maps.Generator -- check</c>, which regenerates and byte-compares; nothing needed the
+    /// provenance to answer it.
+    /// </remarks>
     private static void WriteManifest(
         RepoContext repo,
         IReadOnlyList<ProjectRow> projects,
@@ -452,19 +458,11 @@ public static partial class CoreMapsGenerator
         IReadOnlyList<FeatureRow> features,
         IReadOnlyList<SpecFacts> specs)
     {
-        var (fingerprint, inputs) = ComputeFingerprint(repo);
-        var head = repo.TryGetHead();
-        var dirty = repo.TryGetInputsDirty();
-
         var manifest = new MapBuilder()
             .Line("{")
-            .Line("  \"schema_version\": \"1.0\",")
+            .Line("  \"schema_version\": \"2.0\",")
             .Line("  \"generator\": \"tools/maps/generate-maps\",")
-            .Line("  \"freshness_rule\": \"Maps are fresh when input_fingerprint matches the current inputs. git_head is advisory because generated maps may be committed with their inputs.\",")
-            .Line($"  \"git_head\": {(head is null ? "null" : $"\"{head}\"")},")
-            .Line($"  \"relevant_inputs_dirty\": {(dirty is null ? "null" : dirty.Value ? "true" : "false")},")
-            .Line($"  \"input_fingerprint\": \"{fingerprint}\",")
-            .Line($"  \"input_file_count\": {inputs.Count},")
+            .Line("  \"freshness_rule\": \"Maps are fresh when regenerating them reproduces every committed file byte for byte. Verify with: dotnet run --project tools/maps/Elsa.Maps.Generator -- check.\",")
             .Line("  \"counts\": {")
             .Line($"    \"source_projects\": {projects.Count(project => project.Kind == "source")},")
             .Line($"    \"test_projects\": {projects.Count(project => project.Kind == "test")},")
@@ -493,52 +491,5 @@ public static partial class CoreMapsGenerator
         manifest.Line("  ]").Line("}");
 
         MarkdownTable.Write(Path.Combine(repo.Root, "docs", "maps", "manifest.json"), manifest.Content);
-    }
-
-    /// <summary>The generator scripts are themselves map inputs: changing one can change every output.</summary>
-    private static IEnumerable<string> GeneratorScripts =>
-    [
-        "tools/maps/generate-maps.ps1",
-        "tools/maps/generate-maps.sh",
-        "tools/maps/generate-domain-map.ps1",
-        "tools/maps/generate-domain-map.sh",
-        "tools/maps/generate-extension-point-map.ps1",
-        "tools/maps/generate-extension-point-map.sh",
-        "tools/maps/generate-architecture-reference-map.ps1",
-        "tools/maps/generate-architecture-reference-map.sh",
-        "tools/maps/generate-feature-dependency-map.ps1",
-        "tools/maps/generate-feature-dependency-map.sh"
-    ];
-
-    /// <summary>
-    /// The fingerprint over every map input, plus the input list it was computed from. Exposed so the
-    /// freshness check can recompute it without writing anything.
-    /// </summary>
-    public static (string Fingerprint, IReadOnlyList<string> Inputs) ComputeFingerprint(RepoContext repo)
-    {
-        // EXTENSION_POINTS.md files are inputs to the extension-point map, so they belong in the
-        // fingerprint. The shell generator omitted them, which meant adding an extension-point
-        // heading changed the map while the freshness signal still read clean.
-        var inputs = repo.ListFiles(
-                "src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md",
-                "EXTENSION_POINTS.md", "src/EXTENSION_POINTS.md", "src/*/EXTENSION_POINTS.md")
-            .Concat(["Directory.Packages.props"])
-            .Concat(GeneratorScripts)
-            .Where(path => File.Exists(repo.Absolute(path)))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        var listing = new StringBuilder();
-        foreach (var path in inputs)
-            listing.Append(path).Append('=').Append(Sha256File(repo.Absolute(path))).Append('\n');
-
-        return (Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(listing.ToString()))), inputs);
-    }
-
-    private static string Sha256File(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
 }
