@@ -14,7 +14,9 @@ public sealed record WorkflowExecutionCommandProcessResult(
     bool Faulted,
     bool OutboxDeliveryFailed,
     string? FaultReason,
-    bool WorkflowTerminated = false)
+    bool WorkflowTerminated = false,
+    bool Shed = false,
+    TimeSpan? RetryAfter = null)
 {
     /// <summary>
     /// The command was enqueued but no drain was performed (the drain policy returned no request). There is no fault verdict.
@@ -57,6 +59,21 @@ public sealed record WorkflowExecutionCommandProcessResult(
             FaultReason: faultReason,
             WorkflowTerminated: drainResult.StoppedOnTerminalStatus);
     }
+
+    /// <summary>
+    /// The command was refused by live dispatch admission control (RB1, #1235) and no drain ran. This is deliberately
+    /// not a fault: nothing went wrong with the command, the host declined to take it now. It is also deliberately not
+    /// success, so a caller pattern-matching on acceptance cannot read a refusal as work done.
+    /// </summary>
+    public static WorkflowExecutionCommandProcessResult FromShed(string reason, TimeSpan? retryAfter) =>
+        new(
+            DrainPerformed: false,
+            StopReason: null,
+            Faulted: false,
+            OutboxDeliveryFailed: false,
+            FaultReason: reason,
+            Shed: true,
+            RetryAfter: retryAfter);
 
     /// <summary>
     /// A completed drain that ended by committing a terminal workflow status without faulting. Test/support factory for
