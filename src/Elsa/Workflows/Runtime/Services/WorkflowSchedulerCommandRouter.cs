@@ -15,6 +15,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly IWorkflowBurstScopeAccessor? _burstScopeAccessor;
     private readonly RuntimeBurstCacheOptions _burstCacheOptions;
     private readonly IWorkflowAlterationActorCommandExecutor? _alterationActorCommandExecutor;
+    private readonly IRuntimeAdmissionController? _admissionController;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -24,7 +25,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         IActivityExecutionStateStore? activityExecutionStateStore = null,
         IWorkflowBurstScopeAccessor? burstScopeAccessor = null,
         RuntimeBurstCacheOptions? burstCacheOptions = null,
-        IWorkflowAlterationActorCommandExecutor? alterationActorCommandExecutor = null)
+        IWorkflowAlterationActorCommandExecutor? alterationActorCommandExecutor = null,
+        IRuntimeAdmissionController? admissionController = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -38,6 +40,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _burstScopeAccessor = burstScopeAccessor;
         _burstCacheOptions = burstCacheOptions ?? new RuntimeBurstCacheOptions();
         _alterationActorCommandExecutor = alterationActorCommandExecutor;
+        _admissionController = admissionController;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -76,6 +79,23 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             commandMetadata: envelope.Command.Metadata,
             envelopeMetadata: envelope.Metadata,
             executionScopeId: executionScopeId);
+
+        // Admission control (RB1, #1235). The gate sits here, ahead of the enqueue, because that is the last point at
+        // which a refusal can still be honest. Shedding after the work item is durably queued would leave the recovery
+        // sweep to run it later, so a caller told "not taken, retry" would get its work done twice.
+        //
+        // The two refusal shapes follow from what the caller can correlate against. A start has no execution id to
+        // hand back, so it is refused outright and nothing durable is written; the HTTP edge renders that as 429 with
+        // Retry-After. Every other kind already names a live execution, so the work item IS queued and only the drain
+        // is skipped: the resumption sweep re-drives it, which is what makes Deferred a promise rather than a drop.
+        using var admission = _admissionController?.TryAdmit();
+        if (admission is { IsAdmitted: false })
+        {
+            if (envelope.Command.Kind != WorkflowExecutionCommandKind.Start)
+                await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+
+            return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter);
+        }
 
         workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
 

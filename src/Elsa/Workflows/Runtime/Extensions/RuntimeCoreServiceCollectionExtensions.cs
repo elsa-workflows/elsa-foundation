@@ -219,6 +219,20 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
+
+        // Live dispatch admission control (RB1, #1235). All three are singletons: the load reading, the limit, and the
+        // counters are host-wide facts, and a per-scope controller would see one command at a time and never bound
+        // anything. Registered unconditionally so the router always has a gate to consult — a limiter that a host has
+        // to opt into is a limiter that is not there when the burst arrives.
+        services.TryAddSingleton<RuntimeAdmissionOptions>();
+        services.TryAddSingleton<RuntimeAdmissionDiagnostics>();
+        services.TryAddSingleton<IRuntimeAdmissionLoadSignal, DispatchRuntimeAdmissionLoadSignal>();
+        services.TryAddSingleton<IRuntimeAdmissionController>(serviceProvider =>
+            new RuntimeAdmissionController(
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>(),
+                serviceProvider.GetRequiredService<RuntimeAdmissionOptions>(),
+                serviceProvider.GetRequiredService<RuntimeAdmissionDiagnostics>(),
+                serviceProvider.GetRequiredService<TimeProvider>()));
         // Explicit factory (not greedy ctor selection): the coalescing drain scope factory is only registered when the
         // coalescing feature is enabled, so which collaborators the orchestrator received used to depend on which
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
@@ -289,7 +303,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowEngineTracer>(),
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
-                serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>()));
+                serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();

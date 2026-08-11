@@ -53,6 +53,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
     private readonly IRuntimeConsumedSchedulerWorkClaimAccessor? _consumedWorkClaimAccessor;
     private readonly RuntimeSchedulerDispatchDiagnostics? _dispatchDiagnostics;
+    private readonly IRuntimeAdmissionLoadSignal? _admissionLoadSignal;
     private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
@@ -94,7 +95,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowEngineTracer? tracer = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
-        RuntimeSchedulerDispatchDiagnostics? dispatchDiagnostics = null)
+        RuntimeSchedulerDispatchDiagnostics? dispatchDiagnostics = null,
+        IRuntimeAdmissionLoadSignal? admissionLoadSignal = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -117,6 +119,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _claimOptions = claimOptions ?? new RuntimeSchedulerWorkClaimOptions();
         _consumedWorkClaimAccessor = consumedWorkClaimAccessor;
         _dispatchDiagnostics = dispatchDiagnostics;
+        _admissionLoadSignal = admissionLoadSignal;
         if (_claimOptions.VisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(claimOptions), "Scheduler work visibility timeout must be greater than zero.");
     }
@@ -229,6 +232,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // spec 123 FR-008: one dispatch per drained work item. This is the deterministic hop-count evidence for the
         // ReplaySafe fusion A/B (fusion elides the intermediate StartActivity/InvokeActivity dispatches).
         _dispatchDiagnostics?.RecordDispatch();
+
+        // RB1 (#1235): the same event charged to the admission load reading, which is what makes the admission limit
+        // a limit on dispatches rather than on runs. An External-leaf run pays ~56 of these where a fusable run pays
+        // ~5, so charging per dispatch is the difference between a limit that means the same work for both shapes and
+        // one that admits an order of magnitude more for the shape production traffic has.
+        _admissionLoadSignal?.RecordDispatch();
 
         // WU-1 / spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
         // commit unit-of-work. When it does, the committer marks it consumed and the separate acknowledgement below is

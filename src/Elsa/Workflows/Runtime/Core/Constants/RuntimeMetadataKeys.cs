@@ -51,6 +51,15 @@ public static class RuntimeMetadataKeys
     public const string CommandKind = "runtime.commandKind";
     public const string CompletedChildActivityExecutionId = "runtime.completedChildActivityExecutionId";
     public const string DispatchId = "runtime.dispatchId";
+    /// <summary>
+    /// Set to <c>"true"</c> on a <c>Deferred</c> dispatch result that was refused by live dispatch admission control
+    /// (RB1, #1235). <c>Deferred</c> alone is ambiguous — the distributed leaf also returns it for "forwarded to the
+    /// owning node" — so a caller that must distinguish backpressure from routing reads this key rather than guessing
+    /// from the status. The HTTP start surface renders a marked result as 429.
+    /// </summary>
+    public const string DispatchShed = "runtime.dispatch.shed";
+    /// <summary>Retry-After hint, in whole seconds, accompanying a <see cref="DispatchShed"/> result.</summary>
+    public const string DispatchRetryAfterSeconds = "runtime.dispatch.retryAfterSeconds";
     public const string ChildWorkflowExecutionId = "runtime.childWorkflowExecutionId";
     public const string CreateBookmarkSchedulerWorkItemId = "runtime.createBookmarkSchedulerWorkItemId";
     public const string ExecutableArtifactHash = "runtime.executableArtifactHash";
