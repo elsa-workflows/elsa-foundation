@@ -111,6 +111,15 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- all
 
 The tool needs the .NET SDK. If it is unavailable, ask the user to install it before refreshing maps.
 
+**After regenerating, stage only the changed map files. Never stage `docs/maps/manifest.json`.**
+The freshness check excludes the manifest from its comparison, so committing a regenerated one
+fixes nothing the gate reads. It also manufactures conflicts: the manifest carries `git_head` and
+`input_fingerprint`, which differ per commit, so two concurrent PRs that both regenerate maps
+collide on it. That is what made PR #1247 go `CONFLICTING` the moment #1248 squash-merged, while
+#1243, which left the manifest untouched, stayed mergeable through both merges. `git add` the map
+files by explicit path, and unstage the manifest with
+`git restore --staged docs/maps/manifest.json` if it slipped in.
+
 Generated maps are committed snapshots and are never refreshed automatically. CI does not
 regenerate them; it only runs `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
 That check regenerates every map into a scratch directory and compares the bytes with what is
@@ -119,7 +128,10 @@ edit: a fingerprint gate would oblige every code PR to regenerate and commit ele
 though most source edits change no map at all. `manifest.json` is regenerated but excluded from the
 comparison for the same reason, being bookkeeping rather than a description of the tree. So a red
 check means a committed map genuinely stopped describing the tree, and is worth acting on rather
-than restamping past. Refreshing stays a deliberate, human-initiated act. Before relying on any
+than restamping past. Refreshing stays a deliberate, human-initiated act. The check runs on every
+pull request and on every push to `main` (`.github/workflows/maps.yml`), so main going stale is
+reported against main instead of against whoever opens the next PR. A red run on `main` cannot
+block anything after the fact; treat it as a request to open a refresh PR. Before relying on any
 map for navigation or verification, check `docs/maps/manifest.json`. If relevant inputs are dirty,
 changed, or freshness is uncertain, report that the snapshot is stale and ask the user to invoke or
 authorize the narrowest relevant map refresh. After an explicitly authorized refresh, review any

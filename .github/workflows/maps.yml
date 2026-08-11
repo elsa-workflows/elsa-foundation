@@ -1,0 +1,86 @@
+name: Maps
+
+# Freshness gate for the committed maps under docs/maps/ and the generated findings
+# reports. It regenerates every map into a scratch directory and byte-compares the
+# result with what is committed. Generation itself stays manually initiated (AGENTS.md);
+# this workflow only reports. It exists because the committed maps once went three
+# projects stale and carried 25 corrupted rows with nothing objecting.
+#
+# The job lives here rather than in ci.yml because it needs two triggers and ci.yml is
+# the pull_request gate. "Generated maps fresh" is a required status check on main;
+# branch protection matches the context by JOB name, not by workflow file, so the job
+# name below is load-bearing and must not be renamed.
+#
+#   - pull_request: keeps a PR from landing stale maps. Unchanged behavior.
+#   - push to main: reports main going stale AGAINST MAIN. Until issue #1274 this ran on
+#     pull_request only, so nothing ever evaluated main. PR #1202 added a spec directory
+#     without regenerating, main went stale silently, and the next three unrelated PRs
+#     (#1243, #1247, #1248) went red on a check none of them had broken -- CI evaluates
+#     the PR merged into main, so a branch whose own tree is fine still fails while
+#     `-- check` passes locally on the exact commit CI fails on.
+#   - workflow_dispatch: re-run on demand after a fix without pushing an empty commit.
+#
+# Notify rather than auto-regenerate. Blocking is not available on push: the commit has
+# already landed. Of the two remaining options, a failing run on main is the one that
+# fits this repository. Auto-regenerating and opening a PR would contradict AGENTS.md
+# ("Generated maps are committed snapshots and are never refreshed automatically"), it
+# would skip the findings-report review that a refresh is supposed to trigger, and it
+# would need a third-party pull-request action -- which the org Actions allow-list gates
+# (see the POLICY DEPENDENCY note in docker.yml; a blocked entry fails the run at
+# startup with no logs). This workflow uses only actions/checkout and
+# actions/setup-dotnet, both already in use across this repository's workflows.
+#
+# A failed run on main notifies the pusher through the normal GitHub Actions failure
+# notification and is visible in the Actions tab. The failure step below writes the
+# refresh instructions into the run summary so the fix does not need this file.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  map-freshness:
+    name: Generated maps fresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Check generated maps against the tree
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- check
+
+      - name: Explain how to refresh
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Generated maps are stale
+
+          The committed maps no longer describe the tree. The failing step above lists
+          the files that would change. To fix it:
+
+          ```bash
+          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+          ```
+
+          Then stage only the changed map files. **Do not stage `docs/maps/manifest.json`.**
+          The freshness check excludes it from the comparison, so committing it fixes
+          nothing, and its `git_head` / `input_fingerprint` fields move on every commit,
+          so two PRs that both regenerate maps will conflict on it.
+
+          If this run is on `main`, main is already stale: open a PR with the refreshed
+          maps. Review the generated findings reports before merging.
+          EOF
