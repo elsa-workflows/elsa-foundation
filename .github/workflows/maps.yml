@@ -76,10 +76,9 @@ jobs:
           dotnet run --project tools/maps/Elsa.Maps.Generator -- all
           ```
 
-          Then stage only the changed map files. **Do not stage `docs/maps/manifest.json`.**
-          The freshness check excludes it from the comparison, so committing it fixes
-          nothing, and its `git_head` / `input_fingerprint` fields move on every commit,
-          so two PRs that both regenerate maps will conflict on it.
+          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
+          included. The manifest carries no per-commit provenance, so it changes only when
+          the tree did, and this check compares it like any other generated file.
 
           If this run is on `main`, main is already stale: open a PR with the refreshed
           maps. Review the generated findings reports before merging.
