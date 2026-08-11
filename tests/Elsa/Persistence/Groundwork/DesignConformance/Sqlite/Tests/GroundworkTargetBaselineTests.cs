@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.113";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.114";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
