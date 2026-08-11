@@ -292,7 +292,7 @@ public sealed class WorkloadCatalog
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
-        ["diagnostics.json"] = "16ba05d98250fa5917baf40116b454a1106a3247cde2a94444a97cd49b53f8ad"
+        ["diagnostics.json"] = "fb2c8de14b3ae6c5620c21b9720aa9e544ed477cc88e62f70137db58d500286a"
     };
     private static readonly IReadOnlyDictionary<string, ExpectedWorkload> Expected = new Dictionary<string, ExpectedWorkload>(StringComparer.Ordinal)
     {

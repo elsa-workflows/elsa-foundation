@@ -51,7 +51,10 @@ not deletable until it is fixed. `Undecided` fails closed and blocks spec 144's 
 Comparands: `efcore.sqlite` (`EfCoreStructuredLogStore`) and `groundwork.sqlite`
 (`GroundworkStructuredLogStore`), both over **file-backed** SQLite with distinct connections, as
 [`workloads/diagnostics.json`](workloads/diagnostics.json) requires
-(`file-backed-distinct-connections-with-retained-ef-oracle`).
+(`file-backed-distinct-connections`). That the retained EF implementation is the SQLite comparand is
+recorded by the workload's `correctness.timingGate`; it was previously also encoded as a suffix on the
+topology identifier, which no driver could report — see
+[`diagnostics-provider-topology-basis.md`](contracts/diagnostics-provider-topology-basis.md).
 
 Executable form: `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/`.
 Surface digest (dimension + compared-fact + recorded-divergence names, never observed values):
