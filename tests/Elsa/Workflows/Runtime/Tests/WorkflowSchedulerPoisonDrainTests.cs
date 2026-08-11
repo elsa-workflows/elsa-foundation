@@ -50,7 +50,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     public async Task DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord()
     {
         // #1271: the weakest configuration the drainer can now be built in — no retry policy, no fault capture policy,
-        // nothing but the four required collaborators. The item is ack-deleted either way, so the invariant this pins is
+        // nothing but the required collaborators. The item is ack-deleted either way, so the invariant this pins is
         // that the record survives the ack: an empty queue must always be paired with a poison record, never with
         // nothing. Before the poison store became required, this same configuration dropped the item without a trace.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -60,6 +60,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new InMemoryWorkflowExecutionStateStore(),
             poisonStore,
+            TestSchedulerDrainer.NewInertPauseGate(),
             new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
 
